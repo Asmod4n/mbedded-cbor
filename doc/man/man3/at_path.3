@@ -1,6 +1,6 @@
-.TH "cbor::at_path" "3" "2026-10-31" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.TH "cbor::at_path" "3" "2026-11-05" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
 .SH NAME
-cbor::at_path, cbor::jsonpath::compile, cbor::jsonpath::query, cbor::nodelist, cbor::fixed_string, cbor::is_valid_path_v, cbor::is_singular_query_v \- read one value by its JSONPath
+cbor::at_path, cbor::jsonpath::compile, cbor::jsonpath::query, cbor::nodelist, cbor::fixed_string, cbor::is_valid_path_v, cbor::is_singular_query_v \- read a value by its JSONPath (RFC 9535), with CBOR keys that are not text, tags and typed arrays
 .SH SYNOPSIS
 .IP
 .EX
@@ -118,6 +118,11 @@ static std::expected<query<T>, error> compile(std::string_view const path);
 .EE
 .SH DESCRIPTION
 The functions and types that read a value by its JSONPath (RFC 9535).
+A path also reads CBOR that JSON does not have: keys that are not text,
+tags and typed arrays.
+A read is O(bytes up to the value).
+A number, a \f[CR]bool\f[R] or a view allocates nothing; a path that
+selects many nodes allocates its list.
 .SS cbor::at_path
 Reads the value at a JSONPath (RFC 9535) in \f[CR]encoded\f[R], with no
 decode of the rest.

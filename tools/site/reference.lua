@@ -29,6 +29,7 @@ local function link_target(target)
   local anchor = target:match("(#.*)$") or ""
   local path = target:gsub("#.*$", "")
   local g, file = path:match("^%.%./(%w+)/([%w_]+)%.md$")
+  if path == "console.md" then return "console.html" end
   if g == nil then file = path:match("^([%w_]+)%.md$"); g = group end
   if g and file == "index" then return g .. ".html" end
   if g and file then return (g == group and "" or g .. ".html") .. "#" .. page_id(file) end
@@ -301,7 +302,16 @@ function Pandoc(doc)
   doc.meta.groups = pandoc.MetaList(groups)
   if group == "index" then
     doc.meta.pagetitle = "mbedded-cbor"
-    return doc:walk(links)
+    local blocks = {}
+    for _, b in ipairs(doc:walk(links).blocks) do
+      if b.t == "Header" and b.level == 1 then
+      elseif b.t == "Para" and doc.meta.lead == nil then
+        doc.meta.lead = pandoc.MetaInlines(b.content)
+      else
+        blocks[#blocks + 1] = b
+      end
+    end
+    return pandoc.Pandoc(blocks, doc.meta)
   end
   if group == "console" then
     local blocks = console_blocks(doc)
@@ -309,8 +319,27 @@ function Pandoc(doc)
     return pandoc.Pandoc(blocks, doc.meta)
   end
   local blocks, methods = {}, {}
+  local extra, extra_methods, typed = {}, {}, false
+  local function extra_close()
+    if #extra > 0 then extra[#extra + 1] = pandoc.RawBlock("html", "</section>") end
+  end
   for _, b in ipairs(doc.blocks) do
-    if b.t == "Header" and b.level == 1 then
+    if b.t == "Header" and b.level == 2 then
+      extra_close()
+      local name = pandoc.utils.stringify(b)
+      local id = "s-" .. name:lower():gsub("[^%w]+", "-")
+      extra[#extra + 1] = pandoc.RawBlock("html", '<section class="method" id="' .. id .. '">\n<h2>'
+        .. html_escaped(name) .. "</h2>")
+      extra_methods[#extra_methods + 1] = pandoc.MetaMap({ name = pandoc.MetaString(name),
+        id = pandoc.MetaString(id), does = pandoc.MetaString(name) })
+    elseif #extra > 0 and b.t == "CodeBlock" and b.classes[1] == "example" then
+      local spec = example_read(b.text, group .. "/index.md")
+      spec.page = group .. "/index.md"
+      examples[#examples + 1] = spec
+      extra[#extra + 1] = pandoc.RawBlock("html", example_html(spec, #examples))
+    elseif #extra > 0 then
+      extra[#extra + 1] = b:walk(links)
+    elseif b.t == "Header" and b.level == 1 then
       doc.meta.pagetitle = pandoc.utils.stringify(b)
     elseif b.t == "Para" and #b.content >= 1 and pandoc.utils.stringify(b):match("^The examples use the types in") then
       local link, namespace
@@ -320,6 +349,7 @@ function Pandoc(doc)
       end
       local path = link:gsub("^[./]*", "")
       table.insert(blocks, 1, pandoc.RawBlock("html", types_html(path, namespace)))
+      typed = true
       table.insert(methods, 1, pandoc.MetaMap({ name = pandoc.MetaString("types"),
         id = pandoc.MetaString("types"), does = pandoc.MetaString("the types of the examples") }))
     elseif b.t == "Para" and doc.meta.lead == nil then
@@ -339,6 +369,10 @@ function Pandoc(doc)
       end
     end
   end
+  extra_close()
+  local at = typed and 2 or 1
+  for i, b in ipairs(extra) do table.insert(blocks, at + i - 1, b) end
+  for i, m in ipairs(extra_methods) do table.insert(methods, at + i - 1, m) end
   doc.meta.methods = pandoc.MetaList(methods)
   examples_write()
   return pandoc.Pandoc(blocks, doc.meta)

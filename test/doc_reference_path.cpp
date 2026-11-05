@@ -12,6 +12,7 @@
 #include <utility>
 
 using namespace std::string_literals;
+using namespace std::string_view_literals;
 
 // Each test in this file is one example of a page in doc/reference/path/. The tests exist so that every
 // example compiles and gives the result that its page states.
@@ -119,4 +120,21 @@ TEST_CASE("doc reference path: is_singular_query_v")
     CHECK_FALSE(cbor::is_singular_query_v<"$.a[*]">);
     CHECK_FALSE(cbor::is_singular_query_v<"$..a">);
     CHECK_FALSE(cbor::is_singular_query_v<"$.a[">);
+}
+
+// index.md, CBOR beyond JSON: an integer key, a key in EDN, a path through tag 24 and an element of a typed
+// array. The bytes are those of the page.
+TEST_CASE("doc reference path: CBOR beyond JSON")
+{
+    auto const keys = cbor::lazy::take_ownership("\xa2\x01\x61\x78\x41\x01\x61\x7a"s);
+    auto const x = keys->at_path<"$[1]">()->get<std::string_view>();
+    REQUIRE(x);
+    CHECK_EQ(**x, "x"sv);
+    auto const z = keys->at_path<"$[h'01']">()->get<std::string_view>();
+    REQUIRE(z);
+    CHECK_EQ(**z, "z"sv);
+    auto const embedded = cbor::lazy::take_ownership("\xa1\x61\x61\xd8\x18\x43\x82\x01\x02"s);
+    CHECK_EQ(embedded->at_path<"$.a[1]">()->get<int>().value(), 2);
+    auto const typed = cbor::lazy::take_ownership("\xa1\x61\x76\xd8\x45\x44\x07\x00\x08\x00"s);
+    CHECK_EQ(typed->at_path<"$.v[1]">()->get<int>().value(), 8);
 }

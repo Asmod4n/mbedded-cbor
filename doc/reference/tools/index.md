@@ -1,6 +1,6 @@
 # tools
 
-The functions and types that check, split and print CBOR bytes.
+The functions and types that check, split and print CBOR bytes. `item_size` is O(items) with no allocation. `sequence_reader` keeps only the bytes not yet read. `diagnostic_notation` is O(bytes) and allocates its text.
 
 | Function | Does |
 |---|---|

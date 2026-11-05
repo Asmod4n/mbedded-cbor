@@ -1,4 +1,4 @@
-.TH "cbor::ref" "3" "2026-10-31" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.TH "cbor::ref" "3" "2026-11-05" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
 .SH NAME
 cbor::ref, cbor::ref<T>, cbor::owning<T> \- results that hold the bytes
 .SH SYNOPSIS
@@ -48,6 +48,8 @@ cbor::ref, cbor::ref<T>, cbor::owning<T> \- results that hold the bytes
 .SH DESCRIPTION
 \f[CR]cbor::ref<T>\f[R] and \f[CR]cbor::owning<T>\f[R] hold a result
 together with the owner of the bytes that its views point into.
+Each access is O(1); a copy changes one atomic count.
+\f[CR]clone\f[R] copies, O(bytes).
 .PP
 The examples use the types in test/doc_types.hpp, namespace
 \f[CR]reference_ref\f[R].
