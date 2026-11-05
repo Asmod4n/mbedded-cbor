@@ -423,7 +423,7 @@ inline std::expected<value, error> value_of(cbor::lazy const &l)
 // A value written through the public encoder: an integer at 64 bits, a float as a double, a bignum as tag 2 or 3
 // over the magnitude that it holds.
 template <class Target>
-std::expected<void, error> value_encode(cbor::encoder<Target> &e, value const &x)
+std::expected<void, error> encode_value(cbor::encoder<Target> &e, value const &x)
 {
     reader b;
     switch (b.kind_of(x)) {
@@ -448,7 +448,7 @@ std::expected<void, error> value_encode(cbor::encoder<Target> &e, value const &x
         if (auto const r = e.array(b.array_size(x)); !r)
             return r;
         for (value const &v : *std::get<array *>(x.kind))
-            if (auto const r = value_encode(e, v); !r)
+            if (auto const r = encode_value(e, v); !r)
                 return r;
         return {};
     }
@@ -456,9 +456,9 @@ std::expected<void, error> value_encode(cbor::encoder<Target> &e, value const &x
         if (auto const r = e.map(b.map_size(x)); !r)
             return r;
         for (entry const &v : *std::get<map *>(x.kind)) {
-            if (auto const r = value_encode(e, v.key); !r)
+            if (auto const r = encode_value(e, v.key); !r)
                 return r;
-            if (auto const r = value_encode(e, v.val); !r)
+            if (auto const r = encode_value(e, v.val); !r)
                 return r;
         }
         return {};
@@ -466,7 +466,7 @@ std::expected<void, error> value_encode(cbor::encoder<Target> &e, value const &x
     default:
         if (auto const r = e.tag(b.registered_tag(x)); !r)
             return r;
-        return value_encode(e, b.before_encode(x));
+        return encode_value(e, b.before_encode(x));
     }
 }
 
@@ -475,7 +475,7 @@ auto encode(Target &&target, value const &x)
     -> decltype(std::declval<cbor::encoder<std::remove_cvref_t<Target>> &>().finish())
 {
     cbor::encoder e{std::forward<Target>(target)};
-    if (auto const r = value_encode(e, x); !r)
+    if (auto const r = encode_value(e, x); !r)
         return std::unexpected(r.error());
     return e.finish();
 }

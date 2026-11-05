@@ -145,7 +145,7 @@ class jsonpath
         return (c >= 'a' && c <= 'z') || c == '_' || extended_diagnostic_notation::digit(c);
     }
 
-    static constexpr std::expected<std::optional<integer>, error> int_read(std::string_view const text, std::size_t const at)
+    static constexpr std::expected<std::optional<integer>, error> read_int(std::string_view const text, std::size_t const at)
     {
         if (at >= text.size())
             return std::nullopt;
@@ -174,33 +174,33 @@ class jsonpath
         parsed_query top;
         std::size_t depth_reached;
 
-        constexpr std::expected<std::size_t, error> string_parse(std::string_view const text, std::size_t const at)
+        constexpr std::expected<std::size_t, error> parse_string(std::string_view const text, std::size_t const at)
         {
             std::string name;
-            auto const next = extended_diagnostic_notation::quoted_parse(text, at, name);
+            auto const next = extended_diagnostic_notation::parse_quoted(text, at, name);
             if (!next) [[unlikely]]
                 return next;
             for (char const c : std::span(text).subspan(at + 1, *next - at - 2))
                 if (static_cast<unsigned char>(c) < extended_diagnostic_notation::unescaped_first) [[unlikely]]
                     return std::unexpected(error::invalid_path);
-            if (auto const r = extended_diagnostic_notation::head_append(keys, major_type::text_string, name.size(), extended_diagnostic_notation::no_indicator); !r) [[unlikely]]
+            if (auto const r = extended_diagnostic_notation::append_head(keys, major_type::text_string, name.size(), extended_diagnostic_notation::no_indicator); !r) [[unlikely]]
                 return std::unexpected(r.error());
             keys += name;
             return next;
         }
 
-        constexpr std::expected<std::size_t, error> literal_parse(std::string_view const text, std::size_t const at)
+        constexpr std::expected<std::size_t, error> parse_literal(std::string_view const text, std::size_t const at)
         {
             std::string literal;
-            auto const next = extended_diagnostic_notation::literal_parse({text, at}, literal, {0, depth_max});
+            auto const next = extended_diagnostic_notation::parse_literal({text, at}, literal, {0, depth_max});
             if (!next) [[unlikely]]
                 return next;
-            if (auto const r = extended_diagnostic_notation::canonical_append(keys, literal, validity::offset{}, {0, depth_max}); !r) [[unlikely]]
+            if (auto const r = extended_diagnostic_notation::append_canonical(keys, literal, validity::offset{}, {0, depth_max}); !r) [[unlikely]]
                 return std::unexpected(r.error());
             return next;
         }
 
-        constexpr std::expected<std::pair<std::size_t, selector>, error> selector_parse(std::string_view const text, std::size_t const at,
+        constexpr std::expected<std::pair<std::size_t, selector>, error> parse_selector(std::string_view const text, std::size_t const at,
                                                                                        std::size_t const depth)
         {
             selector s{selector::kind::key, keys.size(), 0, 0, std::nullopt, std::nullopt, 1, 0};
@@ -210,21 +210,21 @@ class jsonpath
                 return std::pair{at + 1, s};
             }
             if (c == '\'' || c == '"') {
-                auto const next = string_parse(text, at);
+                auto const next = parse_string(text, at);
                 if (!next) [[unlikely]]
                     return std::unexpected(next.error());
                 s.key_size = keys.size() - s.key_at;
                 return std::pair{*next, s};
             }
             if (c == '?') {
-                auto const e = logical_or_parse(text, extended_diagnostic_notation::blank_end(text, at + 1), depth + 1);
+                auto const e = parse_logical_or(text, extended_diagnostic_notation::blank_end(text, at + 1), depth + 1);
                 if (!e) [[unlikely]]
                     return std::unexpected(e.error());
                 s.kind = selector::kind::filter;
                 s.expression = e->index;
                 return std::pair{e->at, s};
             }
-            auto const first = int_read(text, at);
+            auto const first = read_int(text, at);
             if (!first) [[unlikely]]
                 return std::unexpected(first.error());
             std::size_t next = *first ? extended_diagnostic_notation::blank_end(text, (*first)->at) : at;
@@ -233,7 +233,7 @@ class jsonpath
                 if (*first)
                     s.start = (*first)->value;
                 next = extended_diagnostic_notation::blank_end(text, next + 1);
-                auto const end = int_read(text, next);
+                auto const end = read_int(text, next);
                 if (!end) [[unlikely]]
                     return std::unexpected(end.error());
                 if (*end) {
@@ -242,7 +242,7 @@ class jsonpath
                 }
                 if (next < text.size() && text[next] == ':') {
                     next = extended_diagnostic_notation::blank_end(text, next + 1);
-                    auto const step = int_read(text, next);
+                    auto const step = read_int(text, next);
                     if (!step) [[unlikely]]
                         return std::unexpected(step.error());
                     if (*step) {
@@ -257,14 +257,14 @@ class jsonpath
                 s.index = (*first)->value;
                 return std::pair{(*first)->at, s};
             }
-            auto const literal_next = literal_parse(text, at);
+            auto const literal_next = parse_literal(text, at);
             if (!literal_next) [[unlikely]]
                 return std::unexpected(literal_next.error());
             s.key_size = keys.size() - s.key_at;
             return std::pair{*literal_next, s};
         }
 
-        constexpr std::expected<std::pair<std::size_t, std::vector<selector>>, error> bracketed_parse(std::string_view const text, std::size_t at,
+        constexpr std::expected<std::pair<std::size_t, std::vector<selector>>, error> parse_bracketed(std::string_view const text, std::size_t at,
                                                                                                      std::size_t const depth)
         {
             std::vector<selector> chosen;
@@ -272,7 +272,7 @@ class jsonpath
                 at = extended_diagnostic_notation::blank_end(text, at + 1);
                 if (at >= text.size()) [[unlikely]]
                     return std::unexpected(error::invalid_path);
-                auto const s = selector_parse(text, at, depth);
+                auto const s = parse_selector(text, at, depth);
                 if (!s) [[unlikely]]
                     return std::unexpected(s.error());
                 chosen.push_back(s->second);
@@ -284,7 +284,7 @@ class jsonpath
             }
         }
 
-        constexpr std::expected<parsed_query, error> segments_parse(std::string_view const text, std::size_t at, std::size_t const depth)
+        constexpr std::expected<parsed_query, error> parse_segments(std::string_view const text, std::size_t at, std::size_t const depth)
         {
             if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
                 return std::unexpected(r.error());
@@ -302,7 +302,7 @@ class jsonpath
                 if (text[at] == '[' || std::string_view{std::span(text).subspan(at)}.starts_with(std::string_view("..["))) {
                     s.descendant = text[at] == '.';
                     auto const b =
-                        bracketed_parse(text, at + (s.descendant ? std::string_view("..").size() : 0), depth);
+                        parse_bracketed(text, at + (s.descendant ? std::string_view("..").size() : 0), depth);
                     if (!b) [[unlikely]]
                         return std::unexpected(b.error());
                     chosen = b->second;
@@ -323,7 +323,7 @@ class jsonpath
                         if (end == at) [[unlikely]]
                             return std::unexpected(error::invalid_path);
                         std::size_t const key_at = keys.size();
-                        if (auto const r = extended_diagnostic_notation::head_append(keys, major_type::text_string, end - at, extended_diagnostic_notation::no_indicator); !r) [[unlikely]]
+                        if (auto const r = extended_diagnostic_notation::append_head(keys, major_type::text_string, end - at, extended_diagnostic_notation::no_indicator); !r) [[unlikely]]
                             return std::unexpected(r.error());
                         std::ranges::copy(std::span(text).subspan(at, end - at), std::back_inserter(keys));
                         chosen.push_back({selector::kind::key, key_at, keys.size() - key_at, 0, std::nullopt, std::nullopt, 1, 0});
@@ -352,13 +352,13 @@ class jsonpath
                    (e.kind == logical_expr::kind::filter_query && e.singular);
         }
 
-        constexpr std::size_t expression_add(logical_expr const e)
+        constexpr std::size_t add_expression(logical_expr const e)
         {
             expressions.push_back(e);
             return expressions.size() - 1;
         }
 
-        constexpr std::expected<parsed_expression, error> function_parse(std::string_view const text, std::size_t const at,
+        constexpr std::expected<parsed_expression, error> parse_function(std::string_view const text, std::size_t const at,
                                                                          std::string_view const name, std::size_t const depth)
         {
             std::vector<std::size_t> arguments;
@@ -367,7 +367,7 @@ class jsonpath
                 ++next;
             else
                 for (;;) {
-                    auto const a = primary_parse(text, next, depth + 1);
+                    auto const a = parse_primary(text, next, depth + 1);
                     if (!a) [[unlikely]]
                         return a;
                     arguments.push_back(a->index);
@@ -387,10 +387,10 @@ class jsonpath
             bool const nodes = expressions[argument].kind == logical_expr::kind::filter_query;
             if (function == logical_expr::kind::length ? !comparable(argument) : !nodes) [[unlikely]]
                 return std::unexpected(error::invalid_path);
-            return parsed_expression{next, expression_add({function, argument, 0, comparison_op::equal, false, false})};
+            return parsed_expression{next, add_expression({function, argument, 0, comparison_op::equal, false, false})};
         }
 
-        constexpr std::expected<parsed_expression, error> primary_parse(std::string_view const text, std::size_t const at,
+        constexpr std::expected<parsed_expression, error> parse_primary(std::string_view const text, std::size_t const at,
                                                                         std::size_t const depth)
         {
             if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
@@ -400,16 +400,16 @@ class jsonpath
                 return std::unexpected(error::invalid_path);
             char const c = text[at];
             if (c == '@' || c == '$') {
-                auto const q = segments_parse(text, at + 1, depth + 1);
+                auto const q = parse_segments(text, at + 1, depth + 1);
                 if (!q) [[unlikely]]
                     return std::unexpected(q.error());
                 return parsed_expression{
-                    q->at, expression_add({logical_expr::kind::filter_query, q->segment_at, q->segment_count,
+                    q->at, add_expression({logical_expr::kind::filter_query, q->segment_at, q->segment_count,
                                            comparison_op::equal, c == '@', q->singular})};
             }
             std::size_t const key_at = keys.size();
             auto const literal = [&](std::size_t const next) {
-                return parsed_expression{next, expression_add({logical_expr::kind::literal, key_at, keys.size() - key_at,
+                return parsed_expression{next, add_expression({logical_expr::kind::literal, key_at, keys.size() - key_at,
                                                                comparison_op::equal, false, false})};
             };
             if (c >= 'a' && c <= 'z') {
@@ -419,23 +419,23 @@ class jsonpath
                 std::string_view const name{std::span(text).subspan(at, end - at)};
                 bool const call = end < text.size() && text[end] == '(';
                 if (call && (name == "length" || name == "count" || name == "value"))
-                    return function_parse(text, at, name, depth);
+                    return parse_function(text, at, name, depth);
                 if (call && (name == "match" || name == "search")) [[unlikely]]
                     return std::unexpected(error::invalid_path);
             }
             if (c == '\'' || c == '"') {
-                auto const next = string_parse(text, at);
+                auto const next = parse_string(text, at);
                 if (!next) [[unlikely]]
                     return std::unexpected(next.error());
                 return literal(*next);
             }
-            auto const next = literal_parse(text, at);
+            auto const next = parse_literal(text, at);
             if (!next) [[unlikely]]
                 return std::unexpected(next.error());
             return literal(*next);
         }
 
-        static constexpr std::optional<std::pair<comparison_op, std::size_t>> comparison_op_read(std::string_view const text, std::size_t const at)
+        static constexpr std::optional<std::pair<comparison_op, std::size_t>> read_comparison_op(std::string_view const text, std::size_t const at)
         {
             constexpr auto ops = std::to_array<std::pair<std::string_view, comparison_op>>(
                 {{"==", comparison_op::equal},
@@ -450,9 +450,9 @@ class jsonpath
             return std::nullopt;
         }
 
-        constexpr std::expected<parsed_expression, error> paren_parse(std::string_view const text, std::size_t const at, std::size_t const depth)
+        constexpr std::expected<parsed_expression, error> parse_paren(std::string_view const text, std::size_t const at, std::size_t const depth)
         {
-            auto const inner = logical_or_parse(text, extended_diagnostic_notation::blank_end(text, at + 1), depth + 1);
+            auto const inner = parse_logical_or(text, extended_diagnostic_notation::blank_end(text, at + 1), depth + 1);
             if (!inner) [[unlikely]]
                 return inner;
             std::size_t const close = extended_diagnostic_notation::blank_end(text, inner->at);
@@ -461,47 +461,47 @@ class jsonpath
             return parsed_expression{close + 1, inner->index};
         }
 
-        constexpr std::expected<parsed_expression, error> basic_parse(std::string_view const text, std::size_t const at, std::size_t const depth)
+        constexpr std::expected<parsed_expression, error> parse_basic(std::string_view const text, std::size_t const at, std::size_t const depth)
         {
             if (at >= text.size()) [[unlikely]]
                 return std::unexpected(error::invalid_path);
             if (text[at] == '!') {
                 std::size_t const next = extended_diagnostic_notation::blank_end(text, at + 1);
                 bool const paren = next < text.size() && text[next] == '(';
-                auto const operand = paren ? paren_parse(text, next, depth) : primary_parse(text, next, depth);
+                auto const operand = paren ? parse_paren(text, next, depth) : parse_primary(text, next, depth);
                 if (!operand) [[unlikely]]
                     return operand;
                 if (!paren && expressions[operand->index].kind != logical_expr::kind::filter_query)
                     [[unlikely]]
                     return std::unexpected(error::invalid_path);
-                return parsed_expression{operand->at, expression_add({logical_expr::kind::logical_not, operand->index, 0,
+                return parsed_expression{operand->at, add_expression({logical_expr::kind::logical_not, operand->index, 0,
                                                                       comparison_op::equal, false, false})};
             }
             if (text[at] == '(')
-                return paren_parse(text, at, depth);
-            auto const left = primary_parse(text, at, depth);
+                return parse_paren(text, at, depth);
+            auto const left = parse_primary(text, at, depth);
             if (!left) [[unlikely]]
                 return left;
             std::size_t const next = extended_diagnostic_notation::blank_end(text, left->at);
-            auto const op = comparison_op_read(text, next);
+            auto const op = read_comparison_op(text, next);
             if (!op) {
                 if (expressions[left->index].kind != logical_expr::kind::filter_query) [[unlikely]]
                     return std::unexpected(error::invalid_path);
                 return left;
             }
-            auto const right = primary_parse(text, extended_diagnostic_notation::blank_end(text, next + op->second), depth);
+            auto const right = parse_primary(text, extended_diagnostic_notation::blank_end(text, next + op->second), depth);
             if (!right) [[unlikely]]
                 return right;
             if (!comparable(left->index) || !comparable(right->index)) [[unlikely]]
                 return std::unexpected(error::invalid_path);
-            return parsed_expression{right->at, expression_add({logical_expr::kind::comparison, left->index, right->index,
+            return parsed_expression{right->at, add_expression({logical_expr::kind::comparison, left->index, right->index,
                                                                 op->first, false, false})};
         }
 
-        constexpr std::expected<parsed_expression, error> logical_and_parse(std::string_view const text, std::size_t const at,
+        constexpr std::expected<parsed_expression, error> parse_logical_and(std::string_view const text, std::size_t const at,
                                                                             std::size_t const depth)
         {
-            auto const first = basic_parse(text, at, depth);
+            auto const first = parse_basic(text, at, depth);
             if (!first) [[unlikely]]
                 return first;
             parsed_expression chain = *first;
@@ -510,13 +510,13 @@ class jsonpath
                 std::size_t const next = extended_diagnostic_notation::blank_end(text, chain.at);
                 if (!std::string_view{std::span(text).subspan(next)}.starts_with(std::string_view("&&")))
                     return chain;
-                auto const right = basic_parse(
+                auto const right = parse_basic(
                     text, extended_diagnostic_notation::blank_end(text, next + std::string_view("&&").size()),
                     depth);
                 if (!right) [[unlikely]]
                     return right;
                 std::size_t const left = last ? expressions[*last].second : chain.index;
-                std::size_t const node = expression_add({logical_expr::kind::logical_and, left, right->index,
+                std::size_t const node = add_expression({logical_expr::kind::logical_and, left, right->index,
                                                          comparison_op::equal, false, false});
                 if (last)
                     expressions[*last].second = node;
@@ -527,13 +527,13 @@ class jsonpath
             }
         }
 
-        constexpr std::expected<parsed_expression, error> logical_or_parse(std::string_view const text, std::size_t const at,
+        constexpr std::expected<parsed_expression, error> parse_logical_or(std::string_view const text, std::size_t const at,
                                                                            std::size_t const depth)
         {
             if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
                 return std::unexpected(r.error());
             depth_reached = std::max(depth_reached, depth);
-            auto const first = logical_and_parse(text, at, depth);
+            auto const first = parse_logical_and(text, at, depth);
             if (!first) [[unlikely]]
                 return first;
             parsed_expression chain = *first;
@@ -542,13 +542,13 @@ class jsonpath
                 std::size_t const next = extended_diagnostic_notation::blank_end(text, chain.at);
                 if (!std::string_view{std::span(text).subspan(next)}.starts_with(std::string_view("||")))
                     return chain;
-                auto const right = logical_and_parse(
+                auto const right = parse_logical_and(
                     text, extended_diagnostic_notation::blank_end(text, next + std::string_view("||").size()),
                     depth);
                 if (!right) [[unlikely]]
                     return right;
                 std::size_t const left = last ? expressions[*last].second : chain.index;
-                std::size_t const node = expression_add({logical_expr::kind::logical_or, left, right->index,
+                std::size_t const node = add_expression({logical_expr::kind::logical_or, left, right->index,
                                                          comparison_op::equal, false, false});
                 if (last)
                     expressions[*last].second = node;
@@ -560,13 +560,13 @@ class jsonpath
         }
     };
 
-    static constexpr std::expected<syntax_tree, error> query_parse(std::string_view const text,
+    static constexpr std::expected<syntax_tree, error> parse_query(std::string_view const text,
                                                              std::size_t const depth_max)
     {
         syntax_tree q{{}, {}, {}, {}, depth_max, {}, 0};
         if (text.empty() || text.front() != '$') [[unlikely]]
             return std::unexpected(error::invalid_path);
-        auto const top = q.segments_parse(text, 1, 0);
+        auto const top = q.parse_segments(text, 1, 0);
         if (!top) [[unlikely]]
             return std::unexpected(top.error());
         if (top->at != text.size()) [[unlikely]]
@@ -578,9 +578,9 @@ class jsonpath
         return q;
     }
 
-    static std::expected<lazy, error> key_find(lazy const &node, std::string_view key);
+    static std::expected<lazy, error> find_key(lazy const &node, std::string_view key);
 
-    static std::expected<lazy, error> index_select(lazy const &node, std::int64_t index);
+    static std::expected<lazy, error> select_index(lazy const &node, std::int64_t index);
 
     static std::expected<bool, error> value_equal(lazy const &a, lazy const &b, std::size_t depth);
 
@@ -590,32 +590,32 @@ class jsonpath
                                                                       lazy const &current, lazy const &root,
                                                                       std::size_t depth);
 
-    static std::expected<bool, error> expression_test(query_view const &v, std::size_t index,
+    static std::expected<bool, error> test_expression(query_view const &v, std::size_t index,
                                                       lazy const &current, lazy const &root, std::size_t depth);
 
-    static std::expected<void, error> selector_apply(query_view const &v, selector const &s, lazy const &node,
+    static std::expected<void, error> apply_selector(query_view const &v, selector const &s, lazy const &node,
                                                      lazy const &root, std::vector<lazy> &nodes, std::size_t depth);
 
-    static std::expected<void, error> segment_apply(query_view const &v, segment const &s, lazy const &node,
+    static std::expected<void, error> apply_segment(query_view const &v, segment const &s, lazy const &node,
                                                     lazy const &root, std::vector<lazy> &nodes,
                                                     std::size_t depth);
 
-    static std::expected<std::vector<lazy>, error> segments_apply(query_view const &v, std::size_t segment_at,
+    static std::expected<std::vector<lazy>, error> apply_segments(query_view const &v, std::size_t segment_at,
                                                                   std::size_t segment_count,
                                                                   lazy const &start, lazy const &root);
 
-    static std::expected<lazy, error> singular_query_walk(query_view const &v, parsed_query const &top,
+    static std::expected<lazy, error> walk_singular_query(query_view const &v, parsed_query const &top,
                                                           lazy const &root);
 
-    static std::expected<std::vector<lazy>, error> query_walk(query_view const &v, parsed_query const &top,
+    static std::expected<std::vector<lazy>, error> walk_query(query_view const &v, parsed_query const &top,
                                                               lazy const &root);
 
     template <fixed_string Path, class Walk>
-    static auto compiled_apply(Walk const &walk);
+    static auto apply_compiled(Walk const &walk);
 
     template <class T, bool Checked>
-    static std::optional<std::expected<T, error>> query_walk(query_view const &v, parsed_query const &top,
-                                                             std::string_view const encoded)
+    static std::optional<std::expected<T, error>> try_walk_bytes(query_view const &v, parsed_query const &top,
+                                                                 std::string_view const encoded)
     {
         heads::decoder<Checked> d{encoded};
         heads::head h{};
@@ -623,13 +623,13 @@ class jsonpath
         auto const typed_array_elements = [&d](std::uint64_t const tag)
             -> std::optional<std::expected<std::string_view, error>> {
             d.encoded = validity::subspan(d.encoded, heads::self_described_cbor_content_at(d.encoded, validity::offset{}));
-            auto const r = d.head_decode();
+            auto const r = d.decode_head();
             if (!r) [[unlikely]]
                 return std::unexpected(r.error());
             if (error const c = validity::check_typed_array_content(tag, r->major, r->argument).error_or(error{});
                 c != error{}) [[unlikely]]
                 return std::unexpected(c);
-            auto const bytes = d.byte_string_decode(r->argument);
+            auto const bytes = d.decode_byte_string(r->argument);
             if (!bytes) [[unlikely]]
                 return std::unexpected(bytes.error());
             return *bytes;
@@ -638,7 +638,7 @@ class jsonpath
             for (;;) {
                 for (;;) {
                     heads::decoder const before = d;
-                    auto const t = d.head_decode();
+                    auto const t = d.decode_head();
                     if (!t) [[unlikely]]
                         return std::unexpected(t.error());
                     if (t->major != major_type::tag || !heads::is_tag_passed(t->argument)) {
@@ -646,19 +646,19 @@ class jsonpath
                         break;
                     }
                 }
-                auto const c = d.head_decode();
+                auto const c = d.decode_head();
                 if (!c) [[unlikely]]
                     return std::unexpected(c.error());
                 h = *c;
                 if (h.major != major_type::tag ||
                     h.argument != std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item))
                     break;
-                auto const r = d.head_decode();
+                auto const r = d.decode_head();
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
                 if (!validity::check_tag_content(h.argument, r->major).has_value()) [[unlikely]]
                     return std::unexpected(error::inadmissible_type_for_tag_content);
-                auto const embedded = d.byte_string_decode(r->argument);
+                auto const embedded = d.decode_byte_string(r->argument);
                 if (!embedded) [[unlikely]]
                     return std::unexpected(embedded.error());
                 d = heads::decoder<Checked>{*embedded};
@@ -674,7 +674,7 @@ class jsonpath
                 auto const position = validity::check_index(each.index, h.argument);
                 if (!position) [[unlikely]]
                     return std::unexpected(position.error());
-                if (auto const r = well_formedness::items_skip(d, std::to_underlying(*position)); !r) [[unlikely]]
+                if (auto const r = well_formedness::skip_items(d, std::to_underlying(*position)); !r) [[unlikely]]
                     return std::unexpected(r.error());
                 continue;
             }
@@ -696,7 +696,7 @@ class jsonpath
                     if (step == top.segment_count)
                         return std::as_bytes(validity::element_span(**elements, *position,
                                                                     validity::typed_array_element_size(h.argument)));
-                auto const element = heads::typed_array_element_decode(h.argument, **elements, *position);
+                auto const element = heads::decode_typed_array_element(h.argument, **elements, *position);
                 if (!element) [[unlikely]]
                     return std::unexpected(element.error());
                 if (step != top.segment_count) [[unlikely]]
@@ -713,7 +713,7 @@ class jsonpath
                 each.kind == selector::kind::key ? std::string_view(std::span(v.keys).subspan(each.key_at, each.key_size)) : std::string_view{};
             heads::decoder<false> named{key};
             if (each.kind == selector::kind::key) {
-                auto const n = named.head_decode();
+                auto const n = named.decode_head();
                 if (!n) [[unlikely]]
                     return std::unexpected(error::invalid_path);
                 if (n->major != major_type::text_string) [[unlikely]]
@@ -723,12 +723,12 @@ class jsonpath
             for (std::uint64_t i = 0; i < h.argument && !found; ++i) {
                 heads::decoder probe = d;
                 probe.encoded = validity::subspan(probe.encoded, heads::self_described_cbor_content_at(probe.encoded, validity::offset{}));
-                auto const k = probe.head_decode();
+                auto const k = probe.decode_head();
                 if (!k) [[unlikely]]
                     return std::unexpected(k.error());
                 if (each.kind == selector::kind::key) {
                     if (k->major == major_type::text_string) {
-                        auto const content = probe.byte_string_decode(k->argument);
+                        auto const content = probe.decode_byte_string(k->argument);
                         if (!content) [[unlikely]]
                             return std::unexpected(content.error());
                         found = *content == named.encoded;
@@ -740,7 +740,7 @@ class jsonpath
                              k->argument == static_cast<std::uint64_t>(-1 - each.index));
                     if (heads::is_bignum(k->major, k->argument)) [[unlikely]] {
                         heads::decoder content = probe;
-                        auto const read = content.bignum_decode(k->argument);
+                        auto const read = content.decode_bignum(k->argument);
                         if (!read) [[unlikely]]
                             return std::nullopt;
                         bool const negative = k->argument == std::to_underlying(rfc8949::tag_number::negative_bignum);
@@ -749,10 +749,10 @@ class jsonpath
                                                           : static_cast<std::uint64_t>(each.index));
                     }
                 }
-                if (auto const r = well_formedness::items_skip(d, 1); !r) [[unlikely]]
+                if (auto const r = well_formedness::skip_items(d, 1); !r) [[unlikely]]
                     return std::unexpected(r.error());
                 if (!found)
-                    if (auto const r = well_formedness::items_skip(d, 1); !r) [[unlikely]]
+                    if (auto const r = well_formedness::skip_items(d, 1); !r) [[unlikely]]
                         return std::unexpected(r.error());
             }
             if (!found) [[unlikely]]
@@ -764,7 +764,7 @@ class jsonpath
             if (heads::is_bignum(h.major, h.argument)) {
                 negative = h.argument == std::to_underlying(rfc8949::tag_number::negative_bignum);
                 d.encoded = validity::subspan(d.encoded, heads::self_described_cbor_content_at(d.encoded, validity::offset{}));
-                auto const read = d.bignum_decode(h.argument);
+                auto const read = d.decode_bignum(h.argument);
                 if (!read) [[unlikely]]
                     return std::unexpected(read.error());
                 if (!*read) [[unlikely]]
@@ -794,7 +794,7 @@ class jsonpath
             case rfc8949::simple_float_information::half_precision_float:
             case rfc8949::simple_float_information::single_precision_float:
             case rfc8949::simple_float_information::double_precision_float:
-                return heads::float_decode(h.info, h.argument);
+                return heads::decode_float(h.info, h.argument);
             [[unlikely]] default:
                 return std::unexpected(error::incorrect_type);
             }
@@ -816,14 +816,14 @@ class jsonpath
         } else if constexpr (std::is_same_v<T, std::string_view>) {
             if (h.major != major_type::text_string) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            auto const text = d.byte_string_decode(h.argument);
+            auto const text = d.decode_byte_string(h.argument);
             if (!text) [[unlikely]]
                 return std::unexpected(text.error());
             return *text;
         } else if constexpr (std::is_same_v<T, typed_array>) {
             if (h.major != major_type::tag) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            if (error const r = validity::typed_array_check(h.argument, 0).error_or(error{}); r != error{})
+            if (error const r = validity::check_typed_array(h.argument, 0).error_or(error{}); r != error{})
                 [[unlikely]]
                 return std::unexpected(r);
             auto const bytes = typed_array_elements(h.argument);
@@ -839,7 +839,7 @@ class jsonpath
         } else {
             if (h.major != major_type::byte_string) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            auto const bytes = d.byte_string_decode(h.argument);
+            auto const bytes = d.decode_byte_string(h.argument);
             if (!bytes) [[unlikely]]
                 return std::unexpected(bytes.error());
             return std::as_bytes(std::span(*bytes));
@@ -847,15 +847,15 @@ class jsonpath
     }
 
     template <class T>
-    static std::expected<T, error> query_walk(query_view const &v, parsed_query const &top, lazy const &root)
+    static std::expected<T, error> walk_query(query_view const &v, parsed_query const &top, lazy const &root)
     {
         lazy node = root;
         for (segment const &s : v.segments.subspan(top.segment_at, top.segment_count)) {
             selector const &each = v.selectors[s.selector_at];
             auto const child =
                 each.kind == selector::kind::index
-                    ? index_select(node, each.index)
-                    : key_find(node, std::string_view(std::span(v.keys).subspan(each.key_at, each.key_size)));
+                    ? select_index(node, each.index)
+                    : find_key(node, std::string_view(std::span(v.keys).subspan(each.key_at, each.key_size)));
             if (!child) [[unlikely]]
                 return std::unexpected(child.error());
             node = *child;
@@ -871,23 +871,23 @@ class jsonpath
     }
 
     template <class T>
-    static std::expected<T, error> bytes_walk(query_view const &v, parsed_query const &top,
+    static std::expected<T, error> walk_bytes(query_view const &v, parsed_query const &top,
                                               std::size_t const depth_reached, std::string_view const encoded)
     {
         if (auto const r = validity::check_nesting_depth(depth_reached, limits::nesting_depth); !r)
             [[unlikely]]
             return std::unexpected(r.error());
         std::string_view const content = heads::self_described_cbor_content(encoded);
-        auto const walked = query_walk<T, true>(v, top, content);
+        auto const walked = try_walk_bytes<T, true>(v, top, content);
         if (walked) [[likely]]
             return *walked;
-        return query_walk<T>(
+        return walk_query<T>(
             v, top,
             lazy{lazy::top_level_item{std::shared_ptr<void const>{}, content}, validity::offset{}, {}});
     }
 
     template <class T>
-    static std::expected<T, error> lazy_walk(query_view const &v, parsed_query const &top,
+    static std::expected<T, error> walk_lazy(query_view const &v, parsed_query const &top,
                                              std::size_t const depth_reached, lazy const &root)
     {
         validity::throw_logic_error_if(root.top_level.encoded.data() == nullptr, "cbor::lazy::at_path: the lazy holds no top-level item");
@@ -895,30 +895,30 @@ class jsonpath
             [[unlikely]]
             return std::unexpected(r.error());
         if (root.typed_array_tag != 0) [[unlikely]]
-            return query_walk<T>(v, top, root);
+            return walk_query<T>(v, top, root);
         auto const walked =
-            query_walk<T, true>(v, top, validity::subspan(root.top_level.encoded, root.offset));
+            try_walk_bytes<T, true>(v, top, validity::subspan(root.top_level.encoded, root.offset));
         if (walked) [[likely]]
             return *walked;
-        return query_walk<T>(v, top, root);
+        return walk_query<T>(v, top, root);
     }
 
     template <fixed_string Path>
-    static constexpr auto literal_parse()
+    static constexpr auto parse_literal()
     {
-        return *query_parse(Path.view(), limits::nesting_depth);
+        return *parse_query(Path.view(), limits::nesting_depth);
     }
 
     template <fixed_string Path, class T>
-    static std::expected<T, error> query_walk(std::string_view const encoded)
+    static std::expected<T, error> walk_query(std::string_view const encoded)
     {
-        constexpr std::size_t segments = literal_parse<Path>().segments.size();
-        constexpr std::size_t selectors = literal_parse<Path>().selectors.size();
-        constexpr std::size_t keys = literal_parse<Path>().keys.size();
-        constexpr auto top = literal_parse<Path>().top;
-        constexpr std::size_t depth_reached = literal_parse<Path>().depth_reached;
+        constexpr std::size_t segments = parse_literal<Path>().segments.size();
+        constexpr std::size_t selectors = parse_literal<Path>().selectors.size();
+        constexpr std::size_t keys = parse_literal<Path>().keys.size();
+        constexpr auto top = parse_literal<Path>().top;
+        constexpr std::size_t depth_reached = parse_literal<Path>().depth_reached;
         constexpr auto compiled = [] {
-            auto const parsed = literal_parse<Path>();
+            auto const parsed = parse_literal<Path>();
             std::tuple<std::array<segment, segments>, std::array<selector, selectors>, std::array<char, keys>> c{};
             std::ranges::copy(parsed.segments, std::get<0>(c).begin());
             std::ranges::copy(parsed.selectors, std::get<1>(c).begin());
@@ -926,19 +926,19 @@ class jsonpath
             return c;
         }();
         query_view const v{std::get<0>(compiled), std::get<1>(compiled), {}, std::string_view(std::get<2>(compiled)), {}};
-        return bytes_walk<T>(v, top, depth_reached, encoded);
+        return walk_bytes<T>(v, top, depth_reached, encoded);
     }
 
     template <fixed_string Path, class T>
-    static std::expected<T, error> query_walk(lazy const &root)
+    static std::expected<T, error> walk_query(lazy const &root)
     {
-        constexpr std::size_t segments = literal_parse<Path>().segments.size();
-        constexpr std::size_t selectors = literal_parse<Path>().selectors.size();
-        constexpr std::size_t keys = literal_parse<Path>().keys.size();
-        constexpr auto top = literal_parse<Path>().top;
-        constexpr std::size_t depth_reached = literal_parse<Path>().depth_reached;
+        constexpr std::size_t segments = parse_literal<Path>().segments.size();
+        constexpr std::size_t selectors = parse_literal<Path>().selectors.size();
+        constexpr std::size_t keys = parse_literal<Path>().keys.size();
+        constexpr auto top = parse_literal<Path>().top;
+        constexpr std::size_t depth_reached = parse_literal<Path>().depth_reached;
         constexpr auto compiled = [] {
-            auto const parsed = literal_parse<Path>();
+            auto const parsed = parse_literal<Path>();
             std::tuple<std::array<segment, segments>, std::array<selector, selectors>, std::array<char, keys>> c{};
             std::ranges::copy(parsed.segments, std::get<0>(c).begin());
             std::ranges::copy(parsed.selectors, std::get<1>(c).begin());
@@ -946,22 +946,22 @@ class jsonpath
             return c;
         }();
         query_view const v{std::get<0>(compiled), std::get<1>(compiled), {}, std::string_view(std::get<2>(compiled)), {}};
-        return lazy_walk<T>(v, top, depth_reached, root);
+        return walk_lazy<T>(v, top, depth_reached, root);
     }
     template <fixed_string Path, class T>
-    static std::expected<ref<T>, error> owned_query_walk(lazy const &root)
+    static std::expected<ref<T>, error> walk_owned_query(lazy const &root)
     {
-        auto const r = query_walk<Path, T>(root);
+        auto const r = walk_query<Path, T>(root);
         if (!r) [[unlikely]]
             return std::unexpected(r.error());
         return ref<T>(root.top_level.owner, *r);
     }
 
     template <fixed_string Path, class T>
-    static std::expected<ref<T>, error> query_walk(std::shared_ptr<void const> owner,
+    static std::expected<ref<T>, error> walk_query(std::shared_ptr<void const> owner,
                                                           std::string_view const encoded)
     {
-        auto const r = query_walk<Path, T>(encoded);
+        auto const r = walk_query<Path, T>(encoded);
         if (!r) [[unlikely]]
             return std::unexpected(r.error());
         return ref<T>(std::move(owner), *r);
@@ -1051,7 +1051,7 @@ private:
     template <class T>
     static std::expected<query<T>, error> query_compile(std::string_view const path)
     {
-        auto q = query_parse(path, limits::nesting_depth);
+        auto q = parse_query(path, limits::nesting_depth);
         if (!q) [[unlikely]]
             return std::unexpected(q.error());
         if (!std::is_same_v<T, nodelist> && !q->top.singular) [[unlikely]]
@@ -1067,48 +1067,48 @@ private:
     }
 
     template <class T>
-    static std::expected<typename query<T>::result_type, error> query_apply(query<T> const &e,
+    static std::expected<typename query<T>::result_type, error> apply_query(query<T> const &e,
                                                                             lazy const &root)
     {
-        query_check(e);
+        throw_logic_error_if_query_empty(e);
         query_view const v{e.segments, e.selectors, e.filters, e.keys, {}};
         if constexpr (std::is_same_v<T, nodelist> || std::is_same_v<T, lazy>) {
             if (auto const r = validity::check_nesting_depth(e.depth_reached, limits::nesting_depth); !r)
                 [[unlikely]]
                 return std::unexpected(r.error());
             if constexpr (std::is_same_v<T, nodelist>)
-                return query_walk(v, e.top, root);
+                return walk_query(v, e.top, root);
             else
-                return singular_query_walk(v, e.top, root);
+                return walk_singular_query(v, e.top, root);
         } else if constexpr (view_result<T>) {
-            auto const r = lazy_walk<T>(v, e.top, e.depth_reached, root);
+            auto const r = walk_lazy<T>(v, e.top, e.depth_reached, root);
             if (!r) [[unlikely]]
                 return std::unexpected(r.error());
             return ref<T>(root.top_level.owner, *r);
         } else
-            return lazy_walk<T>(v, e.top, e.depth_reached, root);
+            return walk_lazy<T>(v, e.top, e.depth_reached, root);
     }
 
     template <class T>
-    static std::expected<T, error> query_apply(query<T> const &e, std::string_view const encoded)
+    static std::expected<T, error> apply_query(query<T> const &e, std::string_view const encoded)
     {
-        query_check(e);
-        return bytes_walk<T>({e.segments, e.selectors, e.filters, e.keys, {}}, e.top, e.depth_reached,
+        throw_logic_error_if_query_empty(e);
+        return walk_bytes<T>({e.segments, e.selectors, e.filters, e.keys, {}}, e.top, e.depth_reached,
                              encoded);
     }
 
     template <view_result T>
-    static std::expected<ref<T>, error> query_apply(query<T> const &e, std::shared_ptr<void const> owner,
+    static std::expected<ref<T>, error> apply_query(query<T> const &e, std::shared_ptr<void const> owner,
                                                     std::string_view const encoded)
     {
-        auto const r = query_apply(e, encoded);
+        auto const r = apply_query(e, encoded);
         if (!r) [[unlikely]]
             return std::unexpected(r.error());
         return ref<T>(std::move(owner), *r);
     }
 
     template <class T>
-    static void query_check(query<T> const &e)
+    static void throw_logic_error_if_query_empty(query<T> const &e)
     {
         validity::throw_logic_error_if(e.top.at == 0,
                                        "cbor::jsonpath::query: the query is empty or moved from");
@@ -1128,7 +1128,7 @@ inline constexpr bool is_path_query_v<jsonpath::query<T>> = true;
 template <scalar_result T>
 std::expected<T, error> at_path(std::string_view const encoded, jsonpath::query<T> const &e)
 {
-    return jsonpath::query_apply(e, encoded);
+    return jsonpath::apply_query(e, encoded);
 }
 
 template <view_result T, borrowed_range_of_chars Encoded>
@@ -1136,7 +1136,7 @@ std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded 
                                             jsonpath::query<T> const &e)
 {
     validity::throw_logic_error_if_empty(owner, "cbor::at_path: the owner of the encoded data item is empty");
-    return jsonpath::query_apply(e, std::move(owner),
+    return jsonpath::apply_query(e, std::move(owner),
                                  std::string_view(std::span<char const>(encoded)));
 }
 
@@ -1168,37 +1168,37 @@ std::expected<typename jsonpath::query<T>::result_type, error> at_path(Encoded &
 
 template <fixed_string Path>
 class is_valid_path
-    : public std::bool_constant<jsonpath::query_parse(Path.view(), limits::nesting_depth).has_value()>
+    : public std::bool_constant<jsonpath::parse_query(Path.view(), limits::nesting_depth).has_value()>
 {
 };
 
-inline std::expected<lazy, error> jsonpath::index_select(lazy const &node, std::int64_t const index)
+inline std::expected<lazy, error> jsonpath::select_index(lazy const &node, std::int64_t const index)
 {
     node.throw_logic_error_if_no_top_level();
     auto found = lazy::resolve<true>(node);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     if (found->h.major != major_type::array && !heads::is_typed_array(found->h))
-        return lazy::value_of(lazy::key_find(std::move(*found), index));
-    return lazy::index_select(*found, index);
+        return lazy::value_of(lazy::find_key(std::move(*found), index));
+    return lazy::select_index(*found, index);
 }
 
-inline std::expected<lazy, error> jsonpath::key_find(lazy const &node, std::string_view const key)
+inline std::expected<lazy, error> jsonpath::find_key(lazy const &node, std::string_view const key)
 {
     heads::decoder<false> text_key{key};
-    auto const literal = text_key.head_decode();
+    auto const literal = text_key.decode_head();
     node.throw_logic_error_if_no_top_level();
     auto found = lazy::resolve<true>(node);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     if (literal && literal->major == major_type::text_string)
-        return lazy::value_of(lazy::key_find(std::move(*found), text_key.encoded));
+        return lazy::value_of(lazy::find_key(std::move(*found), text_key.encoded));
     auto [source, h, d, item_at] = *found;
     if (h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
     for (std::uint64_t i = 0; i < h.argument; ++i) {
         validity::offset const start = validity::distance(source.encoded, d.encoded);
-        if (auto const r = well_formedness::items_skip(d, 1); !r) [[unlikely]]
+        if (auto const r = well_formedness::skip_items(d, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
         auto const match =
             validity::keys_equivalent<true>(source, start, key, validity::offset{}, 0, limits::nesting_depth);
@@ -1206,7 +1206,7 @@ inline std::expected<lazy, error> jsonpath::key_find(lazy const &node, std::stri
             return std::unexpected(match.error());
         if (*match)
             return lazy{source, validity::distance(source.encoded, d.encoded), {}};
-        if (auto const r = well_formedness::items_skip(d, 1); !r) [[unlikely]]
+        if (auto const r = well_formedness::skip_items(d, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
             }
             return std::unexpected(error::key_not_found);
@@ -1218,11 +1218,11 @@ inline std::expected<bool, error> jsonpath::value_equal(lazy const &a, lazy cons
         return std::unexpected(r.error());
     a.throw_logic_error_if_no_top_level();
     auto const x = a.typed_array_tag != 0 ? lazy::resolve<true>(a)
-                                          : lazy::container_resolve<true>(a.top_level, a.offset);
+                                          : lazy::resolve_container<true>(a.top_level, a.offset);
     if (!x) [[unlikely]]
         return std::unexpected(x.error());
     auto const y = b.typed_array_tag != 0 ? lazy::resolve<true>(b)
-                                          : lazy::container_resolve<true>(b.top_level, b.offset);
+                                          : lazy::resolve_container<true>(b.top_level, b.offset);
     if (!y) [[unlikely]]
         return std::unexpected(y.error());
     heads::head const &h = x->h;
@@ -1238,7 +1238,7 @@ inline std::expected<bool, error> jsonpath::value_equal(lazy const &a, lazy cons
     };
     auto const number = [&](heads::head const &n) {
         if (floating(n))
-            return heads::float_decode(n.info, n.argument);
+            return heads::decode_float(n.info, n.argument);
         return n.major == major_type::unsigned_integer ? static_cast<double>(n.argument)
                                                        : -1.0 - static_cast<double>(n.argument);
     };
@@ -1255,10 +1255,10 @@ inline std::expected<bool, error> jsonpath::value_equal(lazy const &a, lazy cons
     case major_type::text_string: {
         heads::decoder d = x->d;
         heads::decoder e = y->d;
-        auto const s = d.byte_string_decode(h.argument);
+        auto const s = d.decode_byte_string(h.argument);
         if (!s) [[unlikely]]
             return std::unexpected(s.error());
-        auto const t = e.byte_string_decode(k.argument);
+        auto const t = e.decode_byte_string(k.argument);
         if (!t) [[unlikely]]
             return std::unexpected(t.error());
         return *s == *t;
@@ -1341,11 +1341,11 @@ inline std::expected<bool, error> jsonpath::value_less(lazy const &a, lazy const
 {
     a.throw_logic_error_if_no_top_level();
     auto const x = a.typed_array_tag != 0 ? lazy::resolve<true>(a)
-                                          : lazy::container_resolve<true>(a.top_level, a.offset);
+                                          : lazy::resolve_container<true>(a.top_level, a.offset);
     if (!x) [[unlikely]]
         return std::unexpected(x.error());
     auto const y = b.typed_array_tag != 0 ? lazy::resolve<true>(b)
-                                          : lazy::container_resolve<true>(b.top_level, b.offset);
+                                          : lazy::resolve_container<true>(b.top_level, b.offset);
     if (!y) [[unlikely]]
         return std::unexpected(y.error());
     heads::head const &h = x->h;
@@ -1361,7 +1361,7 @@ inline std::expected<bool, error> jsonpath::value_less(lazy const &a, lazy const
     };
     auto const number = [&](heads::head const &n) {
         if (floating(n))
-            return heads::float_decode(n.info, n.argument);
+            return heads::decode_float(n.info, n.argument);
         return n.major == major_type::unsigned_integer ? static_cast<double>(n.argument)
                                                        : -1.0 - static_cast<double>(n.argument);
     };
@@ -1376,10 +1376,10 @@ inline std::expected<bool, error> jsonpath::value_less(lazy const &a, lazy const
                 return false;
             heads::decoder d = x->d;
             heads::decoder e = y->d;
-            auto const s = d.byte_string_decode(h.argument);
+            auto const s = d.decode_byte_string(h.argument);
             if (!s) [[unlikely]]
                 return std::unexpected(s.error());
-            auto const t = e.byte_string_decode(k.argument);
+            auto const t = e.decode_byte_string(k.argument);
             if (!t) [[unlikely]]
                 return std::unexpected(t.error());
             return std::ranges::lexicographical_compare(
@@ -1398,7 +1398,7 @@ inline std::expected<std::optional<lazy>, error> jsonpath::comparable_value(quer
     logical_expr const &e = v.expressions[index];
     auto const unsigned_integer = [](std::uint64_t const n) -> std::expected<std::optional<lazy>, error> {
         std::string encoded;
-        if (auto const r = extended_diagnostic_notation::head_append(encoded, major_type::unsigned_integer, n, extended_diagnostic_notation::no_indicator); !r) [[unlikely]]
+        if (auto const r = extended_diagnostic_notation::append_head(encoded, major_type::unsigned_integer, n, extended_diagnostic_notation::no_indicator); !r) [[unlikely]]
             return std::unexpected(r.error());
         auto const owner = std::make_shared<std::string const>(std::move(encoded));
         auto const l = lazy::from(owner, *owner);
@@ -1422,7 +1422,7 @@ inline std::expected<std::optional<lazy>, error> jsonpath::comparable_value(quer
         logical_expr const &q = v.expressions[at];
         std::expected<std::vector<lazy>, error> relative;
         if (q.relative)
-            relative = segments_apply(v, q.first, q.second, current, root);
+            relative = apply_segments(v, q.first, q.second, current, root);
         auto const &nodes = q.relative ? relative : v.absolute_nodelists[at];
         if (!nodes) [[unlikely]]
             return std::unexpected(nodes.error());
@@ -1439,7 +1439,7 @@ inline std::expected<std::optional<lazy>, error> jsonpath::comparable_value(quer
         (*argument)->throw_logic_error_if_no_top_level();
         auto const found = (*argument)->typed_array_tag != 0
                                ? lazy::resolve<true>(**argument)
-                               : lazy::container_resolve<true>((*argument)->top_level, (*argument)->offset);
+                               : lazy::resolve_container<true>((*argument)->top_level, (*argument)->offset);
         if (!found) [[unlikely]]
             return std::unexpected(found.error());
         if (found->h.major == major_type::array || found->h.major == major_type::map)
@@ -1447,7 +1447,7 @@ inline std::expected<std::optional<lazy>, error> jsonpath::comparable_value(quer
         if (found->h.major != major_type::text_string)
             return std::nullopt;
         heads::decoder d = found->d;
-        auto const s = d.byte_string_decode(found->h.argument);
+        auto const s = d.decode_byte_string(found->h.argument);
         if (!s) [[unlikely]]
             return std::unexpected(s.error());
         return unsigned_integer(static_cast<std::uint64_t>(std::ranges::count_if(
@@ -1458,7 +1458,7 @@ inline std::expected<std::optional<lazy>, error> jsonpath::comparable_value(quer
     }
 }
 
-inline std::expected<bool, error> jsonpath::expression_test(query_view const &v, std::size_t const index,
+inline std::expected<bool, error> jsonpath::test_expression(query_view const &v, std::size_t const index,
                                                             lazy const &current, lazy const &root,
                                                             std::size_t const depth)
 {
@@ -1467,7 +1467,7 @@ inline std::expected<bool, error> jsonpath::expression_test(query_view const &v,
     std::size_t at = index;
     while (v.expressions[at].kind == logical_expr::kind::logical_or || v.expressions[at].kind == logical_expr::kind::logical_and) {
         logical_expr const &chain = v.expressions[at];
-        auto const left = expression_test(v, chain.first, current, root, depth);
+        auto const left = test_expression(v, chain.first, current, root, depth);
         if (!left || *left == (chain.kind == logical_expr::kind::logical_or))
             return left;
         at = chain.second;
@@ -1475,7 +1475,7 @@ inline std::expected<bool, error> jsonpath::expression_test(query_view const &v,
     logical_expr const &e = v.expressions[at];
     switch (e.kind) {
     case logical_expr::kind::logical_not: {
-        auto const operand = expression_test(v, e.first, current, root, depth);
+        auto const operand = test_expression(v, e.first, current, root, depth);
         if (!operand) [[unlikely]]
             return operand;
         return !*operand;
@@ -1483,7 +1483,7 @@ inline std::expected<bool, error> jsonpath::expression_test(query_view const &v,
     case logical_expr::kind::filter_query: {
         std::expected<std::vector<lazy>, error> relative;
         if (e.relative)
-            relative = segments_apply(v, e.first, e.second, current, root);
+            relative = apply_segments(v, e.first, e.second, current, root);
         auto const &nodes = e.relative ? relative : v.absolute_nodelists[at];
         if (!nodes) [[unlikely]]
             return std::unexpected(nodes.error());
@@ -1537,7 +1537,7 @@ inline std::expected<bool, error> jsonpath::expression_test(query_view const &v,
     return false;
 }
 
-inline std::expected<void, error> jsonpath::selector_apply(query_view const &v, selector const &s,
+inline std::expected<void, error> jsonpath::apply_selector(query_view const &v, selector const &s,
                                                            lazy const &node, lazy const &root,
                                                            std::vector<lazy> &nodes, std::size_t const depth)
 {
@@ -1551,8 +1551,8 @@ inline std::expected<void, error> jsonpath::selector_apply(query_view const &v, 
     if (s.kind == selector::kind::key || s.kind == selector::kind::index) {
         auto const child =
             s.kind == selector::kind::index
-                ? index_select(node, s.index)
-                : key_find(node, std::string_view(std::span(v.keys).subspan(s.key_at, s.key_size)));
+                ? select_index(node, s.index)
+                : find_key(node, std::string_view(std::span(v.keys).subspan(s.key_at, s.key_size)));
         if (child)
             return append(*child);
         if (child.error() != error::not_indexable && child.error() != error::index_out_of_bounds &&
@@ -1609,7 +1609,7 @@ inline std::expected<void, error> jsonpath::selector_apply(query_view const &v, 
             }
             for (lazy const &child : children) {
                 if (s.kind == selector::kind::filter) {
-                    auto const chosen = expression_test(v, s.expression, child, root, depth);
+                    auto const chosen = test_expression(v, s.expression, child, root, depth);
                     if (!chosen) [[unlikely]]
                         return std::unexpected(chosen.error());
                     if (!*chosen)
@@ -1621,28 +1621,28 @@ inline std::expected<void, error> jsonpath::selector_apply(query_view const &v, 
             return {};
 }
 
-inline std::expected<void, error> jsonpath::segment_apply(query_view const &v, segment const &s,
+inline std::expected<void, error> jsonpath::apply_segment(query_view const &v, segment const &s,
                                                           lazy const &node, lazy const &root,
                                                           std::vector<lazy> &nodes, std::size_t const depth)
 {
     if (auto const r = validity::check_nesting_depth(depth, limits::nesting_depth); !r) [[unlikely]]
         return std::unexpected(r.error());
     for (selector const &each : v.selectors.subspan(s.selector_at, s.selector_count))
-        if (auto const r = selector_apply(v, each, node, root, nodes, depth); !r) [[unlikely]]
+        if (auto const r = apply_selector(v, each, node, root, nodes, depth); !r) [[unlikely]]
             return r;
     if (!s.descendant)
         return {};
     std::vector<lazy> children;
     selector const wildcard{selector::kind::wildcard, 0, 0, 0, std::nullopt, std::nullopt, 1, 0};
-    if (auto const r = selector_apply(v, wildcard, node, root, children, depth); !r) [[unlikely]]
+    if (auto const r = apply_selector(v, wildcard, node, root, children, depth); !r) [[unlikely]]
         return r;
     for (lazy const &child : children)
-        if (auto const r = segment_apply(v, s, child, root, nodes, depth + 1); !r) [[unlikely]]
+        if (auto const r = apply_segment(v, s, child, root, nodes, depth + 1); !r) [[unlikely]]
             return r;
     return {};
 }
 
-inline std::expected<std::vector<lazy>, error> jsonpath::segments_apply(query_view const &v,
+inline std::expected<std::vector<lazy>, error> jsonpath::apply_segments(query_view const &v,
                                                                         std::size_t const segment_at,
                                                                         std::size_t const segment_count,
                                                                         lazy const &start, lazy const &root)
@@ -1652,14 +1652,14 @@ inline std::expected<std::vector<lazy>, error> jsonpath::segments_apply(query_vi
     for (segment const &s : v.segments.subspan(segment_at, segment_count)) {
         next.clear();
         for (lazy const &node : nodes)
-            if (auto const r = segment_apply(v, s, node, root, next, 0); !r) [[unlikely]]
+            if (auto const r = apply_segment(v, s, node, root, next, 0); !r) [[unlikely]]
                 return std::unexpected(r.error());
         std::swap(nodes, next);
     }
     return nodes;
 }
 
-inline std::expected<lazy, error> jsonpath::singular_query_walk(query_view const &v, parsed_query const &top,
+inline std::expected<lazy, error> jsonpath::walk_singular_query(query_view const &v, parsed_query const &top,
                                                                 lazy const &root)
 {
     validity::throw_logic_error_if(root.top_level.encoded.data() == nullptr, "cbor::lazy::at_path: the lazy holds no top-level item");
@@ -1668,8 +1668,8 @@ inline std::expected<lazy, error> jsonpath::singular_query_walk(query_view const
         selector const &each = v.selectors[s.selector_at];
         auto const child =
             each.kind == selector::kind::index
-                ? index_select(node, each.index)
-                : key_find(node, std::string_view(std::span(v.keys).subspan(each.key_at, each.key_size)));
+                ? select_index(node, each.index)
+                : find_key(node, std::string_view(std::span(v.keys).subspan(each.key_at, each.key_size)));
         if (!child) [[unlikely]]
             return std::unexpected(child.error());
         node = *child;
@@ -1677,7 +1677,7 @@ inline std::expected<lazy, error> jsonpath::singular_query_walk(query_view const
     return node;
 }
 
-inline std::expected<std::vector<lazy>, error> jsonpath::query_walk(query_view const &v,
+inline std::expected<std::vector<lazy>, error> jsonpath::walk_query(query_view const &v,
                                                                     parsed_query const &top, lazy const &root)
 {
     validity::throw_logic_error_if(root.top_level.encoded.data() == nullptr, "cbor::lazy::query: the lazy holds no top-level item");
@@ -1686,14 +1686,14 @@ inline std::expected<std::vector<lazy>, error> jsonpath::query_walk(query_view c
     for (std::size_t i = 0; i < v.expressions.size(); ++i)
         if (v.expressions[i].kind == logical_expr::kind::filter_query && !v.expressions[i].relative)
             absolute_nodelists[i] =
-                segments_apply(with_nodelists, v.expressions[i].first, v.expressions[i].second, root, root);
-    return segments_apply(with_nodelists, top.segment_at, top.segment_count, root, root);
+                apply_segments(with_nodelists, v.expressions[i].first, v.expressions[i].second, root, root);
+    return apply_segments(with_nodelists, top.segment_at, top.segment_count, root, root);
 }
 
 template <fixed_string Path, class Walk>
-auto jsonpath::compiled_apply(Walk const &walk)
+auto jsonpath::apply_compiled(Walk const &walk)
 {
-    constexpr auto q = [] { return *query_parse(Path.view(), limits::nesting_depth); };
+    constexpr auto q = [] { return *parse_query(Path.view(), limits::nesting_depth); };
     constexpr std::size_t segments = q().segments.size();
     constexpr std::size_t selectors = q().selectors.size();
     constexpr std::size_t expressions = q().expressions.size();
@@ -1728,7 +1728,7 @@ class is_singular_query
           [] {
     std::array const text = Path.value;
     auto const q =
-        jsonpath::query_parse(std::string_view(std::span(text).first(text.size() - 1)), limits::nesting_depth);
+        jsonpath::parse_query(std::string_view(std::span(text).first(text.size() - 1)), limits::nesting_depth);
     return q.has_value() && q->top.singular;
 }()>
 {
@@ -1744,7 +1744,7 @@ template <fixed_string Path, class T>
               ))
 std::expected<T, error> at_path(std::string_view const encoded)
 {
-    return jsonpath::query_walk<Path, T>(encoded);
+    return jsonpath::walk_query<Path, T>(encoded);
 }
 
 template <fixed_string Path, class T, borrowed_range_of_chars Encoded>
@@ -1754,7 +1754,7 @@ template <fixed_string Path, class T, borrowed_range_of_chars Encoded>
 std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded)
 {
     validity::throw_logic_error_if_empty(owner, "cbor::at_path: the owner of the encoded data item is empty");
-    return jsonpath::query_walk<Path, T>(std::move(owner),
+    return jsonpath::walk_query<Path, T>(std::move(owner),
                                          std::string_view(std::span<char const>(encoded)));
 }
 
@@ -1783,7 +1783,7 @@ template <fixed_string Path, copied_value T>
 std::expected<T, error> at_path(std::string_view const encoded)
 {
     using view = std::conditional_t<std::same_as<T, std::string>, std::string_view, std::span<std::byte const>>;
-    return jsonpath::query_walk<Path, view>(encoded).transform([](view const v) { return T(v.begin(), v.end()); });
+    return jsonpath::walk_query<Path, view>(encoded).transform([](view const v) { return T(v.begin(), v.end()); });
 }
 
 inline std::expected<lazy, error> lazy::operator[](std::string_view const key) const
@@ -1805,12 +1805,12 @@ template <fixed_string Path>
     requires is_valid_path_v<Path>
 std::expected<lazy, error> lazy::at_path() const
 {
-    static_assert(jsonpath::query_parse(Path.view(), limits::nesting_depth)->top.singular,
+    static_assert(jsonpath::parse_query(Path.view(), limits::nesting_depth)->top.singular,
                   "cbor::lazy::at_path: the path is not a singular query (RFC 9535 2.3.5.1); cbor::nodelist "
                   "as the result type reads its nodelist");
-    return jsonpath::compiled_apply<Path>(
+    return jsonpath::apply_compiled<Path>(
         [this](jsonpath::query_view const &v, jsonpath::parsed_query const &top) {
-            return jsonpath::singular_query_walk(v, top, *this);
+            return jsonpath::walk_singular_query(v, top, *this);
         });
 }
 
@@ -1818,9 +1818,9 @@ template <fixed_string Path, std::same_as<nodelist> T>
     requires is_valid_path_v<Path>
 std::expected<nodelist, error> lazy::at_path() const
 {
-    return jsonpath::compiled_apply<Path>(
+    return jsonpath::apply_compiled<Path>(
         [this](jsonpath::query_view const &v, jsonpath::parsed_query const &top) {
-            return jsonpath::query_walk(v, top, *this);
+            return jsonpath::walk_query(v, top, *this);
         });
 }
 
@@ -1834,7 +1834,7 @@ template <fixed_string Path, class T>
               ))
 std::expected<T, error> lazy::at_path() const
 {
-    return jsonpath::query_walk<Path, T>(*this);
+    return jsonpath::walk_query<Path, T>(*this);
 }
 
 template <fixed_string Path, class T>
@@ -1843,14 +1843,14 @@ template <fixed_string Path, class T>
               std::is_same_v<T, typed_array>))
 std::expected<ref<T>, error> lazy::at_path() const
 {
-    return jsonpath::owned_query_walk<Path, T>(*this);
+    return jsonpath::walk_owned_query<Path, T>(*this);
 }
 
 template <class E>
     requires is_path_query_v<E>
 std::expected<typename E::result_type, error> lazy::at_path(E const &e) const
 {
-    return jsonpath::query_apply(e, *this);
+    return jsonpath::apply_query(e, *this);
 }
 
 }

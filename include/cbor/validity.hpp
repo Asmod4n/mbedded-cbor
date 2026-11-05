@@ -395,7 +395,7 @@ public:
         return {};
     }
 
-    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> typed_array_check(std::uint64_t const tag,
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_typed_array(std::uint64_t const tag,
                                                                                      std::uint64_t const size)
     {
         if (tag < std::to_underlying(rfc8746::tag_number::typed_array_first) ||
@@ -410,7 +410,7 @@ public:
     {
         if (auto const r = check_tag_content(tag, content); !r) [[unlikely]]
             return r;
-        return typed_array_check(tag, size);
+        return check_typed_array(tag, size);
     }
 
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>

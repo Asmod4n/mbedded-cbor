@@ -17,7 +17,7 @@ namespace test
 
 // The index selector of RFC 9535 through the public interface of lazy: an index counts from the end when it
 // is negative, and on a map it names the integer key, as at_path reads it.
-inline std::expected<cbor::lazy, cbor::error> index_select(cbor::lazy const &l, std::int64_t const index)
+inline std::expected<cbor::lazy, cbor::error> select_index(cbor::lazy const &l, std::int64_t const index)
 {
     if (auto const e = l.elements(); !e && e.error() == cbor::error::not_indexable)
         return l.at(cbor::key{index});
