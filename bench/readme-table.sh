@@ -3,7 +3,8 @@
 # encode, for mbedded-cbor, FlatBuffers with its Verifier and Cap'n Proto.
 # usage: bench/readme-table.sh
 # Needs: g++-16 with -freflection, flatc, capnp, the headers and libraries of flatbuffers, capnproto, nlohmann_json
-# and google benchmark. Variables: ROUNDS (7), MIN_TIME (1s), GXX (g++-16), FLAGS, RESULTS_DIR (bench/results).
+# and google benchmark. Variables: ROUNDS (7), MIN_TIME (1s), GXX (g++-16), FLAGS, RESULTS_DIR (bench/results),
+# BENCH_COMMIT (the commit of the tree when the tree is no git checkout).
 set -eu
 [ "$(id -u)" = 0 ] && { echo "run it as a normal user" >&2; exit 2; }
 src=$(cd "$(dirname "$0")/.." && pwd)
@@ -29,7 +30,7 @@ for arm in $arms; do
 done
 wait
 nice_level=0
-nice -n -10 true 2>/dev/null && nice_level=-10
+[ "$(nice -n -10 nice)" = -10 ] && nice_level=-10
 for r in $(seq 1 "$rounds"); do
 	for arm in $(printf '%s\n' $arms | shuf); do
 		nice -n "$nice_level" "$work/bin/$arm" --benchmark_min_time="$min_time" --benchmark_format=json \
@@ -39,8 +40,11 @@ for r in $(seq 1 "$rounds"); do
 done
 mkdir -p "$results"
 file="$results/readme-$(date -u +%Y-%m-%d-%H%M%SZ).json"
-commit=$(git -C "$src" rev-parse HEAD 2>/dev/null || echo unknown)
-git -C "$src" diff --quiet 2>/dev/null || commit="$commit-dirty"
+if commit=$(git -C "$src" rev-parse HEAD); then
+	git -C "$src" diff --quiet || commit="$commit-dirty"
+else
+	commit=${BENCH_COMMIT:-unknown}
+fi
 python3 - "$work/out" "$file" "$commit" \
 	"$flags" "$("$gxx" --version | head -1)" "$(uname -srm)" "$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2)" \
 	"$nice_level" "$rounds" "$min_time" <<'PY'
