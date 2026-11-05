@@ -1,5 +1,5 @@
 '\" t
-.TH "cbor::item" "3" "2026-11-04" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.TH "cbor::item" "3" "2026-11-05" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
 .SH NAME
 cbor::item, cbor::item::get, cbor::decode, cbor::encoded_cbor_data_item, cbor::encode, cbor::encode_iov, cbor::encoder, cbor::encoder::unsigned_integer, cbor::encoder::negative_integer, cbor::encoder::byte_string, cbor::encoder::text_string, cbor::encoder::array, cbor::encoder::map, cbor::encoder::tag, cbor::encoder::simple_value, cbor::encoder::floating_point, cbor::encoder::typed_array, cbor::encoder::finish, cbor::iov_writer \- a decoded tree and the encoder
 .SH SYNOPSIS
@@ -134,6 +134,10 @@ std::expected<void, error> typed_array(cbor::typed_array const value);
 .SH DESCRIPTION
 \f[CR]cbor::item\f[R] is a decoded tree, and \f[CR]cbor::encoder\f[R]
 writes CBOR one data item per call.
+\f[CR]decode\f[R] is O(bytes) and copies every string into one memory
+zone.
+The encoder is O(1) per head and allocates nothing over a
+\f[CR]std::span<char>\f[R].
 .SS cbor::item
 One node of a tree from decode or lazy::clone.
 \f[CR]type\f[R] gives the kind of the node.
