@@ -48,6 +48,8 @@ podman run --rm --network none -e COMMIT="$commit" -e SITE_GROUPS="${SITE_GROUPS
       -M tree=/src -M impl=$work/impl -M types=$work/types -M commit=$COMMIT -M group=$1 -M examples=$work/examples-$1.json "$2" -o /out/$1.html
   }
   reference index /src/doc/reference/index.md
+  reference console /src/doc/reference/console.md
+  lynx -dump -nolist /out/console.html > $work/console.txt
   for g in ${SITE_GROUPS:-$groups}; do
     reference $g /src/doc/reference/$g/index.md
     lynx -dump -nolist /out/$g.html > $work/$g.txt
