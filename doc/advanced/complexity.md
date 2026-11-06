@@ -415,6 +415,8 @@ the struct types in a message.
 | `schema::accessor::size()` | O(1) | O(1) | |
 | `schema::accessor::iterator` members, `begin`, `end` | O(1) | O(1) | A list of fixed-size structs. |
 | `schema::accessor<fixed_element<S>>::at_path` | O(p) | O(1) | |
+| `schema::accessor<std::variant<A...>>::index`, `get` | O(1) | O(1) | |
+| `reflection::read_variant_item` | O(alternatives) | O(1) | One head compare for each alternative before the held one. |
 | `schema::path(shared_ptr<string const>)`, `path(shared_ptr<void const>, Encoded const&)` | O(q) in n | O(1) | An error can add too_little_data_if_truncated. |
 | `schema::path<Encoded>(Encoded&&)` | O(q) | O(1) | One make_shared. |
 | `schema::at_path<Path, D>(string_view, Index...)` | O(q + p) | O(1) | An error can add too_little_data_if_truncated. |

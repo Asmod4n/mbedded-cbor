@@ -98,6 +98,7 @@ struct garage {
     std::vector<std::uint8_t> blob;
     std::string note;
     std::variant<sedan, truck> parked;
+    std::variant<bool, std::int32_t, double, std::string> label;
 };
 
 } // namespace fuzz::schema
@@ -176,6 +177,7 @@ struct cbor::describe_members<fuzz::schema::garage> {
         CBOR_MEMBER(fuzz::schema::garage, blob),
         CBOR_MEMBER(fuzz::schema::garage, note),
         CBOR_MEMBER(fuzz::schema::garage, parked),
+        CBOR_MEMBER(fuzz::schema::garage, label),
     };
 };
 
@@ -425,7 +427,7 @@ void compare_all(T const &native, std::string_view message);
 
 // The errors that an unverified form may give on raw input (doc/reference/schema/unverified.md): it skips the
 // checks of the data and keeps every check of a bound, so it never raises and never reads outside the input. The
-// tag of a variant record chooses the alternative, so a type with a variant member also gives incorrect_type.
+// head of a variant item chooses the alternative, so a type with a variant member also gives incorrect_type.
 template <class T>
 bool unverified_error(cbor::error const e)
 {
@@ -509,23 +511,45 @@ inline void garage_parked(std::string const &written)
         require(maker.has_value() && *maker == std::get<truck>(native).maker);
         require(s.error() == cbor::error::incorrect_type);
     }
+    auto const label = root->at_path<"$.label">();
+    auto const &value = (*decoded)->label;
+    require(label.has_value() && label->index() == value.index());
+    auto const flag = label->get<bool>();
+    auto const number = label->get<std::int32_t>();
+    auto const real = label->get<double>();
+    auto const text = label->get<std::string>();
+    require(int{flag.has_value()} + int{number.has_value()} + int{real.has_value()} + int{text.has_value()} == 1);
+    if (flag)
+        require(*flag == std::get<bool>(value));
+    if (number)
+        require(*number == std::get<std::int32_t>(value));
+    if (real)
+        require(same_scalar(*real, std::get<double>(value)));
+    if (text)
+        require(*text == std::get<std::string>(value));
 }
 
-// The variant member of raw input reads inside the message through the verified and the unverified accessor.
+// The variant members of raw input read inside the message through the verified and the unverified accessor.
 template <class Lot>
 void parked_raw(Lot const &lot, std::string_view const message)
 {
-    auto const parked = lot.template at_path<"$.parked">();
-    if (!parked)
-        return;
-    require(parked->index() < 2);
-    if (auto const s = parked->template get<sedan>()) {
-        consume(s->template at_path<"@.maker">(), message);
-        consume(s->template at_path<"@.doors">(), message);
+    if (auto const parked = lot.template at_path<"$.parked">()) {
+        require(parked->index() < 2);
+        if (auto const s = parked->template get<sedan>()) {
+            consume(s->template at_path<"@.maker">(), message);
+            consume(s->template at_path<"@.doors">(), message);
+        }
+        if (auto const t = parked->template get<truck>()) {
+            consume(t->template at_path<"@.maker">(), message);
+            consume(t->template at_path<"@.axles[0].diameter">(), message);
+        }
     }
-    if (auto const t = parked->template get<truck>()) {
-        consume(t->template at_path<"@.maker">(), message);
-        consume(t->template at_path<"@.axles[0].diameter">(), message);
+    if (auto const label = lot.template at_path<"$.label">()) {
+        require(label->index() < 4);
+        consume(label->template get<std::string>(), message);
+        (void)label->template get<bool>();
+        (void)label->template get<std::int32_t>();
+        (void)label->template get<double>();
     }
 }
 

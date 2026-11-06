@@ -106,19 +106,29 @@ reflection, `std::is_base_of_v` checks it, so an indirect base is not
 found there, and Boost.PFR does not count the members of such a class.
 A class with a named base is not an aggregate that takes an allocator.
 
-A `std::variant` member takes classes that name one and the same direct
-base, each with its own tag:
+A `std::variant` member takes as alternatives classes with their own
+tag, numbers, `bool`, enums with a fixed underlying type, texts and
+byte strings. The class alternatives name one and the same direct base:
 
 ```cpp
 struct home {
     std::variant<dog, cat> pet;
 };
+
+struct property {
+    std::string name;
+    std::variant<bool, std::int64_t, std::string> value;
+};
 ```
 
-The tag of the record chooses the alternative. A list, a map, an array
-or a `std::optional` of a variant does not compile. A variant with
-`std::monostate`, with a class that has no description or no tag, with
-one class twice, or with classes of other bases does not compile.
+The CBOR head of the item chooses the alternative, so two alternatives
+whose items begin with one head do not compile: `std::int32_t` with
+`std::uint32_t`, `float` with `std::bfloat16_t`, an enum with its
+underlying type, two text types. A list, a map, an array or a
+`std::optional` of a variant does not compile, and neither does one as
+an alternative. A variant with `std::monostate`, with a class that has
+no description or no tag, with one type twice, or with classes of other
+bases does not compile.
 
 These do not compile: a key that is not a text, two members with one key,
 a member listed twice, `cbor::untagged`, and a tag that a standard type
