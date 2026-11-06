@@ -80,6 +80,8 @@ tag of the typed array.
 - `index_out_of_bounds`: an index past the end of a list.
 - `unpopulated_table_index`, `syntax_error`: a reference or a directory
   entry outside the table or the items.
+- `incorrect_type`: a variant record with a tag of no alternative. The
+  tag chooses the alternative, so these forms compare it too.
 - A wrong byte of data gives a value, not an error.
 
 ## Cost

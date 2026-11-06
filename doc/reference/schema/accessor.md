@@ -29,6 +29,8 @@ accessor.at_path<"@.member">(indexes...) → std::expected<V, cbor::error>
 accessor.at_path<"$.member">(indexes...) → std::expected<V, cbor::error>
 root.view<"$.list">(indexes...)          → std::expected<cbor::typed_array_view<E>, cbor::error>
 accessor.size()                          → std::size_t
+pet.index()                              → std::size_t
+pet.get<A>()                             → std::expected<accessor<A>, cbor::error>
 accessor.begin()                         → iterator
 accessor.end()                           → iterator
 ```
@@ -65,6 +67,12 @@ result is a `std::expected`: the value of a number, `bool` or enum; a
 `std::string_view` of a text; the accessor of a struct, a list or a map.
 Every result holds the owner of the bytes.
 
+The accessor of a `std::variant<A...>` member has `index()` and
+`get<A>()`. `index()` gives the index of the alternative that the tag
+of its record names. `get<A>()` gives the accessor of that record, or
+`incorrect_type` when the record holds another alternative. A path
+ends at a variant member: `$.pet.name` does not compile.
+
 `view` gives a [typed_array_view](typed_array_view.md) of a list of
 numbers. It exists on the root accessor only. `size()` gives the count
 of a list or a map. An accessor of a vector of fixed-size structs is a
@@ -73,7 +81,8 @@ random access range of [fixed_element](fixed_element.md) accessors.
 ## Errors
 
 - `index_out_of_bounds`: an index past the end of a list.
-- `incorrect_type`: a wrong head or tag on the path.
+- `incorrect_type`: a wrong head or tag on the path; a tag of a variant
+  record that names no alternative; `get<A>()` of another alternative.
 - `unpopulated_table_index`, `syntax_error`: a broken reference.
 - `at_path` on a temporary does not compile. A moved-from accessor
   throws `std::logic_error`.
@@ -95,6 +104,19 @@ tires->at_path<"$.seats">();         // 5
 for (auto const t : *tires)
     use(*t.at_path<"@.diameter">()); // 17, then 18
 root->view<"$.track">()->size();     // 3
+```
+
+A variant member, with `dog` and `cat` derived from `animal`:
+
+```cpp
+struct home {
+    std::variant<dog, cat> pet;
+};
+auto const doc = cbor::schema<home>::path(std::move(bytes));
+auto const pet = doc->at_path<"$.pet">();
+pet->index();                        // 0 for a dog
+pet->get<dog>()->at_path<"@.name">(); // "rex"
+pet->get<cat>().error();             // cbor::error::incorrect_type
 ```
 
 ## See also

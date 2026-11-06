@@ -116,3 +116,10 @@ TEST_CASE("member_offset: the record head has one width for any count and any na
     CHECK_EQ(form<größe>::member_offset<&größe::b>(), 10u);
     CHECK_EQ(form<größe>::member_offset<&größe::höhe>(), 12u);
 }
+
+// A variant member is a reference field like any part of variable size: tag 6 and an argument of 4 bytes.
+TEST_CASE("fixed_size: a variant member takes 6 bytes")
+{
+    CHECK_EQ(form<home>::fixed_size<std::variant<dog, cat>>(), 6u);
+    CHECK_EQ(form<home>::member_offset<&home::street>() - form<home>::member_offset<&home::pet>(), 6u);
+}

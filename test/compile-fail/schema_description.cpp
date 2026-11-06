@@ -4,7 +4,8 @@
 // description, 3 a root with cbor::untagged, 4 two structs with one tag, 5 two members with one key, 6 a public
 // member that the description leaves out, 7 a class with a base class that the description does not name, 8
 // cbor::tag on a described class, 9 cbor::key on a member of a described class, 10 a right description, which
-// compiles, 11 a class with a base class that CBOR_DEFINE_DERIVED_TYPE_MEMBERS names, which compiles.
+// compiles, 11 a class with a base class that CBOR_DEFINE_DERIVED_TYPE_MEMBERS names, which compiles, 12 a class
+// with a named base class whose description leaves out the member of the base, which reflection finds.
 #include <cbor/cbor.hpp>
 
 #include <cstdint>
@@ -27,7 +28,7 @@ struct parent {
     std::int32_t b;
 };
 
-#if CBOR_TEST_CASE == 7 || CBOR_TEST_CASE == 11
+#if CBOR_TEST_CASE == 7 || CBOR_TEST_CASE == 11 || CBOR_TEST_CASE == 12
 struct root : parent {
     std::int32_t a;
     inner i;
@@ -96,6 +97,8 @@ struct cbor::describe_members<root> {
 };
 #elif CBOR_TEST_CASE == 11
 CBOR_DEFINE_DERIVED_TYPE_MEMBERS(root, parent, cbor::tag{1650}, b, a, i);
+#elif CBOR_TEST_CASE == 12
+CBOR_DEFINE_DERIVED_TYPE_MEMBERS(root, parent, cbor::tag{1650}, a, i);
 #elif CBOR_TEST_CASE != 1
 template <>
 struct cbor::describe_members<root> {

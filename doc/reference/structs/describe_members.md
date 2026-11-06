@@ -39,7 +39,12 @@ tag. The specialization stands outside every namespace, after `T`.
 
 A class that is not an aggregate, or that has a base class, needs a
 description. `cbor::structs` then reads the members, the keys and the
-tag from the description only.
+tag from the description only. `using base = B;` in the specialization
+names the direct base class `B`; `cbor::schema` takes a class with a
+base class only so, and the members of `B` stand in `members` too.
+`CBOR_DEFINE_DERIVED_TYPE(T, BASE, TAG, members...)` and
+`CBOR_DEFINE_DERIVED_TYPE_MEMBERS(T, BASE, TAG, names...)` write such a
+specialization.
 
 ## Errors
 

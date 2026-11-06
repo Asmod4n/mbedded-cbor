@@ -97,12 +97,36 @@ auto const message = cbor::schema<chosen>::encode(chosen{7, 8});
 cbor::schema<chosen>::at_path<"$.id">(*message);   // 7
 ```
 
+A class with a base class names its direct base in its description:
+`using base = animal;` in `describe_members<dog>`, or
+`CBOR_DEFINE_DERIVED_TYPE_MEMBERS(dog, animal, cbor::tag{1001}, name,
+bark)`. The description lists the members of the base too. With
+reflection, the named base is the one direct base of the class. Without
+reflection, `std::is_base_of_v` checks it, so an indirect base is not
+found there, and Boost.PFR does not count the members of such a class.
+A class with a named base is not an aggregate that takes an allocator.
+
+A `std::variant` member takes classes that name one and the same direct
+base, each with its own tag:
+
+```cpp
+struct home {
+    std::variant<dog, cat> pet;
+};
+```
+
+The tag of the record chooses the alternative. A list, a map, an array
+or a `std::optional` of a variant does not compile. A variant with
+`std::monostate`, with a class that has no description or no tag, with
+one class twice, or with classes of other bases does not compile.
+
 These do not compile: a key that is not a text, two members with one key,
-a member listed twice, a member of a base class, `cbor::untagged`, and a
-tag that a standard type has. With reflection, a member that the
-description leaves out and a class with a base class do not compile
-either. Without reflection, Boost.PFR counts the members of an aggregate
-where it is available, and a count that differs does not compile.
+a member listed twice, `cbor::untagged`, and a tag that a standard type
+has. With reflection, a member that the description leaves out and a
+class with a base class that the description does not name do not
+compile either. Without reflection, Boost.PFR counts the members of an
+aggregate with no named base where it is available, and a count that
+differs does not compile.
 
 A class with no default constructor is read through a constructor that
 takes the described members in the order of the description.

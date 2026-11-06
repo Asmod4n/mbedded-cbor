@@ -254,3 +254,43 @@ TEST_CASE("at_path: [n] into a byte string with a wrong head is incorrect_type")
     bytes[head] = '\x63';
     CHECK_EQ(form<byte_fields>::at_path<"$.fixed[2]">(bytes).error(), error::incorrect_type);
 }
+
+template <class T, cbor::fixed_string Path>
+concept accessor_path_reads = requires(typename form<T>::template accessor<> const &a) { a.template at_path<Path>(); };
+
+// A path ends at a variant member. The accessor tells which alternative the record holds and gives an
+// accessor of that alternative. A path into the variant does not compile, because the member of a variant
+// has no single type.
+TEST_CASE("at_path: a variant member gives its index and an accessor of the held alternative")
+{
+    auto const doc = form<home>::path(*form<home>::encode(home_with_dog()));
+    REQUIRE(doc);
+    auto const pet = doc->at_path<"$.pet">();
+    REQUIRE(pet);
+    CHECK_EQ(pet->index(), 0u);
+    auto const d = pet->get<dog>();
+    REQUIRE(d);
+    CHECK_EQ(d->at_path<"@.name">().value(), "rex"sv);
+    CHECK_EQ(d->at_path<"@.bark">().value(), 3);
+    CHECK_EQ(d->at_path<"$.street">().value(), "elm"sv);
+    CHECK_EQ(pet->get<cat>().error(), error::incorrect_type);
+    CHECK(accessor_path_reads<home, "$.pet">);
+    CHECK_FALSE(accessor_path_reads<home, "$.pet.name">);
+    CHECK_FALSE(accessor_path_reads<home, "$.pet[0]">);
+    CHECK_FALSE(message_path_reads<home, "$.pet">);
+}
+
+// An accessor of a variant keeps the message alive as every accessor does, and a moved-from one is a wrong use.
+TEST_CASE("at_path: a variant accessor owns the message and refuses a use after a move")
+{
+    auto pet = [] {
+        auto const doc = form<home>::path(*form<home>::encode(home_with_cat()));
+        return *doc->at_path<"$.pet">();
+    }();
+    CHECK_EQ(pet.index(), 1u);
+    CHECK_EQ(pet.get<cat>()->at_path<"@.name">().value(), "tom"sv);
+    auto moved = std::move(pet);
+    CHECK_EQ(moved.index(), 1u);
+    CHECK_THROWS_AS((void)pet.index(), std::logic_error);
+    CHECK_THROWS_AS((void)pet.get<cat>(), std::logic_error);
+}

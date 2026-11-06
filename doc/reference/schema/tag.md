@@ -25,14 +25,18 @@ The tag number of a struct, in its description:
 [cbor::describe_members](../structs/describe_members.md)`<point>`.
 `schema` writes the number as the first item of each record of the
 struct. A read compares it, so a message of another struct gives
-`incorrect_type`. `structs` takes the same description.
+`incorrect_type`. The tag of a record of a `std::variant` member
+chooses the alternative; a tag of no alternative is `incorrect_type`.
+Each alternative has its own number, also when it derives from the
+class of another number. `structs` takes the same description.
 
 ## Errors
 
 These do not compile in `schema<T>`:
 
 - a struct in `T` with no description, or with `cbor::untagged`;
-- two structs in `T` with one number;
+- two structs in `T` with one number, the alternatives of a variant
+  included;
 - a number of a standard type: 0, 1, 2, 3, 24, 64 to 87, 100, 258,
   1004 and 32873;
 - a number that the IANA registry calls always invalid: 21334, 65535,
