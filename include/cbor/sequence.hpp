@@ -70,7 +70,7 @@ public:
         {
             if (!size) [[unlikely]]
                 return std::unexpected(size.error());
-            return std::string_view(std::span(bytes).first(*size));
+            return validity::substr(bytes, validity::offset{0}, *size);
         }
 
         iterator &operator++()
@@ -79,7 +79,7 @@ public:
                 bytes = std::string_view(std::span(bytes).last(0));
                 return *this;
             }
-            bytes = std::string_view(std::span(bytes).subspan(*size));
+            bytes = validity::subspan(bytes, validity::offset{*size});
             size = item_size(bytes);
             return *this;
         }

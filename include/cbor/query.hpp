@@ -154,7 +154,8 @@ class jsonpath
         std::size_t digits_end = digits_at;
         while (digits_end < text.size() && extended_diagnostic_notation::digit(text[digits_end]))
             ++digits_end;
-        if (digits_end == digits_at || digits_end - digits_at > 16 ||
+        constexpr std::size_t exact_integer_digits = 16;
+        if (digits_end == digits_at || digits_end - digits_at > exact_integer_digits ||
             (text[digits_at] == '0' && (digits_end > digits_at + 1 || negative)))
             return std::nullopt;
         std::int64_t value = 0;

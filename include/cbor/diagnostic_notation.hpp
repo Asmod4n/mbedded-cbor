@@ -275,7 +275,9 @@ class extended_diagnostic_notation
                 std::uint32_t c1 = 0;
                 if (at < text.size() && text[at] == '{') {
                     std::size_t const close = text.find('}', at);
-                    if (close == std::string_view::npos || close == at + 1 || close > at + 9) [[unlikely]]
+                    constexpr std::size_t braced_hex_digits_max = 8;
+                    if (close == std::string_view::npos || close == at + 1 || close > at + 1 + braced_hex_digits_max)
+                        [[unlikely]]
                         return std::unexpected(error::invalid_path);
                     for (char const h : std::span(text).subspan(at + 1, close - at - 1)) {
                         int const v = hex_digit_value(h);
@@ -532,7 +534,8 @@ class extended_diagnostic_notation
                 exponent_negative = text[at++] == '-';
             int e = 0;
             std::size_t const e_first = at;
-            while (at < text.size() && digit(text[at]) && e < 100000)
+            constexpr int exponent_beyond_double = 100000;
+            while (at < text.size() && digit(text[at]) && e < exponent_beyond_double)
                 e = e * decimal + (text[at++] - '0');
             if (at == e_first || (at < text.size() && digit(text[at]))) [[unlikely]]
                 return std::unexpected(error::invalid_path);
@@ -826,7 +829,8 @@ class extended_diagnostic_notation
             std::size_t next = *opened;
             std::size_t const first = next;
             unsigned value = 0;
-            while (next < text.size() && digit(text[next]) && value < 1000)
+            constexpr unsigned simple_value_beyond_byte = 1000;
+            while (next < text.size() && digit(text[next]) && value < simple_value_beyond_byte)
                 value = value * decimal + static_cast<unsigned>(text[next++] - '0');
             if (next == first || (text[first] == '0' && next > first + 1)) [[unlikely]]
                 return std::unexpected(error::invalid_path);

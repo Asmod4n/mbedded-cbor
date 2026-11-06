@@ -1184,7 +1184,10 @@ inline std::expected<owning<item>, error> lazy::clone() const
     auto const size = item_size(rest);
     if (!size) [[unlikely]]
         return std::unexpected(size.error());
-    return cbor::decode(rest.substr(0, *size));
+    auto const item = validity::substr(rest, validity::offset{0}, *size);
+    if (!item) [[unlikely]]
+        return std::unexpected(item.error());
+    return cbor::decode(*item);
 }
 
 }
