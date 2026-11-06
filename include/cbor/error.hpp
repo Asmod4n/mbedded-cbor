@@ -1,10 +1,14 @@
 // Gives cbor::error, the error codes of the library, and their
 // std::error_category. Maps four codes to std::errc conditions.
-// Stops the build with g++ older than 15.
+// Stops the build with g++ older than 15 and with the frontend of MSVC.
 #pragma once
 
 #if defined(__GNUC__) && !defined(__clang__) && __GNUC__ < 15
 #error "mbedded-cbor needs g++ 15 or later"
+#endif
+
+#if defined(_MSC_VER) && !defined(__clang__)
+#error "mbedded-cbor needs the clang frontend: on Windows build with clang-cl"
 #endif
 
 #include <expected>
