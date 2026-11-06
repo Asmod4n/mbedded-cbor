@@ -1,5 +1,5 @@
 '\" t
-.TH "cbor::structs" "3" "2026-11-05" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.TH "cbor::structs" "3" "2026-11-06" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
 .SH NAME
 cbor::structs, cbor::structs<T>::encode, cbor::structs<T>::decode, cbor::describe_members, cbor::member, CBOR_MEMBER, CBOR_DEFINE_TYPE_MEMBERS \- any CBOR into a C++ struct and back
 .SH SYNOPSIS
@@ -103,6 +103,13 @@ A class that is not an aggregate, or that has a base class, needs a
 description.
 \f[CR]cbor::structs\f[R] then reads the members, the keys and the tag
 from the description only.
+\f[CR]using base = B;\f[R] in the specialization names the direct base
+class \f[CR]B\f[R]; \f[CR]cbor::schema\f[R] takes a class with a base
+class only so, and the members of \f[CR]B\f[R] stand in
+\f[CR]members\f[R] too.
+\f[CR]CBOR_DEFINE_DERIVED_TYPE(T, BASE, TAG, members...)\f[R] and
+\f[CR]CBOR_DEFINE_DERIVED_TYPE_MEMBERS(T, BASE, TAG, names...)\f[R]
+write such a specialization.
 .SS cbor::member
 One entry of describe_members: the key of a member and a pointer to that
 member.
