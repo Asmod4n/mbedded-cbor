@@ -40,13 +40,8 @@
 #include "error.hpp"
 #include "rfc8949.hpp"
 
-#ifdef _MSC_VER
-#define CBOR_ALWAYS_INLINE [[msvc::forceinline]]
-#define CBOR_NEVER_INLINE [[msvc::noinline]]
-#else
 #define CBOR_ALWAYS_INLINE [[gnu::always_inline]]
 #define CBOR_NEVER_INLINE [[gnu::noinline]]
-#endif
 
 #if defined(__wasm__)
 extern "C" unsigned char __stack_low;
