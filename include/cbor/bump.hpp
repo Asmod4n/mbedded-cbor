@@ -34,7 +34,9 @@ class bump {
     CBOR_ALWAYS_INLINE static std::span<E const> appended(std::pmr::forward_list<Chunk> &chunks,
                                                           std::span<E const> const part, std::size_t const chunk_size)
     {
-        if (chunks.empty() || !validity::bytes_fit(part.size(), chunks.front().capacity() - chunks.front().size())) [[unlikely]]
+        if (chunks.empty() ||
+            !detail::validity::bytes_fit(part.size(), chunks.front().capacity() - chunks.front().size()))
+            [[unlikely]]
             chunk_added(chunks, std::max(part.size(), chunk_size));
         Chunk &chunk = chunks.front();
         std::size_t const at = chunk.size();

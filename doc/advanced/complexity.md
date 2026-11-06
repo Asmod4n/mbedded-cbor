@@ -180,7 +180,7 @@ Assumption, not checked: skip_item is O(bytes skipped).
 | `lazy::take_ownership<Encoded>(Encoded&&)` | O(1) | O(1) | Moves the string. One allocation: the make_shared that holds it. |
 | `lazy::view(shared_ptr<void const>, Encoded const&)` | O(1) | O(1) | No allocation. |
 | `lazy::resolve_container(top_level_item, offset)` (private) | Common O(1); worst O(t), t = tag 24 levels <= n/2 | O(1) | No allocation. The nesting depth does not bound tag 24 nesting. |
-| `validity::keys_equivalent<Checked>` | Scalar O(1); string O(len); array O(n_item) plus elements; map O(k·n_map + k²·child) per level; worst exponential in d | Stack O(d) | Defined in lazy.hpp. check_nesting_depth bounds d. Not checked again. |
+| `detail::validity::keys_equivalent<Checked>` | Scalar O(1); string O(len); array O(n_item) plus elements; map O(k·n_map + k²·child) per level; worst exponential in d | Stack O(d) | Defined in lazy.hpp. check_nesting_depth bounds d. Not checked again. |
 | `lazy::clone()` | as `detail::tree_decoder::decode_item` | as `detail::tree_decoder::decode_item` | Returns `owning<item>`. |
 | `lazy::type()` | O(1) | O(1) | |
 | `lazy::find_key<Key>(resolved, Key)` | O(bytes up to the pair); worst O(n_map) | O(1) | Linear scan. |
@@ -452,7 +452,7 @@ the struct types in a message.
 
 Above linear in the input:
 
-- `validity::keys_equivalent` (shared.hpp): map keys O(k²) per level, exponential in d worst.
+- `detail::validity::keys_equivalent` (lazy.hpp): map keys O(k²) per level, exponential in d worst.
 - `jsonpath::value_equal`: O(k²) key compares per map level.
 - `jsonpath::find_key`, non-text key: O(k·n_map).
 - `jsonpath::apply_segment`, `apply_segments`: O(c·n·d), O(p·N·c·n·d).

@@ -10,6 +10,13 @@
 namespace cbor
 {
 
+namespace detail
+{
+
+class validity;
+
+}
+
 struct typed_array {
     std::uint64_t tag;
     std::span<std::byte const> bytes;
@@ -27,7 +34,7 @@ class rfc8746
 
     enum class bit_field : std::uint8_t { ll = 0, e = 2, s = 3, f = 4 };
 
-    friend class validity;
+    friend class detail::validity;
 
     friend class heads;
 

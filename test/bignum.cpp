@@ -255,8 +255,8 @@ TEST_CASE("bignum: a key that fits 64 bits is the same key as the integer")
         CAPTURE(p.second);
         std::string_view const first = p.first;
         std::string_view const second = p.second;
-        auto const equal = cbor::validity::keys_equivalent<false>(first, cbor::validity::offset{}, second,
-                                                                  cbor::validity::offset{}, 0, 16);
+        auto const equal = cbor::detail::validity::keys_equivalent<false>(
+            first, cbor::detail::validity::offset{}, second, cbor::detail::validity::offset{}, 0, 16);
         REQUIRE(equal.has_value());
         CHECK_EQ(*equal, p.equal);
     }

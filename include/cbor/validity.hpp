@@ -65,6 +65,8 @@ namespace cbor
 template <class T>
 class schema;
 
+class reflection;
+
 struct lazy;
 struct item;
 
@@ -84,6 +86,9 @@ struct limits {
     static constexpr std::size_t string_length = CBOR_STRING_LENGTH_DEFAULT;
     static constexpr std::size_t container_elements = CBOR_CONTAINER_ELEMENTS_DEFAULT;
 };
+
+namespace detail
+{
 
 class validity
 {
@@ -456,7 +461,7 @@ public:
                                         std::span<std::ranges::range_value_t<Bytes> const>>;
         view const whole(encoded);
         if (std::to_underlying(at) > whole.size()) [[unlikely]]
-            throw_logic_error("cbor::validity: the offset is after the end of its input");
+            throw_logic_error("cbor::detail::validity: the offset is after the end of its input");
         return view(std::views::drop(whole, static_cast<std::ranges::range_difference_t<view>>(std::to_underlying(at))));
     }
 
@@ -465,7 +470,7 @@ public:
     {
         auto const end = checked_mul(static_cast<std::size_t>(std::to_underlying(i)) + 1, size);
         if (!end || !bytes_fit(*end, elements.size())) [[unlikely]]
-            throw_logic_error("cbor::validity: the element is after the end of its elements");
+            throw_logic_error("cbor::detail::validity: the element is after the end of its elements");
         return elements.subspan(*end - size, size);
     }
 
@@ -553,40 +558,24 @@ public:
         return {};
     }
 
-    friend class heads;
-
-    friend struct lazy;
-
-    template <bool>
-    friend struct detail::tree_decoder;
-
-    friend std::expected<owning<item>, error> decode(std::string_view encoded);
-
-    friend class well_formedness;
-
-    friend class extended_diagnostic_notation;
-
-    friend class jsonpath;
-
-    friend class reflection;
-
-    friend class generic;
+    friend class cbor::reflection;
 
     template <class>
-    friend class structs;
-
-    template <class>
-    friend class schema;
+    friend class cbor::schema;
 };
 
-static_assert(validity::check_nesting_depth(limits::nesting_depth, validity::nesting_depth_limit).has_value(),
-              "CBOR_NESTING_DEPTH_DEFAULT is at most validity::nesting_depth_limit.");
-static_assert(validity::check_limit(limits::string_length, validity::size_limit,
-                                    error::string_length_exceeded)
+} // namespace detail
+
+static_assert(detail::validity::check_nesting_depth(limits::nesting_depth,
+                                                    detail::validity::nesting_depth_limit)
+                  .has_value(),
+              "CBOR_NESTING_DEPTH_DEFAULT is at most detail::validity::nesting_depth_limit.");
+static_assert(detail::validity::check_limit(limits::string_length, detail::validity::size_limit,
+                                            error::string_length_exceeded)
                   .has_value(),
               "CBOR_STRING_LENGTH_DEFAULT fits in std::size_t.");
-static_assert(validity::check_limit(limits::container_elements, validity::size_limit,
-                                    error::container_elements_exceeded)
+static_assert(detail::validity::check_limit(limits::container_elements, detail::validity::size_limit,
+                                            error::container_elements_exceeded)
                   .has_value(),
               "CBOR_CONTAINER_ELEMENTS_DEFAULT fits in std::size_t.");
 }

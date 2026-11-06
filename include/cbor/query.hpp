@@ -196,7 +196,9 @@ class jsonpath
             auto const next = extended_diagnostic_notation::parse_literal({text, at}, literal, {0, depth_max});
             if (!next) [[unlikely]]
                 return next;
-            if (auto const r = extended_diagnostic_notation::append_canonical(keys, literal, validity::offset{}, {0, depth_max}); !r) [[unlikely]]
+            if (auto const r = extended_diagnostic_notation::append_canonical(
+                    keys, literal, detail::validity::offset{}, {0, depth_max});
+                !r) [[unlikely]]
                 return std::unexpected(r.error());
             return next;
         }
@@ -271,14 +273,15 @@ class jsonpath
             std::vector<selector> chosen;
             for (;;) {
                 at = extended_diagnostic_notation::blank_end(text, at + 1);
-                if (auto const left = validity::check_text_left(text, at, 1); !left) [[unlikely]]
+                if (auto const left = detail::validity::check_text_left(text, at, 1); !left) [[unlikely]]
                     return std::unexpected(left.error());
                 auto const s = parse_selector(text, at, depth);
                 if (!s) [[unlikely]]
                     return std::unexpected(s.error());
                 chosen.push_back(s->second);
                 at = extended_diagnostic_notation::blank_end(text, s->first);
-                if (!validity::check_text_left(text, at, 1) || (text[at] != ',' && text[at] != ']')) [[unlikely]]
+                if (!detail::validity::check_text_left(text, at, 1) || (text[at] != ',' && text[at] != ']'))
+                    [[unlikely]]
                     return std::unexpected(error::invalid_path);
                 if (text[at] == ']')
                     return std::pair{at + 1, std::move(chosen)};
@@ -287,7 +290,7 @@ class jsonpath
 
         constexpr std::expected<parsed_query, error> parse_segments(std::string_view const text, std::size_t at, std::size_t const depth)
         {
-            if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
+            if (auto const r = detail::validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
                 return std::unexpected(r.error());
             depth_reached = std::max(depth_reached, depth);
             std::vector<segment> found;
@@ -295,7 +298,8 @@ class jsonpath
             bool singular = true;
             for (;;) {
                 std::size_t const next = extended_diagnostic_notation::blank_end(text, at);
-                if (!validity::check_text_left(text, next, 1) || (text[next] != '.' && text[next] != '['))
+                if (!detail::validity::check_text_left(text, next, 1) ||
+                    (text[next] != '.' && text[next] != '['))
                     break;
                 at = next;
                 segment s{false, found_selectors.size(), 0};
@@ -373,7 +377,8 @@ class jsonpath
                         return a;
                     arguments.push_back(a->index);
                     next = extended_diagnostic_notation::blank_end(text, a->at);
-                    if (!validity::check_text_left(text, next, 1) || (text[next] != ',' && text[next] != ')')) [[unlikely]]
+                    if (!detail::validity::check_text_left(text, next, 1) ||
+                        (text[next] != ',' && text[next] != ')')) [[unlikely]]
                         return std::unexpected(error::invalid_path);
                     if (text[next++] == ')')
                         break;
@@ -394,10 +399,10 @@ class jsonpath
         constexpr std::expected<parsed_expression, error> parse_primary(std::string_view const text, std::size_t const at,
                                                                         std::size_t const depth)
         {
-            if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
+            if (auto const r = detail::validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
                 return std::unexpected(r.error());
             depth_reached = std::max(depth_reached, depth);
-            if (auto const left = validity::check_text_left(text, at, 1); !left) [[unlikely]]
+            if (auto const left = detail::validity::check_text_left(text, at, 1); !left) [[unlikely]]
                 return std::unexpected(left.error());
             char const c = text[at];
             if (c == '@' || c == '$') {
@@ -457,14 +462,14 @@ class jsonpath
             if (!inner) [[unlikely]]
                 return inner;
             std::size_t const close = extended_diagnostic_notation::blank_end(text, inner->at);
-            if (!validity::check_text_left(text, close, 1) || text[close] != ')') [[unlikely]]
+            if (!detail::validity::check_text_left(text, close, 1) || text[close] != ')') [[unlikely]]
                 return std::unexpected(error::invalid_path);
             return parsed_expression{close + 1, inner->index};
         }
 
         constexpr std::expected<parsed_expression, error> parse_basic(std::string_view const text, std::size_t const at, std::size_t const depth)
         {
-            if (auto const left = validity::check_text_left(text, at, 1); !left) [[unlikely]]
+            if (auto const left = detail::validity::check_text_left(text, at, 1); !left) [[unlikely]]
                 return std::unexpected(left.error());
             if (text[at] == '!') {
                 std::size_t const next = extended_diagnostic_notation::blank_end(text, at + 1);
@@ -531,7 +536,7 @@ class jsonpath
         constexpr std::expected<parsed_expression, error> parse_logical_or(std::string_view const text, std::size_t const at,
                                                                            std::size_t const depth)
         {
-            if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
+            if (auto const r = detail::validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
                 return std::unexpected(r.error());
             depth_reached = std::max(depth_reached, depth);
             auto const first = parse_logical_and(text, at, depth);
@@ -572,7 +577,8 @@ class jsonpath
             return std::unexpected(top.error());
         if (top->at != text.size()) [[unlikely]]
             return std::unexpected(error::invalid_path);
-        if (auto const r = validity::check_nesting_depth(top->segment_count, depth_max); !r) [[unlikely]]
+        if (auto const r = detail::validity::check_nesting_depth(top->segment_count, depth_max); !r)
+            [[unlikely]]
             return std::unexpected(r.error());
         q.top = *top;
         q.depth_reached = std::max(q.depth_reached, top->segment_count);
@@ -621,13 +627,15 @@ class jsonpath
         heads::decoder<Checked> d{encoded};
         heads::head h{};
         std::size_t step = 0;
-        auto const typed_array_elements = [&d](std::uint64_t const tag)
-            -> std::optional<std::expected<std::string_view, error>> {
-            d.encoded = validity::subspan(d.encoded, heads::self_described_cbor_content_at(d.encoded, validity::offset{}));
+        auto const typed_array_elements =
+            [&d](std::uint64_t const tag) -> std::optional<std::expected<std::string_view, error>> {
+            d.encoded = detail::validity::subspan(
+                d.encoded, heads::self_described_cbor_content_at(d.encoded, detail::validity::offset{}));
             auto const r = d.decode_head();
             if (!r) [[unlikely]]
                 return std::unexpected(r.error());
-            if (error const c = validity::check_typed_array_content(tag, r->major, r->argument).error_or(error{});
+            if (error const c =
+                    detail::validity::check_typed_array_content(tag, r->major, r->argument).error_or(error{});
                 c != error{}) [[unlikely]]
                 return std::unexpected(c);
             auto const bytes = d.decode_byte_string(r->argument);
@@ -657,22 +665,23 @@ class jsonpath
                 auto const r = d.decode_head();
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                if (!validity::check_tag_content(h.argument, r->major).has_value()) [[unlikely]]
+                if (!detail::validity::check_tag_content(h.argument, r->major).has_value()) [[unlikely]]
                     return std::unexpected(error::inadmissible_type_for_tag_content);
                 auto const embedded = d.decode_byte_string(r->argument);
                 if (!embedded) [[unlikely]]
                     return std::unexpected(embedded.error());
                 d = heads::decoder<Checked>{*embedded};
             }
-            if (auto const r = validity::check_pending_items(h.major, h.info, h.argument, d.encoded.size()); !r)
-                [[unlikely]]
+            if (auto const r =
+                    detail::validity::check_pending_items(h.major, h.info, h.argument, d.encoded.size());
+                !r) [[unlikely]]
                 return std::unexpected(r.error());
             if (step == top.segment_count)
                 break;
             selector const &each = v.selectors[v.segments[top.segment_at + step].selector_at];
             ++step;
             if (each.kind == selector::kind::index && h.major == major_type::array) {
-                auto const position = validity::check_index(each.index, h.argument);
+                auto const position = detail::validity::check_index(each.index, h.argument);
                 if (!position) [[unlikely]]
                     return std::unexpected(position.error());
                 if (auto const r = well_formedness::skip_items(d, std::to_underlying(*position)); !r) [[unlikely]]
@@ -689,14 +698,14 @@ class jsonpath
                     return std::nullopt;
                 if (!*elements) [[unlikely]]
                     return std::unexpected(elements->error());
-                auto const position = validity::check_index(
-                    each.index, (*elements)->size() / validity::typed_array_element_size(h.argument));
+                auto const position = detail::validity::check_index(
+                    each.index, (*elements)->size() / detail::validity::typed_array_element_size(h.argument));
                 if (!position) [[unlikely]]
                     return std::unexpected(position.error());
                 if constexpr (std::is_same_v<T, std::span<std::byte const>>)
                     if (step == top.segment_count)
-                        return std::as_bytes(validity::element_span(**elements, *position,
-                                                                    validity::typed_array_element_size(h.argument)));
+                        return std::as_bytes(detail::validity::element_span(
+                            **elements, *position, detail::validity::typed_array_element_size(h.argument)));
                 auto const element = heads::decode_typed_array_element(h.argument, **elements, *position);
                 if (!element) [[unlikely]]
                     return std::unexpected(element.error());
@@ -723,7 +732,9 @@ class jsonpath
             bool found = false;
             for (std::uint64_t i = 0; i < h.argument && !found; ++i) {
                 heads::decoder probe = d;
-                probe.encoded = validity::subspan(probe.encoded, heads::self_described_cbor_content_at(probe.encoded, validity::offset{}));
+                probe.encoded = detail::validity::subspan(
+                    probe.encoded,
+                    heads::self_described_cbor_content_at(probe.encoded, detail::validity::offset{}));
                 auto const k = probe.decode_head();
                 if (!k) [[unlikely]]
                     return std::unexpected(k.error());
@@ -764,7 +775,8 @@ class jsonpath
             std::uint64_t argument = h.argument;
             if (heads::is_bignum(h.major, h.argument)) {
                 negative = h.argument == std::to_underlying(rfc8949::tag_number::negative_bignum);
-                d.encoded = validity::subspan(d.encoded, heads::self_described_cbor_content_at(d.encoded, validity::offset{}));
+                d.encoded = detail::validity::subspan(
+                    d.encoded, heads::self_described_cbor_content_at(d.encoded, detail::validity::offset{}));
                 auto const read = d.decode_bignum(h.argument);
                 if (!read) [[unlikely]]
                     return std::unexpected(read.error());
@@ -774,7 +786,7 @@ class jsonpath
             } else if (h.major != major_type::unsigned_integer && !negative) [[unlikely]] {
                 return std::unexpected(error::incorrect_type);
             }
-            if (error const c = validity::check_number_range<T>(negative, argument).error_or(error{});
+            if (error const c = detail::validity::check_number_range<T>(negative, argument).error_or(error{});
                 c != error{}) [[unlikely]]
                 return std::unexpected(c);
             T const magnitude = static_cast<T>(argument);
@@ -784,7 +796,8 @@ class jsonpath
                 return std::nullopt;
             if (h.major == major_type::unsigned_integer || h.major == major_type::negative_integer) {
                 bool const negative = h.major == major_type::negative_integer;
-                if (error const c = validity::check_number_range<double>(negative, h.argument).error_or(error{});
+                if (error const c =
+                        detail::validity::check_number_range<double>(negative, h.argument).error_or(error{});
                     c != error{}) [[unlikely]]
                     return std::unexpected(c);
                 return negative ? -1.0 - static_cast<double>(h.argument) : static_cast<double>(h.argument);
@@ -806,8 +819,8 @@ class jsonpath
         } else if constexpr (std::is_same_v<T, simple_value>) {
             if (!heads::is_simple_value(h)) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            if (error const c = validity::check_simple_value(h.info, h.argument).error_or(error{}); c != error{})
-                [[unlikely]]
+            if (error const c = detail::validity::check_simple_value(h.info, h.argument).error_or(error{});
+                c != error{}) [[unlikely]]
                 return std::unexpected(c);
             return static_cast<simple_value>(h.argument);
         } else if constexpr (std::is_same_v<T, std::nullptr_t>) {
@@ -824,8 +837,8 @@ class jsonpath
         } else if constexpr (std::is_same_v<T, typed_array>) {
             if (h.major != major_type::tag) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            if (error const r = validity::check_typed_array(h.argument, 0).error_or(error{}); r != error{})
-                [[unlikely]]
+            if (error const r = detail::validity::check_typed_array(h.argument, 0).error_or(error{});
+                r != error{}) [[unlikely]]
                 return std::unexpected(r);
             auto const bytes = typed_array_elements(h.argument);
             if (!bytes) [[unlikely]]
@@ -875,30 +888,32 @@ class jsonpath
     static std::expected<T, error> walk_bytes(query_view const v, parsed_query const &top,
                                               std::size_t const depth_reached, std::string_view const encoded)
     {
-        if (auto const r = validity::check_nesting_depth(depth_reached, limits::nesting_depth); !r)
+        if (auto const r = detail::validity::check_nesting_depth(depth_reached, limits::nesting_depth); !r)
             [[unlikely]]
             return std::unexpected(r.error());
         std::string_view const content = heads::self_described_cbor_content(encoded);
         auto const walked = try_walk_bytes<T, true>(v, top, content);
         if (walked) [[likely]]
             return *walked;
-        return walk_query<T>(
-            v, top,
-            lazy{lazy::top_level_item{std::shared_ptr<void const>{}, content}, validity::offset{}, {}});
+        return walk_query<T>(v, top,
+                             lazy{lazy::top_level_item{std::shared_ptr<void const>{}, content},
+                                  detail::validity::offset{},
+                                  {}});
     }
 
     template <class T>
     static std::expected<T, error> walk_lazy(query_view const v, parsed_query const &top,
                                              std::size_t const depth_reached, lazy const &root)
     {
-        validity::throw_logic_error_if(root.top_level.encoded.data() == nullptr, "cbor::lazy::at_path: the lazy holds no top-level item");
-        if (auto const r = validity::check_nesting_depth(depth_reached, limits::nesting_depth); !r)
+        detail::validity::throw_logic_error_if(root.top_level.encoded.data() == nullptr,
+                                               "cbor::lazy::at_path: the lazy holds no top-level item");
+        if (auto const r = detail::validity::check_nesting_depth(depth_reached, limits::nesting_depth); !r)
             [[unlikely]]
             return std::unexpected(r.error());
         if (root.typed_array_tag != 0) [[unlikely]]
             return walk_query<T>(v, top, root);
         auto const walked =
-            try_walk_bytes<T, true>(v, top, validity::subspan(root.top_level.encoded, root.offset));
+            try_walk_bytes<T, true>(v, top, detail::validity::subspan(root.top_level.encoded, root.offset));
         if (walked) [[likely]]
             return *walked;
         return walk_query<T>(v, top, root);
@@ -1074,8 +1089,8 @@ private:
         throw_logic_error_if_query_empty(e);
         query_view const v{e.segments, e.selectors, e.filters, e.keys, {}};
         if constexpr (std::is_same_v<T, nodelist> || std::is_same_v<T, lazy>) {
-            if (auto const r = validity::check_nesting_depth(e.depth_reached, limits::nesting_depth); !r)
-                [[unlikely]]
+            if (auto const r = detail::validity::check_nesting_depth(e.depth_reached, limits::nesting_depth);
+                !r) [[unlikely]]
                 return std::unexpected(r.error());
             if constexpr (std::is_same_v<T, nodelist>)
                 return walk_query(v, e.top, root);
@@ -1111,8 +1126,8 @@ private:
     template <class T>
     static void throw_logic_error_if_query_empty(query<T> const &e)
     {
-        validity::throw_logic_error_if(e.top.at == 0,
-                                       "cbor::jsonpath::query: the query is empty or moved from");
+        detail::validity::throw_logic_error_if(e.top.at == 0,
+                                               "cbor::jsonpath::query: the query is empty or moved from");
     }
 
     template <scalar_result T>
@@ -1136,7 +1151,8 @@ template <view_result T, borrowed_range_of_chars Encoded>
 std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded,
                                             jsonpath::query<T> const &e)
 {
-    validity::throw_logic_error_if_empty(owner, "cbor::at_path: the owner of the encoded data item is empty");
+    detail::validity::throw_logic_error_if_empty(
+        owner, "cbor::at_path: the owner of the encoded data item is empty");
     return jsonpath::apply_query(e, std::move(owner),
                                  std::string_view(std::span<char const>(encoded)));
 }
@@ -1154,7 +1170,7 @@ template <class T, owning_range_of_chars Encoded>
 std::expected<typename jsonpath::query<T>::result_type, error> at_path(std::shared_ptr<Encoded const> owner,
                                                                        jsonpath::query<T> const &e)
 {
-    validity::throw_logic_error_if_null(owner, "cbor::at_path: the encoded data item is null");
+    detail::validity::throw_logic_error_if_null(owner, "cbor::at_path: the encoded data item is null");
     std::string_view const bytes{std::span<char const>(*owner)};
     return at_path(std::move(owner), bytes, e);
 }
@@ -1198,15 +1214,15 @@ inline std::expected<lazy, error> jsonpath::find_key(lazy const &node, std::stri
     if (h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
     for (std::uint64_t i = 0; i < h.argument; ++i) {
-        validity::offset const start = validity::distance(source.encoded, d.encoded);
+        detail::validity::offset const start = detail::validity::distance(source.encoded, d.encoded);
         if (auto const r = well_formedness::skip_items(d, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
-        auto const match =
-            validity::keys_equivalent<true>(source, start, key, validity::offset{}, 0, limits::nesting_depth);
+        auto const match = detail::validity::keys_equivalent<true>(
+            source, start, key, detail::validity::offset{}, 0, limits::nesting_depth);
         if (!match) [[unlikely]]
             return std::unexpected(match.error());
         if (*match)
-            return lazy{source, validity::distance(source.encoded, d.encoded), {}};
+            return lazy{source, detail::validity::distance(source.encoded, d.encoded), {}};
         if (auto const r = well_formedness::skip_items(d, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
             }
@@ -1215,7 +1231,7 @@ inline std::expected<lazy, error> jsonpath::find_key(lazy const &node, std::stri
 
 inline std::expected<bool, error> jsonpath::value_equal(lazy const &a, lazy const &b, std::size_t const depth)
 {
-    if (auto const r = validity::check_nesting_depth(depth, limits::nesting_depth); !r) [[unlikely]]
+    if (auto const r = detail::validity::check_nesting_depth(depth, limits::nesting_depth); !r) [[unlikely]]
         return std::unexpected(r.error());
     a.throw_logic_error_if_no_top_level();
     auto const x = a.typed_array_tag != 0 ? lazy::resolve<true>(a)
@@ -1249,8 +1265,8 @@ inline std::expected<bool, error> jsonpath::value_equal(lazy const &a, lazy cons
         return number(h) == number(k);
     if (h.major != k.major || floating(h) || floating(k))
         return false;
-    validity::offset const x_content = validity::distance(x->source.encoded, x->d.encoded);
-    validity::offset const y_content = validity::distance(y->source.encoded, y->d.encoded);
+    detail::validity::offset const x_content = detail::validity::distance(x->source.encoded, x->d.encoded);
+    detail::validity::offset const y_content = detail::validity::distance(y->source.encoded, y->d.encoded);
     switch (h.major) {
     case major_type::byte_string:
     case major_type::text_string: {
@@ -1394,7 +1410,7 @@ inline std::expected<std::optional<lazy>, error> jsonpath::comparable_value(quer
                                                                             lazy const &root,
                                                                             std::size_t const depth)
 {
-    if (auto const r = validity::check_nesting_depth(depth, limits::nesting_depth); !r) [[unlikely]]
+    if (auto const r = detail::validity::check_nesting_depth(depth, limits::nesting_depth); !r) [[unlikely]]
         return std::unexpected(r.error());
     logical_expr const &e = v.expressions[index];
     auto const unsigned_integer = [](std::uint64_t const n) -> std::expected<std::optional<lazy>, error> {
@@ -1463,7 +1479,7 @@ inline std::expected<bool, error> jsonpath::test_expression(query_view const v, 
                                                             lazy const &current, lazy const &root,
                                                             std::size_t const depth)
 {
-    if (auto const r = validity::check_nesting_depth(depth, limits::nesting_depth); !r) [[unlikely]]
+    if (auto const r = detail::validity::check_nesting_depth(depth, limits::nesting_depth); !r) [[unlikely]]
         return std::unexpected(r.error());
     std::size_t at = index;
     while (v.expressions[at].kind == logical_expr::kind::logical_or || v.expressions[at].kind == logical_expr::kind::logical_and) {
@@ -1626,7 +1642,7 @@ inline std::expected<void, error> jsonpath::apply_segment(query_view const v, se
                                                           lazy const &node, lazy const &root,
                                                           std::vector<lazy> &nodes, std::size_t const depth)
 {
-    if (auto const r = validity::check_nesting_depth(depth, limits::nesting_depth); !r) [[unlikely]]
+    if (auto const r = detail::validity::check_nesting_depth(depth, limits::nesting_depth); !r) [[unlikely]]
         return std::unexpected(r.error());
     for (selector const &each : v.selectors.subspan(s.selector_at, s.selector_count))
         if (auto const r = apply_selector(v, each, node, root, nodes, depth); !r) [[unlikely]]
@@ -1663,7 +1679,8 @@ inline std::expected<std::vector<lazy>, error> jsonpath::apply_segments(query_vi
 inline std::expected<lazy, error> jsonpath::walk_singular_query(query_view const v, parsed_query const &top,
                                                                 lazy const &root)
 {
-    validity::throw_logic_error_if(root.top_level.encoded.data() == nullptr, "cbor::lazy::at_path: the lazy holds no top-level item");
+    detail::validity::throw_logic_error_if(root.top_level.encoded.data() == nullptr,
+                                           "cbor::lazy::at_path: the lazy holds no top-level item");
     lazy node = root;
     for (segment const &s : v.segments.subspan(top.segment_at, top.segment_count)) {
         selector const &each = v.selectors[s.selector_at];
@@ -1681,7 +1698,8 @@ inline std::expected<lazy, error> jsonpath::walk_singular_query(query_view const
 inline std::expected<std::vector<lazy>, error> jsonpath::walk_query(query_view const v,
                                                                     parsed_query const &top, lazy const &root)
 {
-    validity::throw_logic_error_if(root.top_level.encoded.data() == nullptr, "cbor::lazy::query: the lazy holds no top-level item");
+    detail::validity::throw_logic_error_if(root.top_level.encoded.data() == nullptr,
+                                           "cbor::lazy::query: the lazy holds no top-level item");
     std::vector<std::expected<std::vector<lazy>, error>> absolute_nodelists(v.expressions.size());
     query_view const with_nodelists{v.segments, v.selectors, v.expressions, v.keys, absolute_nodelists};
     for (std::size_t i = 0; i < v.expressions.size(); ++i)
@@ -1713,7 +1731,8 @@ auto jsonpath::apply_compiled(Walk const &walk)
         return c;
     }();
     using result = decltype(walk(query_view{}, top));
-    if (auto const r = validity::check_nesting_depth(depth_reached, limits::nesting_depth); !r) [[unlikely]]
+    if (auto const r = detail::validity::check_nesting_depth(depth_reached, limits::nesting_depth); !r)
+        [[unlikely]]
         return result(std::unexpect, r.error());
     return walk(query_view{std::get<0>(compiled),
                            std::get<1>(compiled),
@@ -1754,7 +1773,8 @@ template <fixed_string Path, class T, borrowed_range_of_chars Encoded>
               std::is_same_v<T, typed_array>))
 std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded)
 {
-    validity::throw_logic_error_if_empty(owner, "cbor::at_path: the owner of the encoded data item is empty");
+    detail::validity::throw_logic_error_if_empty(
+        owner, "cbor::at_path: the owner of the encoded data item is empty");
     return jsonpath::walk_query<Path, T>(std::move(owner),
                                          std::string_view(std::span<char const>(encoded)));
 }
@@ -1765,7 +1785,7 @@ template <fixed_string Path, class T, owning_range_of_chars Encoded>
               std::is_same_v<T, typed_array>))
 std::expected<ref<T>, error> at_path(std::shared_ptr<Encoded const> owner)
 {
-    validity::throw_logic_error_if_null(owner, "cbor::at_path: the encoded data item is null");
+    detail::validity::throw_logic_error_if_null(owner, "cbor::at_path: the encoded data item is null");
     std::string_view const bytes{std::span<char const>(*owner)};
     return at_path<Path, T>(std::move(owner), bytes);
 }

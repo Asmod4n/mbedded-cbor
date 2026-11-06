@@ -12,9 +12,9 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 using cbor::error;
 
-// Each function that recurses reads an item nested as deep as validity::nesting_depth_limit allows, and
-// refuses the item one level deeper. This binary is built with the nesting depth at the limit, so the stack
-// of the thread holds the deepest item that the library accepts.
+// Each function that recurses reads an item nested as deep as detail::validity::nesting_depth_limit allows,
+// and refuses the item one level deeper. This binary is built with the nesting depth at the limit, so the
+// stack of the thread holds the deepest item that the library accepts.
 
 namespace
 {
@@ -39,7 +39,7 @@ value arrays_around_zero(std::size_t const n)
 // The build of this binary sets the nesting depth to its hard bound, so every test below runs at the bound.
 TEST_CASE("nesting depth depth_limit: the build sets the nesting depth to the hard bound")
 {
-    CHECK_EQ(depth_limit, cbor::validity::nesting_depth_limit);
+    CHECK_EQ(depth_limit, cbor::detail::validity::nesting_depth_limit);
 }
 
 // The decode of the item tree counts one level for each array.
@@ -62,8 +62,8 @@ TEST_CASE("nesting depth depth_limit: lazy::clone")
     CHECK_EQ(deeper->clone().error(), error::nesting_depth_exceeded);
 }
 
-// validity::keys_equivalent compares two keys that differ only in the innermost item, so it recurses through
-// every level of both keys.
+// detail::validity::keys_equivalent compares two keys that differ only in the innermost item, so it recurses
+// through every level of both keys.
 TEST_CASE("nesting depth depth_limit: keys_equivalent")
 {
     auto const checked = [](std::size_t const n) {
@@ -71,8 +71,9 @@ TEST_CASE("nesting depth depth_limit: keys_equivalent")
         std::string const b = arrays_around(n, "\x01"sv);
         std::string_view const first = a;
         std::string_view const second = b;
-        return cbor::validity::keys_equivalent<false>(first, cbor::validity::offset{}, second,
-                                                      cbor::validity::offset{}, 1, depth_limit);
+        return cbor::detail::validity::keys_equivalent<false>(first, cbor::detail::validity::offset{}, second,
+                                                              cbor::detail::validity::offset{}, 1,
+                                                              depth_limit);
     };
     CHECK(checked(depth_limit - 1).has_value());
     CHECK_EQ(checked(depth_limit).error(), error::nesting_depth_exceeded);
