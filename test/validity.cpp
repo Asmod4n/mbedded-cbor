@@ -541,8 +541,14 @@ TEST_CASE("validity: an offset, a size and an index do not take the place of eac
     CHECK_FALSE(std::is_convertible_v<index, offset>);
     CHECK_FALSE(std::is_convertible_v<offset, index>);
     CHECK(std::same_as<decltype(validity::check_index(0, 1))::value_type, index>);
-    CHECK_FALSE(std::same_as<decltype(cbor::lazy::offset), std::size_t>);
-    CHECK(std::same_as<decltype(cbor::lazy::offset), offset>);
+    CHECK(std::same_as<decltype(cbor::lazy::offset), std::size_t>);
+}
+
+// The public member lazy::offset is a std::size_t, so no type of cbor::detail stands in a public signature. The
+// library turns it into an offset at each read.
+TEST_CASE("validity: lazy::offset is the position type of std::string_view")
+{
+    CHECK(std::same_as<decltype(cbor::lazy::offset), std::string_view::size_type>);
 }
 
 // subspan accepts every offset from the start to the end of its input. An offset at the end gives an empty view, and
