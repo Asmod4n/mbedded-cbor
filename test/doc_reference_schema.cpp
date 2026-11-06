@@ -10,7 +10,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
-#include <format>
 #include <functional>
 #include <memory>
 #include <numeric>
@@ -204,13 +203,12 @@ TEST_CASE("doc reference schema: accessor of a variant member")
 {
     auto const bytes = cbor::schema<home>::encode(home{dog{{"rex"}, 3}});
     REQUIRE(bytes.has_value());
-    std::string hex;
-    for (char const c : *bytes)
-        hex += std::format("{:02x}", static_cast<unsigned char>(c));
-    CHECK_EQ(hex,
-             "d871829a00000012d8728163706574d87282646261726b646e616d65d87282646e616d6564746f79735a0000000800000042"
-             "00000054f7f7f7f7f7f7f7f7f7f7f7f7d9070bd8819a000000021803c63a000000007a00000003726578d9070dd8809a0000"
-             "0001c61a00000000"s);
+    CHECK_EQ(*bytes,
+             "\xd8\x71\x82\x9a\x00\x00\x00\x12\xd8\x72\x81\x63\x70\x65\x74\xd8\x72\x82\x64\x62\x61\x72\x6b\x64"
+             "\x6e\x61\x6d\x65\xd8\x72\x82\x64\x6e\x61\x6d\x65\x64\x74\x6f\x79\x73\x5a\x00\x00\x00\x08\x00\x00"
+             "\x00\x42\x00\x00\x00\x54\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xd9\x07\x0b\xd8\x81\x9a"
+             "\x00\x00\x00\x02\x18\x03\xc6\x3a\x00\x00\x00\x00\x7a\x00\x00\x00\x03\x72\x65\x78\xd9\x07\x0d\xd8"
+             "\x80\x9a\x00\x00\x00\x01\xc6\x1a\x00\x00\x00\x00"s);
     auto const doc = cbor::schema<home>::path(std::string(*bytes));
     REQUIRE(doc.has_value());
     auto const pet = doc->at_path<"$.pet">();
@@ -219,6 +217,26 @@ TEST_CASE("doc reference schema: accessor of a variant member")
     CHECK_EQ(pet->get<dog>()->at_path<"@.name">(), "rex"sv);
     CHECK_EQ(pet->get<dog>()->at_path<"@.bark">(), 3);
     CHECK_EQ(pet->get<cat>().error(), error::incorrect_type);
+}
+
+// accessor.md: a variant member of values gives the index of the held value and the value itself; the other
+// alternative is incorrect_type.
+TEST_CASE("doc reference schema: accessor of a variant member of values")
+{
+    auto const bytes = cbor::schema<property>::encode(property{"width", std::int64_t{240}});
+    REQUIRE(bytes.has_value());
+    CHECK_EQ(*bytes,
+             "\xd8\x71\x82\x9a\x00\x00\x00\x12\xd8\x72\x82\x64\x6e\x61\x6d\x65\x65\x76\x61\x6c\x75\x65\x5a\x00"
+             "\x00\x00\x08\x00\x00\x00\x31\x00\x00\x00\x3b\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
+             "\xf7\x7a\x00\x00\x00\x05\x77\x69\x64\x74\x68\x1b\x00\x00\x00\x00\x00\x00\x00\xf0\xd9\x07\x0e\xd8"
+             "\x80\x9a\x00\x00\x00\x02\xc6\x1a\x00\x00\x00\x00\xc6\x3a\x00\x00\x00\x00"s);
+    auto const width = cbor::schema<property>::path(std::string(*bytes));
+    REQUIRE(width.has_value());
+    auto const value = width->at_path<"$.value">();
+    REQUIRE(value.has_value());
+    CHECK_EQ(value->index(), 1u);
+    CHECK_EQ(value->get<std::int64_t>(), 240);
+    CHECK_EQ(value->get<std::string>().error(), error::incorrect_type);
 }
 
 // fixed_element.md: an element of a vector of fixed-size structs reads its members with @ and the root with $.

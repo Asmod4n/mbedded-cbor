@@ -728,6 +728,52 @@ static std::uint64_t mb_struct()
 }
 #endif
 
+#if defined(ARM_MB_VARIANT_ENCODE) || defined(ARM_MB_VARIANT_DECODE) || defined(ARM_MB_VARIANT_AT_PATH)
+#include <variant>
+namespace bench_variant
+{
+struct animal {
+    std::string name;
+};
+struct dog : animal {
+    std::int32_t bark;
+};
+struct cat : animal {
+    std::vector<std::string> toys;
+};
+struct home {
+    std::variant<dog, cat> pet;
+    std::string street;
+};
+}
+CBOR_DEFINE_DERIVED_TYPE_MEMBERS(bench_variant::dog, bench_variant::animal, cbor::tag{1740}, name, bark);
+CBOR_DEFINE_DERIVED_TYPE_MEMBERS(bench_variant::cat, bench_variant::animal, cbor::tag{1741}, name, toys);
+CBOR_DEFINE_TYPE_MEMBERS(bench_variant::home, cbor::tag{1742}, pet, street);
+
+static std::string variant_message;
+
+static bench_variant::home const variant_sample{bench_variant::cat{{"tom"}, {"ball", "mouse", "yarn"}}, "elm"};
+
+static std::uint64_t mb_variant()
+{
+#if defined(ARM_MB_VARIANT_ENCODE)
+    auto const e = cbor::schema<bench_variant::home>::encode(variant_sample);
+    if (!e) [[unlikely]] std::abort();
+    return e->size();
+#elif defined(ARM_MB_VARIANT_DECODE)
+    auto const v = cbor::schema<bench_variant::home>::decode(*held);
+    if (!v) [[unlikely]] std::abort();
+    return std::get<bench_variant::cat>((**v).pet).toys.size() + (**v).street.size();
+#else
+    auto const root = cbor::schema<bench_variant::home>::path(*held);
+    if (!root) [[unlikely]] std::abort();
+    auto const name = root->at_path<"$.pet">()->get<bench_variant::cat>()->at_path<"@.name">();
+    if (!name) [[unlikely]] std::abort();
+    return name->size();
+#endif
+}
+#endif
+
 #if defined(ARM_MB_AT_PATH)
 static std::uint64_t mb_at_path()
 {
@@ -939,6 +985,10 @@ static std::optional<cbor::ref<std::span<std::byte const>>> bytes_ref;
 
 static void setup()
 {
+#if defined(ARM_MB_VARIANT_ENCODE) || defined(ARM_MB_VARIANT_DECODE) || defined(ARM_MB_VARIANT_AT_PATH)
+    variant_message = *cbor::schema<bench_variant::home>::encode(variant_sample);
+    bytes = &variant_message;
+#endif
 #if defined(ARM_S_BYTES_SPAN)
     bytes_out.resize(doc.size() + cbor::encoding::item_size_max);
 #endif
@@ -1103,6 +1153,8 @@ static std::uint64_t op()
     return mb_at_path();
 #elif defined(AP_PATH)
     return ap();
+#elif defined(ARM_MB_VARIANT_ENCODE) || defined(ARM_MB_VARIANT_DECODE) || defined(ARM_MB_VARIANT_AT_PATH)
+    return mb_variant();
 #elif defined(ARM_MB_STRUCT)
     return mb_struct();
 #elif defined(ARM_MB_PATH_ALL)

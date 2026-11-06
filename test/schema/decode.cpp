@@ -410,3 +410,64 @@ TEST_CASE("decode: a target that holds another alternative gets the alternative 
     REQUIRE(std::holds_alternative<cat>((*back)->pet));
     CHECK_EQ(std::get<cat>((*back)->pet).toys.size(), 2u);
 }
+
+// Each kind of alternative comes back from decode and from the unverified decode: bool, a number, a float, a
+// text, a byte string, an empty text as the last item, and a class next to a number and a text.
+TEST_CASE("decode: value, text and class alternatives of a variant member")
+{
+    for (setting const &s : sample_settings()) {
+        auto const bytes = *form<setting>::encode(s);
+        for (auto const &back : {form<setting>::decode(std::string(bytes)), form<setting>::unverified_decode(std::string(bytes))}) {
+            REQUIRE(back.has_value());
+            CHECK_EQ((*back)->name, s.name);
+            CHECK(((*back)->value == s.value));
+        }
+    }
+    for (shelter const &s : {shelter{dog{{"rex"}, 3}, "a"}, shelter{std::int64_t{-7}, "b"}, shelter{std::string("cat"), "c"}}) {
+        auto const back = form<shelter>::decode(*form<shelter>::encode(s));
+        REQUIRE(back.has_value());
+        REQUIRE_EQ((*back)->pet.index(), s.pet.index());
+        CHECK_EQ((*back)->note, s.note);
+        if (s.pet.index() == 0)
+            CHECK_EQ(std::get<dog>((*back)->pet).name, "rex");
+        if (s.pet.index() == 2)
+            CHECK_EQ(std::get<std::string>((*back)->pet), "cat");
+    }
+}
+
+// A class alternative after a text item: the items of the record follow the item of the variant in the order of
+// the writer, so decode, which checks that order, reads both.
+TEST_CASE("decode: a text item before the record of a class alternative")
+{
+    std::vector<shelter> const all{shelter{std::string("first"), "x"}, shelter{dog{{"rex"}, 3}, "y"}};
+    for (shelter const &s : all) {
+        auto const back = form<shelter>::decode(*form<shelter>::encode(s));
+        REQUIRE(back.has_value());
+        CHECK_EQ((*back)->note, s.note);
+    }
+}
+
+#if defined(__STDCPP_FLOAT128_T__)
+namespace schema_types
+{
+
+struct quad {
+    std::float128_t value;
+};
+
+} // namespace schema_types
+
+CBOR_DEFINE_TYPE_MEMBERS(quad, cbor::tag{1750}, value);
+
+// A binary128 field is tag 83 (RFC 8746) on a byte string of 16: d8 53 50. The verified forms compare the whole
+// head, so another tag of one byte, here 100 (d8 64), is incorrect_type and not a value.
+TEST_CASE("decode: a binary128 field with another tag head is incorrect_type")
+{
+    std::string bytes = *form<quad>::encode(quad{0.5f128});
+    std::size_t const at = bytes.find("\xd8\x53\x50"sv);
+    REQUIRE_NE(at, std::string::npos);
+    bytes[at + 1] = '\x64';
+    CHECK_EQ(form<quad>::decode(std::string(bytes)).error(), error::incorrect_type);
+    CHECK_EQ(form<quad>::at_path<"$.value">(bytes).error(), error::incorrect_type);
+}
+#endif

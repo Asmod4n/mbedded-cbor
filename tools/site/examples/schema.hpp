@@ -467,6 +467,34 @@ inline result pet_get(call const &c)
     return std::unexpected("get takes one alternative of std::variant<dog, cat>: get<dog>() or get<cat>()");
 }
 
+inline result value_index(call const &c)
+{
+    auto const self = self_of<cbor::schema<property>::accessor<std::variant<bool, std::int64_t, std::string>>>(c);
+    if (!self) [[unlikely]]
+        return std::unexpected(self.error());
+    if (auto const ok = arguments_counted(c, 0); !ok) [[unlikely]]
+        return std::unexpected(ok.error());
+    return value_of((*self)->index());
+}
+
+inline result value_get(call const &c)
+{
+    auto const self = self_of<cbor::schema<property>::accessor<std::variant<bool, std::int64_t, std::string>>>(c);
+    if (!self) [[unlikely]]
+        return std::unexpected(self.error());
+    if (auto const ok = arguments_counted(c, 0); !ok) [[unlikely]]
+        return std::unexpected(ok.error());
+    std::string_view const t = c.template_arguments.size() == 1 ? std::string_view(c.template_arguments.front()) : "";
+    if (t == "bool")
+        return value_of((*self)->get<bool>());
+    if (t == "std::int64_t")
+        return value_of((*self)->get<std::int64_t>());
+    if (t == "std::string")
+        return expected_view_of(*c.self, (*self)->get<std::string>());
+    return std::unexpected("get takes one alternative of std::variant<bool, std::int64_t, std::string>: get<bool>(), "
+                           "get<std::int64_t>() or get<std::string>()");
+}
+
 template <cbor::description_place D>
 result place_read(call const &)
 {
@@ -535,6 +563,11 @@ inline constexpr entry schema_functions[] = {
     {"cbor::schema<home>::accessor<home>.at_path()", accessor_at_path<cbor::schema<home>::accessor<home>, "$.pet">},
     {"cbor::schema<home>::accessor<std::variant<dog, cat>>.index()", pet_index},
     {"cbor::schema<home>::accessor<std::variant<dog, cat>>.get()", pet_get},
+    {"cbor::schema<property>::path()", schema_path<property, true>},
+    {"cbor::schema<property>::accessor<property>.at_path()",
+     accessor_at_path<cbor::schema<property>::accessor<property>, "$.value", "$.name">},
+    {"cbor::schema<property>::accessor<std::variant<bool, std::int64_t, std::string>>.index()", value_index},
+    {"cbor::schema<property>::accessor<std::variant<bool, std::int64_t, std::string>>.get()", value_get},
     {"cbor::schema<home>::accessor<dog>.at_path()",
      accessor_at_path<cbor::schema<home>::accessor<dog>, "@.name", "@.bark", "$.pet">},
     {"cbor::schema<home>::accessor<cat>.at_path()",

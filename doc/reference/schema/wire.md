@@ -26,7 +26,7 @@ result: lazy of 113([[_2 114(["make", "seats", "tires", "track"]), 114(["diamete
 | description | `[class tag, [[key, RFC 8746 tag], ...]]`: one entry for each element type of a vector of fixed-size structs |
 | directory | a byte string of 4-byte offsets of the parts of variable size |
 | fillers | `undefined`, so that the parts start at index 16 or later |
-| parts | the texts, byte strings, lists, maps and the records of variant members |
+| parts | the texts, byte strings, lists, maps and the items of variant members |
 | rump | the root record, at the end of the message |
 
 A record is the class tag ([tag](tag.md)), a straight reference tag 128
@@ -35,9 +35,11 @@ to 135 (or `6([n, ...])`) to its 114 entry, and an array with a count of
 variable size is `6(N)`, a shared reference with a 4-byte `N`, into the
 table.
 
-A `std::variant` member is a field `6(N)`. Its part is the record of
-the alternative that the variant holds, with no other head: the class
-tag of the record names the alternative.
+A `std::variant` member is a field `6(N)`. Its part is the item of
+the alternative that the variant holds: the record of a class, the
+field of a number, `bool` or enum with its head of fixed width, or a
+text or byte string with a 4-byte length. The head of the item names
+the alternative; no two alternatives begin with one head.
 
 A list of a number is an RFC 8746 typed array, little endian. A
 `std::vector<double>` is tag 86.

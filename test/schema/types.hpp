@@ -1787,3 +1787,65 @@ home home_with_dog()
 }
 
 } // namespace schema_types
+
+namespace schema_types
+{
+
+enum class level : std::uint16_t { low, high };
+
+struct setting {
+    std::string name;
+    std::variant<bool, std::int32_t, double, std::string, std::vector<std::byte>> value;
+};
+
+struct shelter {
+    std::variant<dog, std::int64_t, std::string> pet;
+    std::string note;
+};
+
+struct borrowed_value {
+    std::variant<std::string_view, std::span<std::byte const>, std::int8_t> value;
+};
+
+template <class T>
+struct one_value {
+    std::variant<T, dog> value;
+};
+
+} // namespace schema_types
+
+CBOR_DEFINE_TYPE_MEMBERS(setting, cbor::tag{1745}, name, value);
+CBOR_DEFINE_TYPE_MEMBERS(shelter, cbor::tag{1746}, pet, note);
+CBOR_DEFINE_TYPE_MEMBERS(borrowed_value, cbor::tag{1747}, value);
+
+template <class T>
+struct cbor::describe_members<schema_types::one_value<T>> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1748};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(schema_types::one_value<T>, value),
+    };
+};
+
+namespace schema_types
+{
+
+template <class = void>
+std::vector<setting> sample_settings()
+{
+    return {{"visible", true},
+            {"width", std::int32_t{-240}},
+            {"scale", 1.5},
+            {"title", std::string("probe")},
+            {"blob", std::vector<std::byte>{std::byte{1}, std::byte{2}}},
+            {"empty", std::string()}};
+}
+
+// The item of a variant member is the last item before the root record, so it starts this many bytes before the
+// root: the size of the item.
+template <class T>
+std::string_view variant_item_of(std::string_view const message, std::size_t const item_size)
+{
+    return message.substr(message.size() - form<T>::fixed_size() - item_size, item_size);
+}
+
+} // namespace schema_types
