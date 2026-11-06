@@ -951,8 +951,9 @@ class generic
             return std::array<map_key, count>{pfr::key_of<I, U>()...};
         }(std::make_index_sequence<count>());
         std::array<std::size_t, count> const order = reflection::keys_sorted(keys);
-        if (!validity::keys_unique(order,
-                                   [&](std::size_t const i) { return reflection::key_encoding_of(keys[i]); }))
+        if (std::ranges::adjacent_find(order, {}, [&](std::size_t const i) {
+                return reflection::key_encoding_of(keys[i]);
+            }) != std::ranges::end(order))
             std::unreachable();
         return order;
     }

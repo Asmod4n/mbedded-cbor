@@ -147,37 +147,6 @@ constexpr auto products_at_compile_time = [] {
 
 } // namespace
 
-// A map or a set of members is valid only when no two of its keys are equal. The check reads a sorted range,
-// so it must agree with a comparison of every pair, for every sorted sequence of up to four keys from three
-// values, and through a projection to the key of a pair.
-TEST_CASE("validity: keys_unique for every sorted sequence of up to four keys")
-{
-    std::vector<std::vector<int>> sequences{{}};
-    for (std::size_t length = 1; length <= 4; ++length) {
-        std::vector<std::vector<int>> longer;
-        for (std::vector<int> const &s : sequences)
-            if (s.size() == length - 1)
-                for (int key = s.empty() ? 0 : s.back(); key <= 2; ++key) {
-                    std::vector<int> next = s;
-                    next.push_back(key);
-                    longer.push_back(next);
-                }
-        sequences.insert(sequences.end(), longer.begin(), longer.end());
-    }
-    CHECK_EQ(sequences.size(), 35u);
-    for (std::vector<int> const &s : sequences) {
-        bool distinct = true;
-        for (std::size_t i = 0; i < s.size(); ++i)
-            for (std::size_t j = i + 1; j < s.size(); ++j)
-                distinct = distinct && s[i] != s[j];
-        CHECK_EQ(validity::keys_unique(s), distinct);
-        std::vector<std::pair<int, std::string>> pairs;
-        for (int const key : s)
-            pairs.emplace_back(key, std::to_string(pairs.size()));
-        CHECK_EQ(validity::keys_unique(pairs, &std::pair<int, std::string>::first), distinct);
-    }
-}
-
 // RFC 8949 5.6: a second key equal to a key already met makes the map not valid. The input set is {false,
 // true}.
 TEST_CASE("validity: check_key_unique for both inputs")

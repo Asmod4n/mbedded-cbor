@@ -205,6 +205,7 @@ class extended_diagnostic_notation
         }
     }
 
+    static constexpr std::array<std::uint64_t, 3> quiet_nan{0x7e00, 0x7fc00000, 0x7ff8000000000000};
     static constexpr std::size_t hex4_digits = 4;
     static constexpr std::string_view escape_prefix = "\\u";
 
@@ -421,7 +422,6 @@ class extended_diagnostic_notation
              static_cast<double>(static_cast<float>(value)) == value);
         if (!exact) [[unlikely]]
             return std::unexpected(error::invalid_path);
-        constexpr std::array<std::uint64_t, 3> quiet_nan{0x7e00, 0x7fc00000, 0x7ff8000000000000};
         std::uint64_t const argument =
             nan ? quiet_nan[static_cast<std::size_t>(
                       info - std::to_underlying(rfc8949::simple_float_information::half_precision_float))]
@@ -968,7 +968,8 @@ class extended_diagnostic_notation
                 std::ranges::sort(items);
                 if (error const c =
                         validity::check_key_unique(
-                            !validity::keys_unique(items, &std::pair<std::string, std::string>::first))
+                            std::ranges::adjacent_find(items, {}, &std::pair<std::string, std::string>::first) !=
+                            std::ranges::end(items))
                             .error_or(error{});
                     c != error{}) [[unlikely]]
                     return std::unexpected(c);
@@ -1102,7 +1103,6 @@ class extended_diagnostic_notation
 
     static std::string float_of(std::uint8_t const info, std::uint64_t const argument)
     {
-        constexpr std::array<std::uint64_t, 3> quiet_nan{0x7e00, 0x7fc00000, 0x7ff8000000000000};
         std::size_t const width =
             info - std::to_underlying(rfc8949::simple_float_information::half_precision_float);
         double const value = heads::decode_float(info, argument);

@@ -315,12 +315,6 @@ public:
     }
 
 
-    template <std::ranges::forward_range R, class Projection = std::identity>
-    static constexpr bool keys_unique(R const &sorted, Projection const projection = {})
-    {
-        return std::ranges::adjacent_find(sorted, {}, projection) == std::ranges::end(sorted);
-    }
-
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_key_unique(bool const equal_key_seen)
     {
         if (equal_key_seen) [[unlikely]]
