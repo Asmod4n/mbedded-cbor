@@ -363,6 +363,54 @@ void typed_read_check(std::string const &document, std::vector<step> const &step
         require(comparable(*typed) == comparable(*chained));
 }
 
+// Two results of a typed read: the same value or the same error code.
+template <class T, class A, class B>
+void require_same_read(A const &a, B const &b)
+{
+    require(a.has_value() == b.has_value());
+    if (!a) {
+        require(a.error() == b.error());
+        return;
+    }
+    if constexpr (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+                  std::is_same_v<T, cbor::typed_array>)
+        require(comparable(**a) == comparable(**b));
+    else
+        require(comparable(*a) == comparable(*b));
+}
+
+// Every form of at_path reads what the form over a std::shared_ptr reads: an owner with a span into the bytes, the
+// bytes moved in, lazy::at_path on the root, and a query compiled at run time from the same text, also after a copy
+// and a move of the query.
+template <cbor::fixed_string Path, class T>
+void path_forms_check(std::string const &document)
+{
+    constexpr bool view = std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+                          std::is_same_v<T, cbor::typed_array>;
+    auto const owner = std::make_shared<std::string const>(document);
+    auto const bytes = std::make_shared<std::vector<char> const>(document.begin(), document.end());
+    auto const query = cbor::jsonpath::compile<T>(Path.view());
+    require(query.has_value());
+    auto const copied = *query;
+    auto moved = *query;
+    auto const taken = std::move(moved);
+    if constexpr (view) {
+        auto const reference = cbor::at_path<Path, T>(owner);
+        require_same_read<T>(reference, cbor::at_path<Path, T>(bytes, std::span<char const>(*bytes)));
+        require_same_read<T>(reference, cbor::at_path<Path, T>(std::string(document)));
+        require_same_read<T>(reference, cbor::at_path(bytes, std::span<char const>(*bytes), copied));
+        require_same_read<T>(reference, cbor::at_path(bytes, std::span<char const>(*bytes), taken));
+        if (auto const root = test::lazy_of_copy(document))
+            require_same_read<T>(reference, root->template at_path<Path, T>());
+    } else {
+        auto const reference = cbor::at_path<Path, T>(std::string_view(document));
+        require_same_read<T>(reference, cbor::at_path(std::string_view(document), copied));
+        require_same_read<T>(reference, cbor::at_path(std::string_view(document), taken));
+        if (auto const root = test::lazy_of_copy(document))
+            require_same_read<T>(reference, root->template at_path<Path, T>());
+    }
+}
+
 template <cbor::fixed_string Path>
 void typed_reads_check(std::string const &document, std::vector<step> const &steps)
 {
@@ -375,6 +423,10 @@ void typed_reads_check(std::string const &document, std::vector<step> const &ste
     typed_read_check<Path, std::string_view>(document, steps);
     typed_read_check<Path, std::span<std::byte const>>(document, steps);
     typed_read_check<Path, cbor::typed_array>(document, steps);
+    path_forms_check<Path, std::int64_t>(document);
+    path_forms_check<Path, double>(document);
+    path_forms_check<Path, std::string_view>(document);
+    path_forms_check<Path, std::span<std::byte const>>(document);
 }
 
 inline void path_target(std::string_view const input)
