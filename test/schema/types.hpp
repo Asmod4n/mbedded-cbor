@@ -33,6 +33,7 @@
 #include <string_view>
 #include <type_traits>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace schema_types
@@ -1717,6 +1718,72 @@ void check_positions_outside(R const &range)
     CHECK_THROWS_AS((void)*(range.begin() + std::numeric_limits<std::ptrdiff_t>::max()), std::logic_error);
     CHECK_THROWS_AS((void)*(range.begin() - std::numeric_limits<std::ptrdiff_t>::min()), std::logic_error);
     CHECK_THROWS_AS((void)*I{}, std::logic_error);
+}
+
+} // namespace schema_types
+
+namespace schema_types
+{
+
+struct animal {
+    std::string name;
+};
+
+struct dog : animal {
+    std::int32_t bark;
+};
+
+struct cat : animal {
+    std::vector<std::string> toys;
+};
+
+struct home {
+    std::variant<dog, cat> pet;
+    std::string street;
+};
+
+struct fox : animal {
+    std::int32_t speed;
+
+    fox(std::string n, std::int32_t const s) : animal{std::move(n)}, speed(s)
+    {
+    }
+};
+
+struct den {
+    std::variant<dog, fox> pet;
+};
+
+} // namespace schema_types
+
+template <>
+struct cbor::describe_members<dog> {
+    using base = animal;
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{1740};
+    static constexpr std::tuple members{
+        CBOR_MEMBER(dog, name),
+        CBOR_MEMBER(dog, bark),
+    };
+};
+
+CBOR_DEFINE_DERIVED_TYPE_MEMBERS(cat, animal, cbor::tag{1741}, name, toys);
+CBOR_DEFINE_TYPE_MEMBERS(home, cbor::tag{1742}, pet, street);
+CBOR_DEFINE_DERIVED_TYPE_MEMBERS(fox, animal, cbor::tag{1743}, name, speed);
+CBOR_DEFINE_TYPE_MEMBERS(den, cbor::tag{1744}, pet);
+
+namespace schema_types
+{
+
+template <class = void>
+home home_with_cat()
+{
+    return home{cat{{"tom"}, {"ball", "mouse"}}, "elm"};
+}
+
+template <class = void>
+home home_with_dog()
+{
+    return home{dog{{"rex"}, 3}, "elm"};
 }
 
 } // namespace schema_types

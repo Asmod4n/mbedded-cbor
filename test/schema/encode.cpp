@@ -262,3 +262,36 @@ TEST_CASE("encode: a fixed-size struct with bool, enum, an inner struct and an a
     CHECK_NE(bytes.find("\xd9\x80\x69\x82\xe3\x5a\x00\x00\x00\x09\x03\xfe\x01\x01\x00\x03\x02\x01\x00"s), std::string::npos);
     check_one_item(bytes);
 }
+
+// A variant member is a reference field. Its item is the record of the held alternative, so the class tag of
+// the alternative is the head of the item: 1740 = d9 06 cc for dog, 1741 = d9 06 cd for cat.
+TEST_CASE("encode: a variant member writes the record of the held alternative as its item")
+{
+    auto const with_dog = form<home>::encode(home_with_dog());
+    REQUIRE(with_dog);
+    CHECK_NE(with_dog->find("\xd9\x06\xcc"sv), std::string::npos);
+    CHECK_EQ(with_dog->find("\xd9\x06\xcd"sv), std::string::npos);
+    auto const with_cat = form<home>::encode(home_with_cat());
+    REQUIRE(with_cat);
+    CHECK_NE(with_cat->find("\xd9\x06\xcd"sv), std::string::npos);
+    CHECK_EQ(with_cat->find("\xd9\x06\xcc"sv), std::string::npos);
+}
+
+// A variant that holds no value has no alternative to write. The encoder cannot repair that, so it is a wrong
+// use and raises std::logic_error before it writes a byte.
+TEST_CASE("encode: a variant that holds no value is a wrong use")
+{
+    struct boom {
+        operator cat() const
+        {
+            throw std::runtime_error("boom");
+        }
+    };
+    home h = home_with_dog();
+    CHECK_THROWS_AS(h.pet.emplace<cat>(boom{}), std::runtime_error);
+    REQUIRE(h.pet.valueless_by_exception());
+    CHECK_THROWS_AS((void)form<home>::encode(h), std::logic_error);
+    std::string out;
+    CHECK_THROWS_AS((void)form<home>::encode(h, out), std::logic_error);
+    CHECK(out.empty());
+}

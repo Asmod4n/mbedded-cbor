@@ -1,7 +1,8 @@
 // cbor::schema decodes a class through its default constructor, or through a constructor that takes the described
-// members in the order of the description. It takes the members of the class itself. A wrong use does not compile,
-// with a message that names the cause. CBOR_TEST_CASE selects the case: 1 a class whose constructor takes other
-// arguments, 2 a description that lists a member of a base class, 3 an aggregate whose member has no default
+// members in the order of the description. It takes a member of a base class only where the description names the
+// base. A wrong use does not compile, with a message that names the cause. CBOR_TEST_CASE selects the case: 1 a class
+// whose constructor takes other arguments, 2 a description that lists a member of a base class it does not name, 3
+// an aggregate whose member has no default
 // constructor, 4 a right class with a constructor, which compiles.
 #include <cbor/cbor.hpp>
 

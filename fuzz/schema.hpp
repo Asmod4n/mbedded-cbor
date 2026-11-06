@@ -23,6 +23,7 @@
 #include <stdfloat>
 #include <string>
 #include <string_view>
+#include <variant>
 #include <vector>
 
 namespace fuzz::schema
@@ -78,12 +79,25 @@ struct numbers {
     std::optional<std::int64_t> maybe;
 };
 
+struct machine {
+    std::string maker;
+};
+
+struct sedan : machine {
+    std::uint8_t doors;
+};
+
+struct truck : machine {
+    std::vector<tire> axles;
+};
+
 struct garage {
     std::vector<vehicle> cars;
     std::map<std::uint16_t, std::string> owners;
     std::map<std::int32_t, tire> stock;
     std::vector<std::uint8_t> blob;
     std::string note;
+    std::variant<sedan, truck> parked;
 };
 
 } // namespace fuzz::schema
@@ -161,8 +175,12 @@ struct cbor::describe_members<fuzz::schema::garage> {
         CBOR_MEMBER(fuzz::schema::garage, stock),
         CBOR_MEMBER(fuzz::schema::garage, blob),
         CBOR_MEMBER(fuzz::schema::garage, note),
+        CBOR_MEMBER(fuzz::schema::garage, parked),
     };
 };
+
+CBOR_DEFINE_DERIVED_TYPE_MEMBERS(fuzz::schema::sedan, fuzz::schema::machine, cbor::tag{1505}, maker, doors);
+CBOR_DEFINE_DERIVED_TYPE_MEMBERS(fuzz::schema::truck, fuzz::schema::machine, cbor::tag{1506}, maker, axles);
 
 namespace fuzz::schema
 {
@@ -227,7 +245,7 @@ consteval void paths_of(std::meta::info type, std::string const &prefix, std::ve
                 paths_of(element, prefix + "[" + decimal(i) + "]", out, depth + 1);
             return;
         }
-        if (kind == ^^std::map)
+        if (kind == ^^std::map || kind == ^^std::variant)
             return;
         out.push_back(prefix);
         return;
@@ -398,19 +416,23 @@ void read_all(std::string_view const message)
         return;
     template for (constexpr std::meta::info text : texts)
         consume(lot->template at_path<path_text<text>>(), *owner);
+    if constexpr (std::is_same_v<T, garage>)
+        parked_raw(*lot, *owner);
 }
 
 template <class T>
 void compare_all(T const &native, std::string_view message);
 
 // The errors that an unverified form may give on raw input (doc/reference/schema/unverified.md): it skips the
-// checks of the data and keeps every check of a bound, so it never raises and never reads outside the input.
-inline bool unverified_error(cbor::error const e)
+// checks of the data and keeps every check of a bound, so it never raises and never reads outside the input. The
+// tag of a variant record chooses the alternative, so a type with a variant member also gives incorrect_type.
+template <class T>
+bool unverified_error(cbor::error const e)
 {
     using enum cbor::error;
     return e == too_little_data || e == index_out_of_bounds || e == unpopulated_table_index || e == syntax_error ||
            e == nesting_depth_exceeded || e == not_enough_memory || e == string_length_exceeded ||
-           e == container_elements_exceeded;
+           e == container_elements_exceeded || (std::is_same_v<T, garage> && e == incorrect_type);
 }
 
 // The unverified forms on raw input give a value or one of their errors, and every leaf path reads inside the
@@ -420,16 +442,18 @@ void unverified_raw(std::string_view const message)
 {
     auto const decoded = cbor::schema<T>::unverified_decode(std::string(message));
     if (!decoded)
-        require(unverified_error(decoded.error()));
+        require(unverified_error<T>(decoded.error()));
     static constexpr auto texts = std::define_static_array(path_texts<T>());
     auto const owner = std::make_shared<std::string const>(message);
     auto lot = cbor::schema<T>::unverified_path(owner);
     if (!lot) {
-        require(unverified_error(lot.error()));
+        require(unverified_error<T>(lot.error()));
         return;
     }
     template for (constexpr std::meta::info text : texts)
         consume(lot->template at_path<path_text<text>>(), *owner);
+    if constexpr (std::is_same_v<T, garage>)
+        parked_raw(*lot, *owner);
 }
 
 // The methods of an accessor read what the root reads: a list accessor counts as many elements through begin and
@@ -457,6 +481,52 @@ inline void garage_accessors(std::string const &written)
     auto const note_from_inside = cars->at_path<"$.note">();
     auto const note = root->at_path<"$.note">();
     require(note_from_inside.has_value() && note.has_value() && *note_from_inside == *note);
+}
+
+// The accessor of the variant member gives the index of the alternative that decode reads, and the accessor of
+// that alternative reads its members as decode does; the other alternative is incorrect_type.
+inline void garage_parked(std::string const &written)
+{
+    auto const root = cbor::schema<garage>::path(std::string(written));
+    auto const decoded = cbor::schema<garage>::decode(std::string(written));
+    require(root.has_value() && decoded.has_value());
+    auto const &native = (*decoded)->parked;
+    auto const parked = root->at_path<"$.parked">();
+    require(parked.has_value() && parked->index() == native.index());
+    auto const s = parked->get<sedan>();
+    auto const t = parked->get<truck>();
+    require(s.has_value() != t.has_value());
+    if (s) {
+        auto const doors = s->at_path<"@.doors">();
+        auto const maker = s->at_path<"@.maker">();
+        require(doors.has_value() && *doors == std::get<sedan>(native).doors);
+        require(maker.has_value() && *maker == std::get<sedan>(native).maker);
+        require(t.error() == cbor::error::incorrect_type);
+    } else {
+        auto const axles = t->at_path<"@.axles">();
+        auto const maker = t->at_path<"@.maker">();
+        require(axles.has_value() && axles->size() == std::get<truck>(native).axles.size());
+        require(maker.has_value() && *maker == std::get<truck>(native).maker);
+        require(s.error() == cbor::error::incorrect_type);
+    }
+}
+
+// The variant member of raw input reads inside the message through the verified and the unverified accessor.
+template <class Lot>
+void parked_raw(Lot const &lot, std::string_view const message)
+{
+    auto const parked = lot.template at_path<"$.parked">();
+    if (!parked)
+        return;
+    require(parked->index() < 2);
+    if (auto const s = parked->template get<sedan>()) {
+        consume(s->template at_path<"@.maker">(), message);
+        consume(s->template at_path<"@.doors">(), message);
+    }
+    if (auto const t = parked->template get<truck>()) {
+        consume(t->template at_path<"@.maker">(), message);
+        consume(t->template at_path<"@.axles[0].diameter">(), message);
+    }
 }
 
 // A typed array view gives each element through [], at, the iterator, front, back, first and last; an index or a
@@ -505,8 +575,10 @@ void read_forms(std::string const &written)
     require(cbor::schema<T>::path(bytes).has_value());
     require(cbor::schema<T>::path(bytes, std::span<char const>(*bytes)).has_value());
     require(cbor::schema<T>::unverified_path(bytes, std::span<char const>(*bytes)).has_value());
-    if constexpr (std::is_same_v<T, garage>)
+    if constexpr (std::is_same_v<T, garage>) {
         garage_accessors(written);
+        garage_parked(written);
+    }
     if constexpr (std::is_same_v<T, numbers>)
         numbers_view(written);
 }
@@ -572,6 +644,11 @@ void fill(T &v, source &in, int const depth)
             fill(e, in, depth + 1);
             v = e;
         }
+    } else if constexpr (requires { std::variant_size<T>::value; }) {
+        std::size_t const k = in.byte() % std::variant_size_v<T>;
+        [&]<std::size_t... K>(std::index_sequence<K...>) {
+            ((k == K ? fill(v.template emplace<K>(), in, depth + 1) : void()), ...);
+        }(std::make_index_sequence<std::variant_size_v<T>>{});
     } else if constexpr (requires { v.push_back(typename T::value_type{}); }) {
         for (std::size_t n = depth > 3 ? 0uz : in.byte() % 5uz; n > 0; --n) {
             typename T::value_type e{};
@@ -579,6 +656,9 @@ void fill(T &v, source &in, int const depth)
             v.push_back(std::move(e));
         }
     } else {
+        template for (constexpr std::meta::info b :
+                      std::define_static_array(std::meta::bases_of(^^T, std::meta::access_context::unchecked())))
+            fill(static_cast<typename[:std::meta::type_of(b):] &>(v), in, depth + 1);
         template for (constexpr std::meta::info m :
                       std::define_static_array(std::meta::nonstatic_data_members_of(
                           ^^T, std::meta::access_context::unchecked())))

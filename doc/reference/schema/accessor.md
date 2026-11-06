@@ -29,6 +29,8 @@ accessor.at_path<"@.member">(indexes...) → std::expected<V, cbor::error>
 accessor.at_path<"$.member">(indexes...) → std::expected<V, cbor::error>
 root.view<"$.list">(indexes...)          → std::expected<cbor::typed_array_view<E>, cbor::error>
 accessor.size()                          → std::size_t
+pet.index()                              → std::size_t
+pet.get<A>()                             → std::expected<accessor<A>, cbor::error>
 accessor.begin()                         → iterator
 accessor.end()                           → iterator
 ```
@@ -59,11 +61,33 @@ call: tires->at_path<"@[]">(0u)
 result: accessor of a tire in a std::vector<tire>
 ```
 
+```example
+bytes: d8 71 82 9a 00 00 00 12 d8 72 81 63 70 65 74 d8 72 82 64 62 61 72 6b 64 6e 61 6d 65 d8 72 82 64 6e 61 6d 65 64 74 6f 79 73 5a 00 00 00 08 00 00 00 42 00 00 00 54 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 0b d8 81 9a 00 00 00 02 18 03 c6 3a 00 00 00 00 7a 00 00 00 03 72 65 78 d9 07 0d d8 80 9a 00 00 00 01 c6 1a 00 00 00 00
+call: auto const house = cbor::schema<home>::path(std::move(bytes))
+result: accessor of a home
+call: auto const pet = house->at_path<"$.pet">()
+result: accessor of a std::variant<dog, cat> that holds a dog
+call: pet->index()
+result: 0
+call: pet->get<dog>()->at_path<"@.name">()
+result: "rex"
+call: pet->get<dog>()->at_path<"@.bark">()
+result: 3
+call: pet->get<cat>()
+result: unexpected cbor::error::incorrect_type
+```
+
 Reads the part `U` of a message of `T`. A path that starts with `@`
 starts at `U`. A path that starts with `$` starts at the root. The
 result is a `std::expected`: the value of a number, `bool` or enum; a
 `std::string_view` of a text; the accessor of a struct, a list or a map.
 Every result holds the owner of the bytes.
+
+The accessor of a `std::variant<A...>` member has `index()` and
+`get<A>()`. `index()` gives the index of the alternative that the tag
+of its record names. `get<A>()` gives the accessor of that record, or
+`incorrect_type` when the record holds another alternative. A path
+ends at a variant member: `$.pet.name` does not compile.
 
 `view` gives a [typed_array_view](typed_array_view.md) of a list of
 numbers. It exists on the root accessor only. `size()` gives the count
@@ -73,7 +97,8 @@ random access range of [fixed_element](fixed_element.md) accessors.
 ## Errors
 
 - `index_out_of_bounds`: an index past the end of a list.
-- `incorrect_type`: a wrong head or tag on the path.
+- `incorrect_type`: a wrong head or tag on the path; a tag of a variant
+  record that names no alternative; `get<A>()` of another alternative.
 - `unpopulated_table_index`, `syntax_error`: a broken reference.
 - `at_path` on a temporary does not compile. A moved-from accessor
   throws `std::logic_error`.
@@ -95,6 +120,20 @@ tires->at_path<"$.seats">();         // 5
 for (auto const t : *tires)
     use(*t.at_path<"@.diameter">()); // 17, then 18
 root->view<"$.track">()->size();     // 3
+```
+
+A variant member, with `dog` and `cat` derived from `animal`:
+
+```cpp
+struct home {
+    std::variant<dog, cat> pet;
+};
+// bytes: from schema<home>::encode(home{dog{{"rex"}, 3}})
+auto const house = cbor::schema<home>::path(std::move(bytes));
+auto const pet = house->at_path<"$.pet">();
+pet->index();                         // 0, a dog
+pet->get<dog>()->at_path<"@.name">(); // "rex"
+pet->get<cat>().error();              // cbor::error::incorrect_type
 ```
 
 ## See also

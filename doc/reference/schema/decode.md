@@ -56,11 +56,14 @@ makes that tuple with the allocator of the container.
 ## Errors
 
 - `too_little_data`: the message is shorter than its table and root.
-- `incorrect_type`: a message of another struct, or a wrong head.
+- `incorrect_type`: a message of another struct, or a wrong head; a
+  variant record with a tag of no alternative.
 - `syntax_error`, `unpopulated_table_index`: a broken directory.
 - `inadmissible_type_for_tag_content`: a typed array whose length is
   not a multiple of its element size.
-- `nesting_depth_exceeded`, `not_enough_memory`.
+- `nesting_depth_exceeded`: a variant record, like a list, a map and an
+  optional, is one level deeper than its parent.
+- `not_enough_memory`.
 - A null or empty owner throws `std::logic_error`.
 
 ## Cost
