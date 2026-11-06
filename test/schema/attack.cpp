@@ -424,3 +424,77 @@ TEST_CASE("attack: an accessor reads nothing outside a cut or forged message of 
     }
     CHECK_EQ(differ, 0u);
 }
+
+namespace schema_types
+{
+
+// Reads every form of a variant member and counts the values that came back.
+template <class = void>
+std::size_t read_pet(std::string_view const bytes)
+{
+    std::size_t n = 0;
+    n += form<home>::decode(std::string(bytes)).has_value();
+    n += form<home>::unverified_decode(std::string(bytes)).has_value();
+    if (auto const doc = form<home>::path(std::string(bytes))) {
+        if (auto const pet = doc->at_path<"$.pet">()) {
+            n += 1;
+            if (auto const d = pet->get<dog>())
+                n += d->at_path<"@.name">().has_value();
+            if (auto const c = pet->get<cat>())
+                n += c->at_path<"@.toys[1]">().has_value();
+        }
+    }
+    return n;
+}
+
+} // namespace schema_types
+
+// A message cut at any byte reads no value. Each byte flipped reads no memory outside of the message; ASan
+// and UBSan of this build show such a read.
+TEST_CASE("attack: a variant member under a cut or a changed byte")
+{
+    for (home const &h : {home_with_dog(), home_with_cat()}) {
+        std::string const bytes = *form<home>::encode(h);
+        CHECK_EQ(read_pet(bytes), 4u);
+        std::size_t values = 0;
+        for (std::size_t size = 0; size < bytes.size(); ++size)
+            values += read_pet(std::string_view(bytes).substr(0, size));
+        CHECK_EQ(values, 0u);
+        for (std::size_t at = 0; at < bytes.size(); ++at) {
+            std::string f = bytes;
+            f.at(at) = static_cast<char>(f.at(at) ^ 0x41);
+            read_pet(f);
+        }
+    }
+}
+
+// A tag that names no alternative is incorrect_type. A record whose tag head fits but whose values do not is
+// too_little_data. A directory entry that points one byte into the record finds no tag of an alternative there,
+// and decode, which reads the items in their order, finds the entry off its place.
+TEST_CASE("attack: an unknown tag, a cut record and a wrong directory entry of a variant member")
+{
+    std::string const bytes = *form<home>::encode(home_with_dog());
+    auto const at = bytes.find("\xd9\x06\xcc"sv);
+    REQUIRE_NE(at, std::string::npos);
+    std::string unknown = bytes;
+    unknown[at + 2] = '\xcf';
+    CHECK_EQ(form<home>::decode(std::string(unknown)).error(), error::incorrect_type);
+    CHECK_EQ(form<home>::path(std::string(unknown))->at_path<"$.pet">().error(), error::incorrect_type);
+    std::string other_root = bytes;
+    other_root[at + 2] = '\xce';
+    CHECK_EQ(form<home>::decode(std::string(other_root)).error(), error::incorrect_type);
+    std::size_t const head = bytes.find("\x5a\x00\x00\x00\x0c"sv);
+    REQUIRE_NE(head, std::string::npos);
+    auto const big_endian = [](std::size_t const x) {
+        return std::string{static_cast<char>(x >> 24), static_cast<char>(x >> 16), static_cast<char>(x >> 8),
+                           static_cast<char>(x)};
+    };
+    REQUIRE_EQ(bytes.substr(head + 5, 4), big_endian(at));
+    std::string cut = bytes;
+    cut.replace(head + 9, 4, big_endian(at + 4));
+    CHECK_EQ(form<home>::path(std::string(cut))->at_path<"$.pet">().error(), error::too_little_data);
+    std::string moved = bytes;
+    moved.replace(head + 5, 4, big_endian(at + 1));
+    CHECK_EQ(form<home>::path(std::string(moved))->at_path<"$.pet">().error(), error::incorrect_type);
+    CHECK_EQ(form<home>::decode(std::string(moved)).error(), error::syntax_error);
+}

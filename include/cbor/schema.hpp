@@ -90,6 +90,12 @@ struct fixed_element {};
 namespace detail
 {
 
+template <class U>
+inline constexpr bool is_std_variant = false;
+
+template <class... A>
+inline constexpr bool is_std_variant<std::variant<A...>> = true;
+
 struct directory {
     std::size_t at;
     std::size_t count;
@@ -448,6 +454,7 @@ class reflection
                               "cbor::schema decodes a class through its default constructor, or through a "
                               "constructor that takes the described members in the order of the description, each "
                               "of a type with a default constructor.");
+                static_assert(variant_members_valid<U>());
             }
         };
         if constexpr (is_struct<std::remove_cv_t<Root>>)
@@ -456,9 +463,6 @@ class reflection
         return true;
     }
 
-    // The base that a description names is the direct base of the class: with reflection the one direct base,
-    // without it a base that std::is_base_of_v finds. A class with no named base has no base where reflection can
-    // tell.
     template <class U>
     static consteval bool base_described()
     {
@@ -482,6 +486,77 @@ class reflection
             return true;
 #endif
         }
+    }
+
+    template <class M>
+    static consteval bool holds_variant()
+    {
+        using U = std::remove_cv_t<M>;
+        if constexpr (detail::is_std_variant<U>)
+            return true;
+        else if constexpr (requires { fixed_length<U>::value; })
+            return holds_variant<typename fixed_length<U>::element>();
+        else if constexpr (is_struct<U>)
+            return false;
+        else if constexpr (is_optional<U>)
+            return holds_variant<typename U::value_type>();
+        else if constexpr (is_map<U>)
+            return holds_variant<typename U::key_type>() || holds_variant<typename U::mapped_type>();
+        else if constexpr (std::ranges::sized_range<U>)
+            return holds_variant<std::ranges::range_value_t<U>>();
+        else
+            return false;
+    }
+
+    template <class A, class First>
+    static consteval bool base_shared()
+    {
+        if constexpr (has_described_base<A> && has_described_base<First>)
+            return std::is_same_v<typename describe_members<A>::base, typename describe_members<First>::base>;
+        else
+            return false;
+    }
+
+    template <class M>
+    static consteval bool variant_member_valid()
+    {
+        using U = std::remove_cv_t<M>;
+        if constexpr (detail::is_std_variant<U>) {
+            [[maybe_unused]] constexpr auto alternatives = []<std::size_t... K>(std::index_sequence<K...>) {
+                return std::tuple<std::type_identity<std::variant_alternative_t<K, U>>...>{};
+            }(std::make_index_sequence<std::variant_size_v<U>>{});
+            constexpr bool monostate_absent = !contains<std::monostate>(decltype(alternatives){});
+            static_assert(monostate_absent, "cbor::schema takes no std::monostate in a std::variant.");
+            constexpr bool described = []<std::size_t... K>(std::index_sequence<K...>) {
+                return (has_describe_members<std::remove_cv_t<std::variant_alternative_t<K, U>>> && ...);
+            }(std::make_index_sequence<std::variant_size_v<U>>{});
+            static_assert(!monostate_absent || described,
+                          "cbor::schema takes a std::variant of classes with cbor::describe_members only.");
+            constexpr bool unique = []<std::size_t... K>(std::index_sequence<K...>) {
+                return ((index_in<std::variant_alternative_t<K, U>>(decltype(alternatives){}) == K) && ...);
+            }(std::make_index_sequence<std::variant_size_v<U>>{});
+            static_assert(unique, "cbor::schema takes each alternative of a std::variant once.");
+            if constexpr (monostate_absent && described) {
+                constexpr bool shared = []<std::size_t... K>(std::index_sequence<K...>) {
+                    return (base_shared<std::variant_alternative_t<K, U>, std::variant_alternative_t<0, U>>() && ...);
+                }(std::make_index_sequence<std::variant_size_v<U>>{});
+                static_assert(shared, "cbor::schema takes a std::variant of classes that name one and the same direct base "
+                                      "class through CBOR_DEFINE_DERIVED_TYPE_MEMBERS or describe_members<T>::base.");
+            }
+        } else {
+            static_assert(!holds_variant<U>(),
+                          "cbor::schema takes a std::variant as a member of a described class only; a list, a map, an "
+                          "array or a std::optional of a std::variant is not taken.");
+        }
+        return true;
+    }
+
+    template <class U>
+    static consteval bool variant_members_valid()
+    {
+        return []<std::size_t... I>(std::index_sequence<I...>) {
+            return (variant_member_valid<describe::member_t<U, I>>() && ...);
+        }(std::make_index_sequence<describe::members_count<U>>{});
     }
 
     template <class U>
@@ -1026,11 +1101,22 @@ class reflection
                 collect_description_types<describe::member_t<U, key_order<U>[K]>>(lists));
     }
 
+    template <class V, std::size_t K, class Lists>
+    static consteval auto collect_description_alternatives(Lists const lists)
+    {
+        if constexpr (K == std::variant_size_v<V>)
+            return lists;
+        else
+            return collect_description_alternatives<V, K + 1>(collect_description_types<std::variant_alternative_t<K, V>>(lists));
+    }
+
     template <class T, class Visited, class Types>
     static consteval auto collect_description_types(std::pair<Visited, Types> const lists)
     {
         using U = std::remove_cv_t<T>;
-        if constexpr (requires { fixed_length<U>::value; }) {
+        if constexpr (detail::is_std_variant<U>) {
+            return collect_description_alternatives<U, 0>(lists);
+        } else if constexpr (requires { fixed_length<U>::value; }) {
             return collect_description_types<typename fixed_length<U>::element>(lists);
         } else if constexpr (has_describe_members<U>) {
             if constexpr (contains<U>(Visited{}))
@@ -1185,11 +1271,22 @@ class reflection
             return collect_record_members<U, K + 1>(collect_record_types<describe::member_t<U, key_order<U>[K]>>(types));
     }
 
+    template <class V, std::size_t K, class Types>
+    static consteval auto collect_record_alternatives(Types const types)
+    {
+        if constexpr (K == std::variant_size_v<V>)
+            return types;
+        else
+            return collect_record_alternatives<V, K + 1>(collect_record_types<std::variant_alternative_t<K, V>>(types));
+    }
+
     template <class T, class Types>
     static consteval auto collect_record_types(Types const types)
     {
         using U = std::remove_cv_t<T>;
-        if constexpr (requires { fixed_length<U>::value; }) {
+        if constexpr (detail::is_std_variant<U>) {
+            return collect_record_alternatives<U, 0>(types);
+        } else if constexpr (requires { fixed_length<U>::value; }) {
             return collect_record_types<typename fixed_length<U>::element>(types);
         } else if constexpr (is_struct<U>) {
             if constexpr (contains<U>(Types{}))
@@ -1398,6 +1495,16 @@ class reflection
                 for_each_field<U>([&] CBOR_ALWAYS_INLINE(auto i) {
                     add<describe::member_t<U, decltype(i)::value>>(describe::get<decltype(i)::value>(value));
                 });
+            } else if constexpr (detail::is_std_variant<U>) {
+                validity::throw_logic_error_if(value.valueless_by_exception(),
+                                               "cbor::schema::encode: the std::variant holds no value");
+                items += 1;
+                std::visit(
+                    [&]<class A>(A const &held) {
+                        add_bytes(fixed_size<A, Root>());
+                        add<A>(held);
+                    },
+                    value);
             } else if constexpr (is_inline_optional<U>) {
                 if (value.has_value())
                     add<typename U::value_type>(*value);
@@ -1476,7 +1583,16 @@ class reflection
         auto const n = heads::big_endian(static_cast<std::uint32_t>(m >> 1));
         std::ranges::copy(n, field.template last<sizeof(std::uint32_t)>().begin());
         std::size_t const data = item + item_head;
-        if constexpr (is_optional<U>) {
+        if constexpr (detail::is_std_variant<U>) {
+            std::visit(
+                [&]<class A>(A const &held) {
+                    auto const record = out.subspan(item).template first<fixed_size<A, Root>()>();
+                    copy_zero_initialized<Root, A>(record);
+                    c.position = item + fixed_size<A, Root>();
+                    c = encode_value<Root, A, Exact, D>(out, record, held, c);
+                },
+                value);
+        } else if constexpr (is_optional<U>) {
             using E = typename U::value_type;
             heads::write_item_head(out, item, major_type::array, value.has_value() ? 1 : 0);
             c.position = data;
@@ -1774,10 +1890,11 @@ class reflection
         }
     }
 
-    template <class Root, class U>
-    CBOR_ALWAYS_INLINE static bool class_tag_valid(std::span<char const, fixed_size<U, Root>()> const field)
+    template <class Root, class U, std::size_t N>
+    CBOR_ALWAYS_INLINE static bool class_tag_valid(std::span<char const, N> const field)
     {
         constexpr std::size_t n = heads::head_size(*tag_number_of<U>());
+        static_assert(N != std::dynamic_extent && N >= n, "The field must hold the whole tag head.");
         static_assert(zero_initialized<Root, U>().size() >= n, "The zero-initialized encoding must hold the whole tag head.");
         std::span<char const, n> const expected = zero_initialized<Root, U>().template first<n>();
         return std::ranges::equal(field.template first<n>(), expected);
@@ -1795,6 +1912,17 @@ class reflection
     struct reference {
         std::size_t data;
         std::size_t length;
+    };
+
+    struct variant_reference {
+        std::size_t data;
+        std::size_t size;
+        std::size_t index;
+    };
+
+    struct item_bounds {
+        std::size_t at;
+        std::size_t end;
     };
 
     static constexpr char reference_tag_byte =
@@ -1927,10 +2055,9 @@ class reflection
         return read_item<Root, Major, E, Verified>(encoded, dir, *j, element);
     }
 
-    template <class Root, major_type Major, class E = void, bool Verified = true>
-    CBOR_ALWAYS_INLINE static std::expected<reference, error>
-    read_item(std::string_view const encoded, detail::directory const dir, std::size_t const j,
-              std::size_t const element)
+    template <class Root>
+    CBOR_ALWAYS_INLINE static std::expected<item_bounds, error> read_item_bounds(std::string_view const encoded,
+                                                                                 detail::directory const dir, std::size_t const j)
     {
         if (!validity::check_index(j, dir.count)) [[unlikely]]
             return std::unexpected(error::unpopulated_table_index);
@@ -1941,7 +2068,52 @@ class reflection
         std::size_t const end = j + 1 < dir.count ? directory_entry(encoded, dir, j + 1) : items_end;
         if (auto const inside = validity::check_subrange(item, end, items_at, items_end); !inside) [[unlikely]]
             return std::unexpected(inside.error());
-        return read_item_reference<Root, Major, E, Verified>(encoded, item, end, element);
+        return item_bounds{item, end};
+    }
+
+    template <class Root, major_type Major, class E = void, bool Verified = true>
+    CBOR_ALWAYS_INLINE static std::expected<reference, error>
+    read_item(std::string_view const encoded, detail::directory const dir, std::size_t const j,
+              std::size_t const element)
+    {
+        auto const bounds = read_item_bounds<Root>(encoded, dir, j);
+        if (!bounds) [[unlikely]]
+            return std::unexpected(bounds.error());
+        return read_item_reference<Root, Major, E, Verified>(encoded, bounds->at, bounds->end, element);
+    }
+
+    template <class Root, class V, std::size_t K = 0>
+    CBOR_ALWAYS_INLINE static std::expected<variant_reference, error>
+    read_variant_item(std::string_view const encoded, std::size_t const item, std::size_t const end,
+                      error const fault = error::incorrect_type)
+    {
+        if constexpr (K == std::variant_size_v<V>) {
+            return std::unexpected(fault);
+        } else {
+            using A = std::variant_alternative_t<K, V>;
+            constexpr std::size_t n = heads::head_size(*tag_number_of<A>());
+            if (!validity::check_bytes_left(item + n, end)) [[unlikely]]
+                return read_variant_item<Root, V, K + 1>(encoded, item, end, error::too_little_data);
+            if (!class_tag_valid<Root, A>(std::span<char const>(encoded).subspan(item).template first<n>()))
+                return read_variant_item<Root, V, K + 1>(encoded, item, end, fault);
+            if (auto const fits = validity::check_bytes_left(item + fixed_size<A, Root>(), end); !fits) [[unlikely]]
+                return std::unexpected(fits.error());
+            return variant_reference{item, fixed_size<A, Root>(), K};
+        }
+    }
+
+    template <class Root, class V, bool Verified = true>
+    CBOR_ALWAYS_INLINE static std::expected<variant_reference, error>
+    read_variant_reference(std::string_view const encoded, std::span<char const, dynamic_type_sizes> const field,
+                           detail::directory const dir)
+    {
+        auto const j = read_shared_index<Root, Verified>(field);
+        if (!j) [[unlikely]]
+            return std::unexpected(j.error());
+        auto const bounds = read_item_bounds<Root>(encoded, dir, *j);
+        if (!bounds) [[unlikely]]
+            return std::unexpected(bounds.error());
+        return read_variant_item<Root, V>(encoded, bounds->at, bounds->end);
     }
 
     template <class T, description_place D>
@@ -2302,6 +2474,11 @@ class reflection
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
                 return typename cbor::schema<Root>::template accessor<U, Verified>(encoded, field, floor, *r);
+            } else if constexpr (detail::is_std_variant<U>) {
+                auto const r = read_variant_reference<Root, U, Verified>(encoded, field, floor);
+                if (!r) [[unlikely]]
+                    return std::unexpected(r.error());
+                return typename cbor::schema<Root>::template accessor<U, Verified>(encoded, *r, floor);
             } else if constexpr ((std::is_class_v<U> || std::is_array_v<U>) && !std::same_as<U, int128> && !std::same_as<U, uint128>) {
                 return typename cbor::schema<Root>::template accessor<U, Verified>(encoded, field, floor);
             } else {
@@ -2454,6 +2631,46 @@ class reflection
             return r;
         }
 
+        template <class Root, class V>
+        CBOR_ALWAYS_INLINE std::expected<variant_reference, error>
+        take_variant_reference(std::span<char const, dynamic_type_sizes> const field)
+        {
+            auto const j = read_shared_index<Root, Verified>(field);
+            if (!j) [[unlikely]]
+                return std::unexpected(j.error());
+            if (!validity::check_index(*j, dir.count)) [[unlikely]]
+                return std::unexpected(error::unpopulated_table_index);
+            if constexpr (Verified) {
+                if (*j != index) [[unlikely]]
+                    return std::unexpected(error::unpopulated_table_index);
+                if (directory_entry(encoded, dir, *j) != at) [[unlikely]]
+                    return std::unexpected(error::syntax_error);
+            }
+            auto const r = read_variant_item<Root, V>(encoded, at, end);
+            if (!r) [[unlikely]]
+                return r;
+            index += 1;
+            at = r->data + r->size;
+            return r;
+        }
+
+        template <class Root, class V, std::size_t K>
+        std::expected<void, error> read_alternative(V &out, variant_reference const r, std::size_t const depth,
+                                                    std::size_t const depth_max)
+        {
+            using A = std::variant_alternative_t<K, V>;
+            auto const record = std::span<char const>(encoded).subspan(r.data).template first<fixed_size<A, Root>()>();
+            if constexpr (std::is_default_constructible_v<A>) {
+                return read_value<Root>(out.template emplace<K>(), record, depth, depth_max);
+            } else {
+                auto made = read_constructed<Root, A>(make_arguments<A>(), record, depth, depth_max);
+                if (!made) [[unlikely]]
+                    return std::unexpected(made.error());
+                out.template emplace<K>(std::move(*made));
+                return {};
+            }
+        }
+
         template <class Root, class T>
         std::expected<void, error> read_value(T &out, std::span<char const, fixed_size<T, Root>()> const field, std::size_t const depth,
                                               std::size_t const depth_max)
@@ -2473,6 +2690,17 @@ class reflection
                                                 depth_max);
                 });
                 return done;
+            } else if constexpr (detail::is_std_variant<U>) {
+                auto const r = take_variant_reference<Root, U>(field);
+                if (!r) [[unlikely]]
+                    return std::unexpected(r.error());
+                if (auto const nesting = validity::check_nesting_depth(depth + 1, depth_max); !nesting) [[unlikely]]
+                    return std::unexpected(nesting.error());
+                return [&]<std::size_t... K>(std::index_sequence<K...>) {
+                    std::expected<void, error> done;
+                    ((r->index == K ? (void)(done = read_alternative<Root, U, K>(out, *r, depth + 1, depth_max)) : void()), ...);
+                    return done;
+                }(std::make_index_sequence<std::variant_size_v<U>>{});
             } else if constexpr (is_fixed_string<U>) {
                 if constexpr (Verified)
                     if (!fixed_length_head_valid<Root, U>(field)) [[unlikely]]
@@ -3060,6 +3288,8 @@ consteval std::size_t reflection::fixed_size()
             static_assert(size.has_value(), "The fixed size must fit in std::size_t.");
             return *size;
         }
+    } else if constexpr (detail::is_std_variant<U>) {
+        return reflection::dynamic_type_sizes;
     } else if constexpr (has_describe_members<U>) {
         std::size_t size = heads::head_size(*reflection::tag_number_of<U>()) + reflection::straight_reference_size<Root, U>() +
                            reflection::item_head;
@@ -3421,6 +3651,70 @@ public:
                 if (result && *result)
                     (*result)->owner = self.owner;
             return result;
+        }
+    };
+
+    template <bool Verified, class... A>
+    class accessor<std::variant<A...>, Verified>
+    {
+        std::shared_ptr<void const> owner;
+        std::string_view encoded;
+        reflection::variant_reference held;
+        detail::directory dir;
+
+        accessor(std::string_view const b, reflection::variant_reference const h, detail::directory const d)
+            : encoded(b), held(h), dir(d)
+        {
+        }
+
+        friend class schema;
+
+        friend class reflection;
+
+        template <class, bool>
+        friend class accessor;
+
+    public:
+        accessor(accessor const &) = default;
+
+        accessor(accessor &&other) noexcept
+            : owner(std::move(other.owner)), encoded(std::exchange(other.encoded, std::string_view())), held(other.held),
+              dir(other.dir)
+        {
+        }
+
+        accessor &operator=(accessor const &) = default;
+
+        accessor &operator=(accessor &&other) noexcept
+        {
+            owner = std::move(other.owner);
+            encoded = std::exchange(other.encoded, std::string_view());
+            held = other.held;
+            dir = other.dir;
+            return *this;
+        }
+
+        ~accessor() = default;
+
+        template <class Self>
+            requires std::is_lvalue_reference_v<Self>
+        std::size_t index(this Self &&self)
+        {
+            validity::throw_logic_error_if_empty(self.owner, "cbor::schema::accessor::index: the accessor was moved from");
+            return self.held.index;
+        }
+
+        template <class E, class Self>
+            requires(std::is_lvalue_reference_v<Self> && (std::same_as<E, A> || ...))
+        std::expected<accessor<E, Verified>, error> get(this Self &&self)
+        {
+            validity::throw_logic_error_if_empty(self.owner, "cbor::schema::accessor::get: the accessor was moved from");
+            constexpr std::size_t k = reflection::index_in<E>(std::tuple<std::type_identity<A>...>{});
+            if (self.held.index != k) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            constexpr std::size_t n = reflection::fixed_size<E, T>();
+            return accessor<E, Verified>(self.owner, self.encoded,
+                                         std::span<char const>(self.encoded).subspan(self.held.data).template first<n>(), self.dir);
         }
     };
 

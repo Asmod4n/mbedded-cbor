@@ -369,3 +369,44 @@ TEST_CASE("a whole message of another type keeps its error")
     std::string const text(whole.size(), '{');
     CHECK_EQ(form<byte_fields>::decode(std::string(text)).error(), error::incorrect_type);
 }
+
+// The tag of the record chooses the alternative of a variant member. Each alternative comes back with the
+// values of its own members and of its base class.
+TEST_CASE("decode: a variant member holds the alternative that the tag of its record names")
+{
+    auto const with_dog = form<home>::decode(*form<home>::encode(home_with_dog()));
+    REQUIRE(with_dog);
+    REQUIRE(std::holds_alternative<dog>((*with_dog)->pet));
+    CHECK_EQ(std::get<dog>((*with_dog)->pet).name, "rex");
+    CHECK_EQ(std::get<dog>((*with_dog)->pet).bark, 3);
+    CHECK_EQ((*with_dog)->street, "elm");
+    auto const with_cat = form<home>::decode(*form<home>::encode(home_with_cat()));
+    REQUIRE(with_cat);
+    REQUIRE(std::holds_alternative<cat>((*with_cat)->pet));
+    CHECK_EQ(std::get<cat>((*with_cat)->pet).name, "tom");
+    CHECK_EQ(std::get<cat>((*with_cat)->pet).toys, std::vector<std::string>{"ball", "mouse"});
+    CHECK_EQ((*with_cat)->street, "elm");
+}
+
+// fox has no default constructor. decode builds it through its constructor from the described members, as it
+// builds such a class in any other place.
+TEST_CASE("decode: an alternative with no default constructor is built through its constructor")
+{
+    auto const bytes = form<den>::encode(den{fox{"vix", 7}});
+    REQUIRE(bytes);
+    auto const back = form<den>::decode(std::string(*bytes));
+    REQUIRE(back);
+    REQUIRE(std::holds_alternative<fox>((*back)->pet));
+    CHECK_EQ(std::get<fox>((*back)->pet).name, "vix");
+    CHECK_EQ(std::get<fox>((*back)->pet).speed, 7);
+}
+
+// decode with a target replaces the alternative that the target holds with the one of the message.
+TEST_CASE("decode: a target that holds another alternative gets the alternative of the message")
+{
+    auto const bytes = std::make_shared<std::string const>(*form<home>::encode(home_with_cat()));
+    auto const back = form<home>::decode(bytes, home_with_dog());
+    REQUIRE(back);
+    REQUIRE(std::holds_alternative<cat>((*back)->pet));
+    CHECK_EQ(std::get<cat>((*back)->pet).toys.size(), 2u);
+}
