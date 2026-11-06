@@ -600,7 +600,7 @@ class reflection
         std::vector<map_key> keys;
         std::apply([&](auto const &...m) { (keys.push_back(m.key), ...); }, members);
         std::ranges::sort(keys, key_encoding_less);
-        return validity::keys_unique(keys, key_encoding_of);
+        return std::ranges::adjacent_find(keys, {}, key_encoding_of) == std::ranges::end(keys);
     }
 
     template <std::size_t N>
@@ -2979,7 +2979,7 @@ consteval bool tags_registered()
     if (!tagged)
         return false;
     std::ranges::sort(numbers);
-    return validity::keys_unique(numbers);
+    return std::ranges::adjacent_find(numbers) == std::ranges::end(numbers);
 }
 
 template <class T, class Root>

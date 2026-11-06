@@ -99,7 +99,6 @@ compared again.
 | `throw_logic_error_if_null<T>(shared_ptr<T> const&, char const*)` | O(1) | O(1); allocates only on the throw | |
 | `checked_mul<T>(T, T)` | O(1) | O(1) | Overflow check. |
 | `checked_add<T>(T, T)` | O(1) | O(1) | Overflow check. |
-| `keys_unique<R, Projection>(R const&, Projection)` | O(r) | O(1) | adjacent_find. The range must be sorted. |
 | `check_key_unique(bool)` | O(1) | O(1) | |
 | `writer_error(errc)` | O(1) | O(1) | |
 | `check_additional_information(major_type, uint8_t)` | O(1) | O(1) | |
