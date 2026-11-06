@@ -370,6 +370,7 @@ void require_same_read(A const &a, B const &b)
     require(a.has_value() == b.has_value());
     if (!a) {
         require(a.error() == b.error());
+        require_error_value(a.error());
         return;
     }
     if constexpr (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
