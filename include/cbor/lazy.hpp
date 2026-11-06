@@ -457,6 +457,12 @@ std::expected<bool, error> validity::keys_equivalent(First &first, offset const 
             return false;
         heads::decoder<Checked> d{subspan(a, h->at)};
         heads::decoder<Checked> e{subspan(b, k->at)};
+        if (auto const r = validity::check_pending_items(h->major, h->info, h->argument, d.encoded.size()); !r)
+            [[unlikely]]
+            return std::unexpected(r.error());
+        if (auto const r = validity::check_pending_items(k->major, k->info, k->argument, e.encoded.size()); !r)
+            [[unlikely]]
+            return std::unexpected(r.error());
         for (std::uint64_t i = 0; i < h->argument; ++i) {
             auto const equal = keys_equivalent<Checked>(first, distance(a, d.encoded), second,
                                                         distance(b, e.encoded), depth + 1, depth_max);
@@ -479,6 +485,9 @@ std::expected<bool, error> validity::keys_equivalent(First &first, offset const 
             -> std::expected<std::uint64_t, error> {
             std::uint64_t count = 0;
             heads::decoder<Checked> e{validity::subspan(in_encoded, in_at)};
+            if (auto const r = validity::check_pending_items(h->major, h->info, h->argument, e.encoded.size()); !r)
+                [[unlikely]]
+                return std::unexpected(r.error());
             for (std::uint64_t j = 0; j < h->argument; ++j) {
                 offset const other = distance(in_encoded, e.encoded);
                 if (auto const r = skip(e); !r) [[unlikely]]
@@ -500,6 +509,9 @@ std::expected<bool, error> validity::keys_equivalent(First &first, offset const 
             return count;
         };
         heads::decoder<Checked> d{validity::subspan(a, h->at)};
+        if (auto const r = validity::check_pending_items(h->major, h->info, h->argument, d.encoded.size()); !r)
+            [[unlikely]]
+            return std::unexpected(r.error());
         for (std::uint64_t i = 0; i < h->argument; ++i) {
             offset const key = distance(a, d.encoded);
             if (auto const r = skip(d); !r) [[unlikely]]
@@ -657,8 +669,9 @@ inline lazy_elements::iterator &lazy_elements::iterator::operator++()
     }
     offset = validity::distance(top_level.encoded, d.encoded);
     --left;
-    if (left != 0 && d.encoded.empty()) [[unlikely]]
-        failure = error::too_little_data;
+    if (left != 0)
+        if (auto const r = validity::check_pending_items(left, d.encoded.size()); !r) [[unlikely]]
+            failure = r.error();
     return *this;
 }
 
@@ -755,16 +768,16 @@ std::expected<typename Entries::iterator, error> lazy::find_key(resolved<Checked
     if (found.h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
     validity::offset const first = validity::distance(found.source.encoded, found.d.encoded);
-    std::uint64_t const readable = std::min<std::uint64_t>(found.h.argument, found.d.encoded.size());
-    typename Entries::iterator it(std::move(found.source), first, readable);
+    if (auto const r = validity::check_pending_items(found.h.major, found.h.info, found.h.argument, found.d.encoded.size());
+        !r) [[unlikely]]
+        return std::unexpected(r.error());
+    typename Entries::iterator it(std::move(found.source), first, found.h.argument);
     auto found_at = find_key<typename Entries::iterator, std::default_sentinel_t, Key, Checked>(
         std::move(it), std::default_sentinel, key);
     if (!found_at) [[unlikely]]
         return std::unexpected(found_at.error());
-    if (found_at->first == std::default_sentinel)
-        if (auto const complete = validity::check_entries_all_read(found.h.argument, readable, found_at->first.failure);
-            !complete) [[unlikely]]
-            return std::unexpected(complete.error());
+    if (found_at->first == std::default_sentinel && found_at->first.failure != error{}) [[unlikely]]
+        return std::unexpected(found_at->first.failure);
     return std::move(found_at->first);
 }
 
