@@ -41,6 +41,7 @@
 
 #include "cbor_sets.hpp"
 #include "notable_tags.hpp"
+#include "packed_cbor.hpp"
 #include "describe.hpp"
 #include "encode.hpp"
 #include "error.hpp"
@@ -1122,7 +1123,7 @@ class reflection
             heads::append_head(encoded, major_type::simple_float, std::to_underlying(simple_value::false_value));
             encode_zero_initialized<Root, typename U::value_type>(encoded);
         } else {
-            heads::append_head(encoded, major_type::tag, std::to_underlying(validity::tag_number::reference));
+            heads::append_head(encoded, major_type::tag, std::to_underlying(packed_cbor::tag_number::reference));
             encode_fixed_width_head(encoded, major_type::unsigned_integer, sizeof(std::uint32_t));
         }
     }
@@ -1142,7 +1143,7 @@ class reflection
     {
         return static_bytes<[]() consteval {
             std::vector<char> encoded;
-            heads::append_head(encoded, major_type::tag, std::to_underlying(validity::tag_number::record_function));
+            heads::append_head(encoded, major_type::tag, std::to_underlying(packed_cbor::tag_number::record_function));
             heads::append_head(encoded, major_type::array, describe::members_count<U>);
             for_each_field<U>([&](auto i) {
                 constexpr std::string_view key = describe::key_of<U, decltype(i)::value>.text;
@@ -1213,7 +1214,7 @@ class reflection
                 heads::append_head(encoded, major_type::simple_float, j);
             } else {
                 std::size_t const m = j - shared_first;
-                heads::append_head(encoded, major_type::tag, std::to_underlying(validity::tag_number::reference));
+                heads::append_head(encoded, major_type::tag, std::to_underlying(packed_cbor::tag_number::reference));
                 heads::append_head(encoded, static_cast<major_type>(m & 1), m >> 1);
             }
             encoded.push_back(heads::initial_byte(major_type::byte_string,
@@ -1223,8 +1224,8 @@ class reflection
     }
 
     static constexpr std::uint64_t straight_argument_count =
-        std::to_underlying(validity::tag_number::straight_argument_last) -
-        std::to_underlying(validity::tag_number::straight_argument_first) + 1;
+        std::to_underlying(packed_cbor::tag_number::straight_argument_last) -
+        std::to_underlying(packed_cbor::tag_number::straight_argument_first) + 1;
 
     template <class Root, class U>
     static consteval std::uint64_t argument_index_of()
@@ -1238,9 +1239,9 @@ class reflection
         constexpr std::uint64_t i = argument_index_of<Root, U>();
         if constexpr (i < straight_argument_count) {
             heads::append_head(encoded, major_type::tag,
-                               std::to_underlying(validity::tag_number::straight_argument_first) + i);
+                               std::to_underlying(packed_cbor::tag_number::straight_argument_first) + i);
         } else {
-            heads::append_head(encoded, major_type::tag, std::to_underlying(validity::tag_number::reference));
+            heads::append_head(encoded, major_type::tag, std::to_underlying(packed_cbor::tag_number::reference));
             heads::append_head(encoded, major_type::array, 2);
             heads::append_head(encoded, major_type::unsigned_integer, i - straight_argument_count);
         }
@@ -1275,7 +1276,7 @@ class reflection
     {
         return static_bytes<[]() consteval {
             std::vector<char> encoded;
-            heads::append_head(encoded, major_type::tag, std::to_underlying(validity::tag_number::basic_packed_cbor));
+            heads::append_head(encoded, major_type::tag, std::to_underlying(packed_cbor::tag_number::basic_packed_cbor));
             heads::append_head(encoded, major_type::array, 2);
             encode_fixed_width_head(encoded, major_type::array, sizeof(std::uint32_t));
             if constexpr (D == description_place::inside) {
@@ -1775,7 +1776,7 @@ class reflection
     };
 
     static constexpr char reference_tag_byte =
-        heads::initial_byte(major_type::tag, std::to_underlying(validity::tag_number::reference));
+        heads::initial_byte(major_type::tag, std::to_underlying(packed_cbor::tag_number::reference));
 
     template <class Root, bool Verified = true>
     CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> read_shared_index(std::span<char const, dynamic_type_sizes> const field)
