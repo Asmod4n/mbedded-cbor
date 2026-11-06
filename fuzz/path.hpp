@@ -65,6 +65,21 @@ struct segment {
     std::int64_t index;
 };
 
+// A binary16 NaN keeps its sign and payload (RFC 8949 4.1): the double takes the sign, an exponent of all ones and the
+// ten bits of the significand with 42 zeros on the right, as fuzz::widened does for a binary32.
+inline double nan_of_binary16(std::uint16_t const half)
+{
+    constexpr unsigned sign_shift = 15;
+    constexpr unsigned mantissa_bits = 0x3ff;
+    constexpr unsigned double_sign_shift = 63;
+    constexpr unsigned double_exponent_shift = 52;
+    constexpr std::uint64_t double_exponent_bits = 0x7ff;
+    constexpr unsigned significand_shift = 42;
+    return std::bit_cast<double>(std::uint64_t{static_cast<unsigned>(half) >> sign_shift} << double_sign_shift |
+                                 double_exponent_bits << double_exponent_shift |
+                                 std::uint64_t{half & mantissa_bits} << significand_shift);
+}
+
 // A name selector in single quotes, with the escapes of RFC 9535 2.3.1.1 where a character needs one.
 inline double binary16_decode(std::uint16_t const half)
 {
@@ -81,8 +96,8 @@ inline double binary16_decode(std::uint16_t const half)
                              : exponent != exponent_bits
                                  ? std::ldexp(mantissa + implicit_one, static_cast<int>(exponent) - normal_bias)
                              : mantissa == 0 ? std::numeric_limits<double>::infinity()
-                                             : std::numeric_limits<double>::quiet_NaN();
-    return half & sign_bit ? -magnitude : magnitude;
+                                             : nan_of_binary16(half);
+    return (half & sign_bit) != 0 && !std::isnan(magnitude) ? -magnitude : magnitude;
 }
 
 inline std::string quoted(std::string_view const key)
@@ -187,7 +202,7 @@ inline std::optional<std::vector<test::value>> typed_array_elements(std::uint64_
         if (floating && length == 2)
             elements.push_back(test::value{binary16_decode(static_cast<std::uint16_t>(bits))});
         else if (floating && length == 4)
-            elements.push_back(test::value{static_cast<double>(std::bit_cast<float>(static_cast<std::uint32_t>(bits)))});
+            elements.push_back(test::value{widened(std::bit_cast<float>(static_cast<std::uint32_t>(bits)))});
         else if (floating)
             elements.push_back(test::value{std::bit_cast<double>(bits)});
         else if (signed_integer && bits >> (length * bits_per_byte - 1) != 0)
