@@ -385,9 +385,9 @@ It holds the owner of the bytes.
 Each element is a value of \f[CR]E\f[R], read from little endian, not a
 reference.
 .SS cbor::tag
-The tag number of a struct, in its description:
-\f[CR]static constexpr std::optional<cbor::tag> tag = cbor::tag{1802};\f[R]
-in cbor::describe_members\f[CR]<point>\f[R].
+The tag number of a struct, in the member \f[CR]tag\f[R] of its
+description cbor::describe_members\f[CR]<point>\f[R], as the example
+below shows.
 \f[CR]schema\f[R] writes the number as the first item of each record of
 the struct.
 A read compares it, so a message of another struct gives
@@ -740,11 +740,12 @@ A variant member, with \f[CR]dog\f[R] and \f[CR]cat\f[R] derived from
 \f[B]struct\f[R] home {
     std::variant<dog, cat> pet;
 };
-\f[B]auto\f[R] const doc = cbor::schema<home>::path(std::move(bytes));
-\f[B]auto\f[R] const pet = doc\->at_path<\(dq$.pet\(dq>();
-pet\->index();                        \f[I]// 0 for a dog\f[R]
+\f[I]// bytes: from schema<home>::encode(home{dog{{\(dqrex\(dq}, 3}})\f[R]
+\f[B]auto\f[R] const house = cbor::schema<home>::path(std::move(bytes));
+\f[B]auto\f[R] const pet = house\->at_path<\(dq$.pet\(dq>();
+pet\->index();                         \f[I]// 0, a dog\f[R]
 pet\->get<dog>()\->at_path<\(dq\(at.name\(dq>(); \f[I]// \(dqrex\(dq\f[R]
-pet\->get<cat>().error();             \f[I]// cbor::error::incorrect_type\f[R]
+pet\->get<cat>().error();              \f[I]// cbor::error::incorrect_type\f[R]
 .EE
 .SS cbor::schema::accessor<fixed_element<S>>
 .IP

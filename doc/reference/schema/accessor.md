@@ -61,6 +61,22 @@ call: tires->at_path<"@[]">(0u)
 result: accessor of a tire in a std::vector<tire>
 ```
 
+```example
+bytes: d8 71 82 9a 00 00 00 12 d8 72 81 63 70 65 74 d8 72 82 64 62 61 72 6b 64 6e 61 6d 65 d8 72 82 64 6e 61 6d 65 64 74 6f 79 73 5a 00 00 00 08 00 00 00 42 00 00 00 54 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 0b d8 81 9a 00 00 00 02 18 03 c6 3a 00 00 00 00 7a 00 00 00 03 72 65 78 d9 07 0d d8 80 9a 00 00 00 01 c6 1a 00 00 00 00
+call: auto const house = cbor::schema<home>::path(std::move(bytes))
+result: accessor of a home
+call: auto const pet = house->at_path<"$.pet">()
+result: accessor of a std::variant<dog, cat> that holds a dog
+call: pet->index()
+result: 0
+call: pet->get<dog>()->at_path<"@.name">()
+result: "rex"
+call: pet->get<dog>()->at_path<"@.bark">()
+result: 3
+call: pet->get<cat>()
+result: unexpected cbor::error::incorrect_type
+```
+
 Reads the part `U` of a message of `T`. A path that starts with `@`
 starts at `U`. A path that starts with `$` starts at the root. The
 result is a `std::expected`: the value of a number, `bool` or enum; a
@@ -112,11 +128,12 @@ A variant member, with `dog` and `cat` derived from `animal`:
 struct home {
     std::variant<dog, cat> pet;
 };
-auto const doc = cbor::schema<home>::path(std::move(bytes));
-auto const pet = doc->at_path<"$.pet">();
-pet->index();                        // 0 for a dog
+// bytes: from schema<home>::encode(home{dog{{"rex"}, 3}})
+auto const house = cbor::schema<home>::path(std::move(bytes));
+auto const pet = house->at_path<"$.pet">();
+pet->index();                         // 0, a dog
 pet->get<dog>()->at_path<"@.name">(); // "rex"
-pet->get<cat>().error();             // cbor::error::incorrect_type
+pet->get<cat>().error();              // cbor::error::incorrect_type
 ```
 
 ## See also

@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <format>
 #include <functional>
 #include <memory>
 #include <numeric>
@@ -195,6 +196,29 @@ TEST_CASE("doc reference schema: accessor")
     REQUIRE(track.has_value());
     CHECK_EQ(track->size(), 3u);
     CHECK_EQ(tires->at_path<"@[]">(2uz).error(), error::index_out_of_bounds);
+}
+
+// accessor.md: the accessor of a variant member gives the index of the held alternative and its accessor; the other
+// alternative is incorrect_type.
+TEST_CASE("doc reference schema: accessor of a variant member")
+{
+    auto const bytes = cbor::schema<home>::encode(home{dog{{"rex"}, 3}});
+    REQUIRE(bytes.has_value());
+    std::string hex;
+    for (char const c : *bytes)
+        hex += std::format("{:02x}", static_cast<unsigned char>(c));
+    CHECK_EQ(hex,
+             "d871829a00000012d8728163706574d87282646261726b646e616d65d87282646e616d6564746f79735a0000000800000042"
+             "00000054f7f7f7f7f7f7f7f7f7f7f7f7d9070bd8819a000000021803c63a000000007a00000003726578d9070dd8809a0000"
+             "0001c61a00000000"s);
+    auto const doc = cbor::schema<home>::path(std::string(*bytes));
+    REQUIRE(doc.has_value());
+    auto const pet = doc->at_path<"$.pet">();
+    REQUIRE(pet.has_value());
+    CHECK_EQ(pet->index(), 0u);
+    CHECK_EQ(pet->get<dog>()->at_path<"@.name">(), "rex"sv);
+    CHECK_EQ(pet->get<dog>()->at_path<"@.bark">(), 3);
+    CHECK_EQ(pet->get<cat>().error(), error::incorrect_type);
 }
 
 // fixed_element.md: an element of a vector of fixed-size structs reads its members with @ and the root with $.

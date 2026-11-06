@@ -107,9 +107,9 @@ from the description only.
 class \f[CR]B\f[R]; \f[CR]cbor::schema\f[R] takes a class with a base
 class only so, and the members of \f[CR]B\f[R] stand in
 \f[CR]members\f[R] too.
-\f[CR]CBOR_DEFINE_DERIVED_TYPE(T, BASE, TAG, members...)\f[R] and
-\f[CR]CBOR_DEFINE_DERIVED_TYPE_MEMBERS(T, BASE, TAG, names...)\f[R]
-write such a specialization.
+\f[CR]CBOR_DEFINE_DERIVED_TYPE\f[R] and
+\f[CR]CBOR_DEFINE_DERIVED_TYPE_MEMBERS\f[R] write such a specialization;
+they take \f[CR]BASE\f[R] after \f[CR]T\f[R].
 .SS cbor::member
 One entry of describe_members: the key of a member and a pointer to that
 member.

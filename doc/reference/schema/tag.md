@@ -20,9 +20,9 @@ call: cbor::schema<car>::path(std::move(bytes)).has_value()
 result: true
 ```
 
-The tag number of a struct, in its description:
-`static constexpr std::optional<cbor::tag> tag = cbor::tag{1802};` in
-[cbor::describe_members](../structs/describe_members.md)`<point>`.
+The tag number of a struct, in the member `tag` of its description
+[cbor::describe_members](../structs/describe_members.md)`<point>`, as
+the example below shows.
 `schema` writes the number as the first item of each record of the
 struct. A read compares it, so a message of another struct gives
 `incorrect_type`. The tag of a record of a `std::variant` member

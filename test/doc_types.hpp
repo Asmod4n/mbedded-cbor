@@ -7,6 +7,7 @@
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <variant>
 #include <vector>
 
 namespace reference_ref
@@ -39,6 +40,22 @@ struct point {
     float y;
 };
 
+struct animal {
+    std::string name;
+};
+
+struct dog : animal {
+    std::uint8_t bark;
+};
+
+struct cat : animal {
+    std::vector<std::string> toys;
+};
+
+struct home {
+    std::variant<dog, cat> pet;
+};
+
 } // namespace doc_reference_schema
 
 CBOR_DEFINE_TYPE_MEMBERS(doc_reference_schema::tire, cbor::tag{1800}, diameter, pressure);
@@ -46,6 +63,12 @@ CBOR_DEFINE_TYPE_MEMBERS(doc_reference_schema::tire, cbor::tag{1800}, diameter, 
 CBOR_DEFINE_TYPE_MEMBERS(doc_reference_schema::car, cbor::tag{1801}, make, seats, tires, track);
 
 CBOR_DEFINE_TYPE_MEMBERS(doc_reference_schema::point, cbor::tag{1802}, x, y);
+
+CBOR_DEFINE_DERIVED_TYPE_MEMBERS(doc_reference_schema::dog, doc_reference_schema::animal, cbor::tag{1803}, name, bark);
+
+CBOR_DEFINE_DERIVED_TYPE_MEMBERS(doc_reference_schema::cat, doc_reference_schema::animal, cbor::tag{1804}, name, toys);
+
+CBOR_DEFINE_TYPE_MEMBERS(doc_reference_schema::home, cbor::tag{1805}, pet);
 
 namespace reference_structs
 {
