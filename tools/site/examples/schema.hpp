@@ -443,6 +443,30 @@ inline result vector_made(call const &c)
     return container_made<std::vector<double>>(c, "double");
 }
 
+inline result pet_index(call const &c)
+{
+    auto const self = self_of<cbor::schema<home>::accessor<std::variant<dog, cat>>>(c);
+    if (!self) [[unlikely]]
+        return std::unexpected(self.error());
+    if (auto const ok = arguments_counted(c, 0); !ok) [[unlikely]]
+        return std::unexpected(ok.error());
+    return value_of((*self)->index());
+}
+
+inline result pet_get(call const &c)
+{
+    auto const self = self_of<cbor::schema<home>::accessor<std::variant<dog, cat>>>(c);
+    if (!self) [[unlikely]]
+        return std::unexpected(self.error());
+    if (auto const ok = arguments_counted(c, 0); !ok) [[unlikely]]
+        return std::unexpected(ok.error());
+    if (c.template_arguments.size() == 1 && c.template_arguments.front() == "dog")
+        return expected_view_of(*c.self, (*self)->get<dog>());
+    if (c.template_arguments.size() == 1 && c.template_arguments.front() == "cat")
+        return expected_view_of(*c.self, (*self)->get<cat>());
+    return std::unexpected("get takes one alternative of std::variant<dog, cat>: get<dog>() or get<cat>()");
+}
+
 template <cbor::description_place D>
 result place_read(call const &)
 {
@@ -507,6 +531,14 @@ inline constexpr entry schema_functions[] = {
     {"cbor::schema<car>::accessor<cbor::fixed_element<tire>>.at_path()",
      accessor_at_path<cbor::schema<car>::accessor<cbor::fixed_element<tire>>, "@.diameter", "@.pressure",
                       "$.seats">},
+    {"cbor::schema<home>::path()", schema_path<home, true>},
+    {"cbor::schema<home>::accessor<home>.at_path()", accessor_at_path<cbor::schema<home>::accessor<home>, "$.pet">},
+    {"cbor::schema<home>::accessor<std::variant<dog, cat>>.index()", pet_index},
+    {"cbor::schema<home>::accessor<std::variant<dog, cat>>.get()", pet_get},
+    {"cbor::schema<home>::accessor<dog>.at_path()",
+     accessor_at_path<cbor::schema<home>::accessor<dog>, "@.name", "@.bark", "$.pet">},
+    {"cbor::schema<home>::accessor<cat>.at_path()",
+     accessor_at_path<cbor::schema<home>::accessor<cat>, "@.name", "@.toys[0]", "$.pet">},
     {"cbor::typed_array_view<double>.size()", track_member<&cbor::typed_array_view<double>::size>},
     {"cbor::typed_array_view<double>.empty()", track_member<&cbor::typed_array_view<double>::empty>},
     {"cbor::typed_array_view<double>.begin()", range_end<cbor::typed_array_view<double>, false>},

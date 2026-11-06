@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <variant>
 #include <vector>
 
 using namespace std::string_literals;
@@ -34,6 +35,44 @@ struct cbor::describe_members<node> {
 
 namespace
 {
+
+struct twig {
+    std::uint8_t n;
+};
+
+struct leaf : twig {
+};
+
+struct holder;
+
+struct fork : twig {
+    std::vector<holder> next;
+};
+
+struct holder {
+    std::variant<leaf, fork> held;
+};
+
+} // namespace
+
+CBOR_DEFINE_DERIVED_TYPE_MEMBERS(leaf, twig, cbor::tag{1525}, n);
+CBOR_DEFINE_DERIVED_TYPE_MEMBERS(fork, twig, cbor::tag{1526}, n, next);
+CBOR_DEFINE_TYPE_MEMBERS(holder, cbor::tag{1527}, held);
+
+namespace
+{
+
+// A chain of holders: each fork holds a list of one holder, and the last holder holds a leaf.
+holder holder_chain(std::size_t const links)
+{
+    holder h{leaf{}};
+    for (std::size_t i = 0; i < links; ++i) {
+        fork f{};
+        f.next.push_back(std::move(h));
+        h = holder{std::move(f)};
+    }
+    return h;
+}
 
 void u32_append(std::string &out, std::uint32_t const value)
 {
@@ -112,4 +151,21 @@ TEST_CASE("decode: a struct that holds itself stops at the nesting depth of the 
     auto const deep = cbor::schema<node>::decode(node_chain(100000));
     REQUIRE_FALSE(deep.has_value());
     CHECK_EQ(deep.error(), error::nesting_depth_exceeded);
+}
+
+// The record of a variant member is a part that a reference names, as a list is, so it counts one level. A chain
+// of k links is 2 k + 1 levels deep: the variant of the root, then a list and a variant for each link. The test
+// exists so that a type that holds itself through a variant also stops at the nesting depth of the build.
+TEST_CASE("decode: a variant record counts one level of nesting")
+{
+    constexpr std::size_t depth = cbor::limits::nesting_depth;
+    constexpr std::size_t links = (depth - 1) / 2;
+    auto const at_limit = cbor::schema<holder>::encode(holder_chain(links));
+    REQUIRE(at_limit.has_value());
+    CHECK(cbor::schema<holder>::decode(std::string(*at_limit)).has_value());
+    auto const over = cbor::schema<holder>::encode(holder_chain(links + 1));
+    REQUIRE(over.has_value());
+    auto const refused = cbor::schema<holder>::decode(std::string(*over));
+    REQUIRE_FALSE(refused.has_value());
+    CHECK_EQ(refused.error(), error::nesting_depth_exceeded);
 }

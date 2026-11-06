@@ -241,12 +241,6 @@ class generic
     static constexpr bool is_tagged_item<tagged_item<N, E>> = true;
 
     template <class U>
-    static constexpr bool is_std_variant = false;
-
-    template <class... E>
-    static constexpr bool is_std_variant<std::variant<E...>> = true;
-
-    template <class U>
     static constexpr bool is_std_vector = false;
 
     template <class E, class A>
@@ -385,7 +379,7 @@ class generic
             return heads::is_null(h) || head_accepted<typename U::value_type>(h);
         else if constexpr (is_tagged_item<U>)
             return h.major == major_type::tag && h.argument == U::number;
-        else if constexpr (is_std_variant<U>)
+        else if constexpr (detail::is_std_variant<U>)
             return false;
         else if constexpr (is_std_tuple<U> || is_std_array<U>)
             return h.major == major_type::array && h.argument == std::tuple_size_v<U>;
@@ -525,7 +519,7 @@ class generic
             return {};
         } else if constexpr (reflection::is_wide_integer<U>) {
             return read_wide_integer(d, out);
-        } else if constexpr (is_std_variant<U>) {
+        } else if constexpr (detail::is_std_variant<U>) {
             heads::decoder<Checked> probe = d;
             auto const h = probe.decode_head();
             if (!h) [[unlikely]]
@@ -1003,7 +997,7 @@ class generic
                                       std::numeric_limits<std::uint8_t>::digits;
             return heads::initial_byte_size + heads::head_size(digits) + digits;
 #endif
-        } else if constexpr (is_std_variant<U>) {
+        } else if constexpr (detail::is_std_variant<U>) {
             return std::visit([depth](auto const &e) { return generic_size(e, depth); }, value);
         } else if constexpr (std::is_enum_v<U>) {
             return generic_size(std::to_underlying(value), depth);
@@ -1198,7 +1192,7 @@ class generic
             auto const bytes = heads::big_endian(magnitude);
             return write_bytes(out, at, std::span<char const>(bytes).last(digits));
 #endif
-        } else if constexpr (is_std_variant<U>) {
+        } else if constexpr (detail::is_std_variant<U>) {
             return std::visit([&](auto const &e) { return write_generic(out, at, e); }, value);
         } else if constexpr (std::is_enum_v<U>) {
             return write_generic(out, at, std::to_underlying(value));
@@ -1471,7 +1465,7 @@ void copy_views_into_zone(T &value, bump &zone)
     } else if constexpr (requires { typename T::value_type; value.has_value(); *value; }) {
         if (value)
             detail::copy_views_into_zone(*value, zone);
-    } else if constexpr (generic::is_std_variant<T>) {
+    } else if constexpr (detail::is_std_variant<T>) {
         std::visit([&zone](auto &alternative) { detail::copy_views_into_zone(alternative, zone); }, value);
     } else if constexpr (generic::is_std_tuple<T>) {
         std::apply([&zone](auto &...element) { (detail::copy_views_into_zone(element, zone), ...); }, value);

@@ -33,8 +33,8 @@ root record is the end of the message.
 
 A number takes its head and its argument of fixed width. A struct takes
 its class tag, its table reference, a record head of 5 bytes and its
-fields. A text, a list, a map or an optional of variable size takes a
-reference `6(N)` of 6 bytes.
+fields. A text, a list, a map, an optional of variable size or a
+`std::variant` takes a reference `6(N)` of 6 bytes.
 
 ## Errors
 

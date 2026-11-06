@@ -189,3 +189,27 @@ TEST_CASE("unverified: a bool byte 2 reads true")
     REQUIRE(back.has_value());
     CHECK((*back)->g[0].on);
 }
+
+// The unverified forms skip the checks of type bytes. The tag of a variant record still chooses the
+// alternative, so the unverified forms compare it too, and an unknown tag is incorrect_type in both forms.
+TEST_CASE("unverified: a variant member reads as in the verified forms")
+{
+    auto const bytes = *form<home>::encode(home_with_cat());
+    auto const back = form<home>::unverified_decode(std::string(bytes));
+    REQUIRE(back);
+    CHECK_EQ(std::get<cat>((*back)->pet).toys, std::vector<std::string>{"ball", "mouse"});
+    auto const doc = form<home>::unverified_path(std::string(bytes));
+    REQUIRE(doc);
+    auto const pet = doc->at_path<"$.pet">();
+    REQUIRE(pet);
+    CHECK_EQ(pet->index(), 1u);
+    CHECK_EQ(pet->get<cat>()->at_path<"@.toys[1]">().value(), "mouse"sv);
+    std::string forged = bytes;
+    auto const at = forged.find("\xd9\x06\xcd"sv);
+    REQUIRE_NE(at, std::string::npos);
+    forged[at + 2] = '\xcf';
+    CHECK_EQ(form<home>::unverified_decode(std::string(forged)).error(), error::incorrect_type);
+    auto const forged_doc = form<home>::unverified_path(std::string(forged));
+    REQUIRE(forged_doc);
+    CHECK_EQ(forged_doc->at_path<"$.pet">().error(), error::incorrect_type);
+}

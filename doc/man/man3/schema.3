@@ -1,5 +1,5 @@
 '\" t
-.TH "cbor::schema" "3" "2026-11-05" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.TH "cbor::schema" "3" "2026-11-06" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
 .SH NAME
 cbor::schema, cbor::schema::encode, cbor::schema::decode, cbor::schema::path, cbor::schema::at_path, cbor::schema::unverified_path, cbor::schema::unverified_at_path, cbor::schema::unverified_decode, cbor::schema::description, cbor::schema::description_place, cbor::schema::fixed_size, cbor::schema::member_offset, cbor::schema::accessor, cbor::schema::accessor<fixed_element<S>>, cbor::typed_array_view, cbor::tag \- structs as Packed CBOR, fields at fixed offsets
 .SH SYNOPSIS
@@ -328,8 +328,8 @@ The root record is the end of the message.
 A number takes its head and its argument of fixed width.
 A struct takes its class tag, its table reference, a record head of 5
 bytes and its fields.
-A text, a list, a map or an optional of variable size takes a reference
-\f[CR]6(N)\f[R] of 6 bytes.
+A text, a list, a map, an optional of variable size or a
+\f[CR]std::variant\f[R] takes a reference \f[CR]6(N)\f[R] of 6 bytes.
 .SS cbor::schema::member_offset
 Gives the offset of the head of \f[CR]Member\f[R] from the start of the
 record of \f[CR]U\f[R].
@@ -352,6 +352,14 @@ The result is a \f[CR]std::expected\f[R]: the value of a number,
 \f[CR]bool\f[R] or enum; a \f[CR]std::string_view\f[R] of a text; the
 accessor of a struct, a list or a map.
 Every result holds the owner of the bytes.
+.PP
+The accessor of a \f[CR]std::variant<A...>\f[R] member has
+\f[CR]index()\f[R] and \f[CR]get<A>()\f[R].
+\f[CR]index()\f[R] gives the index of the alternative that the tag of
+its record names.
+\f[CR]get<A>()\f[R] gives the accessor of that record, or
+\f[CR]incorrect_type\f[R] when the record holds another alternative.
+A path ends at a variant member: \f[CR]$.pet.name\f[R] does not compile.
 .PP
 \f[CR]view\f[R] gives a typed_array_view of a list of numbers.
 It exists on the root accessor only.
@@ -377,13 +385,17 @@ It holds the owner of the bytes.
 Each element is a value of \f[CR]E\f[R], read from little endian, not a
 reference.
 .SS cbor::tag
-The tag number of a struct, in its description:
-\f[CR]static constexpr std::optional<cbor::tag> tag = cbor::tag{1802};\f[R]
-in cbor::describe_members\f[CR]<point>\f[R].
+The tag number of a struct, in the member \f[CR]tag\f[R] of its
+description cbor::describe_members\f[CR]<point>\f[R], as the example
+below shows.
 \f[CR]schema\f[R] writes the number as the first item of each record of
 the struct.
 A read compares it, so a message of another struct gives
 \f[CR]incorrect_type\f[R].
+The tag of a record of a \f[CR]std::variant\f[R] member chooses the
+alternative; a tag of no alternative is \f[CR]incorrect_type\f[R].
+Each alternative has its own number, also when it derives from the class
+of another number.
 \f[CR]structs\f[R] takes the same description.
 .SS The bytes that cbor::schema::encode writes
 A message is Packed CBOR
@@ -436,7 +448,7 @@ T}
 T{
 parts
 T}@T{
-the texts, byte strings, lists and maps
+the texts, byte strings, lists, maps and the records of variant members
 T}
 T{
 rump
@@ -451,6 +463,10 @@ bytes of its fields.
 Each field has a head of fixed width.
 A field of variable size is \f[CR]6(N)\f[R], a shared reference with a
 4\-byte \f[CR]N\f[R], into the table.
+.PP
+A \f[CR]std::variant\f[R] member is a field \f[CR]6(N)\f[R].
+Its part is the record of the alternative that the variant holds, with
+no other head: the class tag of the record names the alternative.
 .PP
 A list of a number is an RFC 8746 typed array, little endian.
 A \f[CR]std::vector<double>\f[R] is tag 86.
@@ -482,7 +498,8 @@ type does not compile.
 \f[CR]too_little_data\f[R]: the message is shorter than its table and
 root.
 .IP \(bu 2
-\f[CR]incorrect_type\f[R]: a message of another struct, or a wrong head.
+\f[CR]incorrect_type\f[R]: a message of another struct, or a wrong head;
+a variant record with a tag of no alternative.
 .IP \(bu 2
 \f[CR]syntax_error\f[R], \f[CR]unpopulated_table_index\f[R]: a broken
 directory.
@@ -490,7 +507,10 @@ directory.
 \f[CR]inadmissible_type_for_tag_content\f[R]: a typed array whose length
 is not a multiple of its element size.
 .IP \(bu 2
-\f[CR]nesting_depth_exceeded\f[R], \f[CR]not_enough_memory\f[R].
+\f[CR]nesting_depth_exceeded\f[R]: a variant record, like a list, a map
+and an optional, is one level deeper than its parent.
+.IP \(bu 2
+\f[CR]not_enough_memory\f[R].
 .IP \(bu 2
 A null or empty owner throws \f[CR]std::logic_error\f[R].
 .SS cbor::schema::path
@@ -523,6 +543,10 @@ past the end.
 \f[CR]unpopulated_table_index\f[R], \f[CR]syntax_error\f[R]: a reference
 or a directory entry outside the table or the items.
 .IP \(bu 2
+\f[CR]incorrect_type\f[R]: a variant record with a tag of no
+alternative.
+The tag chooses the alternative, so these forms compare it too.
+.IP \(bu 2
 A wrong byte of data gives a value, not an error.
 .SS cbor::schema::description, description_place
 .IP \(bu 2
@@ -545,7 +569,9 @@ does not list, does not compile.
 .IP \(bu 2
 \f[CR]index_out_of_bounds\f[R]: an index past the end of a list.
 .IP \(bu 2
-\f[CR]incorrect_type\f[R]: a wrong head or tag on the path.
+\f[CR]incorrect_type\f[R]: a wrong head or tag on the path; a tag of a
+variant record that names no alternative; \f[CR]get<A>()\f[R] of another
+alternative.
 .IP \(bu 2
 \f[CR]unpopulated_table_index\f[R], \f[CR]syntax_error\f[R]: a broken
 reference.
@@ -576,7 +602,8 @@ These do not compile in \f[CR]schema<T>\f[R]:
 a struct in \f[CR]T\f[R] with no description, or with
 \f[CR]cbor::untagged\f[R];
 .IP \(bu 2
-two structs in \f[CR]T\f[R] with one number;
+two structs in \f[CR]T\f[R] with one number, the alternatives of a
+variant included;
 .IP \(bu 2
 a number of a standard type: 0, 1, 2, 3, 24, 64 to 87, 100, 258, 1004
 and 32873;
@@ -704,6 +731,21 @@ tires\->at_path<\(dq$.seats\(dq>();         \f[I]// 5\f[R]
 \f[B]for\f[R] (\f[B]auto\f[R] const t : *tires)
     use(*t.at_path<\(dq\(at.diameter\(dq>()); \f[I]// 17, then 18\f[R]
 root\->view<\(dq$.track\(dq>()\->size();     \f[I]// 3\f[R]
+.EE
+.PP
+A variant member, with \f[CR]dog\f[R] and \f[CR]cat\f[R] derived from
+\f[CR]animal\f[R]:
+.IP
+.EX
+\f[B]struct\f[R] home {
+    std::variant<dog, cat> pet;
+};
+\f[I]// bytes: from schema<home>::encode(home{dog{{\(dqrex\(dq}, 3}})\f[R]
+\f[B]auto\f[R] const house = cbor::schema<home>::path(std::move(bytes));
+\f[B]auto\f[R] const pet = house\->at_path<\(dq$.pet\(dq>();
+pet\->index();                         \f[I]// 0, a dog\f[R]
+pet\->get<dog>()\->at_path<\(dq\(at.name\(dq>(); \f[I]// \(dqrex\(dq\f[R]
+pet\->get<cat>().error();              \f[I]// cbor::error::incorrect_type\f[R]
 .EE
 .SS cbor::schema::accessor<fixed_element<S>>
 .IP
