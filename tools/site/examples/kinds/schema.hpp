@@ -5,12 +5,16 @@
 #include <format>
 #include <span>
 #include <string>
+#include <variant>
 #include <vector>
 
 namespace site
 {
 
 using doc_reference_schema::car;
+using doc_reference_schema::cat;
+using doc_reference_schema::dog;
+using doc_reference_schema::home;
 using doc_reference_schema::point;
 using doc_reference_schema::tire;
 
@@ -170,6 +174,42 @@ struct kind<cbor::schema<car>::accessor<cbor::fixed_element<tire>>> {
     static std::string text(cbor::schema<car>::accessor<cbor::fixed_element<tire>> const &)
     {
         return "accessor of a tire in a std::vector<tire>";
+    }
+};
+
+template <>
+struct kind<cbor::schema<home>::accessor<home>> {
+    static constexpr std::string_view name = "cbor::schema<home>::accessor<home>";
+    static std::string text(cbor::schema<home>::accessor<home> const &)
+    {
+        return "accessor of a home";
+    }
+};
+
+template <>
+struct kind<cbor::schema<home>::accessor<std::variant<dog, cat>>> {
+    static constexpr std::string_view name = "cbor::schema<home>::accessor<std::variant<dog, cat>>";
+    static std::string text(cbor::schema<home>::accessor<std::variant<dog, cat>> const &v)
+    {
+        return std::string("accessor of a std::variant<dog, cat> that holds a ") + (v.index() == 0 ? "dog" : "cat");
+    }
+};
+
+template <>
+struct kind<cbor::schema<home>::accessor<dog>> {
+    static constexpr std::string_view name = "cbor::schema<home>::accessor<dog>";
+    static std::string text(cbor::schema<home>::accessor<dog> const &)
+    {
+        return "accessor of a dog";
+    }
+};
+
+template <>
+struct kind<cbor::schema<home>::accessor<cat>> {
+    static constexpr std::string_view name = "cbor::schema<home>::accessor<cat>";
+    static std::string text(cbor::schema<home>::accessor<cat> const &)
+    {
+        return "accessor of a cat";
     }
 };
 
