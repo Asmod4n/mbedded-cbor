@@ -54,7 +54,8 @@ FetchContent_MakeAvailable(mbedded-cbor)
 It builds with g++ 16 in C++26 with `-freflection`, and with g++ 15,
 clang 23 and the AppleClang of Xcode 16 and 26 in C++23. These compilers
 need Boost.PFR 1.84 or later; CMake takes it from the system, else from
-its own copy.
+its own copy. On Windows it builds with clang-cl; the frontend of MSVC is
+refused.
 
 ## Classes
 
