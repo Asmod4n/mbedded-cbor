@@ -1,5 +1,5 @@
 '\" t
-.TH "cbor::lazy" "3" "2026-11-05" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.TH "cbor::lazy" "3" "2026-11-06" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
 .SH NAME
 cbor::lazy, cbor::lazy::take_ownership, cbor::lazy::view, cbor::lazy::at, cbor::lazy::operator[], cbor::lazy::at_path, cbor::lazy::get, cbor::lazy::type, cbor::lazy::size, cbor::lazy::empty, cbor::lazy::elements, cbor::lazy::entries, cbor::lazy::clone, cbor::lazy_elements, cbor::lazy_entries \- read a message in place, step by step
 .SH SYNOPSIS
@@ -11,7 +11,7 @@ cbor::lazy, cbor::lazy::take_ownership, cbor::lazy::view, cbor::lazy::at, cbor::
 .EX
 \f[B]struct\f[R] lazy {
     top_level_item top_level;
-    validity::offset offset;
+    std::size_t offset;
     std::uint64_t typed_array_tag{};
 };
 
