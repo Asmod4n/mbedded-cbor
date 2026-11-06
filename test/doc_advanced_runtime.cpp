@@ -287,7 +287,7 @@ TEST_CASE("doc advanced runtime: cbor::sequence")
     auto it = s.begin();
     ++it;
     CHECK_EQ((*it).error(), error::too_little_data);
-    CHECK_EQ(it.encoded, "\x19\x01"sv);
+    CHECK_EQ(it.encoded(), "\x19\x01"sv);
     std::vector<std::int64_t> last;
     for (auto const e : cbor::sequence{owner})
         if (auto const l = test::lazy_of_copy(*e); l->size().has_value())
