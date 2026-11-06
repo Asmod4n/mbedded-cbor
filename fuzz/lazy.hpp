@@ -84,6 +84,7 @@ void require_same_result(R const &a, R const &b)
     require(a.has_value() == b.has_value());
     if (!a) {
         require(a.error() == b.error());
+        require_error_value(a.error());
         return;
     }
     if constexpr (requires { **a == **b; })
