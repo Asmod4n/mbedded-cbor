@@ -82,7 +82,7 @@ private:
 
 public:
     top_level_item top_level;
-    detail::validity::offset offset;
+    std::size_t offset;
     std::uint64_t typed_array_tag{};
 
     template <borrowed_range_of_chars Encoded>
@@ -646,7 +646,7 @@ inline lazy_elements::iterator::value_type lazy_elements::iterator::operator*() 
 {
     if (failure != error{}) [[unlikely]]
         return std::unexpected(failure);
-    return lazy{top_level, offset, typed_array_tag};
+    return lazy{top_level, std::to_underlying(offset), typed_array_tag};
 }
 
 inline bool lazy_elements::iterator::operator==(iterator const &other) const
@@ -702,7 +702,7 @@ inline lazy_entries::iterator::value_type lazy_entries::iterator::operator*() co
 {
     if (failure != error{}) [[unlikely]]
         return std::unexpected(failure);
-    return std::pair{lazy{top_level, key, {}}, lazy{top_level, value, {}}};
+    return std::pair{lazy{top_level, std::to_underlying(key), {}}, lazy{top_level, std::to_underlying(value), {}}};
 }
 
 inline bool lazy_entries::iterator::operator==(iterator const &other) const
@@ -735,7 +735,7 @@ inline std::expected<lazy, error> lazy::from(std::shared_ptr<void const> owner,
     detail::validity::throw_logic_error_if_empty(
         owner, "cbor::lazy::from: the owner of the encoded data item is empty");
     std::string_view const content = heads::self_described_cbor_content(encoded);
-    return lazy{lazy::top_level_item{std::move(owner), content}, detail::validity::offset{}, {}};
+    return lazy{lazy::top_level_item{std::move(owner), content}, 0, {}};
 }
 
 inline void lazy::throw_logic_error_if_no_top_level() const
@@ -860,7 +860,7 @@ inline std::expected<std::string_view, error> lazy::read_typed_array_element(laz
 {
     detail::validity::throw_logic_error_if(node.top_level.encoded.data() == nullptr,
                                            "cbor::lazy: the lazy holds no top-level item");
-    return detail::validity::substr(node.top_level.encoded, node.offset,
+    return detail::validity::substr(node.top_level.encoded, detail::validity::offset{node.offset},
                                     detail::validity::typed_array_element_size(node.typed_array_tag));
 }
 
@@ -868,7 +868,7 @@ template <bool Checked>
 std::expected<lazy::resolved<Checked>, error> lazy::resolve(lazy const &node)
 {
     if (node.typed_array_tag == 0) [[likely]]
-        return resolve_tag_content<Checked>(node.top_level, node.offset);
+        return resolve_tag_content<Checked>(node.top_level, detail::validity::offset{node.offset});
     auto const element = read_typed_array_element(node);
     if (!element) [[unlikely]]
         return std::unexpected(element.error());
@@ -876,7 +876,8 @@ std::expected<lazy::resolved<Checked>, error> lazy::resolve(lazy const &node)
         heads::decode_typed_array_element(node.typed_array_tag, *element, detail::validity::index{});
     if (!h) [[unlikely]]
         return std::unexpected(h.error());
-    return resolved<Checked>{node.top_level, *h, heads::decoder<Checked>{std::string_view{}}, node.offset};
+    return resolved<Checked>{node.top_level, *h, heads::decoder<Checked>{std::string_view{}},
+                             detail::validity::offset{node.offset}};
 }
 
 template <bool Checked, std::integral Index>
@@ -890,7 +891,7 @@ std::expected<lazy, error> lazy::select_index(resolved<Checked> const &found, In
         auto const position = detail::validity::check_index(i, bytes->bytes.size() / size);
         if (!position) [[unlikely]]
             return std::unexpected(position.error());
-        return lazy{found.source, detail::validity::element_offset(bytes->offset, size, *position),
+        return lazy{found.source, std::to_underlying(detail::validity::element_offset(bytes->offset, size, *position)),
                     found.h.argument};
     }
     if (found.h.major != major_type::array) [[unlikely]]
@@ -904,7 +905,7 @@ std::expected<lazy, error> lazy::select_index(resolved<Checked> const &found, In
     detail::validity::offset const element = detail::validity::distance(found.source.encoded, d.encoded);
     if (auto const target = heads::decoder<Checked>(d).decode_head(); !target) [[unlikely]]
         return std::unexpected(target.error());
-    return lazy{found.source, element, {}};
+    return lazy{found.source, std::to_underlying(element), {}};
 }
 
 inline std::expected<std::uint64_t, error> lazy::size() const
@@ -945,7 +946,7 @@ inline std::expected<cbor::type, error> lazy::type() const
         return heads::type_of(found->h.major, found->h.info, found->h.argument);
                             }
                             detail::validity::offset const at =
-                                heads::self_described_cbor_content_at(top_level.encoded, offset);
+                                heads::self_described_cbor_content_at(top_level.encoded, detail::validity::offset{offset});
                             auto const h = heads::read_raw_head<true>(top_level.encoded, at);
                             if (!h) [[unlikely]]
                                 return std::unexpected(h.error());
@@ -977,7 +978,7 @@ std::expected<lazy, error> lazy::value_of(std::expected<Iterator, error> found)
         return std::unexpected(found.error());
     if (*found == std::default_sentinel) [[unlikely]]
         return std::unexpected(error::key_not_found);
-    return lazy{std::move(found->top_level), found->value, {}};
+    return lazy{std::move(found->top_level), std::to_underlying(found->value), {}};
 }
 
 inline std::expected<lazy, error> lazy::at(std::string_view const key) const
@@ -1198,10 +1199,10 @@ inline std::expected<owning<item>, error> lazy::clone() const
         heads::append_head(encoded, h->major, h->info, h->argument);
         return cbor::decode(encoded);
     }
-    if (offset == detail::validity::offset{})
+    if (offset == 0)
         return detail::decode_tree<true>(top_level.encoded, limits::nesting_depth)
             .transform([](detail::decoded_tree<true> const &d) { return d.tree; });
-    std::string_view const rest = detail::validity::subspan(top_level.encoded, offset);
+    std::string_view const rest = detail::validity::subspan(top_level.encoded, detail::validity::offset{offset});
     auto const size = item_size(rest);
     if (!size) [[unlikely]]
         return std::unexpected(size.error());

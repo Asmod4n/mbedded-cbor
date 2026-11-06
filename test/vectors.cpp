@@ -270,7 +270,7 @@ std::vector<wg_vector> wg_vectors_of(std::string const &path)
                     member_bool(*t, "fail", file_fail)};
         if (auto const decoded = t->at("decoded")) {
             std::string_view const rest =
-                cbor::detail::validity::subspan(std::string_view(file), decoded->offset);
+                std::string_view(file).substr(decoded->offset);
             auto const end = cbor::item_size(rest);
             REQUIRE(end.has_value());
             v.decoded = std::string(rest.substr(0, *end));
@@ -424,7 +424,7 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
         std::size_t const argument_bytes =
             it.additional_information < 24 ? 0 : std::size_t{1} << (it.additional_information - 24);
         auto content =
-            lazy_value(cbor::lazy{l.top_level, cbor::detail::validity::next(l.offset, 1 + argument_bytes)});
+            lazy_value(cbor::lazy{l.top_level, l.offset + 1 + argument_bytes});
         if (!content)
             return content;
         return value{tagged{argument_of(it), std::move(*content)}};

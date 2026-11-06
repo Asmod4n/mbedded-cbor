@@ -897,7 +897,7 @@ class jsonpath
             return *walked;
         return walk_query<T>(v, top,
                              lazy{lazy::top_level_item{std::shared_ptr<void const>{}, content},
-                                  detail::validity::offset{},
+                                  0,
                                   {}});
     }
 
@@ -913,7 +913,7 @@ class jsonpath
         if (root.typed_array_tag != 0) [[unlikely]]
             return walk_query<T>(v, top, root);
         auto const walked =
-            try_walk_bytes<T, true>(v, top, detail::validity::subspan(root.top_level.encoded, root.offset));
+            try_walk_bytes<T, true>(v, top, detail::validity::subspan(root.top_level.encoded, detail::validity::offset{root.offset}));
         if (walked) [[likely]]
             return *walked;
         return walk_query<T>(v, top, root);
@@ -1222,7 +1222,7 @@ inline std::expected<lazy, error> jsonpath::find_key(lazy const &node, std::stri
         if (!match) [[unlikely]]
             return std::unexpected(match.error());
         if (*match)
-            return lazy{source, detail::validity::distance(source.encoded, d.encoded), {}};
+            return lazy{source, std::to_underlying(detail::validity::distance(source.encoded, d.encoded)), {}};
         if (auto const r = well_formedness::skip_items(d, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
             }
@@ -1235,11 +1235,11 @@ inline std::expected<bool, error> jsonpath::value_equal(lazy const &a, lazy cons
         return std::unexpected(r.error());
     a.throw_logic_error_if_no_top_level();
     auto const x = a.typed_array_tag != 0 ? lazy::resolve<true>(a)
-                                          : lazy::resolve_container<true>(a.top_level, a.offset);
+                                          : lazy::resolve_container<true>(a.top_level, detail::validity::offset{a.offset});
     if (!x) [[unlikely]]
         return std::unexpected(x.error());
     auto const y = b.typed_array_tag != 0 ? lazy::resolve<true>(b)
-                                          : lazy::resolve_container<true>(b.top_level, b.offset);
+                                          : lazy::resolve_container<true>(b.top_level, detail::validity::offset{b.offset});
     if (!y) [[unlikely]]
         return std::unexpected(y.error());
     heads::head const &h = x->h;
@@ -1348,7 +1348,8 @@ inline std::expected<bool, error> jsonpath::value_equal(lazy const &a, lazy cons
             case major_type::tag:
                 if (h.argument != k.argument)
                     return false;
-                return value_equal(lazy{x->source, x_content, {}}, lazy{y->source, y_content, {}}, depth + 1);
+                return value_equal(lazy{x->source, std::to_underlying(x_content), {}},
+                                   lazy{y->source, std::to_underlying(y_content), {}}, depth + 1);
             default:
                 return h.info == k.info && h.argument == k.argument;
             }
@@ -1358,11 +1359,11 @@ inline std::expected<bool, error> jsonpath::value_less(lazy const &a, lazy const
 {
     a.throw_logic_error_if_no_top_level();
     auto const x = a.typed_array_tag != 0 ? lazy::resolve<true>(a)
-                                          : lazy::resolve_container<true>(a.top_level, a.offset);
+                                          : lazy::resolve_container<true>(a.top_level, detail::validity::offset{a.offset});
     if (!x) [[unlikely]]
         return std::unexpected(x.error());
     auto const y = b.typed_array_tag != 0 ? lazy::resolve<true>(b)
-                                          : lazy::resolve_container<true>(b.top_level, b.offset);
+                                          : lazy::resolve_container<true>(b.top_level, detail::validity::offset{b.offset});
     if (!y) [[unlikely]]
         return std::unexpected(y.error());
     heads::head const &h = x->h;
@@ -1456,7 +1457,7 @@ inline std::expected<std::optional<lazy>, error> jsonpath::comparable_value(quer
         (*argument)->throw_logic_error_if_no_top_level();
         auto const found = (*argument)->typed_array_tag != 0
                                ? lazy::resolve<true>(**argument)
-                               : lazy::resolve_container<true>((*argument)->top_level, (*argument)->offset);
+                               : lazy::resolve_container<true>((*argument)->top_level, detail::validity::offset{(*argument)->offset});
         if (!found) [[unlikely]]
             return std::unexpected(found.error());
         if (found->h.major == major_type::array || found->h.major == major_type::map)
@@ -1581,7 +1582,7 @@ inline std::expected<void, error> jsonpath::apply_selector(query_view const v, s
     auto const found = lazy::resolve<true>(node);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
-    lazy const content{found->source, found->item_at, {}};
+    lazy const content{found->source, std::to_underlying(found->item_at), {}};
     std::vector<lazy> children;
     if (found->h.major == major_type::array || heads::is_typed_array(found->h)) {
         auto const elements = content.elements();
