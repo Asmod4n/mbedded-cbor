@@ -452,16 +452,6 @@ public:
         return check_typed_array(tag, size);
     }
 
-    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
-    check_entries_all_read(std::uint64_t const claimed, std::uint64_t const readable, error const failure)
-    {
-        if (failure != error{}) [[unlikely]]
-            return std::unexpected(failure);
-        if (claimed > readable) [[unlikely]]
-            return std::unexpected(error::too_little_data);
-        return {};
-    }
-
     CBOR_ALWAYS_INLINE static constexpr offset element_offset(offset const start, std::size_t const element_size,
                                                               index const i)
     {

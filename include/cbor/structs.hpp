@@ -637,6 +637,9 @@ class generic
                 return std::unexpected(h.error());
             if (h->major != major_type::map) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
+            if (auto const r = validity::check_pending_items(h->major, h->info, h->argument, d.encoded.size()); !r)
+                [[unlikely]]
+                return r;
             out.clear();
             for (std::uint64_t i = 0; i < h->argument; ++i) {
                 auto key = pfr::make_element<typename U::key_type>(out);
@@ -649,6 +652,10 @@ class generic
                     return std::unexpected(values.error());
                 if (values->major != major_type::array || values->argument == 0) [[unlikely]]
                     return std::unexpected(error::incorrect_type);
+                if (auto const r = validity::check_pending_items(values->major, values->info, values->argument,
+                                                                 d.encoded.size());
+                    !r) [[unlikely]]
+                    return r;
                 for (std::uint64_t k = 0; k < values->argument; ++k) {
                     auto value = pfr::make_element<typename U::mapped_type>(out);
                     if (auto const r = read_generic(d, value, depth + 2, depth_max); !r) [[unlikely]]
@@ -663,6 +670,9 @@ class generic
                 return std::unexpected(h.error());
             if (h->major != major_type::map) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
+            if (auto const r = validity::check_pending_items(h->major, h->info, h->argument, d.encoded.size()); !r)
+                [[unlikely]]
+                return r;
             out.clear();
             for (std::uint64_t i = 0; i < h->argument; ++i) {
                 auto key = pfr::make_element<typename U::key_type>(out);
@@ -694,6 +704,9 @@ class generic
                 return std::unexpected(h.error());
             if (h->major != major_type::array) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
+            if (auto const r = validity::check_pending_items(h->major, h->info, h->argument, d.encoded.size()); !r)
+                [[unlikely]]
+                return r;
             out.clear();
             for (std::uint64_t i = 0; i < h->argument; ++i) {
                 if constexpr (requires {
@@ -799,6 +812,9 @@ class generic
                 return std::unexpected(h.error());
             if (h->major != major_type::array) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
+            if (auto const r = validity::check_pending_items(h->major, h->info, h->argument, d.encoded.size()); !r)
+                [[unlikely]]
+                return r;
             out.clear();
             for (std::uint64_t i = 0; i < h->argument; ++i) {
                 auto element = pfr::make_element<typename U::value_type>(out);

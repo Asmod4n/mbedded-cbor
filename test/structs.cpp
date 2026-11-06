@@ -1164,3 +1164,12 @@ TEST_CASE("structs: clone of a ref copies every view of the struct, recursively"
     std::string const own = text->clone();
     CHECK_EQ(own, "xyz"s);
 }
+
+// A map whose count claims more pairs than its bytes can hold gives too_little_data before any pair is read; a
+// duplicate key in the first pairs is not reached.
+TEST_CASE("structs: a count longer than the bytes is too_little_data before the first pair")
+{
+    CHECK_EQ(cbor::structs<std::map<int, int>>::decode("\xa2\x01\x01\x01"s).error(), error::too_little_data);
+    // A vector of numbers is an RFC 8746 typed array, so a list of texts shows the array.
+    CHECK_EQ(cbor::structs<std::vector<std::string>>::decode("\x83\x61\x61"s).error(), error::too_little_data);
+}
