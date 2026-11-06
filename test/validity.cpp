@@ -17,8 +17,8 @@
 using namespace std::literals;
 using cbor::error;
 using cbor::major_type;
-using cbor::validity;
 using cbor::value_sharing;
+using cbor::detail::validity;
 
 // The owner set the bound of the nesting depth to 512 and its default to 128. Every function that reads the
 // nesting depth reads both from these two constants, so this test is the one place that holds the two numbers.
@@ -133,7 +133,7 @@ constexpr auto sums_at_compile_time = [] {
     std::array<std::array<bool, factors.size()>, factors.size()> fits{};
     for (std::size_t i = 0; i < factors.size(); ++i)
         for (std::size_t j = 0; j < factors.size(); ++j)
-            fits[i][j] = cbor::validity::checked_add(factors[i], factors[j]).has_value();
+            fits[i][j] = cbor::detail::validity::checked_add(factors[i], factors[j]).has_value();
     return fits;
 }();
 
@@ -141,7 +141,7 @@ constexpr auto products_at_compile_time = [] {
     std::array<std::array<bool, factors.size()>, factors.size()> fits{};
     for (std::size_t i = 0; i < factors.size(); ++i)
         for (std::size_t j = 0; j < factors.size(); ++j)
-            fits[i][j] = cbor::validity::checked_mul(factors[i], factors[j]).has_value();
+            fits[i][j] = cbor::detail::validity::checked_mul(factors[i], factors[j]).has_value();
     return fits;
 }();
 

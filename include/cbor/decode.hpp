@@ -72,7 +72,7 @@ struct zone_owner {
     static zone &zone_found(owning<item> const &tree, char const *const what)
     {
         zone_owner const *const owner = std::get_deleter<zone_owner>(tree.held);
-        validity::throw_logic_error_if(owner == nullptr || owner->owned == nullptr, what);
+        detail::validity::throw_logic_error_if(owner == nullptr || owner->owned == nullptr, what);
         return *owner->owned;
     }
 
@@ -81,7 +81,8 @@ struct zone_owner {
                                   char const *const what)
     {
         auto const found = std::ranges::lower_bound(links, &from, std::less<>{}, key);
-        validity::throw_logic_error_if(found == links.end() || std::invoke(key, *found) != &from, what);
+        detail::validity::throw_logic_error_if(found == links.end() || std::invoke(key, *found) != &from,
+                                               what);
         return *found;
     }
 
@@ -133,7 +134,7 @@ std::expected<void, error> tree_decoder<Checked>::decode_scalar(item &node, head
         if (!string) [[unlikely]]
             return std::unexpected(string.error());
         std::string_view const own = decoded.strings.alloc_str(
-            *string, string->size() + std::min(validity::bump_chunk_size, d.encoded.size()));
+            *string, string->size() + std::min(detail::validity::bump_chunk_size, d.encoded.size()));
         if (h.major == major_type::text_string)
             node.via.str = own;
         else
@@ -148,7 +149,7 @@ std::expected<void, error> tree_decoder<Checked>::decode_scalar(item &node, head
             node.via.f64 = heads::decode_float(h.info, h.argument);
             return {};
         default:
-            if (error const r = validity::check_simple_value(h.info, h.argument).error_or(error{});
+            if (error const r = detail::validity::check_simple_value(h.info, h.argument).error_or(error{});
                 r != error{}) [[unlikely]]
                 return std::unexpected(r);
             node.via.simple_value = static_cast<simple_value>(h.argument);
@@ -163,11 +164,11 @@ template <bool Checked>
 std::expected<bool, error> tree_decoder<Checked>::decode_bignum(std::pmr::vector<item> &into, std::uint64_t const tag,
                                                                 std::size_t const depth)
 {
-    auto const next = heads::read_raw_head<Checked>(d.encoded, validity::offset{});
+    auto const next = heads::read_raw_head<Checked>(d.encoded, detail::validity::offset{});
     if (!next || next->major != major_type::byte_string ||
-        !validity::check_definite_length(next->major, next->info).has_value())
+        !detail::validity::check_definite_length(next->major, next->info).has_value())
         return false;
-    if (auto const r = validity::check_nesting_depth(depth + 1, depth_max); !r) [[unlikely]]
+    if (auto const r = detail::validity::check_nesting_depth(depth + 1, depth_max); !r) [[unlikely]]
         return std::unexpected(r.error());
     heads::decoder<Checked> const before = d;
     auto const read = d.decode_bignum(tag);
@@ -187,7 +188,7 @@ std::expected<bool, error> tree_decoder<Checked>::decode_bignum(std::pmr::vector
 template <bool Checked>
 std::expected<void, error> tree_decoder<Checked>::decode_item(std::pmr::vector<item> &into, std::size_t const depth)
 {
-    if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
+    if (auto const r = detail::validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
         return std::unexpected(r.error());
     auto const h = d.decode_head();
     if (!h) [[unlikely]]
@@ -214,20 +215,21 @@ std::expected<void, error> tree_decoder<Checked>::decode_content(std::pmr::vecto
         return decode_scalar(node, head);
     case major_type::array:
     case major_type::map: {
-        auto const count = validity::checked_mul(
+        auto const count = detail::validity::checked_mul(
             head.argument, head.major == major_type::map ? rfc8949::data_items_per_pair : std::size_t{1});
         if (!count) [[unlikely]]
             return std::unexpected(error::too_little_data);
-        auto const reserved = validity::checked_add(std::uint64_t{open}, *count);
+        auto const reserved = detail::validity::checked_add(std::uint64_t{open}, *count);
         if (!reserved) [[unlikely]]
             return std::unexpected(error::too_little_data);
-        if (auto const r = validity::check_pending_items(*reserved, d.encoded.size()); !r) [[unlikely]]
+        if (auto const r = detail::validity::check_pending_items(*reserved, d.encoded.size()); !r)
+            [[unlikely]]
             return std::unexpected(r.error());
         std::size_t const n = static_cast<std::size_t>(*count);
         std::pmr::vector<item> &nodes = decoded.items_reserved(n);
         open = static_cast<std::size_t>(*reserved);
         if (n != 0)
-            if (auto const r = validity::check_nesting_depth(depth + 1, depth_max); !r) [[unlikely]]
+            if (auto const r = detail::validity::check_nesting_depth(depth + 1, depth_max); !r) [[unlikely]]
                 return std::unexpected(r.error());
         for (std::size_t left = n; left != 0; --left) {
             --open;
@@ -257,7 +259,7 @@ std::expected<void, error> tree_decoder<Checked>::decode_content(std::pmr::vecto
         item const &content = held.front();
         node.via.tag = {head.argument, &content};
         if (node.type == cbor::type::typed_array)
-            if (auto const r = validity::check_typed_array_content(
+            if (auto const r = detail::validity::check_typed_array_content(
                     head.argument, heads::major_type_of(content.type),
                     content.type == cbor::type::byte_string ? content.via.bin.size() : std::size_t{});
                 !r) [[unlikely]]
@@ -268,12 +270,13 @@ std::expected<void, error> tree_decoder<Checked>::decode_content(std::pmr::vecto
             decoded.encoded_cbor_data_items.emplace_back(&node, nullptr);
             return {};
         }
-        std::string_view const content_encoded = tagged.substr(0, std::to_underlying(validity::distance(tagged, d.encoded)));
+        std::string_view const content_encoded =
+            tagged.substr(0, std::to_underlying(detail::validity::distance(tagged, d.encoded)));
         tree_decoder inner{decoded, {content_encoded.substr(content_encoded.size() - content.via.bin.size())}, depth_max};
         std::pmr::vector<item> &embedded = decoded.items_reserved(1);
         if (auto const r = inner.decode_item(embedded, depth + 2); !r) [[unlikely]]
             return r;
-        if (auto const one = validity::check_one_data_item(inner.d.encoded); !one) [[unlikely]]
+        if (auto const one = detail::validity::check_one_data_item(inner.d.encoded); !one) [[unlikely]]
             return std::unexpected(one.error());
         decoded.encoded_cbor_data_items.emplace_back(&node, &embedded.front());
         return {};
@@ -292,10 +295,12 @@ template <bool Checked>
 std::expected<decoded_tree<Checked>, error> decode_tree(std::string_view const encoded,
                                                         std::size_t const depth_max)
 {
-    auto decoded = std::make_unique<zone>(
-        validity::checked_mul(encoded.size(), sizeof(item) + 1)
-            .transform([](std::size_t const size) { return std::clamp(size, std::size_t{1}, validity::initial_size_limit); })
-            .value_or(validity::initial_size_limit));
+    auto decoded = std::make_unique<zone>(detail::validity::checked_mul(encoded.size(), sizeof(item) + 1)
+                                              .transform([](std::size_t const size) {
+                                                  return std::clamp(size, std::size_t{1},
+                                                                    detail::validity::initial_size_limit);
+                                              })
+                                              .value_or(detail::validity::initial_size_limit));
     tree_decoder<Checked> tree{*decoded, {encoded}, depth_max};
     std::pmr::vector<item> &root = decoded->items_reserved(1);
     if (auto const built = tree.decode_item(root, 0); !built) [[unlikely]]

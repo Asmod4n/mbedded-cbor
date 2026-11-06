@@ -13,6 +13,8 @@ namespace cbor
 namespace detail
 {
 
+class validity;
+
 template <bool>
 struct tree_decoder;
 
@@ -98,7 +100,7 @@ class rfc8949
         self_described_cbor = 55799
     };
 
-    friend class validity;
+    friend class detail::validity;
 
     friend class heads;
 

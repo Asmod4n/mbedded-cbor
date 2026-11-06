@@ -977,8 +977,8 @@ TEST_CASE("validity: keys_equivalent follows RFC 8949 5.6.1")
         std::string_view const second = p.second;
         CAPTURE(p.first);
         CAPTURE(p.second);
-        auto const equal = cbor::validity::keys_equivalent<false>(first, cbor::validity::offset{}, second,
-                                                                  cbor::validity::offset{}, 1, 16);
+        auto const equal = cbor::detail::validity::keys_equivalent<false>(
+            first, cbor::detail::validity::offset{}, second, cbor::detail::validity::offset{}, 1, 16);
         REQUIRE(equal.has_value());
         CHECK_EQ(*equal, p.equal);
     }

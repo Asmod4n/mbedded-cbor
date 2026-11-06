@@ -335,7 +335,7 @@ class generic
         if (h->major != major_type::unsigned_integer && h->major != major_type::negative_integer) [[unlikely]]
             return std::unexpected(error::incorrect_type);
         bool const negative = h->major == major_type::negative_integer;
-        if (error const c = validity::check_number_range<U>(negative, h->argument).error_or(error{});
+        if (error const c = detail::validity::check_number_range<U>(negative, h->argument).error_or(error{});
             c != error{}) [[unlikely]]
             return std::unexpected(c);
         U const magnitude = static_cast<U>(h->argument);
@@ -410,7 +410,7 @@ class generic
             auto const b = d.decode_head();
             if (!b) [[unlikely]]
                 return std::unexpected(b.error());
-            if (error const c = validity::check_tag_content(h->argument, b->major).error_or(error{});
+            if (error const c = detail::validity::check_tag_content(h->argument, b->major).error_or(error{});
                 c != error{}) [[unlikely]]
                 return std::unexpected(c);
             auto const bytes = d.decode_byte_string(b->argument);
@@ -418,7 +418,7 @@ class generic
                 return std::unexpected(bytes.error());
             std::span<char const> const digits = heads::magnitude_without_leading_zeros(std::span(*bytes));
             if (error const c =
-                    validity::check_magnitude_size(digits.size(), sizeof(uint128)).error_or(error{});
+                    detail::validity::check_magnitude_size(digits.size(), sizeof(uint128)).error_or(error{});
                 c != error{}) [[unlikely]]
                 return std::unexpected(c);
             magnitude = 0;
@@ -428,7 +428,7 @@ class generic
         } else if (h->major != major_type::unsigned_integer && !negative) [[unlikely]] {
             return std::unexpected(error::incorrect_type);
         }
-        if (error const c = validity::check_number_range<U>(negative, magnitude).error_or(error{});
+        if (error const c = detail::validity::check_number_range<U>(negative, magnitude).error_or(error{});
             c != error{}) [[unlikely]]
             return std::unexpected(c);
         U const value = static_cast<U>(magnitude);
@@ -475,7 +475,7 @@ class generic
             auto const n = look.decode_head();
             if (!n) [[unlikely]]
                 return std::unexpected(n.error());
-            if (error const e = validity::check_tag_content(h->argument, n->major).error_or(error{});
+            if (error const e = detail::validity::check_tag_content(h->argument, n->major).error_or(error{});
                 e != error{}) [[unlikely]]
                 return std::unexpected(e);
             auto const index = value_sharing::check_sharedref_index(n->argument, d.marked_values.size());
@@ -496,7 +496,7 @@ class generic
     static std::expected<void, error> read_generic_value(value_sharing::sharing_decoder<Checked> &d, U &out,
                                                          std::size_t const depth, std::size_t const depth_max)
     {
-        if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
+        if (auto const r = detail::validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
             return std::unexpected(r.error());
         if constexpr (std::same_as<U, bool>) {
             auto const h = d.decode_head();
@@ -512,7 +512,7 @@ class generic
                 return std::unexpected(h.error());
             if (!head_accepted<U>(*h)) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            if (error const r = validity::check_simple_value(h->info, h->argument).error_or(error{});
+            if (error const r = detail::validity::check_simple_value(h->info, h->argument).error_or(error{});
                 r != error{}) [[unlikely]]
                 return std::unexpected(r);
             out = static_cast<simple_value>(h->argument);
@@ -599,8 +599,9 @@ class generic
                 return std::unexpected(error::incorrect_type);
             return read_tag_content(d, out, *t, depth, depth_max);
         } else if constexpr (reflection::is_optional<U>) {
-            if (validity::bytes_fit(heads::initial_byte_size, d.encoded.size()) &&
-                d.encoded.front() == heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::null))) {
+            if (detail::validity::bytes_fit(heads::initial_byte_size, d.encoded.size()) &&
+                d.encoded.front() ==
+                    heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::null))) {
                 d.encoded.remove_prefix(1);
                 out.reset();
                 return {};
@@ -631,23 +632,24 @@ class generic
                 return std::unexpected(h.error());
             if (h->major != major_type::map) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            if (auto const r = validity::check_pending_items(h->major, h->info, h->argument, d.encoded.size()); !r)
-                [[unlikely]]
+            if (auto const r =
+                    detail::validity::check_pending_items(h->major, h->info, h->argument, d.encoded.size());
+                !r) [[unlikely]]
                 return r;
             out.clear();
             for (std::uint64_t i = 0; i < h->argument; ++i) {
                 auto key = pfr::make_element<typename U::key_type>(out);
                 if (auto const r = read_generic(d, key, depth + 1, depth_max); !r) [[unlikely]]
                     return r;
-                if (auto const r = validity::check_key_unique(out.contains(key)); !r) [[unlikely]]
+                if (auto const r = detail::validity::check_key_unique(out.contains(key)); !r) [[unlikely]]
                     return r;
                 auto const values = d.decode_head();
                 if (!values) [[unlikely]]
                     return std::unexpected(values.error());
                 if (values->major != major_type::array || values->argument == 0) [[unlikely]]
                     return std::unexpected(error::incorrect_type);
-                if (auto const r = validity::check_pending_items(values->major, values->info, values->argument,
-                                                                 d.encoded.size());
+                if (auto const r = detail::validity::check_pending_items(values->major, values->info,
+                                                                         values->argument, d.encoded.size());
                     !r) [[unlikely]]
                     return r;
                 for (std::uint64_t k = 0; k < values->argument; ++k) {
@@ -664,8 +666,9 @@ class generic
                 return std::unexpected(h.error());
             if (h->major != major_type::map) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            if (auto const r = validity::check_pending_items(h->major, h->info, h->argument, d.encoded.size()); !r)
-                [[unlikely]]
+            if (auto const r =
+                    detail::validity::check_pending_items(h->major, h->info, h->argument, d.encoded.size());
+                !r) [[unlikely]]
                 return r;
             out.clear();
             for (std::uint64_t i = 0; i < h->argument; ++i) {
@@ -676,7 +679,7 @@ class generic
                 if (auto const r = read_generic(d, value, depth + 1, depth_max); !r) [[unlikely]]
                     return r;
                 if constexpr (requires { out.try_emplace(std::move(key), std::move(value)); }) {
-                    if (auto const r = validity::check_key_unique(
+                    if (auto const r = detail::validity::check_key_unique(
                             !out.try_emplace(std::move(key), std::move(value)).second);
                         !r) [[unlikely]]
                         return r;
@@ -698,8 +701,9 @@ class generic
                 return std::unexpected(h.error());
             if (h->major != major_type::array) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            if (auto const r = validity::check_pending_items(h->major, h->info, h->argument, d.encoded.size()); !r)
-                [[unlikely]]
+            if (auto const r =
+                    detail::validity::check_pending_items(h->major, h->info, h->argument, d.encoded.size());
+                !r) [[unlikely]]
                 return r;
             out.clear();
             for (std::uint64_t i = 0; i < h->argument; ++i) {
@@ -736,7 +740,8 @@ class generic
             if (!head_accepted<double>(*h)) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
             d.encoded = look.encoded;
-            auto const whole = validity::check_whole_number<rep>(heads::decode_float(h->info, h->argument));
+            auto const whole =
+                detail::validity::check_whole_number<rep>(heads::decode_float(h->info, h->argument));
             if (!whole) [[unlikely]]
                 return std::unexpected(whole.error());
             seconds = *whole;
@@ -806,16 +811,17 @@ class generic
                 return std::unexpected(h.error());
             if (h->major != major_type::array) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            if (auto const r = validity::check_pending_items(h->major, h->info, h->argument, d.encoded.size()); !r)
-                [[unlikely]]
+            if (auto const r =
+                    detail::validity::check_pending_items(h->major, h->info, h->argument, d.encoded.size());
+                !r) [[unlikely]]
                 return r;
             out.clear();
             for (std::uint64_t i = 0; i < h->argument; ++i) {
                 auto element = pfr::make_element<typename U::value_type>(out);
                 if (auto const r = read_generic(d, element, depth + 1, depth_max); !r) [[unlikely]]
                     return r;
-                if (auto const r = validity::check_key_unique(!out.insert(std::move(element)).second); !r)
-                    [[unlikely]]
+                if (auto const r = detail::validity::check_key_unique(!out.insert(std::move(element)).second);
+                    !r) [[unlikely]]
                     return r;
             }
             return {};
@@ -824,13 +830,14 @@ class generic
             auto const b = d.decode_head();
             if (!b) [[unlikely]]
                 return std::unexpected(b.error());
-            if (error const c = validity::check_tag_content(tag.argument, b->major).error_or(error{});
+            if (error const c = detail::validity::check_tag_content(tag.argument, b->major).error_or(error{});
                 c != error{}) [[unlikely]]
                 return std::unexpected(c);
             auto const bytes = d.decode_byte_string(b->argument);
             if (!bytes) [[unlikely]]
                 return std::unexpected(bytes.error());
-            if (auto const r = validity::check_typed_array(tag.argument, bytes->size()); !r) [[unlikely]]
+            if (auto const r = detail::validity::check_typed_array(tag.argument, bytes->size()); !r)
+                [[unlikely]]
                 return r;
             std::size_t const count = bytes->size() / sizeof(E);
             if constexpr (is_std_array<U>) {
@@ -876,7 +883,7 @@ class generic
         std::bitset<count> found;
         auto const read_member =
             [&]<std::size_t I>(std::integral_constant<std::size_t, I>) -> std::expected<void, error> {
-            if (auto const unique = validity::check_key_unique(found.test(I)); !unique) [[unlikely]]
+            if (auto const unique = detail::validity::check_key_unique(found.test(I)); !unique) [[unlikely]]
                 return unique;
             found.set(I);
             return read_generic(d, pfr::get<I>(out), depth + 1, depth_max);
@@ -908,7 +915,7 @@ class generic
                            k->major == major_type::tag) [[unlikely]] {
                     return std::unexpected(error::unsupported_value);
                 } else if (error const c =
-                               validity::check_simple_value(k->info, k->argument).error_or(error{});
+                               detail::validity::check_simple_value(k->info, k->argument).error_or(error{});
                            c != error{}) [[unlikely]] {
                     return std::unexpected(c);
                 }
@@ -977,7 +984,8 @@ class generic
     template <class U>
     static std::expected<std::size_t, error> generic_size(U const &value, std::size_t const depth)
     {
-        if (auto const r = validity::check_nesting_depth(depth, limits::nesting_depth); !r) [[unlikely]]
+        if (auto const r = detail::validity::check_nesting_depth(depth, limits::nesting_depth); !r)
+            [[unlikely]]
             return std::unexpected(r.error());
         if constexpr (std::same_as<U, bool> || std::same_as<U, std::nullptr_t>) {
             return heads::initial_byte_size;
@@ -1014,10 +1022,12 @@ class generic
             auto const content = tag_content_size(value, depth);
             if (!content) [[unlikely]]
                 return content;
-            return validity::checked_add(heads::head_size(tag_of_standard_type<U>()), *content).transform_error(validity::writer_error);
+            return detail::validity::checked_add(heads::head_size(tag_of_standard_type<U>()), *content)
+                .transform_error(detail::validity::writer_error);
         } else if constexpr (is_basic_string<U> || std::same_as<U, std::string_view> ||
                              std::same_as<U, std::span<std::byte const>>) {
-            return validity::checked_add(heads::head_size(value.size()), value.size()).transform_error(validity::writer_error);
+            return detail::validity::checked_add(heads::head_size(value.size()), value.size())
+                .transform_error(detail::validity::writer_error);
         } else if constexpr (reflection::is_optional<U>) {
             if (!value)
                 return heads::initial_byte_size;
@@ -1026,15 +1036,18 @@ class generic
             auto const content = generic_size(value.content, depth + 1);
             if (!content) [[unlikely]]
                 return content;
-            return validity::checked_add(heads::head_size(U::number), *content).transform_error(validity::writer_error);
+            return detail::validity::checked_add(heads::head_size(U::number), *content)
+                .transform_error(detail::validity::writer_error);
         } else if constexpr (is_std_tuple<U> || is_std_array<U>) {
             std::expected<std::size_t, error> size = heads::head_size(std::tuple_size_v<U>);
             std::apply(
                 [&](auto const &...e) {
                     ((size = size.and_then([&](std::size_t const sum) {
-                          return generic_size(e, depth + 1).and_then(
-                              [sum](std::size_t const n) { return validity::checked_add(sum, n).transform_error(validity::writer_error); });
-                      })),
+                         return generic_size(e, depth + 1).and_then([sum](std::size_t const n) {
+                             return detail::validity::checked_add(sum, n).transform_error(
+                                 detail::validity::writer_error);
+                         });
+                     })),
                      ...);
                 },
                 value);
@@ -1046,16 +1059,22 @@ class generic
             for (auto const group : groups) {
                 size = size.and_then([&](std::size_t const sum) {
                     return generic_size(group.front().first, depth + 1).and_then([&](std::size_t const n) {
-                        return validity::checked_add(sum, n).transform_error(validity::writer_error).and_then([&group](std::size_t const total) {
-                            return validity::checked_add(
-                                       total, heads::head_size(std::ranges::fold_left(group, std::uint64_t{0}, element_count)))
-                                .transform_error(validity::writer_error);
-                        });
+                        return detail::validity::checked_add(sum, n)
+                            .transform_error(detail::validity::writer_error)
+                            .and_then([&group](std::size_t const total) {
+                                return detail::validity::checked_add(
+                                           total, heads::head_size(std::ranges::fold_left(
+                                                      group, std::uint64_t{0}, element_count)))
+                                    .transform_error(detail::validity::writer_error);
+                            });
                     });
                 });
                 for (auto const &[k, v] : group)
                     size = size.and_then([&v, depth](std::size_t const sum) {
-                        return generic_size(v, depth + 1).and_then([sum](std::size_t const n) { return validity::checked_add(sum, n).transform_error(validity::writer_error); });
+                        return generic_size(v, depth + 1).and_then([sum](std::size_t const n) {
+                            return detail::validity::checked_add(sum, n).transform_error(
+                                detail::validity::writer_error);
+                        });
                     });
                 if (!size) [[unlikely]]
                     return size;
@@ -1064,10 +1083,16 @@ class generic
         } else if constexpr (reflection::is_map<U>) {
             std::size_t size = heads::head_size(value.size());
             for (auto const &[k, v] : value) {
-                auto const key = generic_size(k, depth + 1).and_then([size](std::size_t const n) { return validity::checked_add(size, n).transform_error(validity::writer_error); });
+                auto const key = generic_size(k, depth + 1).and_then([size](std::size_t const n) {
+                    return detail::validity::checked_add(size, n).transform_error(
+                        detail::validity::writer_error);
+                });
                 if (!key) [[unlikely]]
                     return key;
-                auto const mapped = generic_size(v, depth + 1).and_then([&key](std::size_t const n) { return validity::checked_add(*key, n).transform_error(validity::writer_error); });
+                auto const mapped = generic_size(v, depth + 1).and_then([&key](std::size_t const n) {
+                    return detail::validity::checked_add(*key, n).transform_error(
+                        detail::validity::writer_error);
+                });
                 if (!mapped) [[unlikely]]
                     return mapped;
                 size = *mapped;
@@ -1090,7 +1115,8 @@ class generic
                 ++present;
                 constexpr map_key key = pfr::key_of<I, U>();
                 auto const keyed =
-                    validity::checked_add(sum, heads::head_size(key.argument) + key.text.size()).transform_error(validity::writer_error);
+                    detail::validity::checked_add(sum, heads::head_size(key.argument) + key.text.size())
+                        .transform_error(detail::validity::writer_error);
                 if (!keyed) [[unlikely]]
                     return keyed;
                 std::expected<std::size_t, error> encoded_size;
@@ -1098,8 +1124,10 @@ class generic
                     encoded_size = generic_size(*m, depth + 1);
                 else
                     encoded_size = generic_size(m, depth + 1);
-                return encoded_size.and_then(
-                    [&keyed](std::size_t const n) { return validity::checked_add(*keyed, n).transform_error(validity::writer_error); });
+                return encoded_size.and_then([&keyed](std::size_t const n) {
+                    return detail::validity::checked_add(*keyed, n).transform_error(
+                        detail::validity::writer_error);
+                });
             };
             std::expected<std::size_t, error> size = std::size_t{0};
             [&]<std::size_t... I>(std::index_sequence<I...>) {
@@ -1113,7 +1141,7 @@ class generic
             std::size_t head = heads::head_size(present);
             if constexpr (constexpr std::optional<std::uint64_t> tag = reflection::tag_number_of<U>(); tag.has_value())
                 head += heads::head_size(*tag);
-            return validity::checked_add(*size, head).transform_error(validity::writer_error);
+            return detail::validity::checked_add(*size, head).transform_error(detail::validity::writer_error);
         }
     }
 
@@ -1122,8 +1150,9 @@ class generic
     {
         std::size_t size = heads::head_size(value.size());
         for (typename U::value_type const &e : value) {
-            auto const sum = generic_size(e, depth + 1).and_then(
-                [size](std::size_t const n) { return validity::checked_add(size, n).transform_error(validity::writer_error); });
+            auto const sum = generic_size(e, depth + 1).and_then([size](std::size_t const n) {
+                return detail::validity::checked_add(size, n).transform_error(detail::validity::writer_error);
+            });
             if (!sum) [[unlikely]]
                 return sum;
             size = *sum;
@@ -1140,15 +1169,18 @@ class generic
             return generic_size(value.time_since_epoch().count(), depth);
         } else if constexpr (std::same_as<U, std::chrono::year_month_day>) {
             if (!value.ok()) [[unlikely]]
-                validity::throw_logic_error("cbor::structs::encode: the year_month_day is no valid date");
+                detail::validity::throw_logic_error(
+                    "cbor::structs::encode: the year_month_day is no valid date");
             return generic_size(std::chrono::sys_days{value}.time_since_epoch().count(), depth);
         } else if constexpr (is_set<U>) {
             return elements_size(value, depth);
         } else {
-            auto const bytes = validity::checked_mul(value.size(), sizeof(typename U::value_type)).transform_error(validity::writer_error);
+            auto const bytes = detail::validity::checked_mul(value.size(), sizeof(typename U::value_type))
+                                   .transform_error(detail::validity::writer_error);
             if (!bytes) [[unlikely]]
                 return bytes;
-            return validity::checked_add(heads::head_size(*bytes), *bytes).transform_error(validity::writer_error);
+            return detail::validity::checked_add(heads::head_size(*bytes), *bytes)
+                .transform_error(detail::validity::writer_error);
         }
     }
 
@@ -1343,7 +1375,8 @@ public:
     template <owning_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded, T &&target)
     {
-        validity::throw_logic_error_if_null(encoded, "cbor::structs::decode: the encoded data item is null");
+        detail::validity::throw_logic_error_if_null(encoded,
+                                                    "cbor::structs::decode: the encoded data item is null");
         std::string_view const bytes{std::span<char const>(*encoded)};
         return decode(std::shared_ptr<void const>(std::move(encoded)), bytes, std::move(target));
     }
@@ -1368,9 +1401,9 @@ public:
         auto const counted = generic::generic_size(value, 0);
         if (!counted) [[unlikely]]
             return std::unexpected(counted.error());
-        auto const sum = validity::checked_add(*counted, heads::head_padding);
+        auto const sum = detail::validity::checked_add(*counted, heads::head_padding);
         if (!sum) [[unlikely]]
-            return std::unexpected(validity::writer_error(sum.error()));
+            return std::unexpected(detail::validity::writer_error(sum.error()));
         std::size_t const padded = *sum;
         std::string out(padded, '\0');
         out.resize(generic::write_generic(std::span<char>(out), 0, value));
@@ -1384,24 +1417,24 @@ public:
         auto const counted = generic::generic_size(value, 0);
         if (!counted) [[unlikely]]
             return std::unexpected(counted.error());
-        auto const sum = validity::checked_add(*counted, heads::head_padding);
+        auto const sum = detail::validity::checked_add(*counted, heads::head_padding);
         if (!sum) [[unlikely]]
-            return std::unexpected(validity::writer_error(sum.error()));
+            return std::unexpected(detail::validity::writer_error(sum.error()));
         std::size_t const padded = *sum;
         std::size_t const size = *counted;
         if constexpr (encoding::byte_container<U> &&
                              requires { requires std::same_as<std::ranges::range_value_t<U>, char>; }) {
             std::size_t const at = std::ranges::size(target);
-            auto const total = validity::checked_add(at, padded);
+            auto const total = detail::validity::checked_add(at, padded);
             if (!total) [[unlikely]]
-                return std::unexpected(validity::writer_error(total.error()));
+                return std::unexpected(detail::validity::writer_error(total.error()));
             target.resize(*total);
             generic::write_generic(std::span<char>(target), at, value);
             target.resize(at + size);
             return size;
         } else if constexpr (!encoding::byte_container<U> && requires { std::span<char>(target); }) {
             std::span<char> const out(target);
-            if (validity::bytes_fit(padded, out.size())) {
+            if (detail::validity::bytes_fit(padded, out.size())) {
                 generic::write_generic(out.first(padded), 0, value);
                 return size;
             }
@@ -1410,9 +1443,9 @@ public:
         encoded.resize(generic::write_generic(std::span<char>(encoded), 0, value));
         decltype(auto) message = encoding::message_of(target, encoded.size());
         if (auto const r = message.append(encoded); !r) [[unlikely]]
-            return std::unexpected(validity::writer_error(r.error()));
+            return std::unexpected(detail::validity::writer_error(r.error()));
         if (auto const r = message.done(encoded.size()); !r) [[unlikely]]
-            return std::unexpected(validity::writer_error(r.error()));
+            return std::unexpected(detail::validity::writer_error(r.error()));
         return encoded.size();
     }
 
@@ -1420,8 +1453,8 @@ private:
     static std::expected<ref<T>, error> decode_with_owner(std::shared_ptr<void const> owner,
                                                      std::string_view const encoded, T &&target)
     {
-        validity::throw_logic_error_if_empty(owner,
-                                             "cbor::structs::decode: the owner of the encoded data item is empty");
+        detail::validity::throw_logic_error_if_empty(
+            owner, "cbor::structs::decode: the owner of the encoded data item is empty");
 #if defined(__cpp_exceptions)
         try {
 #endif
@@ -1454,9 +1487,9 @@ template <class T>
 void copy_views_into_zone(T &value, bump &zone)
 {
     if constexpr (std::is_same_v<T, std::string_view>) {
-        value = zone.alloc_str(value, validity::bump_chunk_size);
+        value = zone.alloc_str(value, detail::validity::bump_chunk_size);
     } else if constexpr (std::is_same_v<T, std::span<std::byte const>>) {
-        value = zone.alloc_slice_copy(value, validity::bump_chunk_size);
+        value = zone.alloc_slice_copy(value, detail::validity::bump_chunk_size);
     } else if constexpr (std::is_same_v<T, typed_array>) {
         detail::copy_views_into_zone(value.bytes, zone);
     } else if constexpr (std::is_arithmetic_v<T> || std::is_enum_v<T> || generic::is_sys_time<T> ||

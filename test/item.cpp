@@ -1063,12 +1063,12 @@ TEST_CASE("decode: an empty text string and an empty byte string read as empty")
     CHECK(children[1].get<cbor::type::byte_string>().value().empty());
 }
 
-// The strings of a decode are copied into blocks of validity::bump_chunk_size. A string of exactly that size fills a
-// block, and a string one byte longer needs a block of its own; both must keep every byte, and the tree must outlive
-// the input.
+// The strings of a decode are copied into blocks of detail::validity::bump_chunk_size. A string of exactly
+// that size fills a block, and a string one byte longer needs a block of its own; both must keep every byte,
+// and the tree must outlive the input.
 TEST_CASE("decode: strings at the size of a block and one byte over keep every byte after the input is freed")
 {
-    constexpr std::size_t block = cbor::validity::bump_chunk_size;
+    constexpr std::size_t block = cbor::detail::validity::bump_chunk_size;
     std::string const a(block, 'a');
     std::string const b(block + 1, 'b');
     auto input = std::make_unique<std::string>("\x83\x61x\x79"s);

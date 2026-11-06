@@ -3,7 +3,7 @@
 ```cpp
 struct lazy {
     top_level_item top_level;
-    validity::offset offset;
+    detail::validity::offset offset;
     std::uint64_t typed_array_tag{};
 };
 
