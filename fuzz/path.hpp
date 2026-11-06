@@ -230,13 +230,17 @@ inline std::optional<test::value> walked(test::value const &start, std::vector<s
     for (auto const &s : segments) {
         std::vector<test::value> next;
         for (test::value v : nodes) {
-            while (auto const *t = test::get_if<test::tagged>(v)) {
-                if (t->tag == 2 || t->tag == 3 || t->tag == 24 || (t->tag >= 64 && t->tag <= 87))
+            for (;;) {
+                while (auto const *t = test::get_if<test::tagged>(v)) {
+                    if (t->tag == 2 || t->tag == 3 || t->tag == 24 || (t->tag >= 64 && t->tag <= 87))
+                        break;
+                    test::value const content = t->content;
+                    v = content;
+                }
+                auto const *t = test::get_if<test::tagged>(v);
+                if (!t || t->tag != 24)
                     break;
-                test::value const content = t->content;
-                v = content;
-            }
-            if (auto const *t = test::get_if<test::tagged>(v); t && t->tag == 24) {
+                // The embedded item is read like the top level, so a tag 24 inside it is read again.
                 auto const *b = test::get_if<test::bytes>(t->content);
                 if (!b)
                     return std::nullopt;
