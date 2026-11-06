@@ -42,7 +42,7 @@ std::expected<void, error> bignum_encode(cbor::encoder<Target> &e, bignum const 
 // The reference model written through the public encoder: an integer at its native width of 64 bits, a float as
 // a double, a bignum as tag 2 or 3 over its magnitude, every other head in its shortest form.
 template <class Target>
-std::expected<void, error> value_encode(cbor::encoder<Target> &e, value const &v)
+std::expected<void, error> encode_value(cbor::encoder<Target> &e, value const &v)
 {
     return std::visit(
         [&](auto const &k) -> std::expected<void, error> {
@@ -67,23 +67,23 @@ std::expected<void, error> value_encode(cbor::encoder<Target> &e, value const &v
                 if (auto const r = e.array(k->size()); !r)
                     return r;
                 for (value const &x : *k)
-                    if (auto const r = value_encode(e, x); !r)
+                    if (auto const r = encode_value(e, x); !r)
                         return r;
                 return {};
             } else if constexpr (std::same_as<K, map *>) {
                 if (auto const r = e.map(k->size()); !r)
                     return r;
                 for (entry const &x : *k) {
-                    if (auto const r = value_encode(e, x.key); !r)
+                    if (auto const r = encode_value(e, x.key); !r)
                         return r;
-                    if (auto const r = value_encode(e, x.val); !r)
+                    if (auto const r = encode_value(e, x.val); !r)
                         return r;
                 }
                 return {};
             } else {
                 if (auto const r = e.tag(k->tag); !r)
                     return r;
-                return value_encode(e, k->content);
+                return encode_value(e, k->content);
             }
         },
         v.kind);
@@ -94,7 +94,7 @@ auto encode(Target &&target, value const &v)
     -> decltype(std::declval<cbor::encoder<std::remove_cvref_t<Target>> &>().finish())
 {
     cbor::encoder e{std::forward<Target>(target)};
-    if (auto const r = value_encode(e, v); !r)
+    if (auto const r = encode_value(e, v); !r)
         return std::unexpected(r.error());
     return e.finish();
 }

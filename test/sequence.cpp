@@ -81,7 +81,7 @@ TEST_CASE("sequence: a partial last item gives too_little_data and keeps its byt
     ++it;
     REQUIRE(it != s.end());
     CHECK_EQ((*it).error(), error::too_little_data);
-    CHECK_EQ(it.encoded, "\x19\x01"sv);
+    CHECK_EQ(it.encoded(), "\x19\x01"sv);
     ++it;
     CHECK(it == s.end());
 }

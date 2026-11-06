@@ -1802,3 +1802,24 @@ TEST_CASE("lazy: a read through a temporary lazy keeps the bytes alive")
     REQUIRE(copy.has_value());
     CHECK_EQ((*copy)->get<cbor::type::array>()->size(), 2u);
 }
+
+// A map or an array whose count claims more items than its bytes can hold gives too_little_data before any item is
+// read, so a key that stands before the end of a short map is not found, and the elements end at the first step.
+TEST_CASE("lazy: a count longer than the bytes is too_little_data before the first item")
+{
+    auto const map = cbor::lazy::take_ownership("\xa2\x61\x6b\x01"s);
+    REQUIRE(map);
+    CHECK_EQ(map->at("k").error(), error::too_little_data);
+    // Three elements over three bytes pass the first check; after the element 100 (two bytes) two elements are
+    // left over one byte.
+    auto const array = cbor::lazy::take_ownership("\x83\x18\x64\x01"s);
+    REQUIRE(array);
+    auto const elements = array->elements();
+    REQUIRE(elements);
+    auto it = elements->begin();
+    REQUIRE(*it);
+    CHECK_EQ((*it)->get<int>().value(), 100);
+    ++it;
+    REQUIRE(it != elements->end());
+    CHECK_EQ((*it).error(), error::too_little_data);
+}

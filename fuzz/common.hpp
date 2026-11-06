@@ -2,6 +2,8 @@
 
 #include "../test/reference.hpp"
 
+#include <cbor/error.hpp>
+
 #include <array>
 #include <bit>
 #include <cmath>
@@ -15,6 +17,7 @@
 #include <source_location>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 namespace fuzz
@@ -26,6 +29,32 @@ inline void require(bool const holds, std::source_location const where = std::so
     if (!holds) {
         std::fprintf(stderr, "fuzz: check failed at line %u\n", static_cast<unsigned>(where.line()));
         std::abort();
+    }
+}
+
+// An error that a call gives converts to a std::error_code of the library category with a message, and its default
+// condition is the std::errc of the four codes that error.hpp maps, else the code itself in the library category.
+inline void require_error_value(cbor::error const e)
+{
+    std::error_code const code = cbor::make_error_code(e);
+    require(&code.category() == &cbor::category());
+    require(!code.message().empty() && code.message() != "unknown cbor error");
+    std::error_condition const condition = code.default_error_condition();
+    switch (e) {
+    case cbor::error::no_buffer_space:
+        require(condition == std::errc::no_buffer_space);
+        break;
+    case cbor::error::value_too_large:
+        require(condition == std::errc::value_too_large);
+        break;
+    case cbor::error::not_enough_memory:
+        require(condition == std::errc::not_enough_memory);
+        break;
+    case cbor::error::io_error:
+        require(condition == std::errc::io_error);
+        break;
+    default:
+        require(condition == std::error_condition(static_cast<int>(e), cbor::category()));
     }
 }
 

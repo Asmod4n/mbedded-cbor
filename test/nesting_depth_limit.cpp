@@ -50,7 +50,7 @@ TEST_CASE("nesting depth depth_limit: decode of the item tree")
              error::nesting_depth_exceeded);
 }
 
-// lazy::clone decodes through cbor::detail::tree_decoder::item_decode. It counts one level for each tag, and
+// lazy::clone decodes through cbor::detail::tree_decoder::decode_item. It counts one level for each tag, and
 // none for an array or a map.
 TEST_CASE("nesting depth depth_limit: lazy::clone")
 {
@@ -96,7 +96,7 @@ TEST_CASE("nesting depth depth_limit: a comparison in a filter")
     CHECK_EQ(found(depth_limit + 1).error(), error::nesting_depth_exceeded);
 }
 
-// jsonpath::segment_apply recurses once for each level that a descendant segment enters.
+// jsonpath::apply_segment recurses once for each level that a descendant segment enters.
 TEST_CASE("nesting depth depth_limit: a descendant segment")
 {
     CHECK(test::query("$..[0]", *test::lazy_of_copy(arrays_around(depth_limit, "\x00"sv))).has_value());
@@ -104,7 +104,7 @@ TEST_CASE("nesting depth depth_limit: a descendant segment")
              error::nesting_depth_exceeded);
 }
 
-// extended_diagnostic_notation::diagnostic_write counts one level for each array.
+// extended_diagnostic_notation::write_diagnostic counts one level for each array.
 TEST_CASE("nesting depth depth_limit: diagnostic_notation")
 {
     CHECK(cbor::diagnostic_notation(arrays_around(depth_limit, "\x00"sv)).has_value());
@@ -168,7 +168,7 @@ std::string nests_around(std::size_t const n)
 
 } // namespace
 
-// structs::generic_read counts one level for the array of each struct and one for its element, so the empty
+// structs::read_generic counts one level for the array of each struct and one for its element, so the empty
 // array of the innermost struct of n levels is at depth 2 n + 1.
 TEST_CASE("nesting depth depth_limit: structs")
 {

@@ -65,6 +65,21 @@ struct segment {
     std::int64_t index;
 };
 
+// A binary16 NaN keeps its sign and payload (RFC 8949 4.1): the double takes the sign, an exponent of all ones and the
+// ten bits of the significand with 42 zeros on the right, as fuzz::widened does for a binary32.
+inline double nan_of_binary16(std::uint16_t const half)
+{
+    constexpr unsigned sign_shift = 15;
+    constexpr unsigned mantissa_bits = 0x3ff;
+    constexpr unsigned double_sign_shift = 63;
+    constexpr unsigned double_exponent_shift = 52;
+    constexpr std::uint64_t double_exponent_bits = 0x7ff;
+    constexpr unsigned significand_shift = 42;
+    return std::bit_cast<double>(std::uint64_t{static_cast<unsigned>(half) >> sign_shift} << double_sign_shift |
+                                 double_exponent_bits << double_exponent_shift |
+                                 std::uint64_t{half & mantissa_bits} << significand_shift);
+}
+
 // A name selector in single quotes, with the escapes of RFC 9535 2.3.1.1 where a character needs one.
 inline double binary16_decode(std::uint16_t const half)
 {
@@ -81,8 +96,8 @@ inline double binary16_decode(std::uint16_t const half)
                              : exponent != exponent_bits
                                  ? std::ldexp(mantissa + implicit_one, static_cast<int>(exponent) - normal_bias)
                              : mantissa == 0 ? std::numeric_limits<double>::infinity()
-                                             : std::numeric_limits<double>::quiet_NaN();
-    return half & sign_bit ? -magnitude : magnitude;
+                                             : nan_of_binary16(half);
+    return (half & sign_bit) != 0 && !std::isnan(magnitude) ? -magnitude : magnitude;
 }
 
 inline std::string quoted(std::string_view const key)
@@ -187,7 +202,7 @@ inline std::optional<std::vector<test::value>> typed_array_elements(std::uint64_
         if (floating && length == 2)
             elements.push_back(test::value{binary16_decode(static_cast<std::uint16_t>(bits))});
         else if (floating && length == 4)
-            elements.push_back(test::value{static_cast<double>(std::bit_cast<float>(static_cast<std::uint32_t>(bits)))});
+            elements.push_back(test::value{widened(std::bit_cast<float>(static_cast<std::uint32_t>(bits)))});
         else if (floating)
             elements.push_back(test::value{std::bit_cast<double>(bits)});
         else if (signed_integer && bits >> (length * bits_per_byte - 1) != 0)
@@ -215,13 +230,17 @@ inline std::optional<test::value> walked(test::value const &start, std::vector<s
     for (auto const &s : segments) {
         std::vector<test::value> next;
         for (test::value v : nodes) {
-            while (auto const *t = test::get_if<test::tagged>(v)) {
-                if (t->tag == 2 || t->tag == 3 || t->tag == 24 || (t->tag >= 64 && t->tag <= 87))
+            for (;;) {
+                while (auto const *t = test::get_if<test::tagged>(v)) {
+                    if (t->tag == 2 || t->tag == 3 || t->tag == 24 || (t->tag >= 64 && t->tag <= 87))
+                        break;
+                    test::value const content = t->content;
+                    v = content;
+                }
+                auto const *t = test::get_if<test::tagged>(v);
+                if (!t || t->tag != 24)
                     break;
-                test::value const content = t->content;
-                v = content;
-            }
-            if (auto const *t = test::get_if<test::tagged>(v); t && t->tag == 24) {
+                // The embedded item is read like the top level, so a tag 24 inside it is read again.
                 auto const *b = test::get_if<test::bytes>(t->content);
                 if (!b)
                     return std::nullopt;
@@ -328,7 +347,7 @@ void typed_read_check(std::string const &document, std::vector<step> const &step
     std::expected<cbor::lazy, cbor::error> node = *root;
     for (step const &s : steps)
         node = node.and_then([&s](cbor::lazy const &l) {
-            return std::holds_alternative<std::int64_t>(s) ? test::index_select(l, std::get<std::int64_t>(s))
+            return std::holds_alternative<std::int64_t>(s) ? test::select_index(l, std::get<std::int64_t>(s))
                                                            : l.at(std::get<std::string_view>(s));
         });
     auto const chained = node.and_then([](cbor::lazy const &l) { return l.get<T>(); });
@@ -344,6 +363,55 @@ void typed_read_check(std::string const &document, std::vector<step> const &step
         require(comparable(*typed) == comparable(*chained));
 }
 
+// Two results of a typed read: the same value or the same error code.
+template <class T, class A, class B>
+void require_same_read(A const &a, B const &b)
+{
+    require(a.has_value() == b.has_value());
+    if (!a) {
+        require(a.error() == b.error());
+        require_error_value(a.error());
+        return;
+    }
+    if constexpr (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+                  std::is_same_v<T, cbor::typed_array>)
+        require(comparable(**a) == comparable(**b));
+    else
+        require(comparable(*a) == comparable(*b));
+}
+
+// Every form of at_path reads what the form over a std::shared_ptr reads: an owner with a span into the bytes, the
+// bytes moved in, lazy::at_path on the root, and a query compiled at run time from the same text, also after a copy
+// and a move of the query.
+template <cbor::fixed_string Path, class T>
+void path_forms_check(std::string const &document)
+{
+    constexpr bool view = std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
+                          std::is_same_v<T, cbor::typed_array>;
+    auto const owner = std::make_shared<std::string const>(document);
+    auto const bytes = std::make_shared<std::vector<char> const>(document.begin(), document.end());
+    auto const query = cbor::jsonpath::compile<T>(Path.view());
+    require(query.has_value());
+    auto const copied = *query;
+    auto moved = *query;
+    auto const taken = std::move(moved);
+    if constexpr (view) {
+        auto const reference = cbor::at_path<Path, T>(owner);
+        require_same_read<T>(reference, cbor::at_path<Path, T>(bytes, std::span<char const>(*bytes)));
+        require_same_read<T>(reference, cbor::at_path<Path, T>(std::string(document)));
+        require_same_read<T>(reference, cbor::at_path(bytes, std::span<char const>(*bytes), copied));
+        require_same_read<T>(reference, cbor::at_path(bytes, std::span<char const>(*bytes), taken));
+        if (auto const root = test::lazy_of_copy(document))
+            require_same_read<T>(reference, root->template at_path<Path, T>());
+    } else {
+        auto const reference = cbor::at_path<Path, T>(std::string_view(document));
+        require_same_read<T>(reference, cbor::at_path(std::string_view(document), copied));
+        require_same_read<T>(reference, cbor::at_path(std::string_view(document), taken));
+        if (auto const root = test::lazy_of_copy(document))
+            require_same_read<T>(reference, root->template at_path<Path, T>());
+    }
+}
+
 template <cbor::fixed_string Path>
 void typed_reads_check(std::string const &document, std::vector<step> const &steps)
 {
@@ -356,6 +424,10 @@ void typed_reads_check(std::string const &document, std::vector<step> const &ste
     typed_read_check<Path, std::string_view>(document, steps);
     typed_read_check<Path, std::span<std::byte const>>(document, steps);
     typed_read_check<Path, cbor::typed_array>(document, steps);
+    path_forms_check<Path, std::int64_t>(document);
+    path_forms_check<Path, double>(document);
+    path_forms_check<Path, std::string_view>(document);
+    path_forms_check<Path, std::span<std::byte const>>(document);
 }
 
 inline void path_target(std::string_view const input)

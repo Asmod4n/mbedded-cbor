@@ -271,7 +271,7 @@ for (auto const e : cbor::sequence{owner})   // owner: std::shared_ptr<std::stri
 ```
 
 - A last item that is not complete gives `too_little_data`. The iterator
-  keeps the bytes that are left in its member `encoded`, so a reader of a
+  gives the bytes that are left through `encoded()`, so a reader of a
   stream can read them again with more bytes.
 - An item that is not well-formed gives its error, and the sequence ends
   there.

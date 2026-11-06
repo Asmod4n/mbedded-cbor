@@ -94,14 +94,7 @@ struct limits {
 
 class validity
 {
-    enum class tag_number : std::uint64_t {
-        reference = 6,
-        basic_packed_cbor = 113,
-        record_function = 114,
-        straight_argument_first = 128,
-        straight_argument_last = 135,
-        fixed_array = 32873
-    };
+    enum class tag_number : std::uint64_t { fixed_array = 32873 };
 
 public:
     enum class offset : std::size_t {};
@@ -163,9 +156,47 @@ public:
         return {};
     }
 
+    static constexpr bool bytes_fit(std::uint64_t const size, std::size_t const bytes_left)
+    {
+        return size <= bytes_left;
+    }
+
     static constexpr bool pending_items_fit(std::uint64_t const pending, std::size_t const bytes_left)
     {
-        return pending <= bytes_left;
+        return bytes_fit(pending, bytes_left);
+    }
+
+    static constexpr std::expected<void, error> check_bytes_left(std::uint64_t const size,
+                                                                 std::size_t const bytes_left)
+    {
+        if (!bytes_fit(size, bytes_left)) [[unlikely]]
+            return std::unexpected(error::too_little_data);
+        return {};
+    }
+
+    static constexpr std::expected<void, std::errc> check_space_left(std::uint64_t const size,
+                                                                     std::size_t const space_left)
+    {
+        if (!bytes_fit(size, space_left)) [[unlikely]]
+            return std::unexpected(std::errc::no_buffer_space);
+        return {};
+    }
+
+    static constexpr std::expected<void, error> check_text_left(std::string_view const text, std::size_t const at,
+                                                                std::size_t const count)
+    {
+        if (!bytes_fit(at, text.size()) || !bytes_fit(count, text.size() - at)) [[unlikely]]
+            return std::unexpected(error::invalid_path);
+        return {};
+    }
+
+    static constexpr std::expected<void, error> check_subrange(std::size_t const first, std::size_t const last,
+                                                               std::size_t const whole_first,
+                                                               std::size_t const whole_last)
+    {
+        if (first < whole_first || last > whole_last || first > last) [[unlikely]]
+            return std::unexpected(error::syntax_error);
+        return {};
     }
 
     static constexpr std::expected<void, error> check_pending_items(std::uint64_t const pending,
@@ -276,11 +307,6 @@ public:
         return a + b;
     }
 
-    template <std::ranges::forward_range R, class Projection = std::identity>
-    static constexpr bool keys_unique(R const &sorted, Projection const projection = {})
-    {
-        return std::ranges::adjacent_find(sorted, {}, projection) == std::ranges::end(sorted);
-    }
 
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_key_unique(bool const equal_key_seen)
     {
@@ -395,7 +421,7 @@ public:
         return {};
     }
 
-    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> typed_array_check(std::uint64_t const tag,
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_typed_array(std::uint64_t const tag,
                                                                                      std::uint64_t const size)
     {
         if (tag < std::to_underlying(rfc8746::tag_number::typed_array_first) ||
@@ -410,17 +436,7 @@ public:
     {
         if (auto const r = check_tag_content(tag, content); !r) [[unlikely]]
             return r;
-        return typed_array_check(tag, size);
-    }
-
-    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
-    check_entries_all_read(std::uint64_t const claimed, std::uint64_t const readable, error const failure)
-    {
-        if (failure != error{}) [[unlikely]]
-            return std::unexpected(failure);
-        if (claimed > readable) [[unlikely]]
-            return std::unexpected(error::too_little_data);
-        return {};
+        return check_typed_array(tag, size);
     }
 
     CBOR_ALWAYS_INLINE static constexpr offset element_offset(offset const start, std::size_t const element_size,
@@ -454,15 +470,29 @@ public:
     CBOR_ALWAYS_INLINE static constexpr std::span<char const> element_span(std::span<char const> const elements,
                                                                            index const i, std::size_t const size)
     {
-        return elements.subspan(static_cast<std::size_t>(std::to_underlying(i)) * size, size);
+        auto const end = checked_mul(static_cast<std::size_t>(std::to_underlying(i)) + 1, size);
+        if (!end || !bytes_fit(*end, elements.size())) [[unlikely]]
+            throw_logic_error("cbor::validity: the element is after the end of its elements");
+        return elements.subspan(*end - size, size);
     }
 
     CBOR_ALWAYS_INLINE static constexpr std::expected<std::string_view, error>
     substr(std::string_view const encoded, offset const at, std::size_t const size)
     {
-        if (std::to_underlying(at) > encoded.size() || encoded.size() - std::to_underlying(at) < size) [[unlikely]]
+        if (!bytes_fit(std::to_underlying(at), encoded.size()) ||
+            !bytes_fit(size, encoded.size() - std::to_underlying(at))) [[unlikely]]
             return std::unexpected(error::too_little_data);
         return encoded.substr(std::to_underlying(at), size);
+    }
+
+    template <class T>
+    CBOR_ALWAYS_INLINE static constexpr std::expected<std::span<T const>, error>
+    substr(std::span<T const> const encoded, offset const at, std::size_t const size)
+    {
+        if (!bytes_fit(std::to_underlying(at), encoded.size()) ||
+            !bytes_fit(size, encoded.size() - std::to_underlying(at))) [[unlikely]]
+            return std::unexpected(error::too_little_data);
+        return encoded.subspan(std::to_underlying(at), size);
     }
 
     template <std::integral I>

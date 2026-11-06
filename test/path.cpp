@@ -558,7 +558,7 @@ std::expected<comparable_t<T>, error> lazy_get(std::string const &doc, std::vect
         return std::unexpected(root.error());
     cbor::lazy node = *root;
     for (step const &s : steps) {
-        auto const child = std::holds_alternative<std::int64_t>(s) ? test::index_select(node, std::get<std::int64_t>(s))
+        auto const child = std::holds_alternative<std::int64_t>(s) ? test::select_index(node, std::get<std::int64_t>(s))
                                                                    : node.at(std::get<std::string_view>(s));
         if (!child)
             return std::unexpected(child.error());
@@ -1249,7 +1249,7 @@ TEST_CASE("at_path: a path from a held lazy")
 }
 
 // A tag literal in a filter is parsed at run time as at compile time. g++-16 -O3 made the recursion over a tag in
-// canonical_append loop until memory ran out, so this test runs a tag, two tags and a tag inside an array.
+// append_canonical loop until memory ran out, so this test runs a tag, two tags and a tag inside an array.
 TEST_CASE("path: a tag literal in a run-time filter")
 {
     auto const doc = *test::lazy_of_copy(encoded(A(1, tagged{1000, V(1)}, tagged{1001, V(tagged{1000, V(3)})}, A(tagged{1, V(2)}))));
@@ -1371,4 +1371,27 @@ TEST_CASE("path: a std::string or a byte vector is a copy of that value only")
     std::string copied = cbor::at_path<"$.a", std::string_view>(owner)->clone();
     CHECK_EQ(copied, "xyz"s);
     CHECK_FALSE(inside(*owner, copied.data()));
+}
+
+// A NaN in a typed array keeps its sign and payload (RFC 8949 4.1): the element of a binary16 array h'ffff' reads as
+// the double with the sign, an exponent of all ones and the ten bits of the significand. A fuzz run found a model
+// that dropped the payload.
+TEST_CASE("path: a NaN element of a typed array keeps its bits")
+{
+    auto const doc = cbor::lazy::take_ownership("\xa1\x61\x76\xd8\x54\x42\xff\xff"s);
+    REQUIRE(doc);
+    auto const nan = doc->at_path<"$.v[0]">().and_then([](cbor::lazy const &l) { return l.get<double>(); });
+    REQUIRE(nan);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*nan), 0xfffffc0000000000u);
+}
+
+// A path goes into a tag 24 and reads the embedded item like the top level, so a tag 24 inside it is read again:
+// one whose content is a text is inadmissible_type_for_tag_content (RFC 8949 3.4.5.1), also behind a wildcard.
+TEST_CASE("path: a tag 24 over a text inside an embedded item is inadmissible")
+{
+    std::string const bytes = "\xd8\x18\x44\xd8\x18\x61\x68"s;
+    CHECK_EQ(cbor::at_path<"$[0]", int>(bytes).error(), error::inadmissible_type_for_tag_content);
+    auto const doc = cbor::lazy::take_ownership(std::string(bytes));
+    REQUIRE(doc);
+    CHECK_EQ(doc->at_path<"$[*]", cbor::nodelist>().error(), error::inadmissible_type_for_tag_content);
 }
