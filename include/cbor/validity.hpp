@@ -94,14 +94,7 @@ struct limits {
 
 class validity
 {
-    enum class tag_number : std::uint64_t {
-        reference = 6,
-        basic_packed_cbor = 113,
-        record_function = 114,
-        straight_argument_first = 128,
-        straight_argument_last = 135,
-        fixed_array = 32873
-    };
+    enum class tag_number : std::uint64_t { fixed_array = 32873 };
 
 public:
     enum class offset : std::size_t {};
