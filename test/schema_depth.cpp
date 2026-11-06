@@ -45,29 +45,29 @@ struct leaf : twig {
 
 struct holder;
 
-struct fork : twig {
+struct limb : twig {
     std::vector<holder> next;
 };
 
 struct holder {
-    std::variant<leaf, fork> held;
+    std::variant<leaf, limb> held;
 };
 
 } // namespace
 
 CBOR_DEFINE_DERIVED_TYPE_MEMBERS(leaf, twig, cbor::tag{1525}, n);
-CBOR_DEFINE_DERIVED_TYPE_MEMBERS(fork, twig, cbor::tag{1526}, n, next);
+CBOR_DEFINE_DERIVED_TYPE_MEMBERS(limb, twig, cbor::tag{1526}, n, next);
 CBOR_DEFINE_TYPE_MEMBERS(holder, cbor::tag{1527}, held);
 
 namespace
 {
 
-// A chain of holders: each fork holds a list of one holder, and the last holder holds a leaf.
+// A chain of holders: each limb holds a list of one holder, and the last holder holds a leaf.
 holder holder_chain(std::size_t const links)
 {
     holder h{leaf{}};
     for (std::size_t i = 0; i < links; ++i) {
-        fork f{};
+        limb f{};
         f.next.push_back(std::move(h));
         h = holder{std::move(f)};
     }
