@@ -125,7 +125,8 @@ class indexing_iterator
             else
                 return Element(owner, encoded, list, length, at, context);
         }();
-        validity::throw_logic_error_if(!element.has_value(), "cbor::schema: the iterator is outside of its list");
+        detail::validity::throw_logic_error_if(!element.has_value(),
+                                               "cbor::schema: the iterator is outside of its list");
         return *std::move(element);
     }
 
@@ -415,7 +416,7 @@ class reflection
                tag == std::to_underlying(cbor_sets::tag_number::set) ||
                (tag >= std::to_underlying(rfc8746::tag_number::typed_array_first) &&
                 tag <= std::to_underlying(rfc8746::tag_number::typed_array_last)) ||
-               tag == std::to_underlying(validity::tag_number::fixed_array);
+               tag == std::to_underlying(detail::validity::tag_number::fixed_array);
     }
 
     static consteval bool tag_invalid(std::uint64_t const tag)
@@ -1448,7 +1449,8 @@ class reflection
     {
         return static_bytes<[]() consteval {
             std::vector<char> encoded;
-            heads::append_head(encoded, major_type::tag, std::to_underlying(validity::tag_number::fixed_array));
+            heads::append_head(encoded, major_type::tag,
+                               std::to_underlying(detail::validity::tag_number::fixed_array));
             heads::append_head(encoded, major_type::array, 2);
             std::size_t const j = std::tuple_size_v<packing_table_of<Root>> + index_in<S>(description_types_of<Root>{});
             if (j < shared_first) {
@@ -1569,14 +1571,14 @@ class reflection
 
         void add_bytes(std::size_t const n)
         {
-            auto const sum = validity::checked_add(bytes, n);
+            auto const sum = detail::validity::checked_add(bytes, n);
             overflow |= !sum;
             bytes = sum.value_or(bytes);
         }
 
         void add_block(std::size_t const count, std::size_t const size)
         {
-            auto const block = validity::checked_mul(count, size);
+            auto const block = detail::validity::checked_mul(count, size);
             overflow |= !block;
             add_bytes(block.value_or(0));
         }
@@ -1618,8 +1620,8 @@ class reflection
                     add<describe::member_t<U, decltype(i)::value>>(describe::get<decltype(i)::value>(value));
                 });
             } else if constexpr (detail::is_std_variant<U>) {
-                validity::throw_logic_error_if(value.valueless_by_exception(),
-                                               "cbor::schema::encode: the std::variant holds no value");
+                detail::validity::throw_logic_error_if(
+                    value.valueless_by_exception(), "cbor::schema::encode: the std::variant holds no value");
                 items += 1;
                 std::visit(
                     [&]<class A>(A const &held) {
@@ -1878,9 +1880,9 @@ class reflection
                 std::copy(from.begin(), from.end(), std::as_writable_bytes(field.template last<n>()).begin());
             } else {
                 constexpr std::size_t head = heads::head_size(n);
-                static_assert(validity::checked_mul(n, fixed_size<E, Root>())
+                static_assert(detail::validity::checked_mul(n, fixed_size<E, Root>())
                                       .and_then([](std::size_t const elements) {
-                                          return validity::checked_add(head, elements);
+                                          return detail::validity::checked_add(head, elements);
                                       })
                                       .value_or(std::numeric_limits<std::size_t>::max()) <=
                                   fixed_size<U, Root>(),
@@ -2082,20 +2084,24 @@ class reflection
     {
         static constexpr auto head = fixed_array_head<Root, S>();
         constexpr std::size_t data = head.size() + sizeof(std::uint32_t);
-        if (auto const fits = validity::check_bytes_left(item + data, end); !fits) [[unlikely]]
+        if (auto const fits = detail::validity::check_bytes_left(item + data, end); !fits) [[unlikely]]
             return std::unexpected(fits.error());
         if constexpr (Verified)
             if (!std::ranges::equal(std::span<char const>(encoded).subspan(item).template first<head.size()>(), head)) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
         std::size_t const length = heads::read_unsigned<std::uint32_t>(
             std::span<char const>(encoded).subspan(item + head.size()).template first<sizeof(std::uint32_t)>());
-        if (auto const fits = validity::check_bytes_left(length, end - item - data); !fits) [[unlikely]]
+        if (auto const fits = detail::validity::check_bytes_left(length, end - item - data); !fits)
+            [[unlikely]]
             return std::unexpected(fits.error());
         if constexpr (Verified)
-            if (error const r = validity::check_whole_elements(length, fixed_width<S>()).error_or(error{}); r != error{}) [[unlikely]]
+            if (error const r =
+                    detail::validity::check_whole_elements(length, fixed_width<S>()).error_or(error{});
+                r != error{}) [[unlikely]]
                 return std::unexpected(r);
-        if (error const r = validity::check_argument<true>(major_type::byte_string, length).error_or(error{}); r != error{})
-            [[unlikely]]
+        if (error const r =
+                detail::validity::check_argument<true>(major_type::byte_string, length).error_or(error{});
+            r != error{}) [[unlikely]]
             return std::unexpected(r);
         return reference{item + data, length / fixed_width<S>()};
     }
@@ -2123,9 +2129,10 @@ class reflection
         if constexpr (fixed_struct_valid<E>()) {
             return read_fixed_array<Root, E, Verified>(encoded, item, end);
         } else if constexpr (is_typed_array_element<E>) {
-            static_assert(validity::typed_array_element_size(typed_array_tag<E>()) == sizeof(E),
+            static_assert(detail::validity::typed_array_element_size(typed_array_tag<E>()) == sizeof(E),
                           "The elements of the typed array tag of E are sizeof(E) bytes.");
-            if (auto const fits = validity::check_bytes_left(item + typed_array_head, end); !fits) [[unlikely]]
+            if (auto const fits = detail::validity::check_bytes_left(item + typed_array_head, end); !fits)
+                [[unlikely]]
                 return std::unexpected(fits.error());
             static constexpr std::array head{
                 heads::initial_byte(major_type::tag,
@@ -2138,18 +2145,20 @@ class reflection
                     return std::unexpected(error::incorrect_type);
             std::size_t const size =
                 heads::read_unsigned<std::uint32_t>(std::span<char const>(encoded).subspan(item + head.size()).template first<sizeof(std::uint32_t)>());
-            if (auto const fits = validity::check_bytes_left(size, end - item - typed_array_head); !fits) [[unlikely]]
+            if (auto const fits = detail::validity::check_bytes_left(size, end - item - typed_array_head);
+                !fits) [[unlikely]]
                 return std::unexpected(fits.error());
             if constexpr (Verified)
-                if (!validity::check_typed_array(typed_array_tag<E>(), size)) [[unlikely]]
+                if (!detail::validity::check_typed_array(typed_array_tag<E>(), size)) [[unlikely]]
                     return std::unexpected(error::inadmissible_type_for_tag_content);
             if (error const r =
-                    validity::check_argument<true>(major_type::byte_string, size).error_or(error{});
+                    detail::validity::check_argument<true>(major_type::byte_string, size).error_or(error{});
                 r != error{}) [[unlikely]]
                 return std::unexpected(r);
             return reference{item + typed_array_head, size / sizeof(E)};
         } else {
-            if (auto const fits = validity::check_bytes_left(item + item_head, end); !fits) [[unlikely]]
+            if (auto const fits = detail::validity::check_bytes_left(item + item_head, end); !fits)
+                [[unlikely]]
                 return std::unexpected(fits.error());
             if constexpr (Verified)
                 if (encoded[item] !=
@@ -2159,11 +2168,11 @@ class reflection
                     return std::unexpected(error::incorrect_type);
             std::size_t const length =
                 heads::read_unsigned<std::uint32_t>(std::span<char const>(encoded).subspan(item + 1).template first<sizeof(std::uint32_t)>());
-            auto const size = validity::checked_mul(length, element);
-            if (!size || !validity::bytes_fit(*size, end - item - item_head)) [[unlikely]]
+            auto const size = detail::validity::checked_mul(length, element);
+            if (!size || !detail::validity::bytes_fit(*size, end - item - item_head)) [[unlikely]]
                 return std::unexpected(error::too_little_data);
-            if (error const r = validity::check_argument<true>(Major, length).error_or(error{}); r != error{})
-                [[unlikely]]
+            if (error const r = detail::validity::check_argument<true>(Major, length).error_or(error{});
+                r != error{}) [[unlikely]]
                 return std::unexpected(r);
             return reference{item + item_head, length};
         }
@@ -2190,14 +2199,15 @@ class reflection
     CBOR_ALWAYS_INLINE static std::expected<item_bounds, error> read_item_bounds(std::string_view const encoded,
                                                                                  detail::directory const dir, std::size_t const j)
     {
-        if (!validity::check_index(j, dir.count)) [[unlikely]]
+        if (!detail::validity::check_index(j, dir.count)) [[unlikely]]
             return std::unexpected(error::unpopulated_table_index);
         constexpr std::size_t fillers = fillers_of<Root>();
         std::size_t const items_at = dir.at + sizeof(std::uint32_t) * dir.count + fillers;
         std::size_t const items_end = encoded.size() - fixed_size<Root, Root>();
         std::size_t const item = directory_entry(encoded, dir, j);
         std::size_t const end = j + 1 < dir.count ? directory_entry(encoded, dir, j + 1) : items_end;
-        if (auto const inside = validity::check_subrange(item, end, items_at, items_end); !inside) [[unlikely]]
+        if (auto const inside = detail::validity::check_subrange(item, end, items_at, items_end); !inside)
+            [[unlikely]]
             return std::unexpected(inside.error());
         return item_bounds{item, end};
     }
@@ -2223,7 +2233,7 @@ class reflection
         } else {
             using A = std::remove_cv_t<std::variant_alternative_t<K, V>>;
             constexpr std::size_t n = item_heads_of<A>().size;
-            if (!validity::check_bytes_left(item + n, end)) [[unlikely]]
+            if (!detail::validity::check_bytes_left(item + n, end)) [[unlikely]]
                 return read_variant_item<Root, V, K + 1>(encoded, item, end, error::too_little_data);
             if (!item_head_valid<Root, A>(std::span<char const>(encoded).subspan(item).template first<n>()))
                 return read_variant_item<Root, V, K + 1>(encoded, item, end, fault);
@@ -2234,7 +2244,8 @@ class reflection
                     return std::unexpected(r.error());
                 return variant_reference{r->data, r->length, K};
             } else {
-                if (auto const fits = validity::check_bytes_left(item + fixed_size<A, Root>(), end); !fits) [[unlikely]]
+                if (auto const fits = detail::validity::check_bytes_left(item + fixed_size<A, Root>(), end);
+                    !fits) [[unlikely]]
                     return std::unexpected(fits.error());
                 return variant_reference{item, fixed_size<A, Root>(), K};
             }
@@ -2259,19 +2270,22 @@ class reflection
     static bool packing_prefix_valid(std::string_view const encoded)
     {
         static constexpr auto prefix = packing_prefix_of<T, D>();
-        return validity::bytes_fit(prefix.size() + heads::initial_byte_size, encoded.size()) &&
-               std::ranges::equal(std::span(encoded).template first<4>(), std::span(prefix).template first<4>()) &&
+        return detail::validity::bytes_fit(prefix.size() + heads::initial_byte_size, encoded.size()) &&
+               std::ranges::equal(std::span(encoded).template first<4>(),
+                                  std::span(prefix).template first<4>()) &&
                std::ranges::equal(std::span(encoded).template subspan<8, prefix.size() - 8>(),
                                   std::span(prefix).template subspan<8>()) &&
                encoded[prefix.size()] ==
-                   heads::initial_byte(major_type::byte_string,
-                                       std::to_underlying(rfc8949::additional_information::four_byte_argument));
+                   heads::initial_byte(
+                       major_type::byte_string,
+                       std::to_underlying(rfc8949::additional_information::four_byte_argument));
     }
 
     template <class T, description_place D>
     static error too_little_data_if_truncated(std::string_view const encoded, error const e)
     {
-        if (e == error::too_little_data || !packing_prefix_valid<T, D>(encoded) || !validity::bytes_fit(fixed_size<T, T>(), encoded.size()))
+        if (e == error::too_little_data || !packing_prefix_valid<T, D>(encoded) ||
+            !detail::validity::bytes_fit(fixed_size<T, T>(), encoded.size()))
             return e;
         if (class_tag_valid<T, T>(std::span<char const>(encoded).subspan(encoded.size() - fixed_size<T, T>()).template first<fixed_size<T, T>()>()))
             return e;
@@ -2287,12 +2301,13 @@ class reflection
         static constexpr auto prefix = packing_prefix_of<T, D>();
         constexpr std::size_t fillers = fillers_of<T>();
         static_assert(prefix.size() >= 8, "The packing prefix must hold the eight bytes that are compared and read.");
-        constexpr auto least_size = validity::checked_add(directory_at<T, D>(), fillers).and_then([](std::size_t const head) {
-            return validity::checked_add(head, fixed_size<T, T>());
-        });
+        constexpr auto least_size =
+            detail::validity::checked_add(directory_at<T, D>(), fillers).and_then([](std::size_t const head) {
+                return detail::validity::checked_add(head, fixed_size<T, T>());
+            });
         static_assert(least_size.has_value(), "The least size of an encoded item must fit in std::size_t.");
         constexpr std::size_t least = *least_size;
-        if (auto const fits = validity::check_bytes_left(least, encoded.size()); !fits) [[unlikely]]
+        if (auto const fits = detail::validity::check_bytes_left(least, encoded.size()); !fits) [[unlikely]]
             return std::unexpected(fits.error());
         if constexpr (Verified)
             if (!packing_prefix_valid<T, D>(encoded)) [[unlikely]]
@@ -2309,7 +2324,8 @@ class reflection
                                                         .template first<sizeof(std::uint32_t)>()) !=
                     table_first_of<T, D>() + count) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-        if (auto const fits = validity::check_bytes_left(length, encoded.size() - least); !fits) [[unlikely]]
+        if (auto const fits = detail::validity::check_bytes_left(length, encoded.size() - least); !fits)
+            [[unlikely]]
             return std::unexpected(fits.error());
         static constexpr auto undefined = [] {
             std::array<char, fillers> a{};
@@ -2469,11 +2485,12 @@ class reflection
                     j = std::get<index_argument<Path, end>()>(indexes);
                 else
                     j = index_of<S>(std::string_view(std::span(path).subspan(end + 1, close - end - 1)));
-                auto const position = validity::check_index(j, fixed_length<M>::value);
+                auto const position = detail::validity::check_index(j, fixed_length<M>::value);
                 if (!position) [[unlikely]]
                     return std::unexpected(position.error());
                 return read_fixed_leaf<L, Verified>(
-                    validity::element_span(member, *position, sizeof(fixed_leaf_t<L>)).template first<sizeof(fixed_leaf_t<L>)>());
+                    detail::validity::element_span(member, *position, sizeof(fixed_leaf_t<L>))
+                        .template first<sizeof(fixed_leaf_t<L>)>());
             }
         }
     }
@@ -2488,10 +2505,11 @@ class reflection
     CBOR_ALWAYS_INLINE static std::expected<E, error> typed_array_element_at(std::span<char const> const list,
                                                                              std::uint64_t const length, std::size_t const i)
     {
-        auto const position = validity::check_index(i, length);
+        auto const position = detail::validity::check_index(i, length);
         if (!position) [[unlikely]]
             return std::unexpected(position.error());
-        return read_typed_array_element<E>(validity::element_span(list, *position, sizeof(E)).template first<sizeof(E)>());
+        return read_typed_array_element<E>(
+            detail::validity::element_span(list, *position, sizeof(E)).template first<sizeof(E)>());
     }
 
     template <class Root, class S, bool Verified>
@@ -2499,11 +2517,14 @@ class reflection
     fixed_element_at(std::shared_ptr<void const> const &owner, std::string_view const encoded, std::span<char const> const list,
                      std::uint64_t const length, std::size_t const i, detail::directory const dir)
     {
-        auto const position = validity::check_index(i, length);
+        auto const position = detail::validity::check_index(i, length);
         if (!position) [[unlikely]]
             return std::unexpected(position.error());
         typename cbor::schema<Root>::template accessor<fixed_element<S>, Verified> element(
-            encoded, validity::element_span(list, *position, fixed_width<S>()).template first<fixed_width<S>()>(), dir);
+            encoded,
+            detail::validity::element_span(list, *position, fixed_width<S>())
+                .template first<fixed_width<S>()>(),
+            dir);
         element.owner = owner;
         return element;
     }
@@ -2513,11 +2534,14 @@ class reflection
     record_element_at(std::shared_ptr<void const> const &owner, std::string_view const encoded, std::span<char const> const list,
                       std::uint64_t const length, std::size_t const i, detail::directory const dir)
     {
-        auto const position = validity::check_index(i, length);
+        auto const position = detail::validity::check_index(i, length);
         if (!position) [[unlikely]]
             return std::unexpected(position.error());
         return typename cbor::schema<Root>::template accessor<E, Verified>(
-            owner, encoded, validity::element_span(list, *position, fixed_size<E, Root>()).template first<fixed_size<E, Root>()>(), dir);
+            owner, encoded,
+            detail::validity::element_span(list, *position, fixed_size<E, Root>())
+                .template first<fixed_size<E, Root>()>(),
+            dir);
     }
 
     template <class Root, class U, bool Verified>
@@ -2649,18 +2673,20 @@ class reflection
                 if constexpr (Verified)
                     if (!fixed_length_head_valid<Root, U>(field)) [[unlikely]]
                         return std::unexpected(error::incorrect_type);
-                auto const position = validity::check_index(i, n);
+                auto const position = detail::validity::check_index(i, n);
                 if (!position) [[unlikely]]
                     return std::unexpected(position.error());
-                return std::bit_cast<B>(validity::element_span(field.template last<n>(), *position, 1).front());
+                return std::bit_cast<B>(
+                    detail::validity::element_span(field.template last<n>(), *position, 1).front());
             } else {
                 auto const r = read_reference<Root, major_type::byte_string, void, Verified>(encoded, field, floor, 1);
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                auto const position = validity::check_index(i, r->length);
+                auto const position = detail::validity::check_index(i, r->length);
                 if (!position) [[unlikely]]
                     return std::unexpected(position.error());
-                return std::bit_cast<B>(validity::element_span(list_span(encoded, *r, 1), *position, 1).front());
+                return std::bit_cast<B>(
+                    detail::validity::element_span(list_span(encoded, *r, 1), *position, 1).front());
             }
         } else {
             constexpr std::size_t close = index_end(path, At);
@@ -2669,9 +2695,9 @@ class reflection
                 constexpr std::size_t n = fixed_length<U>::value;
                 constexpr std::size_t head = heads::head_size(n);
                 static_assert(zero_initialized<Root, U>().size() >= head, "The zero-initialized encoding must hold the whole head.");
-                static_assert(validity::checked_mul(n, fixed_size<E, Root>())
+                static_assert(detail::validity::checked_mul(n, fixed_size<E, Root>())
                                       .and_then([](std::size_t const elements) {
-                                          return validity::checked_add(head, elements);
+                                          return detail::validity::checked_add(head, elements);
                                       })
                                       .value_or(std::numeric_limits<std::size_t>::max()) <=
                                   fixed_size<U, Root>(),
@@ -2681,17 +2707,24 @@ class reflection
                         return std::unexpected(error::incorrect_type);
                 auto const elements = field.template subspan<head, n * fixed_size<E, Root>()>();
                 if constexpr (close == At + 1) {
-                    auto const position = validity::check_index(std::get<index_argument<Path, At>()>(indexes), n);
+                    auto const position =
+                        detail::validity::check_index(std::get<index_argument<Path, At>()>(indexes), n);
                     if (!position) [[unlikely]]
                         return std::unexpected(position.error());
                     return walk_path<Root, E, Path, close + 1, Verified>(
-                        encoded, validity::element_span(elements, *position, fixed_size<E, Root>()).template first<fixed_size<E, Root>()>(),
+                        encoded,
+                        detail::validity::element_span(elements, *position, fixed_size<E, Root>())
+                            .template first<fixed_size<E, Root>()>(),
                         floor, indexes);
                 } else {
-                    constexpr validity::index position =
-                        validity::check_index(index_of<T>(std::string_view(std::span(path).subspan(At + 1, close - At - 1))), n).value();
+                    constexpr detail::validity::index position =
+                        detail::validity::check_index(
+                            index_of<T>(std::string_view(std::span(path).subspan(At + 1, close - At - 1))), n)
+                            .value();
                     return walk_path<Root, E, Path, close + 1, Verified>(
-                        encoded, validity::element_span(elements, position, fixed_size<E, Root>()).template first<fixed_size<E, Root>()>(),
+                        encoded,
+                        detail::validity::element_span(elements, position, fixed_size<E, Root>())
+                            .template first<fixed_size<E, Root>()>(),
                         floor, indexes);
                 }
             } else {
@@ -2713,12 +2746,13 @@ class reflection
                     auto const r = read_reference<Root, major_type::array, S, Verified>(encoded, field, floor, fixed_width<S>());
                     if (!r) [[unlikely]]
                         return std::unexpected(r.error());
-                    auto const position = validity::check_index(i, r->length);
+                    auto const position = detail::validity::check_index(i, r->length);
                     if (!position) [[unlikely]]
                         return std::unexpected(position.error());
                     return walk_fixed<Root, S, Path, close + 1, Verified>(
                         encoded,
-                        validity::element_span(list_span(encoded, *r, fixed_width<S>()), *position, fixed_width<S>())
+                        detail::validity::element_span(list_span(encoded, *r, fixed_width<S>()), *position,
+                                                       fixed_width<S>())
                             .template first<fixed_width<S>()>(),
                         floor, indexes);
                 } else {
@@ -2726,12 +2760,13 @@ class reflection
                         read_reference<Root, major_type::array, void, Verified>(encoded, field, floor, fixed_size<E, Root>());
                     if (!r) [[unlikely]]
                         return std::unexpected(r.error());
-                    auto const position = validity::check_index(i, r->length);
+                    auto const position = detail::validity::check_index(i, r->length);
                     if (!position) [[unlikely]]
                         return std::unexpected(position.error());
                     return walk_path<Root, E, Path, close + 1, Verified>(
                         encoded,
-                        validity::element_span(list_span(encoded, *r, fixed_size<E, Root>()), *position, fixed_size<E, Root>())
+                        detail::validity::element_span(list_span(encoded, *r, fixed_size<E, Root>()),
+                                                       *position, fixed_size<E, Root>())
                             .template first<fixed_size<E, Root>()>(),
                         floor, indexes);
                 }
@@ -2754,7 +2789,7 @@ class reflection
             auto const j = read_shared_index<Root, Verified>(field);
             if (!j) [[unlikely]]
                 return std::unexpected(j.error());
-            if (!validity::check_index(*j, dir.count)) [[unlikely]]
+            if (!detail::validity::check_index(*j, dir.count)) [[unlikely]]
                 return std::unexpected(error::unpopulated_table_index);
             if constexpr (Verified) {
                 if (*j != index) [[unlikely]]
@@ -2777,7 +2812,7 @@ class reflection
             auto const j = read_shared_index<Root, Verified>(field);
             if (!j) [[unlikely]]
                 return std::unexpected(j.error());
-            if (!validity::check_index(*j, dir.count)) [[unlikely]]
+            if (!detail::validity::check_index(*j, dir.count)) [[unlikely]]
                 return std::unexpected(error::unpopulated_table_index);
             if constexpr (Verified) {
                 if (*j != index) [[unlikely]]
@@ -2857,7 +2892,8 @@ class reflection
                 auto const r = take_variant_reference<Root, U>(field);
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                if (auto const nesting = validity::check_nesting_depth(depth + 1, depth_max); !nesting) [[unlikely]]
+                if (auto const nesting = detail::validity::check_nesting_depth(depth + 1, depth_max);
+                    !nesting) [[unlikely]]
                     return std::unexpected(nesting.error());
                 return [&]<std::size_t... K>(std::index_sequence<K...>) {
                     std::expected<void, error> done;
@@ -2882,11 +2918,12 @@ class reflection
                 std::expected<void, error> done;
                 auto const elements = field.template subspan<heads::head_size(n), n * fixed_size<E, Root>()>();
                 auto const read_element = [&]<std::size_t I>() {
-                    constexpr validity::index position = validity::check_index(I, n).value();
-                    return read_value<Root>(std::span(out).template subspan<I, 1>().front(),
-                                            validity::element_span(elements, position, fixed_size<E, Root>())
-                                                .template first<fixed_size<E, Root>()>(),
-                                            depth, depth_max);
+                    constexpr detail::validity::index position = detail::validity::check_index(I, n).value();
+                    return read_value<Root>(
+                        std::span(out).template subspan<I, 1>().front(),
+                        detail::validity::element_span(elements, position, fixed_size<E, Root>())
+                            .template first<fixed_size<E, Root>()>(),
+                        depth, depth_max);
                 };
                 [&]<std::size_t... I>(std::index_sequence<I...>) {
                     ((done = done ? read_element.template operator()<I>() : done), ...);
@@ -2921,7 +2958,8 @@ class reflection
                     out.reset();
                     return {};
                 }
-                if (auto const nesting = validity::check_nesting_depth(depth + 1, depth_max); !nesting) [[unlikely]]
+                if (auto const nesting = detail::validity::check_nesting_depth(depth + 1, depth_max);
+                    !nesting) [[unlikely]]
                     return std::unexpected(nesting.error());
                 auto const inner = std::span<char const>(encoded).subspan(r->data).template first<fixed_size<E, Root>()>();
                 if constexpr (std::is_default_constructible_v<E>) {
@@ -2949,12 +2987,16 @@ class reflection
                 auto const r = take_reference<Root, major_type::map>(field, pair);
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max); !c) [[unlikely]]
+                if (auto const c =
+                        detail::validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max);
+                    !c) [[unlikely]]
                     return std::unexpected(c.error());
                 out.clear();
                 auto const entries = list_span(encoded, *r, pair);
                 for (std::size_t i = 0; i < r->length; ++i) {
-                    auto const entry = validity::element_span(entries, *validity::check_index(i, r->length), pair).template first<pair>();
+                    auto const entry = detail::validity::element_span(
+                                           entries, *detail::validity::check_index(i, r->length), pair)
+                                           .template first<pair>();
                     if constexpr (std::is_default_constructible_v<K> && std::is_default_constructible_v<V>) {
                         K key = make_element<K>(out);
                         V value = make_element<V>(out);
@@ -2981,7 +3023,9 @@ class reflection
                 auto const r = take_reference<Root, major_type::array, E>(field, sizeof(E));
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max); !c) [[unlikely]]
+                if (auto const c =
+                        detail::validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max);
+                    !c) [[unlikely]]
                     return std::unexpected(c.error());
                 std::span<char const> const all = list_span(encoded, *r, sizeof(E)).first(r->length * sizeof(E));
                 auto const elements =
@@ -3006,7 +3050,9 @@ class reflection
                 auto const r = take_reference<Root, major_type::array, E>(field, width);
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max); !c) [[unlikely]]
+                if (auto const c =
+                        detail::validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max);
+                    !c) [[unlikely]]
                     return std::unexpected(c.error());
                 auto const elements = list_span(encoded, *r, width);
                 out.clear();
@@ -3014,7 +3060,9 @@ class reflection
                 for (std::size_t i = 0; i < r->length; ++i) {
                     E element = make_element<E>(out);
                     if (auto const e = read_fixed_struct<E>(
-                            element, validity::element_span(elements, *validity::check_index(i, r->length), width).template first<width>());
+                            element, detail::validity::element_span(
+                                         elements, *detail::validity::check_index(i, r->length), width)
+                                         .template first<width>());
                         !e) [[unlikely]]
                         return e;
                     out.push_back(std::move(element));
@@ -3025,14 +3073,18 @@ class reflection
                 auto const r = take_reference<Root, major_type::array>(field, fixed_size<E, Root>());
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                if (auto const c = validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max); !c) [[unlikely]]
+                if (auto const c =
+                        detail::validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max);
+                    !c) [[unlikely]]
                     return std::unexpected(c.error());
                 auto const entries = list_span(encoded, *r, fixed_size<E, Root>());
                 out.clear();
                 out.reserve(r->length);
                 for (std::size_t i = 0; i < r->length; ++i) {
-                    auto const entry = validity::element_span(entries, *validity::check_index(i, r->length), fixed_size<E, Root>())
-                                           .template first<fixed_size<E, Root>()>();
+                    auto const entry =
+                        detail::validity::element_span(entries, *detail::validity::check_index(i, r->length),
+                                                       fixed_size<E, Root>())
+                            .template first<fixed_size<E, Root>()>();
                     if constexpr (std::is_default_constructible_v<E>) {
                         E element = make_element<E>(out);
                         if (auto const e = read_value<Root>(element, entry, depth + 1, depth_max); !e) [[unlikely]]
@@ -3109,8 +3161,10 @@ class reflection
                         using L = std::remove_cv_t<typename fixed_length<M>::element>;
                         for (std::size_t k = 0; k < fixed_length<M>::value && done; ++k) {
                             auto const v = read_fixed_leaf<L, Verified>(
-                                validity::element_span(in.template subspan<at, fixed_width<M>()>(),
-                                                       *validity::check_index(k, fixed_length<M>::value), sizeof(fixed_leaf_t<L>))
+                                detail::validity::element_span(
+                                    in.template subspan<at, fixed_width<M>()>(),
+                                    *detail::validity::check_index(k, fixed_length<M>::value),
+                                    sizeof(fixed_leaf_t<L>))
                                     .template first<sizeof(fixed_leaf_t<L>)>());
                             if (v)
                                 describe::get<I>(out)[k] = *v;
@@ -3162,20 +3216,21 @@ class reflection
     template <class T, description_place D>
     static std::expected<std::size_t, std::errc> encoded_size(second_item<T> const &second)
     {
-        constexpr auto fixed_part =
-            validity::checked_add(directory_at<T, D>(), fillers_of<T>())
-                .and_then([](std::size_t const head) { return validity::checked_add(head, fixed_size<T, T>()); });
+        constexpr auto fixed_part = detail::validity::checked_add(directory_at<T, D>(), fillers_of<T>())
+                                        .and_then([](std::size_t const head) {
+                                            return detail::validity::checked_add(head, fixed_size<T, T>());
+                                        });
         static_assert(fixed_part.has_value(), "The fixed part of an encoded item must fit in std::size_t.");
         constexpr std::size_t fixed = *fixed_part;
         if (second.overflow) [[unlikely]]
             return std::unexpected(std::errc::value_too_large);
-        auto const directory = validity::checked_mul(second.items, sizeof(std::uint32_t));
+        auto const directory = detail::validity::checked_mul(second.items, sizeof(std::uint32_t));
         if (!directory) [[unlikely]]
             return directory;
-        auto const second_size = validity::checked_add(*directory, second.bytes);
+        auto const second_size = detail::validity::checked_add(*directory, second.bytes);
         if (!second_size) [[unlikely]]
             return second_size;
-        auto const size = validity::checked_add(fixed, *second_size);
+        auto const size = detail::validity::checked_add(fixed, *second_size);
         if (!size || !std::in_range<std::uint32_t>(*size)) [[unlikely]]
             return std::unexpected(std::errc::value_too_large);
         return size;
@@ -3310,41 +3365,47 @@ public:
     CBOR_ALWAYS_INLINE E front() const
     {
         auto const element = reflection::typed_array_element_at<E>(bytes, size(), 0);
-        validity::throw_logic_error_if(!element.has_value(), "cbor::typed_array_view::front: the view is empty");
+        detail::validity::throw_logic_error_if(!element.has_value(),
+                                               "cbor::typed_array_view::front: the view is empty");
         return *element;
     }
 
     CBOR_ALWAYS_INLINE E back() const
     {
         auto const element = reflection::typed_array_element_at<E>(bytes, size(), size() - 1);
-        validity::throw_logic_error_if(!element.has_value(), "cbor::typed_array_view::back: the view is empty");
+        detail::validity::throw_logic_error_if(!element.has_value(),
+                                               "cbor::typed_array_view::back: the view is empty");
         return *element;
     }
 
     CBOR_ALWAYS_INLINE std::expected<typed_array_view, error> first(std::size_t const n) const &
     {
-        if (error const c = validity::check_count(n, size()).error_or(error{}); c != error{}) [[unlikely]]
+        if (error const c = detail::validity::check_count(n, size()).error_or(error{}); c != error{})
+            [[unlikely]]
             return std::unexpected(c);
         return typed_array_view(owner, bytes.first(n * sizeof(E)));
     }
 
     CBOR_ALWAYS_INLINE std::expected<typed_array_view, error> first(std::size_t const n) &&
     {
-        if (error const c = validity::check_count(n, size()).error_or(error{}); c != error{}) [[unlikely]]
+        if (error const c = detail::validity::check_count(n, size()).error_or(error{}); c != error{})
+            [[unlikely]]
             return std::unexpected(c);
         return typed_array_view(std::move(owner), std::exchange(bytes, std::span<char const>()).first(n * sizeof(E)));
     }
 
     CBOR_ALWAYS_INLINE std::expected<typed_array_view, error> last(std::size_t const n) const &
     {
-        if (error const c = validity::check_count(n, size()).error_or(error{}); c != error{}) [[unlikely]]
+        if (error const c = detail::validity::check_count(n, size()).error_or(error{}); c != error{})
+            [[unlikely]]
             return std::unexpected(c);
         return typed_array_view(owner, bytes.last(n * sizeof(E)));
     }
 
     CBOR_ALWAYS_INLINE std::expected<typed_array_view, error> last(std::size_t const n) &&
     {
-        if (error const c = validity::check_count(n, size()).error_or(error{}); c != error{}) [[unlikely]]
+        if (error const c = detail::validity::check_count(n, size()).error_or(error{}); c != error{})
+            [[unlikely]]
             return std::unexpected(c);
         return typed_array_view(std::move(owner), std::exchange(bytes, std::span<char const>()).last(n * sizeof(E)));
     }
@@ -3357,7 +3418,8 @@ public:
     CBOR_ALWAYS_INLINE E operator[](std::size_t const i) const
     {
         auto const element = reflection::typed_array_element_at<E>(bytes, size(), i);
-        validity::throw_logic_error_if(!element.has_value(), "cbor::typed_array_view::operator[]: the index is outside of the view");
+        detail::validity::throw_logic_error_if(
+            !element.has_value(), "cbor::typed_array_view::operator[]: the index is outside of the view");
         return *element;
     }
 };
@@ -3429,14 +3491,15 @@ consteval std::size_t reflection::fixed_size()
         constexpr std::size_t n = reflection::fixed_length<U>::value;
         if constexpr (std::same_as<E, char> || std::same_as<E, char8_t> || std::same_as<E, unsigned char> ||
                       std::same_as<E, std::byte>) {
-            constexpr auto size = validity::checked_add(heads::head_size(n), n);
+            constexpr auto size = detail::validity::checked_add(heads::head_size(n), n);
             static_assert(size.has_value(), "The fixed size must fit in std::size_t.");
             return *size;
         } else {
             constexpr std::size_t element = fixed_size<E, Root>();
-            constexpr auto size = validity::checked_mul(n, element).and_then([](std::size_t const elements) {
-                return validity::checked_add(heads::head_size(n), elements);
-            });
+            constexpr auto size =
+                detail::validity::checked_mul(n, element).and_then([](std::size_t const elements) {
+                    return detail::validity::checked_add(heads::head_size(n), elements);
+                });
             static_assert(size.has_value(), "The fixed size must fit in std::size_t.");
             return *size;
         }
@@ -3448,14 +3511,14 @@ consteval std::size_t reflection::fixed_size()
         bool fits = true;
         reflection::for_each_field<U>([&](auto i) {
             constexpr std::size_t member = fixed_size<describe::member_t<U, decltype(i)::value>, Root>();
-            auto const sum = validity::checked_add(size, member);
+            auto const sum = detail::validity::checked_add(size, member);
             fits = fits && sum.has_value();
             size = sum.value_or(size);
         });
         return fits ? size : detail::no_fixed_size<U>();
     } else if constexpr (reflection::is_inline_optional<U>) {
         constexpr std::size_t value = fixed_size<typename U::value_type, Root>();
-        constexpr auto size = validity::checked_add(reflection::inline_optional_head, value);
+        constexpr auto size = detail::validity::checked_add(reflection::inline_optional_head, value);
         static_assert(size.has_value(), "The fixed size must fit in std::size_t.");
         return *size;
     }
@@ -3599,7 +3662,8 @@ public:
                      sizeof...(Index) == reflection::index_arguments<Path>() && std::is_lvalue_reference_v<Self>)
         CBOR_ALWAYS_INLINE auto at_path(this Self &&self, Index const... indexes)
         {
-            validity::throw_logic_error_if_empty(self.owner, "cbor::schema::accessor::at_path: the accessor was moved from");
+            detail::validity::throw_logic_error_if_empty(
+                self.owner, "cbor::schema::accessor::at_path: the accessor was moved from");
             auto result = [&] {
                 std::array<std::size_t, sizeof...(Index)> const i{static_cast<std::size_t>(indexes)...};
                 constexpr std::string_view path = Path.view();
@@ -3632,12 +3696,13 @@ public:
                     else
                         at = reflection::index_of<U>(std::string_view(std::span(path).subspan(2, close - 2)));
                     constexpr std::size_t width = reflection::fixed_width<E>();
-                    auto const position = validity::check_index(at, self.items.length);
+                    auto const position = detail::validity::check_index(at, self.items.length);
                     if (!position) [[unlikely]]
                         return std::expected<X, error>(std::unexpect, position.error());
                     return reflection::walk_fixed<T, E, Path, close + 1, Verified>(
                         self.encoded,
-                        validity::element_span(reflection::list_span(self.encoded, self.items, width), *position, width)
+                        detail::validity::element_span(reflection::list_span(self.encoded, self.items, width),
+                                                       *position, width)
                             .template first<width>(),
                         self.dir, i);
                 } else if constexpr (reflection::is_list<U> && path.size() > 1) {
@@ -3650,12 +3715,13 @@ public:
                     else
                         at = reflection::index_of<U>(std::string_view(std::span(path).subspan(2, close - 2)));
                     constexpr std::size_t width = reflection::fixed_size<E, T>();
-                    auto const position = validity::check_index(at, self.items.length);
+                    auto const position = detail::validity::check_index(at, self.items.length);
                     if (!position) [[unlikely]]
                         return std::expected<X, error>(std::unexpect, position.error());
                     return reflection::walk_path<T, E, Path, close + 1, Verified>(
                         self.encoded,
-                        validity::element_span(reflection::list_span(self.encoded, self.items, width), *position, width)
+                        detail::validity::element_span(reflection::list_span(self.encoded, self.items, width),
+                                                       *position, width)
                             .template first<width>(),
                         self.dir, i);
                 } else {
@@ -3701,7 +3767,8 @@ public:
             requires(std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
         iterator begin(this Self &&self)
         {
-            validity::throw_logic_error_if_empty(self.owner, "cbor::schema::accessor::begin: the accessor was moved from");
+            detail::validity::throw_logic_error_if_empty(
+                self.owner, "cbor::schema::accessor::begin: the accessor was moved from");
             return iterator(self.owner, self.encoded, reflection::list_span(self.encoded, self.items, stride()), 0, self.items.length,
                             self.dir);
         }
@@ -3784,7 +3851,8 @@ public:
                      sizeof...(Index) == reflection::index_arguments<Path>() && std::is_lvalue_reference_v<Self>)
         CBOR_ALWAYS_INLINE auto at_path(this Self &&self, Index const... indexes)
         {
-            validity::throw_logic_error_if_empty(self.owner, "cbor::schema::accessor::at_path: the accessor was moved from");
+            detail::validity::throw_logic_error_if_empty(
+                self.owner, "cbor::schema::accessor::at_path: the accessor was moved from");
             auto result = [&] {
                 std::array<std::size_t, sizeof...(Index)> const i{static_cast<std::size_t>(indexes)...};
                 if constexpr (Path.view().starts_with('$')) {
@@ -3852,7 +3920,8 @@ public:
             requires std::is_lvalue_reference_v<Self>
         std::size_t index(this Self &&self)
         {
-            validity::throw_logic_error_if_empty(self.owner, "cbor::schema::accessor::index: the accessor was moved from");
+            detail::validity::throw_logic_error_if_empty(
+                self.owner, "cbor::schema::accessor::index: the accessor was moved from");
             return self.held.index;
         }
 
@@ -3865,7 +3934,8 @@ public:
             requires(std::is_lvalue_reference_v<Self> && (std::same_as<E, A> || ...))
         std::expected<alternative_result<E>, error> get(this Self &&self)
         {
-            validity::throw_logic_error_if_empty(self.owner, "cbor::schema::accessor::get: the accessor was moved from");
+            detail::validity::throw_logic_error_if_empty(
+                self.owner, "cbor::schema::accessor::get: the accessor was moved from");
             constexpr std::size_t k = reflection::index_in<E>(std::tuple<std::type_identity<A>...>{});
             if (self.held.index != k) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
@@ -4022,10 +4092,10 @@ public:
         second.add(value);
         auto const size = reflection::encoded_size<T, D>(second);
         if (!size) [[unlikely]]
-            return std::unexpected(validity::writer_error(size.error()));
-        auto const sum = validity::checked_add(*size, heads::head_padding);
+            return std::unexpected(detail::validity::writer_error(size.error()));
+        auto const sum = detail::validity::checked_add(*size, heads::head_padding);
         if (!sum) [[unlikely]]
-            return std::unexpected(validity::writer_error(sum.error()));
+            return std::unexpected(detail::validity::writer_error(sum.error()));
         std::size_t const padded = *sum;
         std::string out(padded, '\0');
         out.resize(reflection::write_encoded<false, D>(std::span<char>(out), value, second));
@@ -4041,16 +4111,16 @@ public:
         second.add(value);
         auto const size = reflection::encoded_size<T, D>(second);
         if (!size) [[unlikely]]
-            return std::unexpected(validity::writer_error(size.error()));
-        auto const sum = validity::checked_add(*size, heads::head_padding);
+            return std::unexpected(detail::validity::writer_error(size.error()));
+        auto const sum = detail::validity::checked_add(*size, heads::head_padding);
         if (!sum) [[unlikely]]
-            return std::unexpected(validity::writer_error(sum.error()));
+            return std::unexpected(detail::validity::writer_error(sum.error()));
         std::size_t const padded = *sum;
         if constexpr (encoding::byte_container<U> && requires { requires std::same_as<std::ranges::range_value_t<U>, char>; }) {
             std::size_t const at = std::ranges::size(target);
-            auto const total = validity::checked_add(at, padded);
+            auto const total = detail::validity::checked_add(at, padded);
             if (!total) [[unlikely]]
-                return std::unexpected(validity::writer_error(total.error()));
+                return std::unexpected(detail::validity::writer_error(total.error()));
             target.reserve(*total);
             target.insert(target.end(), padded, char{});
             reflection::write_encoded<false, D>(std::span<char>(target).subspan(at), value, second);
@@ -4058,7 +4128,7 @@ public:
             return *size;
         } else if constexpr (!encoding::byte_container<U> && requires { std::span<char>(target); }) {
             std::span<char> const out(target);
-            if (validity::bytes_fit(padded, out.size())) {
+            if (detail::validity::bytes_fit(padded, out.size())) {
                 reflection::write_encoded<false, D>(out.first(padded), value, second);
                 return *size;
             }
@@ -4066,19 +4136,19 @@ public:
         decltype(auto) message = encoding::message_of(target, *size);
         if constexpr (requires { std::span<char>(message); }) {
             std::span<char> const out(message);
-            if (!validity::bytes_fit(*size, out.size())) [[unlikely]]
+            if (!detail::validity::bytes_fit(*size, out.size())) [[unlikely]]
                 return std::unexpected(error::no_buffer_space);
             reflection::write_encoded<true, D>(out.first(*size), value, second);
             if (auto const r = message.done(*size); !r) [[unlikely]]
-                return std::unexpected(validity::writer_error(r.error()));
+                return std::unexpected(detail::validity::writer_error(r.error()));
             return *size;
         } else {
             std::string encoded(padded, '\0');
             encoded.resize(reflection::write_encoded<false, D>(std::span<char>(encoded), value, second));
             if (auto const r = message.append(encoded); !r) [[unlikely]]
-                return std::unexpected(validity::writer_error(r.error()));
+                return std::unexpected(detail::validity::writer_error(r.error()));
             if (auto const r = message.done(encoded.size()); !r) [[unlikely]]
-                return std::unexpected(validity::writer_error(r.error()));
+                return std::unexpected(detail::validity::writer_error(r.error()));
             return encoded.size();
         }
     }
@@ -4107,7 +4177,8 @@ private:
     template <bool Verified, description_place D, owning_range_of_chars Encoded>
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, Verified>, error> path_with_owner(std::shared_ptr<Encoded const> encoded)
     {
-        validity::throw_logic_error_if_null(encoded, "cbor::schema::path: the encoded data item is null");
+        detail::validity::throw_logic_error_if_null(encoded,
+                                                    "cbor::schema::path: the encoded data item is null");
         std::string_view const bytes{std::span<char const>(*encoded)};
         return path_with_owner<Verified, D>(std::shared_ptr<void const>(std::move(encoded)), bytes);
     }
@@ -4115,7 +4186,7 @@ private:
     template <bool Verified, description_place D>
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, Verified>, error> path_with_owner(std::shared_ptr<void const> owner, std::string_view const encoded)
     {
-        validity::throw_logic_error_if_empty(
+        detail::validity::throw_logic_error_if_empty(
             owner, "cbor::schema::path: the owner of the encoded data item is empty");
         auto const dir = reflection::read_directory<T, Verified, D>(encoded);
         if (!dir) [[unlikely]]
@@ -4144,7 +4215,8 @@ private:
     template <bool Verified, description_place D, owning_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode_with_owner(std::shared_ptr<Encoded const> encoded)
     {
-        validity::throw_logic_error_if_null(encoded, "cbor::schema::decode: the encoded data item is null");
+        detail::validity::throw_logic_error_if_null(encoded,
+                                                    "cbor::schema::decode: the encoded data item is null");
         std::string_view const bytes{std::span<char const>(*encoded)};
         return decode_with_owner<Verified, D>(std::shared_ptr<void const>(std::move(encoded)), bytes);
     }
@@ -4155,7 +4227,8 @@ private:
         if constexpr (std::is_default_constructible_v<T>) {
             return decode_with_owner<Verified, D>(std::move(owner), encoded, T{});
         } else {
-            validity::throw_logic_error_if_empty(owner, "cbor::schema::decode: the owner of the encoded data item is empty");
+            detail::validity::throw_logic_error_if_empty(
+                owner, "cbor::schema::decode: the owner of the encoded data item is empty");
 #if defined(__cpp_exceptions)
             try {
 #endif
@@ -4174,7 +4247,8 @@ private:
     template <bool Verified, description_place D, owning_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode_with_owner(std::shared_ptr<Encoded const> encoded, T &&target)
     {
-        validity::throw_logic_error_if_null(encoded, "cbor::schema::decode: the encoded data item is null");
+        detail::validity::throw_logic_error_if_null(encoded,
+                                                    "cbor::schema::decode: the encoded data item is null");
         std::string_view const bytes{std::span<char const>(*encoded)};
         return decode_with_owner<Verified, D>(std::shared_ptr<void const>(std::move(encoded)), bytes, std::move(target));
     }
@@ -4183,8 +4257,8 @@ private:
     static std::expected<ref<T>, error> decode_with_owner(std::shared_ptr<void const> owner,
                                                          std::string_view const encoded, T &&target)
     {
-        validity::throw_logic_error_if_empty(owner,
-                                             "cbor::schema::decode: the owner of the encoded data item is empty");
+        detail::validity::throw_logic_error_if_empty(
+            owner, "cbor::schema::decode: the owner of the encoded data item is empty");
 #if defined(__cpp_exceptions)
         try {
 #endif

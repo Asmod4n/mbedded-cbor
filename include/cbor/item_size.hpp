@@ -53,7 +53,7 @@ class well_formedness
                 if (h->major == major_type::array)
                     added = h->argument;
                 else if (h->major == major_type::map)
-                    added = validity::checked_mul(h->argument, rfc8949::data_items_per_pair)
+                    added = detail::validity::checked_mul(h->argument, rfc8949::data_items_per_pair)
                                 .value_or(std::numeric_limits<std::uint64_t>::max());
                 else
                     continue;
@@ -71,7 +71,7 @@ class well_formedness
                     added = slow->argument;
                     break;
                 case major_type::map:
-                    added = validity::checked_mul(slow->argument, rfc8949::data_items_per_pair)
+                    added = detail::validity::checked_mul(slow->argument, rfc8949::data_items_per_pair)
                                 .value_or(std::numeric_limits<std::uint64_t>::max());
                     break;
                 case major_type::tag:
@@ -80,17 +80,18 @@ class well_formedness
                     added = 1;
                     break;
                 case major_type::simple_float:
-                    if (!validity::check_simple_value(slow->info, slow->argument).has_value()) [[unlikely]]
+                    if (!detail::validity::check_simple_value(slow->info, slow->argument).has_value())
+                        [[unlikely]]
                         return std::unexpected(error::syntax_error);
                     continue;
                 default:
                     continue;
                 }
             }
-            auto const sum = validity::checked_add(pending, added);
+            auto const sum = detail::validity::checked_add(pending, added);
             if (!sum) [[unlikely]]
                 return std::unexpected(error::too_little_data);
-            if (auto const r = validity::check_pending_items(*sum, d.encoded.size()); !r) [[unlikely]]
+            if (auto const r = detail::validity::check_pending_items(*sum, d.encoded.size()); !r) [[unlikely]]
                 return std::unexpected(r.error());
             pending = *sum;
         }
@@ -123,11 +124,12 @@ class well_formedness
     static std::expected<void, error> skip_item(heads::decoder<Checked> &d, Marks &marks,
                                                 std::size_t const depth, std::size_t const depth_max)
     {
-        std::array<std::uint64_t, validity::nesting_depth_limit + 1> left;
-        if (auto const r = validity::check_nesting_depth(depth_max, validity::nesting_depth_limit); !r)
-            [[unlikely]]
+        std::array<std::uint64_t, detail::validity::nesting_depth_limit + 1> left;
+        if (auto const r =
+                detail::validity::check_nesting_depth(depth_max, detail::validity::nesting_depth_limit);
+            !r) [[unlikely]]
             return r;
-        if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
+        if (auto const r = detail::validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
             return r;
         std::size_t level = 0;
         left[0] = 1;
@@ -146,7 +148,7 @@ class well_formedness
                 } else if (h->major == major_type::array) {
                     children = h->argument;
                 } else if (h->major == major_type::map) {
-                    children = validity::checked_mul(h->argument, rfc8949::data_items_per_pair)
+                    children = detail::validity::checked_mul(h->argument, rfc8949::data_items_per_pair)
                                    .value_or(std::numeric_limits<std::uint64_t>::max());
                 }
             } else {
@@ -163,7 +165,7 @@ class well_formedness
                     children = slow->argument;
                     break;
                 case major_type::map:
-                    children = validity::checked_mul(slow->argument, rfc8949::data_items_per_pair)
+                    children = detail::validity::checked_mul(slow->argument, rfc8949::data_items_per_pair)
                                    .value_or(std::numeric_limits<std::uint64_t>::max());
                     break;
                 case major_type::tag:
@@ -172,7 +174,8 @@ class well_formedness
                     children = 1;
                     break;
                 case major_type::simple_float:
-                    if (!validity::check_simple_value(slow->info, slow->argument).has_value()) [[unlikely]]
+                    if (!detail::validity::check_simple_value(slow->info, slow->argument).has_value())
+                        [[unlikely]]
                         return std::unexpected(error::syntax_error);
                     break;
                 default:
@@ -181,9 +184,11 @@ class well_formedness
             }
             if (children == 0)
                 continue;
-            if (auto const r = validity::check_pending_items(children, d.encoded.size()); !r) [[unlikely]]
+            if (auto const r = detail::validity::check_pending_items(children, d.encoded.size()); !r)
+                [[unlikely]]
                 return r;
-            if (auto const r = validity::check_nesting_depth(depth + level + 1, depth_max); !r) [[unlikely]]
+            if (auto const r = detail::validity::check_nesting_depth(depth + level + 1, depth_max); !r)
+                [[unlikely]]
                 return r;
             left[++level] = children;
         }
@@ -191,8 +196,7 @@ class well_formedness
 
     friend std::expected<std::size_t, error> item_size(std::string_view encoded);
 
-    friend class validity;
-
+    friend class detail::validity;
 
     friend struct lazy;
 
@@ -213,7 +217,7 @@ inline std::expected<std::size_t, error> item_size(std::string_view const encode
     well_formedness::no_marks none;
     if (auto const r = well_formedness::skip_item(d, none); !r) [[unlikely]]
         return std::unexpected(r.error());
-    return std::to_underlying(validity::distance(encoded, d.encoded));
+    return std::to_underlying(detail::validity::distance(encoded, d.encoded));
 }
 
 } // namespace cbor

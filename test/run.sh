@@ -7,14 +7,16 @@
 #   fast: gcc-release clang-asan
 #   full: gcc-asan gcc-release clang-asan clang-release clang-libcxx gcc15-release
 #   gcc15-release builds with g++ 15, the floor of the library, in the image of containers/tumbleweed-gcc15.Containerfile.
-#   tsan, gcc-describe, gcc-describe-bundled and wasm are run by name and not in fast or full.
+#   tsan, gcc-groups, gcc-describe, gcc-describe-bundled and wasm are run by name and not in fast or full.
+#   gcc-groups is gcc-release with CBOR_TEST_GROUPS=ON: it also builds one program per test file and checks that
+#   these programs hold the test cases of the full program. It is run when the list of test files changes.
 #   sid-asan, alma-release and alpine-release build in the images of containers/debian-sid, almalinux and alpine.Containerfile:
 #   g++ 16 on Debian sid, g++ 15 of gcc-toolset-15 on AlmaLinux and g++ 15 on Alpine with musl. They are run by name.
 #   gcc-describe-bundled is gcc-describe with CMake told not to find Boost, so the tests take the copy in third_party.
 #   gcc-describe builds with g++ and no reflection, so the tests take the path of the descriptions and Boost.PFR.
 #   wasm compiles test/describe.cpp for wasm32-wasip1 in the image mbedded-cbor-wasm and does not run it: the
 #   libc++ of Debian for wasm32 has no std::basic_fstream, which the runner of doctest needs.
-#   The compile_fail tests run in check, gcc-release, clang-release, gcc15-release and gcc-describe only.
+#   The compile_fail tests run in check, gcc-release, gcc-groups, clang-release, gcc15-release and gcc-describe only.
 #   full also runs test/interop/run.sh, which decodes the output of the library with other decoders.
 #   iter <target>...: builds only the named targets of gcc-asan with CBOR_TEST_GROUPS=ON in $CBOR_BUILD_ROOT/<branch>/iter,
 #   in a container that stays up between runs, and runs each test program among them.
@@ -64,7 +66,8 @@ one() {
 	case $n in
 	check) cxx=g++-16 type=Debug flags=-O0 ;;
 	gcc-asan) cxx=g++-16 type=Debug flags=$asan compile_fail=OFF ;;
-	gcc-release) cxx=g++-16 type=Release flags= options=-DCBOR_TEST_GROUPS=ON ;;
+	gcc-release) cxx=g++-16 type=Release flags= ;;
+	gcc-groups) cxx=g++-16 type=Release flags= options=-DCBOR_TEST_GROUPS=ON ;;
 	gcc-describe) cxx=g++-16 type=Release flags= options=-DCBOR_HAS_FREFLECTION=OFF ;;
 	gcc15-release) cxx=g++-15 type=Release flags= img=mbedded-cbor-gcc15 file=tumbleweed-gcc15 ;;
 	sid-asan) cxx=g++-16 type=Debug flags=$asan compile_fail=OFF img=mbedded-cbor-sid file=debian-sid ;;

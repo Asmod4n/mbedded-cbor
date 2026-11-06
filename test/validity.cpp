@@ -17,8 +17,8 @@
 using namespace std::literals;
 using cbor::error;
 using cbor::major_type;
-using cbor::validity;
 using cbor::value_sharing;
+using cbor::detail::validity;
 
 // The owner set the bound of the nesting depth to 512 and its default to 128. Every function that reads the
 // nesting depth reads both from these two constants, so this test is the one place that holds the two numbers.
@@ -133,7 +133,7 @@ constexpr auto sums_at_compile_time = [] {
     std::array<std::array<bool, factors.size()>, factors.size()> fits{};
     for (std::size_t i = 0; i < factors.size(); ++i)
         for (std::size_t j = 0; j < factors.size(); ++j)
-            fits[i][j] = cbor::validity::checked_add(factors[i], factors[j]).has_value();
+            fits[i][j] = cbor::detail::validity::checked_add(factors[i], factors[j]).has_value();
     return fits;
 }();
 
@@ -141,7 +141,7 @@ constexpr auto products_at_compile_time = [] {
     std::array<std::array<bool, factors.size()>, factors.size()> fits{};
     for (std::size_t i = 0; i < factors.size(); ++i)
         for (std::size_t j = 0; j < factors.size(); ++j)
-            fits[i][j] = cbor::validity::checked_mul(factors[i], factors[j]).has_value();
+            fits[i][j] = cbor::detail::validity::checked_mul(factors[i], factors[j]).has_value();
     return fits;
 }();
 
@@ -541,8 +541,14 @@ TEST_CASE("validity: an offset, a size and an index do not take the place of eac
     CHECK_FALSE(std::is_convertible_v<index, offset>);
     CHECK_FALSE(std::is_convertible_v<offset, index>);
     CHECK(std::same_as<decltype(validity::check_index(0, 1))::value_type, index>);
-    CHECK_FALSE(std::same_as<decltype(cbor::lazy::offset), std::size_t>);
-    CHECK(std::same_as<decltype(cbor::lazy::offset), offset>);
+    CHECK(std::same_as<decltype(cbor::lazy::offset), std::size_t>);
+}
+
+// The public member lazy::offset is a std::size_t, so no type of cbor::detail stands in a public signature. The
+// library turns it into an offset at each read.
+TEST_CASE("validity: lazy::offset is the position type of std::string_view")
+{
+    CHECK(std::same_as<decltype(cbor::lazy::offset), std::string_view::size_type>);
 }
 
 // subspan accepts every offset from the start to the end of its input. An offset at the end gives an empty view, and
