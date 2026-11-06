@@ -56,6 +56,11 @@ struct home {
     std::variant<dog, cat> pet;
 };
 
+struct property {
+    std::string name;
+    std::variant<bool, std::int64_t, std::string> value;
+};
+
 } // namespace doc_reference_schema
 
 CBOR_DEFINE_TYPE_MEMBERS(doc_reference_schema::tire, cbor::tag{1800}, diameter, pressure);
@@ -69,6 +74,8 @@ CBOR_DEFINE_DERIVED_TYPE_MEMBERS(doc_reference_schema::dog, doc_reference_schema
 CBOR_DEFINE_DERIVED_TYPE_MEMBERS(doc_reference_schema::cat, doc_reference_schema::animal, cbor::tag{1804}, name, toys);
 
 CBOR_DEFINE_TYPE_MEMBERS(doc_reference_schema::home, cbor::tag{1805}, pet);
+
+CBOR_DEFINE_TYPE_MEMBERS(doc_reference_schema::property, cbor::tag{1806}, name, value);
 
 namespace reference_structs
 {

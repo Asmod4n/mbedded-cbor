@@ -2,6 +2,7 @@
 
 #include "structs.hpp"
 
+#include <array>
 #include <format>
 #include <span>
 #include <string>
@@ -16,6 +17,7 @@ using doc_reference_schema::cat;
 using doc_reference_schema::dog;
 using doc_reference_schema::home;
 using doc_reference_schema::point;
+using doc_reference_schema::property;
 using doc_reference_schema::tire;
 
 inline std::string float_text(float const v)
@@ -192,6 +194,26 @@ struct kind<cbor::schema<home>::accessor<std::variant<dog, cat>>> {
     static std::string text(cbor::schema<home>::accessor<std::variant<dog, cat>> const &v)
     {
         return std::string("accessor of a std::variant<dog, cat> that holds a ") + (v.index() == 0 ? "dog" : "cat");
+    }
+};
+
+template <>
+struct kind<cbor::schema<property>::accessor<property>> {
+    static constexpr std::string_view name = "cbor::schema<property>::accessor<property>";
+    static std::string text(cbor::schema<property>::accessor<property> const &)
+    {
+        return "accessor of a property";
+    }
+};
+
+template <>
+struct kind<cbor::schema<property>::accessor<std::variant<bool, std::int64_t, std::string>>> {
+    static constexpr std::string_view name = "cbor::schema<property>::accessor<std::variant<bool, std::int64_t, std::string>>";
+    static std::string text(cbor::schema<property>::accessor<std::variant<bool, std::int64_t, std::string>> const &v)
+    {
+        constexpr std::array<std::string_view, 3> held{"bool", "std::int64_t", "std::string"};
+        return "accessor of a std::variant<bool, std::int64_t, std::string> that holds a " +
+               std::string(held.at(v.index()));
     }
 };
 

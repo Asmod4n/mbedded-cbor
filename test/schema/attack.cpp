@@ -498,3 +498,53 @@ TEST_CASE("attack: an unknown tag, a cut record and a wrong directory entry of a
     CHECK_EQ(form<home>::path(std::string(moved))->at_path<"$.pet">().error(), error::incorrect_type);
     CHECK_EQ(form<home>::decode(std::string(moved)).error(), error::syntax_error);
 }
+
+// A value variant under every cut and every changed byte reads no memory outside the message (ASan, UBSan). A
+// string length past its item: the verified decode checks the order of the items and gives syntax_error while
+// the length ends inside the items, too_little_data past the root; the unverified decode keeps the check of the
+// end of the items and gives the same; the path form reads to the next directory entry and gives
+// too_little_data.
+TEST_CASE("attack: value and text alternatives of a variant member")
+{
+    for (setting const &s : sample_settings()) {
+        std::string const bytes = *form<setting>::encode(s);
+        for (std::size_t size = 0; size < bytes.size(); ++size) {
+            CHECK_FALSE(form<setting>::decode(bytes.substr(0, size)).has_value());
+            CHECK_FALSE(form<setting>::unverified_decode(bytes.substr(0, size)).has_value());
+        }
+        for (std::size_t at = 0; at < bytes.size(); ++at) {
+            std::string f = bytes;
+            f.at(at) = static_cast<char>(f.at(at) ^ 0x41);
+            (void)form<setting>::decode(std::string(f));
+            (void)form<setting>::unverified_decode(std::string(f));
+            if (auto const doc = form<setting>::unverified_path(std::string(f)))
+                if (auto const v = doc->at_path<"$.value">()) {
+                    (void)v->get<std::string>();
+                    (void)v->get<std::int32_t>();
+                    (void)v->get<std::vector<std::byte>>();
+                }
+        }
+    }
+    // The text "ab" of pet is the first item; note holds the bytes of an empty text and "y". The length of pet
+    // grows from 2 to 7 and swallows the head of note, so the next read starts at the empty text and ends before
+    // the root, at "y".
+    std::string const swallowed = *form<shelter>::encode(shelter{std::string("ab"), "\x7a\x00\x00\x00\x00y"s});
+    std::size_t const pet = swallowed.find("\x7a\x00\x00\x00\x02" "ab"sv);
+    REQUIRE_NE(pet, std::string::npos);
+    std::string inside = swallowed;
+    inside[pet + 4] = '\x07';
+    CHECK_EQ(form<shelter>::decode(std::string(inside)).error(), error::syntax_error);
+    CHECK_EQ(form<shelter>::unverified_decode(std::string(inside)).error(), error::syntax_error);
+    CHECK_EQ(form<shelter>::path(std::string(inside))->at_path<"$.pet">().error(), error::too_little_data);
+    // name "n" is the first item, the text "ab" of value the last; its length grows past the root.
+    std::string const bytes = *form<setting>::encode(setting{"n", std::string("ab")});
+    std::size_t const head = bytes.size() - form<setting>::fixed_size() - 7;
+    REQUIRE_EQ(bytes.substr(head, 7), "\x7a\x00\x00\x00\x02" "ab"sv);
+    std::string past = bytes;
+    past[head + 3] = '\x7f';
+    CHECK_EQ(form<setting>::decode(std::string(past)).error(), error::too_little_data);
+    CHECK_EQ(form<setting>::unverified_decode(std::string(past)).error(), error::too_little_data);
+    std::string unknown = bytes;
+    unknown[head] = '\x7b';
+    CHECK_EQ(form<setting>::decode(std::string(unknown)).error(), error::incorrect_type);
+}

@@ -77,6 +77,20 @@ call: pet->get<cat>()
 result: unexpected cbor::error::incorrect_type
 ```
 
+```example
+bytes: d8 71 82 9a 00 00 00 12 d8 72 82 64 6e 61 6d 65 65 76 61 6c 75 65 5a 00 00 00 08 00 00 00 31 00 00 00 3b f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 77 69 64 74 68 1b 00 00 00 00 00 00 00 f0 d9 07 0e d8 80 9a 00 00 00 02 c6 1a 00 00 00 00 c6 3a 00 00 00 00
+call: auto const width = cbor::schema<property>::path(std::move(bytes))
+result: accessor of a property
+call: auto const value = width->at_path<"$.value">()
+result: accessor of a std::variant<bool, std::int64_t, std::string> that holds a std::int64_t
+call: value->index()
+result: 1
+call: value->get<std::int64_t>()
+result: 240
+call: value->get<std::string>()
+result: unexpected cbor::error::incorrect_type
+```
+
 Reads the part `U` of a message of `T`. A path that starts with `@`
 starts at `U`. A path that starts with `$` starts at the root. The
 result is a `std::expected`: the value of a number, `bool` or enum; a
@@ -84,10 +98,12 @@ result is a `std::expected`: the value of a number, `bool` or enum; a
 Every result holds the owner of the bytes.
 
 The accessor of a `std::variant<A...>` member has `index()` and
-`get<A>()`. `index()` gives the index of the alternative that the tag
-of its record names. `get<A>()` gives the accessor of that record, or
-`incorrect_type` when the record holds another alternative. A path
-ends at a variant member: `$.pet.name` does not compile.
+`get<A>()`. `index()` gives the index of the alternative that the head
+of its item names. `get<A>()` gives a class alternative as its
+accessor, a number, `bool` or enum as its value, and a text or byte
+string as a `std::string_view` into the message. Another alternative
+gives `incorrect_type`. A path ends at a variant member: `$.pet.name`
+does not compile.
 
 `view` gives a [typed_array_view](typed_array_view.md) of a list of
 numbers. It exists on the root accessor only. `size()` gives the count
@@ -97,8 +113,8 @@ random access range of [fixed_element](fixed_element.md) accessors.
 ## Errors
 
 - `index_out_of_bounds`: an index past the end of a list.
-- `incorrect_type`: a wrong head or tag on the path; a tag of a variant
-  record that names no alternative; `get<A>()` of another alternative.
+- `incorrect_type`: a wrong head or tag on the path; a variant item
+  whose head names no alternative; `get<A>()` of another alternative.
 - `unpopulated_table_index`, `syntax_error`: a broken reference.
 - `at_path` on a temporary does not compile. A moved-from accessor
   throws `std::logic_error`.
@@ -134,6 +150,21 @@ auto const pet = house->at_path<"$.pet">();
 pet->index();                         // 0, a dog
 pet->get<dog>()->at_path<"@.name">(); // "rex"
 pet->get<cat>().error();              // cbor::error::incorrect_type
+```
+
+A variant member of values, as a Qt property holds it:
+
+```cpp
+struct property {
+    std::string name;
+    std::variant<bool, std::int64_t, std::string> value;
+};
+// bytes: from schema<property>::encode(property{"width", std::int64_t{240}})
+auto const width = cbor::schema<property>::path(std::move(bytes));
+auto const value = width->at_path<"$.value">();
+value->index();                // 1, a std::int64_t
+value->get<std::int64_t>();    // 240
+value->get<std::string>();     // cbor::error::incorrect_type
 ```
 
 ## See also

@@ -129,3 +129,29 @@ TEST_CASE("view: a moved-from view and a moved-from accessor read no bytes")
     }
     CHECK_THROWS_AS((void)list->at_path<"@[1]">(), std::logic_error);
 }
+
+// A std::string_view or std::span<std::byte const> alternative of a decoded value points into the message; the ref
+// keeps the message alive after the input is gone. A std::u8string alternative holds a copy.
+TEST_CASE("view: borrowed alternatives of a variant point into a message that the ref keeps alive")
+{
+    std::array<std::byte const, 2> const raw{std::byte{7}, std::byte{8}};
+    std::vector<borrowed_value> const all{{std::string_view("view")}, {std::span<std::byte const>(raw)}, {std::int8_t{-3}}};
+    for (borrowed_value const &b : all) {
+        auto back = [&] {
+            std::string bytes = *form<borrowed_value>::encode(b);
+            return form<borrowed_value>::decode(std::move(bytes));
+        }();
+        REQUIRE(back.has_value());
+        REQUIRE_EQ((*back)->value.index(), b.value.index());
+        if (auto const *v = std::get_if<std::string_view>(&(*back)->value))
+            CHECK_EQ(*v, "view"sv);
+        if (auto const *s = std::get_if<std::span<std::byte const>>(&(*back)->value))
+            CHECK(std::ranges::equal(*s, raw));
+    }
+    auto const u8 = [] {
+        std::string bytes = *form<one_value<std::u8string>>::encode(one_value<std::u8string>{std::u8string(u8"u8")});
+        return form<one_value<std::u8string>>::decode(std::move(bytes));
+    }();
+    REQUIRE(u8.has_value());
+    CHECK(std::get<std::u8string>((*u8)->value) == u8"u8");
+}

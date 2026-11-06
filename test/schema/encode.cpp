@@ -295,3 +295,87 @@ TEST_CASE("encode: a variant that holds no value is a wrong use")
     CHECK_THROWS_AS((void)form<home>::encode(h, out), std::logic_error);
     CHECK(out.empty());
 }
+
+namespace schema_types
+{
+
+// Writes one_value<T>{value}, checks that its item starts with the head that RFC 8949 or RFC 8746 gives, and that
+// decode and the accessor give the value back.
+template <class T>
+void check_value_alternative(T const value, std::string_view const head)
+{
+    CAPTURE(head.size());
+    auto const bytes = form<one_value<T>>::encode(one_value<T>{value});
+    REQUIRE(bytes.has_value());
+    auto const item = variant_item_of<one_value<T>>(*bytes, form<one_value<T>>::template fixed_size<T>());
+    CHECK_EQ(item.substr(0, head.size()), head);
+    auto const back = form<one_value<T>>::decode(std::string(*bytes));
+    REQUIRE(back.has_value());
+    REQUIRE_EQ((*back)->value.index(), 0u);
+    CHECK(std::get<0>((*back)->value) == value);
+    auto const doc = form<one_value<T>>::path(std::string(*bytes));
+    REQUIRE(doc.has_value());
+    auto const v = doc->template at_path<"$.value">();
+    REQUIRE(v.has_value());
+    CHECK(v->template get<T>().value() == value);
+    CHECK_EQ(v->template get<dog>().error(), error::incorrect_type);
+}
+
+} // namespace schema_types
+
+// Each fixed kind as an alternative is the field that encode_value writes, as an item of its own. The expected
+// first bytes come from RFC 8949 3.1 and 3.3 (major type and additional information 24 to 27 for a head of
+// fixed width), RFC 8949 3.4.3 for tags 2 and 3 (bignum, 16 bytes: 50), and RFC 8746 tag 83 (d8 53) for binary128.
+TEST_CASE("encode: each fixed kind as a variant alternative starts with its CBOR head")
+{
+    check_value_alternative<bool>(false, "\xf4"sv);
+    check_value_alternative<bool>(true, "\xf5"sv);
+    check_value_alternative<std::uint8_t>(200, "\x18"sv);
+    check_value_alternative<std::uint16_t>(60000, "\x19"sv);
+    check_value_alternative<std::uint32_t>(4000000000u, "\x1a"sv);
+    check_value_alternative<std::uint64_t>(1ull << 60, "\x1b"sv);
+    check_value_alternative<std::int8_t>(5, "\x18"sv);
+    check_value_alternative<std::int8_t>(-5, "\x38"sv);
+    check_value_alternative<std::int16_t>(300, "\x19"sv);
+    check_value_alternative<std::int16_t>(-300, "\x39"sv);
+    check_value_alternative<std::int32_t>(70000, "\x1a"sv);
+    check_value_alternative<std::int32_t>(-70000, "\x3a"sv);
+    check_value_alternative<std::int64_t>(1ll << 40, "\x1b"sv);
+    check_value_alternative<std::int64_t>(-(1ll << 40), "\x3b"sv);
+    check_value_alternative<float>(1.5f, "\xfa"sv);
+    check_value_alternative<double>(-2.25, "\xfb"sv);
+#if defined(__STDCPP_FLOAT16_T__)
+    check_value_alternative<std::float16_t>(0.5f16, "\xf9"sv);
+#endif
+#if defined(__STDCPP_BFLOAT16_T__)
+    check_value_alternative<std::bfloat16_t>(0.5bf16, "\xfa"sv);
+#endif
+#if defined(__STDCPP_FLOAT128_T__)
+    check_value_alternative<std::float128_t>(0.5f128, "\xd8\x53\x50"sv);
+    check_value_alternative<long double>(0.5L, "\xd8\x53\x50"sv);
+#endif
+#ifdef __SIZEOF_INT128__
+    check_value_alternative<cbor::int128>(cbor::int128{1} << 100, "\xc2\x50"sv);
+    check_value_alternative<cbor::int128>(-(cbor::int128{1} << 100), "\xc3\x50"sv);
+    check_value_alternative<cbor::uint128>(cbor::uint128{1} << 120, "\xc2\x50"sv);
+#endif
+    check_value_alternative<level>(level::high, "\x19"sv);
+}
+
+// A text or byte string alternative is the string item that a std::string member writes: head 7a or 5a with a
+// 4-byte length, then the bytes. A class alternative is its record, with its class tag first.
+TEST_CASE("encode: a text, a byte string and a class as alternatives of one variant")
+{
+    for (setting const &s : sample_settings()) {
+        auto const bytes = form<setting>::encode(s);
+        REQUIRE(bytes.has_value());
+        if (auto const *t = std::get_if<std::string>(&s.value)) {
+            CHECK_EQ(variant_item_of<setting>(*bytes, 5 + t->size()), "\x7a\x00\x00\x00"s + static_cast<char>(t->size()) + *t);
+        }
+        if (auto const *b = std::get_if<std::vector<std::byte>>(&s.value))
+            CHECK_EQ(variant_item_of<setting>(*bytes, 5 + b->size()), "\x5a\x00\x00\x00\x02\x01\x02"sv);
+    }
+    auto const with_dog = form<shelter>::encode(shelter{dog{{"rex"}, 3}, "n"});
+    REQUIRE(with_dog.has_value());
+    CHECK_NE(with_dog->find("\xd9\x06\xcc"sv), std::string::npos);
+}

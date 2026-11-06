@@ -221,6 +221,27 @@ TEST_CASE("doc reference schema: accessor of a variant member")
     CHECK_EQ(pet->get<cat>().error(), error::incorrect_type);
 }
 
+// accessor.md: a variant member of values gives the index of the held value and the value itself; the other
+// alternative is incorrect_type.
+TEST_CASE("doc reference schema: accessor of a variant member of values")
+{
+    auto const bytes = cbor::schema<property>::encode(property{"width", std::int64_t{240}});
+    REQUIRE(bytes.has_value());
+    std::string hex;
+    for (char const c : *bytes)
+        hex += std::format("{:02x}", static_cast<unsigned char>(c));
+    CHECK_EQ(hex,
+             "d871829a00000012d87282646e616d656576616c75655a00000008000000310000003bf7f7f7f7f7f7f7f7f7f7f7f7f7f7"
+             "7a0000000577696474681b00000000000000f0d9070ed8809a00000002c61a00000000c63a00000000"s);
+    auto const width = cbor::schema<property>::path(std::string(*bytes));
+    REQUIRE(width.has_value());
+    auto const value = width->at_path<"$.value">();
+    REQUIRE(value.has_value());
+    CHECK_EQ(value->index(), 1u);
+    CHECK_EQ(value->get<std::int64_t>(), 240);
+    CHECK_EQ(value->get<std::string>().error(), error::incorrect_type);
+}
+
 // fixed_element.md: an element of a vector of fixed-size structs reads its members with @ and the root with $.
 TEST_CASE("doc reference schema: fixed_element")
 {
