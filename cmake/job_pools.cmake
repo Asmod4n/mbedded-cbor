@@ -5,7 +5,7 @@ set(CBOR_RESERVE_MIB_MIN 2048)
 set(CBOR_BYTES_PER_MIB 1048576)
 set(CBOR_KIB_PER_MIB 1024)
 set(CBOR_CONCURRENT_BUILDS 1 CACHE STRING "Number of builds that run at the same time and share the memory and the processors of the host")
-set(CBOR_RESERVED_PROCESSORS 1 CACHE STRING "Processors of the host that no build uses")
+set(CBOR_RESERVED_PROCESSORS 0 CACHE STRING "Processors of the host that no build uses")
 set(CBOR_MEMORY_MIB "" CACHE STRING "Memory of this build in MiB; empty for the memory of the host less its reserve, divided by CBOR_CONCURRENT_BUILDS")
 
 if(CBOR_MEMORY_MIB STREQUAL "")
