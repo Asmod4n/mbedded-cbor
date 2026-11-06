@@ -2,7 +2,8 @@
 // the tag of a type and its members, each with a cbor::map_key.
 // CBOR_DEFINE_TYPE writes this specialization. CBOR_MEMBER writes one
 // member. CBOR_DEFINE_TYPE_MEMBERS writes it from the names of the
-// members, and each key is the name of its member.
+// members, and each key is the name of its member. The DERIVED forms also
+// name the direct base class of the type.
 #pragma once
 
 #include <concepts>
@@ -61,6 +62,9 @@ struct describe_members;
 template <class T>
 concept has_describe_members = requires { describe_members<T>::members; };
 
+template <class T>
+concept has_described_base = requires { typename describe_members<T>::base; };
+
 class describe
 {
     template <class U>
@@ -95,6 +99,14 @@ class describe
         static constexpr std::tuple members{__VA_ARGS__};                                                              \
     }
 
+#define CBOR_DEFINE_DERIVED_TYPE(T, BASE, TAG, ...)                                                                    \
+    template <>                                                                                                        \
+    struct cbor::describe_members<T> {                                                                                 \
+        using base = BASE;                                                                                             \
+        static constexpr std::optional<cbor::tag> tag = TAG;                                                           \
+        static constexpr std::tuple members{__VA_ARGS__};                                                              \
+    }
+
 #define CBOR_PARENS ()
 
 #define CBOR_EXPAND(...) CBOR_EXPAND4(CBOR_EXPAND4(CBOR_EXPAND4(CBOR_EXPAND4(__VA_ARGS__))))
@@ -108,3 +120,6 @@ class describe
 #define CBOR_MEMBERS_AGAIN() CBOR_MEMBERS_HELPER
 
 #define CBOR_DEFINE_TYPE_MEMBERS(T, TAG, ...) CBOR_DEFINE_TYPE(T, TAG, CBOR_MEMBERS(T, __VA_ARGS__))
+
+#define CBOR_DEFINE_DERIVED_TYPE_MEMBERS(T, BASE, TAG, ...)                                                            \
+    CBOR_DEFINE_DERIVED_TYPE(T, BASE, TAG, CBOR_MEMBERS(T, __VA_ARGS__))

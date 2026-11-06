@@ -427,11 +427,12 @@ class reflection
                           "cbor::schema takes each struct through cbor::describe_members<T>.");
             if constexpr (has_describe_members<U>) {
                 static_assert(description_valid<U>());
-#ifdef __cpp_impl_reflection
-                static_assert(std::meta::bases_of(^^U, std::meta::access_context::unprivileged()).empty(),
-                              "cbor::schema takes a class with no base class.");
-#elif defined(BOOST_PFR_ENABLED) && BOOST_PFR_ENABLED
-                if constexpr (std::is_aggregate_v<U> && !describes_array<U>())
+                static_assert(base_described<U>(),
+                              "cbor::schema takes a class with a base class only through "
+                              "CBOR_DEFINE_DERIVED_TYPE_MEMBERS or describe_members<T>::base, which names its one "
+                              "direct base class.");
+#if !defined(__cpp_impl_reflection) && defined(BOOST_PFR_ENABLED) && BOOST_PFR_ENABLED
+                if constexpr (std::is_aggregate_v<U> && !describes_array<U>() && !has_described_base<U>)
                     static_assert(boost::pfr::tuple_size_v<U> == describe::members_count<U>,
                                   "cbor::schema lists each member of an aggregate; Boost.PFR counts another "
                                   "number of members.");
@@ -443,13 +444,6 @@ class reflection
                                          describe_members<U>::members),
                               "cbor::schema takes a text key in cbor::describe_members; an integer key is for "
                               "cbor::structs.");
-                static_assert(
-                    std::apply(
-                        [](auto const &...m) {
-                            return (std::is_same_v<typename decltype(class_of(m.pointer))::type, U> && ...);
-                        },
-                        describe_members<U>::members),
-                    "cbor::schema takes the members of the class itself; a member of a base class is not taken.");
                 static_assert(decode_form_valid<U>(),
                               "cbor::schema decodes a class through its default constructor, or through a "
                               "constructor that takes the described members in the order of the description, each "
@@ -460,6 +454,34 @@ class reflection
             std::apply([&](auto... type) { (check(type), ...); }, packing_table_of<Root>{});
         static_assert(tags_registered<Root>(), "cbor::schema takes one tag for one struct only.");
         return true;
+    }
+
+    // The base that a description names is the direct base of the class: with reflection the one direct base,
+    // without it a base that std::is_base_of_v finds. A class with no named base has no base where reflection can
+    // tell.
+    template <class U>
+    static consteval bool base_described()
+    {
+        if constexpr (has_described_base<U>) {
+            using B = typename describe_members<U>::base;
+            if constexpr (!std::is_class_v<B> || std::is_same_v<B, U> || !std::is_base_of_v<B, U>) {
+                return false;
+            } else {
+#ifdef __cpp_impl_reflection
+                constexpr auto bases =
+                    std::define_static_array(std::meta::bases_of(^^U, std::meta::access_context::unprivileged()));
+                return bases.size() == 1 && std::meta::dealias(std::meta::type_of(bases[0])) == std::meta::dealias(^^B);
+#else
+                return true;
+#endif
+            }
+        } else {
+#ifdef __cpp_impl_reflection
+            return std::meta::bases_of(^^U, std::meta::access_context::unprivileged()).empty();
+#else
+            return true;
+#endif
+        }
     }
 
     template <class U>
@@ -801,7 +823,7 @@ class reflection
     static consteval bool uses_allocator_aggregate()
     {
         if constexpr (std::uses_allocator_v<E, Alloc> || !std::is_class_v<E> || !std::is_aggregate_v<E> ||
-                      std::ranges::range<E>) {
+                      std::ranges::range<E> || has_described_base<E>) {
             return false;
         } else if constexpr (describes_array<E>()) {
             return false;
