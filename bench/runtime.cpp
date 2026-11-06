@@ -750,6 +750,8 @@ CBOR_DEFINE_DERIVED_TYPE_MEMBERS(bench_variant::dog, bench_variant::animal, cbor
 CBOR_DEFINE_DERIVED_TYPE_MEMBERS(bench_variant::cat, bench_variant::animal, cbor::tag{1741}, name, toys);
 CBOR_DEFINE_TYPE_MEMBERS(bench_variant::home, cbor::tag{1742}, pet, street);
 
+static std::string variant_message;
+
 static bench_variant::home const variant_sample{bench_variant::cat{{"tom"}, {"ball", "mouse", "yarn"}}, "elm"};
 
 static std::uint64_t mb_variant()
@@ -984,8 +986,8 @@ static std::optional<cbor::ref<std::span<std::byte const>>> bytes_ref;
 static void setup()
 {
 #if defined(ARM_MB_VARIANT_ENCODE) || defined(ARM_MB_VARIANT_DECODE) || defined(ARM_MB_VARIANT_AT_PATH)
-    alt = *cbor::schema<bench_variant::home>::encode(variant_sample);
-    bytes = &alt;
+    variant_message = *cbor::schema<bench_variant::home>::encode(variant_sample);
+    bytes = &variant_message;
 #endif
 #if defined(ARM_S_BYTES_SPAN)
     bytes_out.resize(doc.size() + cbor::encoding::item_size_max);
