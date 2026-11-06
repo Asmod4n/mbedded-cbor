@@ -539,6 +539,27 @@ void compare_all(T const &native, std::string_view const message)
         compare(native_at<T, text, 1>(native), lot->template at_path<path_text<text>>());
 }
 
+// With the description apart, the data of a message reads back through decode, unverified_decode and path with
+// the same description place, and writes the same bytes again.
+template <class T>
+void apart_round_trip(T const &native)
+{
+    constexpr auto apart = cbor::description_place::apart;
+    auto const data = cbor::schema<T>::template encode<apart>(native);
+    require(data.has_value());
+    auto const bytes = std::make_shared<std::vector<char> const>(data->begin(), data->end());
+    auto const encoded_as = [&](auto const &decoded) {
+        require(decoded.has_value());
+        auto const again = cbor::schema<T>::template encode<apart>(**decoded);
+        require(again.has_value() && *again == *data);
+    };
+    encoded_as(cbor::schema<T>::template decode<apart>(std::string(*data)));
+    encoded_as(cbor::schema<T>::template decode<apart>(bytes, std::span<char const>(*bytes)));
+    encoded_as(cbor::schema<T>::template unverified_decode<apart>(std::string(*data)));
+    require(cbor::schema<T>::template path<apart>(std::string(*data)).has_value());
+    require(cbor::schema<T>::template unverified_path<apart>(bytes, std::span<char const>(*bytes)).has_value());
+}
+
 // A struct from the bytes of the input, written and read back through every path of its type. The message
 // must also be one well-formed CBOR item.
 template <class T>
@@ -572,6 +593,7 @@ void round_trip(source &in)
     auto const end = cbor::item_size(w.encoded);
     require(end.has_value() && *end == w.encoded.size());
     compare_all(native, w.encoded);
+    apart_round_trip(native);
 }
 
 inline void decode_target(std::string_view const input)
