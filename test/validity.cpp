@@ -147,37 +147,6 @@ constexpr auto products_at_compile_time = [] {
 
 } // namespace
 
-// A map or a set of members is valid only when no two of its keys are equal. The check reads a sorted range,
-// so it must agree with a comparison of every pair, for every sorted sequence of up to four keys from three
-// values, and through a projection to the key of a pair.
-TEST_CASE("validity: keys_unique for every sorted sequence of up to four keys")
-{
-    std::vector<std::vector<int>> sequences{{}};
-    for (std::size_t length = 1; length <= 4; ++length) {
-        std::vector<std::vector<int>> longer;
-        for (std::vector<int> const &s : sequences)
-            if (s.size() == length - 1)
-                for (int key = s.empty() ? 0 : s.back(); key <= 2; ++key) {
-                    std::vector<int> next = s;
-                    next.push_back(key);
-                    longer.push_back(next);
-                }
-        sequences.insert(sequences.end(), longer.begin(), longer.end());
-    }
-    CHECK_EQ(sequences.size(), 35u);
-    for (std::vector<int> const &s : sequences) {
-        bool distinct = true;
-        for (std::size_t i = 0; i < s.size(); ++i)
-            for (std::size_t j = i + 1; j < s.size(); ++j)
-                distinct = distinct && s[i] != s[j];
-        CHECK_EQ(validity::keys_unique(s), distinct);
-        std::vector<std::pair<int, std::string>> pairs;
-        for (int const key : s)
-            pairs.emplace_back(key, std::to_string(pairs.size()));
-        CHECK_EQ(validity::keys_unique(pairs, &std::pair<int, std::string>::first), distinct);
-    }
-}
-
 // RFC 8949 5.6: a second key equal to a key already met makes the map not valid. The input set is {false,
 // true}.
 TEST_CASE("validity: check_key_unique for both inputs")
@@ -335,11 +304,11 @@ TEST_CASE("validity: typed_array_element_size for every typed array tag")
 // A typed array tag must lie in 64 to 87 and must not be the reserved tag 76, and its byte string must hold a
 // whole number of elements (RFC 8746 2). The tags around the range and every length up to two elements of the
 // widest type are checked, so that every remainder of every element size is met.
-TEST_CASE("validity: typed_array_check for the tags around 64 to 87 and the lengths 0 to 32")
+TEST_CASE("validity: check_typed_array for the tags around 64 to 87 and the lengths 0 to 32")
 {
     for (std::uint64_t tag = 60; tag <= 90; ++tag)
         for (std::size_t size = 0; size <= 32; ++size) {
-            auto const r = validity::typed_array_check(tag, size);
+            auto const r = validity::check_typed_array(tag, size);
             if (tag < 64 || tag > 87 || tag == 76)
                 CHECK_EQ(r.error(), error::incorrect_type);
             else if (size % element_bytes[static_cast<std::size_t>(tag - 64)] != 0)

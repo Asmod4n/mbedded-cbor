@@ -68,12 +68,12 @@ class sequence_reader
         return false;
     }
 
-    std::expected<void, error> item_scan(std::string_view const item)
+    std::expected<void, error> scan_item(std::string_view const item)
     {
         for (;;) {
             if (at == phase::string_content) {
-                if (item.size() < phase_end) [[unlikely]]
-                    return std::unexpected(error::too_little_data);
+                if (auto const fits = validity::check_bytes_left(phase_end, item.size()); !fits) [[unlikely]]
+                    return std::unexpected(fits.error());
                 scanned = static_cast<std::size_t>(phase_end);
                 at = phase::head;
                 if (item_completed())
@@ -85,12 +85,13 @@ class sequence_reader
                     return r;
                 at = phase::head;
             }
-            if (at == phase::argument && item.size() < phase_end) [[unlikely]]
-                return std::unexpected(error::too_little_data);
+            if (at == phase::argument)
+                if (auto const fits = validity::check_bytes_left(phase_end, item.size()); !fits) [[unlikely]]
+                    return std::unexpected(fits.error());
             heads::decoder<false> d{std::string_view{std::span(item).subspan(scanned)}};
-            auto const h = d.head_decode();
+            auto const h = d.decode_head();
             if (!h) [[unlikely]] {
-                if (h.error() == error::too_little_data && !d.encoded.empty()) {
+                if (h.error() == error::too_little_data && validity::bytes_fit(heads::initial_byte_size, d.encoded.size())) {
                     auto const initial = static_cast<std::uint8_t>(d.encoded.front());
                     std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
                     at = phase::argument;
@@ -99,7 +100,7 @@ class sequence_reader
                 return std::unexpected(h.error());
             }
             at = phase::head;
-            scanned = item.size() - d.encoded.size();
+            scanned = std::to_underlying(validity::distance(std::string_view(std::span(item)), d.encoded));
             --left[level];
             --pending;
             std::uint64_t children = 0;
@@ -157,14 +158,14 @@ class sequence_reader
         }
     }
 
-    void bytes_append(std::string_view const bytes)
+    void append_bytes(std::string_view const bytes)
     {
         if (buffer.use_count() == 1) {
             if (item_begin >= buffer->size() - item_begin) {
                 buffer->erase(0, item_begin);
                 item_begin = 0;
             }
-        } else if (buffer->capacity() - buffer->size() < bytes.size()) {
+        } else if (!validity::bytes_fit(bytes.size(), buffer->capacity() - buffer->size())) {
             std::string_view const rest{std::span(std::as_const(*buffer)).subspan(item_begin)};
             auto block = std::make_shared<std::string>();
             block->reserve(
@@ -177,7 +178,7 @@ class sequence_reader
         buffer->append(bytes);
     }
 
-    void piece_push(held_piece p)
+    void push_piece(held_piece p)
     {
         if (p.bytes.empty())
             return;
@@ -202,12 +203,12 @@ class sequence_reader
         if (failure != error{}) [[unlikely]]
             return;
         if (piece_first == pieces.size()) {
-            bytes_append(bytes);
+            append_bytes(bytes);
             return;
         }
         auto copy = std::make_shared<std::string const>(bytes);
         std::string_view const held(*copy);
-        piece_push(held_piece{std::move(copy), held});
+        push_piece(held_piece{std::move(copy), held});
     }
 
     void failure_keep(error const e)
@@ -219,7 +220,7 @@ class sequence_reader
         buffer->resize(item_begin);
     }
 
-    void item_state_reset()
+    void reset_item_state()
     {
         scanned = 0;
         level = 0;
@@ -267,7 +268,7 @@ public:
         if (failure != error{}) [[unlikely]]
             return;
         std::string_view const bytes{std::span<char const>(*piece)};
-        piece_push(held_piece{std::move(piece), bytes});
+        push_piece(held_piece{std::move(piece), bytes});
     }
 
     bool empty() const
@@ -288,7 +289,7 @@ public:
                 window = std::string_view{std::span(std::as_const(*buffer)).subspan(item_begin)};
             else if (piece_first != pieces.size())
                 window = std::string_view{std::span(pieces[piece_first].bytes).subspan(piece_offset)};
-            auto const r = item_scan(window);
+            auto const r = scan_item(window);
             if (r) {
                 std::string_view const item{std::span(window).first(scanned)};
                 std::shared_ptr<void const> owner = copied ? buffer : pieces[piece_first].owner;
@@ -299,7 +300,7 @@ public:
                     if (piece_offset == pieces[piece_first].bytes.size())
                         piece_drop();
                 }
-                item_state_reset();
+                reset_item_state();
                 return lazy::view(std::move(owner), item);
             }
             if (r.error() != error::too_little_data) [[unlikely]] {
@@ -309,7 +310,7 @@ public:
             if (!copied) {
                 if (pieces.size() - piece_first < 2)
                     return std::unexpected(error::too_little_data);
-                bytes_append(window);
+                append_bytes(window);
                 piece_drop();
                 continue;
             }
@@ -318,7 +319,7 @@ public:
             std::string_view const source{std::span(pieces[piece_first].bytes).subspan(piece_offset)};
             std::size_t const n = static_cast<std::size_t>(
                 std::min<std::uint64_t>(bytes_missing(window.size()), source.size()));
-            bytes_append(std::string_view{std::span(source).first(n)});
+            append_bytes(std::string_view{std::span(source).first(n)});
             piece_offset += n;
             if (piece_offset == pieces[piece_first].bytes.size())
                 piece_drop();

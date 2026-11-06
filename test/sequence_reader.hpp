@@ -104,13 +104,14 @@ inline sequence_outcome sequence_outcome_of(std::string_view const bytes)
 }
 
 // The forms in which a piece reaches the reader: a view that the reader copies, a std::vector<char> that the
-// reader takes without a copy, a std::shared_ptr that the reader holds, and the three in turn, one per piece.
+// reader takes without a copy, a std::shared_ptr that the reader holds, an lvalue std::vector<char> that the reader
+// copies, and the four in turn, one per piece.
 // The owned forms are a std::vector<char> of the exact size of the piece and not a std::string, because the
 // inline buffer and the closing zero of a std::string hide a read of up to 16 bytes past the piece from ASan.
-enum class feed_form { view, rvalue, shared, each_in_turn };
+enum class feed_form { view, rvalue, shared, lvalue, each_in_turn };
 
-inline constexpr std::array<feed_form, 4> feed_forms{feed_form::view, feed_form::rvalue, feed_form::shared,
-                                                     feed_form::each_in_turn};
+inline constexpr std::array<feed_form, 5> feed_forms{feed_form::view, feed_form::rvalue, feed_form::shared,
+                                                     feed_form::lvalue, feed_form::each_in_turn};
 
 inline void piece_feed(cbor::sequence_reader &r, std::string_view const piece, feed_form const form,
                        std::size_t const index)
@@ -124,6 +125,11 @@ inline void piece_feed(cbor::sequence_reader &r, std::string_view const piece, f
     case feed_form::rvalue:
         r.feed(std::vector<char>(piece.begin(), piece.end()));
         break;
+    case feed_form::lvalue: {
+        std::vector<char> const owned(piece.begin(), piece.end());
+        r.feed(owned);
+        break;
+    }
     default:
         r.feed(std::make_shared<std::vector<char> const>(piece.begin(), piece.end()));
         break;
@@ -131,14 +137,19 @@ inline void piece_feed(cbor::sequence_reader &r, std::string_view const piece, f
 }
 
 // Feeds the bytes to one reader in the pieces that the cuts give, and calls next() after each piece until it
-// gives an error.
+// gives an error. With moved, the reader moves into a new reader by construction and back by assignment after the
+// middle piece, so a move in the middle of a stream keeps every item.
 inline sequence_outcome reader_outcome_of(std::string_view const bytes, std::span<std::size_t const> const cuts,
-                                          feed_form const form = feed_form::view)
+                                          feed_form const form = feed_form::view, bool const moved = false)
 {
     cbor::sequence_reader r;
     sequence_outcome out{{}, cbor::error::too_little_data};
     std::size_t from = 0;
     for (std::size_t i = 0; i <= cuts.size(); ++i) {
+        if (moved && i == cuts.size() / 2) {
+            cbor::sequence_reader middle(std::move(r));
+            r = std::move(middle);
+        }
         std::size_t const to = i < cuts.size() ? cuts[i] : bytes.size();
         piece_feed(r, bytes.substr(from, to - from), form, i);
         from = to;

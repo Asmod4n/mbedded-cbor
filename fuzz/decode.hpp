@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <span>
+#include <string>
 #include <vector>
 
 namespace fuzz
@@ -35,6 +36,32 @@ inline void decode_encode_decode(std::string_view const input)
     require(test::encode(twice, *again).has_value() && twice.encoded == w.encoded);
     auto const end = cbor::item_size(input);
     require(end.has_value() && *end <= input.size());
+}
+
+// Every target that encode takes writes the bytes of the std::string form: a container of char or of std::byte, a
+// span of char or of std::byte of the exact size, and a writer with allocate, append and done. A span one byte short
+// gives no_buffer_space.
+inline void encode_targets(cbor::item const &root, std::string const &out)
+{
+    std::vector<char> chars;
+    require(cbor::encode(root, chars) == out.size() && std::ranges::equal(chars, out));
+    std::vector<std::byte> bytes;
+    require(cbor::encode(root, bytes) == out.size() && std::ranges::equal(std::as_bytes(std::span(bytes)), std::as_bytes(std::span(out))));
+    std::vector<char> exact(out.size());
+    require(cbor::encode(root, std::span<char>(exact)) == out.size() && std::ranges::equal(exact, out));
+    std::vector<std::byte> exact_bytes(out.size());
+    require(cbor::encode(root, std::span<std::byte>(exact_bytes)) == out.size() &&
+            std::ranges::equal(std::as_bytes(std::span(exact_bytes)), std::as_bytes(std::span(out))));
+    if (!out.empty()) {
+        std::vector<char> short_by_one(out.size() - 1);
+        auto const refused = cbor::encode(root, std::span<char>(short_by_one));
+        require(!refused && refused.error() == cbor::error::no_buffer_space);
+        std::vector<std::byte> short_bytes(out.size() - 1);
+        auto const refused_bytes = cbor::encode(root, std::span<std::byte>(short_bytes));
+        require(!refused_bytes && refused_bytes.error() == cbor::error::no_buffer_space);
+    }
+    string_writer w;
+    require(cbor::encode(root, w) == out.size() && w.encoded == out);
 }
 
 // encode of the decoded tree writes the library's own form (RFC 8949 2: the same value, not the same bytes). The
@@ -70,6 +97,7 @@ inline void tree_encode(std::string_view const input)
     require(pieces.has_value());
     auto const joined = test::joined(**pieces);
     require(joined.has_value() && *joined == out);
+    encode_targets(**tree, out);
 }
 
 inline void decode_target(std::string_view const input)

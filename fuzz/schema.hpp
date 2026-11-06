@@ -403,15 +403,125 @@ void read_all(std::string_view const message)
 template <class T>
 void compare_all(T const &native, std::string_view message);
 
+// The errors that an unverified form may give on raw input (doc/reference/schema/unverified.md): it skips the
+// checks of the data and keeps every check of a bound, so it never raises and never reads outside the input.
+inline bool unverified_error(cbor::error const e)
+{
+    using enum cbor::error;
+    return e == too_little_data || e == index_out_of_bounds || e == unpopulated_table_index || e == syntax_error ||
+           e == nesting_depth_exceeded || e == not_enough_memory || e == string_length_exceeded ||
+           e == container_elements_exceeded;
+}
+
+// The unverified forms on raw input give a value or one of their errors, and every leaf path reads inside the
+// message through an unverified accessor.
+template <class T>
+void unverified_raw(std::string_view const message)
+{
+    auto const decoded = cbor::schema<T>::unverified_decode(std::string(message));
+    if (!decoded)
+        require(unverified_error(decoded.error()));
+    static constexpr auto texts = std::define_static_array(path_texts<T>());
+    auto const owner = std::make_shared<std::string const>(message);
+    auto lot = cbor::schema<T>::unverified_path(owner);
+    if (!lot) {
+        require(unverified_error(lot.error()));
+        return;
+    }
+    template for (constexpr std::meta::info text : texts)
+        consume(lot->template at_path<path_text<text>>(), *owner);
+}
+
+// The methods of an accessor read what the root reads: a list accessor counts as many elements through begin and
+// end as size says, an element read through the iterator and through '@' with a run-time index is the same, and a
+// '$' path from inside reads from the root.
+inline void garage_accessors(std::string const &written)
+{
+    auto const root = cbor::schema<garage>::path(std::string(written));
+    require(root.has_value());
+    auto const cars = root->at_path<"$.cars">();
+    require(cars.has_value());
+    std::size_t n = 0;
+    for (auto it = cars->begin(); it != cars->end(); ++it) {
+        auto const car = *it;
+        auto const through_element = car.at_path<"@.balance">();
+        auto const through_index = cars->at_path<"@[].balance">(n);
+        require(through_element.has_value() && through_index.has_value() && *through_element == *through_index);
+        auto const indexed = cars->at_path<"@[]">(n);
+        require(indexed.has_value());
+        auto const again = indexed->at_path<"@.balance">();
+        require(again.has_value() && *again == *through_element);
+        ++n;
+    }
+    require(n == cars->size());
+    auto const note_from_inside = cars->at_path<"$.note">();
+    auto const note = root->at_path<"$.note">();
+    require(note_from_inside.has_value() && note.has_value() && *note_from_inside == *note);
+}
+
+// A typed array view gives each element through [], at, the iterator, front, back, first and last; an index or a
+// count past the end is an error.
+inline void numbers_view(std::string const &written)
+{
+    auto const root = cbor::schema<numbers>::path(std::string(written));
+    require(root.has_value());
+    auto const blob = root->view<"$.list">();
+    require(blob.has_value());
+    std::size_t i = 0;
+    for (std::uint32_t const e : *blob) {
+        auto const at = blob->at(i);
+        require(at.has_value() && *at == e && (*blob)[i] == e);
+        ++i;
+    }
+    require(i == blob->size());
+    if (blob->size() != 0) {
+        require(blob->front() == (*blob)[0] && blob->back() == (*blob)[blob->size() - 1]);
+        auto const head = blob->first(1);
+        auto const tail = blob->last(1);
+        require(head.has_value() && tail.has_value() && head->size() == 1 && tail->size() == 1);
+        require(head->front() == blob->front() && tail->back() == blob->back());
+    }
+    require(!blob->at(blob->size()).has_value());
+    require(!blob->first(blob->size() + 1).has_value());
+}
+
+// Every form of decode and path reads the written message to the value of the std::string form, and the
+// unverified forms read it as the verified ones do: the value is compared by its encoding.
+template <class T>
+void read_forms(std::string const &written)
+{
+    auto const bytes = std::make_shared<std::vector<char> const>(written.begin(), written.end());
+    auto const encoded_as = [&](auto const &decoded) {
+        require(decoded.has_value());
+        auto const again = cbor::schema<T>::encode(**decoded);
+        require(again.has_value() && *again == written);
+    };
+    encoded_as(cbor::schema<T>::decode(bytes));
+    encoded_as(cbor::schema<T>::decode(bytes, std::span<char const>(*bytes)));
+    encoded_as(cbor::schema<T>::unverified_decode(std::string(written)));
+    encoded_as(cbor::schema<T>::unverified_decode(bytes));
+    encoded_as(cbor::schema<T>::unverified_decode(bytes, std::span<char const>(*bytes)));
+    require(cbor::schema<T>::path(std::string(written)).has_value());
+    require(cbor::schema<T>::path(bytes).has_value());
+    require(cbor::schema<T>::path(bytes, std::span<char const>(*bytes)).has_value());
+    require(cbor::schema<T>::unverified_path(bytes, std::span<char const>(*bytes)).has_value());
+    if constexpr (std::is_same_v<T, garage>)
+        garage_accessors(written);
+    if constexpr (std::is_same_v<T, numbers>)
+        numbers_view(written);
+}
+
 template <class T>
 void read_target(std::string_view const message)
 {
     read_all<T>(message);
+    unverified_raw<T>(message);
     auto const value = cbor::schema<T>::decode(std::string(message));
     if (value) {
         auto const again = cbor::schema<T>::encode(**value);
         require(again.has_value());
         compare_all(**value, *again);
+        read_forms<T>(*again);
     }
 }
 
@@ -486,6 +596,27 @@ void compare_all(T const &native, std::string_view const message)
         compare(native_at<T, text, 1>(native), lot->template at_path<path_text<text>>());
 }
 
+// With the description apart, the data of a message reads back through decode, unverified_decode and path with
+// the same description place, and writes the same bytes again.
+template <class T>
+void apart_round_trip(T const &native)
+{
+    constexpr auto apart = cbor::description_place::apart;
+    auto const data = cbor::schema<T>::template encode<apart>(native);
+    require(data.has_value());
+    auto const bytes = std::make_shared<std::vector<char> const>(data->begin(), data->end());
+    auto const encoded_as = [&](auto const &decoded) {
+        require(decoded.has_value());
+        auto const again = cbor::schema<T>::template encode<apart>(**decoded);
+        require(again.has_value() && *again == *data);
+    };
+    encoded_as(cbor::schema<T>::template decode<apart>(std::string(*data)));
+    encoded_as(cbor::schema<T>::template decode<apart>(bytes, std::span<char const>(*bytes)));
+    encoded_as(cbor::schema<T>::template unverified_decode<apart>(std::string(*data)));
+    require(cbor::schema<T>::template path<apart>(std::string(*data)).has_value());
+    require(cbor::schema<T>::template unverified_path<apart>(bytes, std::span<char const>(*bytes)).has_value());
+}
+
 // A struct from the bytes of the input, written and read back through every path of its type. The message
 // must also be one well-formed CBOR item.
 template <class T>
@@ -519,6 +650,7 @@ void round_trip(source &in)
     auto const end = cbor::item_size(w.encoded);
     require(end.has_value() && *end == w.encoded.size());
     compare_all(native, w.encoded);
+    apart_round_trip(native);
 }
 
 inline void decode_target(std::string_view const input)

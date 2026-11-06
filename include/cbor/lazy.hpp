@@ -171,11 +171,11 @@ private:
     struct resolved;
 
     template <bool Checked>
-    static std::expected<resolved<Checked>, error> container_resolve(top_level_item source,
+    static std::expected<resolved<Checked>, error> resolve_container(top_level_item source,
                                                                      validity::offset offset);
 
     template <bool Checked>
-    static std::expected<resolved<Checked>, error> tag_content_resolve(top_level_item source,
+    static std::expected<resolved<Checked>, error> resolve_tag_content(top_level_item source,
                                                                        validity::offset offset);
 
     struct tag_content {
@@ -184,23 +184,23 @@ private:
     };
 
     template <bool Checked>
-    static std::expected<tag_content, error> typed_array_bytes_read(resolved<Checked> const &found);
+    static std::expected<tag_content, error> read_typed_array_bytes(resolved<Checked> const &found);
 
-    static std::expected<std::string_view, error> typed_array_element_read(lazy const &node);
+    static std::expected<std::string_view, error> read_typed_array_element(lazy const &node);
 
     template <bool Checked>
     static std::expected<resolved<Checked>, error> resolve(lazy const &node);
 
     template <bool Checked, std::integral Index>
-    static std::expected<lazy, error> index_select(resolved<Checked> const &found, Index i);
+    static std::expected<lazy, error> select_index(resolved<Checked> const &found, Index i);
 
     template <class Key, class Entries = lazy_entries, bool Checked>
         requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
-    static std::expected<typename Entries::iterator, error> key_find(resolved<Checked> found, Key key);
+    static std::expected<typename Entries::iterator, error> find_key(resolved<Checked> found, Key key);
 
     template <class Iterator, class Last, class Key, bool Checked>
         requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
-    static std::expected<std::pair<Iterator, bool>, error> key_find(Iterator first, Last last, Key key);
+    static std::expected<std::pair<Iterator, bool>, error> find_key(Iterator first, Last last, Key key);
 
     template <class Iterator>
     static std::expected<lazy, error> value_of(std::expected<Iterator, error> found);
@@ -317,10 +317,10 @@ struct lazy_entries : std::ranges::view_interface<lazy_entries> {
         iterator(lazy::top_level_item t, validity::offset const k, std::uint64_t const l)
             : top_level(std::move(t)), key(k), value(k), left(l)
         {
-            value_find();
+            find_value();
         }
 
-        void value_find();
+        void find_value();
 
         lazy::top_level_item top_level;
         validity::offset key{};
@@ -389,7 +389,7 @@ std::expected<bool, error> validity::keys_equivalent(First &first, offset const 
     };
     auto const skip = [](heads::decoder<Checked> &d) {
         well_formedness::no_marks none;
-        return well_formedness::item_skip(d, none);
+        return well_formedness::skip_item(d, none);
     };
     auto const resolve = []<class Message>(Message &message, offset const at) -> offset {
         if constexpr (std::same_as<Message, std::string_view const>)
@@ -399,10 +399,10 @@ std::expected<bool, error> validity::keys_equivalent(First &first, offset const 
     };
     std::string_view const a = encoded_of(first);
     std::string_view const b = encoded_of(second);
-    auto const h = heads::raw_head_read<Checked>(a, resolve(first, first_at));
+    auto const h = heads::read_raw_head<Checked>(a, resolve(first, first_at));
     if (!h) [[unlikely]]
         return std::unexpected(h.error());
-    auto const k = heads::raw_head_read<Checked>(b, resolve(second, second_at));
+    auto const k = heads::read_raw_head<Checked>(b, resolve(second, second_at));
     if (!k) [[unlikely]]
         return std::unexpected(k.error());
     if (error const c = check_definite_length(h->major, h->info).error_or(error{}); c != error{}) [[unlikely]]
@@ -418,7 +418,7 @@ std::expected<bool, error> validity::keys_equivalent(First &first, offset const 
             if (!heads::is_bignum(n.major, n.argument))
                 return std::nullopt;
             heads::decoder<Checked> d{subspan(encoded, resolve(message, n.at))};
-            auto const read = d.bignum_decode(n.argument);
+            auto const read = d.decode_bignum(n.argument);
             if (!read) [[unlikely]]
                 return std::unexpected(read.error());
             if (!*read)
@@ -443,11 +443,11 @@ std::expected<bool, error> validity::keys_equivalent(First &first, offset const 
     case major_type::byte_string:
     case major_type::text_string: {
         heads::decoder<Checked> d{subspan(a, h->at)};
-        auto const s = d.byte_string_decode(h->argument);
+        auto const s = d.decode_byte_string(h->argument);
         if (!s) [[unlikely]]
             return std::unexpected(s.error());
         heads::decoder<Checked> e{subspan(b, k->at)};
-        auto const t = e.byte_string_decode(k->argument);
+        auto const t = e.decode_byte_string(k->argument);
         if (!t) [[unlikely]]
             return std::unexpected(t.error());
         return *s == *t;
@@ -457,6 +457,12 @@ std::expected<bool, error> validity::keys_equivalent(First &first, offset const 
             return false;
         heads::decoder<Checked> d{subspan(a, h->at)};
         heads::decoder<Checked> e{subspan(b, k->at)};
+        if (auto const r = validity::check_pending_items(h->major, h->info, h->argument, d.encoded.size()); !r)
+            [[unlikely]]
+            return std::unexpected(r.error());
+        if (auto const r = validity::check_pending_items(k->major, k->info, k->argument, e.encoded.size()); !r)
+            [[unlikely]]
+            return std::unexpected(r.error());
         for (std::uint64_t i = 0; i < h->argument; ++i) {
             auto const equal = keys_equivalent<Checked>(first, distance(a, d.encoded), second,
                                                         distance(b, e.encoded), depth + 1, depth_max);
@@ -479,6 +485,9 @@ std::expected<bool, error> validity::keys_equivalent(First &first, offset const 
             -> std::expected<std::uint64_t, error> {
             std::uint64_t count = 0;
             heads::decoder<Checked> e{validity::subspan(in_encoded, in_at)};
+            if (auto const r = validity::check_pending_items(h->major, h->info, h->argument, e.encoded.size()); !r)
+                [[unlikely]]
+                return std::unexpected(r.error());
             for (std::uint64_t j = 0; j < h->argument; ++j) {
                 offset const other = distance(in_encoded, e.encoded);
                 if (auto const r = skip(e); !r) [[unlikely]]
@@ -500,6 +509,9 @@ std::expected<bool, error> validity::keys_equivalent(First &first, offset const 
             return count;
         };
         heads::decoder<Checked> d{validity::subspan(a, h->at)};
+        if (auto const r = validity::check_pending_items(h->major, h->info, h->argument, d.encoded.size()); !r)
+            [[unlikely]]
+            return std::unexpected(r.error());
         for (std::uint64_t i = 0; i < h->argument; ++i) {
             offset const key = distance(a, d.encoded);
             if (auto const r = skip(d); !r) [[unlikely]]
@@ -553,26 +565,26 @@ struct lazy::resolved {
 };
 
 template <bool Checked>
-std::expected<lazy::resolved<Checked>, error> lazy::container_resolve(lazy::top_level_item source,
+std::expected<lazy::resolved<Checked>, error> lazy::resolve_container(lazy::top_level_item source,
                                                                       validity::offset offset)
 {
     validity::throw_logic_error_if(source.encoded.data() == nullptr, "cbor::lazy: the lazy holds no top-level item");
     for (;;) {
         validity::offset const at = heads::self_described_cbor_content_at(source.encoded, offset);
         heads::decoder<Checked> d{validity::subspan(source.encoded, at)};
-        auto const h = d.head_decode();
+        auto const h = d.decode_head();
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
         if (h->major != major_type::tag ||
             h->argument != std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item))
             return resolved<Checked>{source, *h, d, at};
-        auto const r = d.head_decode();
+        auto const r = d.decode_head();
         if (!r) [[unlikely]]
             return std::unexpected(r.error());
         if (error const c = validity::check_tag_content(h->argument, r->major).error_or(error{});
             c != error{}) [[unlikely]]
             return std::unexpected(c);
-        auto const embedded = d.byte_string_decode(r->argument);
+        auto const embedded = d.decode_byte_string(r->argument);
         if (!embedded) [[unlikely]]
             return std::unexpected(embedded.error());
         source = lazy::top_level_item{source.owner, *embedded};
@@ -581,11 +593,11 @@ std::expected<lazy::resolved<Checked>, error> lazy::container_resolve(lazy::top_
 }
 
 template <bool Checked>
-std::expected<lazy::resolved<Checked>, error> lazy::tag_content_resolve(lazy::top_level_item source,
+std::expected<lazy::resolved<Checked>, error> lazy::resolve_tag_content(lazy::top_level_item source,
                                                                         validity::offset offset)
 {
     for (;;) {
-        auto found = container_resolve<Checked>(std::move(source), offset);
+        auto found = resolve_container<Checked>(std::move(source), offset);
         if (!found) [[unlikely]]
             return found;
         if (found->h.major != major_type::tag || !heads::is_tag_passed(found->h.argument)) [[likely]] {
@@ -601,24 +613,24 @@ std::expected<lazy::resolved<Checked>, error> lazy::tag_content_resolve(lazy::to
 }
 
 template <bool Checked>
-std::expected<lazy::tag_content, error> lazy::typed_array_bytes_read(resolved<Checked> const &found)
+std::expected<lazy::tag_content, error> lazy::read_typed_array_bytes(resolved<Checked> const &found)
 {
     if (found.h.major != major_type::tag) [[unlikely]]
         return std::unexpected(error::incorrect_type);
-    if (error const r = validity::typed_array_check(found.h.argument, 0).error_or(error{}); r != error{})
+    if (error const r = validity::check_typed_array(found.h.argument, 0).error_or(error{}); r != error{})
         [[unlikely]]
         return std::unexpected(r);
     validity::offset const content =
         heads::self_described_cbor_content_at(found.source.encoded, validity::distance(found.source.encoded, found.d.encoded));
     heads::decoder<Checked> d{validity::subspan(found.source.encoded, content)};
-    auto const r = d.head_decode();
+    auto const r = d.decode_head();
     if (!r) [[unlikely]]
         return std::unexpected(r.error());
     if (error const c = validity::check_typed_array_content(found.h.argument, r->major, r->argument).error_or(error{});
         c != error{}) [[unlikely]]
         return std::unexpected(c);
     auto const offset = validity::offset{validity::distance(found.source.encoded, d.encoded)};
-    auto const bytes = d.byte_string_decode(r->argument);
+    auto const bytes = d.decode_byte_string(r->argument);
     if (!bytes) [[unlikely]]
         return std::unexpected(bytes.error());
     return tag_content{offset, *bytes};
@@ -650,29 +662,30 @@ inline lazy_elements::iterator &lazy_elements::iterator::operator++()
         return *this;
     }
     heads::decoder<false> d{validity::subspan(top_level.encoded, offset)};
-    if (auto const r = well_formedness::items_skip(d, 1); !r) [[unlikely]] {
+    if (auto const r = well_formedness::skip_items(d, 1); !r) [[unlikely]] {
         failure = r.error();
         --left;
         return *this;
     }
     offset = validity::distance(top_level.encoded, d.encoded);
     --left;
-    if (left != 0 && d.encoded.empty()) [[unlikely]]
-        failure = error::too_little_data;
+    if (left != 0)
+        if (auto const r = validity::check_pending_items(left, d.encoded.size()); !r) [[unlikely]]
+            failure = r.error();
     return *this;
 }
 
-inline void lazy_entries::iterator::value_find()
+inline void lazy_entries::iterator::find_value()
 {
     if (left == 0)
         return;
     heads::decoder<false> d{validity::subspan(top_level.encoded, key)};
-    if (auto const r = well_formedness::items_skip(d, 1); !r) [[unlikely]] {
+    if (auto const r = well_formedness::skip_items(d, 1); !r) [[unlikely]] {
         failure = r.error();
         return;
     }
-    if (d.encoded.empty()) [[unlikely]] {
-        failure = error::too_little_data;
+    if (auto const fits = validity::check_bytes_left(heads::initial_byte_size, d.encoded.size()); !fits) [[unlikely]] {
+        failure = fits.error();
         return;
     }
     value = validity::distance(top_level.encoded, d.encoded);
@@ -698,14 +711,14 @@ inline lazy_entries::iterator &lazy_entries::iterator::operator++()
         return *this;
     }
     heads::decoder<false> d{validity::subspan(top_level.encoded, value)};
-    if (auto const r = well_formedness::items_skip(d, 1); !r) [[unlikely]] {
+    if (auto const r = well_formedness::skip_items(d, 1); !r) [[unlikely]] {
         failure = r.error();
         --left;
         return *this;
     }
     key = validity::distance(top_level.encoded, d.encoded);
     --left;
-    value_find();
+    find_value();
     return *this;
 }
 
@@ -747,30 +760,30 @@ std::expected<lazy, error> lazy::take_ownership(Encoded &&encoded)
 
 template <class Key, class Entries, bool Checked>
     requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
-std::expected<typename Entries::iterator, error> lazy::key_find(resolved<Checked> found, Key const key)
+std::expected<typename Entries::iterator, error> lazy::find_key(resolved<Checked> found, Key const key)
 {
     if (heads::is_typed_array(found.h)) [[unlikely]]
-        if (auto const bytes = typed_array_bytes_read(found); !bytes) [[unlikely]]
+        if (auto const bytes = read_typed_array_bytes(found); !bytes) [[unlikely]]
             return std::unexpected(bytes.error());
     if (found.h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
     validity::offset const first = validity::distance(found.source.encoded, found.d.encoded);
-    std::uint64_t const readable = std::min<std::uint64_t>(found.h.argument, found.d.encoded.size());
-    typename Entries::iterator it(std::move(found.source), first, readable);
-    auto found_at = key_find<typename Entries::iterator, std::default_sentinel_t, Key, Checked>(
+    if (auto const r = validity::check_pending_items(found.h.major, found.h.info, found.h.argument, found.d.encoded.size());
+        !r) [[unlikely]]
+        return std::unexpected(r.error());
+    typename Entries::iterator it(std::move(found.source), first, found.h.argument);
+    auto found_at = find_key<typename Entries::iterator, std::default_sentinel_t, Key, Checked>(
         std::move(it), std::default_sentinel, key);
     if (!found_at) [[unlikely]]
         return std::unexpected(found_at.error());
-    if (found_at->first == std::default_sentinel)
-        if (auto const complete = validity::check_entries_all_read(found.h.argument, readable, found_at->first.failure);
-            !complete) [[unlikely]]
-            return std::unexpected(complete.error());
+    if (found_at->first == std::default_sentinel && found_at->first.failure != error{}) [[unlikely]]
+        return std::unexpected(found_at->first.failure);
     return std::move(found_at->first);
 }
 
 template <class Iterator, class Last, class Key, bool Checked>
     requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
-std::expected<std::pair<Iterator, bool>, error> lazy::key_find(Iterator it, Last const last, Key const key)
+std::expected<std::pair<Iterator, bool>, error> lazy::find_key(Iterator it, Last const last, Key const key)
 {
     for (; it != last; ++it) {
         if (it == std::default_sentinel) [[unlikely]] {
@@ -782,13 +795,13 @@ std::expected<std::pair<Iterator, bool>, error> lazy::key_find(Iterator it, Last
             return std::unexpected(it.failure);
         validity::offset const key_at = heads::self_described_cbor_content_at(it.top_level.encoded, it.key);
         heads::decoder<Checked> probe{validity::subspan(it.top_level.encoded, key_at)};
-        auto const k = probe.head_decode();
+        auto const k = probe.decode_head();
         if (!k) [[unlikely]]
             return std::unexpected(k.error());
         bool equal = false;
         if constexpr (std::same_as<Key, std::string_view>) {
             if (k->major == major_type::text_string) {
-                auto const content = probe.byte_string_decode(k->argument);
+                auto const content = probe.decode_byte_string(k->argument);
                 if (!content) [[unlikely]]
                     return std::unexpected(content.error());
                 equal = *content == key;
@@ -800,7 +813,7 @@ std::expected<std::pair<Iterator, bool>, error> lazy::key_find(Iterator it, Last
                 validity::offset const content =
                     heads::self_described_cbor_content_at(it.top_level.encoded, validity::distance(it.top_level.encoded, probe.encoded));
                 heads::decoder<Checked> d{validity::subspan(it.top_level.encoded, content)};
-                auto const read = d.bignum_decode(k->argument);
+                auto const read = d.decode_bignum(k->argument);
                 if (!read) [[unlikely]]
                     return std::unexpected(read.error());
                 bool const negative = k->argument == std::to_underlying(rfc8949::tag_number::negative_bignum);
@@ -821,7 +834,7 @@ std::expected<typename Entries::iterator, error> lazy::find(std::string_view con
     auto found = resolve<true>(*this);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
-    return key_find(std::move(*found), key);
+    return find_key(std::move(*found), key);
 }
 
 template <class Entries>
@@ -831,10 +844,10 @@ std::expected<typename Entries::iterator, error> lazy::find(std::int64_t const k
     auto found = resolve<true>(*this);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
-    return key_find(std::move(*found), key);
+    return find_key(std::move(*found), key);
 }
 
-inline std::expected<std::string_view, error> lazy::typed_array_element_read(lazy const &node)
+inline std::expected<std::string_view, error> lazy::read_typed_array_element(lazy const &node)
 {
     validity::throw_logic_error_if(node.top_level.encoded.data() == nullptr, "cbor::lazy: the lazy holds no top-level item");
     return validity::substr(node.top_level.encoded, node.offset,
@@ -845,21 +858,21 @@ template <bool Checked>
 std::expected<lazy::resolved<Checked>, error> lazy::resolve(lazy const &node)
 {
     if (node.typed_array_tag == 0) [[likely]]
-        return tag_content_resolve<Checked>(node.top_level, node.offset);
-    auto const element = typed_array_element_read(node);
+        return resolve_tag_content<Checked>(node.top_level, node.offset);
+    auto const element = read_typed_array_element(node);
     if (!element) [[unlikely]]
         return std::unexpected(element.error());
-    auto const h = heads::typed_array_element_decode(node.typed_array_tag, *element, validity::index{});
+    auto const h = heads::decode_typed_array_element(node.typed_array_tag, *element, validity::index{});
     if (!h) [[unlikely]]
         return std::unexpected(h.error());
     return resolved<Checked>{node.top_level, *h, heads::decoder<Checked>{std::string_view{}}, node.offset};
 }
 
 template <bool Checked, std::integral Index>
-std::expected<lazy, error> lazy::index_select(resolved<Checked> const &found, Index const i)
+std::expected<lazy, error> lazy::select_index(resolved<Checked> const &found, Index const i)
 {
     if (heads::is_typed_array(found.h)) {
-        auto const bytes = typed_array_bytes_read(found);
+        auto const bytes = read_typed_array_bytes(found);
         if (!bytes) [[unlikely]]
             return std::unexpected(bytes.error());
         std::size_t const size = validity::typed_array_element_size(found.h.argument);
@@ -874,10 +887,10 @@ std::expected<lazy, error> lazy::index_select(resolved<Checked> const &found, In
     if (!position) [[unlikely]]
         return std::unexpected(position.error());
     heads::decoder<Checked> d = found.d;
-    if (auto const r = well_formedness::items_skip(d, std::to_underlying(*position)); !r) [[unlikely]]
+    if (auto const r = well_formedness::skip_items(d, std::to_underlying(*position)); !r) [[unlikely]]
         return std::unexpected(r.error());
     validity::offset const element = validity::distance(found.source.encoded, d.encoded);
-    if (auto const target = heads::decoder<Checked>(d).head_decode(); !target) [[unlikely]]
+    if (auto const target = heads::decoder<Checked>(d).decode_head(); !target) [[unlikely]]
         return std::unexpected(target.error());
     return lazy{found.source, element, {}};
 }
@@ -889,7 +902,7 @@ inline std::expected<std::uint64_t, error> lazy::size() const
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     if (heads::is_typed_array(found->h))
-        return typed_array_bytes_read(*found).transform([&](tag_content const &bytes) -> std::uint64_t {
+        return read_typed_array_bytes(*found).transform([&](tag_content const &bytes) -> std::uint64_t {
             return bytes.bytes.size() / validity::typed_array_element_size(found->h.argument);
         });
     auto const &[source, h, d, item_at] = *found;
@@ -920,20 +933,20 @@ inline std::expected<cbor::type, error> lazy::type() const
         return heads::type_of(found->h.major, found->h.info, found->h.argument);
                             }
                             validity::offset const at = heads::self_described_cbor_content_at(top_level.encoded, offset);
-                            auto const h = heads::raw_head_read<true>(top_level.encoded, at);
+                            auto const h = heads::read_raw_head<true>(top_level.encoded, at);
                             if (!h) [[unlikely]]
                                 return std::unexpected(h.error());
                             if (!heads::is_bignum(h->major, h->argument)) [[likely]]
                                 return heads::type_of(h->major, h->info, h->argument);
                             validity::offset const content = heads::self_described_cbor_content_at(top_level.encoded, h->at);
-                            auto const c = heads::raw_head_read<true>(top_level.encoded, content);
+                            auto const c = heads::read_raw_head<true>(top_level.encoded, content);
                             if (!c) [[unlikely]]
                                 return std::unexpected(c.error());
                             if (c->major != major_type::byte_string ||
                                 !validity::check_definite_length(c->major, c->info).has_value())
                                 return heads::type_of(h->major, h->info, h->argument);
                             heads::decoder<true> d{validity::subspan(top_level.encoded, content)};
-                            auto const read = d.bignum_decode(h->argument);
+                            auto const read = d.decode_bignum(h->argument);
                             if (!read) [[unlikely]]
                                 return std::unexpected(read.error());
                             if (!*read)
@@ -971,7 +984,7 @@ inline std::expected<lazy, error> lazy::at(std::size_t const index) const
     auto const found = resolve<true>(*this);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
-    return index_select(*found, index);
+    return select_index(*found, index);
 }
 
 template <class T>
@@ -989,7 +1002,7 @@ std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_
     throw_logic_error_if_no_top_level();
     if constexpr (std::is_same_v<T, std::span<std::byte const>>) {
         if (typed_array_tag != 0) {
-            auto const element = typed_array_element_read(*this);
+            auto const element = read_typed_array_element(*this);
             if (!element) [[unlikely]]
                 return std::unexpected(element.error());
             return ref<T>(top_level.owner, std::as_bytes(std::span(*element)));
@@ -1000,7 +1013,7 @@ std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_
                 if (typed_array_tag != std::to_underlying(rfc8746::tag_number::float128_big_endian) &&
                     typed_array_tag != std::to_underlying(rfc8746::tag_number::float128_little_endian)) [[unlikely]]
                     return std::unexpected(error::incorrect_type);
-                auto const element = typed_array_element_read(*this);
+                auto const element = read_typed_array_element(*this);
                 if (!element) [[unlikely]]
                     return std::unexpected(element.error());
                 std::array<std::byte, sizeof(std::float128_t)> bits{};
@@ -1024,7 +1037,7 @@ std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_
                         validity::offset const content = heads::self_described_cbor_content_at(
                             source.encoded, validity::distance(source.encoded, d.encoded));
                         d = heads::decoder<true>{validity::subspan(source.encoded, content)};
-                        auto const read = d.bignum_decode(h.argument);
+                        auto const read = d.decode_bignum(h.argument);
                         if (!read) [[unlikely]]
                             return std::unexpected(read.error());
                         if (!*read) [[unlikely]]
@@ -1043,7 +1056,7 @@ std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_
                     validity::offset const content =
                         heads::self_described_cbor_content_at(source.encoded, validity::distance(source.encoded, d.encoded));
                     d = heads::decoder<true>{validity::subspan(source.encoded, content)};
-                    auto const read = d.bignum_decode(h.argument);
+                    auto const read = d.decode_bignum(h.argument);
                     if (!read) [[unlikely]]
                         return std::unexpected(read.error());
                     if (!*read) [[unlikely]]
@@ -1066,7 +1079,7 @@ std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_
                 case rfc8949::simple_float_information::half_precision_float:
                 case rfc8949::simple_float_information::single_precision_float:
                 case rfc8949::simple_float_information::double_precision_float:
-                    return heads::float_decode(h.info, h.argument);
+                    return heads::decode_float(h.info, h.argument);
                 [[unlikely]] default:
                     return std::unexpected(error::incorrect_type);
                 }
@@ -1088,19 +1101,19 @@ std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_
             } else if constexpr (std::is_same_v<T, std::string_view>) {
                 if (h.major != major_type::text_string) [[unlikely]]
                     return std::unexpected(error::incorrect_type);
-                auto const text = d.byte_string_decode(h.argument);
+                auto const text = d.decode_byte_string(h.argument);
                 if (!text) [[unlikely]]
                     return std::unexpected(text.error());
                 return ref<T>(source.owner, *text);
             } else if constexpr (std::is_same_v<T, typed_array>) {
-                auto const bytes = typed_array_bytes_read(*found);
+                auto const bytes = read_typed_array_bytes(*found);
                 if (!bytes) [[unlikely]]
                     return std::unexpected(bytes.error());
                 return ref<T>(source.owner, typed_array{h.argument, std::as_bytes(std::span(bytes->bytes))});
             } else {
                 if (h.major != major_type::byte_string) [[unlikely]]
                     return std::unexpected(error::incorrect_type);
-                auto const bytes = d.byte_string_decode(h.argument);
+                auto const bytes = d.decode_byte_string(h.argument);
                 if (!bytes) [[unlikely]]
                     return std::unexpected(bytes.error());
                 return ref<T>(source.owner, std::as_bytes(std::span(*bytes)));
@@ -1117,7 +1130,7 @@ inline std::expected<lazy_elements, error> lazy::elements() const
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     if (heads::is_typed_array(found->h)) {
-        auto const bytes = typed_array_bytes_read(*found);
+        auto const bytes = read_typed_array_bytes(*found);
         if (!bytes) [[unlikely]]
             return std::unexpected(bytes.error());
         return lazy_elements(found->source, bytes->offset,
@@ -1161,7 +1174,7 @@ inline std::expected<owning<item>, error> lazy::clone() const
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
         std::string encoded;
-        heads::head_append(encoded, h->major, h->info, h->argument);
+        heads::append_head(encoded, h->major, h->info, h->argument);
         return cbor::decode(encoded);
     }
     if (offset == validity::offset{})
@@ -1171,7 +1184,10 @@ inline std::expected<owning<item>, error> lazy::clone() const
     auto const size = item_size(rest);
     if (!size) [[unlikely]]
         return std::unexpected(size.error());
-    return cbor::decode(rest.substr(0, *size));
+    auto const item = validity::substr(rest, validity::offset{0}, *size);
+    if (!item) [[unlikely]]
+        return std::unexpected(item.error());
+    return cbor::decode(*item);
 }
 
 }

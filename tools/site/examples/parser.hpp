@@ -397,7 +397,7 @@ struct parser {
         return called(name, nullptr, *targs, {}, false);
     }
 
-    result member_read(value v, bool const constant)
+    result read_member(value v, bool const constant)
     {
         spaces_skip();
         std::string_view const start = rest;
@@ -441,9 +441,9 @@ struct parser {
                     v = called(std::string(v->kind) + ".operator->()", &*v, {}, {}, constant);
                 }
                 if (v)
-                    v = member_read(std::move(*v), constant);
+                    v = read_member(std::move(*v), constant);
             } else if (consumed(".")) {
-                v = member_read(std::move(*v), constant);
+                v = read_member(std::move(*v), constant);
             } else if (spaces_skip(), rest.starts_with("[")) {
                 std::string_view const start = rest;
                 rest.remove_prefix(1);
