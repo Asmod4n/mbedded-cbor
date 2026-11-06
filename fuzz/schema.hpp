@@ -432,6 +432,59 @@ void unverified_raw(std::string_view const message)
         consume(lot->template at_path<path_text<text>>(), *owner);
 }
 
+// The methods of an accessor read what the root reads: a list accessor counts as many elements through begin and
+// end as size says, an element read through the iterator and through '@' with a run-time index is the same, and a
+// '$' path from inside reads from the root.
+inline void garage_accessors(std::string const &written)
+{
+    auto const root = cbor::schema<garage>::path(std::string(written));
+    require(root.has_value());
+    auto const cars = root->at_path<"$.cars">();
+    require(cars.has_value());
+    std::size_t n = 0;
+    for (auto it = cars->begin(); it != cars->end(); ++it) {
+        auto const car = *it;
+        auto const through_element = car.at_path<"@.balance">();
+        auto const through_index = cars->at_path<"@[].balance">(n);
+        require(through_element.has_value() && through_index.has_value() && *through_element == *through_index);
+        auto const indexed = cars->at_path<"@[]">(n);
+        require(indexed.has_value());
+        auto const again = indexed->at_path<"@.balance">();
+        require(again.has_value() && *again == *through_element);
+        ++n;
+    }
+    require(n == cars->size());
+    auto const note_from_inside = cars->at_path<"$.note">();
+    auto const note = root->at_path<"$.note">();
+    require(note_from_inside.has_value() && note.has_value() && *note_from_inside == *note);
+}
+
+// A typed array view gives each element through [], at, the iterator, front, back, first and last; an index or a
+// count past the end is an error.
+inline void numbers_view(std::string const &written)
+{
+    auto const root = cbor::schema<numbers>::path(std::string(written));
+    require(root.has_value());
+    auto const blob = root->view<"$.list">();
+    require(blob.has_value());
+    std::size_t i = 0;
+    for (std::uint32_t const e : *blob) {
+        auto const at = blob->at(i);
+        require(at.has_value() && *at == e && (*blob)[i] == e);
+        ++i;
+    }
+    require(i == blob->size());
+    if (blob->size() != 0) {
+        require(blob->front() == (*blob)[0] && blob->back() == (*blob)[blob->size() - 1]);
+        auto const head = blob->first(1);
+        auto const tail = blob->last(1);
+        require(head.has_value() && tail.has_value() && head->size() == 1 && tail->size() == 1);
+        require(head->front() == blob->front() && tail->back() == blob->back());
+    }
+    require(!blob->at(blob->size()).has_value());
+    require(!blob->first(blob->size() + 1).has_value());
+}
+
 // Every form of decode and path reads the written message to the value of the std::string form, and the
 // unverified forms read it as the verified ones do: the value is compared by its encoding.
 template <class T>
@@ -452,6 +505,10 @@ void read_forms(std::string const &written)
     require(cbor::schema<T>::path(bytes).has_value());
     require(cbor::schema<T>::path(bytes, std::span<char const>(*bytes)).has_value());
     require(cbor::schema<T>::unverified_path(bytes, std::span<char const>(*bytes)).has_value());
+    if constexpr (std::is_same_v<T, garage>)
+        garage_accessors(written);
+    if constexpr (std::is_same_v<T, numbers>)
+        numbers_view(written);
 }
 
 template <class T>
