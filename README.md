@@ -103,6 +103,9 @@ The code of every library, task by task:
 | g++ 15, clang 23, `-std=c++23` | Linux | every part in C++23 |
 | AppleClang of Xcode 16 and 26 | macOS 15 | every part in C++23 |
 
+On Windows the library builds with clang-cl, the clang frontend. The
+frontend of MSVC is refused at the first include.
+
 On g++ 15, clang 23 and AppleClang, `cbor::structs` reads the members
 through Boost.PFR 1.84 or later, and `cbor::schema` uses it to check that
 a description lists every member of an aggregate. It is the only
