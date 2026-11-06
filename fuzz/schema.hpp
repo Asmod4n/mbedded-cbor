@@ -403,15 +403,68 @@ void read_all(std::string_view const message)
 template <class T>
 void compare_all(T const &native, std::string_view message);
 
+// The errors that an unverified form may give on raw input (doc/reference/schema/unverified.md): it skips the
+// checks of the data and keeps every check of a bound, so it never raises and never reads outside the input.
+inline bool unverified_error(cbor::error const e)
+{
+    using enum cbor::error;
+    return e == too_little_data || e == index_out_of_bounds || e == unpopulated_table_index || e == syntax_error ||
+           e == nesting_depth_exceeded || e == not_enough_memory || e == string_length_exceeded ||
+           e == container_elements_exceeded;
+}
+
+// The unverified forms on raw input give a value or one of their errors, and every leaf path reads inside the
+// message through an unverified accessor.
+template <class T>
+void unverified_raw(std::string_view const message)
+{
+    auto const decoded = cbor::schema<T>::unverified_decode(std::string(message));
+    if (!decoded)
+        require(unverified_error(decoded.error()));
+    static constexpr auto texts = std::define_static_array(path_texts<T>());
+    auto const owner = std::make_shared<std::string const>(message);
+    auto lot = cbor::schema<T>::unverified_path(owner);
+    if (!lot) {
+        require(unverified_error(lot.error()));
+        return;
+    }
+    template for (constexpr std::meta::info text : texts)
+        consume(lot->template at_path<path_text<text>>(), *owner);
+}
+
+// Every form of decode and path reads the written message to the value of the std::string form, and the
+// unverified forms read it as the verified ones do: the value is compared by its encoding.
+template <class T>
+void read_forms(std::string const &written)
+{
+    auto const bytes = std::make_shared<std::vector<char> const>(written.begin(), written.end());
+    auto const encoded_as = [&](auto const &decoded) {
+        require(decoded.has_value());
+        auto const again = cbor::schema<T>::encode(**decoded);
+        require(again.has_value() && *again == written);
+    };
+    encoded_as(cbor::schema<T>::decode(bytes));
+    encoded_as(cbor::schema<T>::decode(bytes, std::span<char const>(*bytes)));
+    encoded_as(cbor::schema<T>::unverified_decode(std::string(written)));
+    encoded_as(cbor::schema<T>::unverified_decode(bytes));
+    encoded_as(cbor::schema<T>::unverified_decode(bytes, std::span<char const>(*bytes)));
+    require(cbor::schema<T>::path(std::string(written)).has_value());
+    require(cbor::schema<T>::path(bytes).has_value());
+    require(cbor::schema<T>::path(bytes, std::span<char const>(*bytes)).has_value());
+    require(cbor::schema<T>::unverified_path(bytes, std::span<char const>(*bytes)).has_value());
+}
+
 template <class T>
 void read_target(std::string_view const message)
 {
     read_all<T>(message);
+    unverified_raw<T>(message);
     auto const value = cbor::schema<T>::decode(std::string(message));
     if (value) {
         auto const again = cbor::schema<T>::encode(**value);
         require(again.has_value());
         compare_all(**value, *again);
+        read_forms<T>(*again);
     }
 }
 
