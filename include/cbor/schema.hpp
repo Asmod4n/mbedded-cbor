@@ -517,6 +517,119 @@ class reflection
             return false;
     }
 
+    template <class A>
+    static constexpr bool is_string_alternative =
+        (is_text_range<A> || is_byte_range<A>) && !requires { fixed_length<A>::value; };
+
+    template <class A>
+    static constexpr bool is_value_alternative = std::is_arithmetic_v<A> || has_fixed_underlying_type<A> || is_wide_integer<A>;
+
+    template <class A>
+    static constexpr bool is_alternative =
+        has_describe_members<A> || is_string_alternative<A> || is_value_alternative<A>;
+
+    static constexpr std::size_t item_prefix_capacity = heads::head_size(std::numeric_limits<std::uint64_t>::max());
+
+    static constexpr std::size_t item_prefixes_capacity = 2;
+
+    struct item_heads {
+        std::size_t size;
+        std::size_t count;
+        std::array<std::array<char, item_prefix_capacity>, item_prefixes_capacity> prefixes;
+    };
+
+    template <class A>
+    static consteval item_heads item_heads_of()
+    {
+        using U = std::remove_cv_t<A>;
+        if constexpr (has_fixed_underlying_type<U>) {
+            return item_heads_of<std::underlying_type_t<U>>();
+        } else {
+            std::vector<char> first;
+            std::vector<char> second;
+            if constexpr (has_describe_members<U>) {
+                heads::append_head(first, major_type::tag, *tag_number_of<U>());
+            } else if constexpr (is_string_alternative<U>) {
+                first.push_back(heads::initial_byte(is_text_range<U> ? major_type::text_string : major_type::byte_string,
+                                                    std::to_underlying(rfc8949::additional_information::four_byte_argument)));
+            } else {
+                std::span<char const> const zero = zero_initialized<void, U>();
+                std::size_t n = 1;
+                if constexpr (is_wide_integer<U>)
+                    n = heads::head_size(std::to_underlying(rfc8949::tag_number::unsigned_bignum)) + heads::head_size(sizeof(U));
+                else if constexpr (std::is_floating_point_v<U>)
+                    n = fixed_size<U, void>() - sizeof(decltype(float_bits(U{})));
+                first = std::vector<char>(std::from_range, zero.first(n));
+                if constexpr (std::same_as<U, bool> || std::same_as<U, int128>) {
+                    second = first;
+                    second.front() = static_cast<char>(static_cast<unsigned char>(first.front()) | 1u);
+                } else if constexpr (std::signed_integral<U>) {
+                    second = first;
+                    second.front() = static_cast<char>(static_cast<unsigned char>(first.front()) |
+                                                       1u << rfc8949::additional_information_bits);
+                }
+            }
+            item_heads h{first.size(), second.empty() ? 1uz : 2uz, {}};
+            std::ranges::copy(first, h.prefixes[0].begin());
+            std::ranges::copy(second, h.prefixes[1].begin());
+            return h;
+        }
+    }
+
+    static consteval bool item_heads_overlap(item_heads const a, item_heads const b)
+    {
+        std::size_t const n = std::min(a.size, b.size);
+        for (std::size_t i = 0; i < a.count; ++i)
+            for (std::size_t j = 0; j < b.count; ++j)
+                if (std::ranges::equal(std::span(a.prefixes[i]).first(n), std::span(b.prefixes[j]).first(n)))
+                    return true;
+        return false;
+    }
+
+    template <class V>
+    static consteval bool alternative_heads_distinct()
+    {
+        return []<std::size_t... K>(std::index_sequence<K...>) {
+            std::array<item_heads, sizeof...(K)> const all{item_heads_of<std::variant_alternative_t<K, V>>()...};
+            for (std::size_t i = 0; i < all.size(); ++i)
+                for (std::size_t j = i + 1; j < all.size(); ++j)
+                    if (item_heads_overlap(all[i], all[j]))
+                        return false;
+            return true;
+        }(std::make_index_sequence<std::variant_size_v<V>>{});
+    }
+
+    template <class V>
+    static consteval std::size_t first_class_alternative()
+    {
+        return []<std::size_t... K>(std::index_sequence<K...>) {
+            std::array<bool, sizeof...(K) + 1> const hits{has_describe_members<std::remove_cv_t<std::variant_alternative_t<K, V>>>..., true};
+            return static_cast<std::size_t>(std::ranges::find(hits, true) - hits.begin());
+        }(std::make_index_sequence<std::variant_size_v<V>>{});
+    }
+
+    template <class V>
+    static consteval bool class_bases_shared()
+    {
+        constexpr std::size_t f = first_class_alternative<V>();
+        if constexpr (f == std::variant_size_v<V>) {
+            return true;
+        } else {
+            using F = std::variant_alternative_t<f, V>;
+            constexpr std::size_t classes = []<std::size_t... K>(std::index_sequence<K...>) {
+                return (std::size_t{has_describe_members<std::remove_cv_t<std::variant_alternative_t<K, V>>>} + ... + 0);
+            }(std::make_index_sequence<std::variant_size_v<V>>{});
+            if constexpr (classes < 2)
+                return true;
+            else
+                return []<std::size_t... K>(std::index_sequence<K...>) {
+                    return ((!has_describe_members<std::remove_cv_t<std::variant_alternative_t<K, V>>> ||
+                             base_shared<std::variant_alternative_t<K, V>, F>()) &&
+                            ...);
+                }(std::make_index_sequence<std::variant_size_v<V>>{});
+        }
+    }
+
     template <class M>
     static consteval bool variant_member_valid()
     {
@@ -527,21 +640,30 @@ class reflection
             }(std::make_index_sequence<std::variant_size_v<U>>{});
             constexpr bool monostate_absent = !contains<std::monostate>(decltype(alternatives){});
             static_assert(monostate_absent, "cbor::schema takes no std::monostate in a std::variant.");
-            constexpr bool described = []<std::size_t... K>(std::index_sequence<K...>) {
-                return (has_describe_members<std::remove_cv_t<std::variant_alternative_t<K, U>>> && ...);
+            constexpr bool enums_fixed = []<std::size_t... K>(std::index_sequence<K...>) {
+                return ((!std::is_enum_v<std::remove_cv_t<std::variant_alternative_t<K, U>>> ||
+                         has_fixed_underlying_type<std::remove_cv_t<std::variant_alternative_t<K, U>>>) &&
+                        ...);
             }(std::make_index_sequence<std::variant_size_v<U>>{});
-            static_assert(!monostate_absent || described,
-                          "cbor::schema takes a std::variant of classes with cbor::describe_members only.");
+            static_assert(enums_fixed, "cbor::schema takes an enum in a std::variant only with a fixed underlying type.");
+            constexpr bool described = []<std::size_t... K>(std::index_sequence<K...>) {
+                return (is_alternative<std::remove_cv_t<std::variant_alternative_t<K, U>>> && ...);
+            }(std::make_index_sequence<std::variant_size_v<U>>{});
+            static_assert(!monostate_absent || !enums_fixed || described,
+                          "cbor::schema takes as an alternative of a std::variant a class with cbor::describe_members, a "
+                          "number, bool, an enum, a text or a byte string; a list, a map, an optional, an array or a "
+                          "variant is not taken.");
             constexpr bool unique = []<std::size_t... K>(std::index_sequence<K...>) {
                 return ((index_in<std::variant_alternative_t<K, U>>(decltype(alternatives){}) == K) && ...);
             }(std::make_index_sequence<std::variant_size_v<U>>{});
             static_assert(unique, "cbor::schema takes each alternative of a std::variant once.");
-            if constexpr (monostate_absent && described) {
-                constexpr bool shared = []<std::size_t... K>(std::index_sequence<K...>) {
-                    return (base_shared<std::variant_alternative_t<K, U>, std::variant_alternative_t<0, U>>() && ...);
-                }(std::make_index_sequence<std::variant_size_v<U>>{});
-                static_assert(shared, "cbor::schema takes a std::variant of classes that name one and the same direct base "
-                                      "class through CBOR_DEFINE_DERIVED_TYPE_MEMBERS or describe_members<T>::base.");
+            if constexpr (monostate_absent && enums_fixed && described && unique) {
+                static_assert(class_bases_shared<U>(),
+                              "cbor::schema takes a std::variant of classes that name one and the same direct base "
+                              "class through CBOR_DEFINE_DERIVED_TYPE_MEMBERS or describe_members<T>::base.");
+                static_assert(alternative_heads_distinct<U>(),
+                              "cbor::schema takes no two alternatives of a std::variant whose items begin with the same "
+                              "CBOR head.");
             }
         } else {
             static_assert(!holds_variant<U>(),
@@ -1501,8 +1623,13 @@ class reflection
                 items += 1;
                 std::visit(
                     [&]<class A>(A const &held) {
-                        add_bytes(fixed_size<A, Root>());
-                        add<A>(held);
+                        if constexpr (is_string_alternative<A>) {
+                            add_bytes(item_head + std::ranges::size(held));
+                        } else {
+                            add_bytes(fixed_size<A, Root>());
+                            if constexpr (has_describe_members<A>)
+                                add<A>(held);
+                        }
                     },
                     value);
             } else if constexpr (is_inline_optional<U>) {
@@ -1568,6 +1695,17 @@ class reflection
         return position;
     }
 
+    template <class S>
+    CBOR_ALWAYS_INLINE static std::size_t write_string(std::span<char> const out, std::size_t const item, S const &value)
+    {
+        std::size_t const data = item + item_head;
+        std::size_t const length = std::ranges::size(value);
+        heads::write_item_head(out, item, is_text_range<S> ? major_type::text_string : major_type::byte_string, length);
+        auto const from = std::as_bytes(std::span(value));
+        std::copy(from.begin(), from.end(), std::as_writable_bytes(out.subspan(data, length)).begin());
+        return data + length;
+    }
+
     template <class Root, bool Exact, description_place D, class V>
     CBOR_ALWAYS_INLINE static encode_cursor encode_reference(std::span<char> const out, std::span<char, dynamic_type_sizes> const field,
                                         V const &value, encode_cursor c)
@@ -1586,10 +1724,14 @@ class reflection
         if constexpr (detail::is_std_variant<U>) {
             std::visit(
                 [&]<class A>(A const &held) {
-                    auto const record = out.subspan(item).template first<fixed_size<A, Root>()>();
-                    copy_zero_initialized<Root, A>(record);
-                    c.position = item + fixed_size<A, Root>();
-                    c = encode_value<Root, A, Exact, D>(out, record, held, c);
+                    if constexpr (is_string_alternative<A>) {
+                        c.position = write_string(out, item, held);
+                    } else {
+                        auto const record = out.subspan(item).template first<fixed_size<A, Root>()>();
+                        copy_zero_initialized<Root, A>(record);
+                        c.position = item + fixed_size<A, Root>();
+                        c = encode_value<Root, A, Exact, D>(out, record, held, c);
+                    }
                 },
                 value);
         } else if constexpr (is_optional<U>) {
@@ -1603,11 +1745,7 @@ class reflection
                 c = encode_value<Root, E, Exact, D>(out, element, *value, c);
             }
         } else if constexpr (is_text_range<U> || is_byte_range<U>) {
-            std::size_t const length = std::ranges::size(value);
-            heads::write_item_head(out, item, is_text_range<U> ? major_type::text_string : major_type::byte_string, length);
-            auto const from = std::as_bytes(std::span(value));
-            std::copy(from.begin(), from.end(), std::as_writable_bytes(out.subspan(data, length)).begin());
-            c.position = data + length;
+            c.position = write_string(out, item, value);
         } else if constexpr (is_map<U>) {
             using K = typename U::key_type;
             using M = typename U::mapped_type;
@@ -1863,31 +2001,24 @@ class reflection
         }
     }
 
+    template <class Root, class A, std::size_t N>
+    CBOR_ALWAYS_INLINE static bool item_head_valid(std::span<char const, N> const field)
+    {
+        if constexpr (has_describe_members<A>) {
+            return class_tag_valid<Root, A>(field);
+        } else {
+            static constexpr item_heads h = item_heads_of<A>();
+            static_assert(N != std::dynamic_extent && N >= h.size, "The field must hold the whole head.");
+            return std::ranges::any_of(std::span(h.prefixes).first(h.count), [field](auto const &prefix) {
+                return std::ranges::equal(field.template first<h.size>(), std::span(prefix).template first<h.size>());
+            });
+        }
+    }
+
     template <class T>
     CBOR_ALWAYS_INLINE static bool fixed_head_valid(std::span<char const, fixed_size<T, T>()> const field)
     {
-        using U = std::remove_cv_t<T>;
-        auto const head = static_cast<unsigned char>(field.front());
-        if constexpr (std::same_as<U, bool>) {
-            return (head | 1) == static_cast<unsigned char>(heads::initial_byte(
-                                     major_type::simple_float, std::to_underlying(simple_value::true_value)));
-        } else if constexpr (has_fixed_underlying_type<U>) {
-            return fixed_head_valid<std::underlying_type_t<U>>(field);
-        } else {
-            constexpr unsigned char expected = static_cast<unsigned char>(zero_initialized<void, U>()[0]);
-            if constexpr (std::same_as<U, int128> || std::same_as<U, uint128>)
-                static_assert(fixed_size<T, T>() > 1, "The field must hold the second byte that is read.");
-            if constexpr (std::signed_integral<U> || std::same_as<U, int128>) {
-                if constexpr (std::same_as<U, int128>)
-                    return (head & 0xfe) == expected && static_cast<unsigned char>(field[1]) == static_cast<unsigned char>(zero_initialized<void, U>()[1]);
-                else
-                    return (head & static_cast<unsigned char>(~(1 << rfc8949::additional_information_bits))) == expected;
-            } else if constexpr (std::same_as<U, uint128>) {
-                return head == expected && static_cast<unsigned char>(field[1]) == static_cast<unsigned char>(zero_initialized<void, U>()[1]);
-            } else {
-                return head == expected;
-            }
-        }
+        return item_head_valid<void, std::remove_cv_t<T>>(field);
     }
 
     template <class Root, class U, std::size_t N>
@@ -2090,15 +2221,23 @@ class reflection
         if constexpr (K == std::variant_size_v<V>) {
             return std::unexpected(fault);
         } else {
-            using A = std::variant_alternative_t<K, V>;
-            constexpr std::size_t n = heads::head_size(*tag_number_of<A>());
+            using A = std::remove_cv_t<std::variant_alternative_t<K, V>>;
+            constexpr std::size_t n = item_heads_of<A>().size;
             if (!validity::check_bytes_left(item + n, end)) [[unlikely]]
                 return read_variant_item<Root, V, K + 1>(encoded, item, end, error::too_little_data);
-            if (!class_tag_valid<Root, A>(std::span<char const>(encoded).subspan(item).template first<n>()))
+            if (!item_head_valid<Root, A>(std::span<char const>(encoded).subspan(item).template first<n>()))
                 return read_variant_item<Root, V, K + 1>(encoded, item, end, fault);
-            if (auto const fits = validity::check_bytes_left(item + fixed_size<A, Root>(), end); !fits) [[unlikely]]
-                return std::unexpected(fits.error());
-            return variant_reference{item, fixed_size<A, Root>(), K};
+            if constexpr (is_string_alternative<A>) {
+                auto const r = read_item_reference<Root, is_text_range<A> ? major_type::text_string : major_type::byte_string,
+                                                   void, false>(encoded, item, end, 1);
+                if (!r) [[unlikely]]
+                    return std::unexpected(r.error());
+                return variant_reference{r->data, r->length, K};
+            } else {
+                if (auto const fits = validity::check_bytes_left(item + fixed_size<A, Root>(), end); !fits) [[unlikely]]
+                    return std::unexpected(fits.error());
+                return variant_reference{item, fixed_size<A, Root>(), K};
+            }
         }
     }
 
@@ -2654,15 +2793,39 @@ class reflection
             return r;
         }
 
+        template <class U>
+        static void assign_string(U &out, std::string_view const part)
+        {
+            if constexpr (std::same_as<std::remove_cv_t<std::ranges::range_value_t<U>>, std::byte>) {
+                auto const raw = std::as_bytes(std::span(part));
+                if constexpr (std::ranges::view<U>)
+                    out = U(raw.begin(), raw.end());
+                else
+                    out.assign(raw.begin(), raw.end());
+            } else if constexpr (std::ranges::view<U>) {
+                out = U(part.begin(), part.end());
+            } else {
+                out.assign(part.begin(), part.end());
+            }
+        }
+
         template <class Root, class V, std::size_t K>
         std::expected<void, error> read_alternative(V &out, variant_reference const r, std::size_t const depth,
                                                     std::size_t const depth_max)
         {
             using A = std::variant_alternative_t<K, V>;
-            auto const record = std::span<char const>(encoded).subspan(r.data).template first<fixed_size<A, Root>()>();
-            if constexpr (std::is_default_constructible_v<A>) {
+            if constexpr (is_string_alternative<A>) {
+                assign_string(out.template emplace<K>(), std::string_view(std::span(encoded).subspan(r.data, r.size)));
+                return {};
+            } else if constexpr (is_value_alternative<A>) {
+                out.template emplace<K>(read_fixed_value<A>(
+                    std::span<char const>(encoded).subspan(r.data).template first<fixed_size<A, A>()>()));
+                return {};
+            } else if constexpr (std::is_default_constructible_v<A>) {
+                auto const record = std::span<char const>(encoded).subspan(r.data).template first<fixed_size<A, Root>()>();
                 return read_value<Root>(out.template emplace<K>(), record, depth, depth_max);
             } else {
+                auto const record = std::span<char const>(encoded).subspan(r.data).template first<fixed_size<A, Root>()>();
                 auto made = read_constructed<Root, A>(make_arguments<A>(), record, depth, depth_max);
                 if (!made) [[unlikely]]
                     return std::unexpected(made.error());
@@ -2777,18 +2940,7 @@ class reflection
                 auto const r = take_reference<Root, is_text_range<U> ? major_type::text_string : major_type::byte_string>(field, 1);
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                std::string_view const part{std::span(encoded).subspan(r->data, r->length)};
-                if constexpr (std::same_as<std::remove_cv_t<std::ranges::range_value_t<U>>, std::byte>) {
-                    auto const raw = std::as_bytes(std::span(part));
-                    if constexpr (std::ranges::view<U>)
-                        out = U(raw.begin(), raw.end());
-                    else
-                        out.assign(raw.begin(), raw.end());
-                } else if constexpr (std::ranges::view<U>) {
-                    out = U(part.begin(), part.end());
-                } else {
-                    out.assign(part.begin(), part.end());
-                }
+                assign_string(out, std::string_view(std::span(encoded).subspan(r->data, r->length)));
                 return {};
             } else if constexpr (is_map<U>) {
                 using K = typename U::key_type;
@@ -3704,17 +3856,29 @@ public:
             return self.held.index;
         }
 
+        template <class E>
+        using alternative_result =
+            std::conditional_t<has_describe_members<E>, accessor<E, Verified>,
+                               std::conditional_t<reflection::is_string_alternative<E>, std::string_view, E>>;
+
         template <class E, class Self>
             requires(std::is_lvalue_reference_v<Self> && (std::same_as<E, A> || ...))
-        std::expected<accessor<E, Verified>, error> get(this Self &&self)
+        std::expected<alternative_result<E>, error> get(this Self &&self)
         {
             validity::throw_logic_error_if_empty(self.owner, "cbor::schema::accessor::get: the accessor was moved from");
             constexpr std::size_t k = reflection::index_in<E>(std::tuple<std::type_identity<A>...>{});
             if (self.held.index != k) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            constexpr std::size_t n = reflection::fixed_size<E, T>();
-            return accessor<E, Verified>(self.owner, self.encoded,
-                                         std::span<char const>(self.encoded).subspan(self.held.data).template first<n>(), self.dir);
+            if constexpr (reflection::is_string_alternative<E>) {
+                return std::string_view(std::span(self.encoded).subspan(self.held.data, self.held.size));
+            } else if constexpr (reflection::is_value_alternative<E>) {
+                constexpr std::size_t n = reflection::fixed_size<E, E>();
+                return reflection::read_fixed_value<E>(std::span<char const>(self.encoded).subspan(self.held.data).template first<n>());
+            } else {
+                constexpr std::size_t n = reflection::fixed_size<E, T>();
+                return accessor<E, Verified>(self.owner, self.encoded,
+                                             std::span<char const>(self.encoded).subspan(self.held.data).template first<n>(), self.dir);
+            }
         }
     };
 

@@ -294,3 +294,33 @@ TEST_CASE("at_path: a variant accessor owns the message and refuses a use after 
     CHECK_THROWS_AS((void)pet.index(), std::logic_error);
     CHECK_THROWS_AS((void)pet.get<cat>(), std::logic_error);
 }
+
+// get gives a value alternative by value, a text or byte string alternative as a view into the message, and a
+// class alternative as an accessor; any other alternative is incorrect_type.
+TEST_CASE("at_path: get of a value, a text and a byte string alternative")
+{
+    for (setting const &s : sample_settings()) {
+        auto const doc = form<setting>::path(*form<setting>::encode(s));
+        REQUIRE(doc.has_value());
+        auto const v = doc->at_path<"$.value">();
+        REQUIRE(v.has_value());
+        CHECK_EQ(v->index(), s.value.index());
+        if (auto const *b = std::get_if<bool>(&s.value))
+            CHECK_EQ(v->get<bool>().value(), *b);
+        if (auto const *n = std::get_if<std::int32_t>(&s.value))
+            CHECK_EQ(v->get<std::int32_t>().value(), *n);
+        if (auto const *d = std::get_if<double>(&s.value))
+            CHECK_EQ(v->get<double>().value(), *d);
+        if (auto const *t = std::get_if<std::string>(&s.value))
+            CHECK_EQ(v->get<std::string>().value(), *t);
+        if (std::holds_alternative<std::vector<std::byte>>(s.value))
+            CHECK_EQ(v->get<std::vector<std::byte>>().value(), "\x01\x02"sv);
+        if (s.value.index() != 0)
+            CHECK_EQ(v->get<bool>().error(), error::incorrect_type);
+    }
+    auto const doc = form<shelter>::path(*form<shelter>::encode(shelter{std::int64_t{-7}, "n"}));
+    auto const pet = doc->at_path<"$.pet">();
+    CHECK_EQ(pet->get<std::int64_t>().value(), -7);
+    CHECK_EQ(pet->get<dog>().error(), error::incorrect_type);
+    CHECK_FALSE(accessor_path_reads<setting, "$.value.name">);
+}

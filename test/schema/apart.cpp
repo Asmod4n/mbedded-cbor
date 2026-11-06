@@ -159,3 +159,16 @@ TEST_CASE("description apart: the unverified forms stay inside the input")
         reads(data.substr(0, n));
     reads(schema_bytes(sample_everything));
 }
+
+// A value variant in the data form: the description apart changes the prefix only; each alternative reads back.
+TEST_CASE("description apart: a value variant reads back from the data form")
+{
+    constexpr auto apart = cbor::description_place::apart;
+    for (setting const &s : sample_settings()) {
+        auto const data = form<setting>::encode<apart>(s);
+        REQUIRE(data.has_value());
+        auto const back = form<setting>::decode<apart>(std::string(*data));
+        REQUIRE(back.has_value());
+        CHECK(((*back)->value == s.value));
+    }
+}

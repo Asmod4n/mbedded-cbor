@@ -26,7 +26,8 @@ the example below shows.
 `schema` writes the number as the first item of each record of the
 struct. A read compares it, so a message of another struct gives
 `incorrect_type`. The tag of a record of a `std::variant` member
-chooses the alternative; a tag of no alternative is `incorrect_type`.
+chooses a class alternative; a head of no alternative is
+`incorrect_type`.
 Each alternative has its own number, also when it derives from the
 class of another number. `structs` takes the same description.
 

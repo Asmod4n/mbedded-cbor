@@ -10,6 +10,7 @@
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <variant>
 #include <vector>
 
 using namespace std::string_literals;
@@ -306,4 +307,26 @@ TEST_CASE("limits sizes 2: sequence_reader gives an item above a size limit, and
         CHECK_EQ(array->size().error(), error::container_elements_exceeded);
         CHECK(r.empty());
     }
+}
+
+namespace
+{
+
+struct labelled {
+    std::variant<std::int32_t, std::string> label;
+};
+
+} // namespace
+
+CBOR_DEFINE_TYPE_MEMBERS(labelled, cbor::tag{1749}, label);
+
+// A text alternative of a variant member is a string item, so string_length counts its length as it counts a
+// text member: a text at the limit reads, one above it is string_length_exceeded in decode and on the path.
+TEST_CASE("limits sizes 2: string_length on a text alternative of a variant member")
+{
+    auto const fits = cbor::schema<labelled>::encode(labelled{std::string(limit, 'a')});
+    CHECK(cbor::schema<labelled>::decode(std::string(*fits)).has_value());
+    auto const above = cbor::schema<labelled>::encode(labelled{std::string(limit + 1, 'a')});
+    CHECK_EQ(cbor::schema<labelled>::decode(std::string(*above)).error(), error::string_length_exceeded);
+    CHECK_EQ(cbor::schema<labelled>::path(std::string(*above))->at_path<"$.label">().error(), error::string_length_exceeded);
 }

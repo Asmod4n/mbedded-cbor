@@ -213,3 +213,26 @@ TEST_CASE("unverified: a variant member reads as in the verified forms")
     REQUIRE(forged_doc);
     CHECK_EQ(forged_doc->at_path<"$.pet">().error(), error::incorrect_type);
 }
+
+// The unverified forms choose the alternative by the same head compare, so a head of no alternative is
+// incorrect_type there too, and get gives the same values.
+TEST_CASE("unverified: value and text alternatives read as in the verified forms")
+{
+    for (setting const &s : sample_settings()) {
+        auto const bytes = *form<setting>::encode(s);
+        auto const doc = form<setting>::unverified_path(std::string(bytes));
+        REQUIRE(doc.has_value());
+        auto const v = doc->at_path<"$.value">();
+        REQUIRE(v.has_value());
+        CHECK_EQ(v->index(), s.value.index());
+        if (auto const *t = std::get_if<std::string>(&s.value))
+            CHECK_EQ(v->get<std::string>().value(), *t);
+        if (auto const *n = std::get_if<std::int32_t>(&s.value))
+            CHECK_EQ(v->get<std::int32_t>().value(), *n);
+    }
+    std::string forged = *form<setting>::encode(setting{"x", std::int32_t{1}});
+    std::size_t const at = forged.size() - form<setting>::fixed_size() - form<setting>::fixed_size<std::int32_t>();
+    forged[at] = '\x1b';
+    CHECK_EQ(form<setting>::unverified_decode(std::string(forged)).error(), error::incorrect_type);
+    CHECK_EQ(form<setting>::unverified_path(std::string(forged))->at_path<"$.value">().error(), error::incorrect_type);
+}
