@@ -269,7 +269,8 @@ std::vector<wg_vector> wg_vectors_of(std::string const &path)
                     member_bool(*t, "roundtrip", true),
                     member_bool(*t, "fail", file_fail)};
         if (auto const decoded = t->at("decoded")) {
-            std::string_view const rest = cbor::validity::subspan(std::string_view(file), decoded->offset);
+            std::string_view const rest =
+                std::string_view(file).substr(decoded->offset);
             auto const end = cbor::item_size(rest);
             REQUIRE(end.has_value());
             v.decoded = std::string(rest.substr(0, *end));
@@ -422,7 +423,8 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
         // RFC 8949 3: the content follows the head, whose argument takes 1 << (ai - 24) bytes from ai 24 on.
         std::size_t const argument_bytes =
             it.additional_information < 24 ? 0 : std::size_t{1} << (it.additional_information - 24);
-        auto content = lazy_value(cbor::lazy{l.top_level, cbor::validity::next(l.offset, 1 + argument_bytes)});
+        auto content =
+            lazy_value(cbor::lazy{l.top_level, l.offset + 1 + argument_bytes});
         if (!content)
             return content;
         return value{tagged{argument_of(it), std::move(*content)}};
@@ -575,7 +577,7 @@ TEST_CASE("cbor-wg test vectors: every good vector decodes to its decoded item")
     CHECK_EQ(count.vectors, 88u + 11u + 5u + 2u + 7u + 4u + 5u + 8u + 22u + 6u + 1165u);
     // Three vectors nest deeper than 128 and no vector deeper than the bound.
     CHECK_EQ(count.nesting_depth_exceeded,
-             cbor::limits::nesting_depth == cbor::validity::nesting_depth_limit ? 0u : 3u);
+             cbor::limits::nesting_depth == cbor::detail::validity::nesting_depth_limit ? 0u : 3u);
 }
 
 // bad.cbor holds items that are not well-formed or not valid. Each one fails in decode, lazy and diagnostic_notation,

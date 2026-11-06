@@ -33,7 +33,7 @@ public:
     template <owning_range_of_chars Encoded>
     explicit sequence(std::shared_ptr<Encoded const> e)
     {
-        validity::throw_logic_error_if_null(e, "cbor::sequence: the encoded data items are null");
+        detail::validity::throw_logic_error_if_null(e, "cbor::sequence: the encoded data items are null");
         encoded = std::string_view(std::span<char const>(*e));
         owner = std::move(e);
     }
@@ -42,7 +42,8 @@ public:
     sequence(std::shared_ptr<void const> o, Encoded const &e)
         : owner(std::move(o)), encoded(std::span<char const>(e))
     {
-        validity::throw_logic_error_if_empty(owner, "cbor::sequence: the owner of the encoded data items is empty");
+        detail::validity::throw_logic_error_if_empty(
+            owner, "cbor::sequence: the owner of the encoded data items is empty");
     }
 
 
@@ -70,7 +71,7 @@ public:
         {
             if (!size) [[unlikely]]
                 return std::unexpected(size.error());
-            return validity::substr(bytes, validity::offset{0}, *size);
+            return detail::validity::substr(bytes, detail::validity::offset{0}, *size);
         }
 
         iterator &operator++()
@@ -79,7 +80,7 @@ public:
                 bytes = std::string_view(std::span(bytes).last(0));
                 return *this;
             }
-            bytes = validity::subspan(bytes, validity::offset{*size});
+            bytes = detail::validity::subspan(bytes, detail::validity::offset{*size});
             size = item_size(bytes);
             return *this;
         }

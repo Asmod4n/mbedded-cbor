@@ -104,7 +104,8 @@ private:
             requires std::same_as<E, char> || std::same_as<E, std::byte>
         std::expected<void, std::errc> append(std::span<E const> const part)
         {
-            if (auto const fits = validity::check_space_left(part.size(), out.size() - used); !fits) [[unlikely]]
+            if (auto const fits = detail::validity::check_space_left(part.size(), out.size() - used); !fits)
+                [[unlikely]]
                 return fits;
             std::ranges::copy(std::as_bytes(part), std::as_writable_bytes(out.subspan(used).first(part.size())).begin());
             used += part.size();
@@ -192,8 +193,8 @@ struct encoding::encoder {
         requires blocks
     {
         block = writer.preallocate(std::max(needed, block_size));
-        validity::throw_logic_error_if(block.size() < needed,
-                                       "cbor::encoder: the writer gave a block shorter than the item");
+        detail::validity::throw_logic_error_if(
+            block.size() < needed, "cbor::encoder: the writer gave a block shorter than the item");
         used = 0;
         closed = 0;
     }
@@ -235,9 +236,9 @@ struct encoding::encoder {
     write_item(std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> const &item,
                std::size_t const size)
     {
-        if (!validity::bytes_fit(item.size(), block.size() - used)) [[unlikely]] {
+        if (!detail::validity::bytes_fit(item.size(), block.size() - used)) [[unlikely]] {
             if constexpr (direct) {
-                if (!validity::bytes_fit(size, block.size() - used)) [[unlikely]]
+                if (!detail::validity::bytes_fit(size, block.size() - used)) [[unlikely]]
                     return std::unexpected(std::errc::no_buffer_space);
                 std::ranges::copy(std::span(item).first(size), block.subspan(used).begin());
                 used += size;
@@ -259,7 +260,8 @@ struct encoding::encoder {
                                         std::numeric_limits<std::uint8_t>::digits * bytes) &
                                        (std::numeric_limits<std::uint64_t>::digits - 1)));
         if constexpr (!direct) {
-            if (!validity::bytes_fit(heads::initial_byte_size + sizeof(std::uint64_t), block.size() - used)) [[unlikely]]
+            if (!detail::validity::bytes_fit(heads::initial_byte_size + sizeof(std::uint64_t),
+                                             block.size() - used)) [[unlikely]]
                 if (auto const r = refill(item_size_max); !r) [[unlikely]]
                     return r;
             std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> head;
@@ -277,7 +279,7 @@ struct encoding::encoder {
             std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> tail;
             static_assert(heads::initial_byte_size + sizeof big <= std::tuple_size_v<decltype(tail)>,
                           "A head must hold the initial byte and the eight argument bytes.");
-            bool const near_end = !validity::bytes_fit(tail.size(), out.size() - at);
+            bool const near_end = !detail::validity::bytes_fit(tail.size(), out.size() - at);
             std::span<char, heads::initial_byte_size + sizeof(std::uint64_t)> const item =
                 near_end ? std::span(tail)
                          : out.subspan(at).template first<heads::initial_byte_size + sizeof(std::uint64_t)>();
@@ -304,7 +306,7 @@ struct encoding::encoder {
     CBOR_ALWAYS_INLINE std::expected<void, std::errc> encode_head(major_type const major, std::uint64_t const argument)
     {
         using info = rfc8949::additional_information;
-        if (validity::bytes_fit(item_size_max, block.size() - used)) [[likely]] {
+        if (detail::validity::bytes_fit(item_size_max, block.size() - used)) [[likely]] {
             if (argument < std::to_underlying(info::one_byte_argument)) {
                 std::span<char> const out = block;
                 out[used] = heads::initial_byte(major, static_cast<std::uint8_t>(argument));
@@ -431,7 +433,8 @@ struct encoding::encoder {
 
     std::expected<void, std::errc> encode_text_string(std::shared_ptr<std::string const> const text)
     {
-        validity::throw_logic_error_if_null(text, "cbor::encoder::encode_text_string: the string is null");
+        detail::validity::throw_logic_error_if_null(text,
+                                                    "cbor::encoder::encode_text_string: the string is null");
         if constexpr (blocks)
             if (text->size() >= ref_size)
                 return encode_piece(major_type::text_string, std::as_bytes(std::span(*text)), text);
@@ -460,7 +463,8 @@ struct encoding::encoder {
 
     std::expected<void, std::errc> encode_byte_string(std::shared_ptr<std::vector<std::byte> const> const bytes)
     {
-        validity::throw_logic_error_if_null(bytes, "cbor::encoder::encode_byte_string: the bytes are null");
+        detail::validity::throw_logic_error_if_null(bytes,
+                                                    "cbor::encoder::encode_byte_string: the bytes are null");
         if constexpr (blocks)
             if (bytes->size() >= ref_size)
                 return encode_piece(major_type::byte_string, std::span(*bytes), bytes);
@@ -502,7 +506,7 @@ struct encoding::encoder {
         requires(sizeof(T) <= sizeof(std::uint64_t))
     CBOR_ALWAYS_INLINE std::expected<void, std::errc> encode_fixed_width_head(major_type const major, T const argument)
     {
-        if (validity::bytes_fit(item_size_max, block.size() - used)) [[likely]] {
+        if (detail::validity::bytes_fit(item_size_max, block.size() - used)) [[likely]] {
             put_item(heads::initial_byte(major, static_cast<std::uint8_t>(
                                                     std::to_underlying(rfc8949::additional_information::one_byte_argument) +
                                                     std::countr_zero(sizeof(T)))),
@@ -540,7 +544,7 @@ class iov_writer
 
     std::span<char> preallocate(std::size_t const size)
     {
-        validity::throw_logic_error_if(released, "cbor::iov_writer: a write after release");
+        detail::validity::throw_logic_error_if(released, "cbor::iov_writer: a write after release");
         kept->blocks.emplace_back(size);
         return std::span(kept->blocks.back());
     }
@@ -555,7 +559,7 @@ class iov_writer
 
     void postallocate(std::span<char> const part)
     {
-        validity::throw_logic_error_if(released, "cbor::iov_writer: a write after release");
+        detail::validity::throw_logic_error_if(released, "cbor::iov_writer: a write after release");
         if (part.empty())
             return;
         push_piece(part.data(), part.size());
@@ -563,14 +567,14 @@ class iov_writer
 
     void wrap_buffer(std::span<std::byte const> const piece, std::shared_ptr<void const> owner)
     {
-        validity::throw_logic_error_if(released, "cbor::iov_writer: a write after release");
+        detail::validity::throw_logic_error_if(released, "cbor::iov_writer: a write after release");
         kept->owners.push_back(std::move(owner));
         push_piece(const_cast<std::byte *>(piece.data()), piece.size());
     }
 
     ref<std::span<iovec const>> release()
     {
-        validity::throw_logic_error_if(released, "cbor::iov_writer: a second release");
+        detail::validity::throw_logic_error_if(released, "cbor::iov_writer: a second release");
         released = true;
         std::span<iovec const> const pieces = kept->pieces;
         return {std::move(kept), pieces};
@@ -593,14 +597,15 @@ class encoder
 
     void throw_logic_error_if_unusable() const
     {
-        validity::throw_logic_error_if(!usable, "cbor::encoder: a call after an error or after finish");
+        detail::validity::throw_logic_error_if(!usable,
+                                               "cbor::encoder: a call after an error or after finish");
     }
 
     std::expected<void, error> written(std::expected<void, std::errc> const r)
     {
         if (!r) [[unlikely]] {
             usable = false;
-            return std::unexpected(validity::writer_error(r.error()));
+            return std::unexpected(detail::validity::writer_error(r.error()));
         }
         return {};
     }
@@ -746,7 +751,7 @@ public:
     {
         throw_logic_error_if_unusable();
         std::uint8_t const info = heads::preferred_argument_info(std::to_underlying(value));
-        if (!validity::check_simple_value(info, std::to_underlying(value))) [[unlikely]]
+        if (!detail::validity::check_simple_value(info, std::to_underlying(value))) [[unlikely]]
             return refused(error::reserved_simple_value);
         return written(out.encode_head(major_type::simple_float, info, std::to_underlying(value)));
     }
@@ -768,7 +773,8 @@ public:
     std::expected<void, error> typed_array(cbor::typed_array const value)
     {
         throw_logic_error_if_unusable();
-        if (auto const r = validity::check_typed_array(value.tag, value.bytes.size()); !r) [[unlikely]]
+        if (auto const r = detail::validity::check_typed_array(value.tag, value.bytes.size()); !r)
+            [[unlikely]]
             return refused(r.error() == error::incorrect_type ? error::unsupported_value : r.error());
         if (auto const r = written(out.encode_head(major_type::tag, value.tag)); !r) [[unlikely]]
             return r;
@@ -801,7 +807,7 @@ template <class Writer>
 std::expected<void, error> encoding::encode_item(encoder<Writer> &out, item const &node, std::size_t const depth,
                                                  std::size_t const depth_max)
 {
-    if (auto const r = validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
+    if (auto const r = detail::validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
         return r;
     major_type const major = heads::major_type_of(node.type);
     std::uint64_t argument = node.via.u64;
@@ -817,8 +823,8 @@ std::expected<void, error> encoding::encode_item(encoder<Writer> &out, item cons
         argument = node.via.array.size();
         break;
     case cbor::type::map:
-        validity::throw_logic_error_if(node.via.map.size() % rfc8949::data_items_per_pair != 0,
-                                       "cbor::encode: a map holds a key and a value for each entry");
+        detail::validity::throw_logic_error_if(node.via.map.size() % rfc8949::data_items_per_pair != 0,
+                                               "cbor::encode: a map holds a key and a value for each entry");
         argument = node.via.map.size() / rfc8949::data_items_per_pair;
         break;
     case cbor::type::unsigned_bignum:
@@ -826,13 +832,13 @@ std::expected<void, error> encoding::encode_item(encoder<Writer> &out, item cons
         if (node.via.tag.content->type == cbor::type::byte_string) {
             std::span<std::byte const> const magnitude =
                 heads::magnitude_without_leading_zeros(node.via.tag.content->via.bin);
-            if (validity::check_magnitude_size(magnitude.size(), sizeof(std::uint64_t))) {
+            if (detail::validity::check_magnitude_size(magnitude.size(), sizeof(std::uint64_t))) {
                 std::expected<void, std::errc> const fits =
                     out.encode_head(node.type == cbor::type::negative_bignum ? major_type::negative_integer
                                                                             : major_type::unsigned_integer,
                                     heads::magnitude_value(magnitude));
                 if (!fits) [[unlikely]]
-                    return std::unexpected(validity::writer_error(fits.error()));
+                    return std::unexpected(detail::validity::writer_error(fits.error()));
                 return {};
             }
         }
@@ -867,7 +873,7 @@ std::expected<void, error> encoding::encode_item(encoder<Writer> &out, item cons
     }
     std::expected<void, std::errc> written = out.encode_head(major, info, argument);
     if (!written) [[unlikely]]
-        return std::unexpected(validity::writer_error(written.error()));
+        return std::unexpected(detail::validity::writer_error(written.error()));
     switch (major) {
     case major_type::byte_string:
         written = out.encode_payload(node.via.bin);
@@ -889,7 +895,7 @@ std::expected<void, error> encoding::encode_item(encoder<Writer> &out, item cons
         break;
     }
     if (!written) [[unlikely]]
-        return std::unexpected(validity::writer_error(written.error()));
+        return std::unexpected(detail::validity::writer_error(written.error()));
     return {};
 }
 
@@ -901,9 +907,9 @@ std::expected<std::size_t, error> encode(item const &root, Target &&target)
     if (auto const r = encoding::encode_item(out, root, 0, limits::nesting_depth); !r) [[unlikely]]
         return std::unexpected(r.error());
     if (auto const r = out.flush(); !r) [[unlikely]]
-        return std::unexpected(validity::writer_error(r.error()));
+        return std::unexpected(detail::validity::writer_error(r.error()));
     if (auto const r = message.done(out.written); !r) [[unlikely]]
-        return std::unexpected(validity::writer_error(r.error()));
+        return std::unexpected(detail::validity::writer_error(r.error()));
     return out.written;
 }
 

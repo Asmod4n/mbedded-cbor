@@ -123,7 +123,8 @@ class heads
                                                     std::numeric_limits<std::uint8_t>::digits * width) &
                                                    (std::numeric_limits<std::uint64_t>::digits - 1)));
         if constexpr (Exact) {
-            if (!validity::bytes_fit(initial_byte_size + sizeof(std::uint64_t), out.size() - at)) [[unlikely]] {
+            if (!detail::validity::bytes_fit(initial_byte_size + sizeof(std::uint64_t), out.size() - at))
+                [[unlikely]] {
                 auto const field = out.subspan(at, initial_byte_size + width);
                 field.front() = initial_byte(major, info);
                 std::ranges::copy(std::span(bytes).first(width), field.subspan(initial_byte_size).begin());
@@ -249,20 +250,21 @@ class heads
 
         CBOR_ALWAYS_INLINE std::expected<head, error> decode_head()
         {
-            if (auto const fits = validity::check_bytes_left(initial_byte_size, encoded.size()); !fits) [[unlikely]]
+            if (auto const fits = detail::validity::check_bytes_left(initial_byte_size, encoded.size());
+                !fits) [[unlikely]]
                 return std::unexpected(fits.error());
             auto const initial = static_cast<std::uint8_t>(encoded.front());
             auto const major = static_cast<major_type>(initial >> rfc8949::additional_information_bits);
             std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
             if (info < std::to_underlying(rfc8949::additional_information::one_byte_argument)) {
-                if (error const r = validity::check_argument<Checked>(major, info).error_or(error{});
+                if (error const r = detail::validity::check_argument<Checked>(major, info).error_or(error{});
                     r != error{}) [[unlikely]]
                     return std::unexpected(r);
                 encoded.remove_prefix(initial_byte_size);
                 return head{major, info, info};
             }
-            if (error const r = validity::check_definite_length(major, info).error_or(error{}); r != error{})
-                [[unlikely]]
+            if (error const r = detail::validity::check_definite_length(major, info).error_or(error{});
+                r != error{}) [[unlikely]]
                 return std::unexpected(r);
             static_assert(argument_size(std::to_underlying(
                               rfc8949::additional_information::two_byte_argument)) >= sizeof(std::uint16_t),
@@ -274,7 +276,9 @@ class heads
                               rfc8949::additional_information::eight_byte_argument)) >= sizeof(std::uint64_t),
                           "An eight-byte argument must cover the bytes of one std::uint64_t.");
             std::size_t const size = argument_size(info);
-            if (auto const fits = validity::check_bytes_left(initial_byte_size + size, encoded.size()); !fits) [[unlikely]]
+            if (auto const fits =
+                    detail::validity::check_bytes_left(initial_byte_size + size, encoded.size());
+                !fits) [[unlikely]]
                 return std::unexpected(fits.error());
             std::span<char const> const rest = std::span(encoded).subspan(initial_byte_size, size);
             std::uint64_t argument;
@@ -292,7 +296,7 @@ class heads
                 argument = read_unsigned<std::uint64_t>(rest.first<sizeof(std::uint64_t)>());
                 break;
             }
-            if (error const r = validity::check_argument<Checked>(major, argument).error_or(error{});
+            if (error const r = detail::validity::check_argument<Checked>(major, argument).error_or(error{});
                 r != error{}) [[unlikely]]
                 return std::unexpected(r);
             encoded.remove_prefix(initial_byte_size + size);
@@ -301,11 +305,12 @@ class heads
 
         CBOR_ALWAYS_INLINE std::optional<head> try_decode_head()
         {
-            std::uint8_t const initial =
-                validity::bytes_fit(initial_byte_size, encoded.size()) ? static_cast<std::uint8_t>(encoded.front()) : 0xff;
+            std::uint8_t const initial = detail::validity::bytes_fit(initial_byte_size, encoded.size())
+                                             ? static_cast<std::uint8_t>(encoded.front())
+                                             : 0xff;
             auto const major = static_cast<major_type>(initial >> rfc8949::additional_information_bits);
             std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
-            if (validity::bytes_fit(initial_byte_size + sizeof(std::uint64_t), encoded.size()) &&
+            if (detail::validity::bytes_fit(initial_byte_size + sizeof(std::uint64_t), encoded.size()) &&
                 info <= std::to_underlying(rfc8949::additional_information::eight_byte_argument) &&
                 major != major_type::tag &&
                 (major != major_type::simple_float ||
@@ -324,7 +329,7 @@ class heads
                                  std::numeric_limits<std::uint8_t>::digits * size) &
                                 (std::numeric_limits<std::uint64_t>::digits - 1));
                 }
-                if (!validity::check_argument<Checked>(major, argument)) [[unlikely]]
+                if (!detail::validity::check_argument<Checked>(major, argument)) [[unlikely]]
                     return std::nullopt;
                 encoded.remove_prefix(initial_byte_size + size);
                 return head{major, info, argument};
@@ -334,7 +339,8 @@ class heads
 
         constexpr std::expected<std::string_view, error> decode_byte_string(std::uint64_t const length)
         {
-            if (auto const fits = validity::check_bytes_left(length, encoded.size()); !fits) [[unlikely]]
+            if (auto const fits = detail::validity::check_bytes_left(length, encoded.size()); !fits)
+                [[unlikely]]
                 return std::unexpected(fits.error());
             std::size_t const size = static_cast<std::size_t>(length);
             std::string_view const string{std::span(encoded).first(size)};
@@ -347,17 +353,17 @@ class heads
             auto const r = decode_head();
             if (!r) [[unlikely]]
                 return std::unexpected(r.error());
-            if (error const c = validity::check_tag_content(tag, r->major).error_or(error{}); c != error{})
-                [[unlikely]]
+            if (error const c = detail::validity::check_tag_content(tag, r->major).error_or(error{});
+                c != error{}) [[unlikely]]
                 return std::unexpected(c);
-            if (error const c = validity::check_definite_length(r->major, r->info).error_or(error{}); c != error{})
-                [[unlikely]]
+            if (error const c = detail::validity::check_definite_length(r->major, r->info).error_or(error{});
+                c != error{}) [[unlikely]]
                 return std::unexpected(c);
             auto const bytes = decode_byte_string(r->argument);
             if (!bytes) [[unlikely]]
                 return std::unexpected(bytes.error());
             std::span<char const> const magnitude = magnitude_without_leading_zeros(std::span(*bytes));
-            if (!validity::check_magnitude_size(magnitude.size(), sizeof(std::uint64_t)))
+            if (!detail::validity::check_magnitude_size(magnitude.size(), sizeof(std::uint64_t)))
                 return std::nullopt;
             return magnitude_value(magnitude);
         }
@@ -365,7 +371,7 @@ class heads
 
     static constexpr bool is_typed_array(head const h)
     {
-        return h.major == major_type::tag && validity::check_typed_array(h.argument, 0).has_value();
+        return h.major == major_type::tag && detail::validity::check_typed_array(h.argument, 0).has_value();
     }
 
     static constexpr bool is_bignum(major_type const major, std::uint64_t const argument)
@@ -700,7 +706,7 @@ class heads
         case cbor::type::double_float:
             return major_type::simple_float;
         }
-        validity::throw_logic_error("cbor::item: the type is not a member of cbor::type");
+        detail::validity::throw_logic_error("cbor::item: the type is not a member of cbor::type");
     }
 
     static constexpr bool is_tag_passed(std::uint64_t const tag)
@@ -708,20 +714,20 @@ class heads
         return tag != std::to_underlying(rfc8949::tag_number::unsigned_bignum) &&
                tag != std::to_underlying(rfc8949::tag_number::negative_bignum) &&
                tag != std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item) &&
-               !validity::check_typed_array(tag, 0).has_value();
+               !detail::validity::check_typed_array(tag, 0).has_value();
     }
 
-    static constexpr std::expected<head, error> decode_typed_array_element(std::uint64_t const tag,
-                                                                           std::string_view const elements,
-                                                                           validity::index const position)
+    static constexpr std::expected<head, error>
+    decode_typed_array_element(std::uint64_t const tag, std::string_view const elements,
+                               detail::validity::index const position)
     {
-        std::size_t const size = validity::typed_array_element_size(tag);
+        std::size_t const size = detail::validity::typed_array_element_size(tag);
         bool const floating = (tag >> std::to_underlying(rfc8746::bit_field::f) & 1) != 0;
         bool const signed_integer = (tag >> std::to_underlying(rfc8746::bit_field::s) & 1) != 0;
         bool const little_endian = (tag >> std::to_underlying(rfc8746::bit_field::e) & 1) != 0;
         if (size > sizeof(std::uint64_t)) [[unlikely]]
             return std::unexpected(error::incorrect_type);
-        auto const element = validity::element_span(elements, position, size);
+        auto const element = detail::validity::element_span(elements, position, size);
         std::uint64_t bits = 0;
         for (std::size_t i = 0; i < size; ++i)
             bits = bits << std::numeric_limits<std::uint8_t>::digits |
@@ -746,52 +752,56 @@ class heads
         major_type major;
         std::uint8_t info;
         std::uint64_t argument;
-        validity::offset at;
+        detail::validity::offset at;
     };
 
     template <bool Checked>
     CBOR_ALWAYS_INLINE static constexpr std::expected<raw_head, error>
-    read_raw_head(std::string_view const encoded, validity::offset const at)
+    read_raw_head(std::string_view const encoded, detail::validity::offset const at)
     {
-        std::string_view const rest = validity::subspan(encoded, at);
-        if (auto const fits = validity::check_bytes_left(initial_byte_size, rest.size()); !fits) [[unlikely]]
+        std::string_view const rest = detail::validity::subspan(encoded, at);
+        if (auto const fits = detail::validity::check_bytes_left(initial_byte_size, rest.size()); !fits)
+            [[unlikely]]
             return std::unexpected(fits.error());
         auto const initial = static_cast<std::uint8_t>(rest.front());
         auto const major = static_cast<major_type>(initial >> rfc8949::additional_information_bits);
         std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
         if (info < std::to_underlying(rfc8949::additional_information::one_byte_argument)) {
-            if (error const r = validity::check_argument<Checked>(major, info).error_or(error{});
+            if (error const r = detail::validity::check_argument<Checked>(major, info).error_or(error{});
                 r != error{}) [[unlikely]]
                 return std::unexpected(r);
-            return raw_head{major, info, info, validity::next(at, initial_byte_size)};
+            return raw_head{major, info, info, detail::validity::next(at, initial_byte_size)};
         }
-        if (error const r = validity::check_additional_information(major, info).error_or(error{});
+        if (error const r = detail::validity::check_additional_information(major, info).error_or(error{});
             r != error{}) [[unlikely]]
             return std::unexpected(r);
         if (info == std::to_underlying(rfc8949::additional_information::indefinite_length))
-            return raw_head{major, info, info, validity::next(at, initial_byte_size)};
+            return raw_head{major, info, info, detail::validity::next(at, initial_byte_size)};
         std::size_t const size = argument_size(info);
-        if (auto const fits = validity::check_bytes_left(size, rest.size() - initial_byte_size); !fits) [[unlikely]]
+        if (auto const fits = detail::validity::check_bytes_left(size, rest.size() - initial_byte_size);
+            !fits) [[unlikely]]
             return std::unexpected(fits.error());
         std::uint64_t argument = 0;
-        for (char const c : validity::subspan(encoded, validity::next(at, initial_byte_size)).substr(0, size))
+        for (char const c : detail::validity::subspan(encoded, detail::validity::next(at, initial_byte_size))
+                                .substr(0, size))
             argument = argument << std::numeric_limits<std::uint8_t>::digits | static_cast<std::uint8_t>(c);
-        if (error const r = validity::check_argument<Checked>(major, argument).error_or(error{});
+        if (error const r = detail::validity::check_argument<Checked>(major, argument).error_or(error{});
             r != error{}) [[unlikely]]
             return std::unexpected(r);
-        return raw_head{major, info, argument, validity::next(at, initial_byte_size + size)};
+        return raw_head{major, info, argument, detail::validity::next(at, initial_byte_size + size)};
     }
 
     static constexpr std::string_view self_described_cbor_content(std::string_view const encoded)
     {
-        auto const h = read_raw_head<false>(encoded, validity::offset{});
+        auto const h = read_raw_head<false>(encoded, detail::validity::offset{});
         if (h && h->major == major_type::tag &&
             h->argument == std::to_underlying(rfc8949::tag_number::self_described_cbor))
-            return validity::subspan(encoded, h->at);
+            return detail::validity::subspan(encoded, h->at);
         return encoded;
     }
 
-    static constexpr validity::offset self_described_cbor_content_at(std::string_view const encoded, validity::offset at)
+    static constexpr detail::validity::offset self_described_cbor_content_at(std::string_view const encoded,
+                                                                             detail::validity::offset at)
     {
         for (;;) {
             auto const h = read_raw_head<false>(encoded, at);
@@ -802,16 +812,16 @@ class heads
         }
     }
 
-    static constexpr bool break_at(std::string_view const encoded, validity::offset const at)
+    static constexpr bool break_at(std::string_view const encoded, detail::validity::offset const at)
     {
-        std::string_view const rest = validity::subspan(encoded, at);
-        return validity::bytes_fit(initial_byte_size, rest.size()) &&
+        std::string_view const rest = detail::validity::subspan(encoded, at);
+        return detail::validity::bytes_fit(initial_byte_size, rest.size()) &&
                rest.front() ==
                    initial_byte(major_type::simple_float,
                                 std::to_underlying(rfc8949::simple_float_information::break_stop_code));
     }
 
-    friend class validity;
+    friend class detail::validity;
 
     friend class sequence_reader;
 

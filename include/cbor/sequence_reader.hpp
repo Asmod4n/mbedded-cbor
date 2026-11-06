@@ -55,7 +55,8 @@ class sequence_reader
 
     void throw_logic_error_if_moved_from() const
     {
-        validity::throw_logic_error_if_null(buffer, "cbor::sequence_reader: the reader was moved from");
+        detail::validity::throw_logic_error_if_null(buffer,
+                                                    "cbor::sequence_reader: the reader was moved from");
     }
 
     bool item_completed()
@@ -72,7 +73,8 @@ class sequence_reader
     {
         for (;;) {
             if (at == phase::string_content) {
-                if (auto const fits = validity::check_bytes_left(phase_end, item.size()); !fits) [[unlikely]]
+                if (auto const fits = detail::validity::check_bytes_left(phase_end, item.size()); !fits)
+                    [[unlikely]]
                     return std::unexpected(fits.error());
                 scanned = static_cast<std::size_t>(phase_end);
                 at = phase::head;
@@ -80,18 +82,20 @@ class sequence_reader
                     return {};
             }
             if (at == phase::elements) {
-                if (auto const r = validity::check_pending_items(pending, item.size() - scanned); !r)
+                if (auto const r = detail::validity::check_pending_items(pending, item.size() - scanned); !r)
                     [[unlikely]]
                     return r;
                 at = phase::head;
             }
             if (at == phase::argument)
-                if (auto const fits = validity::check_bytes_left(phase_end, item.size()); !fits) [[unlikely]]
+                if (auto const fits = detail::validity::check_bytes_left(phase_end, item.size()); !fits)
+                    [[unlikely]]
                     return std::unexpected(fits.error());
             heads::decoder<false> d{std::string_view{std::span(item).subspan(scanned)}};
             auto const h = d.decode_head();
             if (!h) [[unlikely]] {
-                if (h.error() == error::too_little_data && validity::bytes_fit(heads::initial_byte_size, d.encoded.size())) {
+                if (h.error() == error::too_little_data &&
+                    detail::validity::bytes_fit(heads::initial_byte_size, d.encoded.size())) {
                     auto const initial = static_cast<std::uint8_t>(d.encoded.front());
                     std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
                     at = phase::argument;
@@ -100,14 +104,15 @@ class sequence_reader
                 return std::unexpected(h.error());
             }
             at = phase::head;
-            scanned = std::to_underlying(validity::distance(std::string_view(std::span(item)), d.encoded));
+            scanned =
+                std::to_underlying(detail::validity::distance(std::string_view(std::span(item)), d.encoded));
             --left[level];
             --pending;
             std::uint64_t children = 0;
             switch (h->major) {
             case major_type::byte_string:
             case major_type::text_string:
-                phase_end = validity::checked_add(std::uint64_t{scanned}, h->argument)
+                phase_end = detail::validity::checked_add(std::uint64_t{scanned}, h->argument)
                                 .value_or(std::numeric_limits<std::uint64_t>::max());
                 at = phase::string_content;
                 continue;
@@ -115,25 +120,25 @@ class sequence_reader
                 children = h->argument;
                 break;
             case major_type::map:
-                children = validity::checked_mul(h->argument, rfc8949::data_items_per_pair)
+                children = detail::validity::checked_mul(h->argument, rfc8949::data_items_per_pair)
                                .value_or(std::numeric_limits<std::uint64_t>::max());
                 break;
             case major_type::tag:
                 children = 1;
                 break;
             case major_type::simple_float:
-                if (!validity::check_simple_value(h->info, h->argument)) [[unlikely]]
+                if (!detail::validity::check_simple_value(h->info, h->argument)) [[unlikely]]
                     return std::unexpected(error::syntax_error);
                 break;
             default:
                 break;
             }
             if (children != 0) {
-                if (auto const r = validity::check_nesting_depth(level + 1, limits::nesting_depth); !r)
-                    [[unlikely]]
+                if (auto const r = detail::validity::check_nesting_depth(level + 1, limits::nesting_depth);
+                    !r) [[unlikely]]
                     return r;
                 left[++level] = children;
-                pending = validity::checked_add(pending, children)
+                pending = detail::validity::checked_add(pending, children)
                               .value_or(std::numeric_limits<std::uint64_t>::max());
                 at = phase::elements;
                 continue;
@@ -165,12 +170,12 @@ class sequence_reader
                 buffer->erase(0, item_begin);
                 item_begin = 0;
             }
-        } else if (!validity::bytes_fit(bytes.size(), buffer->capacity() - buffer->size())) {
+        } else if (!detail::validity::bytes_fit(bytes.size(), buffer->capacity() - buffer->size())) {
             std::string_view const rest{std::span(std::as_const(*buffer)).subspan(item_begin)};
             auto block = std::make_shared<std::string>();
-            block->reserve(
-                std::max(buffer->capacity(), validity::checked_mul(rest.size() + bytes.size(), growth_factor)
-                                                 .value_or(std::numeric_limits<std::size_t>::max())));
+            block->reserve(std::max(buffer->capacity(),
+                                    detail::validity::checked_mul(rest.size() + bytes.size(), growth_factor)
+                                        .value_or(std::numeric_limits<std::size_t>::max())));
             block->append(rest);
             buffer = std::move(block);
             item_begin = 0;
@@ -264,7 +269,7 @@ public:
     void feed(std::shared_ptr<Piece const> piece)
     {
         throw_logic_error_if_moved_from();
-        validity::throw_logic_error_if_null(piece, "cbor::sequence_reader::feed: the piece is null");
+        detail::validity::throw_logic_error_if_null(piece, "cbor::sequence_reader::feed: the piece is null");
         if (failure != error{}) [[unlikely]]
             return;
         std::string_view const bytes{std::span<char const>(*piece)};

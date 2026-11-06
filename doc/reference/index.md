@@ -70,6 +70,9 @@ refused.
 | [tools](tools/index.md) | `item_size`, `sequence`, `sequence_reader`, `diagnostic_notation` | the end of an item, many items in a row, an item as text |
 | [errors](errors/index.md) | `cbor::error`, `std::error_code`, the limits of a build | the reason why a call failed |
 
+The names in `cbor::detail` are not part of the API. They can change in
+any release.
+
 ## More
 
 - [Console](console.md): calls on a message of your own, in the browser.
