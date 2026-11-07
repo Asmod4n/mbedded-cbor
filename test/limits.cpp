@@ -101,6 +101,10 @@ TEST_CASE("structs: a std::pmr target decodes with its allocator, and the refusa
             CHECK_EQ(text.get_allocator().resource(), &budget);
         }
     }
+    // A debug build of the C++ library of MSVC takes a proxy object from the allocator in the noexcept constructor of
+    // each container, so an empty container over a refusing resource ends the program before the decode runs; the
+    // refusal is tested where containers take no such proxy.
+#if !defined(_ITERATOR_DEBUG_LEVEL) || _ITERATOR_DEBUG_LEVEL == 0
     // The buffer holds the vector of three strings but not the characters of all three.
     for (std::size_t const size :
          {0uz, 3 * sizeof(std::pmr::string), 3 * sizeof(std::pmr::string) + long_text.size()}) {
@@ -112,6 +116,7 @@ TEST_CASE("structs: a std::pmr target decodes with its allocator, and the refusa
         REQUIRE_FALSE(decoded.has_value());
         CHECK_EQ(decoded.error(), error::not_enough_memory);
     }
+#endif
 }
 
 // The schema reads into the members of the target that the caller made, so each member keeps its allocator.
@@ -138,6 +143,10 @@ TEST_CASE("schema: a target with std::pmr members decodes with their allocators"
 }
 
 
+// A debug build of the C++ library of MSVC takes a proxy object from the allocator in the noexcept constructor of
+// each container, so an empty container over a refusing resource ends the program before the decode runs; the
+// refusal is tested where containers take no such proxy.
+#if !defined(_ITERATOR_DEBUG_LEVEL) || _ITERATOR_DEBUG_LEVEL == 0
 // schema reads into the members of the target as structs does, so the refusal of their resource reaches the caller
 // of schema as not_enough_memory, and std::bad_alloc does not leave the call.
 TEST_CASE("schema: the refusal of the resource of a std::pmr member is not_enough_memory")
@@ -156,4 +165,5 @@ TEST_CASE("schema: the refusal of the resource of a std::pmr member is not_enoug
         CHECK_EQ(decoded.error(), error::not_enough_memory);
     }
 }
+#endif
 

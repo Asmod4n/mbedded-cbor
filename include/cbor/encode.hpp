@@ -506,17 +506,13 @@ struct encoding::encoder {
         requires(sizeof(T) <= sizeof(std::uint64_t))
     CBOR_ALWAYS_INLINE std::expected<void, std::errc> encode_fixed_width_head(major_type const major, T const argument)
     {
+        constexpr std::uint8_t info = static_cast<std::uint8_t>(
+            std::to_underlying(rfc8949::additional_information::one_byte_argument) + std::countr_zero(sizeof(T)));
         if (detail::validity::bytes_fit(item_size_max, block.size() - used)) [[likely]] {
-            put_item(heads::initial_byte(major, static_cast<std::uint8_t>(
-                                                    std::to_underlying(rfc8949::additional_information::one_byte_argument) +
-                                                    std::countr_zero(sizeof(T)))),
-                     argument);
+            put_item(heads::initial_byte(major, info), argument);
             return {};
         }
-        return encode_head(major,
-                           std::to_underlying(rfc8949::additional_information::one_byte_argument) +
-                               std::countr_zero(sizeof(T)),
-                           argument);
+        return encode_head(major, info, argument);
     }
 
     template <std::floating_point T>

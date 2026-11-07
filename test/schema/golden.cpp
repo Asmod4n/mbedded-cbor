@@ -59,7 +59,9 @@ std::string golden_report()
     report += golden_line<point_a>("point_a");
     report += golden_line<point_b>("point_b");
     report += golden_line<ticket>("ticket");
+#ifdef CBOR_HAS_INT128
     report += golden_line<probe>("probe");
+#endif
     report += golden_line<lot_wheel>("lot_wheel");
     report += golden_line<lot_engine>("lot_engine");
     report += golden_line<lot_car>("lot_car");
@@ -71,7 +73,9 @@ std::string golden_report()
     report += golden_line<filler_type<3>>("filler_type<3>");
     report += golden_line<fifteen_entries>("fifteen_entries");
     report += golden_line<eighteen_entries>("eighteen_entries");
+#ifdef CBOR_HAS_INT128
     report += golden_line<everything>("everything");
+#endif
     return report;
 }
 
@@ -104,6 +108,13 @@ TEST_CASE("golden bytes: every type of this file encodes as before")
 #if !defined(__STDCPP_FLOAT16_T__)
     std::size_t const at = expected.find("\nnumbers ") + 1;
     expected.erase(at, expected.find('\n', at) + 1 - at);
+#endif
+    // probe and everything hold an int128; a platform without it writes neither line.
+#ifndef CBOR_HAS_INT128
+    for (char const *const name : {"\nprobe ", "\neverything "}) {
+        std::size_t const line = expected.find(name) + 1;
+        expected.erase(line, expected.find('\n', line) + 1 - line);
+    }
 #endif
     CHECK_EQ(golden_report(), expected);
 }
@@ -316,11 +327,14 @@ TEST_CASE("golden bytes: ticket encodes as before")
     CHECK_EQ(golden_line<ticket>("ticket"), golden_expected_line("ticket"));
 }
 
+// The golden bytes of this type hold an int128 member; a platform without int128 writes an int64 there.
+#ifdef CBOR_HAS_INT128
 TEST_CASE("golden bytes: probe encodes as before")
 {
     CHECK_FALSE(golden_expected_line("probe").empty());
     CHECK_EQ(golden_line<probe>("probe"), golden_expected_line("probe"));
 }
+#endif
 
 TEST_CASE("golden bytes: lot_wheel encodes as before")
 {
@@ -388,11 +402,14 @@ TEST_CASE("golden bytes: eighteen_entries encodes as before")
     CHECK_EQ(golden_line<eighteen_entries>("eighteen_entries"), golden_expected_line("eighteen_entries"));
 }
 
+// The golden bytes of this type hold an int128 member; a platform without int128 writes an int64 there.
+#ifdef CBOR_HAS_INT128
 TEST_CASE("golden bytes: everything encodes as before")
 {
     CHECK_FALSE(golden_expected_line("everything").empty());
     CHECK_EQ(golden_line<everything>("everything"), golden_expected_line("everything"));
 }
+#endif
 
 // The item of a variant member is the record of the held alternative, as draft-ietf-cbor-packed-19 shares a
 // record as an item: the class tag 1740 (d9 06 cc) or 1741 (d9 06 cd), the straight reference d8 81 or d8 82 to

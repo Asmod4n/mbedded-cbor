@@ -205,7 +205,11 @@ TEST_CASE("decode: a plain struct in a std::pmr::vector takes the resource of th
         CHECK_EQ(p.n, long_name);
         CHECK_EQ(p.n.get_allocator().resource(), &target);
     }
+    // A debug build of the C++ library of MSVC gives each container a proxy object from its allocator, so a
+    // temporary container with the default resource takes blocks there; the count holds without that proxy.
+#if !defined(_ITERATOR_DEBUG_LEVEL) || _ITERATOR_DEBUG_LEVEL == 0
     CHECK_EQ(fallback.allocations, 0u);
+#endif
     CHECK_GT(target.allocations, 0u);
 }
 
@@ -328,7 +332,11 @@ TEST_CASE("decode: a class with a constructor in a std::pmr::vector takes the re
         CHECK_EQ(r.unit, long_unit);
         CHECK_EQ(r.unit.get_allocator().resource(), &target);
     }
+    // A debug build of the C++ library of MSVC gives each container a proxy object from its allocator, so a
+    // temporary container with the default resource takes blocks there; the count holds without that proxy.
+#if !defined(_ITERATOR_DEBUG_LEVEL) || _ITERATOR_DEBUG_LEVEL == 0
     CHECK_EQ(fallback.allocations, 0u);
+#endif
 }
 
 // The root of a message stands at its end. A message with a missing end gave incorrect_type, because the last bytes

@@ -661,12 +661,15 @@ TEST_CASE("encode: a tree is written with the head widths of its input, also wit
         CHECK_EQ(*size, r.own.size());
         CHECK_EQ(out, r.own);
         CHECK(same_value(out, r.wire));
+// The iov forms exist where the platform has <sys/uio.h>, as in the library (encode.hpp); Windows has none.
+#if __has_include(<sys/uio.h>)
         auto const pieces = cbor::encode_iov(*root);
         REQUIRE(pieces.has_value());
         auto const read = test::joined(**pieces);
         REQUIRE(read.has_value());
         std::string const joined = *read;
         CHECK_EQ(joined, r.own);
+#endif
     }
 }
 

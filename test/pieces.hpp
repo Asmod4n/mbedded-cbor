@@ -5,6 +5,9 @@
 #ifndef CBOR_TEST_PIECES_HPP
 #define CBOR_TEST_PIECES_HPP
 
+// The iov forms exist where the platform has <sys/uio.h>, as in the library (encode.hpp); Windows has none.
+#if __has_include(<sys/uio.h>)
+
 #include <cbor/encode.hpp>
 
 #include <sys/uio.h>
@@ -82,4 +85,5 @@ inline std::expected<std::string, std::errc> joined(std::span<iovec const> const
 
 }
 
+#endif
 #endif
