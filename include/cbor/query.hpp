@@ -588,6 +588,9 @@ class jsonpath
 
     static std::partial_ordering compare_numbers(exact_number const &a, exact_number const &b);
 
+    static std::expected<std::pair<std::uint64_t, detail::validity::offset>, error>
+    intern_value(detail::canonical_ids &ids, lazy::top_level_item const &source, detail::validity::offset at);
+
     static std::expected<bool, error> value_equal(lazy const &a, lazy const &b);
 
     static std::expected<bool, error> value_less(lazy const &a, lazy const &b);
@@ -1261,6 +1264,110 @@ inline std::partial_ordering jsonpath::compare_numbers(exact_number const &a, ex
     return a.integral ? order : 0 <=> order;
 }
 
+inline std::expected<std::pair<std::uint64_t, detail::validity::offset>, error>
+jsonpath::intern_value(detail::canonical_ids &ids, lazy::top_level_item const &source, detail::validity::offset const at)
+{
+    if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    auto const resolved = lazy::resolve_container<true>(source, at);
+    if (!resolved) [[unlikely]]
+        return std::unexpected(resolved.error());
+    lazy::top_level_item const &inner = resolved->source;
+    heads::head const &h = resolved->h;
+    heads::decoder<true> d = resolved->d;
+    auto const end = [&](detail::validity::offset const inner_end) -> std::expected<detail::validity::offset, error> {
+        if (inner.encoded.data() == source.encoded.data())
+            return inner_end;
+        heads::decoder<true> outer{detail::validity::subspan(source.encoded, at)};
+        if (auto const r = well_formedness::skip_items(outer, 1); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        return detail::validity::distance(source.encoded, outer.encoded);
+    };
+    auto const done = [&](std::uint64_t const id) -> std::expected<std::pair<std::uint64_t, detail::validity::offset>, error> {
+        auto const e = end(detail::validity::distance(inner.encoded, d.encoded));
+        if (!e) [[unlikely]]
+            return std::unexpected(e.error());
+        return std::pair{id, *e};
+    };
+    using kind = detail::canonical_ids::kind;
+    constexpr std::uint8_t half = std::to_underlying(rfc8949::simple_float_information::half_precision_float);
+    constexpr std::uint8_t twice =
+        std::to_underlying(rfc8949::simple_float_information::double_precision_float);
+    bool const integral = h.major == major_type::unsigned_integer || h.major == major_type::negative_integer;
+    bool const floating = h.major == major_type::simple_float && h.info >= half && h.info <= twice;
+    if (integral || floating) {
+        exact_number const n = number_of(h);
+        if (n.nan) {
+            ids.mark_unequal();
+            return done(ids.id_of(kind::nan, 0, {}));
+        }
+        if (n.integral)
+            return done(ids.id_of(n.negative ? kind::negative_integer : kind::positive_integer, n.magnitude, {}));
+        return done(ids.id_of(kind::floating, std::bit_cast<std::uint64_t>(n.value), {}));
+    }
+    switch (h.major) {
+    case major_type::byte_string:
+    case major_type::text_string: {
+        auto const s = d.decode_byte_string(h.argument);
+        if (!s) [[unlikely]]
+            return std::unexpected(s.error());
+        return done(ids.id_of(
+            {h.major == major_type::byte_string ? kind::byte_string : kind::text_string, 0, *s, ids.children_end(), 0}));
+    }
+    case major_type::array:
+    case major_type::map: {
+        bool const map = h.major == major_type::map;
+        if (auto const r = detail::validity::check_pending_items(h.major, h.info, h.argument, d.encoded.size()); !r)
+            [[unlikely]]
+            return std::unexpected(r.error());
+        auto const child = [&]() -> std::expected<std::uint64_t, error> {
+            auto const c = intern_value(ids, inner, detail::validity::distance(inner.encoded, d.encoded));
+            if (!c) [[unlikely]]
+                return std::unexpected(c.error());
+            d.encoded = detail::validity::subspan(inner.encoded, c->second);
+            return c->first;
+        };
+        std::vector<std::uint64_t> items;
+        std::vector<std::pair<std::uint64_t, std::uint64_t>> pairs;
+        for (std::uint64_t i = 0; i < h.argument; ++i) {
+            auto const key = child();
+            if (!key) [[unlikely]]
+                return std::unexpected(key.error());
+            if (!map) {
+                items.push_back(*key);
+                continue;
+            }
+            auto const value = child();
+            if (!value) [[unlikely]]
+                return std::unexpected(value.error());
+            pairs.emplace_back(*key, *value);
+        }
+        if (map) {
+            std::ranges::sort(pairs);
+            if (std::ranges::adjacent_find(pairs, {}, &std::pair<std::uint64_t, std::uint64_t>::first) != pairs.end())
+                ids.mark_unequal();
+            for (auto const &[key, value] : pairs) {
+                items.push_back(key);
+                items.push_back(value);
+            }
+        }
+        return done(ids.id_of(map ? kind::map : kind::array, 0, items));
+    }
+    case major_type::tag: {
+        auto const content = intern_value(ids, inner, detail::validity::distance(inner.encoded, d.encoded));
+        if (!content) [[unlikely]]
+            return std::unexpected(content.error());
+        d.encoded = detail::validity::subspan(inner.encoded, content->second);
+        std::array<std::uint64_t, 1> const item{content->first};
+        return done(ids.id_of(kind::tag, h.argument, item));
+    }
+    default: {
+        std::array<std::uint64_t, 1> const info{h.info};
+        return done(ids.id_of(kind::simple, h.argument, info));
+    }
+    }
+}
+
 inline std::expected<bool, error> jsonpath::value_equal(lazy const &a, lazy const &b)
 {
     if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
@@ -1330,44 +1437,14 @@ inline std::expected<bool, error> jsonpath::value_equal(lazy const &a, lazy cons
             case major_type::map: {
                 if (h.argument != k.argument)
                     return false;
-                auto const left = a.entries();
-                if (!left) [[unlikely]]
-                    return std::unexpected(left.error());
-                auto const right = b.entries();
-                if (!right) [[unlikely]]
-                    return std::unexpected(right.error());
-                for (auto const entry : *left) {
-                    if (!entry) [[unlikely]]
-                        return std::unexpected(entry.error());
-                    std::size_t twins = 0;
-                    for (auto const mine : *left) {
-                        if (!mine) [[unlikely]]
-                            return std::unexpected(mine.error());
-                        auto const same = value_equal(entry->first, mine->first);
-                        if (!same) [[unlikely]]
-                            return same;
-                        twins += *same ? 1uz : 0uz;
-                    }
-                    std::size_t paired = 0;
-                    bool values_same = false;
-                    for (auto const other : *right) {
-                        if (!other) [[unlikely]]
-                            return std::unexpected(other.error());
-                        auto const same = value_equal(entry->first, other->first);
-                        if (!same) [[unlikely]]
-                            return same;
-                        if (!*same)
-                            continue;
-                        ++paired;
-                        auto const value_same = value_equal(entry->second, other->second);
-                        if (!value_same) [[unlikely]]
-                            return value_same;
-                        values_same = *value_same;
-                    }
-                    if (twins != 1 || paired != 1 || !values_same)
-                        return false;
-                }
-                return true;
+                detail::canonical_ids ids;
+                auto const p = intern_value(ids, a.top_level, detail::validity::offset{a.offset});
+                if (!p) [[unlikely]]
+                    return std::unexpected(p.error());
+                auto const q = intern_value(ids, b.top_level, detail::validity::offset{b.offset});
+                if (!q) [[unlikely]]
+                    return std::unexpected(q.error());
+                return !ids.unequal() && p->first == q->first;
             }
             case major_type::tag:
                 if (h.argument != k.argument)
