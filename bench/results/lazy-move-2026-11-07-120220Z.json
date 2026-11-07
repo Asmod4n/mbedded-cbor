@@ -1,0 +1,122 @@
+{
+ "what": "lazy walk of carsales (OP_LAZY_READ of bench/compare.cpp at bccff8b): arm a = include of bccff8b, aa = a built again, b = resolve_container moves its source and lazy::get binds the resolved item by reference, c = resolved holds a pointer to the owner (rejected); probe script outside the tree, 5 rounds in shuffled order, MIN_TIME 3s",
+ "context": {
+  "commit": "bccff8b (bench), arms a/b/c from copies of include/",
+  "flags": "-O2 -march=native -DNDEBUG; g++-16 -std=c++26 -freflection, clang++-23 -std=c++23",
+  "compiler.g++-16": "g++-16 (Debian 16.2.0-4) 16.2.0",
+  "compiler.clang++-23": "Debian clang version 23.1.5 (2)",
+  "cxx_library": "libstdc++ 16.2.0-4",
+  "c_library": "ldd (Debian GLIBC 2.43-7) 2.43",
+  "kernel": "Linux 6.18.44-fc-v310 #1 SMP @0 x86_64",
+  "scheduler": "not readable in the container",
+  "virtualization": "hypervisor (VM, 4 cpus)",
+  "container": "podman mbedded-cbor-sid-bench",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "cpu_flags_sha256": "39a8dd34f3afdd3862e81b993fb5c5915e50fcc574062958b655b40b631b8663",
+  "cpus": "4",
+  "user": "65534",
+  "nice": "-10",
+  "threads": "1",
+  "rounds": "5",
+  "min_time": "3s",
+  "check": "33191310.687370282 in every binary"
+ },
+ "results": {
+  "clang++-23.a": {
+   "unit": "ns",
+   "repetitions": [
+    3289842.3374999817,
+    3359576.79543661,
+    3322853.2816041815,
+    3407110.6404669476,
+    3285159.283950599
+   ],
+   "median": 3322853.2816041815,
+   "spread": 0.03712190063724852
+  },
+  "clang++-23.aa": {
+   "unit": "ns",
+   "repetitions": [
+    3377041.795631806,
+    3290085.2351072924,
+    3419765.6328810886,
+    3329211.6047243867,
+    3269221.470224277
+   ],
+   "median": 3329211.6047243867,
+   "spread": 0.04604893367670315
+  },
+  "clang++-23.b": {
+   "unit": "ns",
+   "repetitions": [
+    2624934.824937032,
+    2691872.150931242,
+    2647627.966070315,
+    2679054.420603621,
+    2766763.6858436004
+   ],
+   "median": 2679054.420603621,
+   "spread": 0.054031383773488706
+  },
+  "clang++-23.c": {
+   "unit": "ns",
+   "repetitions": [
+    2931767.743375161,
+    2872593.8259687303,
+    3088830.603999895,
+    2816343.2188955075,
+    2902090.2555184057
+   ],
+   "median": 2902090.2555184057,
+   "spread": 0.09675219386479816
+  },
+  "g++-16.a": {
+   "unit": "ns",
+   "repetitions": [
+    3021294.89202897,
+    3075231.0050468342,
+    2990778.1171760987,
+    3076126.484000042,
+    2994857.7990056467
+   ],
+   "median": 3021294.89202897,
+   "spread": 0.028537177777845146
+  },
+  "g++-16.aa": {
+   "unit": "ns",
+   "repetitions": [
+    3109339.1320346487,
+    3019462.844463161,
+    3109614.0382120274,
+    3109160.0396539653,
+    3127473.506410224
+   ],
+   "median": 3109339.1320346487,
+   "spread": 0.035771482383074815
+  },
+  "g++-16.b": {
+   "unit": "ns",
+   "repetitions": [
+    2843675.6408499004,
+    2950679.712267666,
+    2827354.1128274305,
+    2829181.9189189635,
+    2870529.8492857474
+   ],
+   "median": 2843675.6408499004,
+   "spread": 0.0436187313363825
+  },
+  "g++-16.c": {
+   "unit": "ns",
+   "repetitions": [
+    3127425.6896551833,
+    3258068.2705610762,
+    3179603.726726702,
+    3182426.3437499837,
+    3252232.20904369
+   ],
+   "median": 3182426.3437499837,
+   "spread": 0.04177320066725443
+  }
+ }
+}
