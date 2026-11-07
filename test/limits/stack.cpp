@@ -1,4 +1,5 @@
 #include "../owned_copy.hpp"
+#include "../threads.hpp"
 #include <cbor/decode.hpp>
 #include <cbor/diagnostic_notation.hpp>
 #include <cbor/error.hpp>
@@ -205,7 +206,7 @@ TEST_CASE("stack: every recursive reader on the main thread")
 #if defined(_WIN64) || __has_include(<pthread.h>)
 // Threads with stacks of 64 KiB and 256 KiB hold fewer levels than the bound: each reader stops with
 // nesting_depth_exceeded there and does not run past the stack.
-TEST_CASE("stack: every recursive reader on a thread with a small stack")
+TEST_CASE("stack: every recursive reader on a thread with a small stack" * doctest::skip(!test::threads_available))
 {
     for (std::size_t const kib : {64uz, 256uz}) {
         CAPTURE(kib);
