@@ -1362,6 +1362,9 @@ jsonpath::intern_value(detail::canonical_ids &ids, lazy::top_level_item const &s
         return done(ids.id_of(kind::tag, h.argument, item));
     }
     default: {
+        if (error const c = detail::validity::check_simple_value(h.info, h.argument).error_or(error{}); c != error{})
+            [[unlikely]]
+            return std::unexpected(c);
         std::array<std::uint64_t, 1> const info{h.info};
         return done(ids.id_of(kind::simple, h.argument, info));
     }
