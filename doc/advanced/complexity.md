@@ -179,7 +179,8 @@ Assumption, not checked: skip_item is O(bytes skipped).
 | `lazy::take_ownership<Encoded>(Encoded&&)` | O(1) | O(1) | Moves the string. One allocation: the make_shared that holds it. |
 | `lazy::view(shared_ptr<void const>, Encoded const&)` | O(1) | O(1) | No allocation. |
 | `lazy::resolve_container(top_level_item, offset)` (private) | Common O(1); worst O(t), t = tag 24 levels <= n/2 | O(1) | No allocation. The nesting depth does not bound tag 24 nesting. |
-| `detail::validity::keys_equivalent<Checked>` | Scalar O(1); string O(len); array O(n_item) plus elements; map O(k·n_map + k²·child) per level; worst exponential in d | Stack O(d) | Defined in lazy.hpp. The stack of the thread bounds d. Not checked again. |
+| `detail::validity::keys_equivalent<Checked>` | Scalar O(1); string O(len); array O(n_item) plus elements; two maps O(n log n) through `intern_key` | O(1) for scalars and arrays; O(n) for maps; stack O(d) | Defined in lazy.hpp. The stack of the thread bounds d. |
+| `detail::validity::intern_key<Checked>` | O(n log n): each item read once, each distinct subtree interned once in a `std::map` | O(n): one node for each distinct subtree, the child ids in one vector | The canonical id of a map key (tree isomorphism, Aho, Hopcroft and Ullman). A map is its pairs of ids, sorted. |
 | `lazy::clone()` | as `detail::tree_decoder::decode_item` | as `detail::tree_decoder::decode_item` | Returns `owning<item>`. |
 | `lazy::type()` | O(1) | O(1) | |
 | `lazy::find_key<Key>(resolved, Key)` | O(bytes up to the pair); worst O(n_map) | O(1) | Linear scan. |
@@ -241,7 +242,9 @@ Assumption, not checked: skip_item is O(bytes skipped).
 | `walk_query<Path, T>(string_view)` | O(n); fallback O(n·p) | O(1) | When the walk over bytes fails, a walk over a lazy with no owner runs. A typed read of a scalar allocates nothing, also with a key that is not a text. |
 | `walk_query<Path, T>(shared_ptr<void const>, string_view)` | as `walk_query<Path, T>(string_view)` | as `walk_query<Path, T>(string_view)` | |
 | `jsonpath::find_key(lazy const&, string_view)` | text key O(n_map); other key O(k·(n_map + value_equal)) | O(1); tag 24 allocates | |
-| `jsonpath::value_equal` | map: 2k² key compares + O(k·n_map) per level; product over d levels worst | O(d) stack | |
+| `jsonpath::value_equal` | Scalar O(1); string O(len); array O(n_item) plus elements; two maps O(n log n) through `intern_value` | O(1) for scalars and arrays; O(n) for maps; stack O(d) | |
+| `jsonpath::intern_value` | O(n log n), as `intern_key`; tag 24 adds one skip of its item | O(n) | A NaN or a duplicate key marks the comparison unequal. |
+| `jsonpath::number_of`, `compare_numbers` | O(1) | O(1) | Exact comparison of an integer and a float. |
 | `jsonpath::value_less` | O(1) or O(min len) | O(1) | |
 | `jsonpath::comparable_value` | literal O(size); query: apply_segments | allocates per count, length or literal | |
 | `jsonpath::test_expression` | sum of subexpressions | O(e) stack | |
@@ -451,8 +454,8 @@ the struct types in a message.
 
 Above linear in the input:
 
-- `detail::validity::keys_equivalent` (lazy.hpp): map keys O(k²) per level, exponential in d worst.
-- `jsonpath::value_equal`: O(k²) key compares per map level.
+- `detail::validity::keys_equivalent` (lazy.hpp): two maps O(n log n) through canonical ids.
+- `jsonpath::value_equal`: two maps O(n log n) through canonical ids.
 - `jsonpath::find_key`, non-text key: O(k·n_map).
 - `jsonpath::apply_segment`, `apply_segments`: O(c·n·d), O(p·N·c·n·d).
 - `walk_query` lazy forms and the fallback of `at_path` to a lazy walk: O(n·p).
