@@ -201,3 +201,27 @@ TEST_CASE("path equality: an element of a typed array in a filter")
     REQUIRE(r.has_value());
     CHECK_EQ(r->size(), 1u);
 }
+
+// RFC 9535 2.3.5.2.2 asks for mathematical comparison of numbers that interoperate under I-JSON and leaves the rest to
+// the implementation. The library compares an integer and a float by their exact values, so that ==, < and > agree
+// and equality is transitive: 2^53 + 1 is greater than the float 2^53, and 2^64 - 1 is less than the float 2^64.
+TEST_CASE("path equality: an integer and a float compare by their exact values")
+{
+    std::string const two_53_plus_1 = "\x1b\x00\x20\x00\x00\x00\x00\x00\x01"s;
+    std::string const float_two_53 = "\xfb\x43\x40\x00\x00\x00\x00\x00\x00"s;
+    CHECK(values_equal(two_53_plus_1, float_two_53) == false);
+    CHECK(value_less(float_two_53, two_53_plus_1) == true);
+    CHECK(value_less(two_53_plus_1, float_two_53) == false);
+    std::string const two_64_minus_1 = "\x1b\xff\xff\xff\xff\xff\xff\xff\xff"s;
+    std::string const float_two_64 = "\xfa\x5f\x80\x00\x00"s;
+    CHECK(value_less(two_64_minus_1, float_two_64) == true);
+    CHECK(values_equal(two_64_minus_1, float_two_64) == false);
+    std::string const minus_two_64 = "\x3b\xff\xff\xff\xff\xff\xff\xff\xff"s;
+    std::string const float_minus_two_64 = "\xfa\xdf\x80\x00\x00"s;
+    CHECK(values_equal(minus_two_64, float_minus_two_64) == true);
+    CHECK(value_less("\x20"s, "\xf9\xbc\x00"s) == false);
+    CHECK(values_equal("\x20"s, "\xf9\xbc\x00"s) == true);
+    CHECK(value_less("\x20"s, "\xf9\xbd\x00"s) == false);
+    CHECK(value_less("\xf9\xbd\x00"s, "\x20"s) == true);
+    CHECK(value_less("\x20"s, "\x00"s) == true);
+}

@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <cmath>
+#include <compare>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
@@ -571,6 +573,20 @@ class jsonpath
     static std::expected<lazy, error> find_key(lazy const &node, std::string_view key);
 
     static std::expected<lazy, error> select_index(lazy const &node, std::int64_t index);
+
+    struct exact_number {
+        bool nan;
+        bool integral;
+        bool negative;
+        std::uint64_t magnitude;
+        double value;
+    };
+
+    static constexpr double two_to_the_64 = 18446744073709551616.0;
+
+    static exact_number number_of(heads::head const &n);
+
+    static std::partial_ordering compare_numbers(exact_number const &a, exact_number const &b);
 
     static std::expected<bool, error> value_equal(lazy const &a, lazy const &b);
 
@@ -1194,6 +1210,57 @@ inline std::expected<lazy, error> jsonpath::find_key(lazy const &node, std::stri
             return std::unexpected(error::key_not_found);
 }
 
+inline jsonpath::exact_number jsonpath::number_of(heads::head const &n)
+{
+    if (n.major == major_type::unsigned_integer)
+        return {false, true, false, n.argument, 0.0};
+    if (n.major == major_type::negative_integer)
+        return {false, true, true, n.argument, 0.0};
+    double const d = heads::decode_float(n.info, n.argument);
+    if (std::isnan(d))
+        return {true, false, false, 0, d};
+    if (std::trunc(d) != d || d >= two_to_the_64 || d < -two_to_the_64)
+        return {false, false, d < 0.0, 0, d};
+    if (d >= 0.0)
+        return {false, true, false, static_cast<std::uint64_t>(d), 0.0};
+    if (d == -two_to_the_64)
+        return {false, true, true, std::numeric_limits<std::uint64_t>::max(), 0.0};
+    return {false, true, true, static_cast<std::uint64_t>(-d) - 1u, 0.0};
+}
+
+inline std::partial_ordering jsonpath::compare_numbers(exact_number const &a, exact_number const &b)
+{
+    if (a.nan || b.nan)
+        return std::partial_ordering::unordered;
+    auto const integers = [](exact_number const &x, exact_number const &y) {
+        if (x.negative != y.negative)
+            return x.negative ? std::partial_ordering::less : std::partial_ordering::greater;
+        auto const order = x.magnitude <=> y.magnitude;
+        return x.negative ? 0 <=> order : std::partial_ordering(order);
+    };
+    if (a.integral && b.integral)
+        return integers(a, b);
+    if (!a.integral && !b.integral)
+        return a.value <=> b.value;
+    exact_number const &i = a.integral ? a : b;
+    exact_number const &f = a.integral ? b : a;
+    std::partial_ordering order = std::partial_ordering::equivalent;
+    if (f.value >= two_to_the_64)
+        order = std::partial_ordering::less;
+    else if (f.value < -two_to_the_64)
+        order = std::partial_ordering::greater;
+    else {
+        heads::head const whole =
+            std::trunc(f.value) >= 0.0
+                ? heads::head{major_type::unsigned_integer, 0, static_cast<std::uint64_t>(std::trunc(f.value))}
+                : heads::head{major_type::negative_integer, 0, static_cast<std::uint64_t>(-std::trunc(f.value)) - 1u};
+        order = integers(i, number_of(whole));
+        if (order == 0)
+            order = f.value > std::trunc(f.value) ? std::partial_ordering::less : std::partial_ordering::greater;
+    }
+    return a.integral ? order : 0 <=> order;
+}
+
 inline std::expected<bool, error> jsonpath::value_equal(lazy const &a, lazy const &b)
 {
     if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
@@ -1218,16 +1285,8 @@ inline std::expected<bool, error> jsonpath::value_equal(lazy const &a, lazy cons
     auto const floating = [](heads::head const &n) {
         return n.major == major_type::simple_float && n.info >= half && n.info <= twice;
     };
-    auto const number = [&](heads::head const &n) {
-        if (floating(n))
-            return heads::decode_float(n.info, n.argument);
-        return n.major == major_type::unsigned_integer ? static_cast<double>(n.argument)
-                                                       : -1.0 - static_cast<double>(n.argument);
-    };
-    if (integral(h) && integral(k))
-        return h.major == k.major && h.argument == k.argument;
     if ((integral(h) || floating(h)) && (integral(k) || floating(k)))
-        return number(h) == number(k);
+        return compare_numbers(number_of(h), number_of(k)) == 0;
     if (h.major != k.major || floating(h) || floating(k))
         return false;
     detail::validity::offset const x_content = detail::validity::distance(x->source.encoded, x->d.encoded);
@@ -1342,19 +1401,8 @@ inline std::expected<bool, error> jsonpath::value_less(lazy const &a, lazy const
     auto const floating = [](heads::head const &n) {
         return n.major == major_type::simple_float && n.info >= half && n.info <= twice;
     };
-    auto const number = [&](heads::head const &n) {
-        if (floating(n))
-            return heads::decode_float(n.info, n.argument);
-        return n.major == major_type::unsigned_integer ? static_cast<double>(n.argument)
-                                                       : -1.0 - static_cast<double>(n.argument);
-    };
-    if (integral(h) && integral(k)) {
-        if (h.major != k.major)
-            return h.major == major_type::negative_integer;
-        return h.major == major_type::unsigned_integer ? h.argument < k.argument : h.argument > k.argument;
-            }
             if ((integral(h) || floating(h)) && (integral(k) || floating(k)))
-                return number(h) < number(k);
+                return compare_numbers(number_of(h), number_of(k)) < 0;
             if (h.major != major_type::text_string || k.major != major_type::text_string)
                 return false;
             heads::decoder d = x->d;
