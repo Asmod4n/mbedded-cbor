@@ -561,7 +561,11 @@ class reflection
                 else if constexpr (std::is_floating_point_v<U>)
                     n = fixed_size<U, void>() - sizeof(decltype(float_bits(U{})));
                 first = std::vector<char>(std::from_range, zero.first(n));
-                if constexpr (std::same_as<U, bool> || std::same_as<U, int128>) {
+                if constexpr (std::same_as<U, bool>
+#ifdef __SIZEOF_INT128__
+                              || std::same_as<U, int128>
+#endif
+                ) {
                     second = first;
                     second.front() = static_cast<char>(static_cast<unsigned char>(first.front()) | 1u);
                 } else if constexpr (std::signed_integral<U>) {
@@ -1325,8 +1329,8 @@ class reflection
             else {
                 heads::append_head(encoded, major_type::tag,
                                    std::to_underlying(rfc8746::tag_number::float128_big_endian));
-                heads::append_head(encoded, major_type::byte_string, sizeof(uint128));
-                encoded.resize(encoded.size() + sizeof(uint128));
+                heads::append_head(encoded, major_type::byte_string, sizeof(decltype(float_bits(U{}))));
+                encoded.resize(encoded.size() + sizeof(decltype(float_bits(U{}))));
             }
         } else if constexpr (requires { fixed_length<U>::value; }) {
             using E = typename fixed_length<U>::element;
@@ -2417,7 +2421,7 @@ class reflection
                     std::optional<typename decltype(path_result<Root, typename U::value_type, Path, At, Verified>())::type>>{};
             else if constexpr (is_fixed_string<U> || is_text_range<U> || is_byte_range<U>)
                 return std::type_identity<std::string_view>{};
-            else if constexpr ((std::is_class_v<U> || std::is_array_v<U>) && !std::same_as<U, int128> && !std::same_as<U, uint128>)
+            else if constexpr ((std::is_class_v<U> || std::is_array_v<U>) && !is_wide_integer<U>)
                 return std::type_identity<typename cbor::schema<Root>::template accessor<U, Verified>>{};
             else
                 return std::type_identity<U>{};
@@ -2642,7 +2646,7 @@ class reflection
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
                 return typename cbor::schema<Root>::template accessor<U, Verified>(encoded, *r, floor);
-            } else if constexpr ((std::is_class_v<U> || std::is_array_v<U>) && !std::same_as<U, int128> && !std::same_as<U, uint128>) {
+            } else if constexpr ((std::is_class_v<U> || std::is_array_v<U>) && !is_wide_integer<U>) {
                 return typename cbor::schema<Root>::template accessor<U, Verified>(encoded, field, floor);
             } else {
                 if constexpr (Verified)
