@@ -255,12 +255,12 @@ auto const age = doc.at_path<"$.user.age", int>();                 // cbor::erro
 ## Testing
 
 The tests run the examples of RFC 8949 Appendix A, the test vectors of
-the IETF CBOR working group and the JSONPath Compliance Test Suite. Each
-push runs nine Linux builds (g++ 15, g++ 16 and clang 23, with
-AddressSanitizer, UndefinedBehaviorSanitizer and ThreadSanitizer), two
-macOS builds (Xcode 16 and 26) and a run in which other decoders read the
-output. Fuzz targets cover decode, diagnostic notation, encode, the
-encoder, item_size, lazy, path, sequence_reader, structs and schema.
+the IETF CBOR working group and the JSONPath Compliance Test Suite.
+`test/run.sh full` builds and runs them with g++ 16, g++ 15 and clang 23
+(libstdc++ and libc++), with AddressSanitizer and
+UndefinedBehaviorSanitizer, and runs other decoders on the output. Fuzz
+targets cover decode, diagnostic notation, encode, the encoder,
+item_size, lazy, path, sequence_reader, structs and schema.
 
 ## Status
 
