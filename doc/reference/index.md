@@ -122,7 +122,7 @@ Write the message:
   It does not check the data (tags, heads). FlatBuffers without its
   Verifier checks no bounds.
 
-Measured at commit bccff8b in a VM with 4 cpus (Intel Xeon, Sapphire
+Measured at commit cb28a52 in a VM with 4 cpus (Intel Xeon, Sapphire
 Rapids), Debian sid, libstdc++ 16, `-O2 -march=native`, the median of 5
 runs of 3 s. The noise of one run is up to 10 %. `bench/kinds-table.sh`
 measures these tables on your machine, in the image of

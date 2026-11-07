@@ -1,7 +1,7 @@
 {
  "what": "kinds table: carsales (bench/cars.json), bench/compare.cpp, bench/kinds-table.sh",
  "context": {
-  "commit": "bccff8bbed30718ef366f63de2e8db3e3ddc40cf",
+  "commit": "cb28a5212e0830c37e5a3c50c2e2c2e60231ca35", "commit_before_rewrite": "bccff8bbed30718ef366f63de2e8db3e3ddc40cf",
   "flags": "-O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG",
   "march": "\t\tsapphirerapids",
   "compiler.g++-16": "g++-16 (Debian 16.2.0-4) 16.2.0",
