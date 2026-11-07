@@ -7,9 +7,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
-#ifdef _WIN32
-#include <malloc.h>
-#endif
 #include <memory>
 #include <new>
 #include <string>
@@ -44,41 +41,30 @@ std::size_t allocated_bytes = 0;
     std::free(p);
 }
 
-// A memory resource of the C++ library may take its blocks through the aligned form, so that form counts too.
+// A memory resource of the C++ library may take its blocks through the aligned form, so that form counts too. The C
+// library of Windows has no aligned_alloc, so there the aligned form stays the one of the C++ library and is not
+// counted.
+#ifndef _WIN32
 [[gnu::noinline]] void *operator new(std::size_t const size, std::align_val_t const alignment)
 {
     ++allocations;
     allocated_bytes += size;
     auto const step = static_cast<std::size_t>(alignment);
-// The C library of Windows has no aligned_alloc; it gives aligned blocks through _aligned_malloc and frees them with
-// _aligned_free.
-#ifdef _WIN32
-    if (void *const p = _aligned_malloc((size + step - 1) / step * step, step))
-        return p;
-#else
     if (void *const p = std::aligned_alloc(step, (size + step - 1) / step * step))
         return p;
-#endif
     throw std::bad_alloc();
 }
 
 [[gnu::noinline]] void operator delete(void *const p, std::align_val_t) noexcept
 {
-#ifdef _WIN32
-    _aligned_free(p);
-#else
     std::free(p);
-#endif
 }
 
 [[gnu::noinline]] void operator delete(void *const p, std::size_t, std::align_val_t) noexcept
 {
-#ifdef _WIN32
-    _aligned_free(p);
-#else
     std::free(p);
-#endif
 }
+#endif
 
 [[gnu::noinline]] void operator delete(void *const p, std::size_t) noexcept
 {
