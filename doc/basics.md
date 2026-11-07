@@ -140,6 +140,17 @@ the program bounds it before it calls the library.
 The error comes at the read that meets the value. A count in the input
 reserves no memory: memory grows only with the values that a call reads.
 
+The nesting depth also stops at the end of the stack. Each thread reads
+the bounds of its own stack once, at its first check. A call that comes
+within 16 KiB of the end of the stack returns `nesting_depth_exceeded`,
+also below `nesting_depth`. The bounds come from the system on Linux
+(glibc and musl), macOS, Windows, WebAssembly without threads, and
+picolibc. A frame outside these bounds, such as the stack of a fiber or
+of a signal handler, gets the fixed depth alone. On Linux, a mapping that
+a program places with `MAP_FIXED` inside the stack limit of the main
+thread is outside the bound. On picolibc, a stack smaller than 16 KiB
+refuses every nested item.
+
 ## 5. Boost.PFR
 
 CMake looks for Boost 1.84 or later on the system and uses it. Else
