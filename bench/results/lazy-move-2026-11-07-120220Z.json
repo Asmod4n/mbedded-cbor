@@ -1,7 +1,7 @@
 {
- "what": "lazy walk of carsales (OP_LAZY_READ of bench/compare.cpp at bccff8b): arm a = include of bccff8b, aa = a built again, b = resolve_container moves its source and lazy::get binds the resolved item by reference, c = resolved holds a pointer to the owner (rejected); probe script outside the tree, 5 rounds in shuffled order, MIN_TIME 3s",
+ "what": "lazy walk of carsales (OP_LAZY_READ of bench/compare.cpp at cb28a52, bccff8b before the rewrite of main): arm a = include of bccff8b, aa = a built again, b = resolve_container moves its source and lazy::get binds the resolved item by reference, c = resolved holds a pointer to the owner (rejected); probe script outside the tree, 5 rounds in shuffled order, MIN_TIME 3s",
  "context": {
-  "commit": "bccff8b (bench), arms a/b/c from copies of include/",
+  "commit": "cb28a52 (bench; bccff8b before the rewrite of main), arms a/b/c from copies of include/",
   "flags": "-O2 -march=native -DNDEBUG; g++-16 -std=c++26 -freflection, clang++-23 -std=c++23",
   "compiler.g++-16": "g++-16 (Debian 16.2.0-4) 16.2.0",
   "compiler.clang++-23": "Debian clang version 23.1.5 (2)",
