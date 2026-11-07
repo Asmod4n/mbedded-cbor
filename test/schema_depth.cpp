@@ -123,6 +123,19 @@ std::string node_chain(std::size_t const levels)
     return out;
 }
 
+// The destructor of a holder recurses once for each link, and a chain deeper than the small stack overflows the main
+// thread of a Windows debug build there. The test takes the chain apart from its top in a loop, so that each link
+// ends with no link below it.
+void end_chain(holder chain)
+{
+    while (auto *const f = std::get_if<limb>(&chain.held)) {
+        if (f->next.empty())
+            break;
+        holder next = std::move(f->next.front());
+        chain = std::move(next);
+    }
+}
+
 std::size_t depth_of(node const &root)
 {
     std::size_t depth = 0;
@@ -153,7 +166,7 @@ TEST_CASE("decode: a struct that holds itself stops where the stack of the threa
 // The record of a variant member is a part that a reference names, as a list is: each link of a chain is two
 // recursive steps. The test exists so that a type that holds itself through a variant stops where the stack ends in
 // encode and in decode alike, and a deep chain does not run past the stack of the writer. The chain stays alive on
-// the main thread: its destructor recurses through its links.
+// the main thread and ends there in a loop: its destructor recurses through its links.
 TEST_CASE("encode and decode: a variant record is one recursive step")
 {
     constexpr std::size_t steps_per_link = 2;
@@ -161,7 +174,8 @@ TEST_CASE("encode and decode: a variant record is one recursive step")
     REQUIRE(written.has_value());
     CHECK(cbor::schema<holder>::decode(std::string(*written)).has_value());
 
-    holder const deep = holder_chain(test::small_stack_bytes / test::smallest_frame_bytes / steps_per_link);
+    holder deep = holder_chain(test::small_stack_bytes / test::smallest_frame_bytes / steps_per_link);
     CHECK_EQ(test::error_on_small_stack([&deep] { return cbor::schema<holder>::encode(deep); }),
              error::nesting_depth_exceeded);
+    end_chain(std::move(deep));
 }
