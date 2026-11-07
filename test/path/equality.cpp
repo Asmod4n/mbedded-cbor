@@ -270,3 +270,16 @@ TEST_CASE("path equality: the count of ids grows by one for each level")
     std::size_t const large = ids_of(test::levels_every_stack_holds);
     CHECK_EQ(large - small, test::levels_every_stack_holds / 2);
 }
+
+// RFC 8949 3.3: a simple value below 24 in the two-byte form is not well-formed. The comparison of two maps reads
+// both whole and refuses such an item with syntax_error, in the filter as in the map key.
+TEST_CASE("path equality: a map that holds a simple value in the two-byte form below 24")
+{
+    std::string const malformed = "\xa1\x61" "a\xf8\x14"s;
+    auto const r = values_equal(malformed, "\xa1\x61" "a\xf4"s);
+    REQUIRE_FALSE(r.has_value());
+    CHECK_EQ(r.error(), error::syntax_error);
+    auto const k = key_found("\xa1\x61" "a\xf8\x14"s, "$[{\"a\": false}]");
+    REQUIRE_FALSE(k.has_value());
+    CHECK_EQ(k.error(), error::syntax_error);
+}
