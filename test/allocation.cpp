@@ -7,6 +7,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#ifdef _WIN32
+#include <malloc.h>
+#endif
 #include <memory>
 #include <new>
 #include <string>
@@ -47,19 +50,34 @@ std::size_t allocated_bytes = 0;
     ++allocations;
     allocated_bytes += size;
     auto const step = static_cast<std::size_t>(alignment);
+// The C library of Windows has no aligned_alloc; it gives aligned blocks through _aligned_malloc and frees them with
+// _aligned_free.
+#ifdef _WIN32
+    if (void *const p = _aligned_malloc((size + step - 1) / step * step, step))
+        return p;
+#else
     if (void *const p = std::aligned_alloc(step, (size + step - 1) / step * step))
         return p;
+#endif
     throw std::bad_alloc();
 }
 
 [[gnu::noinline]] void operator delete(void *const p, std::align_val_t) noexcept
 {
+#ifdef _WIN32
+    _aligned_free(p);
+#else
     std::free(p);
+#endif
 }
 
 [[gnu::noinline]] void operator delete(void *const p, std::size_t, std::align_val_t) noexcept
 {
+#ifdef _WIN32
+    _aligned_free(p);
+#else
     std::free(p);
+#endif
 }
 
 [[gnu::noinline]] void operator delete(void *const p, std::size_t) noexcept

@@ -154,6 +154,8 @@ TEST_CASE("doc reference item: encode")
     CHECK_EQ(cbor::encode(**tree, writer_target{&written, true}).error(), cbor::error::io_error);
 }
 
+// The iov forms exist where the platform has <sys/uio.h>, as in the library (encode.hpp); Windows has none.
+#if __has_include(<sys/uio.h>)
 // encode_iov.md: one piece; written with writev, the pieces are the bytes of encode, shown as EDN on the page.
 TEST_CASE("doc reference item: encode_iov")
 {
@@ -168,6 +170,7 @@ TEST_CASE("doc reference item: encode_iov")
     CHECK_EQ(*joined, bytes);
     CHECK_EQ(cbor::diagnostic_notation(*joined), "[1, \"a\"]");
 }
+#endif
 
 // encoder.md: a map written call by call; a copy does not compile.
 TEST_CASE("doc reference item: encoder")
@@ -333,6 +336,8 @@ TEST_CASE("doc reference item: encoder::finish")
     CHECK_THROWS_AS((void)e.finish(), std::logic_error);
 }
 
+// The iov forms exist where the platform has <sys/uio.h>, as in the library (encode.hpp); Windows has none.
+#if __has_include(<sys/uio.h>)
 // iov_writer.md: a long text with its owner becomes a piece of its own, with no copy.
 TEST_CASE("doc reference item: iov_writer")
 {
@@ -352,3 +357,4 @@ TEST_CASE("doc reference item: iov_writer")
     REQUIRE(sent.has_value());
     CHECK_EQ(cbor::diagnostic_notation(*sent), "\"" + *text + "\"");
 }
+#endif
