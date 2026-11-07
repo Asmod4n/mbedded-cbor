@@ -582,7 +582,7 @@ std::expected<lazy::resolved<Checked>, error> lazy::resolve_container(lazy::top_
             return std::unexpected(h.error());
         if (h->major != major_type::tag ||
             h->argument != std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item))
-            return resolved<Checked>{source, *h, d, at};
+            return resolved<Checked>{std::move(source), *h, d, at};
         auto const r = d.decode_head();
         if (!r) [[unlikely]]
             return std::unexpected(r.error());
@@ -1040,10 +1040,10 @@ std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_
                 return std::bit_cast<std::float128_t>(bits);
             } else {
 #endif
-                auto const found = resolve<true>(*this);
+                auto found = resolve<true>(*this);
                 if (!found) [[unlikely]]
                     return std::unexpected(found.error());
-                auto [source, h, d, item_at] = *found;
+                auto &[source, h, d, item_at] = *found;
                 if constexpr (std::integral<T> && !std::is_same_v<T, bool>) {
                     bool negative = h.major == major_type::negative_integer;
                     std::uint64_t argument = h.argument;
