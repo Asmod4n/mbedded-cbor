@@ -1,5 +1,6 @@
 #include "../owned_copy.hpp"
 #include "../reference/path.hpp"
+#include "../small_stack.hpp"
 #include <cbor/error.hpp>
 #include <cbor/lazy.hpp>
 #include <cbor/query.hpp>
@@ -224,4 +225,48 @@ TEST_CASE("path equality: an integer and a float compare by their exact values")
     CHECK(value_less("\x20"s, "\xf9\xbd\x00"s) == false);
     CHECK(value_less("\xf9\xbd\x00"s, "\x20"s) == true);
     CHECK(value_less("\x20"s, "\x00"s) == true);
+}
+
+namespace path_equality
+{
+namespace
+{
+
+// levels maps, each {"a": inner, "b": 1}, the innermost 1; the second form writes "b" first. Its size is linear in
+// levels.
+std::string nested_maps(std::size_t const levels, bool const b_first)
+{
+    std::string bytes = "\x01"s;
+    for (std::size_t i = 0; i < levels; ++i)
+        bytes = b_first ? "\xa2\x61" "b\x01\x61" "a"s + bytes : "\xa2\x61" "a"s + bytes + "\x61" "b\x01"s;
+    return bytes;
+}
+
+} // namespace
+} // namespace path_equality
+
+// The comparison of two maps reads each item once and gives each distinct subtree one id (tree isomorphism, Aho,
+// Hopcroft and Ullman). A count of the pairs of each map in both maps, as before, made two recursive comparisons for
+// each level and took time 2^levels; 40 levels compare here at once.
+TEST_CASE("path equality: nested maps compare in time linear in their size")
+{
+    CHECK(values_equal(nested_maps(40, false), nested_maps(40, true)) == true);
+    CHECK(values_equal(nested_maps(40, false), nested_maps(39, true)) == false);
+}
+
+// Each level of nested maps adds one distinct map; the keys "a", "b" and the value 1 are one id each. So the count of
+// ids grows by one for each level: the work of the comparison is linear in the size.
+TEST_CASE("path equality: the count of ids grows by one for each level")
+{
+    auto const ids_of = [](std::size_t const levels) {
+        cbor::detail::canonical_ids ids;
+        std::string const bytes = nested_maps(levels, false);
+        std::string_view const view = bytes;
+        auto const r = cbor::detail::validity::intern_key<true>(ids, view, cbor::detail::validity::offset{});
+        CHECK(r.has_value());
+        return ids.size();
+    };
+    std::size_t const small = ids_of(test::levels_every_stack_holds / 2);
+    std::size_t const large = ids_of(test::levels_every_stack_holds);
+    CHECK_EQ(large - small, test::levels_every_stack_holds / 2);
 }
