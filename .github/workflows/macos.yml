@@ -27,8 +27,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - xcode: '16'
-            os: macos-15
           - xcode: '26'
             os: macos-26
           - xcode: '27'
