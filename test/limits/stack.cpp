@@ -231,12 +231,13 @@ using namespace limits_stack;
 // level, and the rest gives the peak of one step. The stack bound must stay above that peak.
 constexpr unsigned char paint = 0xA5;
 constexpr std::uintptr_t paint_margin = 8192;
+constexpr std::uintptr_t paint_floor = 65536;
 
 std::size_t stack_used_by(std::function<void()> const &f)
 {
     auto const &bounds = cbor::detail::validity::stack_bounds_of_thread();
     auto const top = reinterpret_cast<std::uintptr_t>(__builtin_frame_address(0)) - paint_margin;
-    std::uintptr_t const floor = bounds.low + paint_margin;
+    std::uintptr_t const floor = bounds.low + paint_floor;
     for (std::uintptr_t a = top; a > floor; --a)
         *reinterpret_cast<unsigned char volatile *>(a) = paint;
     f();
