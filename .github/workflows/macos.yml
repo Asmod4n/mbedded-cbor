@@ -29,8 +29,6 @@ jobs:
         include:
           - xcode: '26'
             os: macos-26
-          - xcode: '27'
-            os: macos-26
     env:
       HOMEBREW_NO_AUTO_UPDATE: 1
     steps:
@@ -42,10 +40,6 @@ jobs:
         run: |
           ls -d /Applications/Xcode*.app
           app=$(ls -d /Applications/Xcode_${{ matrix.xcode }}*.app | grep -viE 'beta|release_candidate' | sort -V | tail -1)
-          if [ -z "$app" ]; then
-            app=$(ls -d /Applications/Xcode_${{ matrix.xcode }}*.app | sort -V | tail -1)
-            echo "Xcode ${{ matrix.xcode }} has no release on this image; the job takes the prerelease $app"
-          fi
           if [ -z "$app" ]; then
             echo "The image has no Xcode ${{ matrix.xcode }}"
             exit 1
