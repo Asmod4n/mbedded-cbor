@@ -1,8 +1,20 @@
 # mbedded-cbor
 
-A header-only C++ library for CBOR. It reads a message in place, goes
-to one value and skips the rest by its length, and writes C++ structs
-as Packed CBOR with every field at an offset that the compiler knows.
+A fast C++ library for CBOR (RFC 8949) that follows the specifications,
+for microcontrollers and for large servers. It does more than decode a
+whole message and encode it again without a schema:
+
+- **Lazy decode.** `cbor::lazy` and `cbor::at_path` read only the items
+  that you ask for, and skip the rest by their length.
+- **Structs and classes.** `cbor::structs` decodes CBOR into a struct or
+  a class, and encodes it again.
+- **Schema encode with Packed CBOR** (draft-ietf-cbor-packed-19).
+  `cbor::schema` lays out a struct at compile time. A list of structs
+  whose fields all have a fixed width is written with one copy.
+- **The whole message.** `cbor::decode` gives a tree of items, and
+  `cbor::encode` writes it again.
+
+The library is header-only.
 
 ```cpp
 struct point {
@@ -80,23 +92,6 @@ is at `i × sizeof(element)`, and a loop runs over raw bytes.
 
 ## Performance
 
-The carsales message of 1000 cars on an AMD Ryzen 9 5950X, g++ 16.2
-`-O2 -march=native`, median of 7 runs. Every library checks its input.
-
-| Task | mbedded-cbor | FlatBuffers + Verifier | Cap'n Proto |
-|---|---|---|---|
-| Read one field | 11.6 ns | 34.6 µs | 144 ns |
-| Read the whole message | 59.4 µs | 52.8 µs | 114 µs |
-| Write the message | 17.3 µs | 157 µs | 62.0 µs |
-
-`bench/readme-table.sh` measures this table on your machine. The run
-and its context:
-[bench/results/readme-2026-10-19-183938Z.json](bench/results/readme-2026-10-19-183938Z.json).
-The code of every library, task by task:
-[doc/comparison.md](doc/comparison.md).
-
-### Each kind beside a library
-
 The carsales message of 1000 cars, read and written by each kind of
 mbedded-cbor and by a library that does the same work. A number says how
 many times faster mbedded-cbor is. A number under 1 says that the library
@@ -151,6 +146,8 @@ measures these tables on your machine, in the image of
 `containers/debian-sid-bench.Containerfile`.
 The run and its context:
 [bench/results/kinds-2026-11-07-052855Z.json](bench/results/kinds-2026-11-07-052855Z.json).
+The code of every library, task by task:
+[doc/comparison.md](doc/comparison.md).
 
 ## Requirements
 
@@ -243,12 +240,12 @@ auto const age = doc.at_path<"$.user.age", int>();                 // cbor::erro
 ## Testing
 
 The tests run the examples of RFC 8949 Appendix A, the test vectors of
-the IETF CBOR working group and the JSONPath Compliance Test Suite. Each
-push runs nine Linux builds (g++ 15, g++ 16 and clang 23, with
-AddressSanitizer, UndefinedBehaviorSanitizer and ThreadSanitizer), two
-macOS builds (Xcode 16 and 26) and a run in which other decoders read the
-output. Fuzz targets cover decode, diagnostic notation, encode, the
-encoder, item_size, lazy, path, sequence_reader, structs and schema.
+the IETF CBOR working group and the JSONPath Compliance Test Suite.
+`test/run.sh full` builds and runs them with g++ 16, g++ 15 and clang 23
+(libstdc++ and libc++), with AddressSanitizer and
+UndefinedBehaviorSanitizer, and runs other decoders on the output. Fuzz
+targets cover decode, diagnostic notation, encode, the encoder,
+item_size, lazy, path, sequence_reader, structs and schema.
 
 ## Status
 
