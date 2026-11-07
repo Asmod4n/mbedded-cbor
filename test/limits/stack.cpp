@@ -23,6 +23,8 @@
 
 #if defined(_WIN64)
 #include <process.h>
+#define NOMINMAX
+#include <windows.h>
 #elif __has_include(<pthread.h>)
 #include <pthread.h>
 #endif
@@ -121,16 +123,24 @@ struct chain_values {
 void every_reader(chain_values &kept)
 {
     std::string const deep = arrays_around_one(levels);
+    INFO("decode");
     reads(cbor::decode(std::string(deep)));
     auto const l = test::lazy_of_copy(deep);
     CHECK(l.has_value());
+    INFO("clone");
     if (l)
         reads(l->clone());
+    INFO("diagnostic_notation");
     reads(cbor::diagnostic_notation(deep));
+    INFO("item_size");
     reads(cbor::item_size(deep));
+    INFO("compile");
     reads(cbor::jsonpath::compile<cbor::lazy>("$[" + std::string(levels, '[') + "1" + std::string(levels, ']') + "]"));
+    INFO("query descendants");
     reads(query(deep, "$..*"));
+    INFO("query filter");
     reads(query(deep, "$..[?@ == 1]"));
+    INFO("query comparison");
     reads(query("\x82"s + arrays_around_one(levels - 1) + arrays_around_one(levels - 1), "$[?@ == $[1]]"));
     // A struct that holds a std::vector of itself is a map that holds an array (RFC 8949 3.2): two levels for
     // each step; 255 steps put the innermost empty array at depth 511.
@@ -138,13 +148,17 @@ void every_reader(chain_values &kept)
     for (std::size_t i = 0; i < (levels - 1) / 2; ++i)
         message += "\xa1\x61" "c\x81"s;
     message += "\xa1\x61" "c\x80"s;
+    INFO("structs decode");
     auto const decoded = cbor::structs<node>::decode(std::move(message));
     reads(decoded);
+    INFO("structs encode");
     if (decoded)
         reads(cbor::structs<node>::encode(**decoded));
+    INFO("schema encode");
     auto const written = cbor::schema<holder>::encode(kept.chain);
     reads(written);
     if (written) {
+        INFO("schema decode");
         kept.decoded = cbor::schema<holder>::decode(std::string(*written));
         reads(*kept.decoded);
     }
@@ -167,7 +181,9 @@ void on_stack_of(std::size_t const bytes, std::function<void()> work)
     auto const thread = _beginthreadex(nullptr, static_cast<unsigned>(bytes), run, &work,
                                        stack_size_param_is_a_reservation, nullptr);
     REQUIRE(thread != 0);
-    REQUIRE(_cwait(nullptr, static_cast<std::intptr_t>(thread), 0) != -1);
+    auto const handle = reinterpret_cast<HANDLE>(thread);
+    REQUIRE_EQ(WaitForSingleObject(handle, INFINITE), WAIT_OBJECT_0);
+    CloseHandle(handle);
 }
 #elif __has_include(<pthread.h>)
 void *run(void *const work)

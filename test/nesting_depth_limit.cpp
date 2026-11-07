@@ -118,7 +118,9 @@ TEST_CASE("nesting depth depth_limit: diagnostic_notation")
 TEST_CASE("nesting depth depth_limit: encode")
 {
     auto const deepest = test::lazy_of_copy(preferred(arrays_around_zero(depth_limit)))->clone();
-    REQUIRE(deepest.has_value());
+    REQUIRE(test::reads_bound(deepest));
+    if (!deepest)
+        return;
     std::string out;
     CHECK(test::reads_bound(cbor::encode(**deepest, out)));
 }

@@ -1,3 +1,4 @@
+#include "reads_bound.hpp"
 #include "reference.hpp"
 #include "owned_copy.hpp"
 #include "item_head.hpp"
@@ -575,9 +576,14 @@ TEST_CASE("cbor-wg test vectors: every good vector decodes to its decoded item")
         }
     }
     CHECK_EQ(count.vectors, 88u + 11u + 5u + 2u + 7u + 4u + 5u + 8u + 22u + 6u + 1165u);
-    // Three vectors nest deeper than 128 and no vector deeper than the bound.
-    CHECK_EQ(count.nesting_depth_exceeded,
-             cbor::limits::nesting_depth == cbor::detail::validity::nesting_depth_limit ? 0u : 3u);
+    // Three vectors nest deeper than 128 and no vector deeper than the bound. Where the stack of the thread does not
+    // hold the bound, the stack bound stops these three.
+    if (cbor::limits::nesting_depth != cbor::detail::validity::nesting_depth_limit)
+        CHECK_EQ(count.nesting_depth_exceeded, 3u);
+    else if (test::stack_holds_bound)
+        CHECK_EQ(count.nesting_depth_exceeded, 0u);
+    else
+        CHECK_LE(count.nesting_depth_exceeded, 3u);
 }
 
 // bad.cbor holds items that are not well-formed or not valid. Each one fails in decode, lazy and diagnostic_notation,
