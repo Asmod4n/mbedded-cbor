@@ -48,8 +48,23 @@
 #define CBOR_NO_UNIQUE_ADDRESS [[no_unique_address]]
 #endif
 
-#if defined(__wasm__)
+#if defined(__linux__)
+#include <pthread.h>
+#include <sys/auxv.h>
+#include <sys/resource.h>
+#include <unistd.h>
+#include <cstring>
+#elif defined(__APPLE__)
+#include <pthread.h>
+#elif defined(_WIN64)
+extern "C" __declspec(dllimport) void __stdcall GetCurrentThreadStackLimits(unsigned long long *, unsigned long long *);
+extern "C" __declspec(dllimport) int __stdcall SetThreadStackGuarantee(unsigned long *);
+#elif defined(__wasm__) && !defined(__wasm_atomics__)
 extern "C" unsigned char __stack_low;
+#elif defined(__PICOLIBC__)
+extern "C" [[gnu::weak]] char __stack[];
+extern "C" [[gnu::weak]] char __stack_size[];
+extern "C" [[gnu::weak]] char __stack_bottom[];
 #endif
 
 #ifndef CBOR_NESTING_DEPTH_DEFAULT
@@ -108,7 +123,82 @@ public:
 
     static constexpr std::size_t nesting_depth_limit = 512;
 
-    static constexpr std::size_t stack_red_zone = 8192;
+    static constexpr std::size_t stack_reserve = 16384;
+
+#if defined(_WIN64)
+    static constexpr std::uintptr_t windows_page_size = 4096;
+#endif
+
+    struct stack_bounds {
+        std::uintptr_t low = 0;
+        std::uintptr_t high = 0;
+    };
+
+    static stack_bounds stack_bounds_of_this_thread()
+    {
+        auto const frame = reinterpret_cast<std::uintptr_t>(__builtin_frame_address(0));
+#if defined(__linux__)
+        pthread_attr_t attributes;
+        if (pthread_getattr_np(pthread_self(), &attributes) != 0) [[unlikely]]
+            return {};
+        void *address = nullptr;
+        std::size_t size = 0;
+        int const read = pthread_attr_getstack(&attributes, &address, &size);
+        pthread_attr_destroy(&attributes);
+        if (read != 0) [[unlikely]]
+            return {};
+        auto const low = reinterpret_cast<std::uintptr_t>(address);
+        std::uintptr_t const high = low + size;
+        auto const page = static_cast<std::uintptr_t>(sysconf(_SC_PAGESIZE));
+        auto const program = reinterpret_cast<char const *>(getauxval(AT_EXECFN));
+        std::uintptr_t top = 0;
+        if (program != nullptr)
+            top = (reinterpret_cast<std::uintptr_t>(program) + std::strlen(program) + 1 + page - 1) / page * page;
+        bool const main_thread = top != 0 && high <= top && high + page >= top;
+        if (!main_thread)
+            return frame >= low && frame < high ? stack_bounds{low, high} : stack_bounds{};
+        rlimit limit{};
+        if (getrlimit(RLIMIT_STACK, &limit) != 0 || limit.rlim_cur == RLIM_INFINITY || limit.rlim_cur >= top) [[unlikely]]
+            return {};
+#if defined(__GLIBC__)
+        if (top - low + page < limit.rlim_cur) [[unlikely]]
+            return {};
+#endif
+        return {top - limit.rlim_cur + page, top};
+#elif defined(__APPLE__)
+        auto const high = reinterpret_cast<std::uintptr_t>(pthread_get_stackaddr_np(pthread_self()));
+        std::uintptr_t const low = high - pthread_get_stacksize_np(pthread_self());
+        return frame >= low && frame < high ? stack_bounds{low, high} : stack_bounds{};
+#elif defined(_WIN64)
+        unsigned long long low = 0;
+        unsigned long long high = 0;
+        GetCurrentThreadStackLimits(&low, &high);
+        unsigned long guarantee = 0;
+        if (SetThreadStackGuarantee(&guarantee) == 0) [[unlikely]]
+            return {};
+        std::uintptr_t const usable = static_cast<std::uintptr_t>(low) + windows_page_size + guarantee;
+        return frame >= usable && frame < high ? stack_bounds{usable, static_cast<std::uintptr_t>(high)} : stack_bounds{};
+#elif defined(__wasm__) && !defined(__wasm_atomics__)
+        return {reinterpret_cast<std::uintptr_t>(&__stack_low), std::numeric_limits<std::uintptr_t>::max()};
+#elif defined(__PICOLIBC__)
+        if (__stack == nullptr) [[unlikely]]
+            return {};
+        auto const high = reinterpret_cast<std::uintptr_t>(__stack);
+        std::uintptr_t const low = __stack_size != nullptr ? high - reinterpret_cast<std::uintptr_t>(__stack_size)
+                                   : __stack_bottom != nullptr ? reinterpret_cast<std::uintptr_t>(__stack_bottom)
+                                                               : high;
+        return frame >= low && frame < high ? stack_bounds{low, high} : stack_bounds{};
+#else
+        (void)frame;
+        return {};
+#endif
+    }
+
+    static stack_bounds const &stack_bounds_of_thread()
+    {
+        thread_local stack_bounds const bounds = stack_bounds_of_this_thread();
+        return bounds;
+    }
 
     static constexpr std::size_t size_limit = std::numeric_limits<std::size_t>::max();
 
@@ -128,13 +218,12 @@ public:
     static constexpr std::expected<void, error> check_nesting_depth(std::size_t const depth,
                                                                     std::size_t const depth_max)
     {
-#if defined(__wasm__)
         if !consteval {
-            if (reinterpret_cast<std::uintptr_t>(__builtin_frame_address(0)) <
-                reinterpret_cast<std::uintptr_t>(&__stack_low) + stack_red_zone) [[unlikely]]
+            auto const frame = reinterpret_cast<std::uintptr_t>(__builtin_frame_address(0));
+            stack_bounds const &bounds = stack_bounds_of_thread();
+            if (frame >= bounds.low && frame < bounds.high && frame - bounds.low < stack_reserve) [[unlikely]]
                 return std::unexpected(error::nesting_depth_exceeded);
         }
-#endif
         return check_limit(depth, depth_max, error::nesting_depth_exceeded);
     }
 

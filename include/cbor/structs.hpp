@@ -1194,8 +1194,11 @@ class generic
     }
 
     template <class U>
-    static std::size_t write_generic(std::span<char> const out, std::size_t at, U const &value)
+    static std::expected<std::size_t, error> write_generic(std::span<char> const out, std::size_t at, U const &value,
+                                                           std::size_t const depth)
     {
+        if (auto const r = detail::validity::check_nesting_depth(depth, limits::nesting_depth); !r) [[unlikely]]
+            return std::unexpected(r.error());
         if constexpr (std::same_as<U, bool>) {
             out.subspan(at).front() =
                 heads::initial_byte(major_type::simple_float, value ? std::to_underlying(simple_value::true_value)
@@ -1228,9 +1231,9 @@ class generic
             return write_bytes(out, at, std::span<char const>(bytes).last(digits));
 #endif
         } else if constexpr (detail::is_std_variant<U>) {
-            return std::visit([&](auto const &e) { return write_generic(out, at, e); }, value);
+            return std::visit([&](auto const &e) { return write_generic(out, at, e, depth); }, value);
         } else if constexpr (std::is_enum_v<U>) {
-            return write_generic(out, at, std::to_underlying(value));
+            return write_generic(out, at, std::to_underlying(value), depth);
         } else if constexpr (std::is_integral_v<U>) {
             if constexpr (std::is_signed_v<U>) {
                 if (value < 0)
@@ -1250,44 +1253,57 @@ class generic
             return at + value.size();
         } else if constexpr (is_tagged_standard_type<U>) {
             at += heads::write_head(out, at, major_type::tag, tag_of_standard_type<U>());
-            return write_tag_content(out, at, value);
+            return write_tag_content(out, at, value, depth);
         } else if constexpr (reflection::is_optional<U>) {
             if (!value) {
                 out.subspan(at).front() = heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::null));
                 return at + heads::initial_byte_size;
             }
-            return write_generic(out, at, *value);
+            return write_generic(out, at, *value, depth);
         } else if constexpr (is_tagged_item<U>) {
             at += heads::write_head(out, at, major_type::tag, U::number);
-            return write_generic(out, at, value.content);
+            return write_generic(out, at, value.content, depth + 1);
         } else if constexpr (is_std_tuple<U> || is_std_array<U>) {
             at += heads::write_head(out, at, major_type::array, std::tuple_size_v<U>);
-            std::apply([&](auto const &...e) { ((at = write_generic(out, at, e)), ...); }, value);
-            return at;
+            std::expected<std::size_t, error> written = at;
+            std::apply([&](auto const &...e) {
+                ((written = written.and_then([&](std::size_t const w) { return write_generic(out, w, e, depth + 1); })), ...);
+            }, value);
+            return written;
         } else if constexpr (is_multimap<U>) {
             auto groups = key_groups(value);
             at += heads::write_head(out, at, major_type::map,
                                     std::ranges::fold_left(groups, std::uint64_t{0}, element_count));
             for (auto const group : groups) {
-                at = write_generic(out, at, group.front().first);
+                auto const key = write_generic(out, at, group.front().first, depth + 1);
+                if (!key) [[unlikely]]
+                    return key;
+                at = *key;
                 at += heads::write_head(out, at, major_type::array,
                                         std::ranges::fold_left(group, std::uint64_t{0}, element_count));
-                for (auto const &[k, v] : group)
-                    at = write_generic(out, at, v);
+                for (auto const &[k, v] : group) {
+                    auto const mapped = write_generic(out, at, v, depth + 1);
+                    if (!mapped) [[unlikely]]
+                        return mapped;
+                    at = *mapped;
+                }
             }
             return at;
         } else if constexpr (reflection::is_map<U>) {
             at += heads::write_head(out, at, major_type::map, value.size());
             for (auto const &[k, v] : value) {
-                at = write_generic(out, at, k);
-                at = write_generic(out, at, v);
+                auto const pair = write_generic(out, at, k, depth + 1).and_then(
+                    [&](std::size_t const w) { return write_generic(out, w, v, depth + 1); });
+                if (!pair) [[unlikely]]
+                    return pair;
+                at = *pair;
             }
             return at;
         } else if constexpr (requires {
                                  value.size();
                                  typename U::value_type;
                              }) {
-            return write_elements(out, at, value);
+            return write_elements(out, at, value, depth);
         } else {
             static_assert(pfr::struct_readable<U>());
             if constexpr (constexpr std::optional<std::uint64_t> tag = reflection::tag_number_of<U>(); tag.has_value())
@@ -1298,31 +1314,38 @@ class generic
             }(std::make_index_sequence<pfr::tuple_size_v<U>>());
             at += heads::write_head(out, at, major_type::map, present);
             static constexpr auto order = key_order<U>();
+            std::expected<std::size_t, error> written = at;
             [&]<std::size_t... J>(std::index_sequence<J...>) {
-                ((at = write_member<order[J]>(out, at, value)), ...);
+                ((written = written.and_then([&](std::size_t const w) { return write_member<order[J]>(out, w, value, depth); })), ...);
             }(std::make_index_sequence<order.size()>());
-            return at;
+            return written;
         }
     }
 
     template <class U>
-    static std::size_t write_elements(std::span<char> const out, std::size_t at, U const &value)
+    static std::expected<std::size_t, error> write_elements(std::span<char> const out, std::size_t at, U const &value,
+                                                            std::size_t const depth)
     {
         at += heads::write_head(out, at, major_type::array, value.size());
-        for (typename U::value_type const &e : value)
-            at = write_generic(out, at, e);
+        for (typename U::value_type const &e : value) {
+            auto const element = write_generic(out, at, e, depth + 1);
+            if (!element) [[unlikely]]
+                return element;
+            at = *element;
+        }
         return at;
     }
 
     template <class U>
-    static std::size_t write_tag_content(std::span<char> const out, std::size_t at, U const &value)
+    static std::expected<std::size_t, error> write_tag_content(std::span<char> const out, std::size_t at,
+                                                               U const &value, std::size_t const depth)
     {
         if constexpr (is_sys_time<U>) {
-            return write_generic(out, at, value.time_since_epoch().count());
+            return write_generic(out, at, value.time_since_epoch().count(), depth);
         } else if constexpr (std::same_as<U, std::chrono::year_month_day>) {
-            return write_generic(out, at, std::chrono::sys_days{value}.time_since_epoch().count());
+            return write_generic(out, at, std::chrono::sys_days{value}.time_since_epoch().count(), depth);
         } else if constexpr (is_set<U>) {
-            return write_elements(out, at, value);
+            return write_elements(out, at, value, depth);
         } else {
             using E = typename U::value_type;
             at += heads::write_head(out, at, major_type::byte_string, value.size() * sizeof(E));
@@ -1335,7 +1358,8 @@ class generic
     }
 
     template <std::size_t I, class U>
-    static std::size_t write_member(std::span<char> const out, std::size_t at, U const &value)
+    static std::expected<std::size_t, error> write_member(std::span<char> const out, std::size_t at, U const &value,
+                                                          std::size_t const depth)
     {
         auto const &m = pfr::get<I>(value);
         if (!member_present(m))
@@ -1344,9 +1368,9 @@ class generic
         at += heads::write_head(out, at, key.major, key.argument);
         at = write_bytes(out, at, key.text);
         if constexpr (reflection::is_optional<std::remove_cvref_t<decltype(m)>>)
-            return write_generic(out, at, *m);
+            return write_generic(out, at, *m, depth + 1);
         else
-            return write_generic(out, at, m);
+            return write_generic(out, at, m, depth + 1);
     }
 };
 
@@ -1409,7 +1433,10 @@ public:
             return std::unexpected(detail::validity::writer_error(sum.error()));
         std::size_t const padded = *sum;
         std::string out(padded, '\0');
-        out.resize(generic::write_generic(std::span<char>(out), 0, value));
+        auto const written = generic::write_generic(std::span<char>(out), 0, value, 0);
+        if (!written) [[unlikely]]
+            return std::unexpected(written.error());
+        out.resize(*written);
         return out;
     }
 
@@ -1432,18 +1459,25 @@ public:
             if (!total) [[unlikely]]
                 return std::unexpected(detail::validity::writer_error(total.error()));
             target.resize(*total);
-            generic::write_generic(std::span<char>(target), at, value);
-            target.resize(at + size);
+            auto const written = generic::write_generic(std::span<char>(target), at, value, 0);
+            target.resize(written ? at + size : at);
+            if (!written) [[unlikely]]
+                return std::unexpected(written.error());
             return size;
         } else if constexpr (!encoding::byte_container<U> && requires { std::span<char>(target); }) {
             std::span<char> const out(target);
             if (detail::validity::bytes_fit(padded, out.size())) {
-                generic::write_generic(out.first(padded), 0, value);
+                auto const written = generic::write_generic(out.first(padded), 0, value, 0);
+                if (!written) [[unlikely]]
+                    return std::unexpected(written.error());
                 return size;
             }
         }
         std::string encoded(padded, '\0');
-        encoded.resize(generic::write_generic(std::span<char>(encoded), 0, value));
+        auto const written = generic::write_generic(std::span<char>(encoded), 0, value, 0);
+        if (!written) [[unlikely]]
+            return std::unexpected(written.error());
+        encoded.resize(*written);
         decltype(auto) message = encoding::message_of(target, encoded.size());
         if (auto const r = message.append(encoded); !r) [[unlikely]]
             return std::unexpected(detail::validity::writer_error(r.error()));
