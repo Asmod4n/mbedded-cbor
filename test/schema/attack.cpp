@@ -69,8 +69,10 @@ std::size_t probe_lot_read(std::string_view const message)
             return std::nullopt;
         if constexpr (requires { r->has_value(); })
             return r->has_value() ? std::optional<double>(static_cast<double>(**r)) : std::optional<double>(-1);
+#ifdef CBOR_HAS_INT128
         else if constexpr (std::same_as<std::remove_cvref_t<decltype(*r)>, cbor::int128>)
             return static_cast<double>(static_cast<std::int64_t>(*r));
+#endif
         else
             return static_cast<double>(*r);
     };
@@ -141,7 +143,7 @@ TEST_CASE("attack: the sample message reads every path")
     CHECK_EQ(probe_paths_read(bytes), probe_paths);
     CHECK_EQ(probe_lot_read(bytes), probe_lot_paths);
     CHECK_EQ(at_path<probe, "$.i16">(bytes), -300);
-    CHECK((*at_path<probe, "$.i128">(bytes) == cbor::int128{-5}));
+    CHECK((*at_path<probe, "$.i128">(bytes) == wide_integer{-5}));
     CHECK_EQ(at_path<probe, "$.f64">(bytes), 2.5);
     CHECK_EQ(at_path<probe, "$.pair[]">(bytes, 1uz), 8u);
     CHECK_EQ(at_path<probe, "$.maybe">(bytes).value(), std::optional<std::int32_t>{-9});
@@ -235,7 +237,11 @@ TEST_CASE("attack: every forged head of a fixed field is incorrect_type")
         CHECK_EQ(at_path<probe, "$.u64">(forged(S::member_offset<&probe::u64>(), head)).has_value(), head == 0x1b);
         CHECK_EQ(at_path<probe, "$.f64">(forged(S::member_offset<&probe::f64>(), head)).has_value(), head == 0xfb);
         CHECK_EQ(at_path<probe, "$.f32">(forged(S::member_offset<&probe::f32>(), head)).has_value(), head == 0xfa);
+#ifdef CBOR_HAS_INT128
         CHECK_EQ(at_path<probe, "$.i128">(forged(S::member_offset<&probe::i128>(), head)).has_value(), head == 0xc2 || head == 0xc3);
+#else
+        CHECK_EQ(at_path<probe, "$.i128">(forged(S::member_offset<&probe::i128>(), head)).has_value(), head == 0x1b || head == 0x3b);
+#endif
         CHECK_EQ(at_path<probe, "$.code">(forged(S::member_offset<&probe::code>(), head)).has_value(), head == 0x63);
         CHECK_EQ(at_path<probe, "$.pair[1]">(forged(S::member_offset<&probe::pair>(), head)).has_value(), head == 0x82);
     }

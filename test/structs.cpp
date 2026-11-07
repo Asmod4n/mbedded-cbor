@@ -309,7 +309,7 @@ TEST_CASE("structs: a CTAP2 getAssertion response")
 // are simple values of one and two bytes.
 TEST_CASE("structs: bignums and simple values of RFC 8949 Appendix A")
 {
-#ifdef __SIZEOF_INT128__
+#ifdef CBOR_HAS_INT128
     round_trip<cbor::uint128>("\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s,
                                   static_cast<cbor::uint128>(1) << 64);
     round_trip<cbor::int128>("\xc3\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s,

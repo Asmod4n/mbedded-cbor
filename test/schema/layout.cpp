@@ -15,7 +15,7 @@ TEST_CASE("fixed_size: numbers and simple values have the size of head and argum
     // An enum has the size of its underlying type.
     CHECK_EQ(form<wheel>::fixed_size<color>(), 3u);
     CHECK_EQ(form<wheel>::fixed_size<std::byte>(), 2u);
-#ifdef __SIZEOF_INT128__
+#ifdef CBOR_HAS_INT128
     // A 128-bit integer is tag 2 or 3 (one byte) and a byte string of 16 bytes (RFC 8949 3.4.3).
     CHECK_EQ(form<wheel>::fixed_size<cbor::int128>(), 18u);
     CHECK_EQ(form<wheel>::fixed_size<cbor::uint128>(), 18u);
