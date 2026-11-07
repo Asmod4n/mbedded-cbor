@@ -987,9 +987,9 @@ class generic
     template <class U>
     static std::expected<std::size_t, error> generic_size(U const &value, std::size_t const depth)
     {
-        if (auto const r = detail::validity::check_nesting_depth(depth, limits::nesting_depth); !r)
-            [[unlikely]]
-            return std::unexpected(r.error());
+        if constexpr (!std::is_arithmetic_v<U> && !std::is_enum_v<U>)
+            if (auto const r = detail::validity::check_nesting_depth(depth, limits::nesting_depth); !r) [[unlikely]]
+                return std::unexpected(r.error());
         if constexpr (std::same_as<U, bool> || std::same_as<U, std::nullptr_t>) {
             return heads::initial_byte_size;
         } else if constexpr (std::same_as<U, simple_value>) {
@@ -1197,8 +1197,10 @@ class generic
     static std::expected<std::size_t, error> write_generic(std::span<char> const out, std::size_t at, U const &value,
                                                            std::size_t const depth)
     {
-        if (auto const r = detail::validity::check_nesting_depth(depth, limits::nesting_depth); !r) [[unlikely]]
-            return std::unexpected(r.error());
+        if constexpr (!std::is_arithmetic_v<U> && !std::is_enum_v<U> && !is_basic_string<U> &&
+                      !std::same_as<U, std::string_view> && !std::same_as<U, std::span<std::byte const>>)
+            if (auto const r = detail::validity::check_nesting_depth(depth, limits::nesting_depth); !r) [[unlikely]]
+                return std::unexpected(r.error());
         if constexpr (std::same_as<U, bool>) {
             out.subspan(at).front() =
                 heads::initial_byte(major_type::simple_float, value ? std::to_underlying(simple_value::true_value)
