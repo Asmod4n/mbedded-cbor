@@ -13,8 +13,10 @@
 
 #if defined(_WIN64)
 #include <process.h>
-#define NOMINMAX
-#include <windows.h>
+// windows.h defines macros such as small, min and max that change the names of the tests that include this header; the
+// test declares the two functions of the Windows API that it calls.
+extern "C" __declspec(dllimport) unsigned long __stdcall WaitForSingleObject(void *, unsigned long);
+extern "C" __declspec(dllimport) int __stdcall CloseHandle(void *);
 #elif __has_include(<pthread.h>)
 #include <pthread.h>
 #endif
@@ -49,6 +51,10 @@ namespace small_stack_detail
 // The flag of _beginthreadex that makes the size the reservation of the stack, not its first commit.
 inline constexpr unsigned stack_size_param_is_a_reservation = 0x00010000;
 
+// The timeout of WaitForSingleObject that waits with no end, and its result when the thread has ended.
+inline constexpr unsigned long wait_infinite = 0xFFFFFFFF;
+inline constexpr unsigned long wait_object_0 = 0;
+
 inline unsigned __stdcall run(void *const work)
 {
     (*static_cast<std::function<void()> *>(work))();
@@ -77,8 +83,8 @@ inline void on_stack_of(std::size_t const bytes, std::function<void()> work)
         auto const thread = _beginthreadex(nullptr, static_cast<unsigned>(bytes), small_stack_detail::run, &work,
                                            small_stack_detail::stack_size_param_is_a_reservation, nullptr);
         REQUIRE(thread != 0);
-        auto const handle = reinterpret_cast<HANDLE>(thread);
-        REQUIRE_EQ(WaitForSingleObject(handle, INFINITE), WAIT_OBJECT_0);
+        auto *const handle = reinterpret_cast<void *>(thread);
+        REQUIRE_EQ(WaitForSingleObject(handle, small_stack_detail::wait_infinite), small_stack_detail::wait_object_0);
         CloseHandle(handle);
 #elif __has_include(<pthread.h>)
         pthread_attr_t attributes;
