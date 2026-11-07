@@ -1,3 +1,4 @@
+#include "small_stack.hpp"
 #include "sequence_reader.hpp"
 #include "reference.hpp"
 
@@ -351,22 +352,19 @@ TEST_CASE("sequence_reader: a large count waits for bytes")
     }
 }
 
-// The reader keeps one count per open container in a stack of fixed size, bounded by the nesting depth of the
-// build. An array with an element and a tag each open one level; an item at the depth is read and one level
-// more is refused, at every split.
-TEST_CASE("sequence_reader: the nesting depth of the build and one level more")
+// The reader keeps one count of the items that are still to read and does not recurse, so no depth bounds it. A
+// nested item is read at every split, and an item deeper than a small stack holds is read on a thread with that
+// stack.
+TEST_CASE("sequence_reader: a nested item of any depth")
 {
-    std::size_t const depth = cbor::limits::nesting_depth;
+    std::size_t const depth = test::levels_every_stack_holds;
     for (test::feed_form const form : test::feed_forms) {
         CAPTURE(static_cast<int>(form));
         CHECK_EQ(test::reader_outcome_byte_by_byte(nested_arrays(depth), form).items.size(), 1u);
-        CHECK_EQ(test::reader_outcome_byte_by_byte(nested_arrays(depth + 1), form).last,
-                 error::nesting_depth_exceeded);
         CHECK_EQ(test::reader_outcome_byte_by_byte(nested_tags(depth), form).items.size(), 1u);
-        CHECK_EQ(test::reader_outcome_byte_by_byte(nested_tags(depth + 1), form).last,
-                 error::nesting_depth_exceeded);
     }
-    CHECK_EQ(test::reader_outcome_split_at(std::string(depth, '\x81') + "\x80"s, 0).items.size(), 1u);
+    std::string const deep = std::string(test::levels_beyond_small_stack, '\x81') + "\x80"s;
+    test::on_small_stack([&deep] { CHECK_EQ(test::reader_outcome_split_at(deep, 0).items.size(), 1u); });
 }
 
 // RFC 8949 3 and the decision of the owner of 2026-10-12: an array or a map that announces more items than

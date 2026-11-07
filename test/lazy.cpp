@@ -1,3 +1,4 @@
+#include "small_stack.hpp"
 #include "reference.hpp"
 #include "threads.hpp"
 #include "owned_copy.hpp"
@@ -978,7 +979,7 @@ TEST_CASE("validity: keys_equivalent follows RFC 8949 5.6.1")
         CAPTURE(p.first);
         CAPTURE(p.second);
         auto const equal = cbor::detail::validity::keys_equivalent<false>(
-            first, cbor::detail::validity::offset{}, second, cbor::detail::validity::offset{}, 1, 16);
+            first, cbor::detail::validity::offset{}, second, cbor::detail::validity::offset{});
         REQUIRE(equal.has_value());
         CHECK_EQ(*equal, p.equal);
     }
@@ -1705,15 +1706,16 @@ TEST_CASE("lazy: a moved-from query is a wrong use")
     CHECK_EQ(l.at_path(moved_nodes)->size(), 1u);
 }
 
-// The parse of a query counts the recursion of its filters against the nesting depth of the build, so a query
-// with one filter in another as often as the depth allows does not compile, and one filter does.
-TEST_CASE("lazy: the compile of a query checks its depth against the nesting depth of the build")
+// The parse of a query recurses into each filter, so a query with one filter in another more often than a small stack
+// holds does not compile on a thread with that stack, and one filter does.
+TEST_CASE("lazy: the compile of a query stops where the stack of the thread ends")
 {
     std::string const doc = encoded(A(1));
     cbor::lazy const l = *test::lazy_of_copy(doc);
-    constexpr std::size_t depth = cbor::limits::nesting_depth;
+    constexpr std::size_t depth = test::levels_beyond_small_stack;
     std::string const deep = "$" + test::repeat("[?@", depth) + ".a" + std::string(depth, ']');
-    CHECK_EQ(cbor::jsonpath::compile<cbor::nodelist>(deep).error(), error::nesting_depth_exceeded);
+    CHECK_EQ(test::error_on_small_stack([&deep] { return cbor::jsonpath::compile<cbor::nodelist>(deep); }),
+             error::nesting_depth_exceeded);
     auto const e = *cbor::jsonpath::compile<cbor::nodelist>("$[?@.a]");
     CHECK(l.at_path(e)->empty());
 }

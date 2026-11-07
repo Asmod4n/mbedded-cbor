@@ -124,9 +124,6 @@ TEST_CASE("doc advanced basics: the errors of structs")
 // name.
 TEST_CASE("doc advanced basics: limits")
 {
-    std::size_t const depth = cbor::limits::nesting_depth;
-    CHECK_EQ(depth, std::size_t{CBOR_NESTING_DEPTH_DEFAULT});
-    CHECK_EQ(depth, 128u);
     CHECK_EQ(cbor::limits::string_length, SIZE_MAX);
     CHECK_EQ(cbor::limits::container_elements, SIZE_MAX);
 }

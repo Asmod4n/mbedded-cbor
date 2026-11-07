@@ -1,3 +1,4 @@
+#include "small_stack.hpp"
 #include "reference.hpp"
 #include "threads.hpp"
 #include "owned_copy.hpp"
@@ -345,13 +346,16 @@ TEST_CASE("doc advanced path: the errors")
     CHECK_THROWS_AS((void)test::at_path("$", cbor::lazy{}), std::logic_error);
 }
 
-// The section "Limits" shows that the nesting depth bounds a descendant segment. The examples with a limit
-// set are in test/limits/, built with the flags that the examples name.
+// The section "Limits" shows that the end of the stack of the thread bounds a descendant segment, which recurses,
+// and not a path of child segments, which does not. The examples with a limit set are in test/limits/, built with
+// the flags that the examples name.
 TEST_CASE("doc advanced path: the limits")
 {
-    std::string const deep = test::repeat("\x81"sv, cbor::limits::nesting_depth + 1) + '\x01';
-    CHECK_EQ(test::query("$..[0]", *test::lazy_of_copy(deep)).error(), error::nesting_depth_exceeded);
-    CHECK_EQ(test::at_path("$", *test::lazy_of_copy(deep)).error(), error::nesting_depth_exceeded);
+    std::string const deep = test::repeat("\x81"sv, test::levels_beyond_small_stack) + '\x01';
+    CHECK_EQ(test::error_on_small_stack([&deep] { return test::query("$..[0]", *test::lazy_of_copy(deep)); }),
+             error::nesting_depth_exceeded);
+    CHECK(test::at_path("$" + test::repeat("[0]"sv, test::levels_beyond_small_stack), *test::lazy_of_copy(deep)) ==
+          test::V(1));
 }
 
 // The section "Threads" shows that a lazy is read from another thread, and that a tag 29 is a plain tag there too.
@@ -491,7 +495,6 @@ TEST_CASE("doc advanced path: limits in detail")
 {
     CHECK_EQ(cbor::limits::string_length, SIZE_MAX);
     CHECK_EQ(cbor::limits::container_elements, SIZE_MAX);
-    CHECK_EQ(cbor::limits::nesting_depth, std::size_t{CBOR_NESTING_DEPTH_DEFAULT});
 }
 
 // The section "Path syntax" states that an index counts from 0, because a task that names "element 2" leaves the base

@@ -1,3 +1,4 @@
+#include "../small_stack.hpp"
 #include "../owned_copy.hpp"
 #include "../reference.hpp"
 #include "../sequence_reader.hpp"
@@ -49,11 +50,10 @@ std::string map_of(std::size_t const n)
 
 } // namespace
 
-TEST_CASE("limits sizes 2: the build sets both size limits and keeps the default nesting depth")
+TEST_CASE("limits sizes 2: the build sets both size limits")
 {
     CHECK_EQ(cbor::limits::string_length, limit);
     CHECK_EQ(cbor::limits::container_elements, limit);
-    CHECK_EQ(cbor::limits::nesting_depth, 128u);
 }
 
 // The length of each string head is checked in every reader: the well-formedness walk, the lazy item, the
@@ -117,17 +117,19 @@ TEST_CASE("limits sizes 2: a head that claims 2^64 - 1 is refused at the head")
     CHECK_EQ(cbor::diagnostic_notation(array).error(), error::container_elements_exceeded);
 }
 
-// The nesting depth is checked in the form of the code that checks the size limits too: n tags 100(...)
-// around 0 hold an integer at depth n.
-TEST_CASE("limits sizes 2: the nesting depth is checked beside the size limits")
+// The stack is checked in the form of the code that checks the size limits too: n tags 100(...) around 0 hold an
+// integer at depth n. A depth that every stack holds is read; an input deeper than a small stack holds is refused on a
+// thread with that stack.
+TEST_CASE("limits sizes 2: the stack is checked beside the size limits")
 {
-    constexpr std::size_t depth = cbor::limits::nesting_depth;
-    std::string const deepest = test::repeat("\xd8\x64"sv, depth) + '\x00';
-    std::string const deeper = test::repeat("\xd8\x64"sv, depth + 1) + '\x00';
-    CHECK(test::lazy_of_copy(deepest)->clone().has_value());
-    CHECK(cbor::diagnostic_notation(deepest).has_value());
-    CHECK_EQ(test::lazy_of_copy(deeper)->clone().error(), error::nesting_depth_exceeded);
-    CHECK_EQ(cbor::diagnostic_notation(deeper).error(), error::nesting_depth_exceeded);
+    std::string const held = test::repeat("\xd8\x64"sv, test::levels_every_stack_holds) + '\x00';
+    std::string const deep = test::repeat("\xd8\x64"sv, test::levels_beyond_small_stack) + '\x00';
+    CHECK(test::lazy_of_copy(held)->clone().has_value());
+    CHECK(cbor::diagnostic_notation(held).has_value());
+    CHECK_EQ(test::error_on_small_stack([&deep] { return test::lazy_of_copy(deep)->clone(); }),
+             error::nesting_depth_exceeded);
+    CHECK_EQ(test::error_on_small_stack([&deep] { return cbor::diagnostic_notation(deep); }),
+             error::nesting_depth_exceeded);
 }
 
 // An iterator of elements() or entries() only skips the items it passes, and the owner decided on 2026-10-10
