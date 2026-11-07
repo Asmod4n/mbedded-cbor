@@ -40,8 +40,8 @@ UTF-8 or duplicate keys.
 - `too_little_data`: the bytes end before the item ends.
 - `syntax_error`: a head is not well-formed, a chunk of an indefinite
   string has the wrong type, or bytes follow the item.
-- `nesting_depth_exceeded`: the item is deeper than
-  [limits](../errors/limits.md)`::nesting_depth`.
+- `nesting_depth_exceeded`: the item is deeper than the stack of the
+  thread holds ([limits](../errors/limits.md)).
 - `string_length_exceeded`, `container_elements_exceeded`: a limit is set
   and the item goes past it.
 

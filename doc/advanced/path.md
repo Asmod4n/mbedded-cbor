@@ -404,22 +404,19 @@ the macros. The limits are constants of the build.
 
 | Limit | What a path does |
 |---|---|
-| `nesting_depth` | See below. |
 | `string_length` | Every string that the walk reads is checked: a key it compares and the target. A string that it only skips does not count. |
 | `container_elements` | Every array and map that the walk reads is checked: the containers on the way and the target. A container that it only skips does not count. |
 
-`nesting_depth_exceeded` comes when:
+`nesting_depth_exceeded` comes where the stack of the thread ends
+([basics.md](basics.md), section 5), in the steps that recurse:
 
-- the path has more segments than the depth;
 - a filter, a group in parentheses, a function call or a literal in the
-  path is nested deeper than the depth;
-- a descendant segment goes deeper than the depth;
-- `clone()` of a node reads an item that is deeper than the depth. It
-  counts the depth from the node.
+  path is nested deeper than the stack holds;
+- a descendant segment goes deeper than the stack holds;
+- `clone()` of a node reads an item that is deeper than the stack holds.
 
-An item that a typed read only skips can be deeper than the depth. A
-compile-time path has at most the default nesting depth of segments, or it
-does not compile.
+A path of child segments does not recurse: it reads any number of
+segments. An item that a typed read only skips can be of any depth.
 
 ```cpp
 // built with -DCBOR_STRING_LENGTH_DEFAULT=2
