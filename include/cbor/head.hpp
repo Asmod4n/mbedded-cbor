@@ -415,7 +415,7 @@ class heads
         if !consteval {
             return static_cast<float>(std::bit_cast<std::float16_t>(half));
         }
-#elif defined(__FLT16_MAX__)
+#elif defined(__FLT16_MAX__) && !defined(_MSC_VER)
         if !consteval {
             return static_cast<float>(std::bit_cast<_Float16>(half));
         }
