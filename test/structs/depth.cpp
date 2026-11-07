@@ -64,6 +64,25 @@ std::string nested_optional_bytes(std::size_t const steps)
     return bytes + "\xa0"s;
 }
 
+// The destructor of a nested value recurses once for each step, and a value deeper than the small stack overflows the
+// main thread of a Windows debug build there. The test takes it apart from its root in a loop, so that each step ends
+// with no step below it.
+void end_nested(node value)
+{
+    while (!value.c.empty()) {
+        node next = std::move(value.c.front());
+        value = std::move(next);
+    }
+}
+
+void end_nested(optional_node value)
+{
+    while (value.c && !value.c->empty()) {
+        optional_node next = std::move(value.c->front());
+        value = std::move(next);
+    }
+}
+
 } // namespace
 } // namespace structs_depth
 
@@ -72,7 +91,7 @@ using namespace structs_depth;
 // A struct that holds itself nests as deep as its value. 64 steps are a depth that every stack holds: encode writes it
 // and decode reads what encode wrote. A value of as many steps as the small stack has frames of the smallest size is
 // deeper than that stack: encode and decode stop with nesting_depth_exceeded where the stack of the thread ends. The
-// value is made and ended on the main thread, because its destructor recurses through its steps.
+// value is made on the main thread and ended there in a loop, because its destructor recurses through its steps.
 constexpr std::size_t steps_held = 64;
 constexpr std::size_t steps_beyond = test::small_stack_bytes / test::smallest_frame_bytes;
 
@@ -82,12 +101,13 @@ TEST_CASE("structs depth: a struct that holds a vector of itself")
     REQUIRE(held.has_value());
     CHECK_EQ(*held, nested_bytes(steps_held));
     CHECK(cbor::structs<node>::decode(nested_bytes(steps_held)).has_value());
-    node const deep = nested(steps_beyond);
+    node deep = nested(steps_beyond);
     std::string const deep_bytes = nested_bytes(steps_beyond);
     CHECK_EQ(test::error_on_small_stack([&deep] { return cbor::structs<node>::encode(deep); }),
              error::nesting_depth_exceeded);
     CHECK_EQ(test::error_on_small_stack([&deep_bytes] { return cbor::structs<node>::decode(std::string(deep_bytes)); }),
              error::nesting_depth_exceeded);
+    end_nested(std::move(deep));
 }
 
 TEST_CASE("structs depth: a struct with an optional vector of itself")
@@ -96,11 +116,12 @@ TEST_CASE("structs depth: a struct with an optional vector of itself")
     REQUIRE(held.has_value());
     CHECK_EQ(*held, nested_optional_bytes(steps_held));
     CHECK(cbor::structs<optional_node>::decode(nested_optional_bytes(steps_held)).has_value());
-    optional_node const deep = nested_optional(steps_beyond);
+    optional_node deep = nested_optional(steps_beyond);
     std::string const deep_bytes = nested_optional_bytes(steps_beyond);
     CHECK_EQ(test::error_on_small_stack([&deep] { return cbor::structs<optional_node>::encode(deep); }),
              error::nesting_depth_exceeded);
     CHECK_EQ(test::error_on_small_stack(
                  [&deep_bytes] { return cbor::structs<optional_node>::decode(std::string(deep_bytes)); }),
              error::nesting_depth_exceeded);
+    end_nested(std::move(deep));
 }
