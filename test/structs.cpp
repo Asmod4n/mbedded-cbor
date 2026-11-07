@@ -1,3 +1,4 @@
+#include "small_stack.hpp"
 #include "reference.hpp"
 #include <cbor/schema.hpp>
 #include <cbor/structs.hpp>
@@ -855,11 +856,13 @@ TEST_CASE("structs: a tag 29 into a plain member is incorrect_type")
     CHECK_EQ(cbor::structs<std::vector<numbers>>::decode("\x83\xd8\x1c\x82\x01\x02\xd8\x1d\x00\xd8\x1d\x00"s)
                  .error(),
              error::incorrect_type);
+    // A chain of marks is read in a loop that marks each tag 28 and does not recurse: a chain of any length gives its
+    // value, also on a small stack.
     std::string chain;
-    for (std::size_t i = 0; i < cbor::limits::nesting_depth; ++i)
+    for (std::size_t i = 0; i < test::levels_beyond_small_stack; ++i)
         chain += "\xd8\x1c"s;
-    CHECK_EQ(cbor::structs<std::uint64_t>::decode(chain + "\x05"s), 5u);
-    CHECK_EQ(cbor::structs<std::uint64_t>::decode("\xd8\x1c"s + chain + "\x05"s).error(), error::nesting_depth_exceeded);
+    chain += "\x05"s;
+    test::on_small_stack([&chain] { CHECK_EQ(cbor::structs<std::uint64_t>::decode(std::string(chain)), 5u); });
 }
 
 namespace

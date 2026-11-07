@@ -1,3 +1,4 @@
+#include "small_stack.hpp"
 #include "reference.hpp"
 #include "owned_copy.hpp"
 #include "item_head.hpp"
@@ -108,16 +109,16 @@ TEST_CASE("bignum tag 3: an empty magnitude is refused")
              cbor::error{error::unsupported_value});
 }
 
-// Found by the fuzzer: the decoder counts the content of tag 2 or 3 one level deeper, as the content of every
-// tag. encode of a tree counts the same levels, so the deepest tagged bignum that decode gives encodes, and
-// one level more is refused by decode.
-TEST_CASE("bignum: encode takes the deepest tagged bignum that decode gives")
+// Found by the fuzzer: the decoder reads the content of tag 2 or 3 one level deeper, as the content of every tag.
+// encode of a tree recurses through the same levels, so a deep tagged bignum that decode gives encodes, and an input
+// deeper than a small stack holds is refused by decode on a thread with that stack.
+TEST_CASE("bignum: encode takes a deep tagged bignum that decode gives")
 {
-    constexpr std::size_t depth = cbor::limits::nesting_depth;
     std::string const bignum = "\xc2\x49"s + std::string(9, '\x01');
-    std::string const deep = std::string(depth, '\x81') + bignum;
-    std::string const shallow = std::string(depth - 1, '\x81') + bignum;
-    CHECK_EQ(test::lazy_of_copy(deep)->clone().error(), error::nesting_depth_exceeded);
+    std::string const deep = std::string(test::levels_beyond_small_stack, '\x81') + bignum;
+    std::string const shallow = std::string(test::levels_every_stack_holds, '\x81') + bignum;
+    CHECK_EQ(test::error_on_small_stack([&deep] { return test::lazy_of_copy(deep)->clone(); }),
+             error::nesting_depth_exceeded);
     auto const ok = test::lazy_of_copy(shallow)->clone();
     REQUIRE(ok.has_value());
     std::string again;
@@ -256,7 +257,7 @@ TEST_CASE("bignum: a key that fits 64 bits is the same key as the integer")
         std::string_view const first = p.first;
         std::string_view const second = p.second;
         auto const equal = cbor::detail::validity::keys_equivalent<false>(
-            first, cbor::detail::validity::offset{}, second, cbor::detail::validity::offset{}, 0, 16);
+            first, cbor::detail::validity::offset{}, second, cbor::detail::validity::offset{});
         REQUIRE(equal.has_value());
         CHECK_EQ(*equal, p.equal);
     }

@@ -1,3 +1,4 @@
+#include "small_stack.hpp"
 #include "reference.hpp"
 #include "owned_copy.hpp"
 #include <cbor/shared.hpp>
@@ -20,44 +21,43 @@ using cbor::major_type;
 using cbor::value_sharing;
 using cbor::detail::validity;
 
-// The owner set the bound of the nesting depth to 512 and its default to 128. Every function that reads the
-// nesting depth reads both from these two constants, so this test is the one place that holds the two numbers.
-TEST_CASE("validity: the limit and the default of the nesting depth")
+// The end of the stack of the thread bounds every reader with the one check that every recursive reader calls: an
+// item that every stack holds passes, and an input deeper than a small stack holds is refused on a thread with that
+// stack.
+TEST_CASE("validity: the stack of the thread bounds the decode and the diagnostic notation")
 {
-    CHECK_EQ(validity::nesting_depth_limit, 512u);
-    CHECK_EQ(cbor::limits::nesting_depth, 128u);
+    std::string const held = std::string(test::levels_every_stack_holds, '\x81') + '\x00';
+    std::string const deep = std::string(test::levels_beyond_small_stack, '\x81') + '\x00';
+    CHECK(test::value_of(*test::lazy_of_copy(held)).has_value());
+    CHECK(cbor::diagnostic_notation(held).has_value());
+    CHECK_EQ(test::error_on_small_stack([&deep] { return test::value_of(*test::lazy_of_copy(deep)); }),
+             error::nesting_depth_exceeded);
+    CHECK_EQ(test::error_on_small_stack([&deep] { return cbor::diagnostic_notation(deep); }),
+             error::nesting_depth_exceeded);
 }
 
-// The nesting depth of the build bounds every reader with the check that every reader of a depth uses: an
-// item at the depth passes and one level more is refused.
-TEST_CASE("validity: cbor::limits::nesting_depth bounds the decode and the diagnostic notation")
+namespace
 {
-    std::string const deepest = std::string(cbor::limits::nesting_depth, '\x81') + '\x00';
-    std::string const deeper = std::string(cbor::limits::nesting_depth + 1, '\x81') + '\x00';
-    CHECK(test::value_of(*test::lazy_of_copy(deepest)).has_value());
-    CHECK(cbor::diagnostic_notation(deepest).has_value());
-    CHECK_EQ(test::value_of(*test::lazy_of_copy(deeper)).error(), error::nesting_depth_exceeded);
-    CHECK_EQ(cbor::diagnostic_notation(deeper).error(), error::nesting_depth_exceeded);
+
+// A recursion that calls the one check at each level, as each recursive reader does, and counts its levels.
+std::expected<std::size_t, error> levels_until_refused(std::size_t const level)
+{
+    if (auto const r = validity::check_recursion_limit(); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    return levels_until_refused(level + 1).transform([](std::size_t const n) { return n + 1; });
 }
 
-// One function decides whether a depth is allowed, at compile time for the default and at run time for the depth
-// of an item. A depth up to the maximum is allowed and every depth above it is refused, for every depth up to
-// one past the limit.
-TEST_CASE("validity: check_nesting_depth for every depth up to one past the limit")
+} // namespace
+
+// check_recursion_limit passes on the main thread, and is a constant expression at compile time, where the compiler
+// bounds the recursion. A recursion that calls it at each level stops with nesting_depth_exceeded on a small stack,
+// and does not run past the stack.
+TEST_CASE("validity: check_recursion_limit stops a recursion before the stack ends")
 {
-    for (std::size_t depth = 0; depth <= 513; ++depth) {
-        auto const r = validity::check_nesting_depth(depth, 512);
-        if (depth <= 512)
-            CHECK(r.has_value());
-        else
-            CHECK_EQ(r.error(), error::nesting_depth_exceeded);
-    }
-    constexpr bool limit_allowed =
-        validity::check_nesting_depth(512, validity::nesting_depth_limit).has_value();
-    constexpr bool past_limit_allowed =
-        validity::check_nesting_depth(513, validity::nesting_depth_limit).has_value();
-    CHECK(limit_allowed);
-    CHECK_FALSE(past_limit_allowed);
+    CHECK(validity::check_recursion_limit().has_value());
+    constexpr bool allowed_at_compile_time = validity::check_recursion_limit().has_value();
+    CHECK(allowed_at_compile_time);
+    CHECK_EQ(test::error_on_small_stack([] { return levels_until_refused(0); }), error::nesting_depth_exceeded);
 }
 
 namespace
@@ -491,12 +491,12 @@ TEST_CASE("validity: keys_equivalent compares the pairs of two maps as multisets
     std::string_view const jkk = "\xa3\x61j\x01\x61k\x01\x61k\x01"sv;
     std::string_view const kk = "\xa2\x61k\x01\x61k\x01"sv;
     std::string_view const kj = "\xa2\x61k\x01\x61j\x01"sv;
-    CHECK_FALSE(*validity::keys_equivalent<false>(kkj, validity::offset{}, kjj, validity::offset{}, 0, 16));
-    CHECK_FALSE(*validity::keys_equivalent<false>(kjj, validity::offset{}, kkj, validity::offset{}, 0, 16));
-    CHECK(*validity::keys_equivalent<false>(kkj, validity::offset{}, jkk, validity::offset{}, 0, 16));
-    CHECK(*validity::keys_equivalent<false>(jkk, validity::offset{}, kkj, validity::offset{}, 0, 16));
-    CHECK_FALSE(*validity::keys_equivalent<false>(kk, validity::offset{}, kj, validity::offset{}, 0, 16));
-    CHECK(*validity::keys_equivalent<false>(kk, validity::offset{}, kk, validity::offset{}, 0, 16));
+    CHECK_FALSE(*validity::keys_equivalent<false>(kkj, validity::offset{}, kjj, validity::offset{}));
+    CHECK_FALSE(*validity::keys_equivalent<false>(kjj, validity::offset{}, kkj, validity::offset{}));
+    CHECK(*validity::keys_equivalent<false>(kkj, validity::offset{}, jkk, validity::offset{}));
+    CHECK(*validity::keys_equivalent<false>(jkk, validity::offset{}, kkj, validity::offset{}));
+    CHECK_FALSE(*validity::keys_equivalent<false>(kk, validity::offset{}, kj, validity::offset{}));
+    CHECK(*validity::keys_equivalent<false>(kk, validity::offset{}, kk, validity::offset{}));
 }
 
 // An offset, an element size and an element index are three kinds of number. Each has its own type, so a call that

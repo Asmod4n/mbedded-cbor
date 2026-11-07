@@ -1,10 +1,11 @@
-#include "reads_bound.hpp"
+#include "small_stack.hpp"
 #include "reference.hpp"
 #include <cbor/describe.hpp>
 #include <cbor/schema.hpp>
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -13,9 +14,8 @@ using namespace std::string_literals;
 using cbor::error;
 
 
-// This file is built into the test binary with the default nesting depth and into the one with the nesting
-// depth at its hard bound, so the stack of the thread holds the deepest chain that the library accepts in
-// both.
+// A chain that every stack holds is read and written; a chain deeper than a small stack holds is refused with
+// nesting_depth_exceeded on a thread with that small stack. No depth is fixed: the end of the stack decides.
 
 namespace
 {
@@ -133,42 +133,35 @@ std::size_t depth_of(node const &root)
 
 } // namespace
 
-// A struct that holds a list of itself is read by recursion, and the bytes decide how deep. Without a limit,
-// a chain of 100000 nodes in 2.2 MB overflowed a stack of 8 MiB. Each reference that is followed counts one
-// level, as each nested item counts one in the other decoders.
-TEST_CASE("decode: a struct that holds itself stops at the nesting depth of the build")
+// A struct that holds a list of itself is read by recursion, and the bytes decide how deep. Without a bound, a chain
+// of 100000 nodes in 2.2 MB overflowed a stack of 8 MiB. Each reference that is followed is one recursive step, as
+// each nested item is one in the other decoders.
+TEST_CASE("decode: a struct that holds itself stops where the stack of the thread ends")
 {
     REQUIRE_EQ(cbor::schema<node>::fixed_size(), 16u);
 
-    constexpr std::size_t depth = cbor::limits::nesting_depth;
-    auto const at_limit = cbor::schema<node>::decode(node_chain(depth));
-    CHECK(test::reads_bound(at_limit));
-    if (at_limit)
-        CHECK_EQ(depth_of(**at_limit), depth);
+    constexpr std::size_t held = test::levels_every_stack_holds;
+    auto const read = cbor::schema<node>::decode(node_chain(held));
+    REQUIRE(read.has_value());
+    CHECK_EQ(depth_of(**read), held);
 
-    auto const over = cbor::schema<node>::decode(node_chain(depth + 1));
-    REQUIRE_FALSE(over.has_value());
-    CHECK_EQ(over.error(), error::nesting_depth_exceeded);
-
-    auto const deep = cbor::schema<node>::decode(node_chain(100000));
-    REQUIRE_FALSE(deep.has_value());
-    CHECK_EQ(deep.error(), error::nesting_depth_exceeded);
+    std::string const deep = node_chain(test::levels_beyond_small_stack);
+    CHECK_EQ(test::error_on_small_stack([&deep] { return cbor::schema<node>::decode(std::string(deep)); }),
+             error::nesting_depth_exceeded);
 }
 
-// The record of a variant member is a part that a reference names, as a list is, so it counts one level. A chain
-// of k links is 2 k + 1 levels deep: the variant of the root, then a list and a variant for each link. The test
-// exists so that a type that holds itself through a variant stops at the nesting depth of the build in encode
-// and in decode alike: encode counts the levels as decode does, so it writes no message that decode refuses, and
-// a deeper chain does not run past the stack of the writer.
-TEST_CASE("encode and decode: a variant record counts one level of nesting")
+// The record of a variant member is a part that a reference names, as a list is: each link of a chain is two
+// recursive steps. The test exists so that a type that holds itself through a variant stops where the stack ends in
+// encode and in decode alike, and a deep chain does not run past the stack of the writer. The chain stays alive on
+// the main thread: its destructor recurses through its links.
+TEST_CASE("encode and decode: a variant record is one recursive step")
 {
-    constexpr std::size_t depth = cbor::limits::nesting_depth;
-    constexpr std::size_t links = (depth - 1) / 2;
-    auto const at_limit = cbor::schema<holder>::encode(holder_chain(links));
-    CHECK(test::reads_bound(at_limit));
-    if (at_limit)
-        CHECK(test::reads_bound(cbor::schema<holder>::decode(std::string(*at_limit))));
-    auto const over = cbor::schema<holder>::encode(holder_chain(links + 1));
-    REQUIRE_FALSE(over.has_value());
-    CHECK_EQ(over.error(), error::nesting_depth_exceeded);
+    constexpr std::size_t steps_per_link = 2;
+    auto const written = cbor::schema<holder>::encode(holder_chain(test::levels_every_stack_holds / steps_per_link));
+    REQUIRE(written.has_value());
+    CHECK(cbor::schema<holder>::decode(std::string(*written)).has_value());
+
+    holder const deep = holder_chain(test::small_stack_bytes / test::smallest_frame_bytes / steps_per_link);
+    CHECK_EQ(test::error_on_small_stack([&deep] { return cbor::schema<holder>::encode(deep); }),
+             error::nesting_depth_exceeded);
 }

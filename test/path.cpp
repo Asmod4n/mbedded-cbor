@@ -1,3 +1,4 @@
+#include "small_stack.hpp"
 #include "reference.hpp"
 #include "owned_copy.hpp"
 
@@ -192,17 +193,17 @@ TEST_CASE("path: the grammar")
     CHECK_EQ(path_error("$[9007199254740991]", A(1)), error::index_out_of_bounds);
     for (std::string_view const key : {"$[-0]"sv, "$[1.5]"sv, "$[h'01']"sv, "$[true]"sv})
         CHECK_EQ(path_error(key, A(1)), error::not_indexable);
-    constexpr std::size_t depth = cbor::limits::nesting_depth;
-    std::string const deepest = repeat("\x81", depth) + "\x01"s;
-    std::string const deeper = repeat("\x81", depth + 1) + "\x01"s;
-    CHECK(test::at_path("$" + repeat("[0]", depth), *test::lazy_of_copy(deepest)) == V(1));
-    CHECK_EQ(test::at_path("$" + repeat("[0]", depth + 1), *test::lazy_of_copy(deeper)).error(),
-             error::nesting_depth_exceeded);
+    // A path of child segments is walked one segment after the other, without a recursion: it reads any depth, also
+    // on a small stack.
+    constexpr std::size_t depth = test::levels_beyond_small_stack;
+    std::string const deep = repeat("\x81", depth) + "\x01"s;
+    std::string const path = "$" + repeat("[0]", depth);
+    test::on_small_stack([&deep, &path] { CHECK(test::at_path(path, *test::lazy_of_copy(deep)) == V(1)); });
 }
 
 // The compile-time form reads the same grammar and, inside brackets, any literal of CBOR diagnostic notation
-// (draft-ietf-cbor-edn-literals-28) as a map key. A query that is not valid, or that has more than the default nesting depth of
-// segments, does not compile.
+// (draft-ietf-cbor-edn-literals-28) as a map key. A query that is not valid does not compile. The count of segments
+// has no bound: a path of 129 segments compiles.
 TEST_CASE("path: a query that is not valid does not compile")
 {
     CHECK(path_compiles<"$.a[*][-1]['b']">);
@@ -215,7 +216,6 @@ TEST_CASE("path: a query that is not valid does not compile")
     CHECK_FALSE(path_compiles<"$[1.1_1]">);
     CHECK_FALSE(path_compiles<"$[simple(24)]">);
     CHECK_FALSE(path_compiles<"$[1(]">);
-    CHECK_FALSE(path_compiles<"$[0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0]">);
     CHECK(path_compiles<"$[0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0]">);
 }
 
@@ -449,7 +449,7 @@ TEST_CASE("path: the array slice selector")
 }
 
 // RFC 9535 2.5.2.2: a descendant segment applies its selectors to the input node and then to every descendant,
-// each node before its descendants and an array in its order. A descendant segment deeper than the nesting depth fails.
+// each node before its descendants and an array in its order. A descendant segment deeper than the stack of the thread holds fails.
 TEST_CASE("path: the descendant segment")
 {
     value const doc = M("a"s, M("b"s, 1, "c"s, A(M("b"s, 2))), "b"s, 3);
@@ -459,8 +459,9 @@ TEST_CASE("path: the descendant segment")
     CHECK(at("$..['b', 'c'][0]", doc) == A(M("b"s, 2)));
     for (std::string_view const bad : {"$..."sv, "$.. b"sv, "$..1"sv})
         CHECK_EQ(path_error(bad, doc), error::invalid_path);
-    std::string const deeper = repeat("\x81", cbor::limits::nesting_depth + 1) + "\x01"s;
-    CHECK_EQ(test::query("$..[0]", *test::lazy_of_copy(deeper)).error(), error::nesting_depth_exceeded);
+    std::string const deeper = repeat("\x81", test::levels_beyond_small_stack) + "\x01"s;
+    CHECK_EQ(test::error_on_small_stack([&deeper] { return test::query("$..[0]", *test::lazy_of_copy(deeper)); }),
+             error::nesting_depth_exceeded);
 }
 
 // RFC 9535 2.3.5: a filter keeps the children for which the logical expression is true. A comparison of numbers

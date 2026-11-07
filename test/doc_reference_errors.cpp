@@ -70,8 +70,6 @@ TEST_CASE("doc reference errors: is_error_code_enum")
 // limits.md: a build that sets no macro has the default limits.
 TEST_CASE("doc reference errors: limits")
 {
-    CHECK_EQ(cbor::limits::nesting_depth, std::size_t{128});
     CHECK_EQ(cbor::limits::string_length, SIZE_MAX);
     CHECK_EQ(cbor::limits::container_elements, SIZE_MAX);
-    CHECK_EQ(CBOR_NESTING_DEPTH_DEFAULT, 128);
 }

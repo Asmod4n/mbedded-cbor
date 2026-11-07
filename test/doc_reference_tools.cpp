@@ -1,3 +1,4 @@
+#include "small_stack.hpp"
 #include <cbor/cbor.hpp>
 #include <doctest/doctest.h>
 
@@ -80,9 +81,10 @@ TEST_CASE("doc reference tools: sequence_reader errors")
     CHECK_EQ(r.next().error(), cbor::error::syntax_error);
     CHECK(r.empty());
     CHECK_THROWS_AS(r.feed(std::shared_ptr<std::string const>{}), std::logic_error);
+    // The reader does not recurse, so no depth bounds it.
     cbor::sequence_reader deep;
-    deep.feed(std::string(cbor::limits::nesting_depth + 1, '\x81') + "\x00"s);
-    CHECK_EQ(deep.next().error(), cbor::error::nesting_depth_exceeded);
+    deep.feed(std::string(test::levels_beyond_small_stack, '\x81') + "\x00"s);
+    CHECK(deep.next().has_value());
 }
 
 // diagnostic_notation.md: the text of RFC 8949 section 8 for an item; a byte after the item is syntax_error.
