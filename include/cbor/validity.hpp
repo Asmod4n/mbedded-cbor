@@ -1,5 +1,5 @@
 // Gives cbor::limits. Gives the checks for safety: limits, nesting
-// depth (on WebAssembly also the stack that is left), overflow of sums
+// depth and the stack that is left, overflow of sums
 // and products, number ranges, heads, tag
 // content and typed arrays. Throws std::logic_error on a wrong use, or
 // ends the process when the build has no exceptions. Gives the tag
