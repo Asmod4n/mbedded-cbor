@@ -1,8 +1,20 @@
 # mbedded-cbor
 
-A header-only C++ library for CBOR. It reads a message in place, goes
-to one value and skips the rest by its length, and writes C++ structs
-as Packed CBOR with every field at an offset that the compiler knows.
+A fast C++ library for CBOR (RFC 8949) that follows the specifications,
+for microcontrollers and for large servers. It does more than decode a
+whole message and encode it again without a schema:
+
+- **Lazy decode.** `cbor::lazy` and `cbor::at_path` read only the items
+  that you ask for, and skip the rest by their length.
+- **Structs and classes.** `cbor::structs` decodes CBOR into a struct or
+  a class, and encodes it again.
+- **Schema encode with Packed CBOR** (draft-ietf-cbor-packed-19).
+  `cbor::schema` lays out a struct at compile time. A list of structs
+  whose fields all have a fixed width is written with one copy.
+- **The whole message.** `cbor::decode` gives a tree of items, and
+  `cbor::encode` writes it again.
+
+The library is header-only.
 
 ```cpp
 struct point {
