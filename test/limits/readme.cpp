@@ -5,13 +5,12 @@
 
 using namespace std::string_literals;
 
-// This binary is built with the flags of step 5 of README.md: -DCBOR_NESTING_DEPTH_DEFAULT=16,
-// -DCBOR_STRING_LENGTH_DEFAULT=4096 and -DCBOR_CONTAINER_ELEMENTS_DEFAULT=100. The test exists so that the
+// This binary is built with the flags of step 5 of README.md: -DCBOR_STRING_LENGTH_DEFAULT=4096 and
+// -DCBOR_CONTAINER_ELEMENTS_DEFAULT=100. The test exists so that the
 // example of the README compiles with these flags and gives the result that the README states.
 
 TEST_CASE("doc readme: set limits")
 {
-    CHECK_EQ(cbor::limits::nesting_depth, 16u);
     CHECK_EQ(cbor::limits::string_length, 4096u);
     CHECK_EQ(cbor::limits::container_elements, 100u);
 

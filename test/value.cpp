@@ -1,3 +1,4 @@
+#include "small_stack.hpp"
 #include "reference.hpp"
 #include "owned_copy.hpp"
 
@@ -46,22 +47,25 @@ TEST_CASE("major 5: empty, string, integer, nested keys")
 }
 
 // Ported from test.rb: 'depth: deeply-nested arrays / maps / encoding all raise RuntimeError'.
-// The limit is the nesting depth of the build; the limit itself must pass and one level more must fail.
-TEST_CASE("depth: nested arrays and maps past the limit")
+// The end of the stack of the thread bounds the depth: a depth that every stack holds passes, and an input deeper
+// than a small stack holds fails on a thread with that stack.
+TEST_CASE("depth: nested arrays and maps past the end of the stack")
 {
-    constexpr std::size_t depth = cbor::limits::nesting_depth;
-    CHECK(decoded(std::string(depth, '\x81') + '\x00').has_value());
-    CHECK_EQ(decode_error(std::string(depth + 1, '\x81') + '\x00'), error::nesting_depth_exceeded);
+    constexpr std::size_t held = test::levels_every_stack_holds;
+    constexpr std::size_t beyond = test::levels_beyond_small_stack;
+    CHECK(decoded(std::string(held, '\x81') + '\x00').has_value());
+    std::string const arrays = std::string(beyond, '\x81') + '\x00';
+    test::on_small_stack([&arrays] { CHECK_EQ(decode_error(arrays), error::nesting_depth_exceeded); });
     CHECK(decoded(repeat("\xa1\x61"
                          "a"sv,
-                         depth) +
+                         held) +
                   '\x00')
               .has_value());
-    CHECK_EQ(decode_error(repeat("\xa1\x61"
-                                 "a"sv,
-                                 depth + 1) +
-                          '\x00'),
-             error::nesting_depth_exceeded);
+    std::string const maps = repeat("\xa1\x61"
+                                    "a"sv,
+                                    beyond) +
+                             '\x00';
+    test::on_small_stack([&maps] { CHECK_EQ(decode_error(maps), error::nesting_depth_exceeded); });
 }
 
 // Ported from test.rb: 'safety: all known malformed-input shapes raise cleanly'.
@@ -100,12 +104,11 @@ TEST_CASE("major 6: a tag keeps its number and its content")
 }
 
 // Ported from test.rb: 'depth: deeply-nested arrays / maps / encoding all raise RuntimeError',
-// the encode part. encode of a tree counts the depth as decode does, so the deepest tree that decode gives
-// encodes.
-TEST_CASE("depth: encode at the limit")
+// the encode part. encode of a tree recurses as decode does, so a deep tree that decode gives encodes.
+TEST_CASE("depth: encode of a deep tree")
 {
     value deep = V(0);
-    for (std::size_t i = 0; i < cbor::limits::nesting_depth; ++i)
+    for (std::size_t i = 0; i < test::levels_every_stack_holds; ++i)
         deep = A(deep);
     auto const fits = test::lazy_of_copy(preferred(deep))->clone();
     REQUIRE(fits.has_value());

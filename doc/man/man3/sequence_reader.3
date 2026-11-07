@@ -1,4 +1,4 @@
-.TH "cbor::sequence_reader" "3" "2026-10-31" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.TH "cbor::sequence_reader" "3" "2026-11-07" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
 .SH NAME
 cbor::sequence_reader \- gives the items of a CBOR sequence whose bytes arrive in pieces
 .SH SYNOPSIS
@@ -60,9 +60,6 @@ Feed more bytes.
 .IP \(bu 2
 \f[CR]syntax_error\f[R], \f[CR]indefinite_length\f[R]: the bytes are not
 a well\-formed item with definite lengths.
-.IP \(bu 2
-\f[CR]nesting_depth_exceeded\f[R]: the item is nested deeper than
-\f[CR]limits::nesting_depth\f[R].
 .PP
 After any other error than \f[CR]too_little_data\f[R], every call of
 \f[CR]next\f[R] gives that error, and \f[CR]feed\f[R] keeps no byte.

@@ -26,9 +26,8 @@ Reads the first item in `encoded` to its end and gives its size in bytes.
 It checks that the item is well-formed: each head, each string and each
 element. Bytes after the item are not read and are not an error.
 
-The call keeps no stack, so it checks no nesting depth: an item deeper
-than `limits::nesting_depth` gives its size. It does not check tag
-content, UTF-8 or duplicate keys.
+The call does not recurse: an item of any depth gives its size. It does
+not check tag content, UTF-8 or duplicate keys.
 
 ## Errors
 

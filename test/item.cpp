@@ -1,3 +1,4 @@
+#include "small_stack.hpp"
 #include <cbor/cbor.hpp>
 #include "pieces.hpp"
 #include "owned_copy.hpp"
@@ -521,20 +522,18 @@ TEST_CASE("decode: a long chain of shared references is read without recursion")
     CHECK_EQ(reference->second->get<cbor::type::unsigned_integer>().value(), chain_length - 2u);
 }
 
-// The nesting depth is checked where the decode recurses: n tags 100(...) around 0 hold an integer at depth
-// n, and so do n arrays around 0. The depth of the build passes and one level more is refused.
-TEST_CASE("decode: the nesting depth is limited by the nesting depth of the build")
+// The stack is checked where the decode recurses: n tags 100(...) around 0 hold an integer at depth n, and so do n
+// arrays around 0. A depth that every stack holds is read, and an input deeper than a small stack holds is refused
+// on a thread with that stack.
+TEST_CASE("decode: the depth is bounded by the stack of the thread")
 {
-    constexpr std::size_t depth = cbor::limits::nesting_depth;
     for (std::string_view const level : {"\xd8\x64"sv, "\x81"sv}) {
-        auto const deepest = test::lazy_of_copy(test::repeat(level, depth) + '\x00');
-        REQUIRE(deepest.has_value());
-        CHECK(deepest->clone().has_value());
-        auto const deeper = test::lazy_of_copy(test::repeat(level, depth + 1) + '\x00');
-        REQUIRE(deeper.has_value());
-        auto const refused = deeper->clone();
-        REQUIRE_FALSE(refused.has_value());
-        CHECK_EQ(refused.error(), cbor::error::nesting_depth_exceeded);
+        auto const read = test::lazy_of_copy(test::repeat(level, test::levels_every_stack_holds) + '\x00');
+        REQUIRE(read.has_value());
+        CHECK(read->clone().has_value());
+        auto const deep = test::lazy_of_copy(test::repeat(level, test::levels_beyond_small_stack) + '\x00');
+        REQUIRE(deep.has_value());
+        CHECK_EQ(test::error_on_small_stack([&deep] { return deep->clone(); }), cbor::error::nesting_depth_exceeded);
     }
 }
 
@@ -673,17 +672,17 @@ TEST_CASE("encode: a tree is written with the head widths of its input, also wit
     }
 }
 
-// encode counts the levels of a tree as decode does, so the deepest tree that decode gives is encoded back to
+// encode recurses through the levels of a tree as decode does, so a deep tree that decode gives is encoded back to
 // its bytes.
-TEST_CASE("encode: the deepest tree that decode gives is encoded")
+TEST_CASE("encode: a deep tree that decode gives is encoded")
 {
-    std::string const deepest = test::repeat("\x81"sv, cbor::limits::nesting_depth) + '\x00';
-    auto const top_level = test::lazy_of_copy(deepest);
+    std::string const deep = test::repeat("\x81"sv, test::levels_every_stack_holds) + '\x00';
+    auto const top_level = test::lazy_of_copy(deep);
     REQUIRE(top_level.has_value());
     auto const root = item_of(top_level->clone());
     std::string out;
     REQUIRE(cbor::encode(*root, out).has_value());
-    CHECK_EQ(out, deepest);
+    CHECK_EQ(out, deep);
 }
 
 // encode into a span that is too short gives no_buffer_space.
@@ -831,19 +830,17 @@ TEST_CASE("decode: malformed bytes inside tag 24 give their own error")
     CHECK_EQ(inside.error(), outside.error());
 }
 
-// The nesting depth holds across the boundary: the embedded root of 24(<<0>>) is two levels below the tag,
-// below the byte string. So 24(<<0>>) inside depth - 2 arrays passes and inside depth - 1 arrays is refused.
-TEST_CASE("decode: the nesting depth counts inside tag 24")
+// The recursion goes on across the boundary: the embedded root of 24(<<0>>) is read by the same recursion, below the
+// tag and its byte string. So 24(<<0>>) inside a depth that every stack holds is read, and inside an input deeper than
+// a small stack holds it is refused on a thread with that stack.
+TEST_CASE("decode: the stack check goes on inside tag 24")
 {
-    constexpr std::size_t depth = cbor::limits::nesting_depth;
-    auto const deepest = test::lazy_of_copy(test::repeat("\x81"sv, depth - 2) + "\xd8\x18\x41\x00"s);
-    REQUIRE(deepest.has_value());
-    CHECK(deepest->clone().has_value());
-    auto const deeper = test::lazy_of_copy(test::repeat("\x81"sv, depth - 1) + "\xd8\x18\x41\x00"s);
-    REQUIRE(deeper.has_value());
-    auto const refused = deeper->clone();
-    REQUIRE_FALSE(refused.has_value());
-    CHECK_EQ(refused.error(), cbor::error::nesting_depth_exceeded);
+    auto const read = test::lazy_of_copy(test::repeat("\x81"sv, test::levels_every_stack_holds) + "\xd8\x18\x41\x00"s);
+    REQUIRE(read.has_value());
+    CHECK(read->clone().has_value());
+    auto const deep = test::lazy_of_copy(test::repeat("\x81"sv, test::levels_beyond_small_stack) + "\xd8\x18\x41\x00"s);
+    REQUIRE(deep.has_value());
+    CHECK_EQ(test::error_on_small_stack([&deep] { return deep->clone(); }), cbor::error::nesting_depth_exceeded);
 }
 
 // RFC 8949 3.4.5.1: the byte string of tag 24 holds one encoded data item. decode reads everything and refuses

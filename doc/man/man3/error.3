@@ -64,10 +64,6 @@ std::error_code make_error_code(error const e) \f[B]noexcept\f[R];
 .EE
 .IP
 .EX
-#ifndef CBOR_NESTING_DEPTH_DEFAULT
-#define CBOR_NESTING_DEPTH_DEFAULT 128
-#endif
-
 #ifndef CBOR_STRING_LENGTH_DEFAULT
 #define CBOR_STRING_LENGTH_DEFAULT SIZE_MAX
 #endif
@@ -77,7 +73,6 @@ std::error_code make_error_code(error const e) \f[B]noexcept\f[R];
 #endif
 
 \f[B]struct\f[R] limits {
-    static \f[B]constexpr\f[R] std::size_t nesting_depth = CBOR_NESTING_DEPTH_DEFAULT;
     static \f[B]constexpr\f[R] std::size_t string_length = CBOR_STRING_LENGTH_DEFAULT;
     static \f[B]constexpr\f[R] std::size_t container_elements = CBOR_CONTAINER_ELEMENTS_DEFAULT;
 };
@@ -125,8 +120,8 @@ T}
 T{
 \f[CR]nesting_depth_exceeded\f[R]
 T}@T{
-The item or the path is deeper than limits\f[CR]::nesting_depth\f[R], or
-the stack of the thread ends.
+A reader that recurses comes to the end of the stack of its thread
+(limits).
 T}
 T{
 \f[CR]inadmissible_type_for_tag_content\f[R]
@@ -297,15 +292,6 @@ Error
 T}
 _
 T{
-\f[CR]nesting_depth\f[R]
-T}@T{
-the arrays, maps and tags around an item
-T}@T{
-128, at most 512
-T}@T{
-\f[CR]nesting_depth_exceeded\f[R]
-T}
-T{
 \f[CR]string_length\f[R]
 T}@T{
 the bytes of one text or byte string
@@ -329,18 +315,26 @@ A limit counts what a call reads or decodes.
 An item that a call only skips does not count.
 Every translation unit of one program uses the same values.
 .PP
-The nesting depth also stops at the end of the stack.
-Each thread reads the bounds of its own stack once, at its first check.
-A call that comes within 16 KiB (32 KiB on Windows) of the end of the
-stack returns \f[CR]nesting_depth_exceeded\f[R], also below
-\f[CR]nesting_depth\f[R].
-The bounds come from the system on Linux (glibc and musl), macOS,
-Windows, WebAssembly without threads, and picolibc.
+Nesting has no fixed limit.
+A reader that recurses stops where the stack of its thread ends: a call
+that comes within 16 KiB of the end (32 KiB on Windows or with a
+sanitizer) returns \f[CR]nesting_depth_exceeded\f[R].
+Each thread reads the bounds of its own stack once, at its first check:
+from the system on Linux (glibc and musl), macOS and Windows, and from
+the linker on WebAssembly without threads and on picolibc.
+Another target does not compile.
 A frame outside these bounds, such as the stack of a fiber or of a
-signal handler, gets the fixed depth alone.
-On Linux, a mapping that a program places with \f[CR]MAP_FIXED\f[R]
-inside the stack limit of the main thread is outside the bound.
-On picolibc, a stack smaller than 16 KiB refuses every nested item.
+signal handler, is not checked.
+The first check of a thread does not run in a signal handler.
+On Linux, a change of \f[CR]RLIMIT_STACK\f[R] after the first check, and
+a mapping that a program places with \f[CR]MAP_FIXED\f[R] below the
+stack of the main thread, are outside the bound.
+On picolibc, a stack smaller than the reserve refuses every nested item.
+\f[CR]item_size\f[R], \f[CR]sequence_reader\f[R] and a path of child
+segments do not recurse and read any depth.
+A deep value of a user type (\f[CR]structs\f[R], \f[CR]schema\f[R]) is
+destroyed and copied by its own recursion: a thread with a smaller stack
+than the one that decoded it can overflow there.
 .SH ERRORS
 .SS cbor::error
 Not applicable: the type is the error.
@@ -352,8 +346,6 @@ None.
 None.
 .SS std::is_error_code_enum<cbor::error>
 None.
-.SS cbor::limits
-A \f[CR]CBOR_NESTING_DEPTH_DEFAULT\f[R] above 512 does not compile.
 .SH NOTES
 .SS cbor::error
 O(1).
@@ -373,8 +365,8 @@ No allocation.
 None at run time.
 .SS cbor::limits
 None at run time for a limit.
-The stack check reads the bounds once per thread and then compares one
-address at each level.
+The stack check reads the bounds once per thread and then compares the
+frame address with one limit at each level.
 .SH EXAMPLES
 .SS cbor::error
 .IP
@@ -415,12 +407,11 @@ e == cbor::error::index_out_of_bounds;     \f[I]// true\f[R]
 .SS cbor::limits
 .IP
 .EX
-g++ \-DCBOR_NESTING_DEPTH_DEFAULT=16 \-DCBOR_STRING_LENGTH_DEFAULT=1024 ...
+g++ \-DCBOR_STRING_LENGTH_DEFAULT=1024 ...
 .EE
 .IP
 .EX
 \f[I]// a build that sets no macro\f[R]
-cbor::limits::nesting_depth;        \f[I]// 128\f[R]
 cbor::limits::string_length;        \f[I]// SIZE_MAX\f[R]
 cbor::limits::container_elements;   \f[I]// SIZE_MAX\f[R]
 .EE

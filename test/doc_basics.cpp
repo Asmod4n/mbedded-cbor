@@ -1,3 +1,4 @@
+#include "small_stack.hpp"
 #include "reference.hpp"
 #include "threads.hpp"
 #include "owned_copy.hpp"
@@ -157,15 +158,15 @@ TEST_CASE("doc basics: threads" * doctest::skip(!test::threads_available))
 // The section "Limits" states the default of each limit for a build that sets none.
 TEST_CASE("doc basics: limits")
 {
-    CHECK_EQ(cbor::limits::nesting_depth, 128u);
     CHECK_EQ(cbor::limits::string_length, SIZE_MAX);
     CHECK_EQ(cbor::limits::container_elements, SIZE_MAX);
 }
 
-// The table of the section "Limits" names the error of the nesting depth. The examples of the size limits are
+// The section "Limits" names the error at the end of the stack of the thread. The examples of the size limits are
 // in test/limits/sizes_2.cpp, which is built with them.
-TEST_CASE("doc basics: the error of the nesting depth")
+TEST_CASE("doc basics: the error at the end of the stack")
 {
-    std::string const deep = test::repeat("\x81"sv, cbor::limits::nesting_depth + 1) + '\x01';
-    CHECK_EQ(test::lazy_of_copy(deep)->clone().error(), error::nesting_depth_exceeded);
+    std::string const deep = test::repeat("\x81"sv, test::levels_beyond_small_stack) + '\x01';
+    CHECK_EQ(test::error_on_small_stack([&deep] { return test::lazy_of_copy(deep)->clone(); }),
+             error::nesting_depth_exceeded);
 }

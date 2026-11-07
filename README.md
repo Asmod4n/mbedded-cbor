@@ -70,8 +70,9 @@ and every other CBOR decoder can read it.
   checks of the data and keep every check of a bound.
 - **Description apart.** `cbor::schema` can store the description of a
   struct once and the data of each message apart from it.
-- **Limits.** Nesting depth, string length and element count are
-  constants of the build. Memory grows with the items that were read.
+- **Limits.** A reader that recurses stops where the stack of its
+  thread ends, with no fixed depth. String length and element count
+  are constants of the build. Memory grows with the items that were read.
 
 ## How a read works
 
@@ -155,10 +156,14 @@ The code of every library, task by task:
 |---|---|---|
 | g++ 16, `-std=c++26 -freflection` | Linux | every part, and the check of each description against the members |
 | g++ 15, clang 23, `-std=c++23` | Linux | every part in C++23 |
-| AppleClang of Xcode 16 and 26 | macOS 15 | every part in C++23 |
+| AppleClang of Xcode 26 | macOS 26 | every part in C++23 |
 
 On Windows the library builds with clang-cl, the clang frontend. The
 frontend of MSVC is refused at the first include.
+
+The library reads the bounds of the stack of each thread. It compiles
+for Linux (glibc and musl), macOS, Windows on x64, WebAssembly without
+threads and picolibc. Another target does not compile.
 
 On g++ 15, clang 23 and AppleClang, `cbor::structs` reads the members
 through Boost.PFR 1.84 or later, and `cbor::schema` uses it to check that

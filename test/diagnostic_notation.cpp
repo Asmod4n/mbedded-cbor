@@ -1,3 +1,4 @@
+#include "small_stack.hpp"
 #include "reference.hpp"
 
 #include <charconv>
@@ -206,9 +207,9 @@ TEST_CASE("diagnostic_notation: an item that is not well-formed is an error")
     CHECK_EQ(cbor::diagnostic_notation("\x5f\x5f\xff\xff"sv).error(), error::syntax_error);
     CHECK_EQ(cbor::diagnostic_notation("\x9f\x01"sv).error(), error::too_little_data);
     CHECK_EQ(cbor::diagnostic_notation("\x00\x00"sv).error(), error::syntax_error);
-    constexpr std::size_t depth = cbor::limits::nesting_depth;
-    CHECK(cbor::diagnostic_notation(test::repeat("\x81"sv, depth) + '\x00').has_value());
-    CHECK_EQ(cbor::diagnostic_notation(test::repeat("\x81"sv, depth + 1) + '\x00').error(),
+    CHECK(cbor::diagnostic_notation(test::repeat("\x81"sv, test::levels_every_stack_holds) + '\x00').has_value());
+    std::string const deep = test::repeat("\x81"sv, test::levels_beyond_small_stack) + '\x00';
+    CHECK_EQ(test::error_on_small_stack([&deep] { return cbor::diagnostic_notation(deep); }),
              error::nesting_depth_exceeded);
 }
 

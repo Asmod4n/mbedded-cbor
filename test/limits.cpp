@@ -20,11 +20,11 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 using cbor::error;
 
-// A build that sets no limit has the nesting depth 128 and no size limit. The builds with limits set are in
-// test/limits/, one binary for each set of flags, so each limit is tested by a build that the limit holds.
+// A build that sets no limit has no size limit; the end of the stack of the thread bounds the depth. The builds with
+// limits set are in test/limits/, one binary for each set of flags, so each limit is tested by a build that the limit
+// holds.
 TEST_CASE("limits: the defaults")
 {
-    CHECK_EQ(cbor::limits::nesting_depth, 128u);
     CHECK_EQ(cbor::limits::string_length, std::numeric_limits<std::size_t>::max());
     CHECK_EQ(cbor::limits::container_elements, std::numeric_limits<std::size_t>::max());
 }

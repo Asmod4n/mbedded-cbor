@@ -37,8 +37,8 @@ path at compile time, with EDN literals in brackets and in filters.
 - `invalid_path`: the text is not valid, or it calls `match` or `search`.
 - `not_singular_query`: the path selects many nodes and `T` is not
   `nodelist`.
-- `nesting_depth_exceeded`: the path is deeper than
-  [limits](../errors/limits.md)`::nesting_depth`.
+- `nesting_depth_exceeded`: the path is nested deeper than the stack of
+  the thread holds ([limits](../errors/limits.md)).
 
 `T` outside `path_result` does not compile.
 
