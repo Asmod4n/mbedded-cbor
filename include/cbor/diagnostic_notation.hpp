@@ -1100,8 +1100,7 @@ class extended_diagnostic_notation
                                                                               : std::chars_format::scientific);
         std::string out(text.begin(), std::ranges::find(text, '\0'));
         std::size_t const e = out.find('e');
-        auto const before_exponent = out | std::views::take(e);
-        std::string mantissa(before_exponent.begin(), before_exponent.end());
+        std::string mantissa(std::string_view(out).substr(0, e));
         if (mantissa.find('.') == std::string::npos)
             mantissa += ".0";
         if (e == std::string::npos)
