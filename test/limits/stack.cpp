@@ -133,7 +133,7 @@ struct kept_values {
     std::optional<std::expected<cbor::ref<node>, error>> nodes;
 };
 
-void every_reader(std::size_t const levels, kept_values &kept, outcome const expected)
+void every_reader(std::size_t const levels, kept_values &kept, outcome const expected, outcome const chain_expected)
 {
     std::string const deep = arrays_around_one(levels);
     reads(cbor::decode(std::string(deep)), expected);
@@ -154,10 +154,10 @@ void every_reader(std::size_t const levels, kept_values &kept, outcome const exp
     if (*kept.nodes)
         reads(cbor::structs<node>::encode(***kept.nodes), expected);
     auto const written = cbor::schema<holder>::encode(kept.chain);
-    reads(written, expected);
+    reads(written, chain_expected);
     if (written) {
         kept.decoded = cbor::schema<holder>::decode(std::string(*written));
-        reads(*kept.decoded, expected);
+        reads(*kept.decoded, chain_expected);
     }
 }
 
@@ -170,7 +170,7 @@ using namespace limits_stack;
 TEST_CASE("stack: every recursive reader reads a depth that every stack holds")
 {
     kept_values kept{holder_chain((test::levels_every_stack_holds - 1) / links_per_level), std::nullopt, std::nullopt};
-    every_reader(test::levels_every_stack_holds, kept, outcome::value);
+    every_reader(test::levels_every_stack_holds, kept, outcome::value, outcome::value);
 }
 
 // An input deeper than a small stack holds: every recursive reader stops with nesting_depth_exceeded where the stack
@@ -180,8 +180,15 @@ TEST_CASE("stack: every recursive reader on a small stack refuses an input deepe
 {
     for (std::size_t const bytes : {test::small_stack_bytes, larger_stack_bytes}) {
         CAPTURE(bytes);
-        kept_values kept{holder_chain(bytes / test::smallest_frame_bytes / links_per_level), std::nullopt, std::nullopt};
-        test::on_stack_of(bytes, [&kept] { every_reader(test::levels_beyond_small_stack, kept, outcome::refused); });
+        // Without threads the main thread is the small stack. A chain deeper than that stack would overflow in its own
+        // destructor, because a user type ends by its own recursion; there the chain stays shallow and gives values.
+        std::size_t const links = test::threads_available ? bytes / test::smallest_frame_bytes / links_per_level
+                                                          : (test::levels_every_stack_holds - 1) / links_per_level;
+        constexpr outcome chain_expected = test::threads_available ? outcome::refused : outcome::value;
+        kept_values kept{holder_chain(links), std::nullopt, std::nullopt};
+        test::on_stack_of(bytes, [&kept] {
+            every_reader(test::levels_beyond_small_stack, kept, outcome::refused, chain_expected);
+        });
     }
 }
 
