@@ -91,7 +91,6 @@ inline constexpr entry errors_functions[] = {
     {"std::error_category.default_error_condition()",
      category_by_condition<[](std::error_category const &k, int const n) { return k.default_error_condition(n); }>},
     {"std::is_error_code_enum_v", error_code_enum},
-    {"cbor::limits::nesting_depth", limit_read<cbor::limits::nesting_depth>},
     {"cbor::limits::string_length", limit_read<cbor::limits::string_length>},
     {"cbor::limits::container_elements", limit_read<cbor::limits::container_elements>},
 };

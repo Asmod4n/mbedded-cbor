@@ -1574,9 +1574,9 @@ class reflection
         bool overflow = false;
         bool too_deep = false;
 
-        void enter(std::size_t const depth)
+        void enter()
         {
-            too_deep |= !detail::validity::check_nesting_depth(depth, limits::nesting_depth);
+            too_deep |= !detail::validity::check_recursion_limit();
         }
 
         void add_bytes(std::size_t const n)
@@ -1594,7 +1594,7 @@ class reflection
         }
 
         template <class E, class R>
-        void add_elements(R const &range, std::size_t const depth)
+        void add_elements(R const &range)
         {
             if constexpr (fixed_struct_valid<std::remove_cv_t<E>>()) {
                 items += 1;
@@ -1612,11 +1612,11 @@ class reflection
             add_block(std::ranges::size(range), fixed_size<E, Root>());
             if constexpr (!std::is_arithmetic_v<E> && !std::is_enum_v<E>)
                 for (auto const &e : range)
-                    add<E>(e, depth + 1);
+                    add<E>(e);
         }
 
         template <class T>
-        void add(T const &value, std::size_t const depth)
+        void add(T const &value)
         {
             using U = std::remove_cv_t<T>;
             if constexpr (std::is_arithmetic_v<U> || std::is_enum_v<U> || is_wide_integer<U>) {
@@ -1624,16 +1624,16 @@ class reflection
                 using E = typename fixed_length<U>::element;
                 if constexpr (!std::is_arithmetic_v<E> && !std::same_as<E, std::byte>)
                     for (auto const &e : value)
-                        add<E>(e, depth);
+                        add<E>(e);
             } else if constexpr (has_describe_members<U>) {
                 for_each_field<U>([&] CBOR_ALWAYS_INLINE(auto i) {
-                    add<describe::member_t<U, decltype(i)::value>>(describe::get<decltype(i)::value>(value), depth);
+                    add<describe::member_t<U, decltype(i)::value>>(describe::get<decltype(i)::value>(value));
                 });
             } else if constexpr (detail::is_std_variant<U>) {
                 detail::validity::throw_logic_error_if(
                     value.valueless_by_exception(), "cbor::schema::encode: the std::variant holds no value");
                 items += 1;
-                enter(depth + 1);
+                enter();
                 if (too_deep) [[unlikely]]
                     return;
                 std::visit(
@@ -1643,19 +1643,19 @@ class reflection
                         } else {
                             add_bytes(fixed_size<A, Root>());
                             if constexpr (has_describe_members<A>)
-                                add<A>(held, depth + 1);
+                                add<A>(held);
                         }
                     },
                     value);
             } else if constexpr (is_inline_optional<U>) {
                 if (value.has_value())
-                    add<typename U::value_type>(*value, depth);
+                    add<typename U::value_type>(*value);
             } else if constexpr (is_optional<U>) {
                 items += 1;
                 add_bytes(item_head);
                 if (value.has_value()) {
                     add_bytes(fixed_size<typename U::value_type, Root>());
-                    add<typename U::value_type>(*value, depth + 1);
+                    add<typename U::value_type>(*value);
                 }
             } else if constexpr (is_text_range<U> || is_byte_range<U>) {
                 items += 1;
@@ -1666,11 +1666,11 @@ class reflection
                 add_block(std::ranges::size(value),
                           fixed_size<typename U::key_type, Root>() + fixed_size<typename U::mapped_type, Root>());
                 for (auto const &[k, v] : value) {
-                    add<typename U::key_type>(k, depth + 1);
-                    add<typename U::mapped_type>(v, depth + 1);
+                    add<typename U::key_type>(k);
+                    add<typename U::mapped_type>(v);
                 }
             } else {
-                add_elements<std::ranges::range_value_t<U>>(value, depth);
+                add_elements<std::ranges::range_value_t<U>>(value);
             }
         }
     };
@@ -1747,7 +1747,7 @@ class reflection
                         copy_zero_initialized<Root, A>(record);
                         c.position = item + fixed_size<A, Root>();
                         c.depth += 1;
-                        if (!detail::validity::check_nesting_depth(c.depth, limits::nesting_depth)) [[unlikely]]
+                        if (!detail::validity::check_recursion_limit()) [[unlikely]]
                             return;
                         c = encode_value<Root, A, Exact, D>(out, record, held, c);
                         c.depth -= 1;
@@ -2866,8 +2866,7 @@ class reflection
         }
 
         template <class Root, class V, std::size_t K>
-        std::expected<void, error> read_alternative(V &out, variant_reference const r, std::size_t const depth,
-                                                    std::size_t const depth_max)
+        std::expected<void, error> read_alternative(V &out, variant_reference const r)
         {
             using A = std::variant_alternative_t<K, V>;
             if constexpr (is_string_alternative<A>) {
@@ -2879,10 +2878,10 @@ class reflection
                 return {};
             } else if constexpr (std::is_default_constructible_v<A>) {
                 auto const record = std::span<char const>(encoded).subspan(r.data).template first<fixed_size<A, Root>()>();
-                return read_value<Root>(out.template emplace<K>(), record, depth, depth_max);
+                return read_value<Root>(out.template emplace<K>(), record);
             } else {
                 auto const record = std::span<char const>(encoded).subspan(r.data).template first<fixed_size<A, Root>()>();
-                auto made = read_constructed<Root, A>(make_arguments<A>(), record, depth, depth_max);
+                auto made = read_constructed<Root, A>(make_arguments<A>(), record);
                 if (!made) [[unlikely]]
                     return std::unexpected(made.error());
                 out.template emplace<K>(std::move(*made));
@@ -2891,8 +2890,7 @@ class reflection
         }
 
         template <class Root, class T>
-        std::expected<void, error> read_value(T &out, std::span<char const, fixed_size<T, Root>()> const field, std::size_t const depth,
-                                              std::size_t const depth_max)
+        std::expected<void, error> read_value(T &out, std::span<char const, fixed_size<T, Root>()> const field)
         {
             using U = std::remove_cv_t<T>;
             if constexpr (has_describe_members<U>) {
@@ -2905,20 +2903,19 @@ class reflection
                     using M = describe::member_t<U, I>;
                     if (done)
                         done = read_value<Root>(describe::get<I>(out),
-                                                field.template subspan<member_offset<U, I, Root>(), fixed_size<M, Root>()>(), depth,
-                                                depth_max);
+                                                field.template subspan<member_offset<U, I, Root>(), fixed_size<M, Root>()>());
                 });
                 return done;
             } else if constexpr (detail::is_std_variant<U>) {
                 auto const r = take_variant_reference<Root, U>(field);
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                if (auto const nesting = detail::validity::check_nesting_depth(depth + 1, depth_max);
+                if (auto const nesting = detail::validity::check_recursion_limit();
                     !nesting) [[unlikely]]
                     return std::unexpected(nesting.error());
                 return [&]<std::size_t... K>(std::index_sequence<K...>) {
                     std::expected<void, error> done;
-                    ((r->index == K ? (void)(done = read_alternative<Root, U, K>(out, *r, depth + 1, depth_max)) : void()), ...);
+                    ((r->index == K ? (void)(done = read_alternative<Root, U, K>(out, *r)) : void()), ...);
                     return done;
                 }(std::make_index_sequence<std::variant_size_v<U>>{});
             } else if constexpr (is_fixed_string<U>) {
@@ -2943,8 +2940,7 @@ class reflection
                     return read_value<Root>(
                         std::span(out).template subspan<I, 1>().front(),
                         detail::validity::element_span(elements, position, fixed_size<E, Root>())
-                            .template first<fixed_size<E, Root>()>(),
-                        depth, depth_max);
+                            .template first<fixed_size<E, Root>()>());
                 };
                 [&]<std::size_t... I>(std::index_sequence<I...>) {
                     ((done = done ? read_element.template operator()<I>() : done), ...);
@@ -2959,9 +2955,9 @@ class reflection
                 }
                 auto const inner = field.template subspan<inline_optional_head, fixed_size<E, Root>()>();
                 if constexpr (std::is_default_constructible_v<E>) {
-                    return read_value<Root>(out.emplace(), inner, depth, depth_max);
+                    return read_value<Root>(out.emplace(), inner);
                 } else {
-                    auto made = read_constructed<Root, E>(make_arguments<E>(), inner, depth, depth_max);
+                    auto made = read_constructed<Root, E>(make_arguments<E>(), inner);
                     if (!made) [[unlikely]]
                         return std::unexpected(made.error());
                     out.emplace(std::move(*made));
@@ -2979,17 +2975,17 @@ class reflection
                     out.reset();
                     return {};
                 }
-                if (auto const nesting = detail::validity::check_nesting_depth(depth + 1, depth_max);
+                if (auto const nesting = detail::validity::check_recursion_limit();
                     !nesting) [[unlikely]]
                     return std::unexpected(nesting.error());
                 auto const inner = std::span<char const>(encoded).subspan(r->data).template first<fixed_size<E, Root>()>();
                 if constexpr (std::is_default_constructible_v<E>) {
                     E element{};
-                    if (auto const e = read_value<Root>(element, inner, depth + 1, depth_max); !e) [[unlikely]]
+                    if (auto const e = read_value<Root>(element, inner); !e) [[unlikely]]
                         return e;
                     out = std::move(element);
                 } else {
-                    auto made = read_constructed<Root, E>(make_arguments<E>(), inner, depth + 1, depth_max);
+                    auto made = read_constructed<Root, E>(make_arguments<E>(), inner);
                     if (!made) [[unlikely]]
                         return std::unexpected(made.error());
                     out.emplace(std::move(*made));
@@ -3009,7 +3005,7 @@ class reflection
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
                 if (auto const c =
-                        detail::validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max);
+                        detail::validity::check_recursion_limit();
                     !c) [[unlikely]]
                     return std::unexpected(c.error());
                 out.clear();
@@ -3021,18 +3017,18 @@ class reflection
                     if constexpr (std::is_default_constructible_v<K> && std::is_default_constructible_v<V>) {
                         K key = make_element<K>(out);
                         V value = make_element<V>(out);
-                        if (auto const e = read_value<Root>(key, entry.template first<fixed_size<K, Root>()>(), depth + 1, depth_max);
+                        if (auto const e = read_value<Root>(key, entry.template first<fixed_size<K, Root>()>());
                             !e) [[unlikely]]
                             return e;
-                        if (auto const e = read_value<Root>(value, entry.template last<fixed_size<V, Root>()>(), depth + 1, depth_max);
+                        if (auto const e = read_value<Root>(value, entry.template last<fixed_size<V, Root>()>());
                             !e) [[unlikely]]
                             return e;
                         out.try_emplace(std::move(key), std::move(value));
                     } else {
-                        auto key = read_element<Root, K>(out, entry.template first<fixed_size<K, Root>()>(), depth + 1, depth_max);
+                        auto key = read_element<Root, K>(out, entry.template first<fixed_size<K, Root>()>());
                         if (!key) [[unlikely]]
                             return std::unexpected(key.error());
-                        auto value = read_element<Root, V>(out, entry.template last<fixed_size<V, Root>()>(), depth + 1, depth_max);
+                        auto value = read_element<Root, V>(out, entry.template last<fixed_size<V, Root>()>());
                         if (!value) [[unlikely]]
                             return std::unexpected(value.error());
                         out.try_emplace(std::move(*key), std::move(*value));
@@ -3045,7 +3041,7 @@ class reflection
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
                 if (auto const c =
-                        detail::validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max);
+                        detail::validity::check_recursion_limit();
                     !c) [[unlikely]]
                     return std::unexpected(c.error());
                 std::span<char const> const all = list_span(encoded, *r, sizeof(E)).first(r->length * sizeof(E));
@@ -3072,7 +3068,7 @@ class reflection
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
                 if (auto const c =
-                        detail::validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max);
+                        detail::validity::check_recursion_limit();
                     !c) [[unlikely]]
                     return std::unexpected(c.error());
                 auto const elements = list_span(encoded, *r, width);
@@ -3095,7 +3091,7 @@ class reflection
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
                 if (auto const c =
-                        detail::validity::check_nesting_depth(r->length != 0 ? depth + 1 : depth, depth_max);
+                        detail::validity::check_recursion_limit();
                     !c) [[unlikely]]
                     return std::unexpected(c.error());
                 auto const entries = list_span(encoded, *r, fixed_size<E, Root>());
@@ -3108,11 +3104,11 @@ class reflection
                             .template first<fixed_size<E, Root>()>();
                     if constexpr (std::is_default_constructible_v<E>) {
                         E element = make_element<E>(out);
-                        if (auto const e = read_value<Root>(element, entry, depth + 1, depth_max); !e) [[unlikely]]
+                        if (auto const e = read_value<Root>(element, entry); !e) [[unlikely]]
                             return e;
                         out.push_back(std::move(element));
                     } else {
-                        auto element = read_constructed<Root, E>(make_arguments<E>(out), entry, depth + 1, depth_max);
+                        auto element = read_constructed<Root, E>(make_arguments<E>(out), entry);
                         if (!element) [[unlikely]]
                             return std::unexpected(element.error());
                         out.push_back(std::move(*element));
@@ -3129,8 +3125,7 @@ class reflection
         }
 
         template <class Root, class U, class Arguments>
-        std::expected<U, error> read_constructed(Arguments arguments, std::span<char const, fixed_size<U, Root>()> const field,
-                                                 std::size_t const depth, std::size_t const depth_max)
+        std::expected<U, error> read_constructed(Arguments arguments, std::span<char const, fixed_size<U, Root>()> const field)
         {
             if constexpr (Verified)
                 if (!class_tag_valid<Root, U>(field)) [[unlikely]]
@@ -3141,8 +3136,7 @@ class reflection
                 using M = describe::member_t<U, I>;
                 if (done)
                     done = read_value<Root>(std::get<I>(arguments),
-                                            field.template subspan<member_offset<U, I, Root>(), fixed_size<M, Root>()>(), depth,
-                                            depth_max);
+                                            field.template subspan<member_offset<U, I, Root>(), fixed_size<M, Root>()>());
             });
             if (!done) [[unlikely]]
                 return std::unexpected(done.error());
@@ -3150,16 +3144,15 @@ class reflection
         }
 
         template <class Root, class E, class Container>
-        std::expected<E, error> read_element(Container const &container, std::span<char const, fixed_size<E, Root>()> const field,
-                                             std::size_t const depth, std::size_t const depth_max)
+        std::expected<E, error> read_element(Container const &container, std::span<char const, fixed_size<E, Root>()> const field)
         {
             if constexpr (std::is_default_constructible_v<E>) {
                 E element = make_element<E>(container);
-                if (auto const e = read_value<Root>(element, field, depth, depth_max); !e) [[unlikely]]
+                if (auto const e = read_value<Root>(element, field); !e) [[unlikely]]
                     return std::unexpected(e.error());
                 return element;
             } else {
-                return read_constructed<Root, E>(make_arguments<E>(container), field, depth, depth_max);
+                return read_constructed<Root, E>(make_arguments<E>(container), field);
             }
         }
 
@@ -3202,7 +3195,7 @@ class reflection
     };
 
     template <class T, bool Verified, description_place D, class Target>
-    static std::expected<void, error> read_root(Target &out, std::string_view const encoded, std::size_t const depth_max)
+    static std::expected<void, error> read_root(Target &out, std::string_view const encoded)
     {
         auto const dir = read_directory<T, Verified, D>(encoded);
         if (!dir) [[unlikely]]
@@ -3215,10 +3208,10 @@ class reflection
         constexpr std::size_t fillers = fillers_of<T>();
         decode_cursor<Verified> c{encoded, *dir, 0, dir->at + sizeof(std::uint32_t) * dir->count + fillers, root};
         if constexpr (std::is_same_v<Target, T>) {
-            if (auto const r = c.template read_value<T>(out, field, 0, depth_max); !r) [[unlikely]]
+            if (auto const r = c.template read_value<T>(out, field); !r) [[unlikely]]
                 return std::unexpected(r.error());
         } else {
-            auto made = c.template read_constructed<T, T>(make_arguments<T>(), field, 0, depth_max);
+            auto made = c.template read_constructed<T, T>(make_arguments<T>(), field);
             if (!made) [[unlikely]]
                 return std::unexpected(made.error());
             out.emplace(std::move(*made));
@@ -4112,7 +4105,7 @@ public:
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     {
         reflection::second_item<T> second;
-        second.add(value, 0);
+        second.add(value);
         if (second.too_deep) [[unlikely]]
             return std::unexpected(error::nesting_depth_exceeded);
         auto const size = reflection::encoded_size<T, D>(second);
@@ -4136,7 +4129,7 @@ public:
     {
         using U = std::remove_cvref_t<Target>;
         reflection::second_item<T> second;
-        second.add(value, 0);
+        second.add(value);
         if (second.too_deep) [[unlikely]]
             return std::unexpected(error::nesting_depth_exceeded);
         auto const size = reflection::encoded_size<T, D>(second);
@@ -4271,7 +4264,7 @@ private:
             try {
 #endif
                 std::optional<T> made;
-                if (auto const r = reflection::read_root<T, Verified, D>(made, encoded, limits::nesting_depth); !r) [[unlikely]]
+                if (auto const r = reflection::read_root<T, Verified, D>(made, encoded); !r) [[unlikely]]
                     return std::unexpected(Verified ? reflection::too_little_data_if_truncated<T, D>(encoded, r.error()) : r.error());
                 return ref<T>(std::move(owner), std::move(*made));
 #if defined(__cpp_exceptions)
@@ -4300,7 +4293,7 @@ private:
 #if defined(__cpp_exceptions)
         try {
 #endif
-            if (auto const r = reflection::read_root<T, Verified, D>(target, encoded, limits::nesting_depth); !r)
+            if (auto const r = reflection::read_root<T, Verified, D>(target, encoded); !r)
                 [[unlikely]]
                 return std::unexpected(Verified ? reflection::too_little_data_if_truncated<T, D>(encoded, r.error()) : r.error());
             return ref<T>(std::move(owner), std::move(target));

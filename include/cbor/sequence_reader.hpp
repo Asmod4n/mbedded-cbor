@@ -46,9 +46,7 @@ class sequence_reader
     std::size_t scanned = 0;
     std::uint64_t phase_end = 0;
     phase at = phase::head;
-    std::size_t level = 0;
     std::uint64_t pending = 1;
-    std::array<std::uint64_t, limits::nesting_depth + 1> left{1};
     error failure{};
 
     static constexpr std::size_t growth_factor = 2;
@@ -57,16 +55,6 @@ class sequence_reader
     {
         detail::validity::throw_logic_error_if_null(buffer,
                                                     "cbor::sequence_reader: the reader was moved from");
-    }
-
-    bool item_completed()
-    {
-        while (left[level] == 0) {
-            if (level == 0)
-                return true;
-            --level;
-        }
-        return false;
     }
 
     std::expected<void, error> scan_item(std::string_view const item)
@@ -78,7 +66,7 @@ class sequence_reader
                     return std::unexpected(fits.error());
                 scanned = static_cast<std::size_t>(phase_end);
                 at = phase::head;
-                if (item_completed())
+                if (pending == 0)
                     return {};
             }
             if (at == phase::elements) {
@@ -106,7 +94,6 @@ class sequence_reader
             at = phase::head;
             scanned =
                 std::to_underlying(detail::validity::distance(std::string_view(std::span(item)), d.encoded));
-            --left[level];
             --pending;
             std::uint64_t children = 0;
             switch (h->major) {
@@ -134,16 +121,12 @@ class sequence_reader
                 break;
             }
             if (children != 0) {
-                if (auto const r = detail::validity::check_nesting_depth(level + 1, limits::nesting_depth);
-                    !r) [[unlikely]]
-                    return r;
-                left[++level] = children;
                 pending = detail::validity::checked_add(pending, children)
                               .value_or(std::numeric_limits<std::uint64_t>::max());
                 at = phase::elements;
                 continue;
             }
-            if (item_completed())
+            if (pending == 0)
                 return {};
             if (h->major == major_type::array || h->major == major_type::map)
                 at = phase::elements;
@@ -228,8 +211,6 @@ class sequence_reader
     void reset_item_state()
     {
         scanned = 0;
-        level = 0;
-        left[0] = 1;
         pending = 1;
         at = phase::head;
     }

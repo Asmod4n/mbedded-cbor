@@ -21,7 +21,7 @@ compared again.
 | n_item, n_map, n_array | Bytes of one item, one map, one array. |
 | n_out | Bytes of the encoded output. |
 | i | Data items in the input. |
-| d | Nesting depth. The nesting depth of the build bounds it: cbor::limits::nesting_depth, at most nesting_depth_limit. |
+| d | Nesting depth. No build constant bounds it. In a call that recurses, the stack of the thread bounds it; d is at most n, since each level takes at least one byte. |
 | s | Shared values (tag 28) in the input. |
 | m | Elements of an array. |
 | k | Entries of a map. |
@@ -93,7 +93,7 @@ compared again.
 
 | Function | Time | Memory | Notes |
 |---|---|---|---|
-| `check_nesting_depth(size_t, size_t)` | O(1) | O(1) | The depth check. |
+| `check_recursion_limit()` | O(1) | O(1) | The stack check: one compare of the frame address with the limit of the thread. The first call of a thread reads the bounds of its stack (one system call or less). |
 | `throw_logic_error(char const*)` | O(1) plus a throw | O(1) plus the exception object | std::logic_error allocates its message. Without exceptions: std::abort. |
 | `throw_logic_error_if_empty<T>(shared_ptr<T> const&, char const*)` | O(1) | O(1); allocates only on the throw | |
 | `throw_logic_error_if_null<T>(shared_ptr<T> const&, char const*)` | O(1) | O(1); allocates only on the throw | |
@@ -127,7 +127,6 @@ Enums and constants only. No function found by grep.
 |---|---|---|---|
 | `well_formedness::no_marks::mark(decoder const&)` | O(1) | O(1) | Empty body. Confirmed. |
 | `well_formedness::skip_item<Marks>(decoder&, Marks&)` | O(i) heads, so O(n) | O(1): one count of the items still to read. No allocation. | Iterative. No depth check: nothing recurses. Each add to the count goes through checked_add, and a count larger than the bytes left is too_little_data at once (check_pending_items). Used with no_marks and with value_sharing::sharing_decoder. |
-| `well_formedness::skip_item<Marks>(decoder&, Marks&, size_t depth, size_t depth_max)` | O(i) heads, so O(n) | O(nesting_depth_limit) stack: std::array of nesting_depth_limit + 1 counts of 8 bytes, about 4 KiB. No allocation. | Iterative. Only for marks that record a depth. check_nesting_depth on every item. |
 | `item_size(string_view)` | O(i), bounded by O(n) | O(1). No allocation. | One skip_item with no_marks. No depth check. |
 
 ## item.hpp
@@ -180,7 +179,7 @@ Assumption, not checked: skip_item is O(bytes skipped).
 | `lazy::take_ownership<Encoded>(Encoded&&)` | O(1) | O(1) | Moves the string. One allocation: the make_shared that holds it. |
 | `lazy::view(shared_ptr<void const>, Encoded const&)` | O(1) | O(1) | No allocation. |
 | `lazy::resolve_container(top_level_item, offset)` (private) | Common O(1); worst O(t), t = tag 24 levels <= n/2 | O(1) | No allocation. The nesting depth does not bound tag 24 nesting. |
-| `detail::validity::keys_equivalent<Checked>` | Scalar O(1); string O(len); array O(n_item) plus elements; map O(k·n_map + k²·child) per level; worst exponential in d | Stack O(d) | Defined in lazy.hpp. check_nesting_depth bounds d. Not checked again. |
+| `detail::validity::keys_equivalent<Checked>` | Scalar O(1); string O(len); array O(n_item) plus elements; map O(k·n_map + k²·child) per level; worst exponential in d | Stack O(d) | Defined in lazy.hpp. The stack of the thread bounds d. Not checked again. |
 | `lazy::clone()` | as `detail::tree_decoder::decode_item` | as `detail::tree_decoder::decode_item` | Returns `owning<item>`. |
 | `lazy::type()` | O(1) | O(1) | |
 | `lazy::find_key<Key>(resolved, Key)` | O(bytes up to the pair); worst O(n_map) | O(1) | Linear scan. |
@@ -224,7 +223,7 @@ Assumption, not checked: skip_item is O(bytes skipped).
 | `jsonpath::read_int(string_view, size_t)` | O(t), t = digits | O(1) | The digit scan has no bound; the 16-digit check comes after it. |
 | `query::parse_string` | O(t) | O(t) | Allocates. |
 | `query::parse_literal` | O(t) expected | O(t) | Inner cost not checked. |
-| `query::parse_selector` | O(t) | O(t) through callees | Filter depth bounded by depth_max. |
+| `query::parse_selector` | O(t) | O(t) through callees | The stack of the thread bounds the filter depth. |
 | `query::parse_bracketed` | O(t) | O(c) | vector push_back. |
 | `query::parse_segments` | O(t) | O(p + c) | Copies a chosen vector. |
 | `query::comparable(size_t) const` | O(1) | O(1) | |
@@ -305,10 +304,10 @@ Assumption, not checked: skip_item is O(bytes skipped).
 | `append_float` | O(1) | O(1) amortized | Not confirmed. |
 | `parse_number` | decimal O(t); hex float O(t) plus up to about 10^6 steps | O(1) plus <= 9 bytes | Exponent <= 999999. |
 | `parse_separator` | O(b) | O(1) | Not confirmed. |
-| `parse_container` | O(t·d) worst; O(t) flat | O(t·d) worst | Children copied at each level. |
+| `parse_container` | O(t·d) worst, so O(t²); O(t) flat | O(t) | The children are written in place; the head of each container is inserted before them, which moves its children once. |
 | `string_finish` | O(len) | O(len) | Not confirmed. |
 | `parse_literal` | O(t) scalar; O(t·d) worst for containers | O(t); O(d) frames | Not confirmed. |
-| `append_canonical` | scalar O(1); containers O(n·d) worst; maps + O(k log k) compares | O(n·d) worst | Vector of string pairs per level. |
+| `append_canonical` | scalar O(1); containers O(n·d) worst, so O(n²); maps + O(k log k) compares | O(n) | The elements are written in place; a map copies its pairs once to sort them; the head is inserted before the elements. |
 | `encoding_indicator` | O(1) | std::string of 0 or 2 chars | |
 | `decimal_of` | O(1) | std::string <= 20 chars | |
 | `hex_of` | O(len) | O(len) | |
@@ -457,7 +456,7 @@ Above linear in the input:
 - `jsonpath::find_key`, non-text key: O(k·n_map).
 - `jsonpath::apply_segment`, `apply_segments`: O(c·n·d), O(p·N·c·n·d).
 - `walk_query` lazy forms and the fallback of `at_path` to a lazy walk: O(n·p).
-- `parse_container`, `parse_literal`, `append_canonical` (diagnostic_notation.hpp): O(t·d), O(n·d); maps add O(k log k).
+- `parse_container`, `parse_literal`, `append_canonical` (diagnostic_notation.hpp): time O(t·d), O(n·d), memory O(t), O(n); maps add O(k log k).
 - `read_generic`, `structs::read`: O((n/d)^d) with tag 29.
 - `std::map` targets in schema and structs: O(n + k log k).
 

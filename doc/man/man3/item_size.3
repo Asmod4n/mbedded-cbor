@@ -1,4 +1,4 @@
-.TH "cbor::item_size" "3" "2026-10-31" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.TH "cbor::item_size" "3" "2026-11-07" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
 .SH NAME
 cbor::item_size \- checks the first item and gives its size in bytes
 .SH SYNOPSIS
@@ -17,8 +17,7 @@ It checks that the item is well\-formed: each head, each string and each
 element.
 Bytes after the item are not read and are not an error.
 .PP
-The call keeps no stack, so it checks no nesting depth: an item deeper
-than \f[CR]limits::nesting_depth\f[R] gives its size.
+The call does not recurse: an item of any depth gives its size.
 It does not check tag content, UTF\-8 or duplicate keys.
 .SH ERRORS
 .IP \(bu 2

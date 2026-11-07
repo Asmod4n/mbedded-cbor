@@ -95,16 +95,11 @@ not set is not in the program.
 
 | Macro | Constant | Default | Bound | Error |
 |---|---|---|---|---|
-| `CBOR_NESTING_DEPTH_DEFAULT` | `cbor::limits::nesting_depth` | 128 | 512 | `nesting_depth_exceeded` |
 | `CBOR_STRING_LENGTH_DEFAULT` | `cbor::limits::string_length` | `SIZE_MAX` | `SIZE_MAX` | `string_length_exceeded` |
 | `CBOR_CONTAINER_ELEMENTS_DEFAULT` | `cbor::limits::container_elements` | `SIZE_MAX` | `SIZE_MAX` | `container_elements_exceeded` |
 
 ```sh
-g++ -DCBOR_NESTING_DEPTH_DEFAULT=32 -DCBOR_STRING_LENGTH_DEFAULT=4096 ...
-```
-
-```cpp
-std::size_t const depth = cbor::limits::nesting_depth;   // 32
+g++ -DCBOR_STRING_LENGTH_DEFAULT=4096 ...
 ```
 
 A value above the bound does not compile. All translation units of one
@@ -134,20 +129,22 @@ cbor::item_size(*owner);                                       // string_length_
 ## 5. Nesting depth
 
 The nesting depth counts the arrays, maps and tags around an item. The
-top-level item has the depth 0. An item deeper than `nesting_depth` gives
-`nesting_depth_exceeded` where a call recurses: `decode`, `encode` of an
-item, `diagnostic_notation`, a path and a filter.
+top-level item has the depth 0. The build sets no limit for it. A call
+that recurses gives `nesting_depth_exceeded` where the stack of its
+thread ends: `decode`, `clone`, `encode` of an item,
+`diagnostic_notation`, a filter, a descendant segment, `structs` and
+`schema`. Each thread reads the bounds of its stack once, at its first
+check ([../reference/errors/limits.md](../reference/errors/limits.md)).
 
-An item that a call only skips can be deeper than the limit, and so can
-the item of `item_size`: neither keeps a stack.
+An item that a call only skips can be of any depth, and so can the item
+of `item_size`, the items of `sequence_reader` and a path of child
+segments: they do not recurse.
 
 ```cpp
-// built with -DCBOR_NESTING_DEPTH_DEFAULT=2
-// [[1]]
-cbor::diagnostic_notation(bytes);   // "[[1]]"
-// [[[1]]]
+// on a thread with a stack of 64 KiB
+// 65536 nested arrays around 1
 cbor::diagnostic_notation(bytes);   // nesting_depth_exceeded
-cbor::item_size(bytes);             // 4
+cbor::item_size(bytes);             // 65537
 ```
 
 ## 6. Memory

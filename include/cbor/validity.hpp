@@ -1,5 +1,5 @@
-// Gives cbor::limits. Gives the checks for safety: limits, nesting
-// depth and the stack that is left, overflow of sums
+// Gives cbor::limits. Gives the checks for safety: limits, the stack
+// that is left for a recursion, overflow of sums
 // and products, number ranges, heads, tag
 // content and typed arrays. Throws std::logic_error on a wrong use, or
 // ends the process when the build has no exceptions. Gives the tag
@@ -64,10 +64,17 @@ extern "C" unsigned char __stack_low;
 extern "C" [[gnu::weak]] char __stack[];
 extern "C" [[gnu::weak]] char __stack_size[];
 extern "C" [[gnu::weak]] char __stack_bottom[];
+#else
+#error "mbedded-cbor reads the stack bound of a thread on Linux, macOS, Windows, WebAssembly without threads and picolibc only."
 #endif
 
-#ifndef CBOR_NESTING_DEPTH_DEFAULT
-#define CBOR_NESTING_DEPTH_DEFAULT 128
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer)
+#define CBOR_HAS_SANITIZER 1
+#endif
+#endif
+#ifndef CBOR_HAS_SANITIZER
+#define CBOR_HAS_SANITIZER 0
 #endif
 
 #ifndef CBOR_STRING_LENGTH_DEFAULT
@@ -101,7 +108,6 @@ struct tree_decoder;
 }
 
 struct limits {
-    static constexpr std::size_t nesting_depth = CBOR_NESTING_DEPTH_DEFAULT;
     static constexpr std::size_t string_length = CBOR_STRING_LENGTH_DEFAULT;
     static constexpr std::size_t container_elements = CBOR_CONTAINER_ELEMENTS_DEFAULT;
 };
@@ -120,86 +126,89 @@ public:
 
     static constexpr offset npos{std::numeric_limits<std::size_t>::max()};
 
-    static constexpr std::size_t nesting_depth_limit = 512;
-
-#if defined(_WIN64)
-    static constexpr std::size_t stack_reserve = 32768;
+#if defined(_WIN64) || defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__) || CBOR_HAS_SANITIZER
+    static constexpr std::uintptr_t stack_reserve = 32768;
 #else
-    static constexpr std::size_t stack_reserve = 16384;
+    static constexpr std::uintptr_t stack_reserve = 16384;
 #endif
 
 #if defined(_WIN64)
     static constexpr std::uintptr_t windows_page_size = 4096;
 #endif
 
-    struct stack_bounds {
-        std::uintptr_t low = 0;
-        std::uintptr_t high = 0;
-    };
-
-    static stack_bounds stack_bounds_of_this_thread()
-    {
-        [[maybe_unused]] auto const frame = reinterpret_cast<std::uintptr_t>(__builtin_frame_address(0));
 #if defined(__linux__)
+    static constexpr std::uintptr_t stack_guard_gap_pages = 256;
+#endif
+
+    static constexpr std::uintptr_t stack_limit_not_read = std::numeric_limits<std::uintptr_t>::max();
+    static constexpr std::uintptr_t stack_limit_not_known = stack_limit_not_read - 1;
+
+    static inline constinit thread_local std::uintptr_t stack_limit = stack_limit_not_read;
+
+    [[gnu::cold]] static std::uintptr_t stack_low_of_this_thread(std::uintptr_t const frame)
+    {
+#if defined(__linux__)
+        auto const page = static_cast<std::uintptr_t>(sysconf(_SC_PAGESIZE));
+        auto const program = reinterpret_cast<char const *>(getauxval(AT_EXECFN));
+        rlimit limit{};
+        bool const limited = getrlimit(RLIMIT_STACK, &limit) == 0 && limit.rlim_cur != RLIM_INFINITY;
+        if (program != nullptr && limited) {
+            std::uintptr_t const top =
+                (reinterpret_cast<std::uintptr_t>(program) + std::string_view(program).size() + page) / page * page;
+            if (limit.rlim_cur < top && frame < top && frame >= top - limit.rlim_cur)
+                return top - limit.rlim_cur + page;
+        }
         pthread_attr_t attributes;
         if (pthread_getattr_np(pthread_self(), &attributes) != 0) [[unlikely]]
-            return {};
+            return stack_limit_not_known;
         void *address = nullptr;
         std::size_t size = 0;
         int const read = pthread_attr_getstack(&attributes, &address, &size);
         pthread_attr_destroy(&attributes);
         if (read != 0) [[unlikely]]
-            return {};
+            return stack_limit_not_known;
         auto const low = reinterpret_cast<std::uintptr_t>(address);
-        std::uintptr_t const high = low + size;
-        auto const page = static_cast<std::uintptr_t>(sysconf(_SC_PAGESIZE));
-        auto const program = reinterpret_cast<char const *>(getauxval(AT_EXECFN));
-        std::uintptr_t top = 0;
-        if (program != nullptr)
-            top = (reinterpret_cast<std::uintptr_t>(program) + std::string_view(program).size() + 1 + page - 1) / page * page;
-        bool const main_thread = top != 0 && high <= top && high + page >= top;
-        if (!main_thread)
-            return frame >= low && frame < high ? stack_bounds{low, high} : stack_bounds{};
-        rlimit limit{};
-        if (getrlimit(RLIMIT_STACK, &limit) != 0 || limit.rlim_cur == RLIM_INFINITY || limit.rlim_cur >= top) [[unlikely]]
-            return {};
-#if defined(__GLIBC__)
-        if (top - low + page < limit.rlim_cur) [[unlikely]]
-            return {};
-#endif
-        return {top - limit.rlim_cur + page, top};
+        if (!limited && program != nullptr && reinterpret_cast<std::uintptr_t>(program) >= low &&
+            reinterpret_cast<std::uintptr_t>(program) - low < size)
+            return low + stack_guard_gap_pages * page;
+        return low;
 #elif defined(__APPLE__)
+        (void)frame;
         auto const high = reinterpret_cast<std::uintptr_t>(pthread_get_stackaddr_np(pthread_self()));
-        std::uintptr_t const low = high - pthread_get_stacksize_np(pthread_self());
-        return frame >= low && frame < high ? stack_bounds{low, high} : stack_bounds{};
+        return high - pthread_get_stacksize_np(pthread_self());
 #elif defined(_WIN64)
+        (void)frame;
         unsigned long long low = 0;
         unsigned long long high = 0;
         GetCurrentThreadStackLimits(&low, &high);
         unsigned long guarantee = 0;
         if (SetThreadStackGuarantee(&guarantee) == 0) [[unlikely]]
-            return {};
-        std::uintptr_t const usable = static_cast<std::uintptr_t>(low) + windows_page_size + guarantee;
-        return frame >= usable && frame < high ? stack_bounds{usable, static_cast<std::uintptr_t>(high)} : stack_bounds{};
+            return stack_limit_not_known;
+        return static_cast<std::uintptr_t>(low) + windows_page_size + guarantee;
 #elif defined(__wasm__) && !defined(__wasm_atomics__)
-        return {reinterpret_cast<std::uintptr_t>(&__stack_low), std::numeric_limits<std::uintptr_t>::max()};
+        (void)frame;
+        return reinterpret_cast<std::uintptr_t>(&__stack_low);
 #elif defined(__PICOLIBC__)
+        (void)frame;
         if (__stack == nullptr) [[unlikely]]
-            return {};
-        auto const high = reinterpret_cast<std::uintptr_t>(__stack);
-        std::uintptr_t const low = __stack_size != nullptr ? high - reinterpret_cast<std::uintptr_t>(__stack_size)
-                                   : __stack_bottom != nullptr ? reinterpret_cast<std::uintptr_t>(__stack_bottom)
-                                                               : high;
-        return frame >= low && frame < high ? stack_bounds{low, high} : stack_bounds{};
-#else
-        return {};
+            return stack_limit_not_known;
+        if (__stack_size != nullptr)
+            return reinterpret_cast<std::uintptr_t>(__stack) - reinterpret_cast<std::uintptr_t>(__stack_size);
+        if (__stack_bottom != nullptr)
+            return reinterpret_cast<std::uintptr_t>(__stack_bottom);
+        return stack_limit_not_known;
 #endif
     }
 
-    static stack_bounds const &stack_bounds_of_thread()
+    [[gnu::cold, gnu::noinline]] static std::expected<void, error> check_recursive_call(std::uintptr_t const frame)
     {
-        thread_local stack_bounds const bounds = stack_bounds_of_this_thread();
-        return bounds;
+        if (stack_limit == stack_limit_not_read) {
+            std::uintptr_t const low = stack_low_of_this_thread(frame);
+            stack_limit = low == stack_limit_not_known ? stack_limit_not_known : low + stack_reserve;
+        }
+        if (stack_limit == stack_limit_not_known || (frame < stack_limit && frame >= stack_limit - stack_reserve))
+            return std::unexpected(error::nesting_depth_exceeded);
+        return {};
     }
 
     static constexpr std::size_t size_limit = std::numeric_limits<std::size_t>::max();
@@ -217,16 +226,14 @@ public:
         return {};
     }
 
-    static constexpr std::expected<void, error> check_nesting_depth(std::size_t const depth,
-                                                                    std::size_t const depth_max)
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_recursion_limit()
     {
         if !consteval {
             auto const frame = reinterpret_cast<std::uintptr_t>(__builtin_frame_address(0));
-            stack_bounds const &bounds = stack_bounds_of_thread();
-            if (frame >= bounds.low && frame < bounds.high && frame - bounds.low < stack_reserve) [[unlikely]]
-                return std::unexpected(error::nesting_depth_exceeded);
+            if (frame < stack_limit) [[unlikely]]
+                return check_recursive_call(frame);
         }
-        return check_limit(depth, depth_max, error::nesting_depth_exceeded);
+        return {};
     }
 
     template <bool Checked>
@@ -411,8 +418,7 @@ public:
 
     template <bool Checked, class First, class Second>
     static std::expected<bool, error> keys_equivalent(First &first, offset first_at, Second &second,
-                                                      offset second_at, std::size_t depth,
-                                                      std::size_t depth_max);
+                                                      offset second_at);
 
     static constexpr error writer_error(std::errc const e) noexcept
     {
@@ -662,10 +668,6 @@ public:
 
 } // namespace detail
 
-static_assert(detail::validity::check_nesting_depth(limits::nesting_depth,
-                                                    detail::validity::nesting_depth_limit)
-                  .has_value(),
-              "CBOR_NESTING_DEPTH_DEFAULT is at most detail::validity::nesting_depth_limit.");
 static_assert(detail::validity::check_limit(limits::string_length, detail::validity::size_limit,
                                             error::string_length_exceeded)
                   .has_value(),

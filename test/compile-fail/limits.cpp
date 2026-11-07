@@ -5,5 +5,5 @@
 
 int main()
 {
-    return cbor::limits::nesting_depth == 0 ? 1 : 0;
+    return cbor::limits::string_length == 0 ? 1 : 0;
 }

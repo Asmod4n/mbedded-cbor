@@ -73,8 +73,6 @@ not const does not compile. The reader cannot be copied.
 - `too_little_data`: the item is not complete yet. Feed more bytes.
 - `syntax_error`, `indefinite_length`: the bytes are not a well-formed
   item with definite lengths.
-- `nesting_depth_exceeded`: the item is nested deeper than
-  `limits::nesting_depth`.
 
 After any other error than `too_little_data`, every call of `next` gives
 that error, and `feed` keeps no byte. A null `std::shared_ptr` and a

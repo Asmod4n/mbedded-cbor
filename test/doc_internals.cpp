@@ -1,3 +1,4 @@
+#include "small_stack.hpp"
 #include "reference.hpp"
 #include "owned_copy.hpp"
 #include <cbor/encode.hpp>
@@ -48,10 +49,11 @@ TEST_CASE("doc internals: a lazy reads heads when a step needs them")
 // where the bytes end.
 TEST_CASE("doc internals: a skip keeps a count")
 {
-    value deeper = V(1);
-    for (std::size_t i = 0; i <= cbor::limits::nesting_depth; ++i)
-        deeper = A(deeper);
-    std::string const deep = preferred(M("a"s, deeper, "b"s, 2));
+    // {"a": [[...[1]...]], "b": 2}, written as bytes: the value model of the tests recurses, and the skip does not.
+    std::string const deep = "\xa2\x61"
+                             "a"s +
+                             std::string(test::levels_beyond_small_stack, '\x81') + "\x01\x61"
+                                                                                  "b\x02"s;
     CHECK_EQ(cbor::at_path<"$.b", int>(deep), 2);
     CHECK_EQ(cbor::item_size(deep), deep.size());
     CHECK_EQ(cbor::at_path<"$[1]", int>("\x82\x82\x01"s).error(), error::too_little_data);
