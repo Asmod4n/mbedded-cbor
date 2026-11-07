@@ -53,7 +53,6 @@
 #include <sys/auxv.h>
 #include <sys/resource.h>
 #include <unistd.h>
-#include <cstring>
 #elif defined(__APPLE__)
 #include <pthread.h>
 #elif defined(_WIN64)
@@ -153,7 +152,7 @@ public:
         auto const program = reinterpret_cast<char const *>(getauxval(AT_EXECFN));
         std::uintptr_t top = 0;
         if (program != nullptr)
-            top = (reinterpret_cast<std::uintptr_t>(program) + std::strlen(program) + 1 + page - 1) / page * page;
+            top = (reinterpret_cast<std::uintptr_t>(program) + std::string_view(program).size() + 1 + page - 1) / page * page;
         bool const main_thread = top != 0 && high <= top && high + page >= top;
         if (!main_thread)
             return frame >= low && frame < high ? stack_bounds{low, high} : stack_bounds{};

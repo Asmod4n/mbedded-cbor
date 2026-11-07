@@ -14,10 +14,11 @@
 #include <cstddef>
 #include <expected>
 #include <functional>
+#include <iostream>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <cstdint>
-#include <cstdio>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -123,13 +124,12 @@ struct chain_values {
 
 // A crash of the stack on another thread leaves no doctest context in the log. Each reader writes its name and the
 // stack left to stderr before it starts, so a crash names the reader and shows how much stack it had.
-void starts(char const *const reader)
+void starts(std::string_view const reader)
 {
     auto const &bounds = cbor::detail::validity::stack_bounds_of_thread();
     auto const frame = reinterpret_cast<std::uintptr_t>(__builtin_frame_address(0));
-    std::fprintf(stderr, "%s: stack %zu bytes, %zu bytes left\n", reader, static_cast<std::size_t>(bounds.high - bounds.low),
-                 static_cast<std::size_t>(frame - bounds.low));
-    std::fflush(stderr);
+    std::cerr << reader << ": stack " << bounds.high - bounds.low << " bytes, " << frame - bounds.low << " bytes left"
+              << std::endl;
 }
 
 void every_reader(chain_values &kept)
