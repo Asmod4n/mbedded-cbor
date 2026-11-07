@@ -44,9 +44,10 @@ class extended_diagnostic_notation
         std::size_t at;
     };
 
-    struct nesting {
-        std::size_t depth;
-        std::size_t depth_max;
+    struct canonical_pair {
+        std::size_t key;
+        std::size_t value;
+        std::size_t end;
     };
 
     struct string_literal {
@@ -614,8 +615,7 @@ class extended_diagnostic_notation
         return parsed{*next, separated};
     }
 
-    static constexpr std::expected<std::size_t, error> parse_container(literal_cursor const cursor, std::string &out,
-                                                                       nesting const n)
+    static constexpr std::expected<std::size_t, error> parse_container(literal_cursor const cursor, std::string &out)
     {
         std::string_view const text = cursor.text;
         std::size_t at = cursor.at;
@@ -629,13 +629,17 @@ class extended_diagnostic_notation
         if (!first) [[unlikely]]
             return first;
         at = *first;
-        std::string items;
+        major_type const major = map ? major_type::map : major_type::array;
+        bool const indefinite = indicator == std::to_underlying(rfc8949::additional_information::indefinite_length);
+        if (indefinite)
+            out.push_back(heads::initial_byte(major, static_cast<std::uint64_t>(indicator)));
+        std::size_t const start = out.size();
         std::uint64_t count = 0;
         bool separated = true;
         while (at < text.size() && text[at] != close) {
             if (!separated) [[unlikely]]
                 return std::unexpected(error::invalid_path);
-            auto next = parse_literal({text, at}, items, {n.depth + 1, n.depth_max});
+            auto next = parse_literal({text, at}, out);
             if (!next) [[unlikely]]
                 return next;
             if (map) {
@@ -647,7 +651,7 @@ class extended_diagnostic_notation
                 auto const value = optional_space_end(text, *colon + 1);
                 if (!value) [[unlikely]]
                     return value;
-                next = parse_literal({text, *value}, items, {n.depth + 1, n.depth_max});
+                next = parse_literal({text, *value}, out);
                 if (!next) [[unlikely]]
                     return next;
             }
@@ -660,17 +664,15 @@ class extended_diagnostic_notation
         }
         if (auto const left = detail::validity::check_text_left(text, at, 1); !left) [[unlikely]]
             return std::unexpected(left.error());
-        major_type const major = map ? major_type::map : major_type::array;
-        if (indicator == std::to_underlying(rfc8949::additional_information::indefinite_length)) {
-            out.push_back(heads::initial_byte(major, static_cast<std::uint64_t>(indicator)));
-            out += items;
+        if (indefinite) {
             out.push_back(
                 heads::initial_byte(major_type::simple_float,
                                     std::to_underlying(rfc8949::simple_float_information::break_stop_code)));
         } else {
-            if (auto const r = append_head(out, major, count, indicator); !r) [[unlikely]]
+            std::string head;
+            if (auto const r = append_head(head, major, count, indicator); !r) [[unlikely]]
                 return std::unexpected(r.error());
-            out += items;
+            out.insert(start, head);
         }
         return at + 1;
     }
@@ -704,7 +706,7 @@ class extended_diagnostic_notation
                rest.starts_with("<<");
     }
 
-    static constexpr std::expected<string_literal, error> parse_string_literal(literal_cursor const cursor, nesting const n)
+    static constexpr std::expected<string_literal, error> parse_string_literal(literal_cursor const cursor)
     {
         std::string_view const text = cursor.text;
         std::size_t const at = cursor.at;
@@ -738,7 +740,7 @@ class extended_diagnostic_notation
         while (!std::string_view{std::span(text).subspan(next)}.starts_with(std::string_view(">>"))) {
             if (!separated || !detail::validity::check_text_left(text, next, 1)) [[unlikely]]
                 return std::unexpected(error::invalid_path);
-            auto const item = parse_literal({text, next}, string.content, {n.depth + 1, n.depth_max});
+            auto const item = parse_literal({text, next}, string.content);
             if (!item) [[unlikely]]
                 return std::unexpected(item.error());
             auto const s = parse_separator(text, *item);
@@ -751,8 +753,7 @@ class extended_diagnostic_notation
         return string;
     }
 
-    static constexpr std::expected<std::size_t, error> parse_streamstring(literal_cursor const cursor, std::string &out,
-                                                                          nesting const n)
+    static constexpr std::expected<std::size_t, error> parse_streamstring(literal_cursor const cursor, std::string &out)
     {
         std::string_view const text = cursor.text;
         std::size_t const open = cursor.at + std::string_view("(_").size();
@@ -769,7 +770,7 @@ class extended_diagnostic_notation
         while (at < text.size() && text[at] != ')') {
             if (!separated || !string_literal_starts(std::string_view{std::span(text).subspan(at)})) [[unlikely]]
                 return std::unexpected(error::invalid_path);
-            auto const chunk = parse_string_literal({text, at}, {n.depth + 1, n.depth_max});
+            auto const chunk = parse_string_literal({text, at});
             if (!chunk) [[unlikely]]
                 return std::unexpected(chunk.error());
             if (chunk->at < text.size() && text[chunk->at] == '_') [[unlikely]]
@@ -798,9 +799,9 @@ class extended_diagnostic_notation
         return at + 1;
     }
 
-    static constexpr std::expected<std::size_t, error> parse_literal(literal_cursor const cursor, std::string &out, nesting const n)
+    static constexpr std::expected<std::size_t, error> parse_literal(literal_cursor const cursor, std::string &out)
     {
-        if (auto const r = detail::validity::check_nesting_depth(n.depth, n.depth_max); !r) [[unlikely]]
+        if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
             return std::unexpected(r.error());
         std::string_view const text = cursor.text;
         std::size_t const at = cursor.at;
@@ -809,15 +810,15 @@ class extended_diagnostic_notation
         std::string_view const rest{std::span(text).subspan(at)};
         char const c = rest.front();
         if (c == '[' || c == '{')
-            return parse_container(cursor, out, n);
+            return parse_container(cursor, out);
         if (string_literal_starts(rest)) {
-            auto const string = parse_string_literal(cursor, n);
+            auto const string = parse_string_literal(cursor);
             if (!string) [[unlikely]]
                 return std::unexpected(string.error());
             return string_finish(text, string->at, out, string->major, string->content);
         }
         if (rest.starts_with("(_"))
-            return parse_streamstring(cursor, out, n);
+            return parse_streamstring(cursor, out);
         constexpr auto names = std::to_array<std::string_view>({"false", "true", "null", "undefined"});
         for (std::size_t i = 0; i < names.size(); ++i)
             if (rest.starts_with(names[i])) {
@@ -877,7 +878,7 @@ class extended_diagnostic_notation
             auto const opened = optional_space_end(text, tag_open->at + 1);
             if (!opened) [[unlikely]]
                 return opened;
-            auto const content = parse_literal({text, *opened}, out, {n.depth + 1, n.depth_max});
+            auto const content = parse_literal({text, *opened}, out);
             if (!content) [[unlikely]]
                 return content;
             auto const close = optional_space_end(text, *content);
@@ -891,14 +892,12 @@ class extended_diagnostic_notation
     }
 
     static constexpr std::expected<detail::validity::offset, error>
-    append_canonical(std::string &out, std::string_view const encoded, detail::validity::offset const at,
-                     nesting const n)
+    append_canonical(std::string &out, std::string_view const encoded, detail::validity::offset const at)
     {
-        std::size_t depth = n.depth;
+        if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
+            return std::unexpected(r.error());
         auto h = heads::read_raw_head<false>(encoded, at);
         for (;;) {
-            if (auto const r = detail::validity::check_nesting_depth(depth, n.depth_max); !r) [[unlikely]]
-                return std::unexpected(r.error());
             if (!h) [[unlikely]]
                 return std::unexpected(h.error());
             if (h->major != major_type::tag)
@@ -906,7 +905,6 @@ class extended_diagnostic_notation
             if (auto const r = append_head(out, major_type::tag, h->argument, no_indicator); !r) [[unlikely]]
                 return std::unexpected(r.error());
             h = heads::read_raw_head<false>(encoded, h->at);
-            ++depth;
         }
         bool const indefinite =
             h->info == std::to_underlying(rfc8949::additional_information::indefinite_length);
@@ -959,37 +957,45 @@ class extended_diagnostic_notation
                     h->major, h->info, h->argument, detail::validity::subspan(encoded, next).size());
                 !r) [[unlikely]]
                 return std::unexpected(r.error());
-            std::vector<std::pair<std::string, std::string>> items;
-            for (std::uint64_t i = 0; indefinite ? !heads::break_at(encoded, next) : i < h->argument; ++i) {
-                std::pair<std::string, std::string> item;
-                auto const first = append_canonical(item.first, encoded, next, {depth + 1, n.depth_max});
+            std::size_t const start = out.size();
+            std::vector<canonical_pair> pairs;
+            std::uint64_t count = 0;
+            for (; indefinite ? !heads::break_at(encoded, next) : count < h->argument; ++count) {
+                std::size_t const key_at = out.size();
+                auto const first = append_canonical(out, encoded, next);
                 if (!first) [[unlikely]]
                     return first;
                 next = *first;
                 if (map) {
-                    auto const second = append_canonical(item.second, encoded, next, {depth + 1, n.depth_max});
+                    std::size_t const value_at = out.size();
+                    auto const second = append_canonical(out, encoded, next);
                     if (!second) [[unlikely]]
                         return second;
                     next = *second;
+                    pairs.push_back({key_at - start, value_at - start, out.size() - start});
                 }
-                items.push_back(std::move(item));
             }
             if (indefinite)
                 next = detail::validity::next(next, heads::initial_byte_size);
             if (map) {
-                std::ranges::sort(items);
-                if (error const c = detail::validity::check_key_unique(
-                                        std::ranges::adjacent_find(
-                                            items, {}, &std::pair<std::string, std::string>::first) !=
-                                        std::ranges::end(items))
-                                        .error_or(error{});
+                std::string const region = out.substr(start);
+                auto const key = [&region](canonical_pair const &p) {
+                    return std::string_view(region).substr(p.key, p.value - p.key);
+                };
+                std::ranges::sort(pairs, {}, key);
+                if (error const c =
+                        detail::validity::check_key_unique(std::ranges::adjacent_find(pairs, {}, key) != pairs.end())
+                            .error_or(error{});
                     c != error{}) [[unlikely]]
                     return std::unexpected(c);
+                out.resize(start);
+                for (canonical_pair const &p : pairs)
+                    out += std::string_view(region).substr(p.key, p.end - p.key);
             }
-            if (auto const r = append_head(out, h->major, items.size(), no_indicator); !r) [[unlikely]]
+            std::string head;
+            if (auto const r = append_head(head, h->major, count, no_indicator); !r) [[unlikely]]
                 return std::unexpected(r.error());
-            for (auto const &[first, second] : items)
-                out += first + second;
+            out.insert(start, head);
             return next;
         }
         default:
@@ -1172,10 +1178,9 @@ class extended_diagnostic_notation
 
     template <bool Checked>
     static std::expected<void, error>
-    write_diagnostic(std::string &out, heads::decoder<Checked> &d, std::string_view const encoded,
-                     std::size_t const depth, std::size_t const depth_max)
+    write_diagnostic(std::string &out, heads::decoder<Checked> &d, std::string_view const encoded)
     {
-        if (auto const r = detail::validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
+        if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
             return std::unexpected(r.error());
         auto const h = decode_diagnostic_head(d);
         if (!h) [[unlikely]]
@@ -1223,7 +1228,7 @@ class extended_diagnostic_notation
                             .error_or(error{});
                     c != error{}) [[unlikely]]
                     return std::unexpected(c);
-                if (auto const r = write_diagnostic(out, d, encoded, depth + 1, depth_max); !r) [[unlikely]]
+                if (auto const r = write_diagnostic(out, d, encoded); !r) [[unlikely]]
                     return r;
             }
             out += ")";
@@ -1243,11 +1248,11 @@ class extended_diagnostic_notation
             for (std::uint64_t i = 0; indefinite ? !break_found(d) : i < h->argument; ++i) {
                 if (i != 0)
                     out += ", ";
-                if (auto const r = write_diagnostic(out, d, encoded, depth + 1, depth_max); !r) [[unlikely]]
+                if (auto const r = write_diagnostic(out, d, encoded); !r) [[unlikely]]
                     return r;
                 if (map) {
                     out += ": ";
-                    if (auto const r = write_diagnostic(out, d, encoded, depth + 1, depth_max); !r) [[unlikely]]
+                    if (auto const r = write_diagnostic(out, d, encoded); !r) [[unlikely]]
                         return r;
                 }
             }
@@ -1256,7 +1261,7 @@ class extended_diagnostic_notation
         }
         case major_type::tag: {
             out += std::to_string(h->argument) + encoding_indicator(h->info, h->argument) + "(";
-            if (auto const r = write_diagnostic(out, d, encoded, depth + 1, depth_max); !r) [[unlikely]]
+            if (auto const r = write_diagnostic(out, d, encoded); !r) [[unlikely]]
                 return r;
             out += ")";
             return {};
@@ -1306,7 +1311,7 @@ inline std::expected<std::string, error> diagnostic_notation(std::string_view co
     heads::decoder<true> d{encoded};
     std::string out;
     if (auto const r =
-            extended_diagnostic_notation::write_diagnostic(out, d, encoded, 0, limits::nesting_depth);
+            extended_diagnostic_notation::write_diagnostic(out, d, encoded);
         !r) [[unlikely]]
         return std::unexpected(r.error());
     if (auto const one = detail::validity::check_one_data_item(d.encoded); !one) [[unlikely]]
