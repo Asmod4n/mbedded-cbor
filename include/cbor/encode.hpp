@@ -146,8 +146,7 @@ private:
     }
 
     template <class Writer>
-    static std::expected<void, error> encode_item(encoder<Writer> &out, item const &node, std::size_t depth,
-                                                  std::size_t depth_max);
+    static std::expected<void, error> encode_item(encoder<Writer> &out, item const &node);
 
     template <class Target>
     friend std::expected<std::size_t, error> encode(item const &root, Target &&target);
@@ -800,10 +799,9 @@ template <class Element>
 encoder(std::span<Element>) -> encoder<std::span<Element>>;
 
 template <class Writer>
-std::expected<void, error> encoding::encode_item(encoder<Writer> &out, item const &node, std::size_t const depth,
-                                                 std::size_t const depth_max)
+std::expected<void, error> encoding::encode_item(encoder<Writer> &out, item const &node)
 {
-    if (auto const r = detail::validity::check_nesting_depth(depth, depth_max); !r) [[unlikely]]
+    if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
         return r;
     major_type const major = heads::major_type_of(node.type);
     std::uint64_t argument = node.via.u64;
@@ -880,11 +878,11 @@ std::expected<void, error> encoding::encode_item(encoder<Writer> &out, item cons
     case major_type::array:
     case major_type::map:
         for (item const &child : major == major_type::array ? node.via.array : node.via.map)
-            if (auto const r = encode_item(out, child, depth + 1, depth_max); !r) [[unlikely]]
+            if (auto const r = encode_item(out, child); !r) [[unlikely]]
                 return r;
         break;
     case major_type::tag:
-        return encode_item(out, *node.via.tag.content, depth + 1, depth_max);
+        return encode_item(out, *node.via.tag.content);
     case major_type::unsigned_integer:
     case major_type::negative_integer:
     case major_type::simple_float:
@@ -900,7 +898,7 @@ std::expected<std::size_t, error> encode(item const &root, Target &&target)
 {
     decltype(auto) message = encoding::message_of(target, 0);
     encoding::encoder<std::remove_reference_t<decltype(message)>> out(message);
-    if (auto const r = encoding::encode_item(out, root, 0, limits::nesting_depth); !r) [[unlikely]]
+    if (auto const r = encoding::encode_item(out, root); !r) [[unlikely]]
         return std::unexpected(r.error());
     if (auto const r = out.flush(); !r) [[unlikely]]
         return std::unexpected(detail::validity::writer_error(r.error()));
@@ -914,7 +912,7 @@ inline std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &
 {
     iov_writer writer;
     encoding::encoder<iov_writer> out(writer);
-    if (auto const r = encoding::encode_item(out, root, 0, limits::nesting_depth); !r) [[unlikely]]
+    if (auto const r = encoding::encode_item(out, root); !r) [[unlikely]]
         return std::unexpected(r.error());
     return out.release();
 }

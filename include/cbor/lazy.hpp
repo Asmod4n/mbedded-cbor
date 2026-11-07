@@ -376,10 +376,9 @@ namespace cbor
 
 template <bool Checked, class First, class Second>
 std::expected<bool, error>
-detail::validity::keys_equivalent(First &first, offset const first_at, Second &second, offset const second_at,
-                                  std::size_t const depth, std::size_t const depth_max)
+detail::validity::keys_equivalent(First &first, offset const first_at, Second &second, offset const second_at)
 {
-    if (auto const r = check_nesting_depth(depth, depth_max); !r) [[unlikely]]
+    if (auto const r = check_recursion_limit(); !r) [[unlikely]]
         return std::unexpected(r.error());
     auto const encoded_of = []<class Message>(Message &message) -> std::string_view {
         if constexpr (std::same_as<Message, std::string_view const>)
@@ -467,7 +466,7 @@ detail::validity::keys_equivalent(First &first, offset const first_at, Second &s
             return std::unexpected(r.error());
         for (std::uint64_t i = 0; i < h->argument; ++i) {
             auto const equal = keys_equivalent<Checked>(first, distance(a, d.encoded), second,
-                                                        distance(b, e.encoded), depth + 1, depth_max);
+                                                        distance(b, e.encoded));
             if (!equal || !*equal)
                 return equal;
             if (auto const r = skip(d); !r) [[unlikely]]
@@ -498,13 +497,13 @@ detail::validity::keys_equivalent(First &first, offset const first_at, Second &s
                 offset const other_value = distance(in_encoded, e.encoded);
                 if (auto const r = skip(e); !r) [[unlikely]]
                     return std::unexpected(r.error());
-                auto const key_same = keys_equivalent<Checked>(from, key, in, other, depth + 1, depth_max);
+                auto const key_same = keys_equivalent<Checked>(from, key, in, other);
                 if (!key_same) [[unlikely]]
                     return std::unexpected(key_same.error());
                 if (!*key_same)
                     continue;
                 auto const value_same =
-                    keys_equivalent<Checked>(from, value, in, other_value, depth + 1, depth_max);
+                    keys_equivalent<Checked>(from, value, in, other_value);
                 if (!value_same) [[unlikely]]
                     return std::unexpected(value_same.error());
                 count += *value_same;
@@ -537,7 +536,7 @@ detail::validity::keys_equivalent(First &first, offset const first_at, Second &s
     case major_type::tag:
         if (h->argument != k->argument)
             return false;
-        return keys_equivalent<Checked>(first, h->at, second, k->at, depth + 1, depth_max);
+        return keys_equivalent<Checked>(first, h->at, second, k->at);
     case major_type::simple_float:
         break;
     }
@@ -1200,7 +1199,7 @@ inline std::expected<owning<item>, error> lazy::clone() const
         return cbor::decode(encoded);
     }
     if (offset == 0)
-        return detail::decode_tree<true>(top_level.encoded, limits::nesting_depth)
+        return detail::decode_tree<true>(top_level.encoded)
             .transform([](detail::decoded_tree<true> const &d) { return d.tree; });
     std::string_view const rest = detail::validity::subspan(top_level.encoded, detail::validity::offset{offset});
     auto const size = item_size(rest);
