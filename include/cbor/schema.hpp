@@ -1596,8 +1596,6 @@ class reflection
         template <class E, class R>
         void add_elements(R const &range, std::size_t const depth)
         {
-            if (std::ranges::size(range) != 0)
-                enter(depth + 1);
             if constexpr (fixed_struct_valid<std::remove_cv_t<E>>()) {
                 items += 1;
                 add_bytes(fixed_array_head<Root, std::remove_cv_t<E>>().size() + sizeof(std::uint32_t));
@@ -1613,11 +1611,8 @@ class reflection
             add_bytes(item_head);
             add_block(std::ranges::size(range), fixed_size<E, Root>());
             if constexpr (!std::is_arithmetic_v<E> && !std::is_enum_v<E>)
-                for (auto const &e : range) {
-                    if (too_deep) [[unlikely]]
-                        return;
+                for (auto const &e : range)
                     add<E>(e, depth + 1);
-                }
         }
 
         template <class T>
@@ -1660,7 +1655,6 @@ class reflection
                 add_bytes(item_head);
                 if (value.has_value()) {
                     add_bytes(fixed_size<typename U::value_type, Root>());
-                    enter(depth + 1);
                     add<typename U::value_type>(*value, depth + 1);
                 }
             } else if constexpr (is_text_range<U> || is_byte_range<U>) {
@@ -1671,11 +1665,7 @@ class reflection
                 add_bytes(item_head);
                 add_block(std::ranges::size(value),
                           fixed_size<typename U::key_type, Root>() + fixed_size<typename U::mapped_type, Root>());
-                if (std::ranges::size(value) != 0)
-                    enter(depth + 1);
                 for (auto const &[k, v] : value) {
-                    if (too_deep) [[unlikely]]
-                        return;
                     add<typename U::key_type>(k, depth + 1);
                     add<typename U::mapped_type>(v, depth + 1);
                 }
@@ -1698,7 +1688,6 @@ class reflection
         std::size_t position;
         std::size_t index;
         std::size_t depth = 0;
-        bool too_deep = false;
     };
 
     template <class Root, description_place D>
@@ -1758,8 +1747,7 @@ class reflection
                         copy_zero_initialized<Root, A>(record);
                         c.position = item + fixed_size<A, Root>();
                         c.depth += 1;
-                        c.too_deep |= !detail::validity::check_nesting_depth(c.depth, limits::nesting_depth);
-                        if (c.too_deep) [[unlikely]]
+                        if (!detail::validity::check_nesting_depth(c.depth, limits::nesting_depth)) [[unlikely]]
                             return;
                         c = encode_value<Root, A, Exact, D>(out, record, held, c);
                         c.depth -= 1;
@@ -3284,7 +3272,7 @@ class reflection
                           heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::undefined)));
         auto const root = encoded.subspan(size - fixed_size<T, T>()).template first<fixed_size<T, T>()>();
         copy_zero_initialized<T, T>(root);
-        if (encode_value<T, T, Exact, D>(encoded, root, value, encode_cursor{data + fillers, 0}).too_deep) [[unlikely]]
+        if (encode_value<T, T, Exact, D>(encoded, root, value, encode_cursor{data + fillers, 0}).depth != 0) [[unlikely]]
             return std::unexpected(error::nesting_depth_exceeded);
         return size;
     }
