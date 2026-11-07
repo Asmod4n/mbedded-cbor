@@ -799,7 +799,11 @@ TEST_CASE("structs: a plain struct in a std::pmr::vector takes the resource of t
         CHECK_EQ(std::string_view(p.name), long_name);
         CHECK_EQ(p.name.get_allocator().resource(), &target);
     }
+    // A debug build of the C++ library of MSVC gives each container a proxy object from its allocator, so a
+    // temporary container with the default resource takes blocks there; the count holds without that proxy.
+#if !defined(_ITERATOR_DEBUG_LEVEL) || _ITERATOR_DEBUG_LEVEL == 0
     CHECK_EQ(fallback.allocations, 0u);
+#endif
     CHECK_GT(target.allocations, 0u);
 }
 
