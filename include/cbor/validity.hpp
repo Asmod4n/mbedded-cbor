@@ -136,7 +136,7 @@ public:
 
     static stack_bounds stack_bounds_of_this_thread()
     {
-        auto const frame = reinterpret_cast<std::uintptr_t>(__builtin_frame_address(0));
+        [[maybe_unused]] auto const frame = reinterpret_cast<std::uintptr_t>(__builtin_frame_address(0));
 #if defined(__linux__)
         pthread_attr_t attributes;
         if (pthread_getattr_np(pthread_self(), &attributes) != 0) [[unlikely]]
@@ -189,7 +189,6 @@ public:
                                                                : high;
         return frame >= low && frame < high ? stack_bounds{low, high} : stack_bounds{};
 #else
-        (void)frame;
         return {};
 #endif
     }
