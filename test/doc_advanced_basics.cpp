@@ -1,6 +1,9 @@
 #include "reference.hpp"
 #include "threads.hpp"
 #include "owned_copy.hpp"
+#include "small_stack.hpp"
+#include <cbor/diagnostic_notation.hpp>
+#include <cbor/item_size.hpp>
 #include <cbor/encode.hpp>
 #include <cbor/sequence.hpp>
 #include <cbor/structs.hpp>
@@ -126,6 +129,16 @@ TEST_CASE("doc advanced basics: limits")
 {
     CHECK_EQ(cbor::limits::string_length, SIZE_MAX);
     CHECK_EQ(cbor::limits::container_elements, SIZE_MAX);
+}
+
+// The section "Nesting depth" shows that a call that recurses stops where the stack of its thread ends, and that
+// item_size, which does not recurse, reads the same item: 65536 arrays around 1 are 65537 bytes.
+TEST_CASE("doc advanced basics: nesting depth")
+{
+    std::string const bytes = std::string(test::levels_beyond_small_stack, '\x81') + '\x01';
+    CHECK_EQ(test::error_on_small_stack([&bytes] { return cbor::diagnostic_notation(bytes); }),
+             error::nesting_depth_exceeded);
+    CHECK_EQ(cbor::item_size(bytes), test::levels_beyond_small_stack + 1);
 }
 
 // The section "Memory" shows that the caller bounds the memory of a decode with a std::pmr resource, and that

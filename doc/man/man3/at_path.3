@@ -1,4 +1,4 @@
-.TH "cbor::at_path" "3" "2026-11-05" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.TH "cbor::at_path" "3" "2026-11-07" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
 .SH NAME
 cbor::at_path, cbor::jsonpath::compile, cbor::jsonpath::query, cbor::nodelist, cbor::fixed_string, cbor::is_valid_path_v, cbor::is_singular_query_v \- read a value by its JSONPath (RFC 9535), with CBOR keys that are not text, tags and typed arrays
 .SH SYNOPSIS
@@ -183,8 +183,9 @@ exists only at compile time.
 It checks no grammar; is_valid_path_v does.
 .SS cbor::is_valid_path_v
 True when the grammar of RFC 9535, with EDN literals, accepts
-\f[CR]Path\f[R], and the path is not deeper than
-limits\f[CR]::nesting_depth\f[R].
+\f[CR]Path\f[R].
+A path nested deeper than the compiler evaluates a constant expression
+does not compile.
 \f[CR]is_valid_path<Path>\f[R] is a \f[CR]std::bool_constant\f[R] with
 the same value.
 .PP
@@ -219,8 +220,8 @@ A null or empty owner and a moved\-from query throw
 \f[CR]not_singular_query\f[R]: the path selects many nodes and
 \f[CR]T\f[R] is not \f[CR]nodelist\f[R].
 .IP \(bu 2
-\f[CR]nesting_depth_exceeded\f[R]: the path is deeper than
-limits\f[CR]::nesting_depth\f[R].
+\f[CR]nesting_depth_exceeded\f[R]: the path is nested deeper than the
+stack of the thread holds (limits).
 .PP
 \f[CR]T\f[R] outside \f[CR]path_result\f[R] does not compile.
 .SS cbor::jsonpath::query

@@ -1,4 +1,4 @@
-.TH "cbor::diagnostic_notation" "3" "2026-10-31" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.TH "cbor::diagnostic_notation" "3" "2026-11-07" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
 .SH NAME
 cbor::diagnostic_notation \- prints an item as diagnostic notation (RFC 8949 section 8)
 .SH SYNOPSIS
@@ -27,8 +27,8 @@ The call does not check tag content, UTF\-8 or duplicate keys.
 \f[CR]syntax_error\f[R]: a head is not well\-formed, a chunk of an
 indefinite string has the wrong type, or bytes follow the item.
 .IP \(bu 2
-\f[CR]nesting_depth_exceeded\f[R]: the item is deeper than
-limits\f[CR]::nesting_depth\f[R].
+\f[CR]nesting_depth_exceeded\f[R]: the item is deeper than the stack of
+the thread holds (limits).
 .IP \(bu 2
 \f[CR]string_length_exceeded\f[R],
 \f[CR]container_elements_exceeded\f[R]: a limit is set and the item goes

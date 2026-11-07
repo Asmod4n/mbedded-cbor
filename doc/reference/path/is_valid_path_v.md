@@ -23,8 +23,9 @@ call: cbor::jsonpath::compile<cbor::nodelist>("$[?match(@.t, 'a.c')]").has_value
 result: false
 ```
 
-True when the grammar of RFC 9535, with EDN literals, accepts `Path`, and
-the path is not deeper than [limits](../errors/limits.md)`::nesting_depth`.
+True when the grammar of RFC 9535, with EDN literals, accepts `Path`. A
+path nested deeper than the compiler evaluates a constant expression does
+not compile.
 `is_valid_path<Path>` is a `std::bool_constant` with the same value.
 
 A path with `match` or `search` is not valid here. `lazy.at_path<Path>()`

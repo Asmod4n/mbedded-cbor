@@ -118,18 +118,17 @@ The library starts no thread and holds no lock.
 
 ## 4. Limits
 
-A limit stops input that is too deep or that holds a string or a
-container that is too large. A limit is a constant of the build: a macro
+A limit stops input that holds a string or a container that is too
+large. A limit is a constant of the build: a macro
 sets it, and `cbor::limits` gives its value.
 
 | Macro | Constant | Counts | Default | Error |
 |---|---|---|---|---|
-| `CBOR_NESTING_DEPTH_DEFAULT` | `cbor::limits::nesting_depth` | the arrays, maps and tags around a value | 128, at most 512 | `nesting_depth_exceeded` |
 | `CBOR_STRING_LENGTH_DEFAULT` | `cbor::limits::string_length` | the bytes of one text or byte string | no limit | `string_length_exceeded` |
 | `CBOR_CONTAINER_ELEMENTS_DEFAULT` | `cbor::limits::container_elements` | the elements of one array, or the pairs of one map | no limit | `container_elements_exceeded` |
 
 ```sh
-g++ -DCBOR_NESTING_DEPTH_DEFAULT=16 -DCBOR_STRING_LENGTH_DEFAULT=1024 ...
+g++ -DCBOR_STRING_LENGTH_DEFAULT=1024 ...
 ```
 
 Every translation unit of one program uses the same values. A limit that
@@ -140,16 +139,23 @@ the program bounds it before it calls the library.
 The error comes at the read that meets the value. A count in the input
 reserves no memory: memory grows only with the values that a call reads.
 
-The nesting depth also stops at the end of the stack. Each thread reads
-the bounds of its own stack once, at its first check. A call that comes
-within 16 KiB (32 KiB on Windows) of the end of the stack returns `nesting_depth_exceeded`,
-also below `nesting_depth`. The bounds come from the system on Linux
-(glibc and musl), macOS, Windows, WebAssembly without threads, and
-picolibc. A frame outside these bounds, such as the stack of a fiber or
-of a signal handler, gets the fixed depth alone. On Linux, a mapping that
-a program places with `MAP_FIXED` inside the stack limit of the main
-thread is outside the bound. On picolibc, a stack smaller than 16 KiB
-refuses every nested item.
+Nesting has no fixed limit. A reader that recurses stops where the
+stack of its thread ends: a call that comes within 16 KiB of the end
+(32 KiB on Windows or with a sanitizer) returns `nesting_depth_exceeded`.
+Each thread reads the bounds of its own stack once, at its first check:
+from the system on Linux (glibc and musl), macOS and Windows, and from
+the linker on WebAssembly without threads and on picolibc. Another
+target does not compile. A frame outside these bounds, such as the
+stack of a fiber or of a signal handler, is not checked. The first check
+of a thread does not run in a signal handler. On Linux, a change of
+`RLIMIT_STACK` after the first check, and a mapping that a program places
+with `MAP_FIXED` below the stack of the main thread, are outside the
+bound. On picolibc, a stack smaller than the reserve refuses every
+nested item. `item_size`, `sequence_reader` and a path of child segments
+do not recurse and read any depth. A deep value of a user type
+(`structs`, `schema`) is destroyed and copied by its own recursion: a
+thread with a smaller stack than the one that decoded it can overflow
+there.
 
 ## 5. Boost.PFR
 
