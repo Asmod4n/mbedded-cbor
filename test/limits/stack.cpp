@@ -225,11 +225,61 @@ using namespace limits_stack;
 
 // Every reader that walks nested items reads the stack bound of its thread and stops before the stack ends, with
 // the error of the nesting depth. The main thread reads a message at the bound with what the platform gives it.
+#if defined(_WIN64)
+// A probe of the frames of a Windows build: it fills the free stack of a thread of 1 MiB with a pattern, runs a reader
+// on a message of 100 and of 200 levels, and writes how deep the stack was used. The difference gives the bytes of one
+// level, and the rest gives the peak of one step. The stack bound must stay above that peak.
+constexpr unsigned char paint = 0xA5;
+constexpr std::uintptr_t paint_margin = 8192;
+
+std::size_t stack_used_by(std::function<void()> const &f)
+{
+    auto const &bounds = cbor::detail::validity::stack_bounds_of_thread();
+    auto const top = reinterpret_cast<std::uintptr_t>(__builtin_frame_address(0)) - paint_margin;
+    std::uintptr_t const floor = bounds.low + paint_margin;
+    for (std::uintptr_t a = top; a > floor; --a)
+        *reinterpret_cast<unsigned char volatile *>(a) = paint;
+    f();
+    std::uintptr_t a = floor + 1;
+    while (a < top && *reinterpret_cast<unsigned char volatile *>(a) == paint)
+        ++a;
+    return top - a;
+}
+
+void probe_frames()
+{
+    std::vector<std::pair<char const *, std::function<void(std::size_t)>>> const readers{
+        {"decode", [](std::size_t n) { (void)cbor::decode(arrays_around_one(n)); }},
+        {"clone", [](std::size_t n) { (void)test::lazy_of_copy(arrays_around_one(n))->clone(); }},
+        {"diagnostic_notation", [](std::size_t n) { (void)cbor::diagnostic_notation(arrays_around_one(n)); }},
+        {"item_size", [](std::size_t n) { (void)cbor::item_size(arrays_around_one(n)); }},
+        {"query descendants", [](std::size_t n) { (void)query(arrays_around_one(n), "$..*"); }},
+        {"query filter", [](std::size_t n) { (void)query(arrays_around_one(n), "$..[?@ == 1]"); }},
+    };
+    for (auto const &[name, read] : readers) {
+        std::size_t const near = stack_used_by([&] { read(100); });
+        std::size_t const far = stack_used_by([&] { read(200); });
+        std::cerr << "probe " << name << ": 100 levels " << near << " bytes, 200 levels " << far << " bytes, "
+                  << (far - near) / 100 << " bytes a level, "
+                  << static_cast<long long>(near) - static_cast<long long>(far - near) << " bytes besides the levels"
+                  << std::endl;
+    }
+}
+#endif
+
 TEST_CASE("stack: every recursive reader on the main thread")
 {
     chain_values kept{holder_chain((levels - 1) / 2), std::nullopt};
     every_reader(kept);
 }
+
+
+#if defined(_WIN64)
+TEST_CASE("stack: probe of the frames of a Windows build")
+{
+    on_stack_of(std::size_t{1} << 20, [] { probe_frames(); });
+}
+#endif
 
 #if defined(_WIN64) || __has_include(<pthread.h>)
 // Threads with stacks of 64 KiB and 256 KiB hold fewer levels than the bound: each reader stops with
