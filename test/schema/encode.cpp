@@ -354,7 +354,7 @@ TEST_CASE("encode: each fixed kind as a variant alternative starts with its CBOR
     check_value_alternative<std::float128_t>(0.5f128, "\xd8\x53\x50"sv);
     check_value_alternative<long double>(0.5L, "\xd8\x53\x50"sv);
 #endif
-#ifdef __SIZEOF_INT128__
+#ifdef CBOR_HAS_INT128
     check_value_alternative<cbor::int128>(cbor::int128{1} << 100, "\xc2\x50"sv);
     check_value_alternative<cbor::int128>(-(cbor::int128{1} << 100), "\xc3\x50"sv);
     check_value_alternative<cbor::uint128>(cbor::uint128{1} << 120, "\xc2\x50"sv);

@@ -38,7 +38,11 @@ namespace cbor
 template <class T>
 class schema;
 
-#ifdef __SIZEOF_INT128__
+#if defined(__SIZEOF_INT128__) && !defined(_MSVC_STL_VERSION)
+#define CBOR_HAS_INT128 1
+#endif
+
+#ifdef CBOR_HAS_INT128
 __extension__ typedef __int128 int128;
 __extension__ typedef unsigned __int128 uint128;
 #endif
@@ -159,7 +163,7 @@ class heads
         append_head(out, major, preferred_argument_info(argument), argument);
     }
 
-#ifdef __SIZEOF_INT128__
+#ifdef CBOR_HAS_INT128
     static constexpr std::array<char, sizeof(uint128)> big_endian(uint128 const value)
     {
         auto const high =
@@ -188,7 +192,7 @@ class heads
         write_u32(out, at + initial_byte_size, length);
     }
 
-#ifdef __SIZEOF_INT128__
+#ifdef CBOR_HAS_INT128
     static uint128 read_unsigned128(std::span<char const, sizeof(uint128)> const field)
     {
         auto const high = static_cast<uint128>(read_unsigned<std::uint64_t>(field.first<sizeof(std::uint64_t)>()));

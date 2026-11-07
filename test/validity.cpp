@@ -110,6 +110,8 @@ TEST_CASE("validity: throw_logic_error_if_null for every state of a shared_ptr")
 namespace
 {
 
+// The factors and their results serve the checks against an exact int128 product below.
+#ifdef CBOR_HAS_INT128
 constexpr std::size_t size_max = std::numeric_limits<std::size_t>::max();
 
 // Factors around each width a product can have: zero, one, small numbers, the borders of 32 bits, the halves
@@ -144,6 +146,7 @@ constexpr auto products_at_compile_time = [] {
             fits[i][j] = cbor::detail::validity::checked_mul(factors[i], factors[j]).has_value();
     return fits;
 }();
+#endif
 
 } // namespace
 
@@ -155,7 +158,7 @@ TEST_CASE("validity: check_key_unique for both inputs")
     CHECK_EQ(validity::check_key_unique(true).error(), error::duplicate_key);
 }
 
-#ifdef __SIZEOF_INT128__
+#ifdef CBOR_HAS_INT128
 // C23 ckd_mul gives the product when it is representable and reports an overflow otherwise. The compiler and
 // the run time use the same function, so both must give the answer of the exact product, which a wider type
 // computes here.
@@ -378,7 +381,7 @@ TEST_CASE("value_sharing: index takes no byte offset and no other index")
     CHECK_FALSE(sharedref_index_accepts<std::size_t>);
 }
 
-#ifdef __SIZEOF_INT128__
+#ifdef CBOR_HAS_INT128
 // RFC 9535 2.3.3.2: an index selects the element Normalize(i, len), and only an index in 0 to len - 1 after
 // the normalization selects an element. The path, lazy::at and the schema use this one check, so it must
 // agree with the exact arithmetic for small arrays and at the ends of std::int64_t and std::uint64_t.

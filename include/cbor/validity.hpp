@@ -42,6 +42,11 @@
 
 #define CBOR_ALWAYS_INLINE [[gnu::always_inline]]
 #define CBOR_NEVER_INLINE [[gnu::noinline]]
+#if defined(_MSC_VER)
+#define CBOR_NO_UNIQUE_ADDRESS [[msvc::no_unique_address]]
+#else
+#define CBOR_NO_UNIQUE_ADDRESS [[no_unique_address]]
+#endif
 
 #if defined(__wasm__)
 extern "C" unsigned char __stack_low;

@@ -109,7 +109,7 @@ class indexing_iterator
     std::span<char const> list;
     std::size_t position = 0;
     std::uint64_t length = 0;
-    [[no_unique_address]] Context context{};
+    CBOR_NO_UNIQUE_ADDRESS Context context{};
 
     indexing_iterator(std::shared_ptr<void const> o, std::string_view const b, std::span<char const> const l, std::size_t const p,
                       std::uint64_t const n, Context const c)
@@ -342,7 +342,7 @@ class reflection
     };
 
     template <class U>
-#ifdef __SIZEOF_INT128__
+#ifdef CBOR_HAS_INT128
     static constexpr bool is_wide_integer = std::same_as<U, int128> || std::same_as<U, uint128>;
 #else
     static constexpr bool is_wide_integer = false;
@@ -562,7 +562,7 @@ class reflection
                     n = fixed_size<U, void>() - sizeof(decltype(float_bits(U{})));
                 first = std::vector<char>(std::from_range, zero.first(n));
                 if constexpr (std::same_as<U, bool>
-#ifdef __SIZEOF_INT128__
+#ifdef CBOR_HAS_INT128
                               || std::same_as<U, int128>
 #endif
                 ) {
@@ -1302,7 +1302,7 @@ class reflection
             heads::append_head(encoded, major_type::simple_float, std::to_underlying(simple_value::false_value));
         } else if constexpr (std::is_enum_v<U>) {
             encode_zero_initialized<Root, std::underlying_type_t<U>>(encoded);
-#ifdef __SIZEOF_INT128__
+#ifdef CBOR_HAS_INT128
         } else if constexpr (std::same_as<U, int128> || std::same_as<U, uint128>) {
             heads::append_head(encoded, major_type::tag,
                                std::to_underlying(rfc8949::tag_number::unsigned_bignum));
@@ -1561,7 +1561,7 @@ class reflection
             return std::bit_cast<std::uint32_t>(value);
         else if constexpr (digits == std::numeric_limits<double>::digits)
             return std::bit_cast<std::uint64_t>(value);
-#if defined(__SIZEOF_INT128__) && defined(__STDCPP_FLOAT128_T__)
+#if defined(CBOR_HAS_INT128) && defined(__STDCPP_FLOAT128_T__)
         else
             return std::bit_cast<uint128>(static_cast<std::float128_t>(value));
 #endif
@@ -1847,7 +1847,7 @@ class reflection
             field.front() = heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::false_value) + value);
         } else if constexpr (std::is_enum_v<U>) {
             position = encode_value<Root, std::underlying_type_t<U>, Exact, D>(out, field, std::to_underlying(value), position);
-#ifdef __SIZEOF_INT128__
+#ifdef CBOR_HAS_INT128
         } else if constexpr (std::same_as<U, int128> || std::same_as<U, uint128>) {
             uint128 magnitude = static_cast<uint128>(value);
             if constexpr (std::same_as<U, int128>) {
@@ -1868,8 +1868,9 @@ class reflection
             M const sign = static_cast<M>(value >> std::numeric_limits<U>::digits);
             field.front() =
                 heads::initial_byte(static_cast<major_type>(sign & 1),
-                                    std::to_underlying(rfc8949::additional_information::one_byte_argument) +
-                                        std::countr_zero(sizeof(U)));
+                                    static_cast<std::uint64_t>(
+                                        std::to_underlying(rfc8949::additional_information::one_byte_argument) +
+                                        std::countr_zero(sizeof(U))));
             auto const bytes = heads::big_endian(static_cast<M>(static_cast<M>(value) ^ sign));
             std::copy(bytes.begin(), bytes.end(), field.template last<sizeof(U)>().begin());
         } else if constexpr (std::is_floating_point_v<U>) {
@@ -1931,13 +1932,15 @@ class reflection
 
     static consteval std::size_t step_end(std::string_view const path, std::size_t const at)
     {
-        return static_cast<std::size_t>(std::ranges::find_first_of(path | std::views::drop(at + 1), std::string_view(".[")) -
-                                        path.begin());
+        std::string_view const rest = path.substr(std::min(at + 1, path.size()));
+        return path.size() - rest.size() +
+               static_cast<std::size_t>(std::ranges::find_first_of(rest, std::string_view(".[")) - rest.begin());
     }
 
     static consteval std::size_t index_end(std::string_view const path, std::size_t const at)
     {
-        return static_cast<std::size_t>(std::ranges::find(path | std::views::drop(at + 1), ']') - path.begin());
+        std::string_view const rest = path.substr(std::min(at + 1, path.size()));
+        return path.size() - rest.size() + static_cast<std::size_t>(std::ranges::find(rest, ']') - rest.begin());
     }
 
     template <class T>
@@ -1959,7 +1962,7 @@ class reflection
             return (head & 1) != 0;
         } else if constexpr (has_fixed_underlying_type<U>) {
             return static_cast<U>(read_fixed_value<std::underlying_type_t<U>>(field));
-#ifdef __SIZEOF_INT128__
+#ifdef CBOR_HAS_INT128
         } else if constexpr (std::same_as<U, int128> || std::same_as<U, uint128>) {
             uint128 const magnitude = heads::read_unsigned128(field.template last<sizeof(U)>());
             if constexpr (std::same_as<U, int128>) {
@@ -1977,7 +1980,7 @@ class reflection
             return static_cast<U>(heads::read_unsigned<M>(field.template last<sizeof(M)>()) ^ sign);
         } else {
             using B = decltype(float_bits(U{}));
-#if defined(__SIZEOF_INT128__) && defined(__STDCPP_FLOAT128_T__)
+#if defined(CBOR_HAS_INT128) && defined(__STDCPP_FLOAT128_T__)
             if constexpr (std::same_as<B, uint128>) {
                 auto const bits = heads::read_unsigned128(field.template last<sizeof(B)>());
                 return static_cast<U>(std::bit_cast<std::float128_t>(bits));
@@ -3460,7 +3463,7 @@ consteval std::size_t reflection::fixed_size()
         return initial_byte_size;
     else if constexpr (reflection::has_fixed_underlying_type<U>)
         return fixed_size<std::underlying_type_t<U>, Root>();
-#ifdef __SIZEOF_INT128__
+#ifdef CBOR_HAS_INT128
     else if constexpr (std::same_as<U, int128> || std::same_as<U, uint128>)
         return heads::head_size(std::to_underlying(rfc8949::tag_number::negative_bignum)) +
                heads::head_size(sizeof(U)) + sizeof(U);
@@ -3482,7 +3485,7 @@ consteval std::size_t reflection::fixed_size()
             return initial_byte_size + sizeof(float);
         else if constexpr (digits == std::numeric_limits<double>::digits)
             return initial_byte_size + sizeof(double);
-#if defined(__SIZEOF_INT128__) && defined(__STDCPP_FLOAT128_T__)
+#if defined(CBOR_HAS_INT128) && defined(__STDCPP_FLOAT128_T__)
         else if constexpr (digits == heads::extended_precision_digits ||
                            digits == std::numeric_limits<std::float128_t>::digits)
             return heads::head_size(std::to_underlying(rfc8746::tag_number::float128_big_endian)) +
@@ -3598,7 +3601,7 @@ public:
         std::string_view encoded;
         std::span<char const, reflection::fixed_size<U, T>()> field;
         detail::directory dir;
-        [[no_unique_address]] std::conditional_t<listed, reflection::reference, std::monostate> items;
+        CBOR_NO_UNIQUE_ADDRESS std::conditional_t<listed, reflection::reference, std::monostate> items;
 
         accessor(std::string_view const b, std::span<char const, reflection::fixed_size<U, T>()> const f, detail::directory const d)
             requires(!listed)

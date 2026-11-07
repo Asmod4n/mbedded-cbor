@@ -393,7 +393,7 @@ class generic
             return h.major == major_type::map;
     }
 
-#ifdef __SIZEOF_INT128__
+#ifdef CBOR_HAS_INT128
     template <class U, bool Checked>
     static std::expected<void, error> read_wide_integer(heads::decoder<Checked> &d, U &out)
     {
@@ -991,7 +991,7 @@ class generic
             return heads::initial_byte_size;
         } else if constexpr (std::same_as<U, simple_value>) {
             return heads::head_size(std::to_underlying(value));
-#ifdef __SIZEOF_INT128__
+#ifdef CBOR_HAS_INT128
         } else if constexpr (reflection::is_wide_integer<U>) {
             bool negative = false;
             if constexpr (std::same_as<U, int128>)
@@ -1203,7 +1203,7 @@ class generic
             return at + heads::initial_byte_size;
         } else if constexpr (std::same_as<U, simple_value>) {
             return at + heads::write_head(out, at, major_type::simple_float, std::to_underlying(value));
-#ifdef __SIZEOF_INT128__
+#ifdef CBOR_HAS_INT128
         } else if constexpr (reflection::is_wide_integer<U>) {
             bool negative = false;
             if constexpr (std::same_as<U, int128>)
