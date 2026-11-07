@@ -1572,6 +1572,12 @@ class reflection
         std::size_t items = 0;
         std::size_t bytes = 0;
         bool overflow = false;
+        bool too_deep = false;
+
+        void enter(std::size_t const depth)
+        {
+            too_deep |= !detail::validity::check_nesting_depth(depth, limits::nesting_depth);
+        }
 
         void add_bytes(std::size_t const n)
         {
@@ -1588,8 +1594,10 @@ class reflection
         }
 
         template <class E, class R>
-        void add_elements(R const &range)
+        void add_elements(R const &range, std::size_t const depth)
         {
+            if (std::ranges::size(range) != 0)
+                enter(depth + 1);
             if constexpr (fixed_struct_valid<std::remove_cv_t<E>>()) {
                 items += 1;
                 add_bytes(fixed_array_head<Root, std::remove_cv_t<E>>().size() + sizeof(std::uint32_t));
@@ -1605,12 +1613,15 @@ class reflection
             add_bytes(item_head);
             add_block(std::ranges::size(range), fixed_size<E, Root>());
             if constexpr (!std::is_arithmetic_v<E> && !std::is_enum_v<E>)
-                for (auto const &e : range)
-                    add<E>(e);
+                for (auto const &e : range) {
+                    if (too_deep) [[unlikely]]
+                        return;
+                    add<E>(e, depth + 1);
+                }
         }
 
         template <class T>
-        void add(T const &value)
+        void add(T const &value, std::size_t const depth)
         {
             using U = std::remove_cv_t<T>;
             if constexpr (std::is_arithmetic_v<U> || std::is_enum_v<U> || is_wide_integer<U>) {
@@ -1618,15 +1629,18 @@ class reflection
                 using E = typename fixed_length<U>::element;
                 if constexpr (!std::is_arithmetic_v<E> && !std::same_as<E, std::byte>)
                     for (auto const &e : value)
-                        add<E>(e);
+                        add<E>(e, depth);
             } else if constexpr (has_describe_members<U>) {
                 for_each_field<U>([&] CBOR_ALWAYS_INLINE(auto i) {
-                    add<describe::member_t<U, decltype(i)::value>>(describe::get<decltype(i)::value>(value));
+                    add<describe::member_t<U, decltype(i)::value>>(describe::get<decltype(i)::value>(value), depth);
                 });
             } else if constexpr (detail::is_std_variant<U>) {
                 detail::validity::throw_logic_error_if(
                     value.valueless_by_exception(), "cbor::schema::encode: the std::variant holds no value");
                 items += 1;
+                enter(depth + 1);
+                if (too_deep) [[unlikely]]
+                    return;
                 std::visit(
                     [&]<class A>(A const &held) {
                         if constexpr (is_string_alternative<A>) {
@@ -1634,19 +1648,20 @@ class reflection
                         } else {
                             add_bytes(fixed_size<A, Root>());
                             if constexpr (has_describe_members<A>)
-                                add<A>(held);
+                                add<A>(held, depth + 1);
                         }
                     },
                     value);
             } else if constexpr (is_inline_optional<U>) {
                 if (value.has_value())
-                    add<typename U::value_type>(*value);
+                    add<typename U::value_type>(*value, depth);
             } else if constexpr (is_optional<U>) {
                 items += 1;
                 add_bytes(item_head);
                 if (value.has_value()) {
                     add_bytes(fixed_size<typename U::value_type, Root>());
-                    add<typename U::value_type>(*value);
+                    enter(depth + 1);
+                    add<typename U::value_type>(*value, depth + 1);
                 }
             } else if constexpr (is_text_range<U> || is_byte_range<U>) {
                 items += 1;
@@ -1656,12 +1671,16 @@ class reflection
                 add_bytes(item_head);
                 add_block(std::ranges::size(value),
                           fixed_size<typename U::key_type, Root>() + fixed_size<typename U::mapped_type, Root>());
+                if (std::ranges::size(value) != 0)
+                    enter(depth + 1);
                 for (auto const &[k, v] : value) {
-                    add<typename U::key_type>(k);
-                    add<typename U::mapped_type>(v);
+                    if (too_deep) [[unlikely]]
+                        return;
+                    add<typename U::key_type>(k, depth + 1);
+                    add<typename U::mapped_type>(v, depth + 1);
                 }
             } else {
-                add_elements<std::ranges::range_value_t<U>>(value);
+                add_elements<std::ranges::range_value_t<U>>(value, depth);
             }
         }
     };
@@ -1678,6 +1697,8 @@ class reflection
     struct encode_cursor {
         std::size_t position;
         std::size_t index;
+        std::size_t depth = 0;
+        bool too_deep = false;
     };
 
     template <class Root, description_place D>
@@ -1736,7 +1757,12 @@ class reflection
                         auto const record = out.subspan(item).template first<fixed_size<A, Root>()>();
                         copy_zero_initialized<Root, A>(record);
                         c.position = item + fixed_size<A, Root>();
+                        c.depth += 1;
+                        c.too_deep |= !detail::validity::check_nesting_depth(c.depth, limits::nesting_depth);
+                        if (c.too_deep) [[unlikely]]
+                            return;
                         c = encode_value<Root, A, Exact, D>(out, record, held, c);
+                        c.depth -= 1;
                     }
                 },
                 value);
@@ -3244,7 +3270,8 @@ class reflection
     }
 
     template <bool Exact, description_place D, class T>
-    CBOR_ALWAYS_INLINE static std::size_t write_encoded(std::span<char> const encoded, T const &value, second_item<T> const &second)
+    CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> write_encoded(std::span<char> const encoded, T const &value,
+                                                                           second_item<T> const &second)
     {
         static constexpr auto prefix = packing_prefix_of<T, D>();
         constexpr std::size_t fillers = fillers_of<T>();
@@ -3257,7 +3284,8 @@ class reflection
                           heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::undefined)));
         auto const root = encoded.subspan(size - fixed_size<T, T>()).template first<fixed_size<T, T>()>();
         copy_zero_initialized<T, T>(root);
-        encode_value<T, T, Exact, D>(encoded, root, value, encode_cursor{data + fillers, 0});
+        if (encode_value<T, T, Exact, D>(encoded, root, value, encode_cursor{data + fillers, 0}).too_deep) [[unlikely]]
+            return std::unexpected(error::nesting_depth_exceeded);
         return size;
     }
 
@@ -4096,7 +4124,9 @@ public:
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     {
         reflection::second_item<T> second;
-        second.add(value);
+        second.add(value, 0);
+        if (second.too_deep) [[unlikely]]
+            return std::unexpected(error::nesting_depth_exceeded);
         auto const size = reflection::encoded_size<T, D>(second);
         if (!size) [[unlikely]]
             return std::unexpected(detail::validity::writer_error(size.error()));
@@ -4105,7 +4135,10 @@ public:
             return std::unexpected(detail::validity::writer_error(sum.error()));
         std::size_t const padded = *sum;
         std::string out(padded, '\0');
-        out.resize(reflection::write_encoded<false, D>(std::span<char>(out), value, second));
+        auto const written = reflection::write_encoded<false, D>(std::span<char>(out), value, second);
+        if (!written) [[unlikely]]
+            return std::unexpected(written.error());
+        out.resize(*written);
         return out;
     }
 
@@ -4115,7 +4148,9 @@ public:
     {
         using U = std::remove_cvref_t<Target>;
         reflection::second_item<T> second;
-        second.add(value);
+        second.add(value, 0);
+        if (second.too_deep) [[unlikely]]
+            return std::unexpected(error::nesting_depth_exceeded);
         auto const size = reflection::encoded_size<T, D>(second);
         if (!size) [[unlikely]]
             return std::unexpected(detail::validity::writer_error(size.error()));
@@ -4130,13 +4165,17 @@ public:
                 return std::unexpected(detail::validity::writer_error(total.error()));
             target.reserve(*total);
             target.insert(target.end(), padded, char{});
-            reflection::write_encoded<false, D>(std::span<char>(target).subspan(at), value, second);
-            target.resize(at + *size);
+            auto const written = reflection::write_encoded<false, D>(std::span<char>(target).subspan(at), value, second);
+            target.resize(written ? at + *size : at);
+            if (!written) [[unlikely]]
+                return std::unexpected(written.error());
             return *size;
         } else if constexpr (!encoding::byte_container<U> && requires { std::span<char>(target); }) {
             std::span<char> const out(target);
             if (detail::validity::bytes_fit(padded, out.size())) {
-                reflection::write_encoded<false, D>(out.first(padded), value, second);
+                auto const written = reflection::write_encoded<false, D>(out.first(padded), value, second);
+                if (!written) [[unlikely]]
+                    return std::unexpected(written.error());
                 return *size;
             }
         }
@@ -4145,13 +4184,17 @@ public:
             std::span<char> const out(message);
             if (!detail::validity::bytes_fit(*size, out.size())) [[unlikely]]
                 return std::unexpected(error::no_buffer_space);
-            reflection::write_encoded<true, D>(out.first(*size), value, second);
+            if (auto const written = reflection::write_encoded<true, D>(out.first(*size), value, second); !written) [[unlikely]]
+                return std::unexpected(written.error());
             if (auto const r = message.done(*size); !r) [[unlikely]]
                 return std::unexpected(detail::validity::writer_error(r.error()));
             return *size;
         } else {
             std::string encoded(padded, '\0');
-            encoded.resize(reflection::write_encoded<false, D>(std::span<char>(encoded), value, second));
+            auto const written = reflection::write_encoded<false, D>(std::span<char>(encoded), value, second);
+            if (!written) [[unlikely]]
+                return std::unexpected(written.error());
+            encoded.resize(*written);
             if (auto const r = message.append(encoded); !r) [[unlikely]]
                 return std::unexpected(detail::validity::writer_error(r.error()));
             if (auto const r = message.done(encoded.size()); !r) [[unlikely]]
