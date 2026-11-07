@@ -142,7 +142,7 @@ reserves no memory: memory grows only with the values that a call reads.
 
 The nesting depth also stops at the end of the stack. Each thread reads
 the bounds of its own stack once, at its first check. A call that comes
-within 16 KiB of the end of the stack returns `nesting_depth_exceeded`,
+within 16 KiB (32 KiB on Windows) of the end of the stack returns `nesting_depth_exceeded`,
 also below `nesting_depth`. The bounds come from the system on Linux
 (glibc and musl), macOS, Windows, WebAssembly without threads, and
 picolibc. A frame outside these bounds, such as the stack of a fiber or
