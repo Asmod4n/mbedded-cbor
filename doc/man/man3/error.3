@@ -1,5 +1,5 @@
 '\" t
-.TH "cbor::error" "3" "2026-11-05" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.TH "cbor::error" "3" "2026-11-07" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
 .SH NAME
 cbor::error, cbor::category, cbor::error_category, cbor::make_error_code, std::is_error_code_enum<cbor::error>, cbor::limits \- the error values of the library, their conversion to std::error_code, and the limits of a build
 .SH SYNOPSIS
@@ -125,7 +125,8 @@ T}
 T{
 \f[CR]nesting_depth_exceeded\f[R]
 T}@T{
-The item or the path is deeper than limits\f[CR]::nesting_depth\f[R].
+The item or the path is deeper than limits\f[CR]::nesting_depth\f[R], or
+the stack of the thread ends.
 T}
 T{
 \f[CR]inadmissible_type_for_tag_content\f[R]
@@ -327,6 +328,19 @@ T}
 A limit counts what a call reads or decodes.
 An item that a call only skips does not count.
 Every translation unit of one program uses the same values.
+.PP
+The nesting depth also stops at the end of the stack.
+Each thread reads the bounds of its own stack once, at its first check.
+A call that comes within 16 KiB (32 KiB on Windows) of the end of the
+stack returns \f[CR]nesting_depth_exceeded\f[R], also below
+\f[CR]nesting_depth\f[R].
+The bounds come from the system on Linux (glibc and musl), macOS,
+Windows, WebAssembly without threads, and picolibc.
+A frame outside these bounds, such as the stack of a fiber or of a
+signal handler, gets the fixed depth alone.
+On Linux, a mapping that a program places with \f[CR]MAP_FIXED\f[R]
+inside the stack limit of the main thread is outside the bound.
+On picolibc, a stack smaller than 16 KiB refuses every nested item.
 .SH ERRORS
 .SS cbor::error
 Not applicable: the type is the error.
@@ -358,7 +372,9 @@ No allocation.
 .SS std::is_error_code_enum<cbor::error>
 None at run time.
 .SS cbor::limits
-None at run time.
+None at run time for a limit.
+The stack check reads the bounds once per thread and then compares one
+address at each level.
 .SH EXAMPLES
 .SS cbor::error
 .IP
