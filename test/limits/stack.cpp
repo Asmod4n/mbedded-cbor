@@ -17,6 +17,7 @@
 #include <optional>
 #include <string>
 #include <cstdint>
+#include <cstdio>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -120,27 +121,38 @@ struct chain_values {
     std::optional<std::expected<cbor::ref<holder>, error>> decoded;
 };
 
+// A crash of the stack on another thread leaves no doctest context in the log. Each reader writes its name and the
+// stack left to stderr before it starts, so a crash names the reader and shows how much stack it had.
+void starts(char const *const reader)
+{
+    auto const &bounds = cbor::detail::validity::stack_bounds_of_thread();
+    auto const frame = reinterpret_cast<std::uintptr_t>(__builtin_frame_address(0));
+    std::fprintf(stderr, "%s: stack %zu bytes, %zu bytes left\n", reader, static_cast<std::size_t>(bounds.high - bounds.low),
+                 static_cast<std::size_t>(frame - bounds.low));
+    std::fflush(stderr);
+}
+
 void every_reader(chain_values &kept)
 {
     std::string const deep = arrays_around_one(levels);
-    INFO("decode");
+    starts("decode");
     reads(cbor::decode(std::string(deep)));
     auto const l = test::lazy_of_copy(deep);
     CHECK(l.has_value());
-    INFO("clone");
+    starts("clone");
     if (l)
         reads(l->clone());
-    INFO("diagnostic_notation");
+    starts("diagnostic_notation");
     reads(cbor::diagnostic_notation(deep));
-    INFO("item_size");
+    starts("item_size");
     reads(cbor::item_size(deep));
-    INFO("compile");
+    starts("compile");
     reads(cbor::jsonpath::compile<cbor::lazy>("$[" + std::string(levels, '[') + "1" + std::string(levels, ']') + "]"));
-    INFO("query descendants");
+    starts("query descendants");
     reads(query(deep, "$..*"));
-    INFO("query filter");
+    starts("query filter");
     reads(query(deep, "$..[?@ == 1]"));
-    INFO("query comparison");
+    starts("query comparison");
     reads(query("\x82"s + arrays_around_one(levels - 1) + arrays_around_one(levels - 1), "$[?@ == $[1]]"));
     // A struct that holds a std::vector of itself is a map that holds an array (RFC 8949 3.2): two levels for
     // each step; 255 steps put the innermost empty array at depth 511.
@@ -148,17 +160,17 @@ void every_reader(chain_values &kept)
     for (std::size_t i = 0; i < (levels - 1) / 2; ++i)
         message += "\xa1\x61" "c\x81"s;
     message += "\xa1\x61" "c\x80"s;
-    INFO("structs decode");
+    starts("structs decode");
     auto const decoded = cbor::structs<node>::decode(std::move(message));
     reads(decoded);
-    INFO("structs encode");
+    starts("structs encode");
     if (decoded)
         reads(cbor::structs<node>::encode(**decoded));
-    INFO("schema encode");
+    starts("schema encode");
     auto const written = cbor::schema<holder>::encode(kept.chain);
     reads(written);
     if (written) {
-        INFO("schema decode");
+        starts("schema decode");
         kept.decoded = cbor::schema<holder>::decode(std::string(*written));
         reads(*kept.decoded);
     }
