@@ -257,11 +257,11 @@ void probe_frames()
         {"query filter", [](std::size_t n) { (void)query(arrays_around_one(n), "$..[?@ == 1]"); }},
     };
     for (auto const &[name, read] : readers) {
-        std::size_t const near = stack_used_by([&] { read(100); });
-        std::size_t const far = stack_used_by([&] { read(200); });
-        std::cerr << "probe " << name << ": 100 levels " << near << " bytes, 200 levels " << far << " bytes, "
-                  << (far - near) / 100 << " bytes a level, "
-                  << static_cast<long long>(near) - static_cast<long long>(far - near) << " bytes besides the levels"
+        std::size_t const at_100 = stack_used_by([&] { read(100); });
+        std::size_t const at_200 = stack_used_by([&] { read(200); });
+        std::cerr << "probe " << name << ": 100 levels " << at_100 << " bytes, 200 levels " << at_200 << " bytes, "
+                  << (at_200 - at_100) / 100 << " bytes a level, "
+                  << static_cast<long long>(at_100) - static_cast<long long>(at_200 - at_100) << " bytes besides the levels"
                   << std::endl;
     }
 }
