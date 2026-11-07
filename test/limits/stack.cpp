@@ -76,6 +76,19 @@ holder holder_chain(std::size_t const links)
     return h;
 }
 
+// The destructor of a holder recurses once for each link, and a chain deeper than the main thread holds would overflow
+// there in a debug build with a sanitizer. The test takes the chain apart from its top in a loop, so that each link
+// ends with no link below it.
+void end_chain(holder chain)
+{
+    while (auto *const f = std::get_if<limb>(&chain.held)) {
+        if (f->next.empty())
+            break;
+        holder next = std::move(f->next.front());
+        chain = std::move(next);
+    }
+}
+
 // Each link of a holder chain is two levels, each of at least one frame of the smallest size: a chain with half as many
 // links as a stack has such frames is deeper than that stack. Its destructor recurses once for each link on the
 // thread that ends it, the main thread.
@@ -189,6 +202,7 @@ TEST_CASE("stack: every recursive reader on a small stack refuses an input deepe
         test::on_stack_of(bytes, [&kept] {
             every_reader(test::levels_beyond_small_stack, kept, outcome::refused, chain_expected);
         });
+        end_chain(std::move(kept.chain));
     }
 }
 
