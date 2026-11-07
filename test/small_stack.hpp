@@ -40,7 +40,7 @@ inline constexpr std::size_t levels_beyond_small_stack = small_stack_bytes;
 inline constexpr std::size_t levels_main_thread_holds = 1024;
 
 // A depth that the stack of every thread of every build holds: a read of it gives its value.
-inline constexpr std::size_t levels_every_stack_holds = 100;
+inline constexpr std::size_t levels_every_stack_holds = 32;
 
 namespace small_stack_detail
 {
