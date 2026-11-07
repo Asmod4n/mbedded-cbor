@@ -579,6 +579,8 @@ TEST_CASE("application tag: one object three times is written three times")
 }
 
 // The iov target of the encoder gives the bytes of the string target, the marks and a long string included.
+// The iov forms exist where the platform has <sys/uio.h>, as in the library (encode.hpp); Windows has none.
+#if __has_include(<sys/uio.h>)
 TEST_CASE("application tag: the iov target with shared references gives the bytes of the string target")
 {
     auto const p = object_of(5000, arr({u(3), u(7)}));
@@ -595,6 +597,7 @@ TEST_CASE("application tag: the iov target with shared references gives the byte
     std::string const joined = *read;
     CHECK_EQ(joined, encoded_shared(v));
 }
+#endif
 
 // Ported from test.rb: 'registered tag + sharedref: distinct instances with equal fields do NOT share'.
 TEST_CASE("application tag: distinct objects with equal content do not share")

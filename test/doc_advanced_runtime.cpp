@@ -349,6 +349,8 @@ TEST_CASE("doc advanced runtime: tag 55799")
     CHECK_EQ(out, "\xd9\xd9\xf7"s);
 }
 
+// The iov forms exist where the platform has <sys/uio.h>, as in the library (encode.hpp); Windows has none.
+#if __has_include(<sys/uio.h>)
 // The section "encode_iov" writes an item into pieces and joins them; the joined bytes are those of encode. The
 // encoder over an iov_writer keeps a string that the caller moved in as a piece of its own.
 TEST_CASE("doc advanced runtime: encode_iov")
@@ -372,3 +374,4 @@ TEST_CASE("doc advanced runtime: encode_iov")
     REQUIRE(kept.has_value());
     CHECK_EQ((**kept).size(), 2u);
 }
+#endif
