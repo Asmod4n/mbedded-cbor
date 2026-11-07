@@ -109,7 +109,7 @@ class indexing_iterator
     std::span<char const> list;
     std::size_t position = 0;
     std::uint64_t length = 0;
-    [[no_unique_address]] Context context{};
+    CBOR_NO_UNIQUE_ADDRESS Context context{};
 
     indexing_iterator(std::shared_ptr<void const> o, std::string_view const b, std::span<char const> const l, std::size_t const p,
                       std::uint64_t const n, Context const c)
@@ -342,7 +342,7 @@ class reflection
     };
 
     template <class U>
-#ifdef __SIZEOF_INT128__
+#ifdef CBOR_HAS_INT128
     static constexpr bool is_wide_integer = std::same_as<U, int128> || std::same_as<U, uint128>;
 #else
     static constexpr bool is_wide_integer = false;
@@ -562,7 +562,7 @@ class reflection
                     n = fixed_size<U, void>() - sizeof(decltype(float_bits(U{})));
                 first = std::vector<char>(std::from_range, zero.first(n));
                 if constexpr (std::same_as<U, bool>
-#ifdef __SIZEOF_INT128__
+#ifdef CBOR_HAS_INT128
                               || std::same_as<U, int128>
 #endif
                 ) {
@@ -1302,7 +1302,7 @@ class reflection
             heads::append_head(encoded, major_type::simple_float, std::to_underlying(simple_value::false_value));
         } else if constexpr (std::is_enum_v<U>) {
             encode_zero_initialized<Root, std::underlying_type_t<U>>(encoded);
-#ifdef __SIZEOF_INT128__
+#ifdef CBOR_HAS_INT128
         } else if constexpr (std::same_as<U, int128> || std::same_as<U, uint128>) {
             heads::append_head(encoded, major_type::tag,
                                std::to_underlying(rfc8949::tag_number::unsigned_bignum));
@@ -1561,7 +1561,7 @@ class reflection
             return std::bit_cast<std::uint32_t>(value);
         else if constexpr (digits == std::numeric_limits<double>::digits)
             return std::bit_cast<std::uint64_t>(value);
-#if defined(__SIZEOF_INT128__) && defined(__STDCPP_FLOAT128_T__)
+#if defined(CBOR_HAS_INT128) && defined(__STDCPP_FLOAT128_T__)
         else
             return std::bit_cast<uint128>(static_cast<std::float128_t>(value));
 #endif
@@ -1572,6 +1572,12 @@ class reflection
         std::size_t items = 0;
         std::size_t bytes = 0;
         bool overflow = false;
+        bool too_deep = false;
+
+        void enter(std::size_t const depth)
+        {
+            too_deep |= !detail::validity::check_nesting_depth(depth, limits::nesting_depth);
+        }
 
         void add_bytes(std::size_t const n)
         {
@@ -1588,7 +1594,7 @@ class reflection
         }
 
         template <class E, class R>
-        void add_elements(R const &range)
+        void add_elements(R const &range, std::size_t const depth)
         {
             if constexpr (fixed_struct_valid<std::remove_cv_t<E>>()) {
                 items += 1;
@@ -1606,11 +1612,11 @@ class reflection
             add_block(std::ranges::size(range), fixed_size<E, Root>());
             if constexpr (!std::is_arithmetic_v<E> && !std::is_enum_v<E>)
                 for (auto const &e : range)
-                    add<E>(e);
+                    add<E>(e, depth + 1);
         }
 
         template <class T>
-        void add(T const &value)
+        void add(T const &value, std::size_t const depth)
         {
             using U = std::remove_cv_t<T>;
             if constexpr (std::is_arithmetic_v<U> || std::is_enum_v<U> || is_wide_integer<U>) {
@@ -1618,15 +1624,18 @@ class reflection
                 using E = typename fixed_length<U>::element;
                 if constexpr (!std::is_arithmetic_v<E> && !std::same_as<E, std::byte>)
                     for (auto const &e : value)
-                        add<E>(e);
+                        add<E>(e, depth);
             } else if constexpr (has_describe_members<U>) {
                 for_each_field<U>([&] CBOR_ALWAYS_INLINE(auto i) {
-                    add<describe::member_t<U, decltype(i)::value>>(describe::get<decltype(i)::value>(value));
+                    add<describe::member_t<U, decltype(i)::value>>(describe::get<decltype(i)::value>(value), depth);
                 });
             } else if constexpr (detail::is_std_variant<U>) {
                 detail::validity::throw_logic_error_if(
                     value.valueless_by_exception(), "cbor::schema::encode: the std::variant holds no value");
                 items += 1;
+                enter(depth + 1);
+                if (too_deep) [[unlikely]]
+                    return;
                 std::visit(
                     [&]<class A>(A const &held) {
                         if constexpr (is_string_alternative<A>) {
@@ -1634,19 +1643,19 @@ class reflection
                         } else {
                             add_bytes(fixed_size<A, Root>());
                             if constexpr (has_describe_members<A>)
-                                add<A>(held);
+                                add<A>(held, depth + 1);
                         }
                     },
                     value);
             } else if constexpr (is_inline_optional<U>) {
                 if (value.has_value())
-                    add<typename U::value_type>(*value);
+                    add<typename U::value_type>(*value, depth);
             } else if constexpr (is_optional<U>) {
                 items += 1;
                 add_bytes(item_head);
                 if (value.has_value()) {
                     add_bytes(fixed_size<typename U::value_type, Root>());
-                    add<typename U::value_type>(*value);
+                    add<typename U::value_type>(*value, depth + 1);
                 }
             } else if constexpr (is_text_range<U> || is_byte_range<U>) {
                 items += 1;
@@ -1657,11 +1666,11 @@ class reflection
                 add_block(std::ranges::size(value),
                           fixed_size<typename U::key_type, Root>() + fixed_size<typename U::mapped_type, Root>());
                 for (auto const &[k, v] : value) {
-                    add<typename U::key_type>(k);
-                    add<typename U::mapped_type>(v);
+                    add<typename U::key_type>(k, depth + 1);
+                    add<typename U::mapped_type>(v, depth + 1);
                 }
             } else {
-                add_elements<std::ranges::range_value_t<U>>(value);
+                add_elements<std::ranges::range_value_t<U>>(value, depth);
             }
         }
     };
@@ -1678,6 +1687,7 @@ class reflection
     struct encode_cursor {
         std::size_t position;
         std::size_t index;
+        std::size_t depth = 0;
     };
 
     template <class Root, description_place D>
@@ -1736,7 +1746,11 @@ class reflection
                         auto const record = out.subspan(item).template first<fixed_size<A, Root>()>();
                         copy_zero_initialized<Root, A>(record);
                         c.position = item + fixed_size<A, Root>();
+                        c.depth += 1;
+                        if (!detail::validity::check_nesting_depth(c.depth, limits::nesting_depth)) [[unlikely]]
+                            return;
                         c = encode_value<Root, A, Exact, D>(out, record, held, c);
+                        c.depth -= 1;
                     }
                 },
                 value);
@@ -1847,7 +1861,7 @@ class reflection
             field.front() = heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::false_value) + value);
         } else if constexpr (std::is_enum_v<U>) {
             position = encode_value<Root, std::underlying_type_t<U>, Exact, D>(out, field, std::to_underlying(value), position);
-#ifdef __SIZEOF_INT128__
+#ifdef CBOR_HAS_INT128
         } else if constexpr (std::same_as<U, int128> || std::same_as<U, uint128>) {
             uint128 magnitude = static_cast<uint128>(value);
             if constexpr (std::same_as<U, int128>) {
@@ -1868,8 +1882,9 @@ class reflection
             M const sign = static_cast<M>(value >> std::numeric_limits<U>::digits);
             field.front() =
                 heads::initial_byte(static_cast<major_type>(sign & 1),
-                                    std::to_underlying(rfc8949::additional_information::one_byte_argument) +
-                                        std::countr_zero(sizeof(U)));
+                                    static_cast<std::uint64_t>(
+                                        std::to_underlying(rfc8949::additional_information::one_byte_argument) +
+                                        std::countr_zero(sizeof(U))));
             auto const bytes = heads::big_endian(static_cast<M>(static_cast<M>(value) ^ sign));
             std::copy(bytes.begin(), bytes.end(), field.template last<sizeof(U)>().begin());
         } else if constexpr (std::is_floating_point_v<U>) {
@@ -1931,13 +1946,15 @@ class reflection
 
     static consteval std::size_t step_end(std::string_view const path, std::size_t const at)
     {
-        return static_cast<std::size_t>(std::ranges::find_first_of(path | std::views::drop(at + 1), std::string_view(".[")) -
-                                        path.begin());
+        std::string_view const rest = path.substr(std::min(at + 1, path.size()));
+        return path.size() - rest.size() +
+               static_cast<std::size_t>(std::ranges::find_first_of(rest, std::string_view(".[")) - rest.begin());
     }
 
     static consteval std::size_t index_end(std::string_view const path, std::size_t const at)
     {
-        return static_cast<std::size_t>(std::ranges::find(path | std::views::drop(at + 1), ']') - path.begin());
+        std::string_view const rest = path.substr(std::min(at + 1, path.size()));
+        return path.size() - rest.size() + static_cast<std::size_t>(std::ranges::find(rest, ']') - rest.begin());
     }
 
     template <class T>
@@ -1959,7 +1976,7 @@ class reflection
             return (head & 1) != 0;
         } else if constexpr (has_fixed_underlying_type<U>) {
             return static_cast<U>(read_fixed_value<std::underlying_type_t<U>>(field));
-#ifdef __SIZEOF_INT128__
+#ifdef CBOR_HAS_INT128
         } else if constexpr (std::same_as<U, int128> || std::same_as<U, uint128>) {
             uint128 const magnitude = heads::read_unsigned128(field.template last<sizeof(U)>());
             if constexpr (std::same_as<U, int128>) {
@@ -1977,7 +1994,7 @@ class reflection
             return static_cast<U>(heads::read_unsigned<M>(field.template last<sizeof(M)>()) ^ sign);
         } else {
             using B = decltype(float_bits(U{}));
-#if defined(__SIZEOF_INT128__) && defined(__STDCPP_FLOAT128_T__)
+#if defined(CBOR_HAS_INT128) && defined(__STDCPP_FLOAT128_T__)
             if constexpr (std::same_as<B, uint128>) {
                 auto const bits = heads::read_unsigned128(field.template last<sizeof(B)>());
                 return static_cast<U>(std::bit_cast<std::float128_t>(bits));
@@ -3241,7 +3258,8 @@ class reflection
     }
 
     template <bool Exact, description_place D, class T>
-    CBOR_ALWAYS_INLINE static std::size_t write_encoded(std::span<char> const encoded, T const &value, second_item<T> const &second)
+    CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> write_encoded(std::span<char> const encoded, T const &value,
+                                                                           second_item<T> const &second)
     {
         static constexpr auto prefix = packing_prefix_of<T, D>();
         constexpr std::size_t fillers = fillers_of<T>();
@@ -3254,7 +3272,8 @@ class reflection
                           heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::undefined)));
         auto const root = encoded.subspan(size - fixed_size<T, T>()).template first<fixed_size<T, T>()>();
         copy_zero_initialized<T, T>(root);
-        encode_value<T, T, Exact, D>(encoded, root, value, encode_cursor{data + fillers, 0});
+        if (encode_value<T, T, Exact, D>(encoded, root, value, encode_cursor{data + fillers, 0}).depth != 0) [[unlikely]]
+            return std::unexpected(error::nesting_depth_exceeded);
         return size;
     }
 
@@ -3460,7 +3479,7 @@ consteval std::size_t reflection::fixed_size()
         return initial_byte_size;
     else if constexpr (reflection::has_fixed_underlying_type<U>)
         return fixed_size<std::underlying_type_t<U>, Root>();
-#ifdef __SIZEOF_INT128__
+#ifdef CBOR_HAS_INT128
     else if constexpr (std::same_as<U, int128> || std::same_as<U, uint128>)
         return heads::head_size(std::to_underlying(rfc8949::tag_number::negative_bignum)) +
                heads::head_size(sizeof(U)) + sizeof(U);
@@ -3482,7 +3501,7 @@ consteval std::size_t reflection::fixed_size()
             return initial_byte_size + sizeof(float);
         else if constexpr (digits == std::numeric_limits<double>::digits)
             return initial_byte_size + sizeof(double);
-#if defined(__SIZEOF_INT128__) && defined(__STDCPP_FLOAT128_T__)
+#if defined(CBOR_HAS_INT128) && defined(__STDCPP_FLOAT128_T__)
         else if constexpr (digits == heads::extended_precision_digits ||
                            digits == std::numeric_limits<std::float128_t>::digits)
             return heads::head_size(std::to_underlying(rfc8746::tag_number::float128_big_endian)) +
@@ -3598,7 +3617,7 @@ public:
         std::string_view encoded;
         std::span<char const, reflection::fixed_size<U, T>()> field;
         detail::directory dir;
-        [[no_unique_address]] std::conditional_t<listed, reflection::reference, std::monostate> items;
+        CBOR_NO_UNIQUE_ADDRESS std::conditional_t<listed, reflection::reference, std::monostate> items;
 
         accessor(std::string_view const b, std::span<char const, reflection::fixed_size<U, T>()> const f, detail::directory const d)
             requires(!listed)
@@ -4093,7 +4112,9 @@ public:
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     {
         reflection::second_item<T> second;
-        second.add(value);
+        second.add(value, 0);
+        if (second.too_deep) [[unlikely]]
+            return std::unexpected(error::nesting_depth_exceeded);
         auto const size = reflection::encoded_size<T, D>(second);
         if (!size) [[unlikely]]
             return std::unexpected(detail::validity::writer_error(size.error()));
@@ -4102,7 +4123,10 @@ public:
             return std::unexpected(detail::validity::writer_error(sum.error()));
         std::size_t const padded = *sum;
         std::string out(padded, '\0');
-        out.resize(reflection::write_encoded<false, D>(std::span<char>(out), value, second));
+        auto const written = reflection::write_encoded<false, D>(std::span<char>(out), value, second);
+        if (!written) [[unlikely]]
+            return std::unexpected(written.error());
+        out.resize(*written);
         return out;
     }
 
@@ -4112,7 +4136,9 @@ public:
     {
         using U = std::remove_cvref_t<Target>;
         reflection::second_item<T> second;
-        second.add(value);
+        second.add(value, 0);
+        if (second.too_deep) [[unlikely]]
+            return std::unexpected(error::nesting_depth_exceeded);
         auto const size = reflection::encoded_size<T, D>(second);
         if (!size) [[unlikely]]
             return std::unexpected(detail::validity::writer_error(size.error()));
@@ -4127,13 +4153,17 @@ public:
                 return std::unexpected(detail::validity::writer_error(total.error()));
             target.reserve(*total);
             target.insert(target.end(), padded, char{});
-            reflection::write_encoded<false, D>(std::span<char>(target).subspan(at), value, second);
-            target.resize(at + *size);
+            auto const written = reflection::write_encoded<false, D>(std::span<char>(target).subspan(at), value, second);
+            target.resize(written ? at + *size : at);
+            if (!written) [[unlikely]]
+                return std::unexpected(written.error());
             return *size;
         } else if constexpr (!encoding::byte_container<U> && requires { std::span<char>(target); }) {
             std::span<char> const out(target);
             if (detail::validity::bytes_fit(padded, out.size())) {
-                reflection::write_encoded<false, D>(out.first(padded), value, second);
+                auto const written = reflection::write_encoded<false, D>(out.first(padded), value, second);
+                if (!written) [[unlikely]]
+                    return std::unexpected(written.error());
                 return *size;
             }
         }
@@ -4142,13 +4172,17 @@ public:
             std::span<char> const out(message);
             if (!detail::validity::bytes_fit(*size, out.size())) [[unlikely]]
                 return std::unexpected(error::no_buffer_space);
-            reflection::write_encoded<true, D>(out.first(*size), value, second);
+            if (auto const written = reflection::write_encoded<true, D>(out.first(*size), value, second); !written) [[unlikely]]
+                return std::unexpected(written.error());
             if (auto const r = message.done(*size); !r) [[unlikely]]
                 return std::unexpected(detail::validity::writer_error(r.error()));
             return *size;
         } else {
             std::string encoded(padded, '\0');
-            encoded.resize(reflection::write_encoded<false, D>(std::span<char>(encoded), value, second));
+            auto const written = reflection::write_encoded<false, D>(std::span<char>(encoded), value, second);
+            if (!written) [[unlikely]]
+                return std::unexpected(written.error());
+            encoded.resize(*written);
             if (auto const r = message.append(encoded); !r) [[unlikely]]
                 return std::unexpected(detail::validity::writer_error(r.error()));
             if (auto const r = message.done(encoded.size()); !r) [[unlikely]]

@@ -1,0 +1,60 @@
+name: windows
+
+on:
+  push:
+    paths:
+      - 'include/**'
+      - 'test/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - 'third_party/**'
+      - 'cbor-test-vectors/**'
+      - 'test-vectors/**'
+      - '.github/workflows/windows.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  test:
+    runs-on: windows-2025
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [Debug, Release]
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Take the MSVC environment and the clang-cl of Visual Studio
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
+          Write-Output "Visual Studio: $vs"
+          cmd /c "`"$vs\VC\Auxiliary\Build\vcvars64.bat`" && set" | ForEach-Object {
+            if ($_ -match '^([^=]+)=(.*)$') { "$($matches[1])=$($matches[2])" >> $env:GITHUB_ENV }
+          }
+          $llvm = "$vs\VC\Tools\Llvm\x64\bin"
+          if (-not (Test-Path "$llvm\clang-cl.exe")) { Write-Output "The image has no clang-cl in $llvm"; exit 1 }
+          $llvm >> $env:GITHUB_PATH
+          & "$llvm\clang-cl.exe" --version
+      - name: Install doctest from the vcpkg of the image
+        run: |
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install doctest:x64-windows
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.config }}
+          -DCMAKE_CXX_COMPILER=clang-cl
+          "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+      - name: Build
+        run: cmake --build build -- -k 0
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --parallel $env:NUMBER_OF_PROCESSORS

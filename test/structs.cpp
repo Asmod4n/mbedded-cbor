@@ -309,7 +309,7 @@ TEST_CASE("structs: a CTAP2 getAssertion response")
 // are simple values of one and two bytes.
 TEST_CASE("structs: bignums and simple values of RFC 8949 Appendix A")
 {
-#ifdef __SIZEOF_INT128__
+#ifdef CBOR_HAS_INT128
     round_trip<cbor::uint128>("\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s,
                                   static_cast<cbor::uint128>(1) << 64);
     round_trip<cbor::int128>("\xc3\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s,
@@ -799,7 +799,11 @@ TEST_CASE("structs: a plain struct in a std::pmr::vector takes the resource of t
         CHECK_EQ(std::string_view(p.name), long_name);
         CHECK_EQ(p.name.get_allocator().resource(), &target);
     }
+    // A debug build of the C++ library of MSVC gives each container a proxy object from its allocator, so a
+    // temporary container with the default resource takes blocks there; the count holds without that proxy.
+#if !defined(_ITERATOR_DEBUG_LEVEL) || _ITERATOR_DEBUG_LEVEL == 0
     CHECK_EQ(fallback.allocations, 0u);
+#endif
     CHECK_GT(target.allocations, 0u);
 }
 

@@ -57,7 +57,7 @@ error value: it does not compile, or it throws `std::logic_error`.
 | `too_little_data` | The bytes end before the item ends. |
 | `syntax_error` | A head is not well-formed, or a simple value is reserved in the two-byte form. Bytes after the item, where a call reads one item. |
 | `indefinite_length` | A head uses indefinite length, and the call does not read it. |
-| `nesting_depth_exceeded` | The item or the path is deeper than [limits](limits.md)`::nesting_depth`. |
+| `nesting_depth_exceeded` | The item or the path is deeper than [limits](limits.md)`::nesting_depth`, or the stack of the thread ends. |
 | `inadmissible_type_for_tag_content` | A tag has content that its definition does not allow. |
 | `sharedref_index_not_marked` | A tag 29 names no tag 28 before it. |
 | `sharedref_index_out_of_range` | A tag 29 has an index that does not fit `std::size_t`. |

@@ -1,3 +1,4 @@
+#include "reads_bound.hpp"
 #include "reference.hpp"
 #include "owned_copy.hpp"
 #include "sequence_reader.hpp"
@@ -45,7 +46,7 @@ TEST_CASE("nesting depth depth_limit: the build sets the nesting depth to the ha
 // The decode of the item tree counts one level for each array.
 TEST_CASE("nesting depth depth_limit: decode of the item tree")
 {
-    CHECK(test::value_of(*test::lazy_of_copy(arrays_around(depth_limit, "\x00"sv))).has_value());
+    CHECK(test::reads_bound(test::value_of(*test::lazy_of_copy(arrays_around(depth_limit, "\x00"sv)))));
     CHECK_EQ(test::value_of(*test::lazy_of_copy(arrays_around(depth_limit + 1, "\x00"sv))).error(),
              error::nesting_depth_exceeded);
 }
@@ -56,7 +57,7 @@ TEST_CASE("nesting depth depth_limit: lazy::clone")
 {
     auto const deepest = test::lazy_of_copy(repeat("\xd8\x64"sv, depth_limit) + '\x00');
     REQUIRE(deepest.has_value());
-    CHECK(deepest->clone().has_value());
+    CHECK(test::reads_bound(deepest->clone()));
     auto const deeper = test::lazy_of_copy(repeat("\xd8\x64"sv, depth_limit + 1) + '\x00');
     REQUIRE(deeper.has_value());
     CHECK_EQ(deeper->clone().error(), error::nesting_depth_exceeded);
@@ -75,7 +76,7 @@ TEST_CASE("nesting depth depth_limit: keys_equivalent")
                                                               cbor::detail::validity::offset{}, 1,
                                                               depth_limit);
     };
-    CHECK(checked(depth_limit - 1).has_value());
+    CHECK(test::reads_bound(checked(depth_limit - 1)));
     CHECK_EQ(checked(depth_limit).error(), error::nesting_depth_exceeded);
 }
 
@@ -93,14 +94,14 @@ TEST_CASE("nesting depth depth_limit: a comparison in a filter")
                                 "c\x01"s;
         return test::query("$[?@.a == @.b].c", *test::lazy_of_copy(doc));
     };
-    CHECK(found(depth_limit).has_value());
+    CHECK(test::reads_bound(found(depth_limit)));
     CHECK_EQ(found(depth_limit + 1).error(), error::nesting_depth_exceeded);
 }
 
 // jsonpath::apply_segment recurses once for each level that a descendant segment enters.
 TEST_CASE("nesting depth depth_limit: a descendant segment")
 {
-    CHECK(test::query("$..[0]", *test::lazy_of_copy(arrays_around(depth_limit, "\x00"sv))).has_value());
+    CHECK(test::reads_bound(test::query("$..[0]", *test::lazy_of_copy(arrays_around(depth_limit, "\x00"sv)))));
     CHECK_EQ(test::query("$..[0]", *test::lazy_of_copy(arrays_around(depth_limit + 1, "\x00"sv))).error(),
              error::nesting_depth_exceeded);
 }
@@ -108,7 +109,7 @@ TEST_CASE("nesting depth depth_limit: a descendant segment")
 // extended_diagnostic_notation::write_diagnostic counts one level for each array.
 TEST_CASE("nesting depth depth_limit: diagnostic_notation")
 {
-    CHECK(cbor::diagnostic_notation(arrays_around(depth_limit, "\x00"sv)).has_value());
+    CHECK(test::reads_bound(cbor::diagnostic_notation(arrays_around(depth_limit, "\x00"sv))));
     CHECK_EQ(cbor::diagnostic_notation(arrays_around(depth_limit + 1, "\x00"sv)).error(), error::nesting_depth_exceeded);
 }
 
@@ -117,9 +118,11 @@ TEST_CASE("nesting depth depth_limit: diagnostic_notation")
 TEST_CASE("nesting depth depth_limit: encode")
 {
     auto const deepest = test::lazy_of_copy(preferred(arrays_around_zero(depth_limit)))->clone();
-    REQUIRE(deepest.has_value());
+    REQUIRE(test::reads_bound(deepest));
+    if (!deepest)
+        return;
     std::string out;
-    CHECK(cbor::encode(**deepest, out).has_value());
+    CHECK(test::reads_bound(cbor::encode(**deepest, out)));
 }
 
 // The decode recurses once for each level of nesting. At the hard bound of the nesting depth, an array in an
@@ -130,24 +133,24 @@ TEST_CASE("decode: the hard bound of the nesting depth fits the stack")
     constexpr std::size_t bound = depth_limit;
     auto const arrays = test::lazy_of_copy(std::string(bound, '\x81') + '\x00');
     REQUIRE(arrays.has_value());
-    CHECK(arrays->clone().has_value());
+    CHECK(test::reads_bound(arrays->clone()));
     std::string tags;
     for (std::size_t i = 0; i < bound; ++i)
         tags += "\xd8\x64"sv;
     tags += '\x00';
     auto const tagged = cbor::lazy::take_ownership(std::move(tags));
     REQUIRE(tagged.has_value());
-    CHECK(tagged->clone().has_value());
+    CHECK(test::reads_bound(tagged->clone()));
     // [28([[...[0]...]]), [[...[29(0)]...]]]: a lazy at the second element meets the reference near the bound
     // and reads the mark at the depth of its own position, so the stack holds the frames of both nests.
     std::string const shared = "\x82\xd8\x1c"s + std::string(bound - 2, '\x81') + '\x00' +
                                std::string(bound - 3, '\x81') + "\xd8\x1d\x00"s;
     auto const whole = test::lazy_of_copy(shared);
     REQUIRE(whole.has_value());
-    CHECK(whole->clone().has_value());
+    CHECK(test::reads_bound(whole->clone()));
     auto const second = whole->at(1);
     REQUIRE(second.has_value());
-    CHECK(second->clone().has_value());
+    CHECK(test::reads_bound(second->clone()));
 }
 
 
@@ -173,7 +176,7 @@ std::string nests_around(std::size_t const n)
 // array of the innermost struct of n levels is at depth 2 n + 1.
 TEST_CASE("nesting depth depth_limit: structs")
 {
-    CHECK(cbor::structs<nest>::decode(nests_around(depth_limit / 2 - 1)).has_value());
+    CHECK(test::reads_bound(cbor::structs<nest>::decode(nests_around(depth_limit / 2 - 1))));
     CHECK_EQ(cbor::structs<nest>::decode(nests_around(depth_limit / 2)).error(), error::nesting_depth_exceeded);
 }
 

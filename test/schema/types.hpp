@@ -1126,13 +1126,21 @@ std::string ticket_bytes()
 // message.
 
 
+// A platform without int128 (32-bit targets, the C++ library of MSVC) holds an int64 in its place, so that every
+// other member of probe and everything keeps its position; the int128 checks run where the platform has it.
+#ifdef CBOR_HAS_INT128
+using wide_integer = cbor::int128;
+#else
+using wide_integer = std::int64_t;
+#endif
+
 struct probe {
     bool flag;
     std::int16_t i16;
     std::uint64_t u64;
     double f64;
     float f32;
-    cbor::int128 i128;
+    wide_integer i128;
     char code[3];
     std::string text;
     std::vector<tire> tires;
@@ -1167,7 +1175,7 @@ namespace schema_types
 
 
 
-probe const sample_probe{true, -300, 1ull << 40, 2.5, -1.5f, cbor::int128{-5}, {'x', 'y', 'z'}, "probe text",
+probe const sample_probe{true, -300, 1ull << 40, 2.5, -1.5f, wide_integer{-5}, {'x', 'y', 'z'}, "probe text",
                          {{17, 1.5f}, {18, 2.0f}}, -9, {300, 1800}, {{7, 8}}};
 
 template <class = void>
@@ -1466,7 +1474,7 @@ bool same(gauge const &a, gauge const &b)
 
 struct everything {
     bool flag;
-    cbor::int128 big;
+    wide_integer big;
     char code[3];
     std::array<engine, 2> engines;
     std::optional<sorted_inner> inner;
@@ -1506,7 +1514,7 @@ namespace schema_types
 
 
 everything const sample_everything{true,
-                                   cbor::int128{-5},
+                                   wide_integer{-5},
                                    {'x', 'y', 'z'},
                                    {{{300, 1800}, {90, 1200}}},
                                    sorted_inner{2, 1},
@@ -1560,8 +1568,10 @@ void golden_fill(T &value, unsigned &seed)
         value = seed % 2 == 1;
     } else if constexpr (std::is_enum_v<T>) {
         value = static_cast<T>(seed % 2);
+#ifdef CBOR_HAS_INT128
     } else if constexpr (std::same_as<T, cbor::int128>) {
         value = -static_cast<cbor::int128>(seed) * 1000003;
+#endif
     } else if constexpr (std::is_arithmetic_v<T>) {
         value = static_cast<T>(seed * 37u);
 #if defined(__STDCPP_FLOAT16_T__)
