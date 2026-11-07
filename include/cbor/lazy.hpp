@@ -18,6 +18,7 @@
 #include <functional>
 #include <iterator>
 #include <limits>
+#include <map>
 #include <memory>
 #include <memory_resource>
 #include <optional>
@@ -374,6 +375,200 @@ inline constexpr bool std::ranges::enable_borrowed_range<cbor::lazy_entries> = t
 namespace cbor
 {
 
+namespace detail
+{
+
+class canonical_ids
+{
+public:
+    enum class kind : std::uint8_t {
+        positive_integer,
+        negative_integer,
+        floating,
+        nan,
+        byte_string,
+        text_string,
+        tag,
+        simple,
+        array,
+        map,
+    };
+
+    struct node {
+        kind of;
+        std::uint64_t number;
+        std::string_view bytes;
+        std::size_t first;
+        std::size_t count;
+    };
+
+    std::uint64_t id_of(node const &n)
+    {
+        auto const [at, added] = ids.try_emplace(n, ids.size());
+        if (!added)
+            children.resize(n.first);
+        return at->second;
+    }
+
+    std::size_t children_end() const
+    {
+        return children.size();
+    }
+
+    std::uint64_t id_of(kind const of, std::uint64_t const number, std::span<std::uint64_t const> const items)
+    {
+        std::size_t const first = children.size();
+        children.insert(children.end(), items.begin(), items.end());
+        return id_of({of, number, {}, first, items.size()});
+    }
+
+    std::size_t size() const
+    {
+        return ids.size();
+    }
+
+    void mark_unequal()
+    {
+        unequal_seen = true;
+    }
+
+    bool unequal() const
+    {
+        return unequal_seen;
+    }
+
+private:
+    struct order {
+        std::vector<std::uint64_t> const *children;
+
+        bool operator()(node const &x, node const &y) const
+        {
+            if (auto const c = std::tie(x.of, x.number, x.bytes, x.count) <=> std::tie(y.of, y.number, y.bytes, y.count);
+                c != 0)
+                return c < 0;
+            return std::ranges::lexicographical_compare(std::span(*children).subspan(x.first, x.count),
+                                                        std::span(*children).subspan(y.first, y.count));
+        }
+    };
+
+    std::vector<std::uint64_t> children;
+    std::map<node, std::uint64_t, order> ids{order{&children}};
+    bool unequal_seen = false;
+};
+
+} // namespace detail
+
+template <bool Checked, class Message>
+std::expected<std::pair<std::uint64_t, detail::validity::offset>, error>
+detail::validity::intern_key(canonical_ids &ids, Message &message, offset const at)
+{
+    if (auto const r = check_recursion_limit(); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    std::string_view encoded;
+    offset item_at = at;
+    if constexpr (std::same_as<Message, std::string_view const>) {
+        encoded = message;
+    } else {
+        encoded = message.encoded;
+        item_at = heads::self_described_cbor_content_at(message.encoded, at);
+    }
+    auto const h = heads::read_raw_head<Checked>(encoded, item_at);
+    if (!h) [[unlikely]]
+        return std::unexpected(h.error());
+    if (error const c = check_definite_length(h->major, h->info).error_or(error{}); c != error{}) [[unlikely]]
+        return std::unexpected(c);
+    using kind = canonical_ids::kind;
+    auto const scalar = [&ids](kind const of, std::uint64_t const number, std::string_view const bytes,
+                               offset const end) -> std::pair<std::uint64_t, offset> {
+        return {ids.id_of({of, number, bytes, ids.children_end(), 0}), end};
+    };
+    if (heads::is_bignum(h->major, h->argument)) {
+        offset content = h->at;
+        if constexpr (!std::same_as<Message, std::string_view const>)
+            content = heads::self_described_cbor_content_at(message.encoded, h->at);
+        heads::decoder<Checked> d{subspan(encoded, content)};
+        auto const read = d.decode_bignum(h->argument);
+        if (!read) [[unlikely]]
+            return std::unexpected(read.error());
+        if (*read) {
+            bool const negative = h->argument == std::to_underlying(rfc8949::tag_number::negative_bignum);
+            return scalar(negative ? kind::negative_integer : kind::positive_integer, **read, {},
+                          distance(encoded, d.encoded));
+        }
+    }
+    switch (h->major) {
+    case major_type::unsigned_integer:
+        return scalar(kind::positive_integer, h->argument, {}, h->at);
+    case major_type::negative_integer:
+        return scalar(kind::negative_integer, h->argument, {}, h->at);
+    case major_type::byte_string:
+    case major_type::text_string: {
+        heads::decoder<Checked> d{subspan(encoded, h->at)};
+        auto const s = d.decode_byte_string(h->argument);
+        if (!s) [[unlikely]]
+            return std::unexpected(s.error());
+        return scalar(h->major == major_type::byte_string ? kind::byte_string : kind::text_string, 0, *s,
+                      distance(encoded, d.encoded));
+    }
+    case major_type::array:
+    case major_type::map: {
+        bool const map = h->major == major_type::map;
+        if (auto const r = check_pending_items(h->major, h->info, h->argument, subspan(encoded, h->at).size());
+            !r) [[unlikely]]
+            return std::unexpected(r.error());
+        std::vector<std::uint64_t> items;
+        std::vector<std::pair<std::uint64_t, std::uint64_t>> pairs;
+        offset next = h->at;
+        for (std::uint64_t i = 0; i < h->argument; ++i) {
+            auto const key = intern_key<Checked>(ids, message, next);
+            if (!key) [[unlikely]]
+                return std::unexpected(key.error());
+            next = key->second;
+            if (!map) {
+                items.push_back(key->first);
+                continue;
+            }
+            auto const value = intern_key<Checked>(ids, message, next);
+            if (!value) [[unlikely]]
+                return std::unexpected(value.error());
+            next = value->second;
+            pairs.emplace_back(key->first, value->first);
+        }
+        if (map) {
+            std::ranges::sort(pairs);
+            for (auto const &[key, value] : pairs) {
+                items.push_back(key);
+                items.push_back(value);
+            }
+        }
+        return std::pair{ids.id_of(map ? kind::map : kind::array, 0, items), next};
+    }
+    case major_type::tag: {
+        auto const content = intern_key<Checked>(ids, message, h->at);
+        if (!content) [[unlikely]]
+            return std::unexpected(content.error());
+        std::array<std::uint64_t, 1> const item{content->first};
+        return std::pair{ids.id_of(kind::tag, h->argument, item), content->second};
+    }
+    case major_type::simple_float:
+        break;
+    }
+    constexpr std::uint8_t half = std::to_underlying(rfc8949::simple_float_information::half_precision_float);
+    constexpr std::uint8_t twice =
+        std::to_underlying(rfc8949::simple_float_information::double_precision_float);
+    if (h->info < half || h->info > twice) {
+        if (error const c = check_simple_value(h->info, h->argument).error_or(error{}); c != error{}) [[unlikely]]
+            return std::unexpected(c);
+        return scalar(kind::simple, h->argument, {}, h->at);
+    }
+    heads::float_key const p = heads::float_key_of(h->info, h->argument);
+    if (p.nan) {
+        constexpr std::uint64_t significand = (std::uint64_t{1} << heads::double_precision.significand_bits) - 1u;
+        return scalar(kind::nan, p.widened & significand, {}, h->at);
+    }
+    return scalar(kind::floating, std::bit_cast<std::uint64_t>(p.value == 0.0 ? 0.0 : p.value), {}, h->at);
+}
+
 template <bool Checked, class First, class Second>
 std::expected<bool, error>
 detail::validity::keys_equivalent(First &first, offset const first_at, Second &second, offset const second_at)
@@ -479,59 +674,14 @@ detail::validity::keys_equivalent(First &first, offset const first_at, Second &s
     case major_type::map: {
         if (h->argument != k->argument)
             return false;
-        auto const pairs_counted = [&]<class From, class In>(From &from, offset const key,
-                                                             offset const value, In &in,
-                                                             std::string_view const in_encoded,
-                                                             offset const in_at)
-            -> std::expected<std::uint64_t, error> {
-            std::uint64_t count = 0;
-            heads::decoder<Checked> e{detail::validity::subspan(in_encoded, in_at)};
-            if (auto const r =
-                    detail::validity::check_pending_items(h->major, h->info, h->argument, e.encoded.size());
-                !r) [[unlikely]]
-                return std::unexpected(r.error());
-            for (std::uint64_t j = 0; j < h->argument; ++j) {
-                offset const other = distance(in_encoded, e.encoded);
-                if (auto const r = skip(e); !r) [[unlikely]]
-                    return std::unexpected(r.error());
-                offset const other_value = distance(in_encoded, e.encoded);
-                if (auto const r = skip(e); !r) [[unlikely]]
-                    return std::unexpected(r.error());
-                auto const key_same = keys_equivalent<Checked>(from, key, in, other);
-                if (!key_same) [[unlikely]]
-                    return std::unexpected(key_same.error());
-                if (!*key_same)
-                    continue;
-                auto const value_same =
-                    keys_equivalent<Checked>(from, value, in, other_value);
-                if (!value_same) [[unlikely]]
-                    return std::unexpected(value_same.error());
-                count += *value_same;
-            }
-            return count;
-        };
-        heads::decoder<Checked> d{detail::validity::subspan(a, h->at)};
-        if (auto const r =
-                detail::validity::check_pending_items(h->major, h->info, h->argument, d.encoded.size());
-            !r) [[unlikely]]
-            return std::unexpected(r.error());
-        for (std::uint64_t i = 0; i < h->argument; ++i) {
-            offset const key = distance(a, d.encoded);
-            if (auto const r = skip(d); !r) [[unlikely]]
-                return std::unexpected(r.error());
-            offset const value = distance(a, d.encoded);
-            if (auto const r = skip(d); !r) [[unlikely]]
-                return std::unexpected(r.error());
-            auto const own = pairs_counted(first, key, value, first, a, h->at);
-            if (!own) [[unlikely]]
-                return std::unexpected(own.error());
-            auto const other = pairs_counted(first, key, value, second, b, k->at);
-            if (!other) [[unlikely]]
-                return std::unexpected(other.error());
-            if (*own != *other)
-                return false;
-        }
-        return true;
+        canonical_ids ids;
+        auto const x = intern_key<Checked>(ids, first, first_at);
+        if (!x) [[unlikely]]
+            return std::unexpected(x.error());
+        auto const y = intern_key<Checked>(ids, second, second_at);
+        if (!y) [[unlikely]]
+            return std::unexpected(y.error());
+        return x->first == y->first;
     }
     case major_type::tag:
         if (h->argument != k->argument)

@@ -105,6 +105,8 @@ namespace detail
 template <bool>
 struct tree_decoder;
 
+class canonical_ids;
+
 }
 
 struct limits {
@@ -419,6 +421,10 @@ public:
     template <bool Checked, class First, class Second>
     static std::expected<bool, error> keys_equivalent(First &first, offset first_at, Second &second,
                                                       offset second_at);
+
+    template <bool Checked, class Message>
+    static std::expected<std::pair<std::uint64_t, offset>, error> intern_key(canonical_ids &ids, Message &message,
+                                                                         offset at);
 
     static constexpr error writer_error(std::errc const e) noexcept
     {
