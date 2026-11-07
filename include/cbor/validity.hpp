@@ -122,7 +122,11 @@ public:
 
     static constexpr std::size_t nesting_depth_limit = 512;
 
+#if defined(_WIN64)
+    static constexpr std::size_t stack_reserve = 32768;
+#else
     static constexpr std::size_t stack_reserve = 16384;
+#endif
 
 #if defined(_WIN64)
     static constexpr std::uintptr_t windows_page_size = 4096;
