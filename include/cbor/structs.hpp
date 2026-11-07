@@ -769,7 +769,10 @@ class generic
             U value{};
             std::ispanstream in(*text);
             in >> std::chrono::parse(format, value);
-            if (!in.fail() && in.peek() == std::ispanstream::traits_type::eof()) {
+            bool valid = !in.fail() && in.peek() == std::ispanstream::traits_type::eof();
+            if constexpr (std::same_as<U, std::chrono::year_month_day>)
+                valid = valid && value.ok();
+            if (valid) {
                 out = value;
                 return {};
             }

@@ -109,6 +109,13 @@ TEST_CASE("golden bytes: every type of this file encodes as before")
     std::size_t const at = expected.find("\nnumbers ") + 1;
     expected.erase(at, expected.find('\n', at) + 1 - at);
 #endif
+    // probe and everything hold an int128; a platform without it writes neither line.
+#ifndef CBOR_HAS_INT128
+    for (char const *const name : {"\nprobe ", "\neverything "}) {
+        std::size_t const line = expected.find(name) + 1;
+        expected.erase(line, expected.find('\n', line) + 1 - line);
+    }
+#endif
     CHECK_EQ(golden_report(), expected);
 }
 
