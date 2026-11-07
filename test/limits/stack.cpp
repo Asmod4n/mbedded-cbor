@@ -14,10 +14,8 @@
 #include <cstddef>
 #include <expected>
 #include <functional>
-#include <iostream>
 #include <optional>
 #include <string>
-#include <string_view>
 #include <cstdint>
 #include <utility>
 #include <variant>
@@ -122,37 +120,19 @@ struct chain_values {
     std::optional<std::expected<cbor::ref<holder>, error>> decoded;
 };
 
-// A crash of the stack on another thread leaves no doctest context in the log. Each reader writes its name and the
-// stack left to stderr before it starts, so a crash names the reader and shows how much stack it had.
-void starts(std::string_view const reader)
-{
-    auto const &bounds = cbor::detail::validity::stack_bounds_of_thread();
-    auto const frame = reinterpret_cast<std::uintptr_t>(__builtin_frame_address(0));
-    std::cerr << reader << ": stack " << bounds.high - bounds.low << " bytes, " << frame - bounds.low << " bytes left"
-              << std::endl;
-}
-
 void every_reader(chain_values &kept)
 {
     std::string const deep = arrays_around_one(levels);
-    starts("decode");
     reads(cbor::decode(std::string(deep)));
     auto const l = test::lazy_of_copy(deep);
     CHECK(l.has_value());
-    starts("clone");
     if (l)
         reads(l->clone());
-    starts("diagnostic_notation");
     reads(cbor::diagnostic_notation(deep));
-    starts("item_size");
     reads(cbor::item_size(deep));
-    starts("compile");
     reads(cbor::jsonpath::compile<cbor::lazy>("$[" + std::string(levels, '[') + "1" + std::string(levels, ']') + "]"));
-    starts("query descendants");
     reads(query(deep, "$..*"));
-    starts("query filter");
     reads(query(deep, "$..[?@ == 1]"));
-    starts("query comparison");
     reads(query("\x82"s + arrays_around_one(levels - 1) + arrays_around_one(levels - 1), "$[?@ == $[1]]"));
     // A struct that holds a std::vector of itself is a map that holds an array (RFC 8949 3.2): two levels for
     // each step; 255 steps put the innermost empty array at depth 511.
@@ -160,17 +140,13 @@ void every_reader(chain_values &kept)
     for (std::size_t i = 0; i < (levels - 1) / 2; ++i)
         message += "\xa1\x61" "c\x81"s;
     message += "\xa1\x61" "c\x80"s;
-    starts("structs decode");
     auto const decoded = cbor::structs<node>::decode(std::move(message));
     reads(decoded);
-    starts("structs encode");
     if (decoded)
         reads(cbor::structs<node>::encode(**decoded));
-    starts("schema encode");
     auto const written = cbor::schema<holder>::encode(kept.chain);
     reads(written);
     if (written) {
-        starts("schema decode");
         kept.decoded = cbor::schema<holder>::decode(std::string(*written));
         reads(*kept.decoded);
     }
