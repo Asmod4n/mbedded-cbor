@@ -1,0 +1,262 @@
+{
+ "what": "map comparison of keys_equivalent and value_equal through at_path: SHALLOW = 4096 maps of 3 keys against a literal map, DEEP = two maps of 64 levels compared, KEY = $[*].c over 4096 maps; a = main, aa = main built again (noise), b = canonical ids",
+ "context": {
+  "flags": "-O2 -march=native -DNDEBUG; g++-16 -std=c++26 -freflection, clang++-23 -std=c++23",
+  "march": "\t\tsapphirerapids",
+  "compiler.g++-16": "g++-16 (Debian 16.2.0-4) 16.2.0",
+  "compiler.clang++-23": "Debian clang version 23.1.5 (2)",
+  "cxx_library": "libstdc++ 16.2.0-4",
+  "c_library": "ldd (Debian GLIBC 2.43-7) 2.43",
+  "kernel": "Linux 6.18.44-fc-v310 #1 SMP @0 x86_64",
+  "scheduler": "cat: /sys/kernel/debug/sched/features: No such file or directory",
+  "virtualization": "hypervisor",
+  "container": "podman mbedded-cbor-sid-bench",
+  "cpu": " Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "cpu_flags_sha256": "39a8dd34f3afdd3862e81b993fb5c5915e50fcc574062958b655b40b631b8663",
+  "cpus": "4",
+  "user": "65534",
+  "nice": "-10",
+  "threads": "1",
+  "commit": "45cd4b5 (b: include/ of linear-equality; a, aa: include/ of main 92866ef); probe file outside the tree, its source in \"probe\"",
+  "rounds": "5",
+  "min_time": "0.5s",
+  "order": "shuffled in each round, each arm its own binary"
+ },
+ "probe": "// Probe: cost of the map comparisons of keys_equivalent and value_equal, old form (main) against canonical ids.\n#include <benchmark/benchmark.h>\n#include <cbor/cbor.hpp>\n#include <string>\n#include <cstdlib>\nusing namespace std::string_literals;\n\nstatic std::string shallow_maps(int n)\n{   // an array of n maps {\"a\": i, \"b\": [i, i], \"c\": \"x\"}; the filter compares each with a literal map\n    std::string s = \"\\x99\" + std::string(1, char(n >> 8)) + std::string(1, char(n & 0xff));\n    for (int i = 0; i < n; ++i) s += \"\\xa3\\x61\" \"a\\x01\\x61\" \"b\\x82\\x01\\x01\\x61\" \"c\\x61x\"s;\n    return s;\n}\nstatic std::string deep_map(int levels)\n{   // {\"k\": {\"k\": ... {\"k\": 1}}} twice in an array, compared with each other\n    std::string one;\n    for (int i = 0; i < levels; ++i) one += \"\\xa1\\x61k\"s;\n    one += \"\\x01\";\n    return \"\\x82\" + one + one;\n}\n#if defined(OP_SHALLOW)\nstatic std::string const doc = shallow_maps(4096);\nstatic char const *const path = \"$[?@ == {\\\"c\\\": \\\"x\\\", \\\"b\\\": [1, 1], \\\"a\\\": 1}]\";\n#elif defined(OP_DEEP)\nstatic std::string const doc = deep_map(64);\nstatic char const *const path = \"$[?@ == $[1]]\";\n#elif defined(OP_KEY)\nstatic std::string const doc = shallow_maps(4096);\nstatic char const *const path = \"$[*].c\";\n#endif\nstatic void op(benchmark::State &st)\n{\n    auto const l = cbor::lazy::take_ownership(std::string(doc));\n    auto const q = cbor::jsonpath::compile<cbor::nodelist>(path);\n    if (!l || !q) std::abort();\n    std::size_t n = 0;\n    for (auto _ : st) {\n        auto const r = l->at_path(*q);\n        if (!r) std::abort();\n        n = r->size();\n        benchmark::DoNotOptimize(n);\n    }\n    st.counters[\"nodes\"] = double(n);\n}\nBENCHMARK(op);\nBENCHMARK_MAIN();\n",
+ "results": {
+  "g++-16.DEEP.a": {
+   "unit": "ns",
+   "nodes": 2.0,
+   "repetitions": [
+    92100.07866491504,
+    94909.04369686358,
+    101070.26309426807,
+    77638.93273241856,
+    96658.92782750502
+   ],
+   "median": 94909.04369686358,
+   "spread": 0.30179871795256696
+  },
+  "clang++-23.SHALLOW.b": {
+   "unit": "ns",
+   "nodes": 4096.0,
+   "repetitions": [
+    3924247.795454376,
+    4471845.183006794,
+    5263404.366906542,
+    4429389.132075766,
+    5073500.2428561
+   ],
+   "median": 4471845.183006794,
+   "spread": 0.34125178664899014
+  },
+  "clang++-23.DEEP.aa": {
+   "unit": "ns",
+   "nodes": 2.0,
+   "repetitions": [
+    103647.06699318654,
+    122208.29218318198,
+    121666.05064377292,
+    115729.2144184913,
+    118399.46737637305
+   ],
+   "median": 118399.46737637305,
+   "spread": 0.1790810461738932
+  },
+  "clang++-23.SHALLOW.a": {
+   "unit": "ns",
+   "nodes": 4096.0,
+   "repetitions": [
+    4030108.543750543,
+    5176076.152173519,
+    4903604.972027084,
+    5158658.541935321,
+    4765569.157894477
+   ],
+   "median": 4903604.972027084,
+   "spread": 0.2843515493397861
+  },
+  "g++-16.SHALLOW.aa": {
+   "unit": "ns",
+   "nodes": 4096.0,
+   "repetitions": [
+    7782135.873683154,
+    7694447.651686183,
+    7342688.0416676,
+    6946379.905263568,
+    6913335.504949296
+   ],
+   "median": 7342688.0416676,
+   "spread": 0.1256702163683332
+  },
+  "g++-16.KEY.b": {
+   "unit": "ns",
+   "nodes": 4096.0,
+   "repetitions": [
+    626087.5383929942,
+    532363.9475982537,
+    569892.4203980637,
+    508454.474789924,
+    597045.2296120375
+   ],
+   "median": 569892.4203980637,
+   "spread": 0.2313541711903946
+  },
+  "clang++-23.KEY.b": {
+   "unit": "ns",
+   "nodes": 4096.0,
+   "repetitions": [
+    794321.0117095764,
+    709016.0829544732,
+    827545.7298920747,
+    814043.2520229749,
+    811331.9218934451
+   ],
+   "median": 811331.9218934451,
+   "spread": 0.1671748353629552
+  },
+  "clang++-23.KEY.aa": {
+   "unit": "ns",
+   "nodes": 4096.0,
+   "repetitions": [
+    808594.4105263138,
+    774457.1505376155,
+    835793.9581840831,
+    801755.7956120438,
+    796626.6757344235
+   ],
+   "median": 801755.7956120438,
+   "spread": 0.07919974346403613
+  },
+  "g++-16.SHALLOW.b": {
+   "unit": "ns",
+   "nodes": 4096.0,
+   "repetitions": [
+    4774995.141508712,
+    4534726.37714315,
+    4580150.196429281,
+    5094764.775363082,
+    5250268.683333085
+   ],
+   "median": 4774995.141508712,
+   "spread": 0.1577917269268012
+  },
+  "clang++-23.SHALLOW.aa": {
+   "unit": "ns",
+   "nodes": 4096.0,
+   "repetitions": [
+    5239987.1680672495,
+    5090835.408164592,
+    4544239.740457079,
+    5039058.176100252,
+    4865978.664336174
+   ],
+   "median": 5039058.176100252,
+   "spread": 0.15310535256667346
+  },
+  "g++-16.KEY.aa": {
+   "unit": "ns",
+   "nodes": 4096.0,
+   "repetitions": [
+    615341.3175046319,
+    686643.6902728947,
+    671712.1886792466,
+    590717.4020811734,
+    590039.1315788655
+   ],
+   "median": 615341.3175046319,
+   "spread": 0.16372568110106256
+  },
+  "clang++-23.DEEP.a": {
+   "unit": "ns",
+   "nodes": 2.0,
+   "repetitions": [
+    115760.62534751827,
+    120306.87942288439,
+    115595.85251164762,
+    111483.55438129035,
+    120908.94610342944
+   ],
+   "median": 115760.62534751827,
+   "spread": 0.08454513111326567
+  },
+  "g++-16.DEEP.b": {
+   "unit": "ns",
+   "nodes": 2.0,
+   "repetitions": [
+    49960.552237737866,
+    46999.99091337553,
+    39226.72998204624,
+    38473.08216524246,
+    52614.720300016415
+   ],
+   "median": 46999.99091337553,
+   "spread": 0.3675722697244639
+  },
+  "clang++-23.DEEP.b": {
+   "unit": "ns",
+   "nodes": 2.0,
+   "repetitions": [
+    52512.48888715368,
+    53325.17478665012,
+    56183.86762129945,
+    50156.522512848795,
+    54378.442456017154
+   ],
+   "median": 53325.17478665012,
+   "spread": 0.12017071372734422
+  },
+  "clang++-23.KEY.a": {
+   "unit": "ns",
+   "nodes": 4096.0,
+   "repetitions": [
+    784389.1750277624,
+    791054.1274854657,
+    887268.7717648125,
+    752922.8103975565,
+    826517.1979044626
+   ],
+   "median": 791054.1274854657,
+   "spread": 0.1784325823470787
+  },
+  "g++-16.KEY.a": {
+   "unit": "ns",
+   "nodes": 4096.0,
+   "repetitions": [
+    597696.1484501583,
+    665506.7471664819,
+    662076.0810295424,
+    647512.1433823423,
+    605948.9215328
+   ],
+   "median": 647512.1433823423,
+   "spread": 0.11345329711787211
+  },
+  "g++-16.DEEP.aa": {
+   "unit": "ns",
+   "nodes": 2.0,
+   "repetitions": [
+    101023.18493939708,
+    107982.55449010685,
+    106359.36053938759,
+    84673.36324416866,
+    89958.39504613956
+   ],
+   "median": 101023.18493939708,
+   "spread": 0.2752836352882613
+  },
+  "g++-16.SHALLOW.a": {
+   "unit": "ns",
+   "nodes": 4096.0,
+   "repetitions": [
+    6904265.124999343,
+    7199057.62025231,
+    7462496.4787227195,
+    6434615.150537474,
+    7532665.913979673
+   ],
+   "median": 7199057.62025231,
+   "spread": 0.1706474649615184
+  }
+ }
+}
