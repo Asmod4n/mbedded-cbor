@@ -67,7 +67,7 @@
     </xsl:when>
     <xsl:otherwise>
       <xsl:call-template name="type"><xsl:with-param name="t" select="compoundname|qualifiedname|self::memberdef[@kind='define']/name"/></xsl:call-template>
-      <xsl:if test="self::compounddef and templateparamlist/param">
+      <xsl:if test="self::compounddef and templateparamlist/param and not(contains(compoundname, '&lt;'))">
         <xsl:text>&lt;</xsl:text>
         <xsl:apply-templates select="templateparamlist/param" mode="argument"/>
         <xsl:text>&gt;</xsl:text>
@@ -86,7 +86,7 @@
   <xsl:for-each select="$d//programlisting[@filename='.example']">
     <xsl:call-template name="fence"><xsl:with-param name="info" select="'example'"/></xsl:call-template>
   </xsl:for-each>
-  <xsl:variable name="paras" select="$d//para[not(ancestor::simplesect or ancestor::parameterlist or ancestor::sect1 or ancestor::sect2 or ancestor::sect3 or ancestor::table)][text()[normalize-space()] or computeroutput or ref or ulink or bold or emphasis or table]"/>
+  <xsl:variable name="paras" select="$d//para[not(ancestor::simplesect or ancestor::parameterlist or ancestor::sect1 or ancestor::sect2 or ancestor::sect3 or ancestor::table or ancestor::itemizedlist)][text()[normalize-space()] or computeroutput or ref or ulink or bold or emphasis or table or itemizedlist]"/>
   <xsl:for-each select="$paras">
     <xsl:value-of select="$nl"/>
     <xsl:variable name="own"><xsl:call-template name="inline"><xsl:with-param name="node" select="."/></xsl:call-template></xsl:variable>
@@ -97,6 +97,14 @@
     </xsl:variable>
     <xsl:variable name="text" select="normalize-space(concat($brief, ' ', $own))"/>
     <xsl:if test="$text != ''"><xsl:value-of select="concat($text, $nl)"/></xsl:if>
+    <xsl:for-each select="itemizedlist">
+      <xsl:if test="$text != '' or position() > 1"><xsl:value-of select="$nl"/></xsl:if>
+      <xsl:for-each select="listitem">
+        <xsl:text>- </xsl:text>
+        <xsl:call-template name="inline"><xsl:with-param name="node" select="para"/></xsl:call-template>
+        <xsl:value-of select="$nl"/>
+      </xsl:for-each>
+    </xsl:for-each>
     <xsl:for-each select="table">
       <xsl:if test="$text != '' or position() > 1"><xsl:value-of select="$nl"/></xsl:if>
       <xsl:for-each select="row">
@@ -239,7 +247,7 @@
     </xsl:if>
   </xsl:for-each>
 </xsl:template>
-<xsl:template match="simplesect|parameterlist|programlisting|sect1|sect2|sect3|title|table" mode="md"/>
+<xsl:template match="simplesect|parameterlist|programlisting|sect1|sect2|sect3|title|table|itemizedlist" mode="md"/>
 
 <xsl:template name="page_of">
   <xsl:param name="refid"/>
@@ -423,7 +431,8 @@
 <xsl:template name="members">
   <xsl:param name="c"/>
   <xsl:param name="indent"/>
-  <xsl:variable name="public" select="$c/sectiondef[starts-with(@kind, 'public')]/memberdef[not(contains(argsstring, '=delete'))]"/>
+  <xsl:variable name="body" select="$c/location"/>
+  <xsl:variable name="public" select="$c/sectiondef[starts-with(@kind, 'public')]/memberdef[not(contains(argsstring, '=delete'))][not($body/@bodystart) or (location/@file = $body/@file and location/@line &gt;= $body/@bodystart and location/@line &lt;= $body/@bodyend)]"/>
   <xsl:variable name="short" select="$c/compoundname"/>
   <xsl:variable name="ctor_name"><xsl:call-template name="last"><xsl:with-param name="s" select="$short"/></xsl:call-template></xsl:variable>
   <xsl:variable name="types" select="$public[@kind='typedef']"/>

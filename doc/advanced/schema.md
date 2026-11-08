@@ -325,7 +325,7 @@ length check of a typed array, the prefix of a list of fixed-size
 structs, the check of a `bool` byte and, in `unverified_decode`, the
 order of the items. An accessor from `unverified_path` gives only
 unverified accessors.
-[reference/schema/unverified.md](../reference/schema/unverified.md) has
+[reference/schema/unverified_path.md](../reference/schema/unverified_path.md) has
 the full list.
 
 ## 8. Errors

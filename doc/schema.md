@@ -214,7 +214,7 @@ error.
 auto const fast = cbor::schema<sensor>::unverified_path(owner);
 ```
 
-[reference/schema/unverified.md](reference/schema/unverified.md) lists
+[reference/schema/unverified_path.md](reference/schema/unverified_path.md) lists
 what each form checks.
 
 More: the bytes of a message, every check, the accessor in detail, the

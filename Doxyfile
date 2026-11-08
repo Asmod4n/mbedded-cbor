@@ -12,7 +12,9 @@ INPUT                  = include/cbor/cbor.hpp \
                          include/cbor/structs.hpp \
                          include/cbor/lazy.hpp \
                          include/cbor/rfc9535.hpp \
-                         include/cbor/query.hpp
+                         include/cbor/query.hpp \
+                         include/cbor/rfc8949.hpp \
+                         include/cbor/schema.hpp
 STRIP_FROM_PATH        = include
 STRIP_FROM_INC_PATH    = include
 EXCLUDE_SYMBOLS        = cbor::detail cbor::detail::* cbor::well_formedness

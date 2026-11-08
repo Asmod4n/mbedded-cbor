@@ -13,9 +13,10 @@ podman run --rm --network none -v "$tree":/src:ro -v "$out":/out mbedded-cbor-do
   xsltproc tools/doc/pages.xsl $xml/index.xml > /tmp/names.txt
   tab=$(printf "\t")
   while IFS="$tab" read -r group name; do
-    base=${name%%<*}
-    base=${base% }
-    file=${base##*::}
+    case $name in
+      cbor::*\<*) file=$(printf %s "$name" | sed "s/^[^<]*< *\([A-Za-z_][A-Za-z0-9_]*\).*/\1/") ;;
+      *) base=${name%%<*}; base=${base% }; file=${base##*::} ;;
+    esac
     case $file in
       "operator[]") file=operator_subscript ;;
     esac

@@ -13,8 +13,11 @@ The examples use the types in [test/doc_types.hpp](../../../test/doc_types.hpp),
 | [decode](decode.md) | reads a whole message into a struct |
 | [path](path.md) | opens a message and gives the root accessor |
 | [at_path](at_path.md) | reads one number, `bool` or enum with no accessor |
-| [unverified_path, unverified_at_path, unverified_decode](unverified.md) | the same reads without the checks of the data, for a peer that you trust |
-| [description, description_place](description.md) | gives the description of a struct, and writes and reads a message without it |
+| [unverified_path](unverified_path.md) | opens a message without the checks of the data, for a peer that you trust |
+| [unverified_at_path](unverified_at_path.md) | reads one value without the checks of the data |
+| [unverified_decode](unverified_decode.md) | reads a whole message without the checks of the data |
+| [description](description.md) | gives the description of a struct |
+| [description_place](description_place.md) | writes and reads a message without the description |
 | [fixed_size](fixed_size.md) | gives the count of bytes of a field of a type |
 | [member_offset](member_offset.md) | gives the offset of a member in its record |
 | [accessor](accessor.md) | reads a part of a message by a path |
