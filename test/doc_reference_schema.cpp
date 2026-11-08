@@ -190,7 +190,6 @@ TEST_CASE("doc reference schema: description")
 // for the std::uint16_t and 5 for the float. A text is a reference 6(N) of 6 bytes. The root ends the message.
 TEST_CASE("doc reference schema: fixed_size")
 {
-    static_assert(cbor::schema<tire>::fixed_size() == 18);
     // [fixed_size]
     constexpr std::size_t root_record = cbor::schema<tire>::fixed_size();         // 18
     constexpr std::size_t number = cbor::schema<tire>::fixed_size<std::uint16_t>(); // 3

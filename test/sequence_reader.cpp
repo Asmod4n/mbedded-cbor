@@ -88,15 +88,15 @@ TEST_CASE("sequence_reader: each form of bytes that a user tries first")
 // and lazy::view. A null std::shared_ptr is a wrong use that the compiler cannot see.
 TEST_CASE("sequence_reader: a char array and a shared_ptr to bytes that are not const are refused")
 {
-    static_assert(!feedable<char const (&)[3]>);
-    static_assert(!feedable<char (&)[3]>);
-    static_assert(!feedable<std::shared_ptr<std::string>>);
-    static_assert(feedable<std::string_view>);
-    static_assert(feedable<std::string &>);
-    static_assert(feedable<std::string const &>);
-    static_assert(feedable<std::string>);
-    static_assert(feedable<std::vector<char>>);
-    static_assert(feedable<std::shared_ptr<std::string const>>);
+    CHECK_FALSE(feedable<char const (&)[3]>);
+    CHECK_FALSE(feedable<char (&)[3]>);
+    CHECK_FALSE(feedable<std::shared_ptr<std::string>>);
+    CHECK(feedable<std::string_view>);
+    CHECK(feedable<std::string &>);
+    CHECK(feedable<std::string const &>);
+    CHECK(feedable<std::string>);
+    CHECK(feedable<std::vector<char>>);
+    CHECK(feedable<std::shared_ptr<std::string const>>);
     cbor::sequence_reader r;
     CHECK_THROWS_AS(r.feed(std::shared_ptr<std::string const>{}), std::logic_error);
 }
@@ -412,8 +412,8 @@ TEST_CASE("sequence_reader: empty() is true when no unread byte is held")
 // from holds no buffer; a call on it is a wrong use and throws.
 TEST_CASE("sequence_reader: copy does not compile, a moved-from reader throws")
 {
-    static_assert(!std::is_copy_constructible_v<cbor::sequence_reader>);
-    static_assert(!std::is_copy_assignable_v<cbor::sequence_reader>);
+    CHECK_FALSE(std::is_copy_constructible_v<cbor::sequence_reader>);
+    CHECK_FALSE(std::is_copy_assignable_v<cbor::sequence_reader>);
     cbor::sequence_reader r;
     r.feed("\x01"sv);
     cbor::sequence_reader moved = std::move(r);
