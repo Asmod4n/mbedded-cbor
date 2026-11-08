@@ -249,8 +249,8 @@ A text, a byte string and a typed array come back as a \f[CR]ref\f[R]
 that holds the owner.
 \f[CR]nodelist\f[R] gives every selected node.
 The form with \f[CR]e\f[R] gives the result type of the query;
-\f[CR]e\f[R] comes from \f[CR]cbor::jsonpath::compile<T>(path)\f[R],
-which parses the path at run time.
+\f[CR]e\f[R] comes from \f[CR]cbor::path::compile<T>(path)\f[R], which
+parses the path at run time.
 A path that is not valid does not compile.
 A path that can select more than one node does not compile, except with
 \f[CR]nodelist\f[R].
