@@ -345,6 +345,17 @@ TEST_CASE("cbor2 decoder: test_string")
 // cbor2.
 TEST_CASE("cbor2 decoder: test_string_invalid_utf8")
 {
+    // Upstream refuses a text string that is not UTF-8. The owner decided that the library never checks UTF-8, and
+    // the decode doc says that decode does not check it, so decode gives the tree with the bytes as they are.
+    std::string const long_payload = unhexlify("7a00010000") + std::string(65535, 'a') + unhexlify("c3");
+    std::vector<std::pair<std::string, std::size_t>> const cases = {
+        {unhexlify("6198"), 1}, {long_payload, 65536}, {unhexlify("6b68656c6c6fff776f726c64"), 11}};
+    for (auto const &[payload, length] : cases) {
+        INFO("payload: ", hexlify(payload.substr(0, 16)));
+        auto const tree = cbor::decode(payload);
+        REQUIRE(tree.has_value());
+        CHECK_EQ((*tree)->get<cbor::type::text_string>()->size(), length);
+    }
     // The indefinite string 7f6198ff: decode.hpp: "@retval indefinite_length a string, an array or a map has an
     // indefinite length". The error comes before the content is read; RFC 8949 3.2.3 lets a decoder refuse
     // indefinite lengths.
@@ -552,6 +563,10 @@ TEST_CASE("cbor2 decoder: test_date")
 TEST_CASE("cbor2 decoder: test_date_epoch_out_of_range")
 {
     check_decoded({{"d8641a7fffffff", tag_of(100, V(2147483647))}});
+    // 2147483647 days lie after the last day that std::chrono::year_month_day holds, and the structs guide gives
+    // number_out_of_range for it (RFC 8943 2).
+    CHECK_EQ(cbor::structs<std::chrono::year_month_day>::decode(unhexlify("d8641a7fffffff")).error_or(error{}),
+             error::number_out_of_range);
 }
 
 // Upstream: test_datetime, test_datetime_secfrac, test_datetime_secfrac_overflow, test_datetime_timezone,
@@ -640,6 +655,20 @@ TEST_CASE("cbor2 decoder: test_datetime_value_too_large")
 TEST_CASE("cbor2 decoder: test_datetime_date_out_of_range")
 {
     CHECK_EQ(decode_error_of(unhexlify("a6c11b00002401001b000000000000ff00")), error::syntax_error);
+}
+
+// Upstream: test_bignum_non_bytestring; cbor2 refuses tag 2 or 3 over an array or a map. RFC 8949 5.3.2 lets a
+// decoder pass a tag that it does not convert. The owner decided that cbor::decode keeps tag 2 or 3 over a content
+// that is not a byte string, and the decode doc says that it is an unsigned_bignum or negative_bignum item over that
+// content.
+TEST_CASE("cbor2 decoder: test_bignum_non_bytestring")
+{
+    for (std::string_view const payload : {"c28105", "c2a10509", "c38100", "c3a10509"}) {
+        INFO("payload: ", payload);
+        auto const tree = cbor::decode(unhexlify(payload));
+        REQUIRE(tree.has_value());
+        CHECK_EQ((*tree)->type, payload[1] == '2' ? cbor::type::unsigned_bignum : cbor::type::negative_bignum);
+    }
 }
 
 // Upstream: test_fraction, test_decimal_precision, test_bigfloat, test_decimal_payload_non_integer and
