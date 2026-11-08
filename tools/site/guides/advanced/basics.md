@@ -69,6 +69,7 @@ the compiler cannot see a wrong use, the library throws
 | `no_buffer_space`, `value_too_large`, `not_enough_memory`, `io_error` | The writer of an encode gives this error. `not_enough_memory` also comes from a refused allocation in `structs` and `schema` decode. |
 | `string_length_exceeded`, `container_elements_exceeded` | A limit is set and the input goes past it (section 4). |
 | `not_singular_query` | `jsonpath::compile<T>` gets a path that is not singular, and `T` is not `nodelist` ([path.md](path.md), section 10). |
+| `amplification_limit_breach` | `encode` of a tree from `decode` would write more than the amplification limits allow (section 4). |
 
 ```cpp
 // owner: a std::shared_ptr<std::string const> with the bytes in the comment above each read
@@ -97,6 +98,8 @@ not set is not in the program.
 |---|---|---|---|---|
 | `CBOR_STRING_LENGTH_DEFAULT` | `cbor::limits::string_length` | `SIZE_MAX` | `SIZE_MAX` | `string_length_exceeded` |
 | `CBOR_CONTAINER_ELEMENTS_DEFAULT` | `cbor::limits::container_elements` | `SIZE_MAX` | `SIZE_MAX` | `container_elements_exceeded` |
+| `CBOR_AMPLIFICATION_ACTIVATION_THRESHOLD_DEFAULT` | `cbor::limits::amplification_activation_threshold` | 8388608 (8 MiB) | `SIZE_MAX` | `amplification_limit_breach` |
+| `CBOR_MAXIMUM_AMPLIFICATION_DEFAULT` | `cbor::limits::maximum_amplification` | 100 | `SIZE_MAX` | `amplification_limit_breach` |
 
 ```sh
 g++ -DCBOR_STRING_LENGTH_DEFAULT=4096 ...
@@ -105,6 +108,15 @@ g++ -DCBOR_STRING_LENGTH_DEFAULT=4096 ...
 A value above the bound does not compile. All translation units of one
 program use the same values: a different value is a violation of the one
 definition rule.
+
+`encode` of a tree writes a value that two references without a cycle
+reach twice, so each level of such references doubles the output. Before
+it writes, `encode` counts the bytes that it would write and the bytes of
+the tree. Past `amplification_activation_threshold` bytes, the output may
+be `maximum_amplification` times the tree and no more; past that, `encode`
+gives `amplification_limit_breach` and writes nothing. The check runs at
+each node, so it can stop before the whole tree is counted. expat bounds
+the expansion of XML entities the same way.
 
 The library does not bound the size of the input. The program bounds it
 before it calls the library.

@@ -87,6 +87,14 @@ extern "C" [[gnu::weak]] char __stack_bottom[];
 #define CBOR_CONTAINER_ELEMENTS_DEFAULT SIZE_MAX
 #endif
 
+#ifndef CBOR_AMPLIFICATION_ACTIVATION_THRESHOLD_DEFAULT
+#define CBOR_AMPLIFICATION_ACTIVATION_THRESHOLD_DEFAULT 8388608
+#endif
+
+#ifndef CBOR_MAXIMUM_AMPLIFICATION_DEFAULT
+#define CBOR_MAXIMUM_AMPLIFICATION_DEFAULT 100
+#endif
+
 namespace cbor
 {
 
@@ -160,6 +168,13 @@ struct limits {
     static constexpr std::size_t string_length = CBOR_STRING_LENGTH_DEFAULT;
     /** @brief The elements of an array, or the pairs of a map; more give `container_elements_exceeded`. */
     static constexpr std::size_t container_elements = CBOR_CONTAINER_ELEMENTS_DEFAULT;
+    /** @brief The bytes that cbor::encode() of a tree writes before `maximum_amplification` applies. */
+    static constexpr std::size_t amplification_activation_threshold = CBOR_AMPLIFICATION_ACTIVATION_THRESHOLD_DEFAULT;
+    /**
+     * @brief The most bytes that cbor::encode() writes for each byte of the tree; more give
+     * `amplification_limit_breach`.
+     */
+    static constexpr std::size_t maximum_amplification = CBOR_MAXIMUM_AMPLIFICATION_DEFAULT;
 };
 
 namespace detail
@@ -274,6 +289,17 @@ public:
         if (value > limit) [[unlikely]]
             return std::unexpected(exceeded);
         return {};
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_amplification(std::uint64_t const direct,
+                                                                                       std::uint64_t const tree)
+    {
+        if (direct <= limits::amplification_activation_threshold) [[likely]]
+            return {};
+        auto const allowed = checked_mul(tree, std::uint64_t{limits::maximum_amplification});
+        if (!allowed || direct <= *allowed) [[likely]]
+            return {};
+        return std::unexpected(error::amplification_limit_breach);
     }
 
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_recursion_limit()
@@ -743,4 +769,12 @@ static_assert(detail::validity::check_limit(limits::container_elements, detail::
                                             error::container_elements_exceeded)
                   .has_value(),
               "CBOR_CONTAINER_ELEMENTS_DEFAULT fits in std::size_t.");
+static_assert(detail::validity::check_limit(limits::amplification_activation_threshold, detail::validity::size_limit,
+                                            error::amplification_limit_breach)
+                  .has_value(),
+              "CBOR_AMPLIFICATION_ACTIVATION_THRESHOLD_DEFAULT fits in std::size_t.");
+static_assert(detail::validity::check_limit(limits::maximum_amplification, detail::validity::size_limit,
+                                            error::amplification_limit_breach)
+                  .has_value(),
+              "CBOR_MAXIMUM_AMPLIFICATION_DEFAULT fits in std::size_t.");
 }

@@ -318,8 +318,18 @@ value of the n-th tag 28 ([value-sharing](http://cbor.schmorp.de/value-sharing))
   gives the index and the item that the n-th tag 28 marks. That item can
   be the item itself or an item above it, so the tree can hold a cycle.
   An index with no tag 28 before it gives `sharedref_index_not_marked`,
-  and `28(29(0))` gives `sharedref_not_defined`. `encode` of a tree with
-  a `shared_reference` gives `unsupported_value`.
+  and `28(29(0))` gives `sharedref_not_defined`.
+- `encode` of a tree from `decode` writes tags 28 and 29 only for a cycle.
+  It walks the tree before it writes, depth first, and follows each
+  `shared_reference` to its item. An item that the walk reaches again
+  while it is inside that item gets a tag 28, and each such edge is a tag
+  29 with the index of that mark. A value that two references reach
+  without a cycle is written in full each time
+  ([basics.md](basics.md), section 4, bounds the growth). The path through
+  references can be deeper than the tree, so `encode` can give
+  `nesting_depth_exceeded` for a tree that `decode` gave. A tree of
+  `clone` keeps tags 28 and 29 as tags, and `encode` writes them as they
+  are.
 - A lazy, `clone`, `at_path`, `query` and `diagnostic_notation` read tag 28
   as a tag over its content and tag 29 as a tag over its content. They
   resolve nothing, check no index and give no error of their own. A step

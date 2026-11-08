@@ -961,6 +961,9 @@ static flexbuffers::Builder fbb;
 #if defined(ARM_S)
 static std::vector<char> buf;
 #endif
+#if defined(ARM_MB_TREE_ENCODE)
+static std::optional<cbor::owning<cbor::item>> decoded;
+#endif
 #if defined(ARM_S_STRING_REUSE)
 static std::string reused;
 #endif
@@ -987,6 +990,9 @@ static std::optional<cbor::ref<std::span<std::byte const>>> bytes_ref;
 
 static void setup()
 {
+#if defined(ARM_MB_TREE_ENCODE)
+    decoded.emplace(*cbor::decode(in));
+#endif
 #if defined(ARM_MB_VARIANT_ENCODE) || defined(ARM_MB_VARIANT_DECODE) || defined(ARM_MB_VARIANT_AT_PATH)
     variant_message = *cbor::schema<bench_variant::home>::encode(variant_sample);
     bytes = &variant_message;
@@ -1114,6 +1120,13 @@ static std::uint64_t op()
         std::abort();
     benchmark::ClobberMemory();
     return buf.size();
+#elif defined(ARM_MB_TREE_ENCODE)
+    std::string out;
+    if (!cbor::encode(**decoded, out))
+        std::abort();
+    benchmark::DoNotOptimize(out.data());
+    benchmark::ClobberMemory();
+    return out.size();
 #elif defined(ARM_MB_TREE)
     auto const r = cbor::decode(in);
     if (!r)

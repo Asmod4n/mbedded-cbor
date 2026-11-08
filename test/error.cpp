@@ -16,7 +16,8 @@ TEST_CASE("error: no error is the value-initialized enum")
           error::sharedref_not_defined, error::reserved_simple_value, error::unsupported_value,
           error::not_indexable, error::index_out_of_bounds, error::key_not_found, error::invalid_path,
           error::incorrect_type, error::number_out_of_range, error::cyclic_data_structure,
-          error::unpopulated_table_index, error::nodelist_too_long, error::duplicate_key})
+          error::unpopulated_table_index, error::nodelist_too_long, error::duplicate_key,
+          error::amplification_limit_breach})
         CHECK_NE(e, error{});
 }
 
@@ -35,7 +36,8 @@ TEST_CASE("error: every error has its own message")
           error::sharedref_not_defined, error::reserved_simple_value, error::unsupported_value,
           error::not_indexable, error::index_out_of_bounds, error::key_not_found, error::invalid_path,
           error::incorrect_type, error::number_out_of_range, error::cyclic_data_structure,
-          error::unpopulated_table_index, error::nodelist_too_long, error::duplicate_key})
+          error::unpopulated_table_index, error::nodelist_too_long, error::duplicate_key,
+          error::amplification_limit_breach})
         CHECK_NE(cbor::make_error_code(e).message(), "unknown cbor error");
 }
 
@@ -61,6 +63,7 @@ TEST_CASE("error: an error copied from std::errc compares equal to that std::err
           error::sharedref_not_defined, error::reserved_simple_value, error::unsupported_value,
           error::not_indexable, error::index_out_of_bounds, error::key_not_found, error::invalid_path,
           error::incorrect_type, error::number_out_of_range, error::cyclic_data_structure,
-          error::unpopulated_table_index, error::nodelist_too_long, error::duplicate_key})
+          error::unpopulated_table_index, error::nodelist_too_long, error::duplicate_key,
+          error::amplification_limit_breach})
         CHECK(std::error_code(e) == e);
 }

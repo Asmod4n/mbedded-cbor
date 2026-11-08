@@ -109,7 +109,12 @@ enum class error {
     /** A container has more items than `cbor::limits::container_elements`. */
     container_elements_exceeded,
     /** `jsonpath::compile<T>` gets a path that is not singular, and `T` is not `nodelist`. */
-    not_singular_query
+    not_singular_query,
+    /**
+     * cbor::encode() of a tree would write more than `cbor::limits::maximum_amplification` times the size of the
+     * tree, past `cbor::limits::amplification_activation_threshold`.
+     */
+    amplification_limit_breach
 };
 
 /**
@@ -226,6 +231,8 @@ public:
             return "container elements exceeded";
         case error::not_singular_query:
             return "not a singular query";
+        case error::amplification_limit_breach:
+            return "amplification limit breach";
         }
         return "unknown cbor error";
     }

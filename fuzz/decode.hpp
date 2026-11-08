@@ -3,6 +3,7 @@
 #include "common.hpp"
 #include "../test/owned_copy.hpp"
 #include "../test/pieces.hpp"
+#include "../test/unfolding.hpp"
 
 #include <cbor/decode.hpp>
 #include <cbor/encode.hpp>
@@ -10,6 +11,7 @@
 #include <cbor/item_size.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <span>
 #include <string>
@@ -131,9 +133,10 @@ inline std::vector<cbor::item const *> nodes_of(cbor::owning<cbor::item> const &
 
 // cbor::decode resolves tags 28 and 29 (theories/ValueSharing.v). A decode that succeeds reads a stream that clone
 // also reads; each shared_reference names a node of the tree (theorem read_no_dangling); the tree has no more nodes
-// than the tree of clone, which keeps one node per tag (read_no_expansion); and encode refuses a tree with a
-// shared_reference. A tree with as many nodes as the tree of clone holds no tag 28, so encode writes it as it writes
-// the tree of clone.
+// than the tree of clone, which keeps one node per tag (read_no_expansion). encode writes a tree with a
+// shared_reference unless the amplification limit, the depth or the bounded span stops it, and decode reads back
+// a graph with the same unfolding (theories/Writer.v write_read_back). A tree with as many nodes as the tree of
+// clone holds no tag 28, so encode writes it as it writes the tree of clone.
 inline void resolving_decode(std::string_view const input)
 {
     auto const resolved = cbor::decode(input);
@@ -152,12 +155,21 @@ inline void resolving_decode(std::string_view const input)
             shared = true;
             require(std::ranges::find(nodes, r->second) != nodes.end());
         }
-    std::string out;
-    auto const written = cbor::encode(**resolved, out);
     if (shared) {
-        require(!written && written.error() == cbor::error::unsupported_value);
+        std::array<char, 1 << 16> bounded;
+        auto const size = cbor::encode(**resolved, std::span(bounded));
+        if (!size) {
+            require(size.error() == cbor::error::amplification_limit_breach ||
+                    size.error() == cbor::error::nesting_depth_exceeded ||
+                    size.error() == cbor::error::no_buffer_space);
+            return;
+        }
+        auto const back = cbor::decode(std::string_view(bounded.data(), *size));
+        require(back.has_value() && test::unfoldings_equal(**resolved, **back));
         return;
     }
+    std::string out;
+    auto const written = cbor::encode(**resolved, out);
     require(written.has_value());
     if (nodes.size() != plain_nodes)
         return;

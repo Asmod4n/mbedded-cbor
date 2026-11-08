@@ -18,6 +18,8 @@
 #include <vector>
 
 #include "item_head.hpp"
+#include "small_stack.hpp"
+#include "unfolding.hpp"
 #include "reference.hpp"
 #include <cbor/structs.hpp>
 
@@ -990,4 +992,163 @@ TEST_CASE("value sharing: clone at an inner offset keeps tags 28, 29 and 55799")
     auto const inner = marked->at(0).and_then([](cbor::lazy const &l) { return l.clone(); });
     REQUIRE(inner.has_value());
     CHECK_EQ((*inner)->get<cbor::type::tag>().value().first, 55799u);
+}
+
+namespace shared_test
+{
+
+// The bytes that cbor::encode gives for the tree that cbor::decode gives for the input.
+std::string encoded_again(std::string_view const input)
+{
+    auto const decoded = cbor::decode(input);
+    REQUIRE(decoded.has_value());
+    std::string out;
+    REQUIRE(cbor::encode(**decoded, out).has_value());
+    return out;
+}
+
+// The shortest head of an unsigned integer (RFC 8949 4.2.1).
+std::string shortest_head_of(std::uint8_t const major, std::uint64_t const argument)
+{
+    if (argument < 24)
+        return std::string(1, static_cast<char>(major << 5 | argument));
+    return head_of(major, argument, argument <= 0xff ? 1 : argument <= 0xffff ? 2 : argument <= 0xffffffff ? 4 : 8);
+}
+
+// k values in a row, each an array of the next one marked and a reference to it: [28([28([... []]), 29(1)]), 29(0)].
+// No value is in a cycle, so the encoder writes each one twice, and the output has 2^(k+1)-1 heads of one byte
+// (theories/Writer.v, write_size).
+std::string diamonds_of(std::size_t const k)
+{
+    std::string s = "\x80";
+    for (std::size_t j = k; j-- > 0;)
+        s = "\x82\xd8\x1c"s + s + "\xd8\x1d"s + shortest_head_of(0, j);
+    return s;
+}
+
+} // namespace shared_test
+
+// theories/Writer.v write: the encoder puts a tag 28 on a node that a back edge of the walk reaches, and a tag 29 with
+// the index of that mark on each back edge. A value reached twice without a cycle is written twice (owner decision).
+// Each expectation is the stream that write gives for the graph that cbor::decode reads.
+TEST_CASE("value sharing: cbor::encode writes the marks of each cycle as Writer.v writes them")
+{
+    using shared_test::encoded_again;
+    // An array that holds itself.
+    CHECK_EQ(encoded_again("\xd8\x1c\x81\xd8\x1d\x00"sv), "\xd8\x1c\x81\xd8\x1d\x00"s);
+    // [28([]), 29(0), []]: the first two elements are one node with no cycle, so both are written in full.
+    CHECK_EQ(encoded_again("\x83\xd8\x1c\x80\xd8\x1d\x00\x80"sv), "\x83\x80\x80\x80"s);
+    // A cycle through a tag that is not an array or map.
+    CHECK_EQ(encoded_again("\xd8\x1c\xd9\x04\xd2\x81\xd8\x1d\x00"sv), "\xd8\x1c\xd9\x04\xd2\x81\xd8\x1d\x00"s);
+    // A map that is its own key.
+    CHECK_EQ(encoded_again("\xd8\x1c\xa1\xd8\x1d\x00\x01"sv), "\xd8\x1c\xa1\xd8\x1d\x00\x01"s);
+    // A mark that no reference names is not written.
+    CHECK_EQ(encoded_again("\x82\xd8\x1c\x01\x02"sv), "\x82\x01\x02"s);
+    // A mark on a value whose cycle passes through a reference without a cycle: root = [X, 29(1)] with
+    // X = 28([T, 29(1)]) and T = 28([29(0)]). The walk enters T again through the last reference, then X through the
+    // reference in T, and the edge of X to T reaches T on the path: T gets a mark there too.
+    CHECK_EQ(encoded_again("\x82\xd8\x1c\x82\xd8\x1c\x81\xd8\x1d\x00\xd8\x1d\x01\xd8\x1d\x01"sv),
+             "\x82\xd8\x1c\x82\xd8\x1c\x81\xd8\x1d\x00\xd8\x1c\x81\xd8\x1d\x00\xd8\x1c\x81\xd8\x1c\x82\xd8\x1d\x03\xd8\x1d\x03"s);
+}
+
+// theories/Writer.v write_read_back: what the encoder writes reads back to the same graph, compared by its unfolding.
+// encode_iov writes the same bytes as encode.
+TEST_CASE("value sharing: cbor::decode reads back what cbor::encode writes")
+{
+    for (std::string_view const input :
+         {"\xd8\x1c\x81\xd8\x1d\x00"sv, "\x83\xd8\x1c\x80\xd8\x1d\x00\x80"sv, "\xd8\x1c\xd9\x04\xd2\x81\xd8\x1d\x00"sv,
+          "\xd8\x1c\xa1\xd8\x1d\x00\x01"sv, "\x82\xd8\x1c\x82\xd8\x1c\x81\xd8\x1d\x00\xd8\x1d\x01\xd8\x1d\x01"sv,
+          "\x83\xd8\x1c\x01\xd8\x1c\xd8\x1d\x00\xd8\x1d\x01"sv, "\xd8\x1c\xa1\x61\x61\xd8\x1c\x82\xd8\x1d\x00\xd8\x1d\x01"sv,
+          "\xd8\x1c\x82\xd8\x1c\x81\xd8\x1d\x00\xd8\x1d\x01"sv}) {
+        CAPTURE(input);
+        auto const tree = cbor::decode(input);
+        REQUIRE(tree.has_value());
+        std::string const out = shared_test::encoded_again(input);
+        auto const back = cbor::decode(out);
+        REQUIRE(back.has_value());
+        CHECK(test::unfoldings_equal(**tree, **back));
+#if __has_include(<sys/uio.h>)
+        auto const pieces = cbor::encode_iov(**tree);
+        REQUIRE(pieces.has_value());
+        std::string joined;
+        for (iovec const &piece : **pieces)
+            joined.append(static_cast<char const *>(piece.iov_base), piece.iov_len);
+        CHECK_EQ(joined, out);
+#endif
+    }
+}
+
+// theories/Writer.v write_size: a value reached twice without a cycle doubles the output with each level. The output
+// of k levels has 2^(k+1)-1 heads; past 8 MiB and 100 times the size of the tree the encoder stops before it writes
+// (expat stops an expansion of entities the same way).
+TEST_CASE("value sharing: cbor::encode writes each copy and stops at the amplification limit")
+{
+    constexpr std::size_t levels = 10;
+    CHECK_EQ(shared_test::encoded_again(shared_test::diamonds_of(levels)).size(), (std::size_t{1} << (levels + 1)) - 1);
+    constexpr std::size_t levels_past_the_limit = 30;
+    auto const tree = cbor::decode(shared_test::diamonds_of(levels_past_the_limit));
+    REQUIRE(tree.has_value());
+    std::string out;
+    CHECK_EQ(cbor::encode(**tree, out).error(), error::amplification_limit_breach);
+    CHECK(out.empty());
+    std::array<char, 64> span{};
+    CHECK_EQ(cbor::encode(**tree, std::span(span)).error(), error::amplification_limit_breach);
+    CHECK(std::ranges::all_of(span, [](char const c) { return c == 0; }));
+}
+
+// A large value with a cycle and no copy is no expansion: the output has the size of the tree.
+TEST_CASE("value sharing: a large value in a cycle is written with no amplification error")
+{
+    constexpr std::size_t length = cbor::limits::amplification_activation_threshold + 1;
+    std::string const input = "\xd8\x1c\x82"s + shared_test::shortest_head_of(3, length) + std::string(length, 'x') +
+                              "\xd8\x1d\x00"s;
+    CHECK_EQ(shared_test::encoded_again(input), input);
+}
+
+// The check of the amplification at its bounds: up to the activation threshold every size passes, past it the
+// output may be the maximum amplification times the tree and not one byte more.
+TEST_CASE("value sharing: the amplification check at its bounds")
+{
+    constexpr std::uint64_t threshold = cbor::limits::amplification_activation_threshold;
+    constexpr std::uint64_t factor = cbor::limits::maximum_amplification;
+    using check = cbor::detail::validity;
+    CHECK(check::check_amplification(threshold, 1).has_value());
+    CHECK_EQ(check::check_amplification(threshold + 1, 1).error(), error::amplification_limit_breach);
+    constexpr std::uint64_t tree = threshold / factor + 1;
+    CHECK(check::check_amplification(factor * tree, tree).has_value());
+    CHECK_EQ(check::check_amplification(factor * tree + 1, tree).error(), error::amplification_limit_breach);
+    CHECK(check::check_amplification(std::numeric_limits<std::uint64_t>::max(),
+                                     std::numeric_limits<std::uint64_t>::max())
+              .has_value());
+}
+
+// Each mark gets the index of its place in the output, in the shortest head (RFC 8949 4.2.1): n values that each
+// hold themselves come back as they were written, with indices of one, two, three and five bytes.
+TEST_CASE("value sharing: cbor::encode writes each index in its shortest head")
+{
+    for (std::size_t const n : {24uz, 25uz, 257uz, 65537uz}) {
+        CAPTURE(n);
+        std::string input = shared_test::shortest_head_of(4, n);
+        for (std::size_t i = 0; i < n; ++i)
+            input += "\xd8\x1c\x81\xd8\x1d"s + shared_test::shortest_head_of(0, i);
+        CHECK_EQ(shared_test::encoded_again(input), input);
+    }
+}
+
+// The path through references can be deeper than the tree: element i of the array is 28([29(i-1)]), so the walk
+// from the last element follows every reference before it. encode stops with nesting_depth_exceeded where the stack
+// ends, although the tree has a depth of three.
+TEST_CASE("value sharing: a path through references deeper than the stack gives nesting_depth_exceeded")
+{
+    std::size_t const n = test::levels_beyond_small_stack;
+    std::string input = shared_test::shortest_head_of(4, n) + "\xd8\x1c\x80"s;
+    for (std::size_t i = 1; i < n; ++i)
+        input += "\xd8\x1c\x81\xd8\x1d"s + shared_test::shortest_head_of(0, i - 1);
+    auto const tree = cbor::decode(input);
+    REQUIRE(tree.has_value());
+    CHECK_EQ(test::error_on_small_stack([&tree] {
+                 std::string out;
+                 return cbor::encode(**tree, out);
+             }),
+             error::nesting_depth_exceeded);
 }
