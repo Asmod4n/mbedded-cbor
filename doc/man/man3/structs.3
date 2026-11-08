@@ -96,8 +96,6 @@ A type that \f[CR]structs\f[R] does not take does not compile.
 .PP
 \f[B]Parameters\f[R]
 .IP \(bu 2
-\f[CR]value\f[R]: the value to write
-.IP \(bu 2
 \f[CR]target\f[R]: a \f[CR]std::string\f[R], a container of
 \f[CR]char\f[R], a \f[CR]std::span<char>\f[R] or a writer
 .SS cbor::structs<T>::decode
@@ -115,12 +113,8 @@ A byte after the item is not read.
 .PP
 \f[B]Parameters\f[R]
 .IP \(bu 2
-\f[CR]encoded\f[R]: the bytes of one item
-.IP \(bu 2
 \f[CR]target\f[R]: the value whose containers and allocator the read
 uses
-.IP \(bu 2
-\f[CR]owner\f[R]: the owner of the bytes
 .SS cbor::describe_members<T>
 Describes how cbor::structs and cbor::schema write and read
 \f[CR]T\f[R].
@@ -159,10 +153,6 @@ A tag of a standard type or an invalid tag does not compile.
 With reflection, a list that differs from the public data members does
 not compile.
 An annotation on \f[CR]T\f[R] does not compile.
-.PP
-\f[B]Parameters\f[R]
-.IP \(bu 2
-\f[CR]T\f[R]: the type that the specialization describes
 .SS cbor::member<P>
 One entry of cbor::describe_members: the key of a member and a pointer
 to that member.
@@ -191,10 +181,6 @@ T}@T{
 The pointer to the member.
 T}
 .TE
-.PP
-\f[B]Parameters\f[R]
-.IP \(bu 2
-\f[CR]P\f[R]: the type of the pointer to the member
 .SS CBOR_MEMBER
 Makes the cbor::member entry of \f[CR]T::m\f[R] with the text of the
 name \f[CR]m\f[R] as its key.
@@ -337,15 +323,6 @@ T}
 \f[CR]std::vector<int>\f[R] takes a typed array, not an array.
 An enum with no fixed underlying type, a \f[CR]long double\f[R] and a
 struct under \f[CR]tagged_item\f[R] do not compile.
-.PP
-\f[B]Parameters\f[R]
-.IP \(bu 2
-\f[CR]T\f[R]: the type of the value
-.SH RETURN VALUE
-.SS cbor::structs<T>::encode
-the bytes
-.SS cbor::structs<T>::decode
-the value with the owner of its bytes
 .SH ERRORS
 .SS cbor::structs<T>::encode
 .IP \(bu 2

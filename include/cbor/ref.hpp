@@ -105,7 +105,6 @@ void copy_views_into_zone(T &value, bump &zone);
  * result: "abc"
  * @endcode
  *
- * @tparam T the type of the value
  * @snippet doc_reference_ref.cpp ref
  * @see cbor::owning
  *
@@ -136,23 +135,13 @@ class CBOR_OWNER ref
     friend class iov_writer;
 
 public:
-    /**
-     * @brief Shares the owner and copies the value.
-     * @param other the ref to copy
-     */
+    /** @brief Shares the owner and copies the value. */
     ref(ref const &other) = default;
 
-    /**
-     * @brief Shares the owner and copies the value.
-     * @param other the ref to copy
-     * @return this ref
-     */
+    /** @brief Shares the owner and copies the value. */
     ref &operator=(ref const &other) = default;
 
-    /**
-     * @brief Takes the owner and the value of @p o, and leaves `T{}` and no owner in @p o.
-     * @param o the ref to move from
-     */
+    /** @brief Takes the owner and the value of @p o, and leaves `T{}` and no owner in @p o. */
     ref(ref &&o) noexcept(std::is_nothrow_move_constructible_v<T> &&
                                         std::is_nothrow_default_constructible_v<T>)
         requires std::is_default_constructible_v<T>
@@ -160,11 +149,7 @@ public:
     {
     }
 
-    /**
-     * @brief Takes the owner and the value of @p o, and leaves `T{}` and no owner in @p o.
-     * @param o the ref to move from
-     * @return this ref
-     */
+    /** @brief Takes the owner and the value of @p o, and leaves `T{}` and no owner in @p o. */
     ref &operator=(ref &&o) noexcept(std::is_nothrow_move_assignable_v<T> &&
                                                    std::is_nothrow_default_constructible_v<T>)
         requires std::is_default_constructible_v<T>
@@ -174,10 +159,7 @@ public:
         return *this;
     }
 
-    /**
-     * @brief Gives the value: a view by value, any other `T` as `T const &`.
-     * @return the value
-     */
+    /** @brief Gives the value: a view by value, any other `T` as `T const &`. */
     std::conditional_t<is_view<T>, T, T const &> operator*() const & CBOR_LIFETIMEBOUND
     {
         return value;
@@ -185,10 +167,7 @@ public:
 
     void operator*() const && = delete;
 
-    /**
-     * @brief Gives the address of the value, so that `r->` reaches its members.
-     * @return the address of the value
-     */
+    /** @brief Gives the address of the value, so that `r->` reaches its members. */
     T const *operator->() const & CBOR_LIFETIMEBOUND
     {
         return &value;
@@ -196,30 +175,21 @@ public:
 
     void operator->() const && = delete;
 
-    /**
-     * @brief Copies the text into a `std::string`.
-     * @return the copy
-     */
+    /** @brief Copies the text into a `std::string`. */
     std::string clone() const
         requires std::same_as<T, std::string_view>
     {
         return std::string(value);
     }
 
-    /**
-     * @brief Copies the bytes into a byte vector.
-     * @return the copy
-     */
+    /** @brief Copies the bytes into a byte vector. */
     std::vector<std::byte> clone() const
         requires std::same_as<T, std::span<std::byte const>>
     {
         return std::vector<std::byte>(value.begin(), value.end());
     }
 
-    /**
-     * @brief Copies the value and the bytes of each view in it into a cbor::owning.
-     * @return the copy
-     */
+    /** @brief Copies the value and the bytes of each view in it into a cbor::owning. */
     owning<T> clone() const
         requires(!std::same_as<T, std::string_view> && !std::same_as<T, std::span<std::byte const>>)
     {
@@ -237,24 +207,14 @@ public:
         return owning<T>(std::shared_ptr<T const>(h, &h->value));
     }
 
-    /**
-     * @brief Compares the values of two refs.
-     * @param a the first ref
-     * @param b the second ref
-     * @return `true` when the values are equal
-     */
+    /** @brief Compares the values of two refs. */
     friend bool operator==(ref const &a, ref const &b)
         requires std::equality_comparable<T>
     {
         return a.value == b.value;
     }
 
-    /**
-     * @brief Compares the value of a ref with a value.
-     * @param a the ref
-     * @param b the value
-     * @return `true` when the values are equal
-     */
+    /** @brief Compares the value of a ref with a value. */
     friend bool operator==(ref const &a, T const &b)
         requires std::equality_comparable<T>
     {
@@ -294,7 +254,6 @@ struct zone_owner;
  * result: "ann"
  * @endcode
  *
- * @tparam T the type of the value
  * @snippet doc_reference_ref.cpp owning
  * @see cbor::ref
  *
@@ -315,10 +274,7 @@ class CBOR_OWNER owning
     friend class ref;
 
 public:
-    /**
-     * @brief Gives the value.
-     * @return the value
-     */
+    /** @brief Gives the value. */
     T const &operator*() const & CBOR_LIFETIMEBOUND
     {
         return *held;
@@ -326,10 +282,7 @@ public:
 
     void operator*() const && = delete;
 
-    /**
-     * @brief Gives the address of the value, so that `own->` reaches its members.
-     * @return the address of the value
-     */
+    /** @brief Gives the address of the value, so that `own->` reaches its members. */
     T const *operator->() const & CBOR_LIFETIMEBOUND
     {
         return held.get();

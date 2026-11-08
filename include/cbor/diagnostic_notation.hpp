@@ -1337,8 +1337,6 @@ class extended_diagnostic_notation
  * result: "1(0)"
  * @endcode
  *
- * @param encoded the bytes of one item
- * @return the text of the item
  * @retval too_little_data the bytes end before the item ends
  * @retval syntax_error a head is not well-formed, a chunk of an indefinite string has the wrong type, or bytes follow
  * the item

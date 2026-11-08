@@ -72,7 +72,6 @@ struct map_key {
  * result: lazy of {0: "t", 2: 1.5}
  * @endcode
  *
- * @tparam P the type of the pointer to the member
  * @snippet doc_types.hpp member
  * @snippet doc_reference_structs.cpp member use
  * @see CBOR_MEMBER
@@ -139,7 +138,6 @@ struct member {
  * result: lazy of 160061({"checksum": 7})
  * @endcode
  *
- * @tparam T the type that the specialization describes
  * @snippet doc_types.hpp describe_members
  * @snippet doc_reference_structs.cpp describe_members use
  * @snippet doc_types.hpp CBOR_DEFINE_TYPE

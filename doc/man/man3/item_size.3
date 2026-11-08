@@ -15,12 +15,6 @@ Gives the size in bytes of the first item in \f[CR]encoded\f[R].
 Checks that the item is well\-formed.
 Bytes after the item do not change the result.
 The call does not recurse: an item of any depth gives its size.
-.PP
-\f[B]Parameters\f[R]
-.IP \(bu 2
-\f[CR]encoded\f[R]: the bytes that start with the item
-.SH RETURN VALUE
-the size of the item in bytes
 .SH ERRORS
 .IP \(bu 2
 \f[CR]too_little_data\f[R]: the bytes end before the item ends

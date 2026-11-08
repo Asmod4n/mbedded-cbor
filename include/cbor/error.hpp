@@ -276,7 +276,6 @@ public:
  * result: std::error_category "cbor"
  * @endcode
  *
- * @return the category
  * @snippet doc_reference_errors.cpp category
  * @see cbor::error_category
  * @see cbor::make_error_code()
@@ -309,8 +308,6 @@ inline std::error_category const &category() noexcept
  * result: 14
  * @endcode
  *
- * @param e the error
- * @return the error code
  * @snippet doc_reference_errors.cpp make_error_code
  * @see std::is_error_code_enum<cbor::error>
  * @see cbor::category()

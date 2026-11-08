@@ -293,14 +293,10 @@ public:
     /**
      * @brief Takes the bytes and the state of @p other.
      * @param other the reader that throws on its next call
-     * @return this reader
      */
     sequence_reader &operator=(sequence_reader &&other) = default;
 
-    /**
-     * @brief Copies the bytes of a view to the end of the sequence.
-     * @param piece the next bytes of the sequence
-     */
+    /** @brief Copies the bytes of a view to the end of the sequence. */
     template <borrowed_range_of_chars Piece>
         requires(!std::is_array_v<Piece>)
     void feed(Piece const piece)
@@ -308,10 +304,7 @@ public:
         bytes_feed(std::string_view(std::span<char const>(piece)));
     }
 
-    /**
-     * @brief Copies the bytes of a container to the end of the sequence.
-     * @param piece the next bytes of the sequence
-     */
+    /** @brief Copies the bytes of a container to the end of the sequence. */
     template <owning_range_of_chars Piece>
         requires(!std::is_array_v<Piece>)
     void feed(Piece const &piece)
@@ -319,20 +312,14 @@ public:
         bytes_feed(std::string_view(std::span<char const>(piece)));
     }
 
-    /**
-     * @brief Takes a container by move and holds it as the next bytes of the sequence.
-     * @param piece the next bytes of the sequence
-     */
+    /** @brief Takes a container by move and holds it as the next bytes of the sequence. */
     template <owning_range_of_chars Piece>
     void feed(Piece &&piece)
     {
         feed(std::make_shared<Piece const>(std::move(piece)));
     }
 
-    /**
-     * @brief Holds the bytes of @p piece as the next bytes of the sequence, without a copy.
-     * @param piece the owner of the next bytes of the sequence
-     */
+    /** @brief Holds the bytes of @p piece as the next bytes of the sequence, without a copy. */
     template <owning_range_of_chars Piece>
     void feed(std::shared_ptr<Piece const> piece)
     {
@@ -354,10 +341,7 @@ public:
         return buffer->size() == item_begin && piece_first == pieces.size();
     }
 
-    /**
-     * @brief Gives the next item when all of its bytes are there.
-     * @return the item as a cbor::lazy that holds its bytes, or its error
-     */
+    /** @brief Gives the next item when all of its bytes are there. */
     std::expected<lazy, error> next()
     {
         throw_logic_error_if_moved_from();

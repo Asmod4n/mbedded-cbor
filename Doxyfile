@@ -23,10 +23,13 @@ PREDEFINED             = CBOR_OWNER= CBOR_LIFETIMEBOUND= CBOR_ALWAYS_INLINE=
 ALIASES                = "complexity=@par Complexity^^"
 EXAMPLE_PATH           = test
 QUIET                  = YES
-WARN_NO_PARAMDOC       = YES
+WARN_NO_PARAMDOC       = NO
+WARN_IF_INCOMPLETE_DOC = NO
 WARN_AS_ERROR          = YES
 GENERATE_HTML          = NO
 GENERATE_LATEX         = NO
 GENERATE_XML           = YES
 XML_PROGRAMLISTING     = NO
 HAVE_DOT               = NO
+CLANG_ASSISTED_PARSING = YES
+CLANG_OPTIONS          = -std=c++26 -Iinclude -Ithird_party/boost_pfr/include

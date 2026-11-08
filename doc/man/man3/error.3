@@ -267,10 +267,6 @@ the cbor::category() of cbor::error.
 The constructor of \f[CR]std::error_code\f[R] from a
 \f[CR]cbor::error\f[R] calls it by argument\-dependent lookup.
 So a program seldom calls it by name.
-.PP
-\f[B]Parameters\f[R]
-.IP \(bu 2
-\f[CR]e\f[R]: the error
 .SS std::is_error_code_enum<cbor::error>
 Marks cbor::error as an error code enum.
 So a \f[CR]cbor::error\f[R] converts to a \f[CR]std::error_code\f[R]
@@ -338,11 +334,6 @@ The elements of an array, or the pairs of a map; more give
 \f[CR]container_elements_exceeded\f[R].
 T}
 .TE
-.SH RETURN VALUE
-.SS cbor::category
-the category
-.SS cbor::make_error_code
-the error code
 .SH EXAMPLES
 .SS cbor::error
 .IP

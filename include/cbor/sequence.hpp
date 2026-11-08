@@ -64,7 +64,6 @@ class sequence
 public:
     /**
      * @brief Makes a sequence that owns the bytes.
-     * @param e the pointer to the bytes of the sequence
      * @throws std::logic_error the pointer @p e is null
      */
     template <owning_range_of_chars Encoded>
@@ -77,8 +76,6 @@ public:
 
     /**
      * @brief Makes a sequence over bytes that @p o owns.
-     * @param o the owner of the bytes
-     * @param e the bytes of the sequence
      * @throws std::logic_error the owner @p o owns nothing
      */
     template <borrowed_range_of_chars Encoded>
@@ -109,19 +106,13 @@ public:
         /** @brief Makes an iterator that is at the end. */
         iterator() = default;
 
-        /**
-         * @brief Gives the bytes from the current item to the end of the sequence.
-         * @return the current item and the bytes after it
-         */
+        /** @brief Gives the bytes from the current item to the end of the sequence. */
         std::string_view encoded() const
         {
             return bytes;
         }
 
-        /**
-         * @brief Gives the current item.
-         * @return the bytes of the item, or its error
-         */
+        /** @brief Gives the current item. */
         value_type operator*() const
         {
             if (!size) [[unlikely]]
@@ -129,10 +120,7 @@ public:
             return detail::validity::substr(bytes, detail::validity::offset{0}, *size);
         }
 
-        /**
-         * @brief Goes to the next item, or to the end after an item with an error.
-         * @return this iterator
-         */
+        /** @brief Goes to the next item, or to the end after an item with an error. */
         iterator &operator++()
         {
             if (!size) [[unlikely]] {
@@ -169,10 +157,7 @@ public:
         return iterator{encoded, item_size(encoded)};
     }
 
-    /**
-     * @brief Gives the end of the range.
-     * @return the sentinel that ends the loop
-     */
+    /** @brief Gives the end of the range. */
     std::default_sentinel_t end() const
     {
         return {};

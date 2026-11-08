@@ -152,8 +152,6 @@ class well_formedness
  * result: 3
  * @endcode
  *
- * @param encoded the bytes that start with the item
- * @return the size of the item in bytes
  * @retval too_little_data the bytes end before the item ends
  * @retval syntax_error a head is not well-formed
  * @retval indefinite_length a head uses indefinite length

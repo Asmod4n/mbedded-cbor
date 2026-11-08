@@ -1419,7 +1419,6 @@ class generic
  * result: ref to reading{4, std::nullopt}
  * @endcode
  *
- * @tparam T the type of the value
  * @snippet doc_reference_structs.cpp structs
  * @see cbor::structs::encode()
  * @see cbor::structs::decode()
@@ -1460,8 +1459,6 @@ public:
      * result: "ann"
      * @endcode
      *
-     * @param encoded the bytes of one item
-     * @return the value with the owner of its bytes
      * @retval incorrect_type an item of another type, or a missing or other tag
      * @retval number_out_of_range a number that the type cannot hold
      * @retval key_not_found no key for a member that is not `std::optional`
@@ -1497,8 +1494,6 @@ public:
 
     /**
      * @brief Reads one item into a `T` from the bytes that @p encoded owns.
-     * @param encoded the owner of the bytes of one item
-     * @return the value with the owner of its bytes
      * @throws std::logic_error @p encoded is null
      */
     template <owning_range_of_chars Encoded>
@@ -1510,9 +1505,7 @@ public:
 
     /**
      * @brief Reads one item into @p target from the bytes that @p encoded owns.
-     * @param encoded the owner of the bytes of one item
      * @param target the value whose containers and allocator the read uses
-     * @return the value with the owner of its bytes
      * @throws std::logic_error @p encoded is null
      */
     template <owning_range_of_chars Encoded>
@@ -1526,9 +1519,6 @@ public:
 
     /**
      * @brief Reads one item into a `T` from bytes that @p owner keeps alive.
-     * @param owner the owner of the bytes
-     * @param encoded the bytes of one item
-     * @return the value with the owner of its bytes
      * @throws std::logic_error @p owner is empty
      */
     template <borrowed_range_of_chars Encoded>
@@ -1540,10 +1530,7 @@ public:
 
     /**
      * @brief Reads one item into @p target from bytes that @p owner keeps alive.
-     * @param owner the owner of the bytes
-     * @param encoded the bytes of one item
      * @param target the value whose containers and allocator the read uses
-     * @return the value with the owner of its bytes
      * @throws std::logic_error @p owner is empty
      */
     template <borrowed_range_of_chars Encoded>
@@ -1575,8 +1562,6 @@ public:
      * result: lazy of {"age": 30, "name": "ann"}
      * @endcode
      *
-     * @param value the value to write
-     * @return the bytes
      * @retval value_too_large the size of the bytes does not fit in `std::size_t`
      * @throws std::logic_error a `std::chrono::year_month_day` that is no valid date
      * @throws std::bad_alloc a refused allocation of the result
@@ -1602,7 +1587,6 @@ public:
 
     /**
      * @brief Appends @p value as one CBOR item in preferred serialization to @p target.
-     * @param value the value to write
      * @param target a `std::string`, a container of `char`, a `std::span<char>` or a writer
      * @return the count of bytes that it appended
      * @retval no_buffer_space a `std::span<char>` that is too small for the bytes, or the writer gives this error

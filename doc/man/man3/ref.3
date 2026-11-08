@@ -70,10 +70,6 @@ vector, or a cbor::owning.
 Only the library makes a \f[CR]ref\f[R].
 \f[CR]*\f[R] and \f[CR]\->\f[R] on a temporary \f[CR]ref\f[R] do not
 compile.
-.PP
-\f[B]Parameters\f[R]
-.IP \(bu 2
-\f[CR]T\f[R]: the type of the value
 .SS cbor::owning<T>
 A value that holds its own copy of the bytes of each view in it.
 cbor::ref::clone() makes it for a \f[CR]T\f[R] that is not a single text
@@ -85,10 +81,6 @@ It has no \f[CR]==\f[R] and no public constructor.
 The value is \f[CR]const\f[R].
 \f[CR]*\f[R] and \f[CR]\->\f[R] on a temporary \f[CR]owning\f[R] do not
 compile.
-.PP
-\f[B]Parameters\f[R]
-.IP \(bu 2
-\f[CR]T\f[R]: the type of the value
 .SH EXAMPLES
 .SS cbor::ref<T>
 .IP
