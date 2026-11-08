@@ -1366,7 +1366,7 @@ inline void lazy::throw_logic_error_if_no_top_level(char const *const message) c
 }
 
 template <borrowed_range_of_chars Encoded>
-std::expected<lazy, error> lazy::view(std::shared_ptr<void const> owner, Encoded const &encoded)
+CBOR_ALWAYS_INLINE inline std::expected<lazy, error> lazy::view(std::shared_ptr<void const> owner, Encoded const &encoded)
 {
     detail::validity::throw_logic_error_if_empty(
         owner, "cbor::lazy::view: the owner of the encoded data item is empty");
