@@ -1,0 +1,247 @@
+{
+ "time": "2026-11-08-192654Z",
+ "block": "diagnostic_notation",
+ "what": "each function of bench/function/diagnostic_notation.cpp over a buffer of COLD_BYTES bytes of items; a = commit a, aa = commit a built again, b = commit b",
+ "commit_a": {
+  "given": "HEAD",
+  "id": "93171258bfa184d713d7f59ca77d27c99842975d"
+ },
+ "commit_b": {
+  "given": "HEAD",
+  "id": "93171258bfa184d713d7f59ca77d27c99842975d"
+ },
+ "bench_sources_commit": "93171258bfa184d713d7f59ca77d27c99842975d-dirty",
+ "image": "mbedded-cbor-sid-bench",
+ "flags": "-std=c++26 -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -DNDEBUG -pipe",
+ "link_flags": "-pie -fuse-ld=mold",
+ "resolved_march": "graniterapids",
+ "compilers": [
+  "g++-16 (Debian 16.2.0-4) 16.2.0",
+  "Debian clang version 23.1.5 (2)"
+ ],
+ "gxx_binary": {
+  "comment": "String dump of section '.comment':\n  [     0]  GCC: (Debian 16.2.0-4) 16.2.0\n  [    1f]  mold 3.0.0 (compatible with GNU ld)",
+  "libraries": {
+   "libbenchmark.so.1.9.1": "/usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1",
+   "libstdc++.so.6": "/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.36",
+   "libc.so.6": "/usr/lib/x86_64-linux-gnu/libc.so.6",
+   "libm.so.6": "/usr/lib/x86_64-linux-gnu/libm.so.6"
+  }
+ },
+ "clang_binary": {
+  "comment": "String dump of section '.comment':\n  [     0]  GCC: (Debian 16.2.0-4) 16.2.0\n  [    1e]  Debian clang version 23.1.5 (2)\n  [    3f]  mold 3.0.0 (compatible with GNU ld)",
+  "libraries": {
+   "libbenchmark.so.1.9.1": "/usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1",
+   "libstdc++.so.6": "/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.36",
+   "libm.so.6": "/usr/lib/x86_64-linux-gnu/libm.so.6",
+   "libc.so.6": "/usr/lib/x86_64-linux-gnu/libc.so.6"
+  }
+ },
+ "libc": "ldd (Debian GLIBC 2.43-7) 2.43",
+ "rounds": 7,
+ "min_time": "0.05s",
+ "cold_bytes": 4194304,
+ "level_two_cache": "2048K",
+ "build": "build: 0.15 s for 6 binaries",
+ "kernel": "6.18.44-fc-v310",
+ "scheduler": "cat: /sys/kernel/sched_ext/state: No such file or directory",
+ "virtualization": "docker ",
+ "container": "podman mbedded-cbor-sid-bench, user 65534, network none",
+ "host_in_container": "no",
+ "host_user": "root 0",
+ "cpu": {
+  "model": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+  "flags_sha256": "15c549c6abba3b2839f5ae941760c3918e8f639fb0814cefc6050e97d8593430",
+  "cpus": 4
+ },
+ "uid": 65534,
+ "priority": "nice -10 granted",
+ "threads": 1,
+ "pinned": false,
+ "cpu_left_to_the_machine": "each bench process is single-threaded on 4 cpus",
+ "gate_before_build": [
+  "gate: vmstat 1 2",
+  "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+  " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+  " 0  0      0 15118996   6800 960716    0    0   363  3921  710    2 14  1 85  0  0  0",
+  " 0  0      0 15123100   6804 960996    0    0    16     0  352  411  1  0 99  0  0  0",
+  "gate: ps --sort=-pcpu (top 7)",
+  "  PID USER     %CPU  NI COMMAND",
+  "   87 root      2.0   0 claude",
+  "    1 root      0.0   0 process_api",
+  "   12 root      0.0   0 kworker/u16:0-kvfree_rcu_reclaim",
+  "11116 root      0.0   0 kworker/u16:1-kvfree_rcu_reclaim",
+  "   43 root      0.0   0 kworker/u16:2-kvfree_rcu_reclaim",
+  "   76 root      0.0 -20 kworker/3:1H-kblockd",
+  "  170 root      0.0   0 environment-man",
+  "gate: busy 1.0% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough"
+ ],
+ "gate_before_runs": [
+  "gate: vmstat 1 2",
+  "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+  " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+  " 0  0      0 15113120   6812 961652    0    0   362  3919  711    2 14  1 85  0  0  0",
+  " 0  0      0 15118180   6812 961244    0    0     0     0  124   93  0  0 100  0  0  0",
+  "gate: ps --sort=-pcpu (top 7)",
+  "  PID USER     %CPU  NI COMMAND",
+  "   87 root      2.0   0 claude",
+  "    1 root      0.0   0 process_api",
+  "   12 root      0.0   0 kworker/u16:0-writeback",
+  "11116 root      0.0   0 kworker/u16:1-kvfree_rcu_reclaim",
+  "   43 root      0.0   0 kworker/u16:2-ext4-rsv-conversion",
+  "   76 root      0.0 -20 kworker/3:1H-kblockd",
+  "  170 root      0.0   0 environment-man",
+  "gate: busy 0.0% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough"
+ ],
+ "steal_limit_percent": 3,
+ "rounds_detail": [
+  {
+   "round": 1,
+   "attempt": 1,
+   "wall_s": 0.7612500190734863,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.0
+  },
+  {
+   "round": 2,
+   "attempt": 2,
+   "wall_s": 0.810981035232544,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.0
+  },
+  {
+   "round": 3,
+   "attempt": 3,
+   "wall_s": 0.8589439392089844,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.29069767441860467
+  },
+  {
+   "round": 4,
+   "attempt": 4,
+   "wall_s": 0.9476578235626221,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.0
+  },
+  {
+   "round": 5,
+   "attempt": 5,
+   "wall_s": 0.8218860626220703,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.0
+  },
+  {
+   "round": 6,
+   "attempt": 6,
+   "wall_s": 0.917665958404541,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.0
+  },
+  {
+   "round": 7,
+   "attempt": 7,
+   "wall_s": 0.8725090026855469,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.2824858757062147
+  }
+ ],
+ "failed": [],
+ "stderr_of_runs": "2026-11-08T19:26:56+00:00\nRunning /run-dir/bin/a.gxx\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.59, 0.34, 0.27\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-08T19:26:56+00:00\nRunning /run-dir/bin/aa.clang\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.59, 0.34, 0.27\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-08T19:26:56+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.62, 0.35, 0.28\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-08T19:26:57+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.62, 0.35, 0.28\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-08T19:26:57+00:00\nRunning /run-dir/bin/b.gxx\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.62, 0.35, 0.28\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-08T19:26:57+00:00\nRunning /run-dir/bin/a.clang\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.62, 0.35, 0.28\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-08T19:26:57+00:00\nRunning /run-dir/bin/aa.clang\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.62, 0.35, 0.28\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-08T19:26:57+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.62, 0.35, 0.28\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-08T19:26:57+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.62, 0.35, 0.28\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-08T19:26:57+00:00\nRunning /run-dir/bin/b.gxx\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.62, 0.35, 0.28\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-08T19:26:58+00:00\nRunning /run-dir/bin/a.clang\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.62, 0.35, 0.28\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-08T19:26:58+00:00\nRunning /run-dir/bin/a.gxx\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.62, 0.35, 0.28\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-08T19:26:58+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.62, 0.35, 0.28\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-08T19:26:58+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 K",
+ "noise_floor": {
+  "a_over_a_max_deviation_percent": 1.341328074255388
+ },
+ "cells": {
+  "gxx": {
+   "diagnostic_notation": {
+    "a": {
+     "repetitions_ns": [
+      50227381.00024071,
+      47961565.5001453,
+      48041577.00004908,
+      49685728.49998054,
+      47817587.00005412,
+      48073503.00006874,
+      72482360.00009456
+     ],
+     "median_ns": 48073503.00006874,
+     "spread": 0.515809653883466
+    },
+    "aa": {
+     "repetitions_ns": [
+      48556377.0000681,
+      48179631.00003908,
+      48320182.49999237,
+      48710813.50006534,
+      48094243.000150524,
+      45961280.00002864,
+      48117360.999867745
+     ],
+     "median_ns": 48179631.00003908,
+     "spread": 0.05982282260274285
+    },
+    "b": {
+     "repetitions_ns": [
+      51669656.499825574,
+      48503821.999929644,
+      47317233.000057966,
+      48107933.99997237,
+      49842899.00016847,
+      48103772.50009879,
+      47168406.00008254
+     ],
+     "median_ns": 48107933.99997237,
+     "spread": 0.09542935370203431
+    },
+    "a_over_a_ratio": 1.002207619444129,
+    "b_over_a_ratio": 1.000716215747864,
+    "difference_over_noise": false
+   }
+  },
+  "clang": {
+   "diagnostic_notation": {
+    "a": {
+     "repetitions_ns": [
+      50562012.0002277,
+      51768763.9999167,
+      79806022.99994643,
+      67107398.000189275,
+      51610267.00034199,
+      50714265.000351585,
+      50402587.00000777
+     ],
+     "median_ns": 51610267.00034199,
+     "spread": 0.5833715638432235
+    },
+    "aa": {
+     "repetitions_ns": [
+      75014842.99973527,
+      50918003.99986824,
+      50429734.999852374,
+      50847569.99985984,
+      51656395.00000907,
+      49886700.50011024,
+      52116999.99972552
+     ],
+     "median_ns": 50918003.99986824,
+     "spread": 0.5037042387593764
+    },
+    "b": {
+     "repetitions_ns": [
+      52445570.00014538,
+      50140153.000029385,
+      50740967.99990002,
+      50476914.00000076,
+      56966291.000208005,
+      50346322.00022315,
+      50956175.00001026
+     ],
+     "median_ns": 50740967.99990002,
+     "spread": 0.13614114819662837
+    },
+    "a_over_a_ratio": 0.9865867192574461,
+    "b_over_a_ratio": 0.9831564715517513,
+    "difference_over_noise": true
+   }
+  }
+ }
+}

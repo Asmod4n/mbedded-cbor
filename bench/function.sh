@@ -14,11 +14,12 @@ root=${CBOR_BUILD_ROOT:-/home/user/mbedded-cbor-build}
 cache=${CCACHE_HOST_DIR:-/home/user/.ccache}
 image=${BENCH_IMAGE:-mbedded-cbor-sid-bench}
 RESULTS_DIR=${RESULTS_DIR:-$here/results}
-ROUNDS=${ROUNDS:-7}
-MIN_TIME=${MIN_TIME:-0.2s}
+ROUNDS=${ROUNDS:-9}
+MIN_TIME=${MIN_TIME:-0.05s}
 level_two=$(cat /sys/devices/system/cpu/cpu0/cache/index2/size)
 COLD_BYTES=${COLD_BYTES:-$((2 * ${level_two%K} * 1024))}
 TIME_LIMIT=${TIME_LIMIT:-300}
+[ -n "${NOISE_FLOOR_PERCENT:-}" ] || { echo "NOISE_FLOOR_PERCENT: the largest deviation of B/A from 1 with commit a as commit b on this machine" >&2; exit 2; }
 GATE_SECONDS=${GATE_SECONDS:-2}
 
 for tool in podman git flock vmstat ps python3 tar; do
@@ -69,7 +70,7 @@ gate > "$run/gate-before-runs" 2>&1 || { cat "$run/gate-before-runs"; echo "the 
 podman run --rm --network none --user 65534:65534 --cap-add SYS_NICE --timeout="$TIME_LIMIT" --init \
 	-v "$run":/run-dir:U -v "$here/function-run.sh":/function-run.sh:ro \
 	-e ROUNDS="$ROUNDS" -e MIN_TIME="$MIN_TIME" -e COLD_BYTES="$COLD_BYTES" -e FLAGS="${FLAGS:-}" \
-	-e BLOCK="$block" -e STAMP="$stamp" -e COMMIT_A="$commit_a" -e COMMIT_B="$commit_b" -e BENCH_COMMIT="$bench_commit" \
+	-e NOISE_FLOOR_PERCENT="$NOISE_FLOOR_PERCENT" -e BLOCK="$block" -e STAMP="$stamp" -e COMMIT_A="$commit_a" -e COMMIT_B="$commit_b" -e BENCH_COMMIT="$bench_commit" \
 	-e IMAGE="$image" "$image" bash /function-run.sh measure
 
 cp "$run/out/result.json" "$RESULTS_DIR/function-$block-$stamp.json"

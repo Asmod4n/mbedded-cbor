@@ -58,3 +58,39 @@ The binaries are deleted at the end of the run.
 ROUNDS (10), MIN_TIME (0.2s), DOCS, ARMS, JOBS, GXX, CLANGXX, REPO,
 RESULTS_DIR, GATE_MAX_BUSY_PERCENT (10), GATE_MAX_STEAL_PERCENT (0).
 COMMIT_TREES names a directory with `<commit>/include` and `<commit>.id`; it replaces git.
+
+# function.sh
+
+The script measures the functions of one block for two commits, in podman.
+
+## Usage
+
+    NOISE_FLOOR_PERCENT=<percent> bench/function.sh <commit-a> <commit-b> <block>
+
+`<block>` names the file `bench/function/<block>.cpp`. Each file holds one Google Benchmark per function of the block.
+Each benchmark checks its output once against RFC 8949, then writes every item of a buffer of COLD_BYTES bytes in each
+iteration. NOISE_FLOOR_PERCENT is the largest deviation of B/A from 1 that the script found on this machine with commit
+a as commit b. The image is built with
+`podman build -t mbedded-cbor-sid-bench -f containers/debian-sid-bench.Containerfile containers`.
+
+## Method
+
+1. The script holds the lock of test/run.sh from the first build to the result file.
+2. The gate of gate.sh runs on the host before the build and before the first round.
+3. The script exports include/ of each commit with `git archive`. The bench file comes from the working tree.
+4. One container builds g++-16 and clang++-23 binaries for a, aa (commit a again) and b, all at once. It uses a
+   precompiled header of the standard headers and of Google Benchmark, ccache and mold.
+5. A second container runs the rounds as user 65534 with no network. Each round runs every binary once, in an order
+   that rotates. A round with more than 3 percent steal is discarded and run again.
+6. B differs from A when the two-tailed Mann-Whitney U test of compare.py (Google Benchmark) finds a difference at
+   alpha 0.05, and B/A is further from 1 than A/A and than NOISE_FLOOR_PERCENT.
+
+## Result
+
+One file: `bench/results/function-<block>-<UTC time>.json`, with the context of run-desktop.sh and the output of
+compare.py. The script prints one table with a row per function and a column per build.
+
+## Variables
+
+ROUNDS (9), MIN_TIME (0.05s), COLD_BYTES (twice the level 2 cache), FLAGS, TIME_LIMIT (300 s), GATE_SECONDS (2),
+CBOR_BUILD_ROOT, CCACHE_HOST_DIR, BENCH_IMAGE, RESULTS_DIR.

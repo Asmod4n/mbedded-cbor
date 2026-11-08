@@ -1,0 +1,304 @@
+{
+ "time": "2026-11-08-193008Z",
+ "block": "diagnostic_notation",
+ "what": "each function of bench/function/diagnostic_notation.cpp over a buffer of COLD_BYTES bytes of items; a = commit a, aa = commit a built again, b = commit b",
+ "commit_a": {
+  "given": "HEAD",
+  "id": "93171258bfa184d713d7f59ca77d27c99842975d"
+ },
+ "commit_b": {
+  "given": "HEAD",
+  "id": "93171258bfa184d713d7f59ca77d27c99842975d"
+ },
+ "bench_sources_commit": "93171258bfa184d713d7f59ca77d27c99842975d-dirty",
+ "image": "mbedded-cbor-sid-bench",
+ "flags": "-std=c++26 -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -DNDEBUG -pipe",
+ "link_flags": "-pie -fuse-ld=mold",
+ "resolved_march": "graniterapids",
+ "compilers": [
+  "g++-16 (Debian 16.2.0-4) 16.2.0",
+  "Debian clang version 23.1.5 (2)"
+ ],
+ "gxx_binary": {
+  "comment": "String dump of section '.comment':\n  [     0]  GCC: (Debian 16.2.0-4) 16.2.0\n  [    1f]  mold 3.0.0 (compatible with GNU ld)",
+  "libraries": {
+   "libbenchmark.so.1.9.1": "/usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1",
+   "libstdc++.so.6": "/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.36",
+   "libc.so.6": "/usr/lib/x86_64-linux-gnu/libc.so.6",
+   "libm.so.6": "/usr/lib/x86_64-linux-gnu/libm.so.6"
+  }
+ },
+ "clang_binary": {
+  "comment": "String dump of section '.comment':\n  [     0]  GCC: (Debian 16.2.0-4) 16.2.0\n  [    1e]  Debian clang version 23.1.5 (2)\n  [    3f]  mold 3.0.0 (compatible with GNU ld)",
+  "libraries": {
+   "libbenchmark.so.1.9.1": "/usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1",
+   "libstdc++.so.6": "/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.36",
+   "libm.so.6": "/usr/lib/x86_64-linux-gnu/libm.so.6",
+   "libc.so.6": "/usr/lib/x86_64-linux-gnu/libc.so.6"
+  }
+ },
+ "libc": "ldd (Debian GLIBC 2.43-7) 2.43",
+ "rounds": 9,
+ "min_time": "0.05s",
+ "cold_bytes": 4194304,
+ "level_two_cache": "2048K",
+ "build": "build: 0.11 s for 6 binaries",
+ "kernel": "6.18.44-fc-v310",
+ "scheduler": "cat: /sys/kernel/sched_ext/state: No such file or directory",
+ "virtualization": "docker ",
+ "container": "podman mbedded-cbor-sid-bench, user 65534, network none",
+ "host_in_container": "no",
+ "host_user": "root 0",
+ "cpu": {
+  "model": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+  "flags_sha256": "15c549c6abba3b2839f5ae941760c3918e8f639fb0814cefc6050e97d8593430",
+  "cpus": 4
+ },
+ "uid": 65534,
+ "priority": "nice -10 granted",
+ "threads": 1,
+ "pinned": false,
+ "cpu_left_to_the_machine": "each bench process is single-threaded on 4 cpus",
+ "gate_before_build": [
+  "gate: vmstat 1 2",
+  "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+  " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+  " 0  0      0 13623204  45628 2265976    0    0   349  4900  835    2 14  1 85  0  0  0",
+  " 0  0      0 13639632  45628 2266016    0    0     0     0  114  114  0  0 100  0  0  0",
+  "gate: ps --sort=-pcpu (top 7)",
+  "  PID USER     %CPU  NI COMMAND",
+  "   87 root      1.9   0 claude",
+  "    1 root      0.0   0 process_api",
+  "   12 root      0.0   0 kworker/u16:0-ext4-rsv-conversion",
+  "   43 root      0.0   0 kworker/u16:2-writeback",
+  "   76 root      0.0 -20 kworker/3:1H-kblockd",
+  "11116 root      0.0   0 kworker/u16:1-writeback",
+  "   55 root      0.0 -20 kworker/0:1H-kblockd",
+  "gate: busy 0.0% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough"
+ ],
+ "gate_before_runs": [
+  "gate: vmstat 1 2",
+  "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+  " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+  " 0  0      0 13646868  45632 2266716    0    0   349  4898  836    2 14  1 85  0  0  0",
+  " 0  0      0 13652468  45632 2266312    0    0     0     0  205  184  0  0 100  0  0  0",
+  "gate: ps --sort=-pcpu (top 7)",
+  "  PID USER     %CPU  NI COMMAND",
+  "   87 root      1.9   0 claude",
+  "    1 root      0.0   0 process_api",
+  "   12 root      0.0   0 kworker/u16:0-writeback",
+  "   43 root      0.0   0 kworker/u16:2-events_unbound",
+  "   76 root      0.0 -20 kworker/3:1H-kblockd",
+  "11116 root      0.0   0 kworker/u16:1-writeback",
+  "   55 root      0.0 -20 kworker/0:1H-kblockd",
+  "gate: busy 0.0% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough"
+ ],
+ "steal_limit_percent": 3,
+ "rounds_detail": [
+  {
+   "round": 1,
+   "attempt": 1,
+   "wall_s": 0.8887538909912109,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.2824858757062147
+  },
+  {
+   "round": 2,
+   "attempt": 2,
+   "wall_s": 0.9333779811859131,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.26666666666666666
+  },
+  {
+   "round": 3,
+   "attempt": 3,
+   "wall_s": 0.843559980392456,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.5865102639296188
+  },
+  {
+   "round": 4,
+   "attempt": 4,
+   "wall_s": 0.8149991035461426,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.0
+  },
+  {
+   "round": 5,
+   "attempt": 5,
+   "wall_s": 0.8179597854614258,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.3067484662576687
+  },
+  {
+   "round": 6,
+   "attempt": 6,
+   "wall_s": 0.7298200130462646,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.3448275862068966
+  },
+  {
+   "round": 7,
+   "attempt": 7,
+   "wall_s": 0.8510181903839111,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.0
+  },
+  {
+   "round": 8,
+   "attempt": 8,
+   "wall_s": 0.7768809795379639,
+   "kept": true,
+   "steal_percent_of_cpu_time": 1.597444089456869
+  },
+  {
+   "round": 9,
+   "attempt": 9,
+   "wall_s": 0.7163739204406738,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.3460207612456747
+  }
+ ],
+ "failed": [],
+ "stderr_of_runs": "2026-11-08T19:30:10+00:00\nRunning /run-dir/bin/a.gxx\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.66, 0.48, 0.34\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-08T19:30:10+00:00\nRunning /run-dir/bin/aa.clang\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.66, 0.48, 0.34\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-08T19:30:10+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.66, 0.48, 0.34\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-08T19:30:11+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.66, 0.48, 0.34\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-08T19:30:11+00:00\nRunning /run-dir/bin/b.gxx\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.66, 0.48, 0.34\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-08T19:30:11+00:00\nRunning /run-dir/bin/a.clang\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.66, 0.48, 0.34\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-08T19:30:11+00:00\nRunning /run-dir/bin/aa.clang\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.66, 0.48, 0.34\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-08T19:30:11+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.66, 0.48, 0.34\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-08T19:30:11+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.66, 0.48, 0.34\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-08T19:30:11+00:00\nRunning /run-dir/bin/b.gxx\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.66, 0.48, 0.34\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-08T19:30:12+00:00\nRunning /run-dir/bin/a.clang\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.68, 0.49, 0.34\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-08T19:30:12+00:00\nRunning /run-dir/bin/a.gxx\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.68, 0.49, 0.34\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-08T19:30:12+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.68, 0.49, 0.34\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-08T19:30:12+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 K",
+ "noise_floor": {
+  "a_over_a_max_deviation_percent": 5.040529022149243
+ },
+ "difference_test": "two-tailed Mann-Whitney U test of compare.py of Google Benchmark over the rounds, alpha 0.05, and B/A further from 1 than A/A and than the noise floor of the machine (2.1 %)",
+ "compare_text": {
+  "gxx": {
+   "a_aa": "Comparing /run-dir/out/merged.a.gxx.json to /run-dir/out/merged.aa.gxx.json\nBenchmark                             Time             CPU      Time Old      Time New       CPU Old       CPU New\n------------------------------------------------------------------------------------------------------------------\ndiagnostic_notation                -0.1759         -0.1750            71            58            70            58\ndiagnostic_notation                -0.0946         -0.0944            53            48            53            48\ndiagnostic_notation                +0.1222         +0.1149            48            54            48            54\ndiagnostic_notation                +0.0194         +0.0119            48            49            48            49\ndiagnostic_notation                +0.0058         -0.0117            48            49            48            48\ndiagnostic_notation                -0.3908         -0.3936            79            48            78            48\ndiagnostic_notation                -0.3033         -0.3078            70            49            70            48\ndiagnostic_notation                +0.2832         +0.3009            52            66            51            66\ndiagnostic_notation                +0.0449         +0.0534            49            51            48            51\ndiagnostic_notation_pvalue          0.5962          0.4268      U Test, Repetitions: 9 vs 9\nOVERALL_GEOMEAN                    -0.0765         -0.0785             0             0             0             0",
+   "a_b": "Comparing /run-dir/out/merged.a.gxx.json to /run-dir/out/merged.b.gxx.json\nBenchmark                             Time             CPU      Time Old      Time New       CPU Old       CPU New\n------------------------------------------------------------------------------------------------------------------\ndiagnostic_notation                -0.3118         -0.3105            71            49            70            49\ndiagnostic_notation                -0.0482         -0.0629            53            51            53            50\ndiagnostic_notation                +0.1058         +0.0127            48            53            48            49\ndiagnostic_notation                +0.0004         +0.0005            48            48            48            48\ndiagnostic_notation                +0.0002         +0.0002            48            48            48            48\ndiagnostic_notation                -0.3895         -0.3940            79            48            78            48\ndiagnostic_notation                -0.2223         -0.2225            70            54            70            54\ndiagnostic_notation                -0.0422         -0.0535            52            50            51            48\ndiagnostic_notation                -0.0036         -0.0023            49            48            48            48\ndiagnostic_notation_pvalue          0.3772          0.2510      U Test, Repetitions: 9 vs 9\nOVERALL_GEOMEAN                    -0.1164         -0.1281             0             0             0             0"
+  },
+  "clang": {
+   "a_aa": "Comparing /run-dir/out/merged.a.clang.json to /run-dir/out/merged.aa.clang.json\nBenchmark                             Time             CPU      Time Old      Time New       CPU Old       CPU New\n------------------------------------------------------------------------------------------------------------------\ndiagnostic_notation                -0.0092         -0.0008            51            51            51            51\ndiagnostic_notation                +0.0110         +0.0109            50            50            50            50\ndiagnostic_notation                +0.0719         +0.0683            51            55            51            55\ndiagnostic_notation                -0.0004         +0.0003            51            51            51            51\ndiagnostic_notation                -0.0059         -0.0059            51            50            51            50\ndiagnostic_notation                -0.0313         -0.0069            52            50            51            50\ndiagnostic_notation                -0.0249         -0.0235            49            48            49            48\ndiagnostic_notation                +0.0172         +0.0189            51            52            51            52\ndiagnostic_notation                -0.0009         +0.0093            51            51            51            51\ndiagnostic_notation_pvalue          0.7911          1.0000      U Test, Repetitions: 9 vs 9\nOVERALL_GEOMEAN                    +0.0027         +0.0076             0             0             0             0",
+   "a_b": "Comparing /run-dir/out/merged.a.clang.json to /run-dir/out/merged.b.clang.json\nBenchmark                             Time             CPU      Time Old      Time New       CPU Old       CPU New\n------------------------------------------------------------------------------------------------------------------\ndiagnostic_notation                +0.1707         +0.1025            51            60            51            56\ndiagnostic_notation                -0.0141         -0.0141            50            49            50            49\ndiagnostic_notation                -0.0182         -0.0181            51            50            51            50\ndiagnostic_notation                +0.0412         +0.0003            51            53            51            51\ndiagnostic_notation                +0.0143         +0.0121            51            51            51            51\ndiagnostic_notation                +0.0103         +0.0087            52            53            51            51\ndiagnostic_notation                +0.0611         +0.0205            49            53            49            50\ndiagnostic_notation                +0.1293         +0.0052            51            58            51            51\ndiagnostic_notation                +0.0331         +0.0335            51            53            51            52\ndiagnostic_notation_pvalue          0.0423          0.2510      U Test, Repetitions: 9 vs 9\nOVERALL_GEOMEAN                    +0.0458         +0.0162             0             0             0             0"
+  }
+ },
+ "cells": {
+  "gxx": {
+   "diagnostic_notation": {
+    "a": {
+     "repetitions_ns": [
+      70560157.00004536,
+      53217638.9997403,
+      48223779.500176534,
+      48157526.00006817,
+      48361270.00021406,
+      78500046.00004467,
+      69907164.99967675,
+      51695486.500193514,
+      48646656.00007356
+     ],
+     "median_ns": 51695486.500193514,
+     "spread": 0.6300680811537858
+    },
+    "aa": {
+     "repetitions_ns": [
+      58148691.00004216,
+      48181613.49999173,
+      54117229.99997437,
+      49089760.50001001,
+      48639607.50003571,
+      47821814.50013923,
+      48707298.50017597,
+      66334921.999896325,
+      50831378.00011173
+     ],
+     "median_ns": 49089760.50001001,
+     "spread": 0.38712683099264655
+    },
+    "b": {
+     "repetitions_ns": [
+      48559311.499957405,
+      50652608.999826044,
+      53323478.50003316,
+      48175016.999948636,
+      48373166.50014145,
+      47924208.00004038,
+      54363490.00001428,
+      49512864.50000225,
+      48472521.500116274
+     ],
+     "median_ns": 48559311.499957405,
+     "spread": 0.13436386888164065
+    },
+    "a_over_a_ratio": 0.9495947097785076,
+    "b_over_a_ratio": 0.9393336785751234,
+    "utest_a_aa": {
+     "time_pvalue": 0.5962416305866567,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.37722461666745344,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   }
+  },
+  "clang": {
+   "diagnostic_notation": {
+    "a": {
+     "repetitions_ns": [
+      51304798.99980856,
+      49760985.50014285,
+      51286978.99999679,
+      50839631.00014444,
+      50770853.99989301,
+      52002816.99990228,
+      49491214.49999438,
+      51283172.999774255,
+      51398053.99994657
+     ],
+     "median_ns": 51283172.999774255,
+     "spread": 0.050748451523819016
+    },
+    "aa": {
+     "repetitions_ns": [
+      50830542.99984724,
+      50307926.00018685,
+      54974591.00024571,
+      50818021.99993035,
+      50471868.999920845,
+      50372684.999729246,
+      48258865.500201866,
+      52165194.99981587,
+      51352730.99995174
+     ],
+     "median_ns": 50818021.99993035,
+     "spread": 0.13916045125461474
+    },
+    "b": {
+     "repetitions_ns": [
+      60060385.00026989,
+      49059401.99978431,
+      50352431.00019216,
+      52936734.00001353,
+      51495178.00009562,
+      52540750.999924056,
+      52516029.99987881,
+      57911738.99979185,
+      53100327.999800354
+     ],
+     "median_ns": 52540750.999924056,
+     "spread": 0.22423801660961828
+    },
+    "a_over_a_ratio": 0.990929753901032,
+    "b_over_a_ratio": 1.0245222346159302,
+    "utest_a_aa": {
+     "time_pvalue": 0.7910815129207817,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.04226010608395664,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": true
+   }
+  }
+ }
+}

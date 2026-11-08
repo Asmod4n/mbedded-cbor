@@ -112,6 +112,8 @@ import collections, glob, hashlib, json, os, statistics, subprocess, sys
 
 d, flags, steal_limit = sys.argv[1:4]
 env = os.environ
+utest_alpha = 0.05
+machine_floor = float(env["NOISE_FLOOR_PERCENT"]) / 100
 
 
 def run(*cmd):
@@ -125,13 +127,37 @@ def read(path):
 
 times = collections.defaultdict(list)
 skipped = {}
+merged = {}
 for path in sorted(glob.glob(os.path.join(d, "out", "round*", "*.json"))):
     v, tag = os.path.basename(path)[:-5].split(".")
-    for b in json.load(open(path))["benchmarks"]:
+    data = json.load(open(path))
+    merged.setdefault((tag, v), {"context": data["context"], "benchmarks": []})
+    for b in data["benchmarks"]:
         if b.get("error_occurred"):
             skipped[(tag, v, b["name"])] = b.get("error_message", "")
             continue
+        merged[(tag, v)]["benchmarks"].append(b)
         times[(tag, b["name"], v)].append(b["real_time"] * {"ns": 1, "us": 1e3, "ms": 1e6, "s": 1e9}[b["time_unit"]])
+for (tag, v), data in merged.items():
+    json.dump(data, open(os.path.join(d, "out", f"merged.{v}.{tag}.json"), "w"))
+
+
+def utest(tag, first, second):
+    a = os.path.join(d, "out", f"merged.{first}.{tag}.json")
+    b = os.path.join(d, "out", f"merged.{second}.{tag}.json")
+    dump = os.path.join(d, "out", f"compare.{first}.{second}.{tag}.json")
+    if not (os.path.exists(a) and os.path.exists(b)):
+        return {}
+    text = run("python3", "/usr/share/benchmark/compare.py", "--no-color", "-d", dump, "benchmarks", a, b)
+    result = {"text": text}
+    if os.path.exists(dump):
+        for entry in json.load(open(dump)):
+            if entry.get("utest"):
+                result[entry["name"]] = entry["utest"]
+    return result
+
+
+utests = {tag: {"a_aa": utest(tag, "a", "aa"), "a_b": utest(tag, "a", "b")} for tag in ("gxx", "clang")}
 
 errors = {f: read(os.path.join(d, "log", f))[:2000] for f in os.listdir(os.path.join(d, "log"))} if os.path.isdir(os.path.join(d, "log")) else {}
 functions = sorted({name for _, name, _ in times} | {name for _, _, name in skipped})
@@ -148,7 +174,14 @@ for tag in ("gxx", "clang"):
         if all("median_ns" in row[v] for v in ("a", "aa", "b")):
             row["a_over_a_ratio"] = row["aa"]["median_ns"] / row["a"]["median_ns"]
             row["b_over_a_ratio"] = row["b"]["median_ns"] / row["a"]["median_ns"]
-            row["difference_over_noise"] = abs(row["b_over_a_ratio"] - 1) > abs(row["a_over_a_ratio"] - 1)
+            for pair in ("a_aa", "a_b"):
+                u = utests[tag][pair].get(name)
+                if u:
+                    row["utest_" + pair] = {"time_pvalue": u["time_pvalue"], "repetitions": u["nr_of_repetitions"],
+                                            "optimal_repetitions": u["have_optimal_repetitions"]}
+            u = row.get("utest_a_b")
+            row["difference_over_noise"] = (bool(u) and u["time_pvalue"] < utest_alpha and
+                                            abs(row["b_over_a_ratio"] - 1) > max(abs(row["a_over_a_ratio"] - 1), machine_floor))
         cells.setdefault(tag, {})[name] = row
 
 rounds = []
@@ -221,6 +254,8 @@ print(json.dumps({
     "failed": sorted(set(read(os.path.join(d, "out", "failed.txt")).split())),
     "stderr_of_runs": read(os.path.join(d, "out", "err.txt"))[:4000],
     "noise_floor": {"a_over_a_max_deviation_percent": 100 * max(aa_dev, default=0)},
+    "difference_test": "two-tailed Mann-Whitney U test of compare.py of Google Benchmark over the rounds, alpha %s, and B/A further from 1 than A/A and than the noise floor of the machine (%s %%)" % (utest_alpha, env["NOISE_FLOOR_PERCENT"]),
+    "compare_text": {tag: {pair: u.get("text", "") for pair, u in p.items()} for tag, p in utests.items()},
     "cells": cells,
 }, indent=1))
 PY
