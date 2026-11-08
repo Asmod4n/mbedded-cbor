@@ -38,6 +38,7 @@
 // reads an indefinite-length item with another function, the port expects indefinite_length. RFC 8949 section 5.1
 // lets a protocol leave out indefinite length.
 
+#include "../small_stack.hpp"
 #include "tinycbor.hpp"
 
 #include <doctest/doctest.h>
@@ -1598,14 +1599,16 @@ TEST_CASE("tinycbor parser: the end of the first item")
     }
 }
 
-// recursionLimit: 1026 levels of nesting, two more than CBOR_PARSER_MAX_RECURSIONS of upstream. Upstream prints the
+// recursionLimit: deep nesting. Upstream prints the
 // item and then refuses to skip it with CborErrorNestingTooDeep. The library has no fixed limit of nesting: a reader
 // that recurses stops where the stack of its thread ends, and cbor::item_size() does not recurse (validity.hpp,
 // "Nesting has no fixed limit"). The port expects the size of the item, and key_not_found where upstream looks for
 // the key "foo" in a map.
+// The depth is the one of this library, not the limit of upstream: test::levels_main_thread_reads, the depth that the
+// main thread of each build holds (small_stack.hpp).
 TEST_CASE("tinycbor parser: deep nesting")
 {
-    constexpr std::size_t recursions = 1024 + 2;
+    constexpr std::size_t recursions = test::levels_main_thread_reads;
     struct deep_row {
         std::string_view name;
         std::string data;
