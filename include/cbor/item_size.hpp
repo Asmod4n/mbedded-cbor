@@ -168,4 +168,4 @@ inline std::expected<std::size_t, error> item_size(std::string_view const encode
     return std::to_underlying(detail::validity::distance(encoded, d.encoded));
 }
 
-} // namespace cbor
+}

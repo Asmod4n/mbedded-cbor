@@ -71,7 +71,8 @@ enum class error {
     sharedref_not_defined,
     /** An encode meets a simple value from 24 to 31. */
     reserved_simple_value,
-    /** The encoder meets a typed array with a reserved tag or a tag outside RFC 8746. */
+    /** The encoder meets a typed array with a reserved tag or a tag outside RFC 8746, or a tag 29 that
+     * cbor::encode() writes without cbor::cycles. */
     unsupported_value,
     /** A key or an index meets an item that is not a map or an array. */
     not_indexable,
@@ -324,7 +325,7 @@ inline std::error_code make_error_code(error const e) noexcept
     return {static_cast<int>(e), category()};
 }
 
-} // namespace cbor
+}
 
 /**
  * @brief Marks cbor::error as an error code enum.

@@ -3657,7 +3657,7 @@ public:
      * A number takes its head and its argument of fixed width.
      * A struct takes its class tag, its table reference, a record head of 5 bytes and its fields.
      * A text, a list, a map, an optional of variable size or a `std::variant` takes a reference `6(N)` of 6 bytes.
-     * None.
+     * It gives no error at run time.
      * A type that has no fixed size, for example a struct with a base class, does not compile.
      *
      * @code{.callseq}
@@ -3708,7 +3708,7 @@ public:
      * reads the data form.
      * A generic decoder of Packed CBOR does not.
      * The size of the data form plus the size of `description()` is the size of the message.
-     * Every other error of cbor::schema::path(), cbor::schema::at_path() and cbor::schema::decode().
+     * The other errors are the errors of cbor::schema::path(), cbor::schema::at_path() and cbor::schema::decode().
      *
      * @code{.callseq}
      * cbor::schema<T>::description()                                   → std::span<char const>
@@ -3761,7 +3761,7 @@ public:
      * The fields follow the key order of RFC 8949 4.2.1: a shorter key first, then the bytes of the key.
      * This order is not the order of declaration.
      * The root record of `T` starts at `size - fixed_size()` of the message.
-     * None.
+     * It gives no error at run time.
      * A `Member` of another struct, or a member that the description does not list, does not compile.
      *
      * @code{.callseq}
@@ -4368,7 +4368,7 @@ public:
      * A path starts with `$`, names a member with `.name` and an element with `[n]`.
      * `[]` takes its index from the next argument.
      * On an array or a vector of `std::uint8_t` or `std::byte`, `[n]` reads one byte.
-     * A text, a list or a struct needs an cbor::schema::accessor.
+     * A text, a list or a struct needs a cbor::schema::accessor.
      * A member that `T` does not have, a wrong count of indexes, or a path to a text does not compile.
      *
      * @code{.callseq}
@@ -4419,7 +4419,6 @@ public:
      * A class with no default constructor is made by a constructor that takes the described members in the order of
      * the description: decode reads them into a `std::tuple` and calls `std::make_from_tuple`.
      * An element of a container with an allocator makes that tuple with the allocator of the container.
-     * `not_enough_memory`.
      *
      * @code{.callseq}
      * cbor::schema<T>::decode(std::move(encoded))       → std::expected<cbor::ref<T>, cbor::error>

@@ -972,8 +972,7 @@ class path
     template <class T>
     static std::expected<T, error> walk_lazy(query_view const v, parsed_query const &top, lazy const &root)
     {
-        detail::validity::throw_logic_error_if(root.top_level.encoded.data() == nullptr,
-                                               "cbor::lazy::at_path: the lazy holds no top-level item");
+        root.throw_logic_error_if_no_top_level("cbor::lazy::at_path: the lazy holds no top-level item");
         if (root.typed_array_tag != 0) [[unlikely]]
             return walk_query<T>(v, top, root);
         auto const walked =
@@ -1345,7 +1344,7 @@ class is_valid_path
 
 inline std::expected<lazy, error> path::select_index(lazy const &node, std::int64_t const index)
 {
-    node.throw_logic_error_if_no_top_level();
+    node.throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
     auto found = lazy::resolve<true>(node);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
@@ -1358,7 +1357,7 @@ inline std::expected<lazy, error> path::find_key(lazy const &node, std::string_v
 {
     heads::decoder<false> text_key{key};
     auto const literal = text_key.decode_head();
-    node.throw_logic_error_if_no_top_level();
+    node.throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
     auto found = lazy::resolve<true>(node);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
@@ -1570,7 +1569,7 @@ inline std::expected<bool, error> path::value_equal(lazy const &a, lazy const &b
 {
     if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
         return std::unexpected(r.error());
-    a.throw_logic_error_if_no_top_level();
+    a.throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
     auto const x = a.typed_array_tag != 0 ? lazy::resolve<true>(a)
                                           : lazy::resolve_container<true>(a.top_level, detail::validity::offset{a.offset});
     if (!x) [[unlikely]]
@@ -1662,7 +1661,7 @@ inline std::expected<bool, error> path::value_equal(lazy const &a, lazy const &b
 
 inline std::expected<bool, error> path::value_less(lazy const &a, lazy const &b)
 {
-    a.throw_logic_error_if_no_top_level();
+    a.throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
     auto const x = a.typed_array_tag != 0 ? lazy::resolve<true>(a)
                                           : lazy::resolve_container<true>(a.top_level, detail::validity::offset{a.offset});
     if (!x) [[unlikely]]
@@ -1753,7 +1752,7 @@ inline std::expected<std::optional<lazy>, error> path::comparable_value(query_vi
         auto const argument = comparable_value(v, e.first, current, root);
         if (!argument || !*argument) [[unlikely]]
             return argument;
-        (*argument)->throw_logic_error_if_no_top_level();
+        (*argument)->throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
         auto const found = (*argument)->typed_array_tag != 0
                                ? lazy::resolve<true>(**argument)
                                : lazy::resolve_container<true>((*argument)->top_level, detail::validity::offset{(*argument)->offset});
@@ -1876,7 +1875,7 @@ inline std::expected<void, error> path::apply_selector(query_view const v, selec
             return std::unexpected(child.error());
         return {};
     }
-    node.throw_logic_error_if_no_top_level();
+    node.throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
     auto const found = lazy::resolve<true>(node);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
@@ -1978,8 +1977,7 @@ inline std::expected<std::vector<lazy>, error> path::apply_segments(query_view c
 inline std::expected<lazy, error> path::walk_singular_query(query_view const v, parsed_query const &top,
                                                                 lazy const &root)
 {
-    detail::validity::throw_logic_error_if(root.top_level.encoded.data() == nullptr,
-                                           "cbor::lazy::at_path: the lazy holds no top-level item");
+    root.throw_logic_error_if_no_top_level("cbor::lazy::at_path: the lazy holds no top-level item");
     lazy node = root;
     for (segment const &s : v.segments.subspan(top.segment_at, top.segment_count)) {
         selector const &each = v.selectors[s.selector_at];
@@ -1997,8 +1995,7 @@ inline std::expected<lazy, error> path::walk_singular_query(query_view const v, 
 inline std::expected<std::vector<lazy>, error> path::walk_query(query_view const v,
                                                                     parsed_query const &top, lazy const &root)
 {
-    detail::validity::throw_logic_error_if(root.top_level.encoded.data() == nullptr,
-                                           "cbor::lazy::query: the lazy holds no top-level item");
+    root.throw_logic_error_if_no_top_level("cbor::at_path: the lazy holds no top-level item");
     std::vector<std::expected<std::vector<lazy>, error>> absolute_nodelists(v.expressions.size());
     query_view const with_nodelists{v.segments, v.selectors, v.expressions, v.keys, absolute_nodelists};
     for (std::size_t i = 0; i < v.expressions.size(); ++i)

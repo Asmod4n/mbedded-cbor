@@ -21,4 +21,5 @@ PointerAlignment: Right
 SpaceBeforeParens: ControlStatements
 SortIncludes: CaseSensitive
 IncludeBlocks: Preserve
+FixNamespaceComments: false
 ...

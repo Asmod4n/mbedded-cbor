@@ -392,4 +392,4 @@ public:
     }
 };
 
-} // namespace cbor
+}

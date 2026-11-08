@@ -774,7 +774,7 @@ public:
     friend class cbor::schema;
 };
 
-} // namespace detail
+}
 
 static_assert(detail::validity::check_limit(limits::string_length, detail::validity::size_limit,
                                             error::string_length_exceeded)

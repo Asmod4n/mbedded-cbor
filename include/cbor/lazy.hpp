@@ -67,7 +67,8 @@ struct lazy;
  * nodelist.
  * A path that selects nothing gives an empty nodelist and no error.
  * The errors of the walk apply (cbor::at_path()).
- * `nodelist_too_long`: one step selects more nodes than the top-level item has bytes, which tag 29 makes possible.
+ * `nodelist_too_long`: one step selects more nodes than the top-level item has bytes, for example a step that
+ * repeats one selector many times.
  *
  * @code{.callseq}
  * doc->at_path<"$.a[*]", cbor::nodelist>() → std::expected<nodelist, error>
@@ -587,7 +588,7 @@ private:
     template <class Entries = lazy_entries>
     std::expected<typename Entries::iterator, error> find(std::int64_t key) const;
 
-    void throw_logic_error_if_no_top_level() const;
+    void throw_logic_error_if_no_top_level(char const *message) const;
 
     template <bool Checked>
     struct resolved;
@@ -939,7 +940,7 @@ private:
     bool unequal_seen = false;
 };
 
-} // namespace detail
+}
 
 template <bool Checked, class Message>
 std::expected<std::pair<std::uint64_t, detail::validity::offset>, error>
@@ -1359,15 +1360,14 @@ inline std::expected<lazy, error> lazy::from(std::shared_ptr<void const> owner,
                                              std::string_view const encoded)
 {
     detail::validity::throw_logic_error_if_empty(
-        owner, "cbor::lazy::from: the owner of the encoded data item is empty");
+        owner, "cbor::lazy::view: the owner of the encoded data item is empty");
     std::string_view const content = heads::self_described_cbor_content(encoded);
     return lazy{lazy::top_level_item{std::move(owner), content}, 0, {}};
 }
 
-inline void lazy::throw_logic_error_if_no_top_level() const
+inline void lazy::throw_logic_error_if_no_top_level(char const *const message) const
 {
-    detail::validity::throw_logic_error_if(top_level.encoded.data() == nullptr,
-                                           "cbor::lazy: the lazy holds no top-level item");
+    detail::validity::throw_logic_error_if(top_level.encoded.data() == nullptr, message);
 }
 
 template <borrowed_range_of_chars Encoded>
@@ -1466,7 +1466,7 @@ std::expected<std::pair<Iterator, bool>, error> lazy::find_key(Iterator it, Last
 template <class Entries>
 std::expected<typename Entries::iterator, error> lazy::find(std::string_view const key) const
 {
-    throw_logic_error_if_no_top_level();
+    throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
     auto found = resolve<true>(*this);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
@@ -1476,7 +1476,7 @@ std::expected<typename Entries::iterator, error> lazy::find(std::string_view con
 template <class Entries>
 std::expected<typename Entries::iterator, error> lazy::find(std::int64_t const key) const
 {
-    throw_logic_error_if_no_top_level();
+    throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
     auto found = resolve<true>(*this);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
@@ -1485,8 +1485,7 @@ std::expected<typename Entries::iterator, error> lazy::find(std::int64_t const k
 
 inline std::expected<std::string_view, error> lazy::read_typed_array_element(lazy const &node)
 {
-    detail::validity::throw_logic_error_if(node.top_level.encoded.data() == nullptr,
-                                           "cbor::lazy: the lazy holds no top-level item");
+    node.throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
     return detail::validity::substr(node.top_level.encoded, detail::validity::offset{node.offset},
                                     detail::validity::typed_array_element_size(node.typed_array_tag));
 }
@@ -1537,7 +1536,7 @@ std::expected<lazy, error> lazy::select_index(resolved<Checked> const &found, In
 
 inline std::expected<std::uint64_t, error> lazy::size() const
 {
-    throw_logic_error_if_no_top_level();
+    throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
     auto const found = resolve<true>(*this);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
@@ -1564,8 +1563,7 @@ inline std::expected<bool, error> lazy::empty() const
 
 inline std::expected<cbor::type, error> lazy::type() const
 {
-    detail::validity::throw_logic_error_if(top_level.encoded.data() == nullptr,
-                                           "cbor::lazy::type: the lazy holds no top-level item");
+    throw_logic_error_if_no_top_level("cbor::lazy::type: the lazy holds no top-level item");
     if (typed_array_tag != 0) [[unlikely]] {
         auto const found = resolve<true>(*this);
         if (!found) [[unlikely]]
@@ -1618,7 +1616,7 @@ inline std::expected<lazy, error> lazy::at(key const k) const
 
 inline std::expected<lazy, error> lazy::at(std::size_t const index) const
 {
-    throw_logic_error_if_no_top_level();
+    throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
     auto const found = resolve<true>(*this);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
@@ -1637,7 +1635,7 @@ std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_
                                std::is_same_v<T, typed_array>,
                            ref<T>, T>, error> lazy::get() const
 {
-    throw_logic_error_if_no_top_level();
+    throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
     if constexpr (std::is_same_v<T, std::span<std::byte const>>) {
         if (typed_array_tag != 0) {
             auto const element = read_typed_array_element(*this);
@@ -1763,7 +1761,7 @@ std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_
 
 inline std::expected<lazy_elements, error> lazy::elements() const
 {
-    throw_logic_error_if_no_top_level();
+    throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
     auto const found = resolve<true>(*this);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
@@ -1790,7 +1788,7 @@ inline std::expected<lazy_elements, error> lazy::elements() const
 
 inline std::expected<lazy_entries, error> lazy::entries() const
 {
-    throw_logic_error_if_no_top_level();
+    throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
     auto const found = resolve<true>(*this);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
@@ -1809,8 +1807,7 @@ inline std::expected<lazy_entries, error> lazy::entries() const
 
 inline std::expected<owning<item>, error> lazy::clone() const
 {
-    detail::validity::throw_logic_error_if(top_level.encoded.data() == nullptr,
-                                           "cbor::lazy::clone: the lazy holds no top-level item");
+    throw_logic_error_if_no_top_level("cbor::lazy::clone: the lazy holds no top-level item");
     if (typed_array_tag != 0) [[unlikely]] {
         auto const h = resolve<true>(*this).transform([](resolved<true> const &found) { return found.h; });
         if (!h) [[unlikely]]
