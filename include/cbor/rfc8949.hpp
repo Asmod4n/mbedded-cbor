@@ -18,7 +18,7 @@ namespace detail
 
 class validity;
 
-template <bool>
+template <bool, bool>
 struct tree_decoder;
 
 }
@@ -98,7 +98,8 @@ enum class type : std::uint8_t {
     double_float,
     unsigned_bignum,
     negative_bignum,
-    typed_array
+    typed_array,
+    shared_reference
 };
 
 class rfc8949
@@ -152,7 +153,7 @@ class rfc8949
 
     friend struct lazy;
 
-    template <bool>
+    template <bool, bool>
     friend struct detail::tree_decoder;
 
     template <class Target>

@@ -408,6 +408,9 @@ inline value value_of(cbor::item const &it)
         return tag_value<cbor::type::negative_bignum>(it);
     case cbor::type::typed_array:
         return tag_value<cbor::type::typed_array>(it);
+    case cbor::type::shared_reference:
+        return {tagged{std::uint64_t{29},
+                       value{it.get<cbor::type::shared_reference>().value().first}}};
     }
     std::unreachable();
 }

@@ -56,7 +56,7 @@ class owning;
 namespace detail
 {
 
-template <bool>
+template <bool, bool>
 struct tree_decoder;
 
 }
@@ -703,6 +703,7 @@ class heads
         case cbor::type::unsigned_bignum:
         case cbor::type::negative_bignum:
         case cbor::type::typed_array:
+        case cbor::type::shared_reference:
             return major_type::tag;
         case cbor::type::false_value:
         case cbor::type::true_value:
@@ -852,7 +853,7 @@ class heads
 
     friend struct lazy;
 
-    template <bool>
+    template <bool, bool>
     friend struct detail::tree_decoder;
 
     friend std::expected<owning<item>, error> decode(std::string_view encoded);

@@ -1375,6 +1375,8 @@ std::expected<void, error> encoding::encode_item(encoder<Writer> &out, item cons
     case cbor::type::typed_array:
         argument = node.via.tag.number;
         break;
+    case cbor::type::shared_reference:
+        return std::unexpected(error::unsupported_value);
     case cbor::type::false_value:
     case cbor::type::true_value:
     case cbor::type::null:

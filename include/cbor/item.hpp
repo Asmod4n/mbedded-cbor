@@ -24,7 +24,7 @@ namespace cbor
 namespace detail
 {
 
-template <bool>
+template <bool, bool>
 struct tree_decoder;
 
 }
@@ -66,7 +66,7 @@ struct item_alternative<K> {
 
 template <cbor::type K>
     requires(K == cbor::type::tag || K == cbor::type::unsigned_bignum || K == cbor::type::negative_bignum ||
-             K == cbor::type::typed_array)
+             K == cbor::type::typed_array || K == cbor::type::shared_reference)
 struct item_alternative<K> {
     using type = std::pair<std::uint64_t, item const *>;
 };
@@ -197,7 +197,7 @@ private:
     {
     }
 
-    template <bool>
+    template <bool, bool>
     friend struct detail::tree_decoder;
 
     friend class encoding;

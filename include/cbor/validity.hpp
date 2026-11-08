@@ -104,7 +104,7 @@ class owning;
 namespace detail
 {
 
-template <bool>
+template <bool, bool>
 struct tree_decoder;
 
 class canonical_ids;

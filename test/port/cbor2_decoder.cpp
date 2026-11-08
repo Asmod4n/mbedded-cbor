@@ -818,25 +818,36 @@ TEST_CASE("cbor2 decoder: Python semantic tags read as plain tags")
 }
 
 // Upstream: TestSharedReference, TestMaximumDepth.test_self_referential_tag_as_map_key and
-// test_self_referential_tag_as_set_element, read by cbor::decode. decode.hpp: "Tags 28 and 29 stay tag nodes". So
-// cbor::decode gives a tree with the two tags and no reference, also where cbor2 raises an error (the first two
-// rows and the last two). The value sharing specification (refs/value-sharing.html) defines the tags; RFC 8949
-// 5.4 lets a generic decoder pass a tag on.
+// test_self_referential_tag_as_set_element, read by cbor::decode. The value sharing specification
+// (refs/value-sharing.html): "index 0 refers to the first value marked as shareable in the CBOR stream". cbor::decode
+// resolves the two tags (owner decision): a tag 28 makes no node and marks the node of its content, and a tag 29 is
+// a shared_reference node whose target is the node of that mark. The reference model shows a shared_reference as
+// 29(index). A tag 29 with no mark before it is an error, as in cbor2.
 TEST_CASE("cbor2 decoder: TestSharedReference read by cbor::decode")
 {
+    CHECK_EQ(decode_error_of(unhexlify("d81d05")), error::sharedref_index_not_marked);
+    auto const ref = [](int const index) { return tag_of(29, V(index)); };
     check_decoded({
-        {"d81d05", tag_of(29, V(5))},
-        {"D90102D81C8181D81D00", tag_of(258, tag_of(28, A(A(tag_of(29, V(0))))))},
-        {"d90102d81c82d81c82d81c83010203d81d02d81d02",
-         tag_of(258, tag_of(28, A(tag_of(28, A(tag_of(28, A(1, 2, 3)), tag_of(29, V(2)))), tag_of(29, V(2)))))},
-        {"d81c81d81d00", tag_of(28, A(tag_of(29, V(0))))},
-        {"d81ca100d81d00", tag_of(28, M(0, tag_of(29, V(0))))},
-        {"82d81c82d81c61616162d81d00", A(tag_of(28, A(tag_of(28, V("a")), "b")), tag_of(29, V(0)))},
-        {"82d81ca1616101d81d00", A(tag_of(28, M("a", 1)), tag_of(29, V(0)))},
-        {"82d81cd917706548656c6c6fd81d00", A(tag_of(28, tag_of(6000, V("Hello"))), tag_of(29, V(0)))},
-        {"a1d81cd903e7d81d0001", M(tag_of(28, tag_of(999, tag_of(29, V(0)))), 1)},
-        {"d9010281d81cd903e7d81d00", tag_of(258, A(tag_of(28, tag_of(999, tag_of(29, V(0))))))},
+        {"D90102D81C8181D81D00", tag_of(258, A(A(ref(0))))},
+        {"d90102d81c82d81c82d81c83010203d81d02d81d02", tag_of(258, A(A(A(1, 2, 3), ref(2)), ref(2)))},
+        {"d81c81d81d00", A(ref(0))},
+        {"d81ca100d81d00", M(0, ref(0))},
+        {"82d81c82d81c61616162d81d00", A(A("a", "b"), ref(0))},
+        {"82d81ca1616101d81d00", A(M("a", 1), ref(0))},
+        {"82d81cd917706548656c6c6fd81d00", A(tag_of(6000, V("Hello")), ref(0))},
+        {"a1d81cd903e7d81d0001", M(tag_of(999, ref(0)), 1)},
+        {"d9010281d81cd903e7d81d00", tag_of(258, A(tag_of(999, ref(0))))},
     });
+    // A tag 29 gives the node of its mark: in 28([29(0)]) the element names the array itself, and in
+    // [28([28("a"), "b"]), 29(0)] the second element names the first.
+    auto const cyclic = cbor::decode(unhexlify("d81c81d81d00"));
+    REQUIRE(cyclic.has_value());
+    CHECK_EQ((*cyclic)->get<cbor::type::array>().value()[0].get<cbor::type::shared_reference>().value().second,
+             &**cyclic);
+    auto const shared = cbor::decode(unhexlify("82d81c82d81c61616162d81d00"));
+    REQUIRE(shared.has_value());
+    auto const elements = (*shared)->get<cbor::type::array>().value();
+    CHECK_EQ(elements[1].get<cbor::type::shared_reference>().value().second, &elements[0]);
 }
 
 // Upstream: TestSharedReference.test_nested_shareable_in_array, test_object_hook and test_tag_hook, and
@@ -970,7 +981,7 @@ TEST_CASE("cbor2 decoder: TestStrictHashableTypes, test_immutable_keys")
         {"a10102", M(1, 2)},
         {"d9010281f5", tag_of(258, A(test::simple{21}))},
         {"a2616101416202", M("a", 1, bytes_of("62"), 2)},
-        {"a1d81c616101", M(tag_of(28, V("a")), 1)},
+        {"a1d81c616101", M("a", 1)},
         {"d901028261614161", tag_of(258, A("a", bytes_of("61")))},
         {"d9010280", tag_of(258, A())},
         {"d9010283616361626161", tag_of(258, A("c", "b", "a"))},
@@ -981,7 +992,7 @@ TEST_CASE("cbor2 decoder: TestStrictHashableTypes, test_immutable_keys")
         {"a1d901028301020304", M(tag_of(258, A(1, 2, 3)), 4)},
         {"d9010282d90102820102d90102820304", tag_of(258, A(tag_of(258, A(1, 2)), tag_of(258, A(3, 4))))},
         {"d9010283050763666f6f", tag_of(258, A(5, 7, "foo"))},
-        {"d81cda00013880d81d00", tag_of(28, tag_of(80000, tag_of(29, V(0))))},
+        {"d81cda00013880d81d00", tag_of(80000, tag_of(29, V(0)))},
         {"da00013880820102", tag_of(80000, A(1, 2))},
     });
     for (std::string_view const payload : {"bf616101416202ff", "a17f6161ff01", "d901029f61614161ff", "a17f657374726561646d696e67ff01"}) {

@@ -84,6 +84,8 @@ static std::uint64_t item_tree_sum(cbor::item const &it)
         return tag_sum<cbor::type::negative_bignum>(it);
     case cbor::type::typed_array:
         return tag_sum<cbor::type::typed_array>(it);
+    case cbor::type::shared_reference:
+        return it.get<cbor::type::shared_reference>().value().first;
     case cbor::type::half_float:
         return float_sum<cbor::type::half_float>(it);
     case cbor::type::single_float:

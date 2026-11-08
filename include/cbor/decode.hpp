@@ -28,6 +28,7 @@
 #include "head.hpp"
 #include "item.hpp"
 #include "ref.hpp"
+#include "shared.hpp"
 #include "rfc8949.hpp"
 #include "validity.hpp"
 
@@ -37,7 +38,7 @@ namespace cbor
 namespace detail
 {
 
-template <bool Checked>
+template <bool Checked, bool Resolve>
 struct tree_decoder;
 
 struct zone {
@@ -135,15 +136,20 @@ encoded_cbor_data_item(owning<item> const &tree, item const &tagged)
 namespace detail
 {
 
-template <bool Checked>
+template <bool Checked, bool Resolve>
 struct tree_decoder {
     zone &decoded;
     heads::decoder<Checked> d;
     std::size_t open = 0;
+    std::vector<item const *> marks;
 
     std::expected<void, error> decode_item(std::pmr::vector<item> &into);
 
-    std::expected<void, error> decode_content(std::pmr::vector<item> &into, heads::head h);
+    std::expected<void, error> decode_content(std::pmr::vector<item> &into, heads::head h, std::size_t marked = 0);
+
+    std::expected<void, error> decode_shareable(std::pmr::vector<item> &into, std::size_t marked);
+
+    std::expected<void, error> decode_sharedref(std::pmr::vector<item> &into, std::size_t marked);
 
     CBOR_ALWAYS_INLINE inline std::expected<void, error> decode_scalar(item &node, heads::head h);
 
@@ -151,8 +157,8 @@ struct tree_decoder {
 };
 
 
-template <bool Checked>
-std::expected<void, error> tree_decoder<Checked>::decode_scalar(item &node, heads::head const h)
+template <bool Checked, bool Resolve>
+std::expected<void, error> tree_decoder<Checked, Resolve>::decode_scalar(item &node, heads::head const h)
 {
     switch (h.major) {
     case major_type::byte_string:
@@ -184,8 +190,8 @@ std::expected<void, error> tree_decoder<Checked>::decode_scalar(item &node, head
     }
 }
 
-template <bool Checked>
-std::expected<bool, error> tree_decoder<Checked>::decode_bignum(std::pmr::vector<item> &into, std::uint64_t const tag)
+template <bool Checked, bool Resolve>
+std::expected<bool, error> tree_decoder<Checked, Resolve>::decode_bignum(std::pmr::vector<item> &into, std::uint64_t const tag)
 {
     auto const next = heads::read_raw_head<Checked>(d.encoded, detail::validity::offset{});
     if (!next || next->major != major_type::byte_string ||
@@ -206,8 +212,8 @@ std::expected<bool, error> tree_decoder<Checked>::decode_bignum(std::pmr::vector
     return true;
 }
 
-template <bool Checked>
-std::expected<void, error> tree_decoder<Checked>::decode_item(std::pmr::vector<item> &into)
+template <bool Checked, bool Resolve>
+std::expected<void, error> tree_decoder<Checked, Resolve>::decode_item(std::pmr::vector<item> &into)
 {
     if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
         return std::unexpected(r.error());
@@ -217,19 +223,33 @@ std::expected<void, error> tree_decoder<Checked>::decode_item(std::pmr::vector<i
     return decode_content(into, *h);
 }
 
-template <bool Checked>
-std::expected<void, error> tree_decoder<Checked>::decode_content(std::pmr::vector<item> &into,
-                                                                 heads::head const head)
+template <bool Checked, bool Resolve>
+std::expected<void, error> tree_decoder<Checked, Resolve>::decode_content(std::pmr::vector<item> &into,
+                                                                          heads::head const head,
+                                                                          std::size_t const marked)
 {
+    if constexpr (Resolve) {
+        if (head.major == major_type::tag && head.argument == std::to_underlying(rfc8949::tag_number::shareable))
+            [[unlikely]]
+            return decode_shareable(into, marked + 1);
+        if (head.major == major_type::tag && head.argument == std::to_underlying(rfc8949::tag_number::sharedref))
+            [[unlikely]]
+            return decode_sharedref(into, marked);
+    }
     if (heads::is_bignum(head.major, head.argument)) {
         auto const r = decode_bignum(into, head.argument);
         if (!r) [[unlikely]]
             return std::unexpected(r.error());
-        if (*r)
+        if (*r) {
+            if constexpr (Resolve)
+                marks.insert(marks.end(), marked, &into.back());
             return {};
+        }
     }
     item &node = into.emplace_back(
         item{heads::type_of(head.major, head.info, head.argument), head.info, {.u64 = head.argument}});
+    if constexpr (Resolve)
+        marks.insert(marks.end(), marked, &node);
     switch (head.major) {
     case major_type::unsigned_integer:
     case major_type::negative_integer:
@@ -297,7 +317,7 @@ std::expected<void, error> tree_decoder<Checked>::decode_content(std::pmr::vecto
         }
         std::string_view const content_encoded =
             tagged.substr(0, std::to_underlying(detail::validity::distance(tagged, d.encoded)));
-        tree_decoder inner{decoded, {content_encoded.substr(content_encoded.size() - content.via.bin.size())}};
+        tree_decoder inner{decoded, {content_encoded.substr(content_encoded.size() - content.via.bin.size())}, 0, {}};
         std::pmr::vector<item> &embedded = decoded.items_reserved(1);
         if (auto const r = inner.decode_item(embedded); !r) [[unlikely]]
             return r;
@@ -309,6 +329,40 @@ std::expected<void, error> tree_decoder<Checked>::decode_content(std::pmr::vecto
     }
 }
 
+template <bool Checked, bool Resolve>
+std::expected<void, error> tree_decoder<Checked, Resolve>::decode_shareable(std::pmr::vector<item> &into,
+                                                                            std::size_t const marked)
+{
+    std::size_t chain = marked;
+    for (;;) {
+        auto const h = d.decode_head();
+        if (!h) [[unlikely]]
+            return std::unexpected(h.error());
+        if (h->major != major_type::tag || h->argument != std::to_underlying(rfc8949::tag_number::shareable))
+            return decode_content(into, *h, chain);
+        ++chain;
+    }
+}
+
+template <bool Checked, bool Resolve>
+std::expected<void, error> tree_decoder<Checked, Resolve>::decode_sharedref(std::pmr::vector<item> &into,
+                                                                            std::size_t const marked)
+{
+    auto const h = d.decode_head();
+    if (!h) [[unlikely]]
+        return std::unexpected(h.error());
+    if (error const c = detail::validity::check_tag_content(std::to_underlying(rfc8949::tag_number::sharedref), h->major)
+                            .error_or(error{});
+        c != error{}) [[unlikely]]
+        return std::unexpected(c);
+    auto const index = value_sharing::check_sharedref_index(h->argument, marks.size());
+    if (!index) [[unlikely]]
+        return std::unexpected(h->argument - marks.size() < marked ? error::sharedref_not_defined : index.error());
+    item const *const target = marks[std::to_underlying(*index)];
+    marks.insert(marks.end(), marked, target);
+    into.emplace_back(item{cbor::type::shared_reference, h->info, {.tag = {h->argument, target}}});
+    return {};
+}
 
 template <bool Checked>
 struct decoded_tree {
@@ -316,7 +370,7 @@ struct decoded_tree {
     std::string_view rest;
 };
 
-template <bool Checked>
+template <bool Checked, bool Resolve>
 std::expected<decoded_tree<Checked>, error> decode_tree(std::string_view const encoded)
 {
     auto decoded = std::make_unique<zone>(detail::validity::checked_mul(encoded.size(), sizeof(item) + 1)
@@ -325,7 +379,7 @@ std::expected<decoded_tree<Checked>, error> decode_tree(std::string_view const e
                                                                     detail::validity::initial_size_limit);
                                               })
                                               .value_or(detail::validity::initial_size_limit));
-    tree_decoder<Checked> tree{*decoded, {encoded}};
+    tree_decoder<Checked, Resolve> tree{*decoded, {encoded}, 0, {}};
     std::pmr::vector<item> &root = decoded->items_reserved(1);
     if (auto const built = tree.decode_item(root); !built) [[unlikely]]
         return std::unexpected(built.error());
@@ -385,7 +439,7 @@ std::expected<decoded_tree<Checked>, error> decode_tree(std::string_view const e
  */
 inline std::expected<owning<item>, error> decode(std::string_view const encoded)
 {
-    auto const decoded = detail::decode_tree<true>(heads::self_described_cbor_content(encoded));
+    auto const decoded = detail::decode_tree<true, true>(heads::self_described_cbor_content(encoded));
     if (!decoded) [[unlikely]]
         return std::unexpected(decoded.error());
     return decoded->tree;

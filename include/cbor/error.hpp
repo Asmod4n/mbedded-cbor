@@ -65,10 +65,10 @@ enum class error {
     inadmissible_type_for_tag_content,
     /** A tag 29 names no tag 28 before it. */
     sharedref_index_not_marked,
-    /** A tag 29 has an index that does not fit `std::size_t`. */
-    sharedref_index_out_of_range,
     /** `structs` decode meets a tag 29 that names a tag 28 in a skipped member. */
     sharedref_not_complete,
+    /** `decode` meets a tag 29 that names a tag 28 whose content is only tags 28 and this tag 29. */
+    sharedref_not_defined,
     /** An encode meets a simple value from 24 to 31. */
     reserved_simple_value,
     /** The encoder meets a typed array with a reserved tag or a tag outside RFC 8746. */
@@ -184,10 +184,10 @@ public:
             return "inadmissible type for tag content";
         case error::sharedref_index_not_marked:
             return "sharedref index not marked";
-        case error::sharedref_index_out_of_range:
-            return "sharedref index out of range";
         case error::sharedref_not_complete:
             return "sharedref not complete";
+        case error::sharedref_not_defined:
+            return "sharedref not defined";
         case error::reserved_simple_value:
             return "reserved simple value";
         case error::unsupported_value:

@@ -36,6 +36,8 @@ inline std::uint64_t argument_of(cbor::item const &node)
         return node.get<cbor::type::negative_bignum>().value().first;
     case cbor::type::typed_array:
         return node.get<cbor::type::typed_array>().value().first;
+    case cbor::type::shared_reference:
+        return node.get<cbor::type::shared_reference>().value().first;
     case cbor::type::false_value:
         return std::to_underlying(node.get<cbor::type::false_value>().value());
     case cbor::type::true_value:
@@ -77,6 +79,8 @@ inline cbor::item const *tag_content_of(cbor::item const &node)
         return node.get<cbor::type::negative_bignum>().value().second;
     case cbor::type::typed_array:
         return node.get<cbor::type::typed_array>().value().second;
+    case cbor::type::shared_reference:
+        return node.get<cbor::type::shared_reference>().value().second;
     default:
         FAIL("the item is no tag");
         return nullptr;
@@ -117,6 +121,7 @@ inline cbor::major_type major_of(cbor::type const t)
     case cbor::type::unsigned_bignum:
     case cbor::type::negative_bignum:
     case cbor::type::typed_array:
+    case cbor::type::shared_reference:
         return cbor::major_type::tag;
     default:
         return cbor::major_type::simple_float;
@@ -168,6 +173,8 @@ inline bool item_values_equal(cbor::item const &a, cbor::item const &b)
         return tag_values_equal<cbor::type::tag>(a, b);
     case cbor::type::typed_array:
         return tag_values_equal<cbor::type::typed_array>(a, b);
+    case cbor::type::shared_reference:
+        return a.get<cbor::type::shared_reference>().value().first == b.get<cbor::type::shared_reference>().value().first;
     default:
         return argument_of(a) == argument_of(b);
     }
