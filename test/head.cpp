@@ -253,6 +253,6 @@ TEST_CASE("head: every head that Appendix C makes not well-formed is syntax_erro
         r.feed(std::string_view{bytes});
         CHECK_EQ(r.next().error(), cbor::error::syntax_error);
         CHECK_EQ(cbor::structs<one_simple_value>::decode("\xa1\x61v" + bytes).error(), cbor::error::syntax_error);
-        CHECK_EQ(cbor::structs<one_simple_value>::decode("\xa1" + bytes + "\x00").error(), cbor::error::syntax_error);
+        CHECK_EQ(cbor::structs<one_simple_value>::decode("\xa1" + bytes + '\0').error(), cbor::error::syntax_error);
     }
 }
