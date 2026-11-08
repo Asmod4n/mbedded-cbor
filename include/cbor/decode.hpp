@@ -372,14 +372,13 @@ std::expected<decoded_tree<Checked>, error> decode_tree(std::string_view const e
  * @endcode
  *
  * @retval too_little_data the item is not complete, or a count is larger than the bytes that are left
- * @retval syntax_error a head is not well-formed. A byte after the item is not read, so the input can be a CBOR
- * sequence (RFC 8742)
+ * @retval syntax_error a head is not well-formed, or a simple value below 32 stands in the two-byte form. A byte after
+ * the item is not read, so the input can be a CBOR sequence (RFC 8742)
  * @retval indefinite_length a string, an array or a map has an indefinite length
  * @retval nesting_depth_exceeded the item is deeper than the limit
- * @retval reserved_simple_value a simple value that RFC 8949 does not allow
  * @retval inadmissible_type_for_tag_content a typed array (RFC 8746) whose content is not a byte string of whole
- * elements. A tag 2, 3 or 24 over another content stays a tag over that content, and decode checks the content of
- * no other tag.
+ * elements. A tag 2 or 3 over another content is an `unsigned_bignum` or `negative_bignum` item over that content,
+ * a tag 24 over another content is a `tag` item over that content, and decode checks the content of no other tag.
  * @snippet doc_reference_item.cpp decode
  * @see cbor::item
  * @see cbor::encode()
