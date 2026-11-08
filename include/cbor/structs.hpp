@@ -802,10 +802,9 @@ class generic
             std::chrono::days::rep days = 0;
             if (auto const r = read_integer<std::chrono::days::rep>(d, days); !r) [[unlikely]]
                 return r;
-            std::chrono::year_month_day const date{std::chrono::sys_days{std::chrono::days{days}}};
-            if (!date.ok()) [[unlikely]]
-                return std::unexpected(error::number_out_of_range);
-            out = date;
+            if (auto const r = detail::validity::check_day_count(days); !r) [[unlikely]]
+                return r;
+            out = std::chrono::year_month_day{std::chrono::sys_days{std::chrono::days{days}}};
             return {};
         } else if constexpr (is_set<U>) {
             auto const h = d.decode_head();

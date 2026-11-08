@@ -1088,6 +1088,40 @@ std::expected<std::int64_t, error> day_of(std::string_view const text)
 
 } // namespace
 
+// RFC 8943 2: tag 100 holds the number of days since 1970-01-01, with no bound. std::chrono::year_month_day holds the
+// years from -32767 to 32767 (C++ [time.cal.year]). Their first and last days, -32767-01-01 and 32767-12-31, are
+// -12687428 and 11248737 days from the epoch, counted year by year in the proleptic Gregorian calendar outside
+// std::chrono. A count outside them is no date that year_month_day holds: decode gives number_out_of_range and gives
+// no other date, also for the counts at the ends of 32 and 64 bits.
+TEST_CASE("structs: tag 100 outside the years of year_month_day is number_out_of_range")
+{
+    using namespace std::chrono;
+    auto const days_tag = [](std::int64_t const n) {
+        std::uint64_t const argument = n < 0 ? static_cast<std::uint64_t>(-(n + 1)) : static_cast<std::uint64_t>(n);
+        std::string bytes = "\xd8\x64"s;
+        bytes += static_cast<char>(n < 0 ? 0x3b : 0x1b);
+        for (int shift = 56; shift >= 0; shift -= 8)
+            bytes += static_cast<char>((argument >> shift) & 0xff);
+        return cbor::structs<year_month_day>::decode(std::move(bytes));
+    };
+    constexpr std::int64_t first_day = -12687428;
+    constexpr std::int64_t last_day = 11248737;
+    auto const lowest = days_tag(first_day);
+    REQUIRE(lowest.has_value());
+    CHECK(**lowest == year{-32767} / January / 1);
+    auto const highest = days_tag(last_day);
+    REQUIRE(highest.has_value());
+    CHECK(**highest == year{32767} / December / 31);
+    for (std::int64_t const n : {first_day - 1, last_day + 1, std::int64_t{2146764180}, std::int64_t{2147483647},
+                                 std::int64_t{-2147483648}, std::numeric_limits<std::int64_t>::max(),
+                                 std::numeric_limits<std::int64_t>::min()}) {
+        CAPTURE(n);
+        auto const r = days_tag(n);
+        REQUIRE_FALSE(r.has_value());
+        CHECK_EQ(r.error(), error::number_out_of_range);
+    }
+}
+
 // Tag 0 holds an RFC 3339 date-time and tag 1004 an RFC 3339 full-date (RFC 8949 3.4.1, RFC 8943 2). The
 // inputs are the examples of RFC 3339 5.8 (refs/rfc3339.txt:515-536) and forms that the grammar of 5.6
 // (405-437) allows or refuses. The epoch values are computed from the calendar with Python calendar.timegm,
