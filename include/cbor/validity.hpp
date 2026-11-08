@@ -542,6 +542,9 @@ public:
         case std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item):
             admitted = major_type::byte_string;
             break;
+        case std::to_underlying(rfc8949::tag_number::sharedref):
+            admitted = major_type::unsigned_integer;
+            break;
         default:
             if (tag < std::to_underlying(rfc8746::tag_number::typed_array_first) ||
                 tag > std::to_underlying(rfc8746::tag_number::typed_array_last))

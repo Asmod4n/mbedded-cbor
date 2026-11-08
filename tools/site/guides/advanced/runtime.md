@@ -246,8 +246,9 @@ e.text_string("a");
 e.finish();   // 5: out holds 82 18 01 61 61
 ```
 
-Tags 28 and 29 mark shared values. `tag(28)` and `tag(29)` write them as
-any other tag, and no function of the library writes them by itself. `cbor::structs`
+Tags 28 and 29 mark shared values. `shareable()` and `sharedref()` of
+the encoder are private, and no function of the library calls them.
+`tag(28)` and `tag(29)` write them as any other tag. `cbor::structs`
 encode writes no tag 28 and no tag 29.
 
 `cbor::encode(item, target)` writes an item with the additional
@@ -314,8 +315,8 @@ value of the n-th tag 28 ([value-sharing](http://cbor.schmorp.de/value-sharing))
   resolve nothing, check no index and give no error of their own. A step
   and `get` pass both tags, as they pass every tag that they do not
   interpret.
-- `cbor::structs` decode reads them as tags that it does not interpret
-  ([structs.md](structs.md)).
+- `cbor::structs` decode resolves them, with a table that exists for one
+  call ([structs.md](structs.md)).
 - A lazy holds only its owner, its bytes and its offset. Several threads
   read one lazy at the same time.
 

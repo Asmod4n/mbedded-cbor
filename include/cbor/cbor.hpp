@@ -28,6 +28,7 @@
 #include "item_size.hpp"
 #include "sequence.hpp"
 #include "sequence_reader.hpp"
+#include "shared.hpp"
 #include "item.hpp"
 #include "decode.hpp"
 #include "lazy.hpp"

@@ -286,13 +286,12 @@ A path passes a tag that it does not read, as a generic decoder does (RFC
 8949 6.1): a step and a typed read go to the content. A path that ends at the
 tag gives the node of the whole tagged item, so the caller reads the tag
 number. Tags 2 and 3 are not passed: a typed read into an integer reads the
-bignum, and an index on a bignum is `not_indexable`. A map key behind tag
-55799 is matched as the key without the tag. A key behind any other tag, tag
-28 included, is a different key: `$.k` does not find `1000("k")` and does not
-find `28("k")`.
+bignum, and an index on a bignum is `not_indexable`. A map key behind tag 28
+or tag 55799 is matched as the key without the tag. A key behind any other
+tag is a different key: `$.k` does not find `1000("k")`.
 
-A path does not resolve a tag 29. No reader of the library resolves tags 28
-and 29.
+A path does not resolve a tag 29. Only `cbor::structs` decode resolves
+tags 28 and 29.
 
 ### Typed arrays
 

@@ -835,13 +835,13 @@ A path that ends at the tag gives the node of the whole tagged item, so
 the caller reads the tag number.
 Tags 2 and 3 are not passed: a typed read into an integer reads the
 bignum, and an index on a bignum is \f[CR]not_indexable\f[R].
-A map key behind tag 55799 is matched as the key without the tag.
-A key behind any other tag, tag 28 included, is a different key:
-\f[CR]$.k\f[R] does not find \f[CR]1000(\(dqk\(dq)\f[R] and does not
-find \f[CR]28(\(dqk\(dq)\f[R].
+A map key behind tag 28 or tag 55799 is matched as the key without the
+tag.
+A key behind any other tag is a different key: \f[CR]$.k\f[R] does not
+find \f[CR]1000(\(dqk\(dq)\f[R].
 .PP
 A path does not resolve a tag 29.
-No reader of the library resolves tags 28 and 29.
+Only \f[CR]cbor::structs\f[R] decode resolves tags 28 and 29.
 .SS Typed arrays
 A typed array (RFC 8746) is a tag over a byte string.
 The tag gives the type, the sign and the byte order of the elements.

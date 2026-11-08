@@ -484,10 +484,37 @@ T}
 .TE
 .SS 7. Shared values
 \f[CR]decode\f[R] reads tag 28 and tag 29 of the value\-sharing
-registration as tags that it does not interpret.
-A tag 28 or a tag 29 where the value of a member stands gives
-\f[CR]incorrect_type\f[R], and on a key of a struct map
-\f[CR]unsupported_value\f[R].
+registration with a table that exists for one call.
+A tag 28 is allowed on every member and keeps the value.
+No member takes a tag 29, so every tag 29 gives an error:
+.PP
+.TS
+tab(@);
+l l.
+T{
+The tag 29 names
+T}@T{
+Error
+T}
+_
+T{
+no tag 28 before it
+T}@T{
+\f[CR]sharedref_index_not_marked\f[R]
+T}
+T{
+a tag 28 in a skipped member
+T}@T{
+\f[CR]sharedref_not_complete\f[R]
+T}
+T{
+any other tag 28
+T}@T{
+\f[CR]incorrect_type\f[R]
+T}
+.TE
+.PP
+Nothing is decoded twice.
 .IP
 .EX
 \f[I]// [28(\(dqx\(dq), 29(0)]\f[R]

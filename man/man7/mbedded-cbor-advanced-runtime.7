@@ -492,8 +492,9 @@ e.finish();   \f[I]// 5: out holds 82 18 01 61 61\f[R]
 .EE
 .PP
 Tags 28 and 29 mark shared values.
-\f[CR]tag(28)\f[R] and \f[CR]tag(29)\f[R] write them as any other tag,
-and no function of the library writes them by itself.
+\f[CR]shareable()\f[R] and \f[CR]sharedref()\f[R] of the encoder are
+private, and no function of the library calls them.
+\f[CR]tag(28)\f[R] and \f[CR]tag(29)\f[R] write them as any other tag.
 \f[CR]cbor::structs\f[R] encode writes no tag 28 and no tag 29.
 .PP
 \f[CR]cbor::encode(item, target)\f[R] writes an item with the additional
@@ -596,8 +597,8 @@ They resolve nothing, check no index and give no error of their own.
 A step and \f[CR]get\f[R] pass both tags, as they pass every tag that
 they do not interpret.
 .IP \(bu 2
-\f[CR]cbor::structs\f[R] decode reads them as tags that it does not
-interpret (structs.md).
+\f[CR]cbor::structs\f[R] decode resolves them, with a table that exists
+for one call (structs.md).
 .IP \(bu 2
 A lazy holds only its owner, its bytes and its offset.
 Several threads read one lazy at the same time.

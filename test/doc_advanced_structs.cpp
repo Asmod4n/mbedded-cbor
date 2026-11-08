@@ -267,13 +267,19 @@ TEST_CASE("doc advanced structs: a variant takes the first alternative that acce
     CHECK_EQ(std::get<std::uint8_t>(**back), 42u);
 }
 
-// The section "Shared values" says that decode reads tags 28 and 29 as tags that it does not interpret: a tag where a
-// value of a plain member stands is incorrect_type.
-TEST_CASE("doc advanced structs: a tag 28 or 29 into a plain member is incorrect_type")
+// The section "Shared values" says that decode accepts a tag 28 on any member, and a tag 29 only where a member can
+// share a value; a plain member gives incorrect_type.
+TEST_CASE("doc advanced structs: a tag 29 into a plain member is incorrect_type")
 {
-    CHECK_EQ(cbor::structs<std::vector<std::string>>::decode("\x82\xd8\x1c\x61x\x61y"s).error(), error::incorrect_type);
-    CHECK_EQ(cbor::structs<std::vector<std::string>>::decode("\x82\x61x\xd8\x1d\x00"s).error(), error::incorrect_type);
-    CHECK_EQ(cbor::structs<std::vector<std::string>>::decode("\x81\xd8\x1d\x00"s).error(), error::incorrect_type);
+    auto const marked = cbor::structs<std::vector<std::string>>::decode("\x82\xd8\x1c\x61x\x61y"s);
+    REQUIRE(marked.has_value());
+    CHECK_EQ(**marked, std::vector<std::string>{"x", "y"});
+    CHECK_EQ(cbor::structs<std::vector<std::string>>::decode("\x82\xd8\x1c\x61x\xd8\x1d\x00"s).error(),
+             error::incorrect_type);
+    CHECK_EQ(cbor::structs<std::vector<std::string>>::decode("\x81\xd8\x1d\x00"s).error(),
+             error::sharedref_index_not_marked);
+    CHECK_EQ(cbor::structs<person>::decode("\xa3\x61z\xd8\x1c\x01\x64name\xd8\x1d\x00\x63" "age\x01"s).error(),
+             error::sharedref_not_complete);
 }
 
 // The section "A memory budget" shows a std::pmr target, and that a refused allocation is the error

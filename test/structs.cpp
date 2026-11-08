@@ -450,28 +450,39 @@ struct named_pair {
 
 } // namespace
 
-// The owner removed the code of tags 28 and 29 on 2026-11-08: structs decode reads them as tags it does not
-// interpret. A tag where a number, a string or an array stands is "a missing or other tag" of the structs
-// documentation, so it gives incorrect_type; a tag on a key keeps unsupported_value, as every tag on a key of a
-// struct map does.
-TEST_CASE("structs: tags 28 and 29 are tags that structs does not interpret")
+// The owner decided on 2026-10-13 that an eager decode keeps one table of the tags 28 of one call. A tag 28
+// on a plain member is allowed and keeps the value. A tag 29 needs a member that can share a value; no plain
+// member can, so it gives incorrect_type. A tag 29 to a mark in a skipped member gives
+// sharedref_not_complete, a forward index sharedref_index_not_marked, and a tag 28 or 29 on a key
+// unsupported_value. A typed array holds no tag, so the marks stand in a vector of std::optional, which is a
+// plain array.
+TEST_CASE("structs: the table of tags 28 and 29 of one decode")
 {
     using marked_numbers = std::vector<std::optional<std::uint64_t>>;
-    CHECK_EQ(cbor::structs<pair_marks>::decode("\xa2\x61\x61\xd8\x1c\x02\x61\x62\x81\xd8\x1c\x03"s).error(),
-             error::incorrect_type);
+    auto const marked =
+        cbor::structs<pair_marks>::decode("\xa2\x61\x61\xd8\x1c\x02\x61\x62\x81\xd8\x1c\x03"s);
+    REQUIRE(marked.has_value());
+    CHECK(**marked == pair_marks{2, {3}});
     CHECK_EQ(cbor::structs<pair_marks>::decode(
                  "\xa2\xd8\x1c\x61\x61\xd8\x1c\x01\x61\x62\x82\xd8\x1d\x01\xd8\x1d\x01"s)
                  .error(),
              error::unsupported_value);
     CHECK_EQ(cbor::structs<named_pair>::decode("\xa2\x61\x62\x81\xd8\x1c\x61\x61\xd8\x1d\x00\x07"s).error(),
-             error::incorrect_type);
-    CHECK_EQ(cbor::structs<marked_numbers>::decode("\x81\xd8\x1d\x00"s).error(), error::incorrect_type);
+             error::unsupported_value);
+    CHECK_EQ(cbor::structs<marked_numbers>::decode("\x81\xd8\x1d\x00"s).error(),
+             error::sharedref_index_not_marked);
     CHECK_EQ(
         cbor::structs<pair_marks>::decode("\xa3\x61\x63\xd8\x1c\x00\x61\x61\x02\x61\x62\x81\xd8\x1d\x00"s)
             .error(),
-        error::incorrect_type);
-    CHECK_EQ(cbor::structs<pair_marks>::decode("\xa2\x61\x61\x02\x61\x62\x81\xd8\x1d\x61x"s).error(),
+        error::sharedref_not_complete);
+    CHECK_EQ(cbor::structs<pair_marks>::decode(
+                 "\xa3\x61\x63\xd8\x1c\x00\x61\x61\xd8\x1c\x02\x61\x62\x81\xd8\x1d\x01"s)
+                 .error(),
              error::incorrect_type);
+    CHECK_EQ(cbor::structs<pair_marks>::decode("\xa2\x61\x61\x02\x61\x62\x81\xd8\x1d\x18\x1d"s).error(),
+             error::sharedref_index_not_marked);
+    CHECK_EQ(cbor::structs<pair_marks>::decode("\xa2\x61\x61\x02\x61\x62\x81\xd8\x1d\x61x"s).error(),
+             error::inadmissible_type_for_tag_content);
 }
 
 template <class Encoded>
@@ -827,22 +838,31 @@ TEST_CASE("structs: an integer key written as a bignum that fits")
 
 
 
-// A tag 28 or 29 where a value of a plain member stands is a tag that structs does not interpret: incorrect_type. A
-// chain of tags 28 is refused at its first tag, so it needs no stack, also on a small one.
-TEST_CASE("structs: a tag 28 or 29 into a plain member is incorrect_type")
+// A tag 29 into a member that is no shared pointer gives incorrect_type, also inside the value that its mark is still
+// reading. Nothing is decoded twice. A forward index names no mark. A tag 28 counts one level of nesting, as in a
+// tree decode.
+TEST_CASE("structs: a tag 29 into a plain member is incorrect_type")
 {
     using numbers = std::vector<std::optional<std::uint64_t>>;
     CHECK_EQ(cbor::structs<std::vector<numbers>>::decode("\xd8\x1c\x81\xd8\x1d\x00"s).error(), error::incorrect_type);
     CHECK_EQ(cbor::structs<std::map<std::uint64_t, numbers>>::decode("\xd8\x1c\xa1\x01\xd8\x1d\x00"s).error(),
              error::incorrect_type);
+    CHECK_EQ(cbor::structs<std::vector<std::vector<numbers>>>::decode(
+                 "\xd8\x1c\x81\xd8\x1c\x82\xd8\x1d\x00\xd8\x1d\x01"s)
+                 .error(),
+             error::incorrect_type);
     CHECK_EQ(cbor::structs<std::uint64_t>::decode("\xd8\x1c\xd8\x1d\x00"s).error(), error::incorrect_type);
-    CHECK_EQ(cbor::structs<numbers>::decode("\x82\xd8\x1d\x00\xd8\x1c\x01"s).error(), error::incorrect_type);
+    CHECK_EQ(cbor::structs<numbers>::decode("\x82\xd8\x1d\x00\xd8\x1c\x01"s).error(), error::sharedref_index_not_marked);
+    CHECK_EQ(cbor::structs<std::vector<numbers>>::decode("\x83\xd8\x1c\x82\x01\x02\xd8\x1d\x00\xd8\x1d\x00"s)
+                 .error(),
+             error::incorrect_type);
+    // A chain of marks is read in a loop that marks each tag 28 and does not recurse: a chain of any length gives its
+    // value, also on a small stack.
     std::string chain;
     for (std::size_t i = 0; i < test::levels_beyond_small_stack; ++i)
         chain += "\xd8\x1c"s;
     chain += "\x05"s;
-    test::on_small_stack(
-        [&chain] { CHECK_EQ(cbor::structs<std::uint64_t>::decode(std::string(chain)).error(), error::incorrect_type); });
+    test::on_small_stack([&chain] { CHECK_EQ(cbor::structs<std::uint64_t>::decode(std::string(chain)), 5u); });
 }
 
 namespace
