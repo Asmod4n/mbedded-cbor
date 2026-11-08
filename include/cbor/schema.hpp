@@ -4846,7 +4846,8 @@ private:
 #if defined(__cpp_exceptions)
         try {
 #endif
-            return decode_with_owner<Verified, D>(std::make_shared<Encoded const>(std::move(encoded)));
+            auto owner = std::make_shared<Encoded const>(std::move(encoded));
+            return decode_with_owner<Verified, D>(std::move(owner));
 #if defined(__cpp_exceptions)
         } catch (std::bad_alloc const &) {
             return std::unexpected(error::not_enough_memory);
