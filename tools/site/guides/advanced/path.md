@@ -90,7 +90,7 @@ It gives no error when a selector finds nothing.
 | T | CBOR item | Other items |
 |---|---|---|
 | a signed or unsigned integer type, also `char` | an integer, or a tag 2 or 3 with a magnitude up to 64 bits | `incorrect_type`; out of range: `number_out_of_range` |
-| `double` | a half, single or double float; an integer that a `double` holds exactly | `incorrect_type`; another integer: `number_out_of_range` |
+| `double` | a half, single or double float; an integer or a bignum that a `double` holds exactly | `incorrect_type`; another integer or bignum: `number_out_of_range` |
 | `bool` | `true`, `false` | `incorrect_type` |
 | `std::nullptr_t` | `null` | `incorrect_type` |
 | `cbor::simple_value` | any simple value, also `false`, `true` and `null` | `incorrect_type` |

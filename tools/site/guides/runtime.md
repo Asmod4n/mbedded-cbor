@@ -61,7 +61,7 @@ so that they stay short. A program checks each result as above, or uses
 | T | Reads |
 |---|---|
 | an integer type, for example `int` or `std::uint64_t` | an integer that fits `T` |
-| `double` | a float, or an integer that a `double` holds exactly |
+| `double` | a float, or an integer or a bignum that a `double` holds exactly |
 | `bool` | `false` or `true` |
 | `std::string_view` | a text, as a `cbor::ref<std::string_view>` |
 | `std::span<std::byte const>` | a byte string, as a `cbor::ref<std::span<std::byte const>>` |

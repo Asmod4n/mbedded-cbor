@@ -303,6 +303,7 @@ describes the memory of every API.
 | an integer that the C++ type cannot hold | `number_out_of_range` |
 | a binary64 that a `float` cannot hold exactly | `number_out_of_range` |
 | an item of another major type | `incorrect_type` |
+| a tag 1 over an item that is not an integer or a float | `inadmissible_type_for_tag_content` |
 | an array whose count differs from a `std::tuple` or `std::array` | `incorrect_type` |
 | a plain array for a `std::vector` or a `std::array` of a number type | `incorrect_type` |
 | a variant with no alternative that accepts the item | `incorrect_type` |

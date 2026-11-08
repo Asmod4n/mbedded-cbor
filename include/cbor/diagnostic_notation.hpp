@@ -1337,7 +1337,7 @@ class extended_diagnostic_notation
  * result: "1(0)"
  * @endcode
  *
- * @retval too_little_data the bytes end before the item ends
+ * @retval too_little_data the bytes end before the item ends, or a count is larger than the bytes that are left
  * @retval syntax_error a head is not well-formed, a chunk of an indefinite string has the wrong type, or bytes follow
  * the item
  * @retval nesting_depth_exceeded the item is deeper than the stack of the thread holds

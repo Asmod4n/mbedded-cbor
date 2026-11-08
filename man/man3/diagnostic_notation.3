@@ -21,7 +21,8 @@ A tag is printed as its number and its content; tag 29 is not resolved.
 The call does not check tag content, UTF\-8 or duplicate keys.
 .SH ERRORS
 .IP \(bu 2
-\f[CR]too_little_data\f[R]: the bytes end before the item ends
+\f[CR]too_little_data\f[R]: the bytes end before the item ends, or a
+count is larger than the bytes that are left
 .IP \(bu 2
 \f[CR]syntax_error\f[R]: a head is not well\-formed, a chunk of an
 indefinite string has the wrong type, or bytes follow the item
