@@ -134,6 +134,31 @@ class well_formedness
     friend class reflection;
 };
 
+/**
+ * @brief Gives the size in bytes of the first item in @p encoded.
+ *
+ * Checks that the item is well-formed. Bytes after the item do not change the result.
+ * The call does not recurse: an item of any depth gives its size.
+ *
+ * @code{.callseq}
+ * cbor::item_size(bytes) → std::expected<std::size_t, error>
+ * @endcode
+ * @code{.example}
+ * bytes: 82 01 02 07
+ * call: cbor::item_size(bytes)
+ * result: 3
+ * @endcode
+ *
+ * @param encoded the bytes that start with the item
+ * @return the size of the item in bytes
+ * @retval too_little_data the bytes end before the item ends
+ * @retval syntax_error a head is not well-formed
+ * @retval indefinite_length a head uses indefinite length
+ * @retval string_length_exceeded a string is longer than `limits::string_length`
+ * @retval container_elements_exceeded the count of an array or a map is greater than `limits::container_elements`
+ * @snippet doc_reference_tools.cpp item_size
+ * @see cbor::sequence
+ */
 inline std::expected<std::size_t, error> item_size(std::string_view const encoded)
 {
     heads::decoder<true> d{encoded};

@@ -50,6 +50,20 @@
     <xsl:call-template name="inline"><xsl:with-param name="node" select="."/></xsl:call-template>
     <xsl:value-of select="$nl"/>
   </xsl:for-each>
+  <xsl:variable name="params" select="$d//parameterlist[@kind='templateparam' or @kind='param']/parameteritem"/>
+  <xsl:if test="$params">
+    <xsl:value-of select="concat($nl, '## Parameters', $nl, $nl)"/>
+    <xsl:for-each select="$params">
+      <xsl:value-of select="concat('- `', normalize-space(parameternamelist/parametername), '`: ')"/>
+      <xsl:call-template name="inline"><xsl:with-param name="node" select="parameterdescription/para"/></xsl:call-template>
+      <xsl:value-of select="$nl"/>
+    </xsl:for-each>
+  </xsl:if>
+  <xsl:for-each select="$d//simplesect[@kind='return']">
+    <xsl:value-of select="concat($nl, '## Return value', $nl, $nl)"/>
+    <xsl:call-template name="inline"><xsl:with-param name="node" select="para"/></xsl:call-template>
+    <xsl:value-of select="$nl"/>
+  </xsl:for-each>
   <xsl:variable name="retvals" select="$d//parameterlist[@kind='retval']/parameteritem"/>
   <xsl:variable name="error_paras" select="$d//*[title='Errors']/para[not(ancestor::simplesect)][text()[normalize-space()] or computeroutput or ref or ulink or bold or emphasis]"/>
   <xsl:if test="$retvals or $error_paras">

@@ -14,16 +14,24 @@
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 
-// Each test in this file is one example of a page in doc/reference/tools/. The tests exist so that every
-// example compiles and gives the result that its page states.
+// Each test in this file is one example of a page in doc/reference/tools/ or of the API comment of a header.
+// The tests exist so that every example compiles and gives the result that its page states.
 
-// item_size.md: item_size gives the bytes of the first item, and a cut item gives too_little_data.
+// item_size.hpp, snippet item_size: item_size gives the bytes of the first item, and a cut item gives
+// too_little_data.
 TEST_CASE("doc reference tools: item_size")
 {
     std::string const bytes = test::preferred(test::A(1, 2)) + test::preferred(test::V(7));
-    CHECK_EQ(cbor::item_size(bytes), 3u);
-    CHECK_EQ(cbor::item_size(std::string_view(bytes).substr(0, 2)).error(), cbor::error::too_little_data);
-    CHECK_EQ(cbor::item_size("\x9f\x01\xff"sv).error(), cbor::error::indefinite_length);
+    // [item_size]
+    // bytes: [1, 2] followed by 7, 4 bytes
+    auto const size = cbor::item_size(bytes);                              // 3
+    auto const cut = cbor::item_size(std::string_view(bytes).substr(0, 2)); // too_little_data
+    // [_ 1]
+    auto const open = cbor::item_size("\x9f\x01\xff"sv);                   // indefinite_length
+    // [item_size]
+    CHECK_EQ(size, 3u);
+    CHECK_EQ(cut.error(), cbor::error::too_little_data);
+    CHECK_EQ(open.error(), cbor::error::indefinite_length);
 }
 
 // sequence.md: the loop gives each item of a CBOR sequence as a view into the bytes of the owner.
