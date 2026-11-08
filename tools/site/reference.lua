@@ -293,10 +293,14 @@ function Pandoc(doc)
   for _, b in ipairs(pandoc.read(read_file(reference .. "/index.md"), "gfm").blocks) do
     if b.t == "Table" then
       for _, row in ipairs(b.bodies[1].body) do
-        local name = pandoc.utils.stringify(row.cells[1].contents)
-        groups[#groups + 1] = pandoc.MetaMap({ name = pandoc.MetaString(name),
-          href = pandoc.MetaString(name .. ".html"),
-          here = pandoc.MetaBool(name == group) })
+        local first = row.cells[1].contents[1]
+        local link = first and first.t == "Plain" and first.content[1]
+        local name = link and link.t == "Link" and link.target:match("^([%w_]+)/index%.md$")
+        if name then
+          groups[#groups + 1] = pandoc.MetaMap({ name = pandoc.MetaString(name),
+            href = pandoc.MetaString(name .. ".html"),
+            here = pandoc.MetaBool(name == group) })
+        end
       end
     end
   end
