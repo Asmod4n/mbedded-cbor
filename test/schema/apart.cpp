@@ -103,9 +103,11 @@ TEST_CASE("description apart: one form read as the other is refused")
     CHECK_EQ(form<everything>::path<apart>(std::string(inside)).error(), error::incorrect_type);
     CHECK_EQ(form<everything>::decode<apart>(std::string(inside)).error(), error::incorrect_type);
     CHECK_EQ((form<everything>::at_path<"$.big", apart>(inside)).error(), error::incorrect_type);
+    // The data form holds no description, so read as the form with the description inside it is shorter than its
+    // table: the doc of schema::path gives too_little_data for that.
     for (auto const e : {form<everything>::path(std::string(data)).error(),
                          form<everything>::decode(std::string(data)).error()})
-        CHECK((e == error::incorrect_type || e == error::too_little_data));
+        CHECK_EQ(e, error::too_little_data);
     std::string const small = apart_bytes(empty{});
     CHECK_EQ(form<empty>::path(std::string(small)).error(), error::too_little_data);
 }

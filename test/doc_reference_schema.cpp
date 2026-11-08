@@ -178,8 +178,10 @@ TEST_CASE("doc reference schema: description")
     CHECK_EQ(seats, 5);
     CHECK_EQ(data->size() + description.size(), sample_bytes().size());
     CHECK_EQ((cbor::schema<car>::at_path<"$.seats", apart>(*data)), 5);
+    // The data form holds no description, so at_path with the description inside reads a message that is shorter
+    // than its table: the doc of schema::path gives too_little_data for that.
     auto const refused = cbor::schema<car>::at_path<"$.seats">(*data).error();
-    CHECK((refused == error::incorrect_type || refused == error::too_little_data));
+    CHECK_EQ(refused, error::too_little_data);
     auto const root = cbor::schema<car>::path<apart>(std::string(*data));
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.tires[1].diameter">(), 18);
