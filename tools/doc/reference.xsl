@@ -214,9 +214,10 @@
 <xsl:template match="ref" mode="md">
   <xsl:variable name="target"><xsl:call-template name="page_of"><xsl:with-param name="refid" select="@refid"/></xsl:call-template></xsl:variable>
   <xsl:variable name="target_group"><xsl:call-template name="group_of"><xsl:with-param name="refid" select="@refid"/></xsl:call-template></xsl:variable>
+  <xsl:variable name="label" select="str:replace(str:replace(string(.), '[', '\['), ']', '\]')"/>
   <xsl:choose>
-    <xsl:when test="$target_group = '' or $target_group = $group"><xsl:value-of select="concat('[', ., '](', $target, '.md)')"/></xsl:when>
-    <xsl:otherwise><xsl:value-of select="concat('[', ., '](../', $target_group, '/', $target, '.md)')"/></xsl:otherwise>
+    <xsl:when test="$target_group = '' or $target_group = $group"><xsl:value-of select="concat('[', $label, '](', $target, '.md)')"/></xsl:when>
+    <xsl:otherwise><xsl:value-of select="concat('[', $label, '](../', $target_group, '/', $target, '.md)')"/></xsl:otherwise>
   </xsl:choose>
 </xsl:template>
 
