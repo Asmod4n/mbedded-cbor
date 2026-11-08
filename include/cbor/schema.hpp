@@ -2389,6 +2389,17 @@ class reflection
         return index_arguments<Path>() - count_index_arguments(std::string_view(std::span(Path.view()).subspan(At)));
     }
 
+    template <class T, fixed_string Path, std::size_t At, class Indexes>
+    static constexpr std::size_t index_selected(Indexes const &indexes)
+    {
+        constexpr std::string_view path = Path.view();
+        constexpr std::size_t close = index_end(path, At);
+        if constexpr (close == At + 1)
+            return std::get<index_argument<Path, At>()>(indexes);
+        else
+            return index_of<T>(std::string_view(std::span(path).subspan(At + 1, close - At - 1)));
+    }
+
     template <class T, fixed_string Path, std::size_t At>
     static consteval bool path_valid()
     {
@@ -2510,12 +2521,7 @@ class reflection
                 return read_fixed_leaf<M, Verified>(member.template first<sizeof(fixed_leaf_t<M>)>());
             } else {
                 using L = std::remove_cv_t<typename fixed_length<M>::element>;
-                constexpr std::size_t close = index_end(path, end);
-                std::size_t j;
-                if constexpr (close == end + 1)
-                    j = std::get<index_argument<Path, end>()>(indexes);
-                else
-                    j = index_of<S>(std::string_view(std::span(path).subspan(end + 1, close - end - 1)));
+                std::size_t const j = index_selected<S, Path, end>(indexes);
                 auto const position = detail::validity::check_index(j, fixed_length<M>::value);
                 if (!position) [[unlikely]]
                     return std::unexpected(position.error());
@@ -2693,12 +2699,7 @@ class reflection
                 indexes);
         } else if constexpr (is_byte_range<U>) {
             using B = std::remove_cv_t<std::ranges::range_value_t<U>>;
-            constexpr std::size_t close = index_end(path, At);
-            std::size_t i;
-            if constexpr (close == At + 1)
-                i = std::get<index_argument<Path, At>()>(indexes);
-            else
-                i = index_of<T>(std::string_view(std::span(path).subspan(At + 1, close - At - 1)));
+            std::size_t const i = index_selected<T, Path, At>(indexes);
             if constexpr (requires { fixed_length<U>::value; }) {
                 constexpr std::size_t n = fixed_length<U>::value;
                 if constexpr (Verified)
@@ -2760,11 +2761,7 @@ class reflection
                 }
             } else {
                 using E = std::ranges::range_value_t<U>;
-                std::size_t i;
-                if constexpr (close == At + 1)
-                    i = std::get<index_argument<Path, At>()>(indexes);
-                else
-                    i = index_of<T>(std::string_view(std::span(path).subspan(At + 1, close - At - 1)));
+                std::size_t const i = index_selected<T, Path, At>(indexes);
                 if constexpr (is_typed_array<U>) {
                     using F = std::remove_cv_t<E>;
                     auto const r =
@@ -3965,23 +3962,14 @@ public:
                                                                 self.dir, i);
                 } else if constexpr (reflection::is_typed_array<U> && path.size() > 1) {
                     using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
-                    constexpr std::size_t close = reflection::index_end(path, 1);
-                    std::size_t at;
-                    if constexpr (close == 2)
-                        at = std::get<0>(i);
-                    else
-                        at = reflection::index_of<U>(std::string_view(std::span(path).subspan(2, close - 2)));
+                    std::size_t const at = reflection::index_selected<U, Path, 1>(i);
                     return reflection::typed_array_element_at<E>(reflection::list_span(self.encoded, self.items, sizeof(E)),
                                                                   self.items.length, at);
                 } else if constexpr (reflection::is_fixed_vector<U> && path.size() > 1) {
                     using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
                     constexpr std::size_t close = reflection::index_end(path, 1);
                     using X = typename decltype(reflection::fixed_path_result<T, E, Path, close + 1, Verified>())::type;
-                    std::size_t at;
-                    if constexpr (close == 2)
-                        at = std::get<0>(i);
-                    else
-                        at = reflection::index_of<U>(std::string_view(std::span(path).subspan(2, close - 2)));
+                    std::size_t const at = reflection::index_selected<U, Path, 1>(i);
                     constexpr std::size_t width = reflection::fixed_width<E>();
                     auto const position = detail::validity::check_index(at, self.items.length);
                     if (!position) [[unlikely]]
@@ -3996,11 +3984,7 @@ public:
                     using E = std::ranges::range_value_t<U>;
                     constexpr std::size_t close = reflection::index_end(path, 1);
                     using X = typename decltype(reflection::path_result<T, E, Path, close + 1, Verified>())::type;
-                    std::size_t at;
-                    if constexpr (close == 2)
-                        at = std::get<0>(i);
-                    else
-                        at = reflection::index_of<U>(std::string_view(std::span(path).subspan(2, close - 2)));
+                    std::size_t const at = reflection::index_selected<U, Path, 1>(i);
                     constexpr std::size_t width = reflection::fixed_size<E, T>();
                     auto const position = detail::validity::check_index(at, self.items.length);
                     if (!position) [[unlikely]]
