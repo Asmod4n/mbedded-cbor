@@ -110,6 +110,14 @@ details.src pre { background: var(--panel); border-radius: 6px; padding: 0.6rem 
 details.src .ln { display: inline-block; width: 3.6em; padding-right: 0.8em; text-align: right; color: var(--muted); text-decoration: none; user-select: none; }
 details.src .ln:hover { color: var(--link); text-decoration: underline; }
 .keyword { color: var(--kw); } .literal { color: var(--lit); } .comment { color: var(--cm); font-style: italic; }
+code.sourceCode .kw, code.sourceCode .cf, code.sourceCode .pp, code.sourceCode .im { color: var(--kw); }
+code.sourceCode .dt, code.sourceCode .bu, code.sourceCode .ot { color: var(--ty); }
+code.sourceCode .st, code.sourceCode .ch, code.sourceCode .ss, code.sourceCode .vs, code.sourceCode .sc { color: var(--lit); }
+code.sourceCode .dv, code.sourceCode .bn, code.sourceCode .fl, code.sourceCode .cn { color: var(--num); }
+code.sourceCode .co, code.sourceCode .cv, code.sourceCode .an, code.sourceCode .do, code.sourceCode .in { color: var(--cm); font-style: italic; }
+code.sourceCode .at { color: var(--muted); }
+code.sourceCode .er, code.sourceCode .al { color: var(--err); }
+code.sourceCode > span > a { display: none; }
 details.src pre a.line, pre.types a.line { color: var(--muted); text-decoration: none; user-select: none; }
 details.src pre a.line::before, pre.types a.line::before { content: attr(data-line); display: inline-block; width: 3.6em; padding-right: 0.8em; text-align: right; }
 details.src pre a.line:hover, pre.types a.line:hover { color: var(--link); text-decoration: underline; }
