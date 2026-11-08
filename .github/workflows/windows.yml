@@ -43,7 +43,7 @@ jobs:
           "commit=$(git -C "$env:VCPKG_INSTALLATION_ROOT" rev-parse HEAD)" >> $env:GITHUB_OUTPUT
           "archives=$env:LOCALAPPDATA\vcpkg\archives" >> $env:GITHUB_OUTPUT
       - name: Keep the built doctest and its source between runs
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ${{ steps.vcpkg.outputs.archives }}
