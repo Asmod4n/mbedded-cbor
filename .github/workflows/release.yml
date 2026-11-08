@@ -1,0 +1,51 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'RELEASE'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.read.outputs.tag }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - id: read
+        run: |
+          test -f RELEASE
+          version=$(sed -n 's/^project(mbedded-cbor VERSION \([0-9][0-9.]*\) .*/\1/p' CMakeLists.txt)
+          test -n "$version"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version"; then
+            echo "The tag v$version exists already"
+            exit 1
+          fi
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+  macos:
+    needs: version
+    uses: ./.github/workflows/macos.yml
+
+  windows:
+    needs: version
+    uses: ./.github/workflows/windows.yml
+
+  tag:
+    needs: [version, macos, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - run: |
+          git tag "${{ needs.version.outputs.tag }}" "$GITHUB_SHA"
+          git push origin "refs/tags/${{ needs.version.outputs.tag }}"
