@@ -1011,8 +1011,8 @@ std::string encoded_again(std::string_view const input)
 std::string shortest_head_of(std::uint8_t const major, std::uint64_t const argument)
 {
     if (argument < 24)
-        return std::string(1, static_cast<char>(major << 5 | argument));
-    return head_of(major, argument, argument <= 0xff ? 1 : argument <= 0xffff ? 2 : argument <= 0xffffffff ? 4 : 8);
+        return std::string(1, static_cast<char>(std::uint64_t{major} << 5 | argument));
+    return head_of(major, argument, argument <= 0xff ? 1uz : argument <= 0xffff ? 2uz : argument <= 0xffffffff ? 4uz : 8uz);
 }
 
 // k values in a row, each an array of the next one marked and a reference to it: [28([28([... []]), 29(1)]), 29(0)].
