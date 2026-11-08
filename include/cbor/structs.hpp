@@ -512,9 +512,6 @@ class generic
                 return std::unexpected(h.error());
             if (!head_accepted<U>(*h)) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            if (error const r = detail::validity::check_simple_value(h->info, h->argument).error_or(error{});
-                r != error{}) [[unlikely]]
-                return std::unexpected(r);
             out = static_cast<simple_value>(h->argument);
             return {};
         } else if constexpr (reflection::is_wide_integer<U>) {
@@ -915,10 +912,6 @@ class generic
                 } else if (k->major == major_type::array || k->major == major_type::map ||
                            k->major == major_type::tag) [[unlikely]] {
                     return std::unexpected(error::unsupported_value);
-                } else if (error const c =
-                               detail::validity::check_simple_value(k->info, k->argument).error_or(error{});
-                           c != error{}) [[unlikely]] {
-                    return std::unexpected(c);
                 }
             }
             std::expected<void, error> r;

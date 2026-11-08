@@ -1,5 +1,8 @@
 #include "reference.hpp"
 
+#include <cbor/sequence_reader.hpp>
+#include <cbor/structs.hpp>
+
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
@@ -213,6 +216,10 @@ TEST_CASE("head: encode returns io_error for any other error of the Writer")
     CHECK_EQ(test::encode(w, U(0)).error(), cbor::error::io_error);
 }
 
+struct one_simple_value {
+    cbor::simple_value v;
+};
+
 // RFC 8949 3 and Appendix C: a simple value below 32 in the two-byte form (f8 00 to f8 1f), the additional
 // information 28 to 30 of every major type, and the additional information 31 on major types 0, 1 and 6 are not
 // well-formed. This is the whole finite set of heads that are not well-formed for a reason of their own byte, and
@@ -242,5 +249,10 @@ TEST_CASE("head: every head that Appendix C makes not well-formed is syntax_erro
         } else {
             CHECK_EQ(l.error(), cbor::error::syntax_error);
         }
+        cbor::sequence_reader r;
+        r.feed(std::string_view{bytes});
+        CHECK_EQ(r.next().error(), cbor::error::syntax_error);
+        CHECK_EQ(cbor::structs<one_simple_value>::decode("\xa1\x61v" + bytes).error(), cbor::error::syntax_error);
+        CHECK_EQ(cbor::structs<one_simple_value>::decode("\xa1" + bytes + "\x00").error(), cbor::error::syntax_error);
     }
 }

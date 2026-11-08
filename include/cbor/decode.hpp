@@ -176,9 +176,6 @@ std::expected<void, error> tree_decoder<Checked>::decode_scalar(item &node, head
             node.via.f64 = heads::decode_float(h.info, h.argument);
             return {};
         default:
-            if (error const r = detail::validity::check_simple_value(h.info, h.argument).error_or(error{});
-                r != error{}) [[unlikely]]
-                return std::unexpected(r);
             node.via.simple_value = static_cast<simple_value>(h.argument);
             return {};
         }
