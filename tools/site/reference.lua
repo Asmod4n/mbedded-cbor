@@ -1,4 +1,4 @@
-local tree, group, impl, commit, examples_path, types_dir
+local tree, reference, group, impl, commit, examples_path, types_dir
 
 local function read_file(path)
   local f = io.open(path, "rb")
@@ -168,7 +168,7 @@ local examples = {}
 
 local function page_blocks(file, title, does)
   local where = group .. "/" .. file
-  local text = read_file(tree .. "/doc/reference/" .. group .. "/" .. file)
+  local text = read_file(reference .. "/" .. group .. "/" .. file)
   if text == nil then error("reference.lua: cannot read " .. where) end
   local doc = pandoc.read(text, "gfm"):walk(links)
   local out = { pandoc.RawBlock("html", '<section class="method" id="' .. page_id(file) .. '">'),
@@ -283,13 +283,14 @@ end
 
 function Pandoc(doc)
   tree = pandoc.utils.stringify(doc.meta.tree)
+  reference = pandoc.utils.stringify(doc.meta.reference)
   group = pandoc.utils.stringify(doc.meta.group)
   impl = pandoc.utils.stringify(doc.meta.impl)
   types_dir = pandoc.utils.stringify(doc.meta.types)
   commit = pandoc.utils.stringify(doc.meta.commit)
   examples_path = pandoc.utils.stringify(doc.meta.examples)
   local groups = {}
-  for _, b in ipairs(pandoc.read(read_file(tree .. "/doc/reference/index.md"), "gfm").blocks) do
+  for _, b in ipairs(pandoc.read(read_file(reference .. "/index.md"), "gfm").blocks) do
     if b.t == "Table" then
       for _, row in ipairs(b.bodies[1].body) do
         local name = pandoc.utils.stringify(row.cells[1].contents)

@@ -1,5 +1,4 @@
-local tree, out, version, date = arg[1], arg[2], arg[3], arg[4]
-local reference = tree .. '/doc/reference/'
+local reference, out, version, date = arg[1] .. '/', arg[2], arg[3], arg[4]
 
 local function text_of(path)
   local f, err = io.open(path)

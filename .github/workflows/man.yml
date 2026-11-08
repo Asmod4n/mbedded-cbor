@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
     paths:
+      - 'include/cbor/**'
+      - 'Doxyfile'
+      - 'tools/doc/**'
+      - 'containers/doxygen.Containerfile'
       - 'doc/reference/**'
       - 'doc/man/**'
       - 'tools/man/**'
@@ -19,6 +23,24 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - id: alpine
+        name: Read the date of the Alpine 3.24 package index
+        run: |
+          echo "index=$(for repo in main community; do curl -sSfI https://dl-cdn.alpinelinux.org/alpine/v3.24/$repo/x86_64/APKINDEX.tar.gz | sed -n 's/^last-modified: //Ip' | tr -d '\r' | date -u -f - +%Y%m%dT%H%M%S; done | sort | tail -1)" >> "$GITHUB_OUTPUT"
+      - id: image-doxygen
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/image-doxygen
+          key: image-doxygen-${{ steps.alpine.outputs.index }}-${{ hashFiles('containers/doxygen.Containerfile') }}
+      - if: steps.image-doxygen.outputs.cache-hit != 'true'
+        name: Build the image of Doxygen
+        run: |
+          mkdir -p "$RUNNER_TEMP/image-doxygen"
+          podman build -q -t mbedded-cbor-doxygen -f containers/doxygen.Containerfile containers
+          podman save -o "$RUNNER_TEMP/image-doxygen/image.tar" mbedded-cbor-doxygen
+      - if: steps.image-doxygen.outputs.cache-hit == 'true'
+        name: Load the image of Doxygen
+        run: podman load -q -i "$RUNNER_TEMP/image-doxygen/image.tar"
       - name: Build the image
         run: podman build -q -t mbedded-cbor-man -f containers/man.Containerfile containers
       - name: Make the man pages and compare them with doc/man/man3

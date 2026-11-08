@@ -7,17 +7,23 @@ if [ -n "$(git -C "$tree" status --porcelain)" ] && [ "${SITE_DIRTY:-}" != 1 ]; 
   exit 1
 fi
 mkdir -p "$out"
+generated=$(mktemp -d)
+trap 'rm -rf "$generated"' EXIT
+sh "$tree/tools/doc/reference.sh" "$generated"
 commit=$(git -C "$tree" rev-parse HEAD)
-podman run --rm --network none -e COMMIT="$commit" -e SITE_GROUPS="${SITE_GROUPS:-}" -v "$tree":/src:ro -v "$out":/out mbedded-cbor-site sh -ec '
+podman run --rm --network none -e COMMIT="$commit" -e SITE_GROUPS="${SITE_GROUPS:-}" -v "$tree":/src:ro -v "$generated":/generated:ro -v "$out":/out mbedded-cbor-site sh -ec '
   site=/src/tools/site
   work=/tmp/work
+  markdown=$work/markdown
   mkdir -p $work
+  cp -r /src/doc/reference $markdown
+  cp -r /generated/. $markdown
   flags="-std=c++23 -O1 -Wall -Wextra -Werror -I/src/include -I/src/third_party/boost_pfr/include -I/usr/lib/llvm-23/include"
   g++-16 $flags $site/tokens.cpp -L/usr/lib/llvm-23/lib -lclang -Wl,-rpath,/usr/lib/llvm-23/lib -o /tmp/tokens
   g++-16 $flags $site/check.cpp -o /tmp/check
-  groups=$(sed -n "s/^| \[\([a-z]*\)\](\1\/index.md) |.*/\1/p" /src/doc/reference/index.md)
+  groups=$(sed -n "s/^| \[\([a-z]*\)\](\1\/index.md) |.*/\1/p" $markdown/index.md)
   for g in $groups; do
-    for page in /src/doc/reference/$g/*.md; do
+    for page in $markdown/$g/*.md; do
       file=$(basename $page .md)
       [ $file = index ] && continue
       sed -n "1s/^# //p" $page | awk -v page="$g/$file" "{
@@ -45,13 +51,13 @@ podman run --rm --network none -e COMMIT="$commit" -e SITE_GROUPS="${SITE_GROUPS
   cp $site/style.css $site/site.js $site/examples.mjs /out/
   reference() {
     pandoc -f gfm -t html5 --template $site/reference.html --lua-filter $site/reference.lua \
-      -M tree=/src -M impl=$work/impl -M types=$work/types -M commit=$COMMIT -M group=$1 -M examples=$work/examples-$1.json "$2" -o /out/$1.html
+      -M tree=/src -M reference=$markdown -M impl=$work/impl -M types=$work/types -M commit=$COMMIT -M group=$1 -M examples=$work/examples-$1.json "$2" -o /out/$1.html
   }
-  reference index /src/doc/reference/index.md
-  reference console /src/doc/reference/console.md
+  reference index $markdown/index.md
+  reference console $markdown/console.md
   lynx -dump -nolist /out/console.html > $work/console.txt
   for g in ${SITE_GROUPS:-$groups}; do
-    reference $g /src/doc/reference/$g/index.md
+    reference $g $markdown/$g/index.md
     lynx -dump -nolist /out/$g.html > $work/$g.txt
   done
   node $site/check_examples.mjs /out/examples.wasm $work /src/include/cbor/error.hpp'
