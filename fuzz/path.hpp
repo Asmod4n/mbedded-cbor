@@ -1,3 +1,4 @@
+// Gives the fuzz target of the paths of RFC 9535.
 #pragma once
 
 #include "common.hpp"

@@ -1,3 +1,4 @@
+// Gives the value model of the bench and its read from cbor::item and cbor::lazy.
 #pragma once
 
 #include <cbor/cbor.hpp>

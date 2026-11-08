@@ -1,3 +1,4 @@
+// Gives the fuzz target of cbor::item_size against cbor::decode.
 #pragma once
 
 #include "common.hpp"

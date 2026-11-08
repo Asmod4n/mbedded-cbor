@@ -1,3 +1,4 @@
+// Gives the calls of the console that give a cbor::ref.
 #pragma once
 
 #include "lazy.hpp"

@@ -1,3 +1,4 @@
+// Gives the calls of the console on cbor::item and the tree of cbor::decode.
 #pragma once
 
 #include "lazy.hpp"

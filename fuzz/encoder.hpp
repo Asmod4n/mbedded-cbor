@@ -1,3 +1,4 @@
+// Gives the fuzz target of cbor::encoder.
 #pragma once
 
 #include "common.hpp"

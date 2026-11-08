@@ -1,3 +1,4 @@
+// Gives the fuzz target of cbor::sequence and cbor::sequence_reader over the pieces of the input.
 #pragma once
 
 #include "../test/sequence_reader.hpp"

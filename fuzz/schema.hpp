@@ -1,3 +1,4 @@
+// Gives the fuzz targets of cbor::schema over messages made from the input.
 #pragma once
 
 #include "common.hpp"

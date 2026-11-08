@@ -1,3 +1,4 @@
+// Gives the calls of the console on cbor::schema.
 #pragma once
 
 #include "lazy.hpp"

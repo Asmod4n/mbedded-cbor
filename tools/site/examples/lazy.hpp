@@ -1,3 +1,4 @@
+// Gives the calls of the console on cbor::lazy.
 #pragma once
 
 #include "candidates.hpp"

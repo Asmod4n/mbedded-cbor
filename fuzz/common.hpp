@@ -1,3 +1,4 @@
+// Gives the checks, the comparison of values and the reader of the input that every fuzz target uses.
 #pragma once
 
 #include "../test/reference.hpp"

@@ -1,3 +1,4 @@
+// Parses the calls that a user types into the console, and runs them on the variables of a session.
 #pragma once
 
 #include "kinds/kinds.hpp"

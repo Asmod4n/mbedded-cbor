@@ -1,3 +1,4 @@
+// Gives the token of a source file that the site colours, and the file of tokens.
 #pragma once
 
 #include <cbor/cbor.hpp>

@@ -1,3 +1,5 @@
+// Gives the calls of the console on cbor::diagnostic_notation, cbor::item_size, cbor::sequence and
+// cbor::sequence_reader.
 #pragma once
 
 #include "lazy.hpp"

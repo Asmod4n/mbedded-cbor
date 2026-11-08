@@ -1,3 +1,4 @@
+// Gives the value of a console variable and the checks of the arguments of a call.
 #pragma once
 
 #include <cbor/cbor.hpp>

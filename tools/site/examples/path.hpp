@@ -1,3 +1,4 @@
+// Gives the calls of the console on cbor::path and cbor::at_path.
 #pragma once
 
 #include "lazy.hpp"
