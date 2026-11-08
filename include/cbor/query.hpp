@@ -698,8 +698,6 @@ class jsonpath
         std::size_t step = 0;
         auto const typed_array_elements =
             [&d](std::uint64_t const tag) -> std::optional<std::expected<std::string_view, error>> {
-            d.encoded = detail::validity::subspan(
-                d.encoded, heads::self_described_cbor_content_at(d.encoded, detail::validity::offset{}));
             auto const r = d.decode_head();
             if (!r) [[unlikely]]
                 return std::unexpected(r.error());
@@ -844,8 +842,6 @@ class jsonpath
             std::uint64_t argument = h.argument;
             if (heads::is_bignum(h.major, h.argument)) {
                 negative = h.argument == std::to_underlying(rfc8949::tag_number::negative_bignum);
-                d.encoded = detail::validity::subspan(
-                    d.encoded, heads::self_described_cbor_content_at(d.encoded, detail::validity::offset{}));
                 auto const read = d.decode_bignum(h.argument);
                 if (!read) [[unlikely]]
                     return std::unexpected(read.error());

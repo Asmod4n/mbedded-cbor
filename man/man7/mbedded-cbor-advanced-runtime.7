@@ -623,7 +623,9 @@ so the root of its tree is the content.
 A second tag 55799, and a tag 55799 inside an item, stay tags:
 \f[CR]type()\f[R] gives \f[CR]tag\f[R] there.
 \f[CR]get\f[R], \f[CR]at\f[R] and a path read through such a tag to its
-content.
+content, except as the content of a tag 2, a tag 3 or a typed array:
+there it is a content that is not a byte string, as
+\f[CR]cbor::decode\f[R] reads it.
 .IP
 .EX
 \f[I]// owner: a std::shared_ptr<std::string const> with the bytes in the comment above each read\f[R]

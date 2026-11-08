@@ -268,7 +268,7 @@ pair. A wildcard, a descendant segment and a filter take all pairs.
 | 24, encoded CBOR data item | goes into the byte string and reads the embedded item |
 | 28, shareable | passes it; the value is the content |
 | 29, shared reference | passes it as any other tag; the value is the content, the index. A path does not resolve the reference |
-| 55799, self-described CBOR | passes it, at the top, inside the item and inside tag 24 |
+| 55799, self-described CBOR | passes it, at the top, inside the item and inside tag 24; not as the content of a tag 2, a tag 3 or a typed array |
 | 2 and 3, bignum | a typed read into an integer type reads the magnitude |
 | an RFC 8746 typed array tag | an index reads one element; a typed read into `cbor::typed_array` reads the whole array |
 | any other tag | passes it; the value is the content (RFC 8949 6.1) |

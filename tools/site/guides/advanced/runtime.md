@@ -337,7 +337,9 @@ width of the argument. So `clone` of that lazy gives the content.
 `cbor::decode` also reads one leading tag 55799 as its content, so the
 root of its tree is the content. A second tag 55799, and a tag 55799
 inside an item, stay tags: `type()` gives `tag` there. `get`, `at` and a
-path read through such a tag to its content.
+path read through such a tag to its content, except as the content of a
+tag 2, a tag 3 or a typed array: there it is a content that is not a byte
+string, as `cbor::decode` reads it.
 
 ```cpp
 // owner: a std::shared_ptr<std::string const> with the bytes in the comment above each read
