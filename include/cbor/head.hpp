@@ -76,6 +76,11 @@ class heads
 
     static constexpr std::size_t initial_byte_size = 1;
 
+    static constexpr std::uint8_t additional_information_of(std::uint8_t const initial)
+    {
+        return initial & ((1 << rfc8949::additional_information_bits) - 1);
+    }
+
     static constexpr char initial_byte(major_type const major, std::uint64_t const info)
     {
         return static_cast<char>(std::uint64_t{std::to_underlying(major)} << rfc8949::additional_information_bits | info);
@@ -259,7 +264,7 @@ class heads
                 return std::unexpected(fits.error());
             auto const initial = static_cast<std::uint8_t>(encoded.front());
             auto const major = static_cast<major_type>(initial >> rfc8949::additional_information_bits);
-            std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
+            std::uint8_t const info = additional_information_of(initial);
             if (info < std::to_underlying(rfc8949::additional_information::one_byte_argument)) {
                 if (error const r = detail::validity::check_argument<Checked>(major, info).error_or(error{});
                     r != error{}) [[unlikely]]
@@ -317,7 +322,7 @@ class heads
                                              ? static_cast<std::uint8_t>(encoded.front())
                                              : 0xff;
             auto const major = static_cast<major_type>(initial >> rfc8949::additional_information_bits);
-            std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
+            std::uint8_t const info = additional_information_of(initial);
             if (detail::validity::bytes_fit(initial_byte_size + sizeof(std::uint64_t), encoded.size()) &&
                 info <= std::to_underlying(rfc8949::additional_information::eight_byte_argument) &&
                 major != major_type::tag &&
@@ -774,7 +779,7 @@ class heads
             return std::unexpected(fits.error());
         auto const initial = static_cast<std::uint8_t>(rest.front());
         auto const major = static_cast<major_type>(initial >> rfc8949::additional_information_bits);
-        std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
+        std::uint8_t const info = additional_information_of(initial);
         if (info < std::to_underlying(rfc8949::additional_information::one_byte_argument)) {
             if (error const r = detail::validity::check_argument<Checked>(major, info).error_or(error{});
                 r != error{}) [[unlikely]]

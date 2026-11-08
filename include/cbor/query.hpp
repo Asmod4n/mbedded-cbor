@@ -942,18 +942,10 @@ class path
     template <class T>
     static std::expected<T, error> walk_query(query_view const v, parsed_query const &top, lazy const &root)
     {
-        lazy node = root;
-        for (segment const &s : v.segments.subspan(top.segment_at, top.segment_count)) {
-            selector const &each = v.selectors[s.selector_at];
-            auto const child =
-                each.kind == selector::kind::index
-                    ? select_index(node, each.index)
-                    : find_key(node, std::string_view(std::span(v.keys).subspan(each.key_at, each.key_size)));
-            if (!child) [[unlikely]]
-                return std::unexpected(child.error());
-            node = *child;
-        }
-        auto const value = node.template get<T>();
+        auto const node = walk_singular_query(v, top, root);
+        if (!node) [[unlikely]]
+            return std::unexpected(node.error());
+        auto const value = node->template get<T>();
         if (!value) [[unlikely]]
             return std::unexpected(value.error());
         if constexpr (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
@@ -989,49 +981,20 @@ class path
         return walk_query<T>(v, top, root);
     }
 
-    template <fixed_string Path>
-    static constexpr auto parse_literal()
-    {
-        return *parse_query(Path.view());
-    }
-
     template <fixed_string Path, class T>
     static std::expected<T, error> walk_query(std::string_view const encoded)
     {
-        constexpr std::size_t segments = parse_literal<Path>().segments.size();
-        constexpr std::size_t selectors = parse_literal<Path>().selectors.size();
-        constexpr std::size_t keys = parse_literal<Path>().keys.size();
-        constexpr auto top = parse_literal<Path>().top;
-        constexpr auto compiled = [] {
-            auto const parsed = parse_literal<Path>();
-            std::tuple<std::array<segment, segments>, std::array<selector, selectors>, std::array<char, keys>> c{};
-            std::ranges::copy(parsed.segments, std::get<0>(c).begin());
-            std::ranges::copy(parsed.selectors, std::get<1>(c).begin());
-            std::ranges::copy(parsed.keys, std::get<2>(c).begin());
-            return c;
-        }();
-        query_view const v{std::get<0>(compiled), std::get<1>(compiled), {}, std::string_view(std::get<2>(compiled)), {}};
-        return walk_bytes<T>(v, top, encoded);
+        return apply_compiled<Path>(
+            [encoded](query_view const v, parsed_query const &top) { return walk_bytes<T>(v, top, encoded); });
     }
 
     template <fixed_string Path, class T>
     static std::expected<T, error> walk_query(lazy const &root)
     {
-        constexpr std::size_t segments = parse_literal<Path>().segments.size();
-        constexpr std::size_t selectors = parse_literal<Path>().selectors.size();
-        constexpr std::size_t keys = parse_literal<Path>().keys.size();
-        constexpr auto top = parse_literal<Path>().top;
-        constexpr auto compiled = [] {
-            auto const parsed = parse_literal<Path>();
-            std::tuple<std::array<segment, segments>, std::array<selector, selectors>, std::array<char, keys>> c{};
-            std::ranges::copy(parsed.segments, std::get<0>(c).begin());
-            std::ranges::copy(parsed.selectors, std::get<1>(c).begin());
-            std::ranges::copy(parsed.keys, std::get<2>(c).begin());
-            return c;
-        }();
-        query_view const v{std::get<0>(compiled), std::get<1>(compiled), {}, std::string_view(std::get<2>(compiled)), {}};
-        return walk_lazy<T>(v, top, root);
+        return apply_compiled<Path>(
+            [&root](query_view const v, parsed_query const &top) { return walk_lazy<T>(v, top, root); });
     }
+
     template <fixed_string Path, class T>
     static std::expected<ref<T>, error> walk_owned_query(lazy const &root)
     {

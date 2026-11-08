@@ -1154,7 +1154,7 @@ class extended_diagnostic_notation
             return std::unexpected(r.error());
         auto const initial = static_cast<std::uint8_t>(d.encoded.front());
         auto const major = static_cast<major_type>(initial >> rfc8949::additional_information_bits);
-        std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
+        std::uint8_t const info = heads::additional_information_of(initial);
         if (error const r = detail::validity::check_additional_information(major, info).error_or(error{});
             r != error{}) [[unlikely]]
             return std::unexpected(r);
@@ -1224,7 +1224,7 @@ class extended_diagnostic_notation
                         detail::validity::check_chunk(
                             h->major,
                             static_cast<major_type>(initial >> rfc8949::additional_information_bits),
-                            initial & ((1 << rfc8949::additional_information_bits) - 1))
+                            heads::additional_information_of(initial))
                             .error_or(error{});
                     c != error{}) [[unlikely]]
                     return std::unexpected(c);

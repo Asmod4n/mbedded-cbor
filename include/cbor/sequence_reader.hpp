@@ -147,7 +147,7 @@ class sequence_reader
                 if (h.error() == error::too_little_data &&
                     detail::validity::bytes_fit(heads::initial_byte_size, d.encoded.size())) {
                     auto const initial = static_cast<std::uint8_t>(d.encoded.front());
-                    std::uint8_t const info = initial & ((1 << rfc8949::additional_information_bits) - 1);
+                    std::uint8_t const info = heads::additional_information_of(initial);
                     at = phase::argument;
                     phase_end = scanned + heads::initial_byte_size + heads::argument_size(info);
                 }
