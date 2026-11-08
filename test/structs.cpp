@@ -1091,8 +1091,8 @@ std::expected<std::int64_t, error> day_of(std::string_view const text)
 // RFC 8943 2: tag 100 holds the number of days since 1970-01-01, with no bound. std::chrono::year_month_day holds the
 // years from -32767 to 32767 (C++ [time.cal.year]). Their first and last days, -32767-01-01 and 32767-12-31, are
 // -12687428 and 11248737 days from the epoch, counted year by year in the proleptic Gregorian calendar outside
-// std::chrono. A count outside them is no date that year_month_day holds: decode gives number_out_of_range, gives no
-// other date, and computes nothing that overflows (a count near 2^31 overflowed the int days of libc++).
+// std::chrono. A count outside them is no date that year_month_day holds: decode gives number_out_of_range and gives
+// no other date, also for the counts at the ends of 32 and 64 bits.
 TEST_CASE("structs: tag 100 outside the years of year_month_day is number_out_of_range")
 {
     using namespace std::chrono;

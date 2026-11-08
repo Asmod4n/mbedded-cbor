@@ -673,8 +673,7 @@ public:
         return {};
     }
 
-    template <class Rep>
-    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_day_count(Rep const days)
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_day_count(std::chrono::days::rep const days)
     {
         constexpr auto first_day =
             std::chrono::sys_days{std::chrono::year::min() / std::chrono::January / 1}.time_since_epoch().count();
