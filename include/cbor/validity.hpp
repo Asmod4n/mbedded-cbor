@@ -500,6 +500,21 @@ public:
     static std::expected<std::pair<std::uint64_t, offset>, error> intern_key(canonical_ids &ids, Message &message,
                                                                          offset at);
 
+    template <class Encoded>
+        requires(!std::is_reference_v<Encoded>)
+    static std::expected<std::shared_ptr<Encoded const>, error> make_shared_owner(Encoded &&encoded)
+    {
+#if defined(__cpp_exceptions)
+        try {
+#endif
+            return std::make_shared<Encoded const>(std::move(encoded));
+#if defined(__cpp_exceptions)
+        } catch (std::bad_alloc const &) {
+            return std::unexpected(error::not_enough_memory);
+        }
+#endif
+    }
+
     static constexpr error writer_error(std::errc const e) noexcept
     {
         if (e == std::errc::no_buffer_space)

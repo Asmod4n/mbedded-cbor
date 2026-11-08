@@ -4322,6 +4322,7 @@ public:
      *
      * @retval too_little_data the message is shorter than its table and root, or its end is missing
      * @retval incorrect_type a message of another layout, or a wrong tag of the root
+     * @retval not_enough_memory an allocation of the owner fails (the rvalue form)
      * @snippet doc_reference_schema.cpp path
      * @see cbor::schema::accessor
      * @see cbor::schema::at_path()
@@ -4332,7 +4333,10 @@ public:
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(Encoded &&encoded)
     {
-        return path_with_owner<true, D>(std::make_shared<Encoded const>(std::move(encoded)));
+        auto owner = detail::validity::make_shared_owner(std::move(encoded));
+        if (!owner) [[unlikely]]
+            return std::unexpected(owner.error());
+        return path_with_owner<true, D>(std::move(*owner));
     }
 
     /**
@@ -4545,6 +4549,7 @@ public:
      * @retval unpopulated_table_index, syntax_error a reference or a directory entry outside the table or the items
      * @retval incorrect_type a variant item whose head names no alternative. The head chooses the alternative, so
      * these forms compare it too
+     * @retval not_enough_memory an allocation of the owner fails (the rvalue form)
      * @snippet doc_reference_schema.cpp unverified
      * @see cbor::schema::unverified_at_path()
      * @see cbor::schema::unverified_decode()
@@ -4554,7 +4559,10 @@ public:
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_path(Encoded &&encoded)
     {
-        return path_with_owner<false, D>(std::make_shared<Encoded const>(std::move(encoded)));
+        auto owner = detail::validity::make_shared_owner(std::move(encoded));
+        if (!owner) [[unlikely]]
+            return std::unexpected(owner.error());
+        return path_with_owner<false, D>(std::move(*owner));
     }
 
     /**

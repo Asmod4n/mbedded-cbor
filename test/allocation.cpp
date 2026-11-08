@@ -1,12 +1,15 @@
 #include "reference.hpp"
 #include "owned_copy.hpp"
 #include "item_head.hpp"
+#include "doc_types.hpp"
+#include <cbor/schema.hpp>
 #include <cbor/sequence_reader.hpp>
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <limits>
 #include <memory>
 #include <new>
 #include <string>
@@ -23,6 +26,8 @@ std::size_t allocations = 0;
 
 std::size_t allocated_bytes = 0;
 
+std::size_t refused_allocation = std::numeric_limits<std::size_t>::max();
+
 } // namespace
 
 // The replaced operator new counts each allocation of this test binary, so a test can show that a call allocates
@@ -31,6 +36,8 @@ std::size_t allocated_bytes = 0;
 {
     ++allocations;
     allocated_bytes += size;
+    if (allocations == refused_allocation)
+        throw std::bad_alloc();
     if (void *const p = std::malloc(size == 0 ? 1 : size))
         return p;
     throw std::bad_alloc();
@@ -49,6 +56,8 @@ std::size_t allocated_bytes = 0;
 {
     ++allocations;
     allocated_bytes += size;
+    if (allocations == refused_allocation)
+        throw std::bad_alloc();
     auto const step = static_cast<std::size_t>(alignment);
     if (void *const p = std::aligned_alloc(step, (size + step - 1) / step * step))
         return p;
@@ -69,6 +78,43 @@ std::size_t allocated_bytes = 0;
 [[gnu::noinline]] void operator delete(void *const p, std::size_t) noexcept
 {
     std::free(p);
+}
+
+namespace
+{
+
+struct next_allocation_refused {
+    next_allocation_refused() { refused_allocation = allocations + 1; }
+    ~next_allocation_refused() { refused_allocation = std::numeric_limits<std::size_t>::max(); }
+    next_allocation_refused(next_allocation_refused const &) = delete;
+    next_allocation_refused &operator=(next_allocation_refused const &) = delete;
+};
+
+} // namespace
+
+// The rvalue forms of schema::path and schema::unverified_path move the message into a new owner. A full memory
+// gives std::bad_alloc there, and the owner decided that it becomes not_enough_memory, as in schema::decode.
+// Before, the std::bad_alloc left the call.
+TEST_CASE("schema: path and unverified_path give not_enough_memory when the owner cannot be allocated")
+{
+    using doc_reference_schema::car;
+    car const sample{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}};
+    auto const encoded = cbor::schema<car>::encode(sample);
+    REQUIRE(encoded.has_value());
+    std::string verified = *encoded;
+    std::string unverified = verified;
+    error verified_error{};
+    error unverified_error{};
+    {
+        next_allocation_refused const refused;
+        verified_error = cbor::schema<car>::path(std::move(verified)).error_or(error{});
+    }
+    {
+        next_allocation_refused const refused;
+        unverified_error = cbor::schema<car>::unverified_path(std::move(unverified)).error_or(error{});
+    }
+    CHECK_EQ(verified_error, error::not_enough_memory);
+    CHECK_EQ(unverified_error, error::not_enough_memory);
 }
 
 // The path that succeeds compares a key of the top-level item with a literal by value without an allocation: the
