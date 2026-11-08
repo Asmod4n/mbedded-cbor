@@ -424,3 +424,26 @@ TEST_CASE("sequence_reader: copy does not compile, a moved-from reader throws")
     CHECK_THROWS_AS(static_cast<void>(r.next()), std::logic_error);
     CHECK_THROWS_AS(static_cast<void>(r.empty()), std::logic_error);
 }
+
+// The reader dropped the pieces it had read from the front of its list at each feed, and moved every piece that
+// waited behind them: with k pieces that wait, a feed after each next took k steps, and 80000 pieces took 9 s. It now
+// drops them when they are at least half of the list, so each piece is moved a bounded number of times on average.
+// A form that moves every waiting piece at each feed takes 10^10 steps here, and the test run would not end in time.
+TEST_CASE("sequence_reader: a feed after each next with 100000 pieces that wait")
+{
+    constexpr std::size_t waiting = 100000;
+    cbor::sequence_reader r;
+    for (std::size_t i = 0; i < waiting; ++i)
+        r.feed(std::string(1, '\x00'));
+    std::size_t read = 0;
+    for (std::size_t i = 0; i < waiting; ++i) {
+        read += r.next().has_value();
+        r.feed(std::string(1, '\x01'));
+    }
+    CHECK_EQ(read, waiting);
+    std::size_t ones = 0;
+    while (auto const e = r.next())
+        ones += e->get<std::uint64_t>().value_or(0);
+    CHECK_EQ(ones, waiting);
+    CHECK(r.empty());
+}
