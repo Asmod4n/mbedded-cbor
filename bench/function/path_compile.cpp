@@ -22,6 +22,7 @@ constexpr std::array paths{
     R"($.a[?@ == "IETF"])"sv,
     "$.a[?@ == h'01020304']"sv,
     "$.a[?@ == 1.5 && @ != 1.1]"sv,
+    "$.a[1][2:9007199254740991]"sv,
 };
 
 std::size_t cold_bytes()
