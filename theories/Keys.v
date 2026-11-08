@@ -3,10 +3,11 @@
 
 From Stdlib Require Import List Arith Lia PeanoNat Bool.
 From MbeddedCbor Require Import ValueSharing Writer.
+From MbeddedCbor Require Meaning.
 Import ListNotations.
 
 Definition bisimilar (g1 : list (nat * node)) (a : nat) (g2 : list (nat * node)) (b : nat) : Prop :=
-  forall k, unfold g1 k a = unfold g2 k b.
+  forall k, Meaning.unfold g1 k a = Meaning.unfold g2 k b.
 
 Fixpoint all2 {A B : Type} (R : A -> B -> bool) (l1 : list A) (l2 : list B) : bool :=
   match l1, l2 with
@@ -52,16 +53,16 @@ Proof.
   - intros E. injection E as E1 E2. split; assumption.
 Qed.
 
-Lemma eq_upto_unfold : forall g1 g2 k a b, eq_upto g1 g2 k a b = true <-> unfold g1 k a = unfold g2 k b.
+Lemma eq_upto_unfold : forall g1 g2 k a b, eq_upto g1 g2 k a b = true <-> Meaning.unfold g1 k a = Meaning.unfold g2 k b.
 Proof.
   intros g1 g2. induction k as [| k IH]; intros a b; [simpl; split; reflexivity |].
-  simpl. destruct (assoc g1 a) as [n1 |], (assoc g2 b) as [n2 |].
+  simpl. rewrite <- !assoc_find. destruct (assoc g1 a) as [n1 |], (assoc g2 b) as [n2 |].
   - destruct n1, n2; simpl; try (split; intros E; discriminate E).
     + rewrite Nat.eqb_eq. split; [intros ->; reflexivity | intros E; injection E; auto].
     + rewrite Nat.eqb_eq. split; [intros ->; reflexivity | intros E; injection E; auto].
     + rewrite (all2_map _ _ _ _ _ _ IH). split; [intros ->; reflexivity | intros E; injection E; auto].
-    + rewrite (all2_map _ _ _ _ (fun p => (unfold g1 k (fst p), unfold g1 k (snd p)))
-                              (fun q => (unfold g2 k (fst q), unfold g2 k (snd q)))).
+    + rewrite (all2_map _ _ _ _ (fun p => (Meaning.unfold g1 k (fst p), Meaning.unfold g1 k (snd p)))
+                              (fun q => (Meaning.unfold g2 k (fst q), Meaning.unfold g2 k (snd q)))).
       * split; [intros ->; reflexivity | intros E; injection E; auto].
       * intros p q. rewrite andb_true_iff, IH, IH. split.
         -- intros [E1 E2]. rewrite E1, E2. reflexivity.

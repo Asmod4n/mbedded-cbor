@@ -46,8 +46,12 @@ Fixpoint tree_pairs (l : list tree) : list (tree * tree) :=
   | _ => []
   end.
 
-(* The stream after a chain of tags 28. *)
-Definition strip (ts : list tok) : list tok := snd (chain ts 0).
+(* The stream after a chain of tags 28. It does not use the chain of the reader. *)
+Fixpoint strip (ts : list tok) : list tok :=
+  match ts with
+  | TTag t :: r => if Nat.eqb t shareable then strip r else ts
+  | _ => ts
+  end.
 Arguments strip : simpl never.
 
 (* Entry n: the item that the n-th tag 28 of the stream marks, after the chain of tags 28 that it starts. *)
@@ -152,23 +156,27 @@ Definition simple (ts : list tok) : Prop :=
   end.
 
 (* Facts about chains of tags 28. *)
-Lemma chain_snd : forall ts c, snd (chain ts c) = snd (chain ts 0).
+Lemma strip_tag : forall t r, strip (TTag t :: r) = if Nat.eqb t shareable then strip r else TTag t :: r.
+Proof. reflexivity. Qed.
+
+(* strip and the chain of the reader give the same stream. *)
+Lemma strip_chain : forall ts c c' content, chain ts c = (c', content) -> strip ts = content.
 Proof.
-  induction ts as [| t ts IH]; intros c; simpl; [reflexivity |].
-  destruct t as [| | | | tg]; try reflexivity.
-  destruct (Nat.eqb tg shareable); [rewrite (IH (S c)), (IH 1); reflexivity | reflexivity].
+  induction ts as [| t ts IH]; intros c c' content H; simpl in H.
+  - inversion H; subst; reflexivity.
+  - destruct t as [n | n | n | n | tg]; try (inversion H; subst; reflexivity).
+    rewrite strip_tag. destruct (Nat.eqb tg shareable).
+    + eapply IH. exact H.
+    + inversion H; subst; reflexivity.
 Qed.
 
-Lemma strip_chain : forall ts c c' content, chain ts c = (c', content) -> strip ts = content.
-Proof. intros ts c c' content H. unfold strip. rewrite <- (chain_snd ts c), H. reflexivity. Qed.
-
 Lemma strip_shareable : forall r, strip (TTag shareable :: r) = strip r.
-Proof. intros r. unfold strip. simpl. apply chain_snd. Qed.
+Proof. intros r. reflexivity. Qed.
 
 Lemma strip_simple : forall ts, (forall r, ts <> TTag shareable :: r) -> strip ts = ts.
 Proof.
-  intros [| [n | n | n | n | t] r] H; unfold strip; simpl; try reflexivity.
-  destruct (Nat.eqb t shareable) eqn:M; [| reflexivity].
+  intros [| [n | n | n | n | t] r] H; try reflexivity.
+  rewrite strip_tag. destruct (Nat.eqb t shareable) eqn:M; [| reflexivity].
   apply Nat.eqb_eq in M. subst t. exfalso. eapply H. reflexivity.
 Qed.
 

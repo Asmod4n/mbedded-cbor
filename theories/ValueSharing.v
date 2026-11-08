@@ -27,12 +27,13 @@ Record state := mkstate {
   next : nat;                 (* the id of the next node *)
   table : list nat;           (* entry n: the node that the n-th tag 28 marks *)
   graph : list (nat * node);  (* the complete nodes, the newest first *)
-  steps : nat                 (* the heads that the reader has looked at *)
+  steps : nat                 (* the heads that the reader has consumed *)
 }.
 
 Inductive err :=
 | out_of_fuel
 | too_little_data
+| trailing_data
 | sharedref_index_not_unsigned
 | sharedref_index_not_marked
 | sharedref_not_defined.
@@ -162,7 +163,7 @@ Definition read (ts : list tok) : result (nat * state) :=
   match read_item (S (length ts)) ts start with
   | fail e => fail e
   | ok (root, [], s) => ok (root, s)
-  | ok (_, _ :: _, _) => fail too_little_data
+  | ok (_, _ :: _, _) => fail trailing_data
   end.
 
 (* What every step keeps: the stream gets shorter, the graph and the table only grow at their ends, and the
@@ -646,8 +647,8 @@ Proof.
   inversion H; subst. auto.
 Qed.
 
-(* Cases with their result, computed by the model. Each one is a case of the specification or a trap that a
-   reader met; the name says which. *)
+(* Cases with their result, computed by the model. Each one is a case of the specification or an input that
+   broke another reader; the name says which. *)
 Definition result_of (ts : list tok) : result (nat * list (nat * node) * list nat) :=
   match read ts with
   | ok (root, s) => ok (root, graph s, table s)
@@ -693,6 +694,10 @@ Example two_marks_one_value :
   = ok (0, [(0, NArr [1; 1; 1]); (1, NUInt 5)], [1; 1]).
 Proof. reflexivity. Qed.
 
+(* An item after the root: 1 2. *)
+Example item_after_root : result_of [TUInt 1; TUInt 2] = fail trailing_data.
+Proof. reflexivity. Qed.
+
 (* A reference before any mark: [29(0)]. *)
 Example forward_reference : result_of [TArr 1; TTag 29; TUInt 0] = fail sharedref_index_not_marked.
 Proof. reflexivity. Qed.
@@ -716,9 +721,10 @@ Example map_is_its_own_key :
   result_of [TTag 28; TMap 1; TTag 29; TUInt 0; TUInt 1] = ok (0, [(0, NMap [(0, 1)]); (1, NUInt 1)], [0]).
 Proof. reflexivity. Qed.
 
-(* T1 (linear cost): the reader looks at each head once. A chain of tags 28 is one pass, a tag 29 looks at its
-   head and its index, and nothing is read twice. The lookup of an entry in the table is one step of the C++
-   reader, which keeps the table in a std::vector; this list model does not count it. *)
+(* T1 (linear cost): the reader consumes each head once. A chain of tags 28 is one pass, and a tag 29 consumes
+   its head and its index. The theorem counts the consumed heads. It does not count the look-ahead of
+   chain_target at the item after a chain. It does not count the cost of nth_error either. The lookup of an
+   entry in the table is one step of the C++ reader, which keeps the table in a std::vector. *)
 Lemma chain_length : forall ts c c' content, chain ts c = (c', content) -> length content + c' = length ts + c.
 Proof.
   induction ts as [| t ts IH]; intros c c' content H; simpl in H.

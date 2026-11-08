@@ -5,6 +5,7 @@
 
 From Stdlib Require Import List Arith Lia PeanoNat.
 From MbeddedCbor Require Import ValueSharing.
+From MbeddedCbor Require Meaning.
 Import ListNotations.
 
 (* The value of the first entry with the key k. A graph is read with it. *)
@@ -69,31 +70,9 @@ Proof.
   - apply mem_false. apply assoc_None. exact E.
 Qed.
 
-(* The unfolding of a graph at a node to the depth k. Each array, map and tag level takes one depth. *)
-Scheme All for list.
-Scheme All for prod.
-
-Inductive tree :=
-| Cut
-| TU (n : nat)
-| TL (n : nat)
-| TA (l : list tree)
-| TM (l : list (tree * tree))
-| TT (t : nat) (c : tree).
-
-Fixpoint unfold (g : list (nat * node)) (k : nat) (id : nat) : tree :=
-  match k with
-  | 0 => Cut
-  | S k' =>
-    match assoc g id with
-    | None => Cut
-    | Some (NUInt n) => TU n
-    | Some (NLeaf n) => TL n
-    | Some (NArr l) => TA (map (unfold g k') l)
-    | Some (NMap ps) => TM (map (fun p => (unfold g k' (fst p), unfold g k' (snd p))) ps)
-    | Some (NTag t c) => TT t (unfold g k' c)
-    end
-  end.
+(* assoc on a graph gives what Meaning.find gives. Meaning.unfold reads a graph with Meaning.find. *)
+Lemma assoc_find : forall (g : list (nat * node)) i, assoc g i = Meaning.find g i.
+Proof. induction g as [| [j n] g IH]; intros i; simpl; [reflexivity | rewrite IH; reflexivity]. Qed.
 
 (* Every child of a node of g is a node of g. *)
 Definition closed (g : list (nat * node)) : Prop :=
@@ -336,7 +315,10 @@ Proof.
 Qed.
 
 (* T8 (where the marks are). The stream has one tag 28 for each time that the walk enters a node of
-   back_edges, and one tag 29 for each back edge. Each node of back_edges is entered, so it gets a mark. *)
+   back_edges, and one tag 29 for each back edge. Each node of back_edges is entered, so it gets a mark.
+   The writer marks a node of back_edges at each full write of it, also where no tag 29 follows that mark.
+   An example is R -> [A, X], A -> [X], X -> [A] (write_two_cycles): the first full writes of A and X both get
+   a mark, and only the mark of A gets a reference. The specification allows a mark with no reference. *)
 Theorem marks_on_back_edges : forall g root,
   plain_tags g ->
   count_tag shareable (write g root)
@@ -376,74 +358,6 @@ Proof.
   - intros i n _. reflexivity.
 Qed.
 
-(* The reader gives each node a new id, and the ids of its graph are distinct. *)
-Definition fresh (a b : state) : Prop :=
-  next a <= next b /\
-  exists nw, graph b = nw ++ graph a /\ NoDup (map fst nw) /\ Forall (fun e => next a <= fst e < next b) nw.
-
-Lemma fresh_refl : forall s, fresh s s.
-Proof. intros s. split; [lia | exists []; split; [reflexivity | split; constructor]]. Qed.
-
-Lemma fresh_trans : forall a b c, fresh a b -> fresh b c -> fresh a c.
-Proof.
-  intros a b c [L1 [n1 [G1 [N1 F1]]]] [L2 [n2 [G2 [N2 F2]]]].
-  split; [lia |]. exists (n2 ++ n1). split; [rewrite G2, G1, app_assoc; reflexivity |]. split.
-  - rewrite map_app. apply NoDup_app; [exact N2 | exact N1 |].
-    intros i H2 H1. apply in_map_iff in H2. destruct H2 as [[i2 x2] [E2 H2]].
-    apply in_map_iff in H1. destruct H1 as [[i1 x1] [E1 H1]]. simpl in E1, E2. subst.
-    rewrite Forall_forall in F1, F2. specialize (F2 _ H2). specialize (F1 _ H1). simpl in F1, F2. lia.
-  - apply Forall_app. split.
-    + eapply Forall_impl; [| exact F2]. intros e He. cbv beta in *. lia.
-    + eapply Forall_impl; [| exact F1]. intros e He. cbv beta in *. lia.
-Qed.
-
-Lemma fresh_made : forall s s1 n, fresh (reserved (looked 1 s)) s1 -> fresh s (made (next s) n s1).
-Proof.
-  intros s s1 n [L [nw [G [N F]]]]. simpl in L.
-  split; [simpl; lia |]. exists ((next s, n) :: nw). split; [simpl; rewrite G; reflexivity |]. split.
-  - simpl. constructor; [| exact N]. intros H. apply in_map_iff in H. destruct H as [[i n'] [E H]].
-    simpl in E. subst i. rewrite Forall_forall in F. specialize (F _ H). simpl in F. lia.
-  - constructor; [simpl; lia |]. eapply Forall_impl; [| exact F]. intros e He. simpl in He |- *. lia.
-Qed.
-
-Lemma read_item_fresh : forall fuel ts s id rest s', read_item fuel ts s = ok (id, rest, s') -> fresh s s'.
-Proof.
-  induction fuel as [| fuel IH]; intros ts s id rest s' H; [discriminate |].
-  simpl in H. destruct ts as [| t ts]; [discriminate |].
-  assert (Hit : forall k ts0 s0 ids r0 s0', items (read_item fuel) k ts0 s0 = ok (ids, r0, s0') -> fresh s0 s0').
-  { intros. eapply (items_step (read_item fuel) (fun a _ b _ => fresh a b)); [| | | eassumption].
-    - intros; apply fresh_refl.
-    - intros; eapply fresh_trans; eassumption.
-    - intros; eapply IH; eassumption. }
-  destruct t as [n | n | k | k | tg].
-  - inversion H; subst. apply fresh_made. apply fresh_refl.
-  - inversion H; subst. apply fresh_made. apply fresh_refl.
-  - destruct (items (read_item fuel) k ts (reserved (looked 1 s))) as [[[ids r1] s1] | e] eqn:E; [| discriminate].
-    inversion H; subst. apply fresh_made. eapply Hit; exact E.
-  - destruct (items (read_item fuel) (k + k) ts (reserved (looked 1 s))) as [[[ids r1] s1] | e] eqn:E; [| discriminate].
-    inversion H; subst. apply fresh_made. eapply Hit; exact E.
-  - destruct (Nat.eqb tg shareable).
-    + destruct (chain ts 1) as [c content].
-      destruct (chain_target content c s) as [target | e]; [| discriminate].
-      apply IH in H. exact H.
-    + destruct (Nat.eqb tg sharedref).
-      * destruct ts as [| [i | | | |] ts']; try discriminate.
-        destruct (nth_error (table s) i); [| discriminate].
-        destruct (_ <? _); [| discriminate].
-        inversion H; subst. exact (fresh_refl s).
-      * destruct (read_item fuel ts (reserved (looked 1 s))) as [[[c r1] s1] | e] eqn:E; [| discriminate].
-        inversion H; subst. apply fresh_made. eapply IH; exact E.
-Qed.
-
-Lemma read_unique : forall ts root s, read ts = ok (root, s) -> NoDup (map fst (graph s)).
-Proof.
-  intros ts root s H. unfold read in H.
-  destruct (read_item (S (length ts)) ts start) as [[[r rest] s'] | e] eqn:E; [| discriminate].
-  destruct rest; [| discriminate]. inversion H; subst.
-  apply read_item_fresh in E. destruct E as [_ [nw [G [N _]]]].
-  rewrite G. simpl. rewrite app_nil_r. exact N.
-Qed.
-
 (* Two nodes agree in their kind and their data, and P pairs their children in order. *)
 Definition same_shape (P : list (nat * nat)) (a b : node) : Prop :=
   match a, b with
@@ -470,10 +384,10 @@ Proof. intros A B C R f h l1 l2 H F. induction F; simpl; [reflexivity | f_equal;
 (* A relation P where every pair has the same shape is a bisimulation: its pairs unfold alike at each depth. *)
 Lemma unfold_same_shape : forall G g P,
   (forall a b, In (a, b) P -> exists na nb, assoc G a = Some na /\ assoc g b = Some nb /\ same_shape P na nb) ->
-  forall k a b, In (a, b) P -> unfold G k a = unfold g k b.
+  forall k a b, In (a, b) P -> Meaning.unfold G k a = Meaning.unfold g k b.
 Proof.
   intros G g P H. induction k as [| k IH]; intros a b I; [reflexivity |].
-  destruct (H a b I) as [na [nb [Ea [Eb C]]]]. simpl. rewrite Ea, Eb.
+  destruct (H a b I) as [na [nb [Ea [Eb C]]]]. simpl. rewrite <- !assoc_find, Ea, Eb.
   destruct na, nb; simpl in C; try contradiction.
   - subst; reflexivity.
   - subst; reflexivity.
@@ -551,7 +465,7 @@ Hypothesis g_closed : closed g.
 Hypothesis g_plain : plain_tags g.
 
 (* Each open node of be has its mark in the table of the reader, and Q pairs the id of that mark with it. *)
-Definition refs_ok (s : state) (path : list (nat * nat)) (Q : list (nat * nat)) : Prop :=
+Definition marks_in_table (s : state) (path : list (nat * nat)) (Q : list (nat * nat)) : Prop :=
   forall u i, assoc path u = Some i -> mem u be = true ->
     exists r, nth_error (table s) i = Some r /\ r < next s /\ In (r, u) Q.
 
@@ -559,7 +473,7 @@ Definition refs_ok (s : state) (path : list (nat * nat)) (Q : list (nat * nat)) 
 Definition bisim_pairs (G : list (nat * node)) (P N : list (nat * nat)) : Prop :=
   forall a b, In (a, b) N -> exists na nb, In (a, na) G /\ assoc g b = Some nb /\ same_shape P na nb.
 
-Lemma refs_ok_extends : forall s s' path Q, extends s s' -> refs_ok s path Q -> refs_ok s' path Q.
+Lemma marks_in_table_extends : forall s s' path Q, extends s s' -> marks_in_table s path Q -> marks_in_table s' path Q.
 Proof.
   intros s s' path Q [_ [[t T] L]] H u i P M.
   destruct (H u i P M) as [r [E [Lr I]]].
@@ -573,7 +487,7 @@ Proof. intros s s' e [[gg G] _] H. rewrite G. apply in_or_app. right. exact H. Q
 Definition reads_back (f : nat) (path : list (nat * nat)) (v : nat) : Prop :=
   forall m ts m' Q s F rest,
     write_item g be f path m v = (ts, m') ->
-    refs_ok s path Q -> length (table s) = m -> length ts < F ->
+    marks_in_table s path Q -> length (table s) = m -> length ts < F ->
     exists r s' N,
       read_item F (ts ++ rest) s = ok (r, rest, s') /\ extends s s' /\ length (table s') = m' /\
       In (r, v) (N ++ Q) /\ (forall P, incl (N ++ Q) P -> bisim_pairs (graph s') P N).
@@ -582,7 +496,7 @@ Lemma write_items_read : forall f path l,
   (forall c, In c l -> reads_back f path c) ->
   forall m ts m' Q s F rest,
     write_items (write_item g be f path) l m = (ts, m') ->
-    refs_ok s path Q -> length (table s) = m -> length ts < F ->
+    marks_in_table s path Q -> length (table s) = m -> length ts < F ->
     exists ids s' N,
       items (read_item F) (length l) (ts ++ rest) s = ok (ids, rest, s') /\ extends s s' /\
       length (table s') = m' /\ Forall2 (fun a b => In (a, b) (N ++ Q)) ids l /\
@@ -596,7 +510,7 @@ Proof.
     injection W as Ets Em; subst ts m'. rewrite length_app in L.
     destruct (Hc c (or_introl eq_refl) m ts1 m1 Q s F (ts2 ++ rest) W1 R T ltac:(lia))
       as [r [s1 [N1 [E1 [X1 [T1 [I1 B1]]]]]]].
-    destruct (IH (fun c' H' => Hc c' (or_intror H')) m1 ts2 m2 Q s1 F rest W2 (refs_ok_extends _ _ _ _ X1 R) T1 ltac:(lia))
+    destruct (IH (fun c' H' => Hc c' (or_intror H')) m1 ts2 m2 Q s1 F rest W2 (marks_in_table_extends _ _ _ _ X1 R) T1 ltac:(lia))
       as [ids [s2 [N2 [E2 [X2 [T2 [F2 B2]]]]]]].
     exists (r :: ids), s2, (N1 ++ N2). simpl. rewrite <- app_assoc, E1, E2.
     split; [reflexivity |]. split; [eapply extends_trans; eassumption |]. split; [exact T2 |]. split.
@@ -646,7 +560,7 @@ Proof.
     - specialize (g_closed v n Gv). rewrite Forall_forall in g_closed. apply g_closed. exact Hc. }
   (* The node itself, from its head, at the state s0 after its mark if it has one. *)
   assert (Node : forall s0 m1 Q', next s0 = next s -> extends s s0 -> length (table s0) = m1 ->
-            refs_ok (reserved (looked 1 s0)) ((v, m) :: path) Q' -> incl Q' ((next s, v) :: Q) ->
+            marks_in_table (reserved (looked 1 s0)) ((v, m) :: path) Q' -> incl Q' ((next s, v) :: Q) ->
             forall body F1, write_items (write_item g be f ((v, m) :: path)) (children n) m1 = (body, m') ->
             length body < F1 ->
             exists s' N2, read_item (S F1) (item_head n :: body ++ rest) s0 = ok (next s, rest, s') /\
@@ -676,7 +590,7 @@ Proof.
   - destruct (write_items (write_item g be f ((v, m) :: path)) (children n) (S m)) as [body m2] eqn:Wb.
     injection W as Ets Em; subst ts m2.
     simpl in L. destruct F as [| [| F1]]; [lia | lia |].
-    assert (R0 : refs_ok (reserved (looked 1 (marked_as (next s) 1 (looked 1 s)))) ((v, m) :: path) ((next s, v) :: Q)).
+    assert (R0 : marks_in_table (reserved (looked 1 (marked_as (next s) 1 (looked 1 s)))) ((v, m) :: path) ((next s, v) :: Q)).
     { intros u i Pu Mu. simpl in Pu. destruct (Nat.eqb v u) eqn:Evu.
       - apply Nat.eqb_eq in Evu. subst u. inversion Pu; subst i. exists (next s).
         split; [| split; [simpl; lia | left; reflexivity]].
@@ -695,7 +609,7 @@ Proof.
   - destruct (write_items (write_item g be f ((v, m) :: path)) (children n) m) as [body m2] eqn:Wb.
     injection W as Ets Em; subst ts m2.
     simpl in L. destruct F as [| F1]; [lia |].
-    assert (R0 : refs_ok (reserved (looked 1 s)) ((v, m) :: path) Q).
+    assert (R0 : marks_in_table (reserved (looked 1 s)) ((v, m) :: path) Q).
     { intros u i Pu Mu. simpl in Pu. destruct (Nat.eqb v u) eqn:Evu.
       - apply Nat.eqb_eq in Evu. subst u. rewrite Mb in Mu. discriminate.
       - destruct (R u i Pu Mu) as [r [E [Lr I]]]. exists r.
@@ -714,7 +628,7 @@ End RoundTrip.
 Theorem write_read_back : forall g root,
   closed g -> plain_tags g -> In root (map fst g) ->
   exists root' s, read (write g root) = ok (root', s) /\
-    forall k, unfold (graph s) k root' = unfold g k root.
+    forall k, Meaning.unfold (graph s) k root' = Meaning.unfold g k root.
 Proof.
   intros g root Hc Hp Hr. unfold write.
   destruct (write_item g (back_edges g root) (length g) [] 0 root) as [ts m'] eqn:W. simpl.
@@ -728,7 +642,80 @@ Proof.
   intros k. apply (unfold_same_shape (graph s') g N); [| exact I].
   intros a b Hab. rewrite app_nil_r in B.
   destruct (B N (incl_refl _) a b Hab) as [na [nb [Ga [Gb C]]]].
-  exists na, nb. split; [apply assoc_NoDup; [eapply read_unique; exact Rd | exact Ga] | split; assumption].
+  exists na, nb. split; [apply assoc_NoDup; [eapply Meaning.read_unique; exact Rd | exact Ga] | split; assumption].
+Qed.
+
+(* No node of the graph of s is a tag 28 or a tag 29. *)
+Definition plain_graph (s : state) : Prop :=
+  forall i t c, In (i, NTag t c) (graph s) -> t <> shareable /\ t <> sharedref.
+
+Lemma plain_made : forall id n s1, plain_graph s1 ->
+  (forall t c, n = NTag t c -> t <> shareable /\ t <> sharedref) -> plain_graph (made id n s1).
+Proof.
+  intros id n s1 P1 Hn i t c [E | I].
+  - injection E as E1 E2. exact (Hn t c E2).
+  - exact (P1 i t c I).
+Qed.
+
+(* The reader makes a node of a tag only for a tag that is not 28 and not 29. *)
+Lemma read_item_plain : forall fuel ts s id rest s',
+  read_item fuel ts s = ok (id, rest, s') -> plain_graph s -> plain_graph s'.
+Proof.
+  induction fuel as [| fuel IH]; intros ts s id rest s' H Pl; [discriminate |].
+  simpl in H. destruct ts as [| t ts]; [discriminate |].
+  assert (Hit : forall k ts0 s0 ids r0 s0', items (read_item fuel) k ts0 s0 = ok (ids, r0, s0') ->
+            plain_graph s0 -> plain_graph s0').
+  { intros k ts0 s0 ids r0 s0' E.
+    eapply (items_step (read_item fuel) (fun a _ b _ => plain_graph a -> plain_graph b)); [| | | exact E].
+    - intros s1 ts1 P1. exact P1.
+    - intros a b c x y z H1 H2 Pa. exact (H2 (H1 Pa)).
+    - intros ts1 s1 id1 r1 s1' E1. exact (IH _ _ _ _ _ E1). }
+  destruct t as [n | n | k | k | tg].
+  - inversion H; subst. apply plain_made; [exact Pl | intros t c E0; discriminate E0].
+  - inversion H; subst. apply plain_made; [exact Pl | intros t c E0; discriminate E0].
+  - destruct (items (read_item fuel) k ts (reserved (looked 1 s))) as [[[ids r1] s1] | e] eqn:E; [| discriminate].
+    inversion H; subst. apply plain_made; [exact (Hit _ _ _ _ _ _ E Pl) | intros t c E0; discriminate E0].
+  - destruct (items (read_item fuel) (k + k) ts (reserved (looked 1 s))) as [[[ids r1] s1] | e] eqn:E; [| discriminate].
+    inversion H; subst. apply plain_made; [exact (Hit _ _ _ _ _ _ E Pl) | intros t c E0; discriminate E0].
+  - destruct (Nat.eqb tg shareable) eqn:M28.
+    + destruct (chain ts 1) as [c content].
+      destruct (chain_target content c s) as [target | e]; [| discriminate].
+      exact (IH _ _ _ _ _ H Pl).
+    + destruct (Nat.eqb tg sharedref) eqn:M29.
+      * destruct ts as [| [i | | | |] ts']; try discriminate.
+        destruct (nth_error (table s) i); [| discriminate].
+        destruct (_ <? _); [| discriminate].
+        inversion H; subst. exact Pl.
+      * destruct (read_item fuel ts (reserved (looked 1 s))) as [[[c r1] s1] | e] eqn:E; [| discriminate].
+        inversion H; subst. apply plain_made; [exact (IH _ _ _ _ _ E Pl) |].
+        intros t c0 E0. injection E0 as E1 _. subst t. split; apply Nat.eqb_neq; assumption.
+Qed.
+
+(* The graph that read gives is closed, has no node of tag 28 or 29, and holds its root. So write takes it. *)
+Theorem read_closed_plain_tags : forall ts root s, read ts = ok (root, s) ->
+  closed (graph s) /\ plain_tags (graph s) /\ In root (map fst (graph s)).
+Proof.
+  intros ts root s H. destruct (read_no_dangling _ _ _ H) as [Lr [Sd C]].
+  split; [| split].
+  - intros i n A. apply assoc_In in A. destruct (Sd i n A) as [_ F].
+    refine (Forall_impl _ _ F). intros c Lc. destruct (C c Lc) as [m Im]. apply (in_map fst) in Im. exact Im.
+  - assert (Pg : plain_graph s).
+    { unfold read in H.
+      destruct (read_item (S (length ts)) ts start) as [[[r rest] s'] | e] eqn:E; [| discriminate].
+      destruct rest; [| discriminate]. inversion H; subst.
+      eapply read_item_plain; [exact E | intros i t c []]. }
+    intros i t c A. apply assoc_In in A. exact (Pg i t c A).
+  - destruct (C root Lr) as [m Im]. apply (in_map fst) in Im. exact Im.
+Qed.
+
+(* T9, from the stream: read, then write, then read again gives a graph that unfolds at its root like the graph
+   of the first read at its root, at every depth. *)
+Theorem read_write_read : forall ts root s, read ts = ok (root, s) ->
+  exists root' s', read (write (graph s) root) = ok (root', s') /\
+    forall k, Meaning.unfold (graph s') k root' = Meaning.unfold (graph s) k root.
+Proof.
+  intros ts root s H. destruct (read_closed_plain_tags _ _ _ H) as [Hc [Hp Hr]].
+  exact (write_read_back (graph s) root Hc Hp Hr).
 Qed.
 
 (* Cases of write with their stream, written by hand from the rules of the writer. *)
