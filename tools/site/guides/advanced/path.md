@@ -100,7 +100,8 @@ It gives no error when a selector finds nothing.
 
 A typed read converts in one case only: a `double` takes an integer when
 the double holds it exactly: an integer from -2^53 to 2^53, and also a
-larger one such as 2^60 or -2^64 whose significant bits fit in 53 bits.
+larger one such as 2^60 or -2^64 whose bits from the highest 1 to the
+lowest 1 fit in 53 bits.
 `lazy::get<double>` does the same. A float is not an integer.
 
 | bytes | Call | Result |

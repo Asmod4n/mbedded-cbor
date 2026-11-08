@@ -523,6 +523,7 @@ TEST_CASE("lazy: get reads a float")
     CHECK_EQ(*get<double>("\x01"s), 1.0);
     CHECK_EQ(*get<double>("\x3b\x00\x1f\xff\xff\xff\xff\xff\xff"s), -0x1p53);
     CHECK_EQ(get<double>("\x1b\x00\x20\x00\x00\x00\x00\x00\x01"s).error(), error::number_out_of_range);
+    CHECK_EQ(*get<double>("\x00"s), 0.0);
     CHECK_EQ(*get<double>("\x1b\x10\x00\x00\x00\x00\x00\x00\x00"s), 0x1p60);
     CHECK_EQ(*get<double>("\x3b\x00\x20\x00\x00\x00\x00\x00\x01"s), -(0x1p53 + 2));
     CHECK_EQ(get<double>("\x1b\xff\xff\xff\xff\xff\xff\xff\xff"s).error(), error::number_out_of_range);

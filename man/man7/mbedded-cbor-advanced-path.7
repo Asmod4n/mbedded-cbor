@@ -270,8 +270,8 @@ T}
 .PP
 A typed read converts in one case only: a \f[CR]double\f[R] takes an
 integer when the double holds it exactly: an integer from \-2\(ha53 to
-2\(ha53, and also a larger one such as 2\(ha60 or \-2\(ha64 whose
-significant bits fit in 53 bits.
+2\(ha53, and also a larger one such as 2\(ha60 or \-2\(ha64 whose bits
+from the highest 1 to the lowest 1 fit in 53 bits.
 \f[CR]lazy::get<double>\f[R] does the same.
 A float is not an integer.
 .PP
