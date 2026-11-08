@@ -71,10 +71,7 @@ enum class error {
     sharedref_not_complete,
     /** An encode meets a simple value from 24 to 31. */
     reserved_simple_value,
-    /**
-     * The encoder meets a typed array with a reserved tag or a tag outside RFC 8746. `structs` meets a map key that
-     * is an array, a map or a tag.
-     */
+    /** The encoder meets a typed array with a reserved tag or a tag outside RFC 8746. */
     unsupported_value,
     /** A key or an index meets an item that is not a map or an array. */
     not_indexable,

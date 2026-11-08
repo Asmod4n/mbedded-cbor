@@ -231,8 +231,12 @@ TEST_CASE("doc advanced structs: unknown, repeated and missing keys")
     CHECK_EQ(cbor::structs<person>::decode(preferred(M("name"s, "x"s, "age"s, 1, "age"s, 2))).error(),
              error::duplicate_key);
     CHECK_EQ(cbor::structs<person>::decode(preferred(M("name"s, "x"s))).error(), error::key_not_found);
-    CHECK_EQ(cbor::structs<person>::decode(preferred(M("name"s, "x"s, "age"s, 1, A(), 0))).error(),
-             error::unsupported_value);
+    for (value const &key : {A(), M(), value{tagged{1000, V(1)}}, A(1, M("a"s, A())), value{tagged{28, V(1)}}}) {
+        auto const skipped = cbor::structs<person>::decode(preferred(M("name"s, "x"s, key, 0, "age"s, 1)));
+        REQUIRE(skipped.has_value());
+        CHECK_EQ((*skipped)->name, "x");
+        CHECK_EQ((*skipped)->age, 1);
+    }
 }
 
 // The section "Tags" states that a struct carries the tag of its description, and that cbor::tagged_item puts a tag on
