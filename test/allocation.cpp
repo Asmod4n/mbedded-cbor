@@ -2,6 +2,7 @@
 #include "owned_copy.hpp"
 #include "item_head.hpp"
 #include "doc_types.hpp"
+#include <cbor/query.hpp>
 #include <cbor/schema.hpp>
 #include <cbor/sequence_reader.hpp>
 
@@ -115,6 +116,37 @@ TEST_CASE("schema: path and unverified_path give not_enough_memory when the owne
     }
     CHECK_EQ(verified_error, error::not_enough_memory);
     CHECK_EQ(unverified_error, error::not_enough_memory);
+}
+
+// lazy::adopt and the two rvalue forms of at_path move the message into a new owner, as schema::path does. A full
+// memory gives std::bad_alloc there, and the owner decided that it becomes not_enough_memory. The new owner is the
+// first allocation of each call, so the refused allocation is the owner.
+TEST_CASE("lazy::adopt and at_path give not_enough_memory when the owner cannot be allocated")
+{
+    std::string const message = "\xa2\x61\x61\x61\x78\x61\x62\x82\x02\x03"s;
+    auto const query = cbor::path::compile<std::string_view>("$.a");
+    REQUIRE(query.has_value());
+    std::string adopted = message;
+    std::string queried = message;
+    std::string viewed = message;
+    error adopt_error{};
+    error query_error{};
+    error view_error{};
+    {
+        next_allocation_refused const refused;
+        adopt_error = cbor::lazy::adopt(std::move(adopted)).error_or(error{});
+    }
+    {
+        next_allocation_refused const refused;
+        query_error = cbor::at_path(std::move(queried), *query).error_or(error{});
+    }
+    {
+        next_allocation_refused const refused;
+        view_error = cbor::at_path<"$.a", std::string_view>(std::move(viewed)).error_or(error{});
+    }
+    CHECK_EQ(adopt_error, error::not_enough_memory);
+    CHECK_EQ(query_error, error::not_enough_memory);
+    CHECK_EQ(view_error, error::not_enough_memory);
 }
 
 // The path that succeeds compares a key of the top-level item with a literal by value without an allocation: the

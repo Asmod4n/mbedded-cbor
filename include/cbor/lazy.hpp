@@ -213,6 +213,7 @@ public:
      * result: 42
      * @endcode
      *
+     * @retval not_enough_memory an allocation of the owner fails
      * @snippet doc_reference_lazy.cpp adopt
      * @see cbor::lazy::view()
      * @see cbor::lazy::at()
@@ -1386,7 +1387,10 @@ std::expected<lazy, error> lazy::view(std::shared_ptr<Encoded const> owner)
 template <owning_range_of_chars Encoded>
 std::expected<lazy, error> lazy::adopt(Encoded &&encoded)
 {
-    return view(std::make_shared<Encoded const>(std::move(encoded)));
+    auto owner = detail::validity::make_shared_owner(std::move(encoded));
+    if (!owner) [[unlikely]]
+        return std::unexpected(owner.error());
+    return view(std::move(*owner));
 }
 
 template <class Key, class Entries, bool Checked>
