@@ -12,64 +12,95 @@
 
 using namespace std::string_literals;
 
-// Each test in this file is one example of a page in doc/reference/errors/. The tests exist so that every
-// example compiles and gives the result that its page states.
+// Each test in this file is one example of a reference page of the errors group; the comment of the header gives the
+// example through the snippet markers. The tests exist so that every example compiles and gives the result that its
+// page states.
 
-// error.md: a missing key comes back as the value key_not_found, and its text comes from std::error_code.
+// error.hpp, snippet error: a missing key comes back as the value key_not_found, and its text comes from
+// std::error_code.
 TEST_CASE("doc reference errors: error")
 {
     std::string const bytes = test::preferred(test::M("user"s, test::M("id"s, 42)));
+    // [error]
+    // bytes: {"user": {"id": 42}}
     auto const age = cbor::at_path<"$.user.age", std::int64_t>(bytes);
-    CHECK_EQ(age.error(), cbor::error::key_not_found);
-    CHECK_EQ(std::error_code{age.error()}.message(), "key not found"s);
+    auto const e = age.error();                              // key_not_found
+    auto const text = std::error_code{e}.message();          // "key not found"
+    // [error]
+    CHECK_EQ(e, cbor::error::key_not_found);
+    CHECK_EQ(text, "key not found"s);
 }
 
-// error.md: the first enumerator has the value 1, so no enumerator is equal to a std::error_code that holds 0.
+// error.hpp, the comment of error: the first enumerator has the value 1, so no enumerator is equal to a
+// std::error_code that holds 0.
 TEST_CASE("doc reference errors: no error has the value 0")
 {
     CHECK_EQ(static_cast<int>(cbor::error::too_little_data), 1);
     CHECK(static_cast<bool>(std::error_code{cbor::error::too_little_data}));
 }
 
-// category.md: every cbor::error converts into a std::error_code of the one category, named "cbor".
+// error.hpp, snippet category: every cbor::error converts into a std::error_code of the one category, named "cbor".
 TEST_CASE("doc reference errors: category")
 {
+    // [category]
     std::error_code const e = cbor::error::syntax_error;
-    CHECK_EQ(e.category(), cbor::category());
-    CHECK_EQ(std::string_view(cbor::category().name()), "cbor");
+    bool const same = e.category() == cbor::category();     // true
+    std::string_view const name = cbor::category().name();  // "cbor"
+    // [category]
+    CHECK(same);
+    CHECK_EQ(name, "cbor");
 }
 
-// error_category.md: four errors compare equal to a std::errc, and the others do not.
+// error.hpp, snippet error_category: four errors compare equal to a std::errc, and the others do not.
 TEST_CASE("doc reference errors: error_category")
 {
-    CHECK(std::error_code{cbor::error::no_buffer_space} == std::errc::no_buffer_space);
+    // [error_category]
+    bool const space = std::error_code{cbor::error::no_buffer_space} == std::errc::no_buffer_space;  // true
+    bool const other = std::error_code{cbor::error::too_little_data} == std::errc::no_message;       // false
+    std::string const unknown = cbor::category().message(0);                                         // "unknown cbor error"
+    // [error_category]
+    CHECK(space);
+    CHECK_FALSE(other);
+    CHECK_EQ(unknown, "unknown cbor error"s);
     CHECK(std::error_code{cbor::error::not_enough_memory} == std::errc::not_enough_memory);
-    CHECK(std::error_code{cbor::error::too_little_data} != std::errc::no_message);
     CHECK_EQ(cbor::category().message(static_cast<int>(cbor::error::not_singular_query)), "not a singular query"s);
-    CHECK_EQ(cbor::category().message(0), "unknown cbor error"s);
 }
 
-// make_error_code.md: make_error_code gives the value and the category of the error.
+// error.hpp, snippet make_error_code: make_error_code gives the value and the category of the error.
 TEST_CASE("doc reference errors: make_error_code")
 {
+    // [make_error_code]
     std::error_code const e = cbor::make_error_code(cbor::error::invalid_path);
+    std::string const text = e.message();                               // "invalid path"
+    bool const same = e == std::error_code{cbor::error::invalid_path};  // true
+    // [make_error_code]
+    CHECK_EQ(text, "invalid path"s);
+    CHECK(same);
     CHECK_EQ(e.value(), static_cast<int>(cbor::error::invalid_path));
-    CHECK_EQ(e.message(), "invalid path"s);
-    CHECK_EQ(e, std::error_code{cbor::error::invalid_path});
 }
 
-// is_error_code_enum.md: the specialization lets a cbor::error convert to a std::error_code without a cast.
+// error.hpp, snippet is_error_code_enum: the specialization lets a cbor::error convert to a std::error_code without
+// a cast.
 TEST_CASE("doc reference errors: is_error_code_enum")
 {
     CHECK(std::is_error_code_enum_v<cbor::error>);
+    // [is_error_code_enum]
     std::error_code const e = cbor::error::index_out_of_bounds;
-    CHECK_EQ(e.message(), "index outside of array bounds"s);
-    CHECK(e == cbor::error::index_out_of_bounds);
+    std::string const text = e.message();                     // "index outside of array bounds"
+    bool const same = e == cbor::error::index_out_of_bounds;  // true
+    // [is_error_code_enum]
+    CHECK_EQ(text, "index outside of array bounds"s);
+    CHECK(same);
 }
 
-// limits.md: a build that sets no macro has the default limits.
+// validity.hpp, snippet limits: a build that sets no macro has the default limits.
 TEST_CASE("doc reference errors: limits")
 {
-    CHECK_EQ(cbor::limits::string_length, SIZE_MAX);
-    CHECK_EQ(cbor::limits::container_elements, SIZE_MAX);
+    // [limits]
+    // a build that sets no macro
+    std::size_t const strings = cbor::limits::string_length;          // SIZE_MAX
+    std::size_t const containers = cbor::limits::container_elements;  // SIZE_MAX
+    // [limits]
+    CHECK_EQ(strings, SIZE_MAX);
+    CHECK_EQ(containers, SIZE_MAX);
 }

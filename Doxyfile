@@ -3,13 +3,16 @@ PROJECT_NAME           = mbedded-cbor
 INPUT                  = include/cbor/item_size.hpp \
                          include/cbor/sequence.hpp \
                          include/cbor/sequence_reader.hpp \
-                         include/cbor/diagnostic_notation.hpp
+                         include/cbor/diagnostic_notation.hpp \
+                         include/cbor/error.hpp \
+                         include/cbor/validity.hpp
 STRIP_FROM_PATH        = include
 STRIP_FROM_INC_PATH    = include
 EXCLUDE_SYMBOLS        = cbor::detail cbor::detail::* cbor::well_formedness
 HIDE_UNDOC_MEMBERS     = YES
 HIDE_UNDOC_CLASSES     = YES
 HIDE_FRIEND_COMPOUNDS  = YES
+BUILTIN_STL_SUPPORT    = YES
 ALIASES                = "complexity=@par Complexity^^"
 EXAMPLE_PATH           = test
 QUIET                  = YES

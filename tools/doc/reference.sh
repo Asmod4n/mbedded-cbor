@@ -12,7 +12,9 @@ podman run --rm --network none -v "$tree":/src:ro -v "$out":/out mbedded-cbor-do
   { cat Doxyfile; echo "OUTPUT_DIRECTORY = /tmp/doxygen"; } | doxygen -
   xsltproc tools/doc/pages.xsl $xml/index.xml | sort -u > /tmp/names.txt
   while read -r name; do
-    file=${name##*::}
+    base=${name%%<*}
+    base=${base% }
+    file=${base##*::}
     groups=$(grep -l "]($file\.md)" doc/reference/*/index.md || true)
     if [ $(echo "$groups" | grep -c .) -ne 1 ]; then
       echo "reference: no group index, or more than one, links $file.md" >&2
