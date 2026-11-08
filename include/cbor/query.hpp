@@ -138,7 +138,7 @@ std::expected<ref<T>, error> at_path(Encoded &&encoded);
  */
 template <fixed_string Path, copied_value T>
     requires is_singular_query_v<Path>
-std::expected<T, error> at_path(std::string_view encoded);
+std::expected<T, error> at_path(std::basic_string_view<char> encoded);
 
 /** @ingroup path */
 class jsonpath
