@@ -162,6 +162,8 @@ class well_formedness
  * @complexity O(n) time, n the bytes of the item. O(1) memory. No allocation.
  * @snippet doc_reference_tools.cpp item_size
  * @see cbor::sequence
+ *
+ * @ingroup tools
  */
 inline std::expected<std::size_t, error> item_size(std::string_view const encoded)
 {

@@ -1347,6 +1347,8 @@ class extended_diagnostic_notation
  * @retval container_elements_exceeded the count of an array or a map is greater than `limits::container_elements`
  * @snippet doc_reference_tools.cpp diagnostic_notation
  * @see cbor::item_size()
+ *
+ * @ingroup tools
  */
 inline std::expected<std::string, error> diagnostic_notation(std::string_view const encoded)
 {

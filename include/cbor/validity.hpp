@@ -150,6 +150,8 @@ class canonical_ids;
  *
  * @snippet doc_reference_errors.cpp limits
  * @see cbor::error
+ *
+ * @ingroup errors
  */
 struct limits {
     /** @brief The bytes of one text or byte string; more give `string_length_exceeded`. */

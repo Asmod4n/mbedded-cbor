@@ -46,6 +46,8 @@ namespace cbor
  * @snippet doc_reference_errors.cpp error
  * @see cbor::make_error_code()
  * @see cbor::error_category
+ *
+ * @ingroup errors
  */
 enum class error {
     /** The bytes end before the item ends. */
@@ -150,6 +152,8 @@ enum class error {
  * @snippet doc_reference_errors.cpp error_category
  * @see cbor::category()
  * @see std::is_error_code_enum<cbor::error>
+ *
+ * @ingroup errors
  */
 class error_category : public std::error_category
 {
@@ -277,6 +281,8 @@ public:
  * @see cbor::error_category
  * @see cbor::make_error_code()
  * @see cbor::error
+ *
+ * @ingroup errors
  */
 inline std::error_category const &category() noexcept
 {
@@ -309,6 +315,8 @@ inline std::error_category const &category() noexcept
  * @see std::is_error_code_enum<cbor::error>
  * @see cbor::category()
  * @see cbor::error
+ *
+ * @ingroup errors
  */
 inline std::error_code make_error_code(error const e) noexcept
 {
@@ -342,6 +350,8 @@ inline std::error_code make_error_code(error const e) noexcept
  * @snippet doc_reference_errors.cpp is_error_code_enum
  * @see cbor::make_error_code()
  * @see cbor::error_category
+ *
+ * @ingroup errors
  */
 template <>
 struct std::is_error_code_enum<cbor::error> : std::true_type {};

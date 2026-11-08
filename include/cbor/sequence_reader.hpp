@@ -88,6 +88,8 @@ namespace cbor
  * @snippet doc_reference_tools.cpp sequence_reader
  * @see cbor::sequence
  * @see cbor::lazy
+ *
+ * @ingroup tools
  */
 class sequence_reader
 {

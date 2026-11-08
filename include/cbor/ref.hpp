@@ -108,6 +108,8 @@ void copy_views_into_zone(T &value, bump &zone);
  * @tparam T the type of the value
  * @snippet doc_reference_ref.cpp ref
  * @see cbor::owning
+ *
+ * @ingroup ref
  */
 template <class T>
 class CBOR_OWNER ref
@@ -295,6 +297,8 @@ struct zone_owner;
  * @tparam T the type of the value
  * @snippet doc_reference_ref.cpp owning
  * @see cbor::ref
+ *
+ * @ingroup ref
  */
 template <class T>
 class CBOR_OWNER owning

@@ -1,6 +1,7 @@
 # Doxygen reads the API comments of the headers in INPUT and writes XML.
 PROJECT_NAME           = mbedded-cbor
-INPUT                  = include/cbor/item_size.hpp \
+INPUT                  = include/cbor/cbor.hpp \
+                         include/cbor/item_size.hpp \
                          include/cbor/sequence.hpp \
                          include/cbor/sequence_reader.hpp \
                          include/cbor/diagnostic_notation.hpp \

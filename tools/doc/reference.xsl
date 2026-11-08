@@ -19,7 +19,10 @@
       <xsl:apply-templates select="document(concat($class/@refid, '.xml'), /)/doxygen/compounddef" mode="page"/>
     </xsl:when>
     <xsl:when test="$function">
-      <xsl:apply-templates select="document(concat($function/../@refid, '.xml'), /)//memberdef[@id=$function/@refid]" mode="page"/>
+      <xsl:variable name="id" select="$function[1]/@refid"/>
+      <xsl:variable name="holders" select="doxygenindex/compound[member/@refid=$id]"/>
+      <xsl:variable name="holder" select="($holders[@kind='group'] | $holders[@kind='namespace'][not($holders[@kind='group'])])[1]"/>
+      <xsl:apply-templates select="document(concat($holder/@refid, '.xml'), /)//memberdef[@id=$id]" mode="page"/>
     </xsl:when>
     <xsl:otherwise>
       <xsl:message terminate="yes">reference.xsl: no class, no enum and no function has the name <xsl:value-of select="$name"/></xsl:message>

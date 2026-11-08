@@ -53,6 +53,8 @@ namespace cbor
  * @complexity A loop over all items: O(n) time, n the bytes of the sequence. O(1) memory. No allocation.
  * @snippet doc_reference_tools.cpp sequence
  * @see cbor::item_size()
+ *
+ * @ingroup tools
  */
 class sequence
 {
