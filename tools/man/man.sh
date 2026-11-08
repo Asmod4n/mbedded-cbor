@@ -18,9 +18,8 @@ podman run --rm --network none -e VERSION="$version" -e TODAY="$today" -v "$tree
   body() { sed "s/^\(\.TH \"[^\"]*\" \"[^\"]*\" \)\"[^\"]*\"/\1\"\"/" "$1"; }
   guides=/src/tools/site/guides
   mkdir -p $work/man7
-  for guide in $guides/*.md $guides/advanced/*.md; do
+  for guide in $guides/*.md; do
     topic=$(basename $guide .md)
-    case $guide in $guides/advanced/*) topic=advanced-$topic ;; esac
     pandoc -s -f gfm -t man --lua-filter /src/tools/man/guide.lua -M title=mbedded-cbor-$topic -M section=7 \
       -M footer="mbedded-cbor $VERSION" -M header=mbedded-cbor "$guide" -o $work/man7/page
     sed "/^\.S[HS] /{n;/^\.PP\$/d;}" $work/man7/page > $work/man7/mbedded-cbor-$topic.7
