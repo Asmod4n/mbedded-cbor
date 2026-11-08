@@ -824,20 +824,10 @@ class path
                         found = *content == named.encoded;
                     }
                 } else {
-                    found = (k->major == major_type::unsigned_integer && each.index >= 0 &&
-                             k->argument == static_cast<std::uint64_t>(each.index)) ||
-                            (k->major == major_type::negative_integer && each.index < 0 &&
-                             k->argument == static_cast<std::uint64_t>(-1 - each.index));
-                    if (heads::is_bignum(k->major, k->argument)) [[unlikely]] {
-                        heads::decoder content = probe;
-                        auto const read = content.decode_bignum(k->argument);
-                        if (!read) [[unlikely]]
-                            return std::nullopt;
-                        bool const negative = k->argument == std::to_underlying(rfc8949::tag_number::negative_bignum);
-                        found = *read && negative == (each.index < 0) &&
-                                **read == (each.index < 0 ? static_cast<std::uint64_t>(-1 - each.index)
-                                                          : static_cast<std::uint64_t>(each.index));
-                    }
+                    auto const same = lazy::integer_key_equivalent(probe, *k, each.index);
+                    if (!same) [[unlikely]]
+                        return std::nullopt;
+                    found = *same;
                 }
                 if (auto const r = well_formedness::skip_items(d, 1); !r) [[unlikely]]
                     return std::unexpected(r.error());

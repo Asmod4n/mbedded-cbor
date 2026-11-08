@@ -623,6 +623,10 @@ private:
         requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
     static std::expected<std::pair<Iterator, bool>, error> find_key(Iterator first, Last last, Key key);
 
+    template <bool Checked>
+    static std::expected<bool, error> integer_key_equivalent(heads::decoder<Checked> const &probe,
+                                                             heads::head const &k, std::int64_t key);
+
     template <class Iterator>
     static std::expected<lazy, error> value_of(std::expected<Iterator, error> found);
 
@@ -1438,22 +1442,33 @@ std::expected<std::pair<Iterator, bool>, error> lazy::find_key(Iterator it, Last
                 equal = *content == key;
             }
         } else {
-            equal = (k->major == major_type::unsigned_integer && key >= 0 && k->argument == static_cast<std::uint64_t>(key)) ||
-                    (k->major == major_type::negative_integer && key < 0 && k->argument == static_cast<std::uint64_t>(-1 - key));
-            if (heads::is_bignum(k->major, k->argument)) [[unlikely]] {
-                heads::decoder<Checked> d = probe;
-                auto const read = d.decode_bignum(k->argument);
-                if (!read) [[unlikely]]
-                    return std::unexpected(read.error());
-                bool const negative = k->argument == std::to_underlying(rfc8949::tag_number::negative_bignum);
-                equal = *read && negative == (key < 0) &&
-                        **read == (key < 0 ? static_cast<std::uint64_t>(-1 - key) : static_cast<std::uint64_t>(key));
-            }
+            auto const same = integer_key_equivalent(probe, *k, key);
+            if (!same) [[unlikely]]
+                return std::unexpected(same.error());
+            equal = *same;
         }
         if (equal)
             return std::pair{std::move(it), true};
     }
     return std::pair{std::move(it), false};
+}
+
+template <bool Checked>
+std::expected<bool, error> lazy::integer_key_equivalent(heads::decoder<Checked> const &probe, heads::head const &k,
+                                                        std::int64_t const key)
+{
+    std::uint64_t const magnitude =
+        key < 0 ? static_cast<std::uint64_t>(-1 - key) : static_cast<std::uint64_t>(key);
+    if (heads::is_bignum(k.major, k.argument)) [[unlikely]] {
+        heads::decoder<Checked> d = probe;
+        auto const read = d.decode_bignum(k.argument);
+        if (!read) [[unlikely]]
+            return std::unexpected(read.error());
+        bool const negative = k.argument == std::to_underlying(rfc8949::tag_number::negative_bignum);
+        return *read && negative == (key < 0) && **read == magnitude;
+    }
+    return k.argument == magnitude &&
+           k.major == (key < 0 ? major_type::negative_integer : major_type::unsigned_integer);
 }
 
 template <class Entries>
