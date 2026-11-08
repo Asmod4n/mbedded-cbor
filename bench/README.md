@@ -10,7 +10,7 @@ Run it as a normal user. It refuses to run as root.
 The image of containers/bench-desktop.Containerfile holds the compilers and Google Benchmark;
 it is built with `podman build -t mbedded-cbor-bench-desktop -f containers/bench-desktop.Containerfile containers`
 after the image mbedded-cbor-tw.
-Close other programs first. The script does not pin the process.
+Close other programs first. The process runs on the cpu that the scheduler gives it.
 
 ## What it measures
 
@@ -22,7 +22,7 @@ Close other programs first. The script does not pin the process.
 
 ## Method
 
-1. The gate runs `vmstat 1 5` and `ps --sort=-pcpu`. It does not read the load average.
+1. The gate runs `vmstat 1 5` and `ps --sort=-pcpu`.
    It prints what else is busy. The run stops with code 3 when the busy share is above
    10 percent of all cpus or the steal is above 0 percent.
 2. The script exports include/ of each commit with `git archive`.
@@ -30,7 +30,7 @@ Close other programs first. The script does not pin the process.
    bench/runtime.cpp, bench/value.hpp and bench/docs come from the working tree.
 3. Each arm of each variant is its own binary. Builds use all cpus but one.
 4. Each round runs every cell once per variant. The order of the variants rotates in each round.
-   One cpu stays free. The process is not pinned. nice -10 is used when the system allows it.
+   One cpu stays free. nice -10 is used when the system allows it.
 5. The script prints one line per round.
 6. The result is the median of the rounds for each binary, and the spread (maximum over minimum, minus one).
    B/A is b over a. A/A is aa over a, and it is the noise of the cell.

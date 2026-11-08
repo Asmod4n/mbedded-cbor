@@ -43,7 +43,7 @@ The reference with examples that run in the browser:
 <https://asmod4n.github.io/mbedded-cbor/>.
 
 It implements CBOR (RFC 8949), CBOR sequences (RFC 8742), typed arrays
-(RFC 8746), JSONPath (RFC 9535) and Packed CBOR
+(RFC 8746), the paths of RFC 9535 and Packed CBOR
 (draft-ietf-cbor-packed-19). Every message it writes is standard CBOR,
 and every other CBOR decoder can read it.
 
@@ -71,7 +71,7 @@ and every other CBOR decoder can read it.
 - **Description apart.** `cbor::schema` can store the description of a
   struct once and the data of each message apart from it.
 - **Limits.** A reader that recurses stops where the stack of its
-  thread ends, with no fixed depth. String length and element count
+  thread ends, so the depth follows the stack. String length and element count
   are constants of the build. Memory grows with the items that were read.
 
 ## How a read works
@@ -137,7 +137,7 @@ Write the message:
   structs gives views into the message.
 - jsoncons writes no tags (422954 bytes).
 - schema, unverified checks every bound, so no read leaves the input.
-  It does not check the data (tags, heads). FlatBuffers without its
+  It reads the tags and heads as they stand. FlatBuffers without its
   Verifier checks no bounds.
 
 Measured at commit cb28a52 in a VM with 4 cpus (Intel Xeon, Sapphire
@@ -163,7 +163,7 @@ frontend of MSVC is refused at the first include.
 
 The library reads the bounds of the stack of each thread. It compiles
 for Linux (glibc and musl), macOS, Windows on x64, WebAssembly without
-threads and picolibc. Another target does not compile.
+threads and picolibc. On another target the build stops with an error.
 
 On g++ 15, clang 23 and AppleClang, `cbor::structs` reads the members
 through Boost.PFR 1.84 or later, and `cbor::schema` uses it to check that
@@ -235,7 +235,7 @@ auto const age = doc.at_path<"$.user.age", int>();                 // cbor::erro
 - <https://asmod4n.github.io/mbedded-cbor/>: every function and type,
   with examples that run in the browser.
 - [tools/site/guides/basics.md](tools/site/guides/basics.md): errors, limits, memory, threads.
-- [tools/site/guides/path.md](tools/site/guides/path.md): JSONPath on CBOR.
+- [tools/site/guides/path.md](tools/site/guides/path.md): the paths of RFC 9535 on CBOR.
 - [tools/site/guides/schema.md](tools/site/guides/schema.md): structs as Packed CBOR.
 - [tools/site/guides/structs.md](tools/site/guides/structs.md): any CBOR into a struct.
 - [tools/site/guides/comparison.md](tools/site/guides/comparison.md): other libraries, task by task.
