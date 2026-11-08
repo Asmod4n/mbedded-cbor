@@ -1038,10 +1038,7 @@ detail::validity::intern_key(canonical_ids &ids, Message &message, offset const 
     case major_type::simple_float:
         break;
     }
-    constexpr std::uint8_t half = std::to_underlying(rfc8949::simple_float_information::half_precision_float);
-    constexpr std::uint8_t twice =
-        std::to_underlying(rfc8949::simple_float_information::double_precision_float);
-    if (h->info < half || h->info > twice) {
+    if (!heads::is_floating_point(h->major, h->info)) {
         if (error const c = check_simple_value(h->info, h->argument).error_or(error{}); c != error{}) [[unlikely]]
             return std::unexpected(c);
         return scalar(kind::simple, h->argument, {}, h->at);
@@ -1174,11 +1171,8 @@ detail::validity::keys_equivalent(First &first, offset const first_at, Second &s
     case major_type::simple_float:
         break;
     }
-    constexpr std::uint8_t half = std::to_underlying(rfc8949::simple_float_information::half_precision_float);
-    constexpr std::uint8_t twice =
-        std::to_underlying(rfc8949::simple_float_information::double_precision_float);
-    bool const h_float = h->info >= half && h->info <= twice;
-    bool const k_float = k->info >= half && k->info <= twice;
+    bool const h_float = heads::is_floating_point(h->major, h->info);
+    bool const k_float = heads::is_floating_point(k->major, k->info);
     if (h_float != k_float)
         return false;
     if (!h_float)

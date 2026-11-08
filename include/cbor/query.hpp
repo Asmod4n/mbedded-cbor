@@ -1448,11 +1448,8 @@ path::intern_value(detail::canonical_ids &ids, lazy::top_level_item const &sourc
         return std::pair{id, *e};
     };
     using kind = detail::canonical_ids::kind;
-    constexpr std::uint8_t half = std::to_underlying(rfc8949::simple_float_information::half_precision_float);
-    constexpr std::uint8_t twice =
-        std::to_underlying(rfc8949::simple_float_information::double_precision_float);
     bool const integral = h.major == major_type::unsigned_integer || h.major == major_type::negative_integer;
-    bool const floating = h.major == major_type::simple_float && h.info >= half && h.info <= twice;
+    bool const floating = heads::is_floating_point(h.major, h.info);
     if (integral || floating) {
         exact_number const n = number_of(h);
         if (n.nan) {
@@ -1550,15 +1547,10 @@ inline std::expected<bool, error> path::value_equal(lazy const &a, lazy const &b
         return std::unexpected(y_number.error());
     heads::head const &h = x_number->first;
     heads::head const &k = y_number->first;
-    constexpr std::uint8_t half = std::to_underlying(rfc8949::simple_float_information::half_precision_float);
-    constexpr std::uint8_t twice =
-        std::to_underlying(rfc8949::simple_float_information::double_precision_float);
     auto const integral = [](heads::head const &n) {
         return n.major == major_type::unsigned_integer || n.major == major_type::negative_integer;
     };
-    auto const floating = [](heads::head const &n) {
-        return n.major == major_type::simple_float && n.info >= half && n.info <= twice;
-    };
+    auto const floating = [](heads::head const &n) { return heads::is_floating_point(n.major, n.info); };
     if ((integral(h) || floating(h)) && (integral(k) || floating(k)))
         return compare_numbers(number_of(h), number_of(k)) == 0;
     if (h.major != k.major || floating(h) || floating(k))
@@ -1642,15 +1634,10 @@ inline std::expected<bool, error> path::value_less(lazy const &a, lazy const &b)
         return std::unexpected(y_number.error());
     heads::head const &h = x_number->first;
     heads::head const &k = y_number->first;
-    constexpr std::uint8_t half = std::to_underlying(rfc8949::simple_float_information::half_precision_float);
-    constexpr std::uint8_t twice =
-        std::to_underlying(rfc8949::simple_float_information::double_precision_float);
     auto const integral = [](heads::head const &n) {
         return n.major == major_type::unsigned_integer || n.major == major_type::negative_integer;
     };
-    auto const floating = [](heads::head const &n) {
-        return n.major == major_type::simple_float && n.info >= half && n.info <= twice;
-    };
+    auto const floating = [](heads::head const &n) { return heads::is_floating_point(n.major, n.info); };
             if ((integral(h) || floating(h)) && (integral(k) || floating(k)))
                 return compare_numbers(number_of(h), number_of(k)) < 0;
             if (h.major != major_type::text_string || k.major != major_type::text_string)

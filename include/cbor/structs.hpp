@@ -357,9 +357,7 @@ class generic
             return h.major == major_type::simple_float &&
                    h.info <= std::to_underlying(rfc8949::simple_float_information::simple_value_follows);
         else if constexpr (std::is_floating_point_v<U>)
-            return h.major == major_type::simple_float &&
-                   h.info >= std::to_underlying(rfc8949::simple_float_information::half_precision_float) &&
-                   h.info <= std::to_underlying(rfc8949::simple_float_information::double_precision_float);
+            return heads::is_floating_point(h.major, h.info);
         else if constexpr (reflection::is_wide_integer<U>)
             return h.major == major_type::unsigned_integer || h.major == major_type::negative_integer ||
                    (h.major == major_type::tag &&

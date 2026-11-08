@@ -387,6 +387,13 @@ class heads
         return h.major == major_type::tag && detail::validity::check_typed_array(h.argument, 0).has_value();
     }
 
+    static constexpr bool is_floating_point(major_type const major, std::uint8_t const info)
+    {
+        return major == major_type::simple_float &&
+               info >= std::to_underlying(rfc8949::simple_float_information::half_precision_float) &&
+               info <= std::to_underlying(rfc8949::simple_float_information::double_precision_float);
+    }
+
     static constexpr bool is_bignum(major_type const major, std::uint64_t const argument)
     {
         return major == major_type::tag &&
