@@ -826,3 +826,125 @@ TEST_CASE("value sharing: an eager decode reads every form of a tag 29")
         CHECK((**marked == marked_numbers{5}));
     }
 }
+
+namespace shared_test
+{
+
+// The node of the target of a shared_reference node.
+cbor::item const *target_of(cbor::item const &reference)
+{
+    auto const r = reference.get<cbor::type::shared_reference>();
+    REQUIRE(r.has_value());
+    return r->second;
+}
+
+std::span<cbor::item const> elements_of(cbor::item const &array)
+{
+    auto const e = array.get<cbor::type::array>();
+    REQUIRE(e.has_value());
+    return *e;
+}
+
+} // namespace shared_test
+
+// The cases of the model (proof/theories/ValueSharing.v, the Examples) read by cbor::decode, which resolves the
+// tags (owner decision): a tag 28 makes no node and marks the node of its content; a tag 29 is a shared_reference
+// node whose target is that node. The specification (refs/value-sharing.html) gives the first two cases; the others
+// are the traps that the model names. The model gives the expected node identities and errors.
+TEST_CASE("value sharing: cbor::decode reads each case of the model")
+{
+    using shared_test::elements_of;
+    using shared_test::target_of;
+    // [28([]), 29(0), []]: the first two elements are one array, the third is another.
+    auto const shared = cbor::decode("\x83\xd8\x1c\x80\xd8\x1d\x00\x80"sv);
+    REQUIRE(shared.has_value());
+    auto const three = elements_of(**shared);
+    CHECK_EQ(target_of(three[1]), &three[0]);
+    CHECK_EQ(three[2].type, cbor::type::array);
+    // 28([29(0)]): an array that holds itself.
+    auto const cyclic = cbor::decode("\xd8\x1c\x81\xd8\x1d\x00"sv);
+    REQUIRE(cyclic.has_value());
+    CHECK_EQ(target_of(elements_of(**cyclic)[0]), &**cyclic);
+    // 28(1234([29(0)])): a cycle through a tag that is not 28.
+    auto const through_tag = cbor::decode("\xd8\x1c\xd9\x04\xd2\x81\xd8\x1d\x00"sv);
+    REQUIRE(through_tag.has_value());
+    auto const *const content = (*through_tag)->get<cbor::type::tag>().value().second;
+    CHECK_EQ(target_of(elements_of(*content)[0]), &**through_tag);
+    // A mark whose content is only marks and a reference to one of them names no value.
+    for (std::string_view const own : {"\xd8\x1c\xd8\x1d\x00"sv, "\xd8\x1c\xd8\x1c\xd8\x1d\x00"sv,
+                                       "\xd8\x1c\xd8\x1c\xd8\x1d\x01"sv}) {
+        CAPTURE(own.size());
+        CHECK_EQ(cbor::decode(own).error(), error::sharedref_not_defined);
+    }
+    // [28(1), 28(29(0)), 29(1)]: a mark of a reference marks the value that the reference names.
+    auto const mark_of_reference = cbor::decode("\x83\xd8\x1c\x01\xd8\x1c\xd8\x1d\x00\xd8\x1d\x01"sv);
+    REQUIRE(mark_of_reference.has_value());
+    auto const m = elements_of(**mark_of_reference);
+    CHECK_EQ(target_of(m[1]), &m[0]);
+    CHECK_EQ(target_of(m[2]), &m[0]);
+    // [28(28(5)), 29(0), 29(1)]: two marks of one value.
+    auto const two_marks = cbor::decode("\x83\xd8\x1c\xd8\x1c\x05\xd8\x1d\x00\xd8\x1d\x01"sv);
+    REQUIRE(two_marks.has_value());
+    auto const t = elements_of(**two_marks);
+    CHECK_EQ(t[0].get<cbor::type::unsigned_integer>().value(), 5u);
+    CHECK_EQ(target_of(t[1]), &t[0]);
+    CHECK_EQ(target_of(t[2]), &t[0]);
+    // A reference before any mark, and a reference to a mark that comes later.
+    CHECK_EQ(cbor::decode("\x81\xd8\x1d\x00"sv).error(), error::sharedref_index_not_marked);
+    CHECK_EQ(cbor::decode("\x82\xd8\x1d\x00\xd8\x1c\x01"sv).error(), error::sharedref_index_not_marked);
+    // The registration: the content of tag 29 is an unsigned integer. A text and a bignum are not.
+    CHECK_EQ(cbor::decode("\xd8\x1d\x61x"sv).error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(cbor::decode("\x82\xd8\x1c\x01\xd8\x1d\xc2\x41\x00"sv).error(), error::inadmissible_type_for_tag_content);
+    // {28("a"): 29(0)}: a value refers to its own key.
+    auto const key = cbor::decode("\xa1\xd8\x1c\x61\x61\xd8\x1d\x00"sv);
+    REQUIRE(key.has_value());
+    auto const pair = (*key)->get<cbor::type::map>().value();
+    CHECK_EQ(target_of(pair[1]), &pair[0]);
+    // 28({29(0): 1}): a map that holds itself as its key.
+    auto const own_key = cbor::decode("\xd8\x1c\xa1\xd8\x1d\x00\x01"sv);
+    REQUIRE(own_key.has_value());
+    CHECK_EQ(target_of((*own_key)->get<cbor::type::map>().value()[0]), &**own_key);
+}
+
+// RFC 8949 3: an argument can stand in each width. The tag 29 and its index are read in each width, and the largest
+// index has no mark, on every build (the index is compared as a 64-bit number).
+TEST_CASE("value sharing: cbor::decode reads a tag 29 and its index in each width")
+{
+    for (std::size_t const bytes : {1uz, 2uz, 4uz, 8uz}) {
+        CAPTURE(bytes);
+        std::string const wire = "\x82\xd8\x1c\x05"s + head_of(6, 29, bytes) + head_of(0, 0, bytes);
+        auto const tree = cbor::decode(wire);
+        REQUIRE(tree.has_value());
+        auto const e = shared_test::elements_of(**tree);
+        CHECK_EQ(shared_test::target_of(e[1]), &e[0]);
+    }
+    CHECK_EQ(cbor::decode("\x82\xd8\x1c\x05\xd8\x1d\x1b\xff\xff\xff\xff\xff\xff\xff\xff"sv).error(),
+             error::sharedref_index_not_marked);
+}
+
+// A long chain of tags 28 is read in a loop: 50000 tags 28 before 1 give the integer and no deep stack. The content
+// of a tag 24 is decoded with a table of its own (RFC 8949 3.4.5.1: an embedded item is a data item of its own), so
+// a tag 29 in it does not see the marks of the enclosing item.
+TEST_CASE("value sharing: cbor::decode reads a long chain of marks and a tag 24 with its own table")
+{
+    constexpr std::size_t chain_length = 50000;
+    std::string chain;
+    for (std::size_t i = 0; i < chain_length; ++i)
+        chain += "\xd8\x1c"s;
+    chain += '\x01';
+    auto const one = cbor::decode(chain);
+    REQUIRE(one.has_value());
+    CHECK_EQ((*one)->get<cbor::type::unsigned_integer>().value(), 1u);
+    CHECK_EQ(cbor::decode("\x82\xd8\x1c\x01\xd8\x18\x43\xd8\x1d\x00"sv).error(), error::sharedref_index_not_marked);
+}
+
+// lazy::clone, paths and diagnostic_notation pass tags 28 and 29 as plain tags (owner decision); only the eager
+// cbor::decode resolves them.
+TEST_CASE("value sharing: lazy::clone keeps tags 28 and 29")
+{
+    auto const top_level = test::lazy_of_copy("\xd8\x1c\x81\xd8\x1d\x00"s);
+    REQUIRE(top_level.has_value());
+    auto const tree = top_level->clone();
+    REQUIRE(tree.has_value());
+    CHECK_EQ((*tree)->get<cbor::type::tag>().value().first, 28u);
+}
