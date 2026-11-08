@@ -964,10 +964,7 @@ detail::validity::intern_key(canonical_ids &ids, Message &message, offset const 
         return {ids.id_of({of, number, bytes, ids.children_end(), 0}), end};
     };
     if (heads::is_bignum(h->major, h->argument)) {
-        offset content = h->at;
-        if constexpr (!std::same_as<Message, std::string_view const>)
-            content = heads::self_described_cbor_content_at(message.encoded, h->at);
-        heads::decoder<Checked> d{subspan(encoded, content)};
+        heads::decoder<Checked> d{subspan(encoded, h->at)};
         auto const read = d.decode_bignum(h->argument);
         if (!read) [[unlikely]]
             return std::unexpected(read.error());
@@ -1085,14 +1082,13 @@ detail::validity::keys_equivalent(First &first, offset const first_at, Second &s
     if (error const c = check_definite_length(k->major, k->info).error_or(error{}); c != error{}) [[unlikely]]
         return std::unexpected(c);
     if (h->major != k->major || heads::is_bignum(h->major, h->argument)) [[unlikely]] {
-        auto const integer_of = [&]<class Message>(Message &message, std::string_view const encoded,
-                                                   heads::raw_head const n)
+        auto const integer_of = [](std::string_view const encoded, heads::raw_head const n)
             -> std::expected<std::optional<std::pair<bool, std::uint64_t>>, error> {
             if (n.major == major_type::unsigned_integer || n.major == major_type::negative_integer)
                 return std::pair{n.major == major_type::negative_integer, n.argument};
             if (!heads::is_bignum(n.major, n.argument))
                 return std::nullopt;
-            heads::decoder<Checked> d{subspan(encoded, resolve(message, n.at))};
+            heads::decoder<Checked> d{subspan(encoded, n.at)};
             auto const read = d.decode_bignum(n.argument);
             if (!read) [[unlikely]]
                 return std::unexpected(read.error());
@@ -1100,10 +1096,10 @@ detail::validity::keys_equivalent(First &first, offset const first_at, Second &s
                 return std::nullopt;
             return std::pair{n.argument == std::to_underlying(rfc8949::tag_number::negative_bignum), **read};
         };
-        auto const x_value = integer_of(first, a, *h);
+        auto const x_value = integer_of(a, *h);
         if (!x_value) [[unlikely]]
             return std::unexpected(x_value.error());
-        auto const y_value = integer_of(second, b, *k);
+        auto const y_value = integer_of(b, *k);
         if (!y_value) [[unlikely]]
             return std::unexpected(y_value.error());
         if (*x_value && *y_value)
@@ -1255,9 +1251,7 @@ std::expected<lazy::tag_content, error> lazy::read_typed_array_bytes(resolved<Ch
     if (error const r = detail::validity::check_typed_array(found.h.argument, 0).error_or(error{});
         r != error{}) [[unlikely]]
         return std::unexpected(r);
-    detail::validity::offset const content = heads::self_described_cbor_content_at(
-        found.source.encoded, detail::validity::distance(found.source.encoded, found.d.encoded));
-    heads::decoder<Checked> d{detail::validity::subspan(found.source.encoded, content)};
+    heads::decoder<Checked> d = found.d;
     auto const r = d.decode_head();
     if (!r) [[unlikely]]
         return std::unexpected(r.error());
@@ -1449,9 +1443,7 @@ std::expected<std::pair<Iterator, bool>, error> lazy::find_key(Iterator it, Last
             equal = (k->major == major_type::unsigned_integer && key >= 0 && k->argument == static_cast<std::uint64_t>(key)) ||
                     (k->major == major_type::negative_integer && key < 0 && k->argument == static_cast<std::uint64_t>(-1 - key));
             if (heads::is_bignum(k->major, k->argument)) [[unlikely]] {
-                detail::validity::offset const content = heads::self_described_cbor_content_at(
-                    it.top_level.encoded, detail::validity::distance(it.top_level.encoded, probe.encoded));
-                heads::decoder<Checked> d{detail::validity::subspan(it.top_level.encoded, content)};
+                heads::decoder<Checked> d = probe;
                 auto const read = d.decode_bignum(k->argument);
                 if (!read) [[unlikely]]
                     return std::unexpected(read.error());
@@ -1580,15 +1572,13 @@ inline std::expected<cbor::type, error> lazy::type() const
                                 return std::unexpected(h.error());
                             if (!heads::is_bignum(h->major, h->argument)) [[likely]]
                                 return heads::type_of(h->major, h->info, h->argument);
-                            detail::validity::offset const content =
-                                heads::self_described_cbor_content_at(top_level.encoded, h->at);
-                            auto const c = heads::read_raw_head<true>(top_level.encoded, content);
+                            auto const c = heads::read_raw_head<true>(top_level.encoded, h->at);
                             if (!c) [[unlikely]]
                                 return std::unexpected(c.error());
                             if (c->major != major_type::byte_string ||
                                 !detail::validity::check_definite_length(c->major, c->info).has_value())
                                 return heads::type_of(h->major, h->info, h->argument);
-                            heads::decoder<true> d{detail::validity::subspan(top_level.encoded, content)};
+                            heads::decoder<true> d{detail::validity::subspan(top_level.encoded, h->at)};
                             auto const read = d.decode_bignum(h->argument);
                             if (!read) [[unlikely]]
                                 return std::unexpected(read.error());
@@ -1677,9 +1667,6 @@ std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_
                     std::uint64_t argument = h.argument;
                     if (heads::is_bignum(h.major, h.argument)) {
                         negative = h.argument == std::to_underlying(rfc8949::tag_number::negative_bignum);
-                        detail::validity::offset const content = heads::self_described_cbor_content_at(
-                            source.encoded, detail::validity::distance(source.encoded, d.encoded));
-                        d = heads::decoder<true>{detail::validity::subspan(source.encoded, content)};
                         auto const read = d.decode_bignum(h.argument);
                         if (!read) [[unlikely]]
                             return std::unexpected(read.error());
@@ -1697,9 +1684,6 @@ std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_
                     return static_cast<T>(negative ? ~magnitude : magnitude);
             } else if constexpr (std::is_same_v<T, double>) {
                 if (heads::is_bignum(h.major, h.argument)) [[unlikely]] {
-                    detail::validity::offset const content = heads::self_described_cbor_content_at(
-                        source.encoded, detail::validity::distance(source.encoded, d.encoded));
-                    d = heads::decoder<true>{detail::validity::subspan(source.encoded, content)};
                     auto const read = d.decode_bignum(h.argument);
                     if (!read) [[unlikely]]
                         return std::unexpected(read.error());

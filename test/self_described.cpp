@@ -79,7 +79,8 @@ TEST_CASE("self-described CBOR: lazy reads through a leading tag 55799")
 // runtime.md section 11: lazy::view and lazy::take_ownership read one leading tag 55799 as its content, and a
 // second tag 55799 or a tag 55799 inside an item stays a tag. type() gives the kind of the item there, so it gives tag,
 // as decode and clone do, in each width of the argument. get, a key and a path pass the tag (runtime.md, path.md), so
-// they still give the content. A tag 55799 inside the item of a tag 24 is passed by a step and a path as well.
+// they still give the content. A tag 55799 inside the item of a tag 24 is passed by a step and a path as well. The
+// content of a tag 2, tag 3 or typed array is the exception; the next test covers it.
 TEST_CASE("self-described CBOR: type() of a second tag 55799 and of a tag 55799 inside an item is tag")
 {
     for (std::string const &head : {"\xd9\xd9\xf7"s, "\xda\x00\x00\xd9\xf7"s, "\xdb\x00\x00\x00\x00\x00\x00\xd9\xf7"s}) {
@@ -111,6 +112,68 @@ TEST_CASE("self-described CBOR: type() of a second tag 55799 and of a tag 55799 
                                      head + "\x82\x01\x02";
         CHECK_EQ(cbor::lazy::take_ownership(std::string(embedded))->at("a"sv)->at(1)->get<std::int64_t>().value(), 2);
         CHECK_EQ((cbor::at_path<"$.a[1]", std::int64_t>(embedded)).value(), 2);
+    }
+}
+
+// The owner decided that a tag 55799 inside an item stays a tag. The content of a tag 2, tag 3 or typed array is then
+// a tag and not a byte string, so every reader gives for 2(55799(h'01')) what it gives for 2("a"), and for
+// 64(55799(h'0102')) what it gives for 64("a"): the same type, value or error. Each width of the 55799 head is read.
+TEST_CASE("self-described CBOR: a tag 55799 in the content of a bignum or a typed array stays a tag")
+{
+    auto const same = [](auto const &a, auto const &b) {
+        REQUIRE_EQ(a.has_value(), b.has_value());
+        if (a.has_value())
+            CHECK_EQ(*a, *b);
+        else
+            CHECK_EQ(a.error(), b.error());
+    };
+    for (std::string const &head : {"\xd9\xd9\xf7"s, "\xda\x00\x00\xd9\xf7"s, "\xdb\x00\x00\x00\x00\x00\x00\xd9\xf7"s}) {
+        CAPTURE(head.size());
+        for (char const bignum : {'\xc2', '\xc3'}) {
+            std::string const tagged = std::string(1, bignum) + head + "\x41\x01";
+            std::string const text = std::string(1, bignum) + "\x61\x61";
+            auto const l = cbor::lazy::take_ownership(std::string(tagged));
+            auto const t = cbor::lazy::take_ownership(std::string(text));
+            REQUIRE(l.has_value());
+            REQUIRE(t.has_value());
+            same(l->type(), t->type());
+            same(l->get<std::int64_t>(), t->get<std::int64_t>());
+            same(l->get<double>(), t->get<double>());
+            same((cbor::at_path<"$", std::int64_t>(tagged)), (cbor::at_path<"$", std::int64_t>(text)));
+            same((cbor::at_path<"$", double>(tagged)), (cbor::at_path<"$", double>(text)));
+            auto const tree = cbor::decode(tagged);
+            REQUIRE(tree.has_value());
+            CHECK_EQ((*tree)->type, l->type().value());
+            auto const cloned = l->clone();
+            REQUIRE(cloned.has_value());
+            CHECK_EQ((*cloned)->type, (*tree)->type);
+            std::string const map_tagged = "\xa1" + tagged + "\x05";
+            std::string const map_text = "\xa1" + text + "\x05";
+            if (bignum == '\xc2')
+                same((cbor::at_path<"$[1]", std::int64_t>(map_tagged)), (cbor::at_path<"$[1]", std::int64_t>(map_text)));
+            else
+                same((cbor::at_path<"$[-2]", std::int64_t>(map_tagged)), (cbor::at_path<"$[-2]", std::int64_t>(map_text)));
+            std::string const array_tagged = "\x81" + tagged;
+            std::string const array_text = "\x81" + text;
+            auto const fa = cbor::lazy::take_ownership(std::string(array_tagged))->at_path<"$[?@ == 1]", cbor::nodelist>();
+            auto const fb = cbor::lazy::take_ownership(std::string(array_text))->at_path<"$[?@ == 1]", cbor::nodelist>();
+            REQUIRE_EQ(fa.has_value(), fb.has_value());
+            if (fa.has_value())
+                CHECK_EQ(fa->size(), fb->size());
+            else
+                CHECK_EQ(fa.error(), fb.error());
+        }
+        std::string const typed = "\xd8\x40" + head + "\x42\x01\x02";
+        std::string const typed_text = "\xd8\x40\x61\x61"s;
+        auto const l = cbor::lazy::take_ownership(std::string(typed));
+        auto const t = cbor::lazy::take_ownership(std::string(typed_text));
+        REQUIRE(l.has_value());
+        REQUIRE(t.has_value());
+        CHECK_EQ(l->get<cbor::typed_array>().error(), t->get<cbor::typed_array>().error());
+        CHECK_EQ(l->at(0).error(), t->at(0).error());
+        CHECK_EQ((cbor::at_path<"$[0]", std::int64_t>(typed)).error(), (cbor::at_path<"$[0]", std::int64_t>(typed_text)).error());
+        CHECK_EQ(cbor::decode(typed).error(), cbor::decode(typed_text).error());
+        CHECK_EQ(l->clone().error(), t->clone().error());
     }
 }
 
