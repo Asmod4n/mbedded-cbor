@@ -160,15 +160,15 @@ TEST_CASE("tinycbor tojson: maps")
     }
 }
 
-// recursionLimit: 1026 arrays, tags or maps, one in the other, with no item in the deepest one. Upstream stops at its
+// recursionLimit: arrays, tags or maps, one in the other, with no item in the deepest one. Upstream stops at its
 // limit of nesting with CborErrorNestingTooDeep. The library has no fixed limit of nesting (validity.hpp, "Nesting has
 // no fixed limit"), so it reads to the end of the bytes and finds that the item is not complete: too_little_data
 // (RFC 8949 Appendix F).
-// The main thread holds 1026 levels where test::main_thread_holds_deep_input says so; elsewhere, as in a Windows debug
-// build, the test reads test::levels_every_stack_holds levels (small_stack.hpp; a test does not make a stack larger).
+// The depth is the one of this library, not the limit of upstream: test::levels_main_thread_reads, the depth that the
+// main thread of each build holds (small_stack.hpp).
 TEST_CASE("tinycbor tojson: deep nesting with no end")
 {
-    constexpr std::size_t recursions = test::main_thread_holds_deep_input ? 1024 + 2 : test::levels_every_stack_holds;
+    constexpr std::size_t recursions = test::levels_main_thread_reads;
     std::string maps;
     for (std::size_t i = 0; i < recursions; ++i)
         maps += "\xa1\x60"s;

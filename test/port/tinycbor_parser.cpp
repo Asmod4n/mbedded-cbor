@@ -1599,16 +1599,16 @@ TEST_CASE("tinycbor parser: the end of the first item")
     }
 }
 
-// recursionLimit: 1026 levels of nesting, two more than CBOR_PARSER_MAX_RECURSIONS of upstream. Upstream prints the
+// recursionLimit: deep nesting. Upstream prints the
 // item and then refuses to skip it with CborErrorNestingTooDeep. The library has no fixed limit of nesting: a reader
 // that recurses stops where the stack of its thread ends, and cbor::item_size() does not recurse (validity.hpp,
 // "Nesting has no fixed limit"). The port expects the size of the item, and key_not_found where upstream looks for
 // the key "foo" in a map.
-// The main thread holds 1026 levels where test::main_thread_holds_deep_input says so; elsewhere, as in a Windows debug
-// build, the test reads test::levels_every_stack_holds levels (small_stack.hpp; a test does not make a stack larger).
+// The depth is the one of this library, not the limit of upstream: test::levels_main_thread_reads, the depth that the
+// main thread of each build holds (small_stack.hpp).
 TEST_CASE("tinycbor parser: deep nesting")
 {
-    constexpr std::size_t recursions = test::main_thread_holds_deep_input ? 1024 + 2 : test::levels_every_stack_holds;
+    constexpr std::size_t recursions = test::levels_main_thread_reads;
     struct deep_row {
         std::string_view name;
         std::string data;
