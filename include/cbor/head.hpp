@@ -303,6 +303,10 @@ class heads
             if (error const r = detail::validity::check_argument<Checked>(major, argument).error_or(error{});
                 r != error{}) [[unlikely]]
                 return std::unexpected(r);
+            if (major == major_type::simple_float)
+                if (error const r = detail::validity::check_simple_value(info, argument).error_or(error{});
+                    r != error{}) [[unlikely]]
+                    return std::unexpected(r);
             encoded.remove_prefix(initial_byte_size + size);
             return head{major, info, argument};
         }
@@ -792,6 +796,10 @@ class heads
         if (error const r = detail::validity::check_argument<Checked>(major, argument).error_or(error{});
             r != error{}) [[unlikely]]
             return std::unexpected(r);
+        if (major == major_type::simple_float)
+            if (error const r = detail::validity::check_simple_value(info, argument).error_or(error{});
+                r != error{}) [[unlikely]]
+                return std::unexpected(r);
         return raw_head{major, info, argument, detail::validity::next(at, initial_byte_size + size)};
     }
 
