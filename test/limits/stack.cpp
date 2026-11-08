@@ -179,11 +179,13 @@ void every_reader(std::size_t const levels, kept_values &kept, outcome const exp
 
 using namespace limits_stack;
 
-// Every reader that walks nested items reads a moderate depth on the main thread and gives its value.
-TEST_CASE("stack: every recursive reader reads a depth that every stack holds")
+// Every reader that walks nested items reads a depth on the main thread and gives its value: the depth that the main
+// thread holds where it holds it, so that a reader that stops too early fails there.
+TEST_CASE("stack: every recursive reader reads a depth that the main thread holds")
 {
-    kept_values kept{holder_chain((test::levels_every_stack_holds - 1) / links_per_level), std::nullopt, std::nullopt};
-    every_reader(test::levels_every_stack_holds, kept, outcome::value, outcome::value);
+    kept_values kept{holder_chain((test::levels_main_thread_reads - 1) / links_per_level), std::nullopt, std::nullopt};
+    every_reader(test::levels_main_thread_reads, kept, outcome::value, outcome::value);
+    end_chain(std::move(kept.chain));
 }
 
 // An input deeper than a small stack holds: every recursive reader stops with nesting_depth_exceeded where the stack
@@ -215,10 +217,13 @@ constexpr std::size_t tree_levels = test::levels_main_thread_holds;
 TEST_CASE("stack: a deep tree of the library ends and encodes on a small stack")
 {
     auto decoded = cbor::decode(arrays_around_one(tree_levels));
-    if (!decoded) {
-        CHECK_EQ(decoded.error(), error::nesting_depth_exceeded);
-        return;
+    if constexpr (!test::main_thread_holds_deep_input) {
+        if (!decoded) {
+            CHECK_EQ(decoded.error(), error::nesting_depth_exceeded);
+            return;
+        }
     }
+    REQUIRE(decoded.has_value());
     std::optional<cbor::owning<cbor::item>> tree(std::move(*decoded));
     auto const l = test::lazy_of_copy(arrays_around_one(tree_levels));
     REQUIRE(l.has_value());
@@ -228,8 +233,8 @@ TEST_CASE("stack: a deep tree of the library ends and encodes on a small stack")
     test::on_small_stack([&tree, &clone] {
         std::string out;
         auto const written = cbor::encode(**tree, out);
-        if (!written)
-            CHECK_EQ(written.error(), error::nesting_depth_exceeded);
+        REQUIRE_FALSE(written.has_value());
+        CHECK_EQ(written.error(), error::nesting_depth_exceeded);
         tree.reset();
         clone.reset();
     });

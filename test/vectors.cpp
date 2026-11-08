@@ -2,6 +2,7 @@
 #include "owned_copy.hpp"
 #include "item_head.hpp"
 #include "sequence_reader.hpp"
+#include "small_stack.hpp"
 
 #include <algorithm>
 #include <array>
@@ -499,9 +500,8 @@ void wg_good_check(wg_vector const &v, wg_count &count)
     CAPTURE(v.description);
     CAPTURE(v.encoded);
     REQUIRE_FALSE(v.decoded.empty());
-    // The nesting depth defaults to 128 (owner, 2026-10-06). A vector nested deeper gives
-    // nesting_depth_exceeded in a build with the default and is read in full in the build with the nesting
-    // depth at its bound.
+    // No depth is fixed. A vector nested deeper than the stack of the main thread holds gives nesting_depth_exceeded;
+    // the test case counts it and checks the count.
     if (auto const shallow = decoded(v.encoded);
         !shallow && shallow.error() == error::nesting_depth_exceeded) {
         ++count.nesting_depth_exceeded;
@@ -578,7 +578,10 @@ TEST_CASE("cbor-wg test vectors: every good vector decodes to its decoded item")
     // Three vectors nest deeper than 128 levels. No depth is fixed: they decode where the stack of the main thread
     // holds them, and give nesting_depth_exceeded where it does not (the frames of a Windows debug build, the stack of
     // a WebAssembly program).
-    CHECK_LE(count.nesting_depth_exceeded, 3u);
+    if constexpr (test::main_thread_holds_deep_input)
+        CHECK_EQ(count.nesting_depth_exceeded, 0u);
+    else
+        CHECK_LE(count.nesting_depth_exceeded, 3u);
 }
 
 // bad.cbor holds items that are not well-formed or not valid. Each one fails in decode, lazy and diagnostic_notation,
@@ -675,8 +678,8 @@ namespace
 
 // A reader of a CBOR Sequence (RFC 8742) that gets the bytes one at a time gives the same items, and the same error,
 // as cbor::sequence over the whole buffer, in each form of feed. Every cut of a well-formed item is a prefix that
-// waits for more bytes, so it gives too_little_data, or nesting_depth_exceeded where the item is nested deeper than
-// the limit and the prefix reaches that depth.
+// waits for more bytes, so it gives too_little_data. The reader does not recurse, so it never gives
+// nesting_depth_exceeded.
 void sequence_reader_check(std::string_view const wire)
 {
     test::sequence_outcome const whole = test::sequence_outcome_of(wire);
@@ -684,12 +687,13 @@ void sequence_reader_check(std::string_view const wire)
         CAPTURE(static_cast<int>(form));
         CHECK_EQ(test::reader_outcome_byte_by_byte(wire, form), whole);
     }
-    if (whole.last != error::too_little_data && whole.last != error::nesting_depth_exceeded)
+    CHECK_NE(whole.last, error::nesting_depth_exceeded);
+    if (whole.last != error::too_little_data)
         return;
     for (std::size_t cut = 0; cut < wire.size(); ++cut) {
         test::sequence_outcome const prefix = test::reader_outcome_split_at(wire.substr(0, cut), 0);
         CHECK(prefix.items.empty());
-        CHECK((prefix.last == error::too_little_data || prefix.last == whole.last));
+        CHECK_EQ(prefix.last, error::too_little_data);
     }
 }
 
@@ -733,16 +737,13 @@ namespace
 
 // A reader gives one outcome for an item at every split and in every form of feed, and it is the outcome of cbor::sequence over the whole
 // buffer. An array or a map that announces more items than bytes follow gives too_little_data before its elements in
-// both (owner, 2026-10-12). The reader refuses an item as soon as it is nested deeper than the limit, so where the
-// rest of that item is cut or not well-formed, cbor::sequence gives that other error.
+// both (owner, 2026-10-12). Neither recurses, so neither gives nesting_depth_exceeded.
 void sequence_reader_malformed_check(std::string_view const wire)
 {
     test::sequence_outcome const whole = test::sequence_outcome_of(wire);
     test::sequence_outcome const read = test::reader_outcome_split_at(wire, 0);
-    if (read.last == error::nesting_depth_exceeded)
-        CHECK_EQ(read.items, whole.items);
-    else
-        CHECK_EQ(read, whole);
+    CHECK_NE(read.last, error::nesting_depth_exceeded);
+    CHECK_EQ(read, whole);
     for (test::feed_form const form : test::feed_forms) {
         CAPTURE(static_cast<int>(form));
         for (std::size_t at = 1; at <= wire.size(); ++at) {

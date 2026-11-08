@@ -44,6 +44,20 @@ inline constexpr std::size_t levels_main_thread_holds = 1024;
 // A depth that the stack of every thread of every build holds: a read of it gives its value.
 inline constexpr std::size_t levels_every_stack_holds = 32;
 
+// The main thread of a program on Linux, macOS and Windows in a release build holds levels_main_thread_holds for every
+// reader. A Windows debug build (_DEBUG, from /MDd) has larger frames, and WebAssembly and picolibc have a stack of 64
+// KiB or less. A test reads the deep input on the main thread where it holds it, so that a reader that stops too early
+// fails there.
+#if defined(__wasm__) || defined(__PICOLIBC__) || (defined(_WIN64) && defined(_DEBUG))
+inline constexpr bool main_thread_holds_deep_input = false;
+#else
+inline constexpr bool main_thread_holds_deep_input = true;
+#endif
+
+// The depth that the tests read on the main thread and expect a value from.
+inline constexpr std::size_t levels_main_thread_reads =
+    main_thread_holds_deep_input ? levels_main_thread_holds : levels_every_stack_holds;
+
 namespace small_stack_detail
 {
 
