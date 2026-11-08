@@ -489,7 +489,7 @@ public:
     }
 
     template <bool Checked, class First, class Second>
-    static std::expected<bool, error> keys_equivalent(First &first, offset first_at, Second &second,
+    static std::expected<bool, error> keys_equivalent(First const &first, offset first_at, Second const &second,
                                                       offset second_at);
 
     template <bool Checked, class Message>

@@ -1057,7 +1057,8 @@ detail::validity::intern_key(canonical_ids &ids, Message &message, offset const 
 
 template <bool Checked, class First, class Second>
 std::expected<bool, error>
-detail::validity::keys_equivalent(First &first, offset const first_at, Second &second, offset const second_at)
+detail::validity::keys_equivalent(First const &first, offset const first_at, Second const &second,
+                                  offset const second_at)
 {
     if (auto const r = check_recursion_limit(); !r) [[unlikely]]
         return std::unexpected(r.error());
