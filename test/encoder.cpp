@@ -164,6 +164,48 @@ TEST_CASE("encoder: a span that is too short, then a call after the failure")
     CHECK_THROWS_AS((void)e.finish(), std::logic_error);
 }
 
+// Each method of the encoder over a span checks the space at its own call. A span one byte shorter than the item
+// gives no_buffer_space at that call, and the next call throws std::logic_error. A span of the exact size takes the
+// item, and finish gives that size. The list holds every public method that writes bytes.
+TEST_CASE("encoder: each method into a span one byte too short gives no_buffer_space at its call")
+{
+    using write = std::expected<void, cbor::error> (*)(cbor::encoder<std::span<char>> &);
+    static constexpr std::array<std::byte, 2> two{std::byte{1}, std::byte{2}};
+    struct method {
+        std::string_view name;
+        std::size_t size;
+        write call;
+    };
+    std::array const methods{
+        method{"unsigned_integer", 9, [](auto &e) { return e.unsigned_integer(std::uint64_t{1}); }},
+        method{"negative_integer", 3, [](auto &e) { return e.negative_integer(std::uint16_t{0}); }},
+        method{"byte_string", 3, [](auto &e) { return e.byte_string(std::span<std::byte const>(two)); }},
+        method{"text_string", 4, [](auto &e) { return e.text_string("abc"sv); }},
+        method{"array", 2, [](auto &e) { return e.array(24); }},
+        method{"map", 3, [](auto &e) { return e.map(256); }},
+        method{"tag", 5, [](auto &e) { return e.tag(65536); }},
+        method{"simple_value", 1, [](auto &e) { return e.simple_value(cbor::simple_value::null); }},
+        method{"floating_point float", 5, [](auto &e) { return e.floating_point(1.5f); }},
+        method{"floating_point double", 9, [](auto &e) { return e.floating_point(1.5); }},
+        method{"typed_array", 5,
+               [](auto &e) { return e.typed_array(cbor::typed_array{64, std::span<std::byte const>(two)}); }},
+    };
+    for (method const &m : methods) {
+        CAPTURE(m.name);
+        std::array<char, 16> buffer{};
+        cbor::encoder<std::span<char>> short_one{std::span<char>(buffer).first(m.size - 1)};
+        auto const r = m.call(short_one);
+        REQUIRE_FALSE(r.has_value());
+        CHECK_EQ(r.error(), cbor::error::no_buffer_space);
+        CHECK_THROWS_AS((void)short_one.simple_value(cbor::simple_value::null), std::logic_error);
+        cbor::encoder<std::span<char>> exact{std::span<char>(buffer).first(m.size)};
+        REQUIRE(m.call(exact).has_value());
+        auto const size = exact.finish();
+        REQUIRE(size.has_value());
+        CHECK_EQ(*size, m.size);
+    }
+}
+
 // finish returns the bytes written into the span; a call after finish is a wrong use.
 TEST_CASE("encoder: finish gives the size, and a call after it throws")
 {
