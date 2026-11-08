@@ -15,9 +15,6 @@ cbor::error, cbor::category, cbor::error_category, cbor::make_error_code, std::i
     indefinite_length,
     nesting_depth_exceeded,
     inadmissible_type_for_tag_content,
-    sharedref_index_not_marked,
-    sharedref_index_out_of_range,
-    sharedref_not_complete,
     reserved_simple_value,
     unsupported_value,
     not_indexable,
@@ -118,22 +115,6 @@ T{
 \f[CR]inadmissible_type_for_tag_content\f[R]
 T}@T{
 A tag has content that its definition does not allow.
-T}
-T{
-\f[CR]sharedref_index_not_marked\f[R]
-T}@T{
-A tag 29 names no tag 28 before it.
-T}
-T{
-\f[CR]sharedref_index_out_of_range\f[R]
-T}@T{
-A tag 29 has an index that does not fit \f[CR]std::size_t\f[R].
-T}
-T{
-\f[CR]sharedref_not_complete\f[R]
-T}@T{
-\f[CR]structs\f[R] decode meets a tag 29 that names a tag 28 in a
-skipped member.
 T}
 T{
 \f[CR]reserved_simple_value\f[R]

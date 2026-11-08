@@ -1120,24 +1120,6 @@ public:
         return written(out.encode_head(major_type::tag, number));
     }
 
-private:
-    std::expected<void, error> shareable()
-    {
-        throw_logic_error_if_unusable();
-        return written(out.encode_head(major_type::tag, std::to_underlying(rfc8949::tag_number::shareable)));
-    }
-
-    std::expected<void, error> sharedref(std::uint64_t const index)
-    {
-        throw_logic_error_if_unusable();
-        if (auto const r = written(out.encode_head(major_type::tag, std::to_underlying(rfc8949::tag_number::sharedref)));
-            !r) [[unlikely]]
-            return r;
-        return written(out.encode_head(major_type::unsigned_integer, index));
-    }
-
-public:
-
     /**
      * @brief Writes a simple value (major type 7), for example `false_value`, `true_value`, `null` or `undefined`.
      *

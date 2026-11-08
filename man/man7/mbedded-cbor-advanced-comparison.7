@@ -314,8 +314,9 @@ std::vector<std::shared_ptr<std::string const>> const v{x, x};
 bool const same = v[0] == v[1];
 .EE
 .SS mbedded\-cbor
-Tags 28 and 29 are plain tags in a lazy, in a path and in a tree decode.
-Only \f[CR]cbor::structs\f[R] decode resolves them.
+Tags 28 and 29 are plain tags in every reader of the library: a lazy, a
+path, a tree decode and \f[CR]cbor::structs\f[R] decode.
+No reader resolves them.
 No writer of the library adds them by itself.
 \f[CR]encode\f[R] of an item writes a tag 28 or 29 that the item holds,
 and a program writes them with \f[CR]encoder::tag\f[R] (runtime.md).

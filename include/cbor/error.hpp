@@ -63,12 +63,6 @@ enum class error {
     nesting_depth_exceeded,
     /** A tag has content that its definition does not allow. */
     inadmissible_type_for_tag_content,
-    /** A tag 29 names no tag 28 before it. */
-    sharedref_index_not_marked,
-    /** A tag 29 has an index that does not fit `std::size_t`. */
-    sharedref_index_out_of_range,
-    /** `structs` decode meets a tag 29 that names a tag 28 in a skipped member. */
-    sharedref_not_complete,
     /** An encode meets a simple value from 24 to 31. */
     reserved_simple_value,
     /**
@@ -136,14 +130,14 @@ enum class error {
  * @code{.example}
  * message: {}
  * call: std::error_code const e{cbor::error::no_buffer_space}
- * result: std::error_code cbor:21
+ * result: std::error_code cbor:18
  * call: e.default_error_condition().category().name()
  * result: "generic"
  * call: std::error_code const t{cbor::error::too_little_data}
  * result: std::error_code cbor:1
  * call: t.default_error_condition().category().name()
  * result: "cbor"
- * call: cbor::category().message(13)
+ * call: cbor::category().message(10)
  * result: "key not found"
  * call: cbor::category().message(0)
  * result: "unknown cbor error"
@@ -185,12 +179,6 @@ public:
             return "nesting depth exceeded";
         case error::inadmissible_type_for_tag_content:
             return "inadmissible type for tag content";
-        case error::sharedref_index_not_marked:
-            return "sharedref index not marked";
-        case error::sharedref_index_out_of_range:
-            return "sharedref index out of range";
-        case error::sharedref_not_complete:
-            return "sharedref not complete";
         case error::reserved_simple_value:
             return "reserved simple value";
         case error::unsupported_value:
@@ -301,11 +289,11 @@ inline std::error_category const &category() noexcept
  * @code{.example}
  * message: {}
  * call: std::error_code const e = cbor::make_error_code(cbor::error::invalid_path)
- * result: std::error_code cbor:14
+ * result: std::error_code cbor:11
  * call: e.message()
  * result: "invalid path"
  * call: e.value()
- * result: 14
+ * result: 11
  * @endcode
  *
  * @snippet doc_reference_errors.cpp make_error_code
@@ -339,7 +327,7 @@ inline std::error_code make_error_code(error const e) noexcept
  * call: std::is_error_code_enum_v<cbor::error>
  * result: true
  * call: std::error_code const e{cbor::error::index_out_of_bounds}
- * result: std::error_code cbor:12
+ * result: std::error_code cbor:9
  * call: e.message()
  * result: "index outside of array bounds"
  * @endcode

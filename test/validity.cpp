@@ -1,7 +1,6 @@
 #include "small_stack.hpp"
 #include "reference.hpp"
 #include "owned_copy.hpp"
-#include <cbor/shared.hpp>
 
 #include <array>
 #include <cstddef>
@@ -18,7 +17,6 @@
 using namespace std::literals;
 using cbor::error;
 using cbor::major_type;
-using cbor::value_sharing;
 using cbor::detail::validity;
 
 // The end of the stack of the thread bounds every reader with the one check that every recursive reader calls: an
@@ -322,9 +320,9 @@ TEST_CASE("validity: check_typed_array for the tags around 64 to 87 and the leng
 }
 
 // The rule table holds a row only for a tag that the library interprets (owner, 2026-10-13). The content of tags
-// 2 and 3 (RFC 8949 3.4.3), of tag 24 (RFC 8949 3.4.5.1) and of tags 64 to 87 (RFC 8746 2) is a byte string; the
-// content of tag 29 is an unsigned integer (value-sharing). Tags 0 and 1 and every other tag take every major
-// type. This test exists so that no content that these sections forbid passes a reader that interprets the tag,
+// 2 and 3 (RFC 8949 3.4.3), of tag 24 (RFC 8949 3.4.5.1) and of tags 64 to 87 (RFC 8746 2) is a byte string. Tags
+// 0 and 1, tags 28 and 29 (which the library does not interpret, owner 2026-11-08) and every other tag take every
+// major type. This test exists so that no content that these sections forbid passes a reader that interprets the tag,
 // and so that no row refuses a tag that the library does not interpret.
 TEST_CASE("validity: check_tag_content for the tags 0 to 100 and 1113 and every major type")
 {
@@ -340,45 +338,11 @@ TEST_CASE("validity: check_tag_content for the tags 0 to 100 and 1113 and every 
             bool admitted = true;
             if (byte_string)
                 admitted = major == major_type::byte_string;
-            else if (tag == 29)
-                admitted = major == major_type::unsigned_integer;
             if (admitted)
                 CHECK(r.has_value());
             else
                 CHECK_EQ(r.error(), error::inadmissible_type_for_tag_content);
         }
-}
-
-// A shared reference names one of the values that were marked before it. The decoder and the lazy reader read
-// the index through this one check, so an index that no mark has reached gives the same error on both paths,
-// and the index is converted to std::size_t only after it is known to fit.
-TEST_CASE("value_sharing: check_sharedref_index for up to three marks")
-{
-    std::array<std::uint64_t, 6> const arguments{0, 1, 2, 3, 4, std::numeric_limits<std::uint64_t>::max()};
-    for (std::size_t marked = 0; marked <= 3; ++marked)
-        for (std::uint64_t const argument : arguments) {
-            auto const r = value_sharing::check_sharedref_index(argument, marked);
-            if (argument > std::numeric_limits<std::size_t>::max())
-                CHECK_EQ(r.error(), error::sharedref_index_out_of_range);
-            else if (argument >= marked)
-                CHECK_EQ(r.error(), error::sharedref_index_not_marked);
-            else
-                CHECK_EQ(std::to_underlying(*r), argument);
-        }
-}
-
-template <class Argument>
-constexpr bool sharedref_index_accepts =
-    requires(Argument const argument, void (*const take)(value_sharing::index)) { take(argument); };
-
-// An index into the marks of tags 28 and 29 is a type of its own. A byte offset or an index of an array that
-// stands where a shared reference index is expected does not compile, so the two cannot be mixed up silently.
-TEST_CASE("value_sharing: index takes no byte offset and no other index")
-{
-    CHECK(sharedref_index_accepts<value_sharing::index>);
-    CHECK_FALSE(sharedref_index_accepts<validity::index>);
-    CHECK_FALSE(sharedref_index_accepts<validity::offset>);
-    CHECK_FALSE(sharedref_index_accepts<std::size_t>);
 }
 
 #ifdef CBOR_HAS_INT128

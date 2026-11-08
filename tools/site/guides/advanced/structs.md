@@ -257,18 +257,10 @@ using id = std::variant<std::uint8_t, std::int64_t, std::string>;
 
 ## 7. Shared values
 
-`decode` reads tag 28 and tag 29 of the value-sharing registration with
-a table that exists for one call. A tag 28 is allowed on every member and
-keeps the value. No member takes a tag 29, so every tag 29 gives an
-error:
-
-| The tag 29 names | Error |
-|---|---|
-| no tag 28 before it | `sharedref_index_not_marked` |
-| a tag 28 in a skipped member | `sharedref_not_complete` |
-| any other tag 28 | `incorrect_type` |
-
-Nothing is decoded twice.
+`decode` reads tag 28 and tag 29 of the value-sharing registration as
+tags that it does not interpret. A tag 28 or a tag 29 where the value of a
+member stands gives `incorrect_type`, and on a key of a struct map
+`unsupported_value`.
 
 ```cpp
 // [28("x"), 29(0)]

@@ -4,8 +4,7 @@
  * same type. Writes a struct as a map with one key for each member
  * that holds a value. Finds the members by reflection, by Boost.PFR or
  * in describe_members. Writes std::chrono times and dates, sets and
- * arrays of numbers under their standard tags. Reads values marked as
- * shareable.
+ * arrays of numbers under their standard tags.
  * https://www.rfc-editor.org/rfc/rfc8949
  * https://www.rfc-editor.org/rfc/rfc8943#section-2.1
  * https://www.rfc-editor.org/rfc/rfc8746#section-2
@@ -64,7 +63,6 @@
 #include "lazy.hpp"
 #include "ref.hpp"
 #include "schema.hpp"
-#include "shared.hpp"
 
 namespace cbor
 {
@@ -441,7 +439,7 @@ class generic
 #endif
 
     template <class U, std::size_t I = 0, bool Checked>
-    static std::expected<void, error> read_variant(value_sharing::sharing_decoder<Checked> &d, U &out,
+    static std::expected<void, error> read_variant(heads::decoder<Checked> &d, U &out,
                                                    heads::head const &h)
     {
         if constexpr (I == std::variant_size_v<U>) {
@@ -455,46 +453,7 @@ class generic
     }
 
     template <class U, bool Checked>
-    static std::expected<void, error> read_generic(value_sharing::sharing_decoder<Checked> &d, U &out)
-    {
-        using marked_value = typename value_sharing::sharing_decoder<Checked>::marked_value;
-        std::size_t const first_mark = d.marked_values.size();
-        for (;;) {
-            heads::decoder<Checked> look = d;
-            auto const h = look.decode_head();
-            if (!h) [[unlikely]]
-                return std::unexpected(h.error());
-            if (h->major != major_type::tag)
-                break;
-            if (h->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
-                d.encoded = look.encoded;
-                d.marked_values.push_back(marked_value::open);
-                continue;
-            }
-            if (h->argument != std::to_underlying(rfc8949::tag_number::sharedref))
-                break;
-            auto const n = look.decode_head();
-            if (!n) [[unlikely]]
-                return std::unexpected(n.error());
-            if (error const e = detail::validity::check_tag_content(h->argument, n->major).error_or(error{});
-                e != error{}) [[unlikely]]
-                return std::unexpected(e);
-            auto const index = value_sharing::check_sharedref_index(n->argument, d.marked_values.size());
-            if (!index) [[unlikely]]
-                return std::unexpected(index.error());
-            if (d.marked_values[std::to_underlying(*index)] == marked_value::in_skipped_member) [[unlikely]]
-                return std::unexpected(error::sharedref_not_complete);
-            return std::unexpected(error::incorrect_type);
-        }
-        if (auto const r = read_generic_value(d, out); !r)
-            [[unlikely]]
-            return r;
-        std::ranges::fill(std::span(d.marked_values).subspan(first_mark, d.marked_values.size() - first_mark), marked_value::value_member);
-        return {};
-    }
-
-    template <class U, bool Checked>
-    static std::expected<void, error> read_generic_value(value_sharing::sharing_decoder<Checked> &d, U &out)
+    static std::expected<void, error> read_generic_value(heads::decoder<Checked> &d, U &out)
     {
         if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
             return std::unexpected(r.error());
@@ -606,14 +565,14 @@ class generic
                 out.reset();
                 return {};
             }
-            return read_generic(d, out.emplace());
+            return read_generic_value(d, out.emplace());
         } else if constexpr (is_tagged_item<U>) {
             auto const h = d.decode_head();
             if (!h) [[unlikely]]
                 return std::unexpected(h.error());
             if (h->major != major_type::tag || h->argument != U::number) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            return read_generic(d, out.content);
+            return read_generic_value(d, out.content);
         } else if constexpr (is_std_tuple<U> || is_std_array<U>) {
             auto const h = d.decode_head();
             if (!h) [[unlikely]]
@@ -622,7 +581,7 @@ class generic
                 return std::unexpected(error::incorrect_type);
             std::expected<void, error> r;
             [&]<std::size_t... I>(std::index_sequence<I...>) {
-                ((r = r.and_then([&] { return read_generic(d, std::get<I>(out)); })),
+                ((r = r.and_then([&] { return read_generic_value(d, std::get<I>(out)); })),
                  ...);
             }(std::make_index_sequence<std::tuple_size_v<U>>());
             return r;
@@ -639,7 +598,7 @@ class generic
             out.clear();
             for (std::uint64_t i = 0; i < h->argument; ++i) {
                 auto key = pfr::make_element<typename U::key_type>(out);
-                if (auto const r = read_generic(d, key); !r) [[unlikely]]
+                if (auto const r = read_generic_value(d, key); !r) [[unlikely]]
                     return r;
                 if (auto const r = detail::validity::check_key_unique(out.contains(key)); !r) [[unlikely]]
                     return r;
@@ -654,7 +613,7 @@ class generic
                     return r;
                 for (std::uint64_t k = 0; k < values->argument; ++k) {
                     auto value = pfr::make_element<typename U::mapped_type>(out);
-                    if (auto const r = read_generic(d, value); !r) [[unlikely]]
+                    if (auto const r = read_generic_value(d, value); !r) [[unlikely]]
                         return r;
                     out.emplace(key, std::move(value));
                 }
@@ -673,10 +632,10 @@ class generic
             out.clear();
             for (std::uint64_t i = 0; i < h->argument; ++i) {
                 auto key = pfr::make_element<typename U::key_type>(out);
-                if (auto const r = read_generic(d, key); !r) [[unlikely]]
+                if (auto const r = read_generic_value(d, key); !r) [[unlikely]]
                     return r;
                 auto value = pfr::make_element<typename U::mapped_type>(out);
-                if (auto const r = read_generic(d, value); !r) [[unlikely]]
+                if (auto const r = read_generic_value(d, value); !r) [[unlikely]]
                     return r;
                 if constexpr (requires { out.try_emplace(std::move(key), std::move(value)); }) {
                     if (auto const r = detail::validity::check_key_unique(
@@ -711,12 +670,12 @@ class generic
                                   { out.emplace_back() } -> std::same_as<E &>;
                                   requires !pfr::uses_allocator_aggregate<E, decltype(out.get_allocator())>();
                               }) {
-                    if (auto const r = read_generic(d, out.emplace_back()); !r)
+                    if (auto const r = read_generic_value(d, out.emplace_back()); !r)
                         [[unlikely]]
                         return r;
                 } else {
                     E element = pfr::make_element<E>(out);
-                    if (auto const r = read_generic(d, element); !r) [[unlikely]]
+                    if (auto const r = read_generic_value(d, element); !r) [[unlikely]]
                         return r;
                     out.insert(out.end(), std::move(element));
                 }
@@ -728,7 +687,7 @@ class generic
     }
 
     template <class U, bool Checked>
-    static std::expected<void, error> read_epoch(value_sharing::sharing_decoder<Checked> &d, U &out)
+    static std::expected<void, error> read_epoch(heads::decoder<Checked> &d, U &out)
     {
         using rep = std::chrono::seconds::rep;
         heads::decoder<Checked> look = d;
@@ -754,7 +713,7 @@ class generic
 
 #if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
     template <class U, bool Checked, std::size_t N>
-    static std::expected<void, error> parse_text(value_sharing::sharing_decoder<Checked> &d, U &out,
+    static std::expected<void, error> parse_text(heads::decoder<Checked> &d, U &out,
                                                  std::array<char const *, N> const &formats)
     {
         auto const h = d.decode_head();
@@ -782,7 +741,7 @@ class generic
 #endif
 
     template <class U, bool Checked>
-    static std::expected<void, error> read_tag_content(value_sharing::sharing_decoder<Checked> &d, U &out,
+    static std::expected<void, error> read_tag_content(heads::decoder<Checked> &d, U &out,
                                                        heads::head const &tag)
     {
         if constexpr (is_sys_time<U>) {
@@ -820,7 +779,7 @@ class generic
             out.clear();
             for (std::uint64_t i = 0; i < h->argument; ++i) {
                 auto element = pfr::make_element<typename U::value_type>(out);
-                if (auto const r = read_generic(d, element); !r) [[unlikely]]
+                if (auto const r = read_generic_value(d, element); !r) [[unlikely]]
                     return r;
                 if (auto const r = detail::validity::check_key_unique(!out.insert(std::move(element)).second);
                     !r) [[unlikely]]
@@ -865,7 +824,7 @@ class generic
     }
 
     template <class U, bool Checked>
-    static std::expected<void, error> read_struct(value_sharing::sharing_decoder<Checked> &d, U &out)
+    static std::expected<void, error> read_struct(heads::decoder<Checked> &d, U &out)
     {
         static_assert(pfr::struct_readable<U>());
         constexpr std::size_t count = pfr::tuple_size_v<U>;
@@ -887,7 +846,7 @@ class generic
             if (auto const unique = detail::validity::check_key_unique(found.test(I)); !unique) [[unlikely]]
                 return unique;
             found.set(I);
-            return read_generic(d, pfr::get<I>(out));
+            return read_generic_value(d, pfr::get<I>(out));
         };
         for (std::uint64_t entry = 0; entry < h->argument; ++entry) {
             auto k = d.decode_head();
@@ -929,7 +888,7 @@ class generic
                      (static_cast<void>(r = read_member(std::integral_constant<std::size_t, I>{})), true)));
             }(std::make_index_sequence<count>());
             if (!matched) {
-                if (auto const s = well_formedness::skip_item(d, d); !s) [[unlikely]]
+                if (auto const s = well_formedness::skip_item(d); !s) [[unlikely]]
                     return s;
             } else if (!r) [[unlikely]] {
                 return r;
@@ -1469,8 +1428,6 @@ public:
      * @retval nesting_depth_exceeded the item is deeper than the stack of the thread holds
      * @retval inadmissible_type_for_tag_content a tag has content that its definition does not allow
      * @retval unsupported_value a map key is an array, a map or a tag
-     * @retval sharedref_index_not_marked, sharedref_index_out_of_range, sharedref_not_complete a tag 29 that names no
-     * shared value that the decode holds
      * @retval string_length_exceeded a string is longer than `limits::string_length`
      * @retval container_elements_exceeded the count of an array or a map is greater than `limits::container_elements`
      * @retval not_enough_memory a refused allocation
@@ -1663,8 +1620,8 @@ private:
     template <bool Checked>
     static std::expected<T, error> read(std::string_view const encoded, T out)
     {
-        value_sharing::sharing_decoder<Checked> d{{encoded}, {}};
-        if (auto const r = generic::read_generic(d, out); !r) [[unlikely]]
+        heads::decoder<Checked> d{encoded};
+        if (auto const r = generic::read_generic_value(d, out); !r) [[unlikely]]
             return std::unexpected(r.error());
         return out;
     }

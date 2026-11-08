@@ -67,7 +67,7 @@ struct lazy;
  * nodelist.
  * A path that selects nothing gives an empty nodelist and no error.
  * The errors of the walk apply (cbor::at_path()).
- * `nodelist_too_long`: one step selects more nodes than the top-level item has bytes, which tag 29 makes possible.
+ * `nodelist_too_long`: one step selects more nodes than the top-level item has bytes, which a union selector that names one node many times makes possible (RFC 9535 2.5.2).
  *
  * @code{.callseq}
  * doc->at_path<"$.a[*]", cbor::nodelist>() → std::expected<nodelist, error>
@@ -1063,8 +1063,7 @@ detail::validity::keys_equivalent(First &first, offset const first_at, Second &s
             return message.encoded;
     };
     auto const skip = [](heads::decoder<Checked> &d) {
-        well_formedness::no_marks none;
-        return well_formedness::skip_item(d, none);
+        return well_formedness::skip_item(d);
     };
     auto const resolve = []<class Message>(Message &message, offset const at) -> offset {
         if constexpr (std::same_as<Message, std::string_view const>)

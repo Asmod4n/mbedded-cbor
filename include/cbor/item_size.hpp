@@ -33,15 +33,8 @@ struct lazy_entries;
 
 class well_formedness
 {
-    struct no_marks {
-        template <bool Checked>
-        void mark(heads::decoder<Checked> const &)
-        {
-        }
-    };
-
-    template <bool Checked, class Marks>
-    static std::expected<void, error> skip_item(heads::decoder<Checked> &d, Marks &marks)
+    template <bool Checked>
+    static std::expected<void, error> skip_item(heads::decoder<Checked> &d)
     {
         std::uint64_t pending = 1;
         while (pending != 0) {
@@ -78,8 +71,6 @@ class well_formedness
                                 .value_or(std::numeric_limits<std::uint64_t>::max());
                     break;
                 case major_type::tag:
-                    if (slow->argument == std::to_underlying(rfc8949::tag_number::shareable))
-                        marks.mark(d);
                     added = 1;
                     break;
                 case major_type::simple_float:
@@ -105,16 +96,15 @@ class well_formedness
     CBOR_ALWAYS_INLINE static std::expected<void, error> skip_items(heads::decoder<Checked> &d,
                                                                     std::uint64_t const count)
     {
-        no_marks none;
         if constexpr (!Checked) {
             for (std::uint64_t i = 0; i < count; ++i)
-                if (auto const r = skip_item(d, none); !r) [[unlikely]]
+                if (auto const r = skip_item(d); !r) [[unlikely]]
                     return r;
             return {};
         }
         heads::decoder<false> unlimited{d.encoded};
         for (std::uint64_t i = 0; i < count; ++i)
-            if (auto const r = skip_item(unlimited, none); !r) [[unlikely]]
+            if (auto const r = skip_item(unlimited); !r) [[unlikely]]
                 return r;
         d.encoded = unlimited.encoded;
         return {};
@@ -167,8 +157,7 @@ class well_formedness
 inline std::expected<std::size_t, error> item_size(std::string_view const encoded)
 {
     heads::decoder<true> d{encoded};
-    well_formedness::no_marks none;
-    if (auto const r = well_formedness::skip_item(d, none); !r) [[unlikely]]
+    if (auto const r = well_formedness::skip_item(d); !r) [[unlikely]]
         return std::unexpected(r.error());
     return std::to_underlying(detail::validity::distance(encoded, d.encoded));
 }

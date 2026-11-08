@@ -147,7 +147,8 @@ give a nodelist.
 A path that selects nothing gives an empty nodelist and no error.
 The errors of the walk apply (cbor::at_path()).
 \f[CR]nodelist_too_long\f[R]: one step selects more nodes than the
-top\-level item has bytes, which tag 29 makes possible.
+top\-level item has bytes, which a union selector that names one node
+many times makes possible (RFC 9535 2.5.2).
 .SS cbor::fixed_string<N>
 The type of a path at compile time.
 A string literal converts to it, so

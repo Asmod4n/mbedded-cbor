@@ -51,9 +51,6 @@ the compiler cannot see a wrong use, the library throws
 | `indefinite_length` | A head uses indefinite length. The library does not read indefinite length. `diagnostic_notation` prints it. |
 | `nesting_depth_exceeded` | The item is deeper than the nesting depth (section 5). |
 | `inadmissible_type_for_tag_content` | A tag has content that its definition does not allow. |
-| `sharedref_index_not_marked` | `structs` decode meets a tag 29 that names no tag 28 before it. |
-| `sharedref_index_out_of_range` | `structs` decode meets a tag 29 whose index does not fit `std::size_t`. |
-| `sharedref_not_complete` | `structs` decode meets a tag 29 that names a tag 28 in a skipped member. |
 | `reserved_simple_value` | An encode meets a simple value from 24 to 31. |
 | `unsupported_value` | The encoder meets a typed array with a reserved tag or a tag outside RFC 8746. `structs` gives it for a map key that is an array, a map or a tag. |
 | `not_indexable` | A key or an index meets an item that is not a map or an array. |
