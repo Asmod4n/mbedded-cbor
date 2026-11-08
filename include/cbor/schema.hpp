@@ -397,19 +397,6 @@ class reflection
         return bytes;
     }();
 
-    static consteval std::vector<unsigned char> key_encoded(major_type const major, std::uint64_t const argument,
-                                                            std::string_view const text)
-    {
-        std::uint8_t const info = heads::preferred_argument_info(argument);
-        std::size_t const bytes = heads::argument_size(info);
-        std::vector<unsigned char> out{static_cast<unsigned char>(heads::initial_byte(major, info))};
-        for (std::size_t k = bytes; k > 0; --k)
-            out.push_back(static_cast<unsigned char>(argument >> (std::numeric_limits<std::uint8_t>::digits * (k - 1))));
-        for (char const c : text)
-            out.push_back(static_cast<unsigned char>(c));
-        return out;
-    }
-
     template <class E>
     CBOR_ALWAYS_INLINE static E read_typed_array_element(std::span<char const, sizeof(E)> const in)
     {
@@ -1034,10 +1021,7 @@ class reflection
     {
         std::vector<std::meta::info> members(std::from_range, std::meta::nonstatic_data_members_of(
                                                                   std::meta::dealias(^^U), std::meta::access_context::unprivileged()));
-        std::ranges::sort(members, {}, [](std::meta::info const m) {
-            std::string_view const key = key_of(m);
-            return key_encoded(major_type::text_string, key.size(), key);
-        });
+        std::ranges::sort(members, {}, [](std::meta::info const m) { return key_encoding_of(map_key(key_of(m))); });
         return std::define_static_array(members);
     }
 

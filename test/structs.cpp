@@ -96,6 +96,12 @@ struct text_order {
     bool operator==(text_order const &) const = default;
 };
 
+struct long_text_order {
+    int aaaaaaaaaaaaaaaaaaaaaaaa;
+    int bbbbbbbbbbbbbbbbbbbbbbb;
+    bool operator==(long_text_order const &) const = default;
+};
+
 struct integer_order {
     int first;
     int second;
@@ -825,6 +831,16 @@ TEST_CASE("structs: keys come out in the deterministic order of RFC 8949 4.2.1")
     auto const back = cbor::structs<integer_order>::decode(std::string(*i));
     REQUIRE(back.has_value());
     CHECK(**back == integer_order{10, 20, 30});
+}
+
+// RFC 8949 4.2.1 and 3: a text of 23 bytes has the head 77, a text of 24 bytes the head 78 18. So the key of 23 "b"
+// comes before the key of 24 "a", though "a" sorts first by its characters. The test exists because the order of
+// the members compares the initial byte first, and a text of 24 bytes or more has a head of two bytes.
+TEST_CASE("structs: a key of 23 bytes comes before a key of 24 bytes")
+{
+    auto const t = cbor::structs<long_text_order>::encode(long_text_order{1, 2});
+    REQUIRE(t.has_value());
+    CHECK_EQ(*t, "\xa2\x77" + std::string(23, 'b') + "\x02\x78\x18" + std::string(24, 'a') + "\x01");
 }
 
 // RFC 8949 3.4.3 and 5.6.1: a key written as a bignum that fits 64 bits is the integer key of the same value, so
