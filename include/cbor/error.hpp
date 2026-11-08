@@ -111,7 +111,7 @@ enum class error {
     /** `jsonpath::compile<T>` gets a path that is not singular, and `T` is not `nodelist`. */
     not_singular_query,
     /**
-     * cbor::encode() of a tree would write more than `cbor::limits::maximum_amplification` times the size of the
+     * cbor::encode() with cbor::cycles would write more than `cbor::limits::maximum_amplification` times the size of the
      * tree, past `cbor::limits::amplification_activation_threshold`.
      */
     amplification_limit_breach

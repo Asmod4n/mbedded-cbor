@@ -69,7 +69,7 @@ the compiler cannot see a wrong use, the library throws
 | `no_buffer_space`, `value_too_large`, `not_enough_memory`, `io_error` | The writer of an encode gives this error. `not_enough_memory` also comes from a refused allocation in `structs` and `schema` decode. |
 | `string_length_exceeded`, `container_elements_exceeded` | A limit is set and the input goes past it (section 4). |
 | `not_singular_query` | `jsonpath::compile<T>` gets a path that is not singular, and `T` is not `nodelist` ([path.md](path.md), section 10). |
-| `amplification_limit_breach` | `encode` of a tree from `decode` would write more than the amplification limits allow (section 4). |
+| `amplification_limit_breach` | `encode` with `cbor::cycles` would write more than the amplification limits allow (section 4). |
 
 ```cpp
 // owner: a std::shared_ptr<std::string const> with the bytes in the comment above each read
@@ -109,8 +109,8 @@ A value above the bound does not compile. All translation units of one
 program use the same values: a different value is a violation of the one
 definition rule.
 
-`encode` of a tree writes a value that two references without a cycle
-reach twice, so each level of such references doubles the output. Before
+`encode` with `cbor::cycles` writes a value that two references
+without a cycle reach twice, so each level of such references doubles the output. Before
 it writes, `encode` counts the bytes that it would write and the bytes of
 the tree. Past `amplification_activation_threshold` bytes, the output may
 be `maximum_amplification` times the tree and no more; past that, `encode`

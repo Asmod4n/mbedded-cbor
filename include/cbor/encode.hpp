@@ -55,16 +55,35 @@ class encoder;
 class iov_writer;
 
 /**
+ * @brief Selects the encode that writes each cycle of a tree with tags 28 and 29 (RFC 8949 3.4, IANA tags 28 and 29).
+ *
+ * cbor::encode() and cbor::encode_iov() without it write no tag 28 or 29 of their own, and a `shared_reference` gives
+ * `unsupported_value`.
+ *
+ * @code{.callseq}
+ * cbor::encode(**tree, out, cbor::cycles) → std::expected<std::size_t, error>
+ * @endcode
+ *
+ * @see cbor::encode()
+ *
+ * @ingroup item
+ */
+struct cycles_t {
+    explicit cycles_t() = default;
+};
+
+/** @brief The value of cbor::cycles_t. */
+inline constexpr cycles_t cycles{};
+
+/**
  * @brief Writes the tree at `root` and gives the count of bytes written.
  *
  * Each integer, length and tag number keeps the width of its head, from `additional_information`.
  * A float keeps its width.
- * A `shared_reference` stands for the item it names.
- * A walk before the write finds each item that a depth-first walk reaches again while it is inside that item.
- * Such an item gets a tag 28, and each edge that reaches it again is a tag 29 with the index of that mark, in its
- * shortest head.
- * A value that two references reach without a cycle is written in full each time.
+ * The call walks the tree once and writes no tag 28 or 29 of its own.
  * A tag 28 and a tag 29 of a tree of cbor::lazy::clone() are written as they are.
+ * A `shared_reference` gives `unsupported_value`; the target then holds the bytes written before it.
+ * The form with cbor::cycles writes it as the overload below says.
  * The target is one of these:
  * - a container of bytes, for example `std::string`: the call appends; - a `std::span` of bytes: the call writes
  * into it and allocates nothing; - an object with `allocate(std::size_t)`, which gives a writer with
@@ -88,9 +107,8 @@ class iov_writer;
  * @endcode
  *
  * @retval no_buffer_space the span is too short
- * @retval nesting_depth_exceeded the tree, or the path through its references, is deeper than the limit
- * @retval amplification_limit_breach the output would be larger than `cbor::limits::amplification_activation_threshold`
- * and than `cbor::limits::maximum_amplification` times the tree; nothing is written
+ * @retval nesting_depth_exceeded the tree is deeper than the limit
+ * @retval unsupported_value the tree holds a `shared_reference`
  * @retval value_too_large, not_enough_memory, io_error the error of a writer, from its `std::errc`
  * @snippet doc_reference_item.cpp encode
  * @see cbor::encode_iov()
@@ -102,6 +120,43 @@ class iov_writer;
 template <class Target>
 std::expected<std::size_t, error> encode(item const &root, Target &&target);
 
+/**
+ * @brief Writes the tree at `root` with tags 28 and 29 for each cycle and gives the count of bytes written.
+ *
+ * A `shared_reference` stands for the item it names.
+ * A walk before the write finds each item that a depth-first walk reaches again while it is inside that item.
+ * Such an item gets a tag 28, and each edge that reaches it again is a tag 29 with the index of that mark, in its
+ * shortest head.
+ * A value that two references reach without a cycle is written in full each time.
+ * Every other item is written as cbor::encode() without cbor::cycles writes it.
+ *
+ * @code{.callseq}
+ * cbor::encode(**tree, out, cbor::cycles) → std::expected<std::size_t, error>
+ * @endcode
+ * @code{.example}
+ * message: 28([29(0)])
+ * call: auto const tree = cbor::decode(bytes)
+ * result: owning item of an array that holds itself
+ * call: std::string out;
+ * result: ""
+ * call: cbor::encode(**tree, out, cbor::cycles)
+ * result: 6
+ * call: out
+ * result: 6 bytes: d8 1c 81 d8 1d 00
+ * @endcode
+ *
+ * @retval no_buffer_space the span is too short
+ * @retval nesting_depth_exceeded the tree, or the path through its references, is deeper than the limit
+ * @retval amplification_limit_breach the output would be larger than `cbor::limits::amplification_activation_threshold`
+ * and than `cbor::limits::maximum_amplification` times the tree; nothing is written
+ * @retval value_too_large, not_enough_memory, io_error the error of a writer, from its `std::errc`
+ * @see cbor::cycles_t
+ *
+ * @ingroup item
+ */
+template <class Target>
+std::expected<std::size_t, error> encode(item const &root, Target &&target, cycles_t);
+
 #if __has_include(<sys/uio.h>)
 /**
  * @brief Writes the tree at `root` into a list of `struct iovec` pieces, not into one buffer.
@@ -111,8 +166,9 @@ std::expected<std::size_t, error> encode(item const &root, Target &&target);
  * The program holds the `ref` until the call returns or until the last completion of the request.
  * The bytes are those of cbor::encode().
  * The function exists where `<sys/uio.h>` exists.
- * `nesting_depth_exceeded`: the tree, or the path through its references, is deeper than the limit.
- * `amplification_limit_breach`: as cbor::encode() gives it.
+ * `nesting_depth_exceeded`: the tree is deeper than the limit.
+ * `unsupported_value`: the tree holds a `shared_reference`.
+ * The form with cbor::cycles writes tags 28 and 29 as cbor::encode() with cbor::cycles does.
  * A piece that refers to the string of an owner points into memory that the owner holds as const; a call that writes
  * into the pieces, such as `readv`, is a wrong use.
  *
@@ -134,6 +190,20 @@ std::expected<std::size_t, error> encode(item const &root, Target &&target);
  * @ingroup item
  */
 std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &root);
+
+/**
+ * @brief Writes the tree at `root` with tags 28 and 29 for each cycle into a list of `struct iovec` pieces.
+ *
+ * The bytes are those of cbor::encode() with cbor::cycles, and its errors.
+ *
+ * @code{.callseq}
+ * cbor::encode_iov(**tree, cbor::cycles) → std::expected<ref<std::span<iovec const>>, error>
+ * @endcode
+ * @see cbor::cycles_t
+ *
+ * @ingroup item
+ */
+std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &root, cycles_t);
 #endif
 
 class encoding
@@ -232,20 +302,33 @@ private:
     static head_parts head_of(item const &node);
     static std::span<item const> children_of(item const &node, major_type major);
     static item const *content_of(item const &node, major_type major);
-    static std::expected<bool, error> holds_reference(item const &node);
+    template <class Writer>
+    static std::expected<void, error> encode_item(encoder<Writer> &out, item const &node);
     static std::uint64_t size_of(item const &node, head_parts const &head);
     static std::uint64_t reference_size_of(item const &reference);
 
     class depth_first_search;
 
-    template <class Writer>
+    template <bool Cycles, class Writer>
     static std::expected<void, error> encode_tree(encoder<Writer> &out, item const &root);
+
+    template <bool Cycles, class Target>
+    static std::expected<std::size_t, error> encode_into(item const &root, Target &&target);
+
+#if __has_include(<sys/uio.h>)
+    template <bool Cycles>
+    static std::expected<ref<std::span<iovec const>>, error> encode_iov_of(item const &root);
+#endif
 
     template <class Target>
     friend std::expected<std::size_t, error> encode(item const &root, Target &&target);
 
+    template <class Target>
+    friend std::expected<std::size_t, error> encode(item const &root, Target &&target, cycles_t);
+
 #if __has_include(<sys/uio.h>)
     friend std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &root);
+    friend std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &root, cycles_t);
 #endif
 
     template <class>
@@ -1446,27 +1529,27 @@ inline item const *encoding::content_of(item const &node, major_type const major
     return node.via.tag.content;
 }
 
-inline std::expected<bool, error> encoding::holds_reference(item const &node)
+template <class Writer>
+std::expected<void, error> encoding::encode_item(encoder<Writer> &out, item const &node)
 {
     if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
-        return std::unexpected(r.error());
-    switch (node.type) {
-    case cbor::type::shared_reference:
-        return true;
-    case cbor::type::array:
-    case cbor::type::map:
-        for (item const &child : node.type == cbor::type::array ? node.via.array : node.via.map) {
-            auto const r = holds_reference(child);
-            if (!r || *r) [[unlikely]]
-                return r;
-        }
-        return false;
-    case cbor::type::tag:
-    case cbor::type::typed_array:
-        return holds_reference(*node.via.tag.content);
-    default:
-        return false;
-    }
+        return r;
+    if (node.type == cbor::type::shared_reference) [[unlikely]]
+        return std::unexpected(error::unsupported_value);
+    head_parts const head = head_of(node);
+    std::expected<void, std::errc> written = out.encode_head(head.major, head.info, head.argument);
+    if (written && head.major == major_type::byte_string)
+        written = out.encode_payload(node.via.bin);
+    else if (written && head.major == major_type::text_string)
+        written = out.encode_payload(std::span(node.via.str));
+    if (!written) [[unlikely]]
+        return std::unexpected(detail::validity::writer_error(written.error()));
+    for (item const &child : children_of(node, head.major))
+        if (auto const r = encode_item(out, child); !r) [[unlikely]]
+            return r;
+    if (item const *const content = content_of(node, head.major))
+        return encode_item(out, *content);
+    return {};
 }
 
 inline std::uint64_t encoding::size_of(item const &node, head_parts const &head)
@@ -1623,12 +1706,8 @@ public:
     std::expected<void, error> encode(encoder<Writer> &out, item const &root)
     {
         item const &start = root.type == cbor::type::shared_reference ? *root.via.tag.content : root;
-        auto const shared = holds_reference(start);
-        if (!shared) [[unlikely]]
-            return std::unexpected(shared.error());
-        if (*shared) [[unlikely]]
-            if (auto const r = find_back_edges(start, nullptr, false); !r) [[unlikely]]
-                return r;
+        if (auto const r = find_back_edges(start, nullptr, false); !r) [[unlikely]]
+            return r;
         std::ranges::sort(targets);
         auto const repeated = std::ranges::unique(targets);
         targets.erase(repeated.begin(), repeated.end());
@@ -1640,19 +1719,23 @@ public:
     }
 };
 
-template <class Writer>
+template <bool Cycles, class Writer>
 std::expected<void, error> encoding::encode_tree(encoder<Writer> &out, item const &root)
 {
-    depth_first_search walk;
-    return walk.encode(out, root);
+    if constexpr (Cycles) {
+        depth_first_search walk;
+        return walk.encode(out, root);
+    } else {
+        return encode_item(out, root);
+    }
 }
 
-template <class Target>
-std::expected<std::size_t, error> encode(item const &root, Target &&target)
+template <bool Cycles, class Target>
+std::expected<std::size_t, error> encoding::encode_into(item const &root, Target &&target)
 {
-    decltype(auto) message = encoding::message_of(target, 0);
-    encoding::encoder<std::remove_reference_t<decltype(message)>> out(message);
-    if (auto const r = encoding::encode_tree(out, root); !r) [[unlikely]]
+    decltype(auto) message = message_of(target, 0);
+    encoder<std::remove_reference_t<decltype(message)>> out(message);
+    if (auto const r = encode_tree<Cycles>(out, root); !r) [[unlikely]]
         return std::unexpected(r.error());
     if (auto const r = out.flush(); !r) [[unlikely]]
         return std::unexpected(detail::validity::writer_error(r.error()));
@@ -1661,14 +1744,37 @@ std::expected<std::size_t, error> encode(item const &root, Target &&target)
     return out.written;
 }
 
+template <class Target>
+std::expected<std::size_t, error> encode(item const &root, Target &&target)
+{
+    return encoding::encode_into<false>(root, std::forward<Target>(target));
+}
+
+template <class Target>
+std::expected<std::size_t, error> encode(item const &root, Target &&target, cycles_t)
+{
+    return encoding::encode_into<true>(root, std::forward<Target>(target));
+}
+
 #if __has_include(<sys/uio.h>)
-inline std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &root)
+template <bool Cycles>
+std::expected<ref<std::span<iovec const>>, error> encoding::encode_iov_of(item const &root)
 {
     iov_writer writer;
-    encoding::encoder<iov_writer> out(writer);
-    if (auto const r = encoding::encode_tree(out, root); !r) [[unlikely]]
+    encoder<iov_writer> out(writer);
+    if (auto const r = encode_tree<Cycles>(out, root); !r) [[unlikely]]
         return std::unexpected(r.error());
     return out.release();
+}
+
+inline std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &root)
+{
+    return encoding::encode_iov_of<false>(root);
+}
+
+inline std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &root, cycles_t)
+{
+    return encoding::encode_iov_of<true>(root);
 }
 #endif
 }

@@ -319,8 +319,9 @@ value of the n-th tag 28 ([value-sharing](http://cbor.schmorp.de/value-sharing))
   be the item itself or an item above it, so the tree can hold a cycle.
   An index with no tag 28 before it gives `sharedref_index_not_marked`,
   and `28(29(0))` gives `sharedref_not_defined`.
-- `encode` of a tree from `decode` writes tags 28 and 29 only for a cycle.
-  It walks the tree before it writes, depth first, and follows each
+- `encode` writes no tag 28 or 29 of its own: a `shared_reference` gives
+  `unsupported_value`. `encode(tree, out, cbor::cycles)` writes
+  tags 28 and 29 only for a cycle. It walks the tree before it writes, depth first, and follows each
   `shared_reference` to its item. An item that the walk reaches again
   while it is inside that item gets a tag 28, and each such edge is a tag
   29 with the index of that mark. A value that two references reach

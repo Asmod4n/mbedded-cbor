@@ -849,7 +849,7 @@ std::span<cbor::item const> elements_of(cbor::item const &array)
 
 } // namespace shared_test
 
-// The cases of the model (proof/theories/ValueSharing.v, the Examples) read by cbor::decode, which resolves the
+// The cases of the model (proof/theories/Cycles.v, the Examples) read by cbor::decode, which resolves the
 // tags (owner decision): a tag 28 makes no node and marks the node of its content; a tag 29 is a shared_reference
 // node whose target is that node. The specification (refs/value-sharing.html) gives the first two cases; the others
 // are the traps that the model names. The model gives the expected node identities and errors.
@@ -1003,7 +1003,7 @@ std::string encoded_again(std::string_view const input)
     auto const decoded = cbor::decode(input);
     REQUIRE(decoded.has_value());
     std::string out;
-    REQUIRE(cbor::encode(**decoded, out).has_value());
+    REQUIRE(cbor::encode(**decoded, out, cbor::cycles).has_value());
     return out;
 }
 
@@ -1028,7 +1028,26 @@ std::string diamonds_of(std::size_t const k)
 
 } // namespace shared_test
 
-// theories/Writer.v write: the encoder puts a tag 28 on a node that a back edge of the walk reaches, and a tag 29 with
+// The owner decided that encode writes no shared reference unless the program selects cycles: without
+// cbor::cycles a tree with a shared_reference gives unsupported_value, and a tree without one is written as
+// before.
+TEST_CASE("value sharing: cbor::encode without cbor::cycles writes no tag 28 or 29")
+{
+    auto const cyclic = cbor::decode("\xd8\x1c\x81\xd8\x1d\x00"sv);
+    REQUIRE(cyclic.has_value());
+    std::string out;
+    CHECK_EQ(cbor::encode(**cyclic, out).error(), error::unsupported_value);
+#if __has_include(<sys/uio.h>)
+    CHECK_EQ(cbor::encode_iov(**cyclic).error(), error::unsupported_value);
+#endif
+    auto const marked = cbor::decode("\x82\xd8\x1c\x01\x02"sv);
+    REQUIRE(marked.has_value());
+    std::string plain;
+    CHECK_EQ(cbor::encode(**marked, plain), 3u);
+    CHECK_EQ(plain, "\x82\x01\x02"s);
+}
+
+// theories/Writer.v write: with cbor::cycles the encoder puts a tag 28 on a node that a back edge of the walk reaches, and a tag 29 with
 // the index of that mark on each back edge. A value reached twice without a cycle is written twice (owner decision).
 // Each expectation is the stream that write gives for the graph that cbor::decode reads.
 TEST_CASE("value sharing: cbor::encode writes the marks of each cycle as Writer.v writes them")
@@ -1068,7 +1087,7 @@ TEST_CASE("value sharing: cbor::decode reads back what cbor::encode writes")
         REQUIRE(back.has_value());
         CHECK(test::unfoldings_equal(**tree, **back));
 #if __has_include(<sys/uio.h>)
-        auto const pieces = cbor::encode_iov(**tree);
+        auto const pieces = cbor::encode_iov(**tree, cbor::cycles);
         REQUIRE(pieces.has_value());
         std::string joined;
         for (iovec const &piece : **pieces)
@@ -1089,10 +1108,10 @@ TEST_CASE("value sharing: cbor::encode writes each copy and stops at the amplifi
     auto const tree = cbor::decode(shared_test::diamonds_of(levels_past_the_limit));
     REQUIRE(tree.has_value());
     std::string out;
-    CHECK_EQ(cbor::encode(**tree, out).error(), error::amplification_limit_breach);
+    CHECK_EQ(cbor::encode(**tree, out, cbor::cycles).error(), error::amplification_limit_breach);
     CHECK(out.empty());
     std::array<char, 64> span{};
-    CHECK_EQ(cbor::encode(**tree, std::span(span)).error(), error::amplification_limit_breach);
+    CHECK_EQ(cbor::encode(**tree, std::span(span), cbor::cycles).error(), error::amplification_limit_breach);
     CHECK(std::ranges::all_of(span, [](char const c) { return c == 0; }));
 }
 
@@ -1148,7 +1167,7 @@ TEST_CASE("value sharing: a path through references deeper than the stack gives 
     REQUIRE(tree.has_value());
     CHECK_EQ(test::error_on_small_stack([&tree] {
                  std::string out;
-                 return cbor::encode(**tree, out);
+                 return cbor::encode(**tree, out, cbor::cycles);
              }),
              error::nesting_depth_exceeded);
 }
