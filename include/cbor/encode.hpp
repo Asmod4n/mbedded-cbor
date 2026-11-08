@@ -304,6 +304,11 @@ private:
     static item const *content_of(item const &node, major_type major);
     template <class Writer>
     static std::expected<void, error> encode_item(encoder<Writer> &out, item const &node);
+    template <class Writer>
+    static std::expected<void, std::errc> encode_head_and_payload(encoder<Writer> &out, item const &node,
+                                                                  head_parts const &head);
+    template <class Writer>
+    static std::expected<void, std::errc> encode_sharedref(encoder<Writer> &out, std::uint64_t index);
     static std::uint64_t size_of(item const &node, head_parts const &head);
     static std::uint64_t reference_size_of(item const &reference);
 
@@ -1236,10 +1241,7 @@ private:
     std::expected<void, error> sharedref(std::uint64_t const index)
     {
         throw_logic_error_if_unusable();
-        if (auto const r = written(out.encode_head(major_type::tag, std::to_underlying(rfc8949::tag_number::sharedref)));
-            !r) [[unlikely]]
-            return r;
-        return written(out.encode_head(major_type::unsigned_integer, index));
+        return written(encoding::encode_sharedref(out, index));
     }
 
 public:
@@ -1530,6 +1532,28 @@ inline item const *encoding::content_of(item const &node, major_type const major
 }
 
 template <class Writer>
+std::expected<void, std::errc> encoding::encode_head_and_payload(encoder<Writer> &out, item const &node,
+                                                                 head_parts const &head)
+{
+    std::expected<void, std::errc> written = out.encode_head(head.major, head.info, head.argument);
+    if (written && head.major == major_type::byte_string)
+        written = out.encode_payload(node.via.bin);
+    else if (written && head.major == major_type::text_string)
+        written = out.encode_payload(std::span(node.via.str));
+    return written;
+}
+
+template <class Writer>
+std::expected<void, std::errc> encoding::encode_sharedref(encoder<Writer> &out, std::uint64_t const index)
+{
+    std::expected<void, std::errc> const written =
+        out.encode_head(major_type::tag, std::to_underlying(rfc8949::tag_number::sharedref));
+    if (!written) [[unlikely]]
+        return written;
+    return out.encode_head(major_type::unsigned_integer, index);
+}
+
+template <class Writer>
 std::expected<void, error> encoding::encode_item(encoder<Writer> &out, item const &node)
 {
     if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
@@ -1537,11 +1561,7 @@ std::expected<void, error> encoding::encode_item(encoder<Writer> &out, item cons
     if (node.type == cbor::type::shared_reference) [[unlikely]]
         return std::unexpected(error::unsupported_value);
     head_parts const head = head_of(node);
-    std::expected<void, std::errc> written = out.encode_head(head.major, head.info, head.argument);
-    if (written && head.major == major_type::byte_string)
-        written = out.encode_payload(node.via.bin);
-    else if (written && head.major == major_type::text_string)
-        written = out.encode_payload(std::span(node.via.str));
+    std::expected<void, std::errc> const written = encode_head_and_payload(out, node, head);
     if (!written) [[unlikely]]
         return std::unexpected(detail::validity::writer_error(written.error()));
     for (item const &child : children_of(node, head.major))
@@ -1652,11 +1672,7 @@ class encoding::depth_first_search
             ++marks;
         }
         head_parts const head = head_of(node);
-        std::expected<void, std::errc> written = out.encode_head(head.major, head.info, head.argument);
-        if (written && head.major == major_type::byte_string)
-            written = out.encode_payload(node.via.bin);
-        else if (written && head.major == major_type::text_string)
-            written = out.encode_payload(std::span(node.via.str));
+        std::expected<void, std::errc> const written = encoding::encode_head_and_payload(out, node, head);
         if (!written) [[unlikely]]
             return std::unexpected(detail::validity::writer_error(written.error()));
         frame const here{&node, index, up};
@@ -1689,10 +1705,7 @@ class encoding::depth_first_search
             enter_path(here);
         if (path_in_map) [[unlikely]] {
             if (auto const at = open.find(&next); at != open.end()) {
-                std::expected<void, std::errc> written =
-                    out.encode_head(major_type::tag, std::to_underlying(rfc8949::tag_number::sharedref));
-                if (written)
-                    written = out.encode_head(major_type::unsigned_integer, at->second);
+                std::expected<void, std::errc> const written = encoding::encode_sharedref(out, at->second);
                 if (!written) [[unlikely]]
                     return std::unexpected(detail::validity::writer_error(written.error()));
                 return marks;
