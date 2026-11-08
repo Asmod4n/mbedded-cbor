@@ -36,7 +36,7 @@
 #include <cbor/cbor.hpp>
 #include <doctest/doctest.h>
 
-#include "reference/value.hpp"
+#include "../reference/value.hpp"
 
 #include <bit>
 #include <cmath>

@@ -69,7 +69,7 @@
 #include <cbor/cbor.hpp>
 #include <doctest/doctest.h>
 
-#include "reference/value.hpp"
+#include "../reference/value.hpp"
 
 #include <chrono>
 #include <cmath>
@@ -623,6 +623,10 @@ std::vector<not_well_formed> const not_well_formed_inputs = {
     {"Tag with no content", {0xc0}, error::too_little_data},
     {"Array of length 1 with sole member replaced by a break", {0x81, 0xff}, error::syntax_error},
     {"Array of length 2 with 2nd member replaced by a break", {0x82, 0x00, 0xff}, error::syntax_error},
+    {"Map of length 1 with sole member label replaced by a break (too_little_data: the map claims 2 items and 1 byte "
+     "is left, and the decode doc gives too_little_data for a count larger than the bytes that are left)",
+     {0xa1, 0xff},
+     error::too_little_data},
     {"Alternate representation that some decoders handle differently", {0xa1, 0xff, 0x00}, error::syntax_error},
     {"Array of length 1 with 2nd member value replaced by a break", {0xa1, 0x00, 0xff}, error::syntax_error},
     {"Map of length 2 with 2nd entry label replaced by a break", {0xa2, 0x00, 0x00, 0xff, 0x00},
@@ -760,6 +764,31 @@ TEST_CASE("qcbor DecodeFailureTests: a text string of SIZE_MAX bytes with no byt
     CHECK(cbor::decode(head).error_or(error{}) == error::too_little_data);
 }
 
+// DecodeFailureTests, the invalid rows: tag 0 on an integer, tag 1 on a byte string, tag 1 on tag 0, and tag 2 on an
+// integer. Upstream gives QCBOR_ERR_BAD_OPT_TAG. RFC 8949 5.3.2 lets a decoder pass a tag that it does not convert,
+// and the owner decided that cbor::decode keeps a tag over such a content as a tag (decode.hpp: "decode checks the
+// content of no other tag"; a tag 2 over another content is an unsigned_bignum item over it). A converter checks:
+// structs<sys_seconds> names inadmissible_type_for_tag_content for tag 1 over a byte string or a tag (RFC 8949
+// 3.4.2 admits an integer or a float). std::uint64_t takes no bignum (structs.hpp: "an integer of 8 to 64 bits |
+// an integer"), so tag 2 is another item for it: incorrect_type.
+TEST_CASE("qcbor DecodeFailureTests: a tag with an inadmissible content type")
+{
+    auto const type_of = [](std::string const &in) {
+        auto const tree = cbor::decode(in);
+        REQUIRE(tree.has_value());
+        return (*tree)->type;
+    };
+    CHECK(type_of(as_string({0xc0, 0x00})) == cbor::type::tag);
+    CHECK(type_of(as_string({0xc1, 0x41, 0x33})) == cbor::type::tag);
+    CHECK(type_of(as_string({0xc1, 0xc0, 0x00})) == cbor::type::tag);
+    CHECK(type_of(as_string({0xc2, 0x00})) == cbor::type::unsigned_bignum);
+    CHECK(cbor::structs<std::uint64_t>::decode(as_string({0xc2, 0x00})).error_or(error{}) == error::incorrect_type);
+    CHECK(cbor::structs<std::chrono::sys_seconds>::decode(as_string({0xc1, 0x41, 0x33})).error_or(error{}) ==
+          error::inadmissible_type_for_tag_content);
+    CHECK(cbor::structs<std::chrono::sys_seconds>::decode(as_string({0xc1, 0xc0, 0x00})).error_or(error{}) ==
+          error::inadmissible_type_for_tag_content);
+}
+
 // ComprehensiveInputTest: every input of one and of two bytes goes through each reader. Upstream checks only that
 // nothing crashes; the sanitizers of the build check the same here. A decode that succeeds reads a well-formed item,
 // so item_size gives the size of that item within the input.
@@ -830,6 +859,32 @@ TEST_CASE("qcbor DateParseTest: an epoch date on an integer reads into sys_secon
     REQUIRE(t1.has_value());
     CHECK_EQ(t1->first, 1u);
     CHECK(t1->second->get<cbor::type::unsigned_integer>() == 1400000001u);
+}
+
+// DateParseTest, rows 7 to 13: tag 1 on a float. Upstream reads 1.1 as 1 second and a fraction of 0.1, and gives
+// QCBOR_ERR_DATE_OVERFLOW for 3.4028234663852886e+38, 9223372036854775808.0, NaN, +Infinity and -Infinity; it
+// reads 9223372036854773760.0. RFC 8949 3.4.2 admits a float. std::chrono::sys_seconds counts whole seconds in an
+// int64_t, and the structs guide says that decode takes a float under tag 1 when its value is a whole number and
+// gives number_out_of_range for any other float. So 1.1, the values outside int64_t, NaN and the infinities give
+// number_out_of_range, and 9223372036854773760.0 gives that count of seconds, as upstream.
+TEST_CASE("qcbor DateParseTest: an epoch date on a float reads into sys_seconds when it is whole")
+{
+    using cbor::structs;
+    using std::chrono::sys_seconds;
+    for (auto const &in : {
+             as_string({0xc1, 0xfa, 0x3f, 0x8c, 0xcc, 0xcd}),
+             as_string({0xc1, 0xfa, 0x7f, 0x7f, 0xff, 0xff}),
+             as_string({0xc1, 0xfb, 0x43, 0xe0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}),
+             as_string({0xc1, 0xfa, 0x7f, 0xc0, 0x00, 0x00}),
+             as_string({0xc1, 0xfb, 0x7f, 0xf0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}),
+             as_string({0xc1, 0xf9, 0xfc, 0x00}),
+         }) {
+        CAPTURE(in.size());
+        CHECK(structs<sys_seconds>::decode(std::string(in)).error_or(error{}) == error::number_out_of_range);
+    }
+    auto const largest = structs<sys_seconds>::decode(as_string({0xc1, 0xfb, 0x43, 0xdf, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe}));
+    REQUIRE(largest.has_value());
+    CHECK_EQ((*largest)->time_since_epoch().count(), 9223372036854773760);
 }
 
 // BignumParseTest, spBigNumInput: [2(h'010000000000000000'), 3(h'010000000000000000'), {-64: 3(...), 64: 2(...),
@@ -913,6 +968,8 @@ std::vector<std::uint8_t> extreme_bignum(std::uint8_t const tag)
 std::vector<number_conversion> const number_conversions = {
     {"too large to fit into int64_t", {0xc3, 0x48, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, out_of_range,
      out_of_range, out_of_range},
+    {"largest negative int that fits in int64_t", {0xc3, 0x48, 0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+     std::numeric_limits<std::int64_t>::min(), out_of_range, -9223372036854775808.0},
     {"negative bignum -1", {0xc3, 0x41, 0x00}, -1, out_of_range, -1.0},
     {"negative bignum 0xc349010000000000000000 -18446744073709551617",
      {0xc3, 0x49, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
@@ -925,6 +982,8 @@ std::vector<number_conversion> const number_conversions = {
     {"Positive integer 18446744073709551615", {0x1b, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}, out_of_range,
      std::numeric_limits<std::uint64_t>::max(), out_of_range},
     {"Postive integer 0", {0x00}, 0, 0u, 0.0},
+    {"Negative integer -18446744073709551616", {0x3b, 0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+     std::numeric_limits<std::int64_t>::min(), out_of_range, -9223372036854775808.0},
     {"Double Floating point value 100.3", {0xfb, 0x40, 0x59, 0x13, 0x33, 0x33, 0x33, 0x33, 0x33}, other_type,
      other_type, 100.3},
     {"half-precision Floating point value -4", {0xf9, 0xc4, 0x00}, other_type, other_type, -4.0},

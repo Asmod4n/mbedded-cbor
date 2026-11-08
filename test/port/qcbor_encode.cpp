@@ -74,7 +74,7 @@
 #include <cbor/cbor.hpp>
 #include <doctest/doctest.h>
 
-#include "reference/value.hpp"
+#include "../reference/value.hpp"
 
 #include <chrono>
 #include <cstddef>
