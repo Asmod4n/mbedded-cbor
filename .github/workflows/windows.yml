@@ -2,7 +2,6 @@ name: windows
 
 on:
   push:
-    branches-ignore: [docs-from-headers]
     paths:
       - 'include/**'
       - 'test/**'
