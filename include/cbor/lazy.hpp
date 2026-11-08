@@ -1376,7 +1376,7 @@ CBOR_ALWAYS_INLINE inline std::expected<lazy, error> lazy::view(std::shared_ptr<
 }
 
 template <owning_range_of_chars Encoded>
-std::expected<lazy, error> lazy::view(std::shared_ptr<Encoded const> owner)
+CBOR_ALWAYS_INLINE inline std::expected<lazy, error> lazy::view(std::shared_ptr<Encoded const> owner)
 {
     detail::validity::throw_logic_error_if_null(owner, "cbor::lazy::view: the encoded data item is null");
     std::string_view const bytes{std::span<char const>(*owner)};
