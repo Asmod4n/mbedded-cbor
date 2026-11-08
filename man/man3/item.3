@@ -388,9 +388,13 @@ indefinite length
 .IP \(bu 2
 \f[CR]nesting_depth_exceeded\f[R]: the item is deeper than the limit
 .IP \(bu 2
-\f[CR]reserved_simple_value\f[R],
-\f[CR]inadmissible_type_for_tag_content\f[R]: a value that RFC 8949 or
-RFC 8746 does not allow
+\f[CR]reserved_simple_value\f[R]: a simple value that RFC 8949 does not
+allow
+.IP \(bu 2
+\f[CR]inadmissible_type_for_tag_content\f[R]: a typed array (RFC 8746)
+whose content is not a byte string of whole elements.
+A tag 2, 3 or 24 over another content stays a tag over that content, and
+decode checks the content of no other tag.
 .SS cbor::encoded_cbor_data_item
 .IP \(bu 2
 \f[CR]incorrect_type\f[R]: the content of the tag 24 is not a byte

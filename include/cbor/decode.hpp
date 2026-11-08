@@ -376,7 +376,10 @@ std::expected<decoded_tree<Checked>, error> decode_tree(std::string_view const e
  * sequence (RFC 8742)
  * @retval indefinite_length a string, an array or a map has an indefinite length
  * @retval nesting_depth_exceeded the item is deeper than the limit
- * @retval reserved_simple_value, inadmissible_type_for_tag_content a value that RFC 8949 or RFC 8746 does not allow
+ * @retval reserved_simple_value a simple value that RFC 8949 does not allow
+ * @retval inadmissible_type_for_tag_content a typed array (RFC 8746) whose content is not a byte string of whole
+ * elements. A tag 2, 3 or 24 over another content stays a tag over that content, and decode checks the content of
+ * no other tag.
  * @snippet doc_reference_item.cpp decode
  * @see cbor::item
  * @see cbor::encode()
