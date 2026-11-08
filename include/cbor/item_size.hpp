@@ -1,7 +1,10 @@
-// Gives the length in bytes of the first CBOR data item in a buffer.
-// Goes from head to head and copies nothing. Gives an error for an
-// item of indefinite length.
-// https://www.rfc-editor.org/rfc/rfc8949#section-3
+/**
+ * @file
+ * Gives the length in bytes of the first CBOR data item in a buffer.
+ * Goes from head to head and copies nothing. Gives an error for an
+ * item of indefinite length.
+ * https://www.rfc-editor.org/rfc/rfc8949#section-3
+ */
 #pragma once
 
 #include <array>

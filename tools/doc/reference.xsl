@@ -66,7 +66,8 @@
   </xsl:for-each>
   <xsl:variable name="retvals" select="$d//parameterlist[@kind='retval']/parameteritem"/>
   <xsl:variable name="error_paras" select="$d//*[title='Errors']/para[not(ancestor::simplesect)][text()[normalize-space()] or computeroutput or ref or ulink or bold or emphasis]"/>
-  <xsl:if test="$retvals or $error_paras">
+  <xsl:variable name="throws" select="$d//parameterlist[@kind='exception']/parameteritem | sectiondef[starts-with(@kind, 'public')]/memberdef/detaileddescription//parameterlist[@kind='exception']/parameteritem"/>
+  <xsl:if test="$retvals or $throws or $error_paras">
     <xsl:value-of select="concat($nl, '## Errors', $nl, $nl)"/>
     <xsl:for-each select="$retvals">
       <xsl:text>- </xsl:text>
@@ -75,6 +76,11 @@
         <xsl:value-of select="concat('`', normalize-space(.), '`')"/>
       </xsl:for-each>
       <xsl:text>: </xsl:text>
+      <xsl:call-template name="inline"><xsl:with-param name="node" select="parameterdescription/para"/></xsl:call-template>
+      <xsl:value-of select="$nl"/>
+    </xsl:for-each>
+    <xsl:for-each select="$throws">
+      <xsl:value-of select="concat('- `', normalize-space(parameternamelist/parametername), '`: ')"/>
       <xsl:call-template name="inline"><xsl:with-param name="node" select="parameterdescription/para"/></xsl:call-template>
       <xsl:value-of select="$nl"/>
     </xsl:for-each>
@@ -243,7 +249,8 @@
   <xsl:for-each select="$nested">
     <xsl:variable name="inner" select="document(concat(@refid, '.xml'), $index)/doxygen/compounddef"/>
     <xsl:variable name="inner_name"><xsl:call-template name="last"><xsl:with-param name="s" select="$inner/compoundname"/></xsl:call-template></xsl:variable>
-    <xsl:value-of select="concat($indent, 'struct ', $inner_name, ' {', $nl)"/>
+    <xsl:value-of select="concat($indent, $inner/@kind, ' ', $inner_name, ' {', $nl)"/>
+    <xsl:if test="$inner/@kind = 'class'"><xsl:value-of select="concat($indent, 'public:', $nl)"/></xsl:if>
     <xsl:call-template name="members">
       <xsl:with-param name="c" select="$inner"/>
       <xsl:with-param name="indent" select="concat($indent, $indent_step)"/>

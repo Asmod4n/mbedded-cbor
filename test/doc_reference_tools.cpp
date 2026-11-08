@@ -34,19 +34,24 @@ TEST_CASE("doc reference tools: item_size")
     CHECK_EQ(open.error(), cbor::error::indefinite_length);
 }
 
-// sequence.md: the loop gives each item of a CBOR sequence as a view into the bytes of the owner.
+// sequence.hpp, snippet sequence: the loop gives each item of a CBOR sequence as a view into the bytes of the owner.
 TEST_CASE("doc reference tools: sequence")
 {
     auto const owner = std::make_shared<std::string const>(
         test::preferred(test::V(1)) + test::preferred(test::V(2)) + test::preferred(test::V(3)));
+    // use stands for the code of the reader; here it checks the sum.
+    auto const use = [](std::int64_t const s) { CHECK_EQ(s, 6); };
+    // [sequence]
+    // owner: a std::shared_ptr<std::string const> with the sequence 1, 2, 3
     std::int64_t sum = 0;
     for (auto const item : cbor::sequence(owner))
         if (item)
             sum += cbor::at_path<"$", std::int64_t>(*item).value_or(0);
-    CHECK_EQ(sum, 6);
+    use(sum);   // 6
+    // [sequence]
 }
 
-// sequence.md, section Errors: a broken item gives its error once, and the loop then ends.
+// sequence.hpp, the comment of sequence: a broken item gives its error once, and the loop then ends.
 TEST_CASE("doc reference tools: sequence with a broken item")
 {
     auto const owner = std::make_shared<std::string const>("\x01\x19\x01"s);
