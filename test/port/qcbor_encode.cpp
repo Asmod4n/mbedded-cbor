@@ -71,6 +71,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <bit>
 #include <cbor/cbor.hpp>
 #include <doctest/doctest.h>
 
@@ -453,14 +454,17 @@ TEST_CASE("qcbor example.c: the car engine encodes and decodes back")
     CHECK_EQ(**manufacturer, "Porsche");
     CHECK(field("Displacement").get<std::int64_t>() == 3296);
     CHECK(field("Horsepower").get<std::int64_t>() == 210);
-    CHECK(field("DesignedCompression").get<double>() == 9.1);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(field("DesignedCompression").get<double>().value_or(0.0)),
+             std::bit_cast<std::uint64_t>(9.1));
     CHECK(field("Turbo").get<bool>() == false);
     CHECK(field("NumCylinders").get<std::int64_t>() == 6);
     auto const array = field("Cylinders");
     REQUIRE(array.size() == cylinders.size());
     std::size_t i = 0;
     for (double const c : cylinders) {
-        CHECK(array.at(i).and_then([](cbor::lazy const &l) { return l.get<double>(); }) == c);
+        auto const read = array.at(i).and_then([](cbor::lazy const &l) { return l.get<double>(); });
+        REQUIRE(read.has_value());
+        CHECK_EQ(std::bit_cast<std::uint64_t>(*read), std::bit_cast<std::uint64_t>(c));
         ++i;
     }
 }

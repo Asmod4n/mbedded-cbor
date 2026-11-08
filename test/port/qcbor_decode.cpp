@@ -66,6 +66,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <bit>
 #include <cbor/cbor.hpp>
 #include <doctest/doctest.h>
 
@@ -982,8 +983,8 @@ std::vector<number_conversion> const number_conversions = {
     {"Positive integer 18446744073709551615", {0x1b, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}, out_of_range,
      std::numeric_limits<std::uint64_t>::max(), out_of_range},
     {"Postive integer 0", {0x00}, 0, 0u, 0.0},
-    {"Negative integer -18446744073709551616", {0x3b, 0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
-     std::numeric_limits<std::int64_t>::min(), out_of_range, -9223372036854775808.0},
+    {"Negative integer -18446744073709551616", {0x3b, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}, out_of_range,
+     out_of_range, -18446744073709551616.0},
     {"Double Floating point value 100.3", {0xfb, 0x40, 0x59, 0x13, 0x33, 0x33, 0x33, 0x33, 0x33}, other_type,
      other_type, 100.3},
     {"half-precision Floating point value -4", {0xf9, 0xc4, 0x00}, other_type, other_type, -4.0},
@@ -1021,8 +1022,8 @@ std::vector<number_conversion> const number_conversions = {
 //   incorrect_type. RFC 8949 3.3 makes a float a separate kind of number, and 2 gives no conversion between them.
 // - An integer read as double that a double does not hold exactly: upstream rounds 18446744073709551615 to
 //   18446744073709551616.0 and -18446744073709551617 to -18446744073709551616.0, and gives infinity for 400-byte
-//   bignums. lazy.hpp: "double | a float, or an integer that a double holds exactly", so these give
-//   number_out_of_range.
+//   bignums. lazy.hpp: "double | a float, or an integer or a bignum that a double holds exactly", so these give
+//   number_out_of_range. -18446744073709551616 (3b ffffffffffffffff) is -2^64, which a double holds exactly.
 // - A decimal fraction or a bigfloat (tags 4 and 5, RFC 8949 3.4.4): upstream computes the value. lazy.hpp: "The
 //   call passes a tag that it does not interpret", so the read meets the array of exponent and mantissa, and gives
 //   incorrect_type.
@@ -1041,7 +1042,11 @@ TEST_CASE("qcbor IntegerConvertTest: numbers read as int64_t, uint64_t and doubl
         cbor::error const read_error = d.error_or(error{});
         CAPTURE(read_value);
         CAPTURE(read_error);
-        CHECK(d == c.to_double);
+        REQUIRE_EQ(d.has_value(), c.to_double.has_value());
+        if (d.has_value())
+            CHECK_EQ(std::bit_cast<std::uint64_t>(*d), std::bit_cast<std::uint64_t>(*c.to_double));
+        else
+            CHECK_EQ(d.error(), c.to_double.error());
     }
     auto const nan = read_as<double>(lazy_of(as_string({0xfa, 0x7f, 0xc0, 0x00, 0x00})));
     REQUIRE(nan.has_value());

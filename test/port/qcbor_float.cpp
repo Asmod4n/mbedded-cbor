@@ -348,16 +348,16 @@ TEST_CASE("qcbor GeneralFloatDecodeTests: floats of each width decode to double"
         REQUIRE(d.has_value());
         return *d;
     };
-    CHECK_EQ(at(0), 0.0);
-    CHECK_EQ(at(1), 3.14);
-    CHECK_EQ(at(2), 0.0);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(at(0)), std::bit_cast<std::uint64_t>(0.0));
+    CHECK_EQ(std::bit_cast<std::uint64_t>(at(1)), std::bit_cast<std::uint64_t>(3.14));
+    CHECK_EQ(std::bit_cast<std::uint64_t>(at(2)), std::bit_cast<std::uint64_t>(0.0));
     CHECK(std::isnan(at(3)));
-    CHECK_EQ(at(4), std::numeric_limits<double>::infinity());
-    CHECK_EQ(at(5), 0.0);
-    CHECK_EQ(at(6), 3.1400001049041748);
-    CHECK_EQ(at(7), 0.0);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(at(4)), std::bit_cast<std::uint64_t>(std::numeric_limits<double>::infinity()));
+    CHECK_EQ(std::bit_cast<std::uint64_t>(at(5)), std::bit_cast<std::uint64_t>(0.0));
+    CHECK_EQ(std::bit_cast<std::uint64_t>(at(6)), std::bit_cast<std::uint64_t>(3.1400001049041748));
+    CHECK_EQ(std::bit_cast<std::uint64_t>(at(7)), std::bit_cast<std::uint64_t>(0.0));
     CHECK(std::isnan(at(8)));
-    CHECK_EQ(at(9), std::numeric_limits<double>::infinity());
+    CHECK_EQ(std::bit_cast<std::uint64_t>(at(9)), std::bit_cast<std::uint64_t>(std::numeric_limits<double>::infinity()));
 
     auto const tree = cbor::decode(expected_floats);
     REQUIRE(tree.has_value());
@@ -367,5 +367,6 @@ TEST_CASE("qcbor GeneralFloatDecodeTests: floats of each width decode to double"
     CHECK((*elements)[0].type == cbor::type::half_float);
     CHECK((*elements)[1].type == cbor::type::double_float);
     CHECK((*elements)[6].type == cbor::type::single_float);
-    CHECK((*elements)[6].get<cbor::type::single_float>() == 3.1400001049041748);
+    CHECK_EQ(std::bit_cast<std::uint64_t>((*elements)[6].get<cbor::type::single_float>().value_or(0.0)),
+             std::bit_cast<std::uint64_t>(3.1400001049041748));
 }
