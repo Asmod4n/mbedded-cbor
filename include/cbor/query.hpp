@@ -655,6 +655,9 @@ class jsonpath
 
     static exact_number number_of(heads::head const &n);
 
+    static std::expected<std::pair<heads::head, heads::decoder<true>>, error>
+    integer_of(heads::head const &n, heads::decoder<true> const content);
+
     static std::partial_ordering compare_numbers(exact_number const &a, exact_number const &b);
 
     static std::expected<std::pair<std::uint64_t, detail::validity::offset>, error>
@@ -1393,6 +1396,28 @@ inline jsonpath::exact_number jsonpath::number_of(heads::head const &n)
     return {false, true, true, static_cast<std::uint64_t>(-d) - 1u, 0.0};
 }
 
+inline std::expected<std::pair<heads::head, heads::decoder<true>>, error>
+jsonpath::integer_of(heads::head const &n, heads::decoder<true> const content)
+{
+    if (!heads::is_bignum(n.major, n.argument))
+        return std::pair{n, content};
+    auto const c = heads::read_raw_head<true>(content.encoded, detail::validity::offset{});
+    if (!c || c->major != major_type::byte_string ||
+        !detail::validity::check_definite_length(c->major, c->info).has_value())
+        return std::pair{n, content};
+    heads::decoder<true> d = content;
+    auto const read = d.decode_bignum(n.argument);
+    if (!read) [[unlikely]]
+        return std::unexpected(read.error());
+    if (!*read)
+        return std::pair{n, content};
+    return std::pair{heads::head{n.argument == std::to_underlying(rfc8949::tag_number::negative_bignum)
+                                     ? major_type::negative_integer
+                                     : major_type::unsigned_integer,
+                                 0, **read},
+                     d};
+}
+
 inline std::partial_ordering jsonpath::compare_numbers(exact_number const &a, exact_number const &b)
 {
     if (a.nan || b.nan)
@@ -1435,8 +1460,11 @@ jsonpath::intern_value(detail::canonical_ids &ids, lazy::top_level_item const &s
     if (!resolved) [[unlikely]]
         return std::unexpected(resolved.error());
     lazy::top_level_item const &inner = resolved->source;
-    heads::head const &h = resolved->h;
-    heads::decoder<true> d = resolved->d;
+    auto const folded = integer_of(resolved->h, resolved->d);
+    if (!folded) [[unlikely]]
+        return std::unexpected(folded.error());
+    heads::head const h = folded->first;
+    heads::decoder<true> d = folded->second;
     auto const end = [&](detail::validity::offset const inner_end) -> std::expected<detail::validity::offset, error> {
         if (inner.encoded.data() == source.encoded.data())
             return inner_end;
@@ -1546,8 +1574,14 @@ inline std::expected<bool, error> jsonpath::value_equal(lazy const &a, lazy cons
                                           : lazy::resolve_container<true>(b.top_level, detail::validity::offset{b.offset});
     if (!y) [[unlikely]]
         return std::unexpected(y.error());
-    heads::head const &h = x->h;
-    heads::head const &k = y->h;
+    auto const x_number = integer_of(x->h, x->d);
+    if (!x_number) [[unlikely]]
+        return std::unexpected(x_number.error());
+    auto const y_number = integer_of(y->h, y->d);
+    if (!y_number) [[unlikely]]
+        return std::unexpected(y_number.error());
+    heads::head const &h = x_number->first;
+    heads::head const &k = y_number->first;
     constexpr std::uint8_t half = std::to_underlying(rfc8949::simple_float_information::half_precision_float);
     constexpr std::uint8_t twice =
         std::to_underlying(rfc8949::simple_float_information::double_precision_float);
@@ -1632,8 +1666,14 @@ inline std::expected<bool, error> jsonpath::value_less(lazy const &a, lazy const
                                           : lazy::resolve_container<true>(b.top_level, detail::validity::offset{b.offset});
     if (!y) [[unlikely]]
         return std::unexpected(y.error());
-    heads::head const &h = x->h;
-    heads::head const &k = y->h;
+    auto const x_number = integer_of(x->h, x->d);
+    if (!x_number) [[unlikely]]
+        return std::unexpected(x_number.error());
+    auto const y_number = integer_of(y->h, y->d);
+    if (!y_number) [[unlikely]]
+        return std::unexpected(y_number.error());
+    heads::head const &h = x_number->first;
+    heads::head const &k = y_number->first;
     constexpr std::uint8_t half = std::to_underlying(rfc8949::simple_float_information::half_precision_float);
     constexpr std::uint8_t twice =
         std::to_underlying(rfc8949::simple_float_information::double_precision_float);

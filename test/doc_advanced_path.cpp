@@ -414,8 +414,8 @@ TEST_CASE("doc advanced path: comparisons")
     CHECK(*test::query("$[?@ == {\"a\": 1}]", eqs) == A(M("a"s, 1)));
     CHECK(*test::query("$[?@ == h'01']", eqs) == A(bytes{"\x01"}));
     CHECK(*test::query("$[?@ == 1000(1)]", eqs) == A(tagged{1000, V(1)}));
-    CHECK(*test::query("$[?@ == 1]", eqs) == A(1, 1.0));
-    CHECK(*test::query("$[?@ < 2]", eqs) == A(1, 1.0));
+    CHECK(*test::query("$[?@ == 1]", eqs) == A(1, 1.0, 1));
+    CHECK(*test::query("$[?@ < 2]", eqs) == A(1, 1.0, 1));
     CHECK(*test::query("$[?@ < [3]]", eqs) == A());
     CHECK(*test::query("$[?@ >= 'x']", eqs) == A("x"s));
     auto const one = *test::lazy_of_copy(preferred(A(1)));
