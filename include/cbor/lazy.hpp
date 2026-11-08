@@ -57,6 +57,42 @@ struct lazy_entries;
 
 struct lazy;
 
+/**
+ * @brief The result of a path that can select many nodes: a wildcard, a descendant segment, a slice, a filter or
+ * several selectors.
+ *
+ * Each node is a cbor::lazy and holds the owner of the bytes.
+ * A nodelist holds the values, not their places in the item.
+ * `lazy.at_path<Path, cbor::nodelist>()`, `compile<cbor::nodelist>` and cbor::at_path() with such a query give a
+ * nodelist.
+ * A path that selects nothing gives an empty nodelist and no error.
+ * The errors of the walk apply (cbor::at_path()).
+ * `nodelist_too_long`: one step selects more nodes than the top-level item has bytes, which tag 29 makes possible.
+ *
+ * @code{.callseq}
+ * doc->at_path<"$.a[*]", cbor::nodelist>() → std::expected<nodelist, error>
+ * nodes->size()                            → std::size_t
+ * (*nodes)[i]                              → lazy const &
+ * nodes->empty()                           → bool
+ * @endcode
+ * @code{.example}
+ * message: {"a": [1, 2, 3]}
+ * call: auto const nodes = doc->at_path<"$.a[*]", cbor::nodelist>()
+ * result: nodelist of 3 nodes: 1, 2, 3
+ * call: nodes->size()
+ * result: 3
+ * call: (*nodes)[2].get<int>()
+ * result: 3
+ * call: doc->at_path<"$.b", cbor::nodelist>()->empty()
+ * result: true
+ * @endcode
+ *
+ * @snippet doc_reference_path.cpp nodelist
+ * @see cbor::jsonpath::compile()
+ * @see cbor::lazy
+ *
+ * @ingroup path
+ */
 using nodelist = std::vector<lazy>;
 
 template <class T>

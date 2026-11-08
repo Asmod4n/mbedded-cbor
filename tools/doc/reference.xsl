@@ -14,7 +14,7 @@
 
 <xsl:template match="/">
   <xsl:variable name="class" select="doxygenindex/compound[(@kind='class' or @kind='struct') and name=$name]"/>
-  <xsl:variable name="function" select="doxygenindex/compound[@kind='namespace']/member[(@kind='function' or @kind='enum') and concat(../name, '::', name)=$name]"/>
+  <xsl:variable name="function" select="doxygenindex/compound[@kind='namespace']/member[(@kind='function' or @kind='enum' or @kind='variable' or @kind='typedef') and concat(../name, '::', name)=$name]"/>
   <xsl:variable name="define" select="doxygenindex/compound[@kind='group']/member[@kind='define' and name=$name]"/>
   <xsl:variable name="member_name"><xsl:call-template name="last"><xsl:with-param name="s" select="$name"/></xsl:call-template></xsl:variable>
   <xsl:variable name="owner_name" select="substring($name, 1, string-length($name) - string-length($member_name) - 2)"/>
@@ -27,7 +27,10 @@
       <xsl:variable name="id" select="$function[1]/@refid"/>
       <xsl:variable name="holders" select="doxygenindex/compound[member/@refid=$id]"/>
       <xsl:variable name="holder" select="($holders[@kind='group'] | $holders[@kind='namespace'][not($holders[@kind='group'])])[1]"/>
-      <xsl:apply-templates select="document(concat($holder/@refid, '.xml'), /)//memberdef[@id=$id]" mode="page"/>
+      <xsl:variable name="all" select="document(concat($holder/@refid, '.xml'), /)//memberdef[qualifiedname=$name]"/>
+      <xsl:apply-templates select="($all[.//programlisting[@filename='.callseq']] | $all[normalize-space(briefdescription)])[1]" mode="page">
+        <xsl:with-param name="all" select="$all"/>
+      </xsl:apply-templates>
     </xsl:when>
     <xsl:when test="$define">
       <xsl:apply-templates select="document(concat($define[1]/../@refid, '.xml'), /)//memberdef[@id=$define[1]/@refid]" mode="page"/>
@@ -309,6 +312,9 @@
   </xsl:variable>
   <xsl:if test="position() > 1">, </xsl:if>
   <xsl:choose>
+    <xsl:when test="array and substring($t, string-length($t)) = ')'">
+      <xsl:value-of select="concat(substring($t, 1, string-length($t) - 1), declname, ')', array)"/>
+    </xsl:when>
     <xsl:when test="declname">
       <xsl:call-template name="joined"><xsl:with-param name="left" select="$t"/><xsl:with-param name="right" select="declname"/></xsl:call-template>
     </xsl:when>
@@ -327,6 +333,8 @@
   <xsl:if test="@kind='friend'">friend </xsl:if>
   <xsl:if test="@static='yes'">static </xsl:if>
   <xsl:if test="@explicit='yes'">explicit </xsl:if>
+  <xsl:if test="@consteval='yes' and normalize-space(type) != 'consteval'">consteval </xsl:if>
+  <xsl:if test="@constexpr='yes'">constexpr </xsl:if>
   <xsl:variable name="t"><xsl:call-template name="type"><xsl:with-param name="t" select="type"/></xsl:call-template></xsl:variable>
   <xsl:call-template name="joined"><xsl:with-param name="left" select="$t"/><xsl:with-param name="right" select="name"/></xsl:call-template>
   <xsl:text>(</xsl:text>
@@ -379,7 +387,13 @@
 <xsl:template match="memberdef[@kind='variable']" mode="declaration">
   <xsl:param name="indent" select="''"/>
   <xsl:variable name="t"><xsl:call-template name="type"><xsl:with-param name="t" select="type"/></xsl:call-template></xsl:variable>
+  <xsl:if test="templateparamlist">
+    <xsl:value-of select="concat($indent, 'template &lt;')"/>
+    <xsl:apply-templates select="templateparamlist/param" mode="template"/>
+    <xsl:value-of select="concat('&gt;', $nl)"/>
+  </xsl:if>
   <xsl:value-of select="$indent"/>
+  <xsl:if test="@inline='yes'">inline </xsl:if>
   <xsl:if test="@static='yes'">static </xsl:if>
   <xsl:if test="@constexpr='yes'">constexpr </xsl:if>
   <xsl:value-of select="concat($t, ' ', name)"/>
