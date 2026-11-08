@@ -1387,7 +1387,7 @@ TEST_CASE("path: a std::string or a byte vector is a copy of that value only")
 // that dropped the payload.
 TEST_CASE("path: a NaN element of a typed array keeps its bits")
 {
-    auto const doc = cbor::lazy::take_ownership("\xa1\x61\x76\xd8\x54\x42\xff\xff"s);
+    auto const doc = cbor::lazy::adopt("\xa1\x61\x76\xd8\x54\x42\xff\xff"s);
     REQUIRE(doc);
     auto const nan = doc->at_path<"$.v[0]">().and_then([](cbor::lazy const &l) { return l.get<double>(); });
     REQUIRE(nan);
@@ -1400,7 +1400,7 @@ TEST_CASE("path: a tag 24 over a text inside an embedded item is inadmissible")
 {
     std::string const bytes = "\xd8\x18\x44\xd8\x18\x61\x68"s;
     CHECK_EQ(cbor::at_path<"$[0]", int>(bytes).error(), error::inadmissible_type_for_tag_content);
-    auto const doc = cbor::lazy::take_ownership(std::string(bytes));
+    auto const doc = cbor::lazy::adopt(std::string(bytes));
     REQUIRE(doc);
     CHECK_EQ(doc->at_path<"$[*]", cbor::nodelist>().error(), error::inadmissible_type_for_tag_content);
 }

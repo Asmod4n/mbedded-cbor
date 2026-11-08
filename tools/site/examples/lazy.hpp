@@ -218,12 +218,12 @@ inline result item_type(call const &c)
     return value_of((**self)->type);
 }
 
-inline result take_ownership(call const &c)
+inline result adopt(call const &c)
 {
     auto const bytes = argument_of<std::string>(c, 0, "a std::string");
     if (!bytes) [[unlikely]]
         return std::unexpected(bytes.error());
-    return value_of(cbor::lazy::take_ownership(std::string(**bytes)));
+    return value_of(cbor::lazy::adopt(std::string(**bytes)));
 }
 
 inline result lazy_view(call const &c)
@@ -256,7 +256,7 @@ inline constexpr entry lazy_functions[] = {
     {"std::make_shared()", string_shared},
     {"cbor::key{}", key_made},
     {"cbor::key()", key_made},
-    {"cbor::lazy::take_ownership()", take_ownership},
+    {"cbor::lazy::adopt()", adopt},
     {"cbor::lazy::view()", lazy_view},
     {.name = "cbor::lazy.at()", .run = lazy_at, .candidates = lazy_index_candidates<false>, .runnable = true},
     {.name = "cbor::lazy.operator[]()", .run = lazy_at, .candidates = lazy_index_candidates<true>, .runnable = true},

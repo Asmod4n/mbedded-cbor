@@ -49,7 +49,7 @@ const cases = [
   // The cases of the first form of the console stay, in the form that ends in a call that runs.
   [old, "doc->ty", ["doc->type()"]],
   [old, "doc.", ["doc.has_value()", "doc.value()", "doc.value_or("]],
-  [old, "cbor::lazy::ta", ["cbor::lazy::take_ownership("]],
+  [old, "cbor::lazy::ad", ["cbor::lazy::adopt("]],
   [old, "auto const x = doc\nx->si", ["x->size()"]],
   [old, "std::move(doc->ty", ["std::move(doc->type()", "std::move(doc->type())"]],
   [old, "auto const y = doc->em", ["auto const y = doc->empty()"]],

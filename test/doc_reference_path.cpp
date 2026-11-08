@@ -100,7 +100,7 @@ TEST_CASE("doc reference path: nodelist")
     std::string bytes = test::preferred(test::M("a"s, test::A(1, 2, 3)));
     // [nodelist]
     // bytes: a std::string with {"a": [1, 2, 3]}
-    auto const doc = cbor::lazy::take_ownership(std::move(bytes)).value();
+    auto const doc = cbor::lazy::adopt(std::move(bytes)).value();
     auto const nodes = doc.at_path<"$.a[*]", cbor::nodelist>();  // 3 nodes
     auto const third = (*nodes)[2].get<int>();                   // 3
     auto const none = doc.at_path<"$.b", cbor::nodelist>();      // an empty nodelist
@@ -169,15 +169,15 @@ TEST_CASE("doc reference path: is_singular_query_v")
 // array. The bytes are those of the page.
 TEST_CASE("doc reference path: CBOR beyond JSON")
 {
-    auto const keys = cbor::lazy::take_ownership("\xa2\x01\x61\x78\x41\x01\x61\x7a"s);
+    auto const keys = cbor::lazy::adopt("\xa2\x01\x61\x78\x41\x01\x61\x7a"s);
     auto const x = keys->at_path<"$[1]">()->get<std::string_view>();
     REQUIRE(x);
     CHECK_EQ(**x, "x"sv);
     auto const z = keys->at_path<"$[h'01']">()->get<std::string_view>();
     REQUIRE(z);
     CHECK_EQ(**z, "z"sv);
-    auto const embedded = cbor::lazy::take_ownership("\xa1\x61\x61\xd8\x18\x43\x82\x01\x02"s);
+    auto const embedded = cbor::lazy::adopt("\xa1\x61\x61\xd8\x18\x43\x82\x01\x02"s);
     CHECK_EQ(embedded->at_path<"$.a[1]">()->get<int>().value(), 2);
-    auto const typed = cbor::lazy::take_ownership("\xa1\x61\x76\xd8\x45\x44\x07\x00\x08\x00"s);
+    auto const typed = cbor::lazy::adopt("\xa1\x61\x76\xd8\x45\x44\x07\x00\x08\x00"s);
     CHECK_EQ(typed->at_path<"$.v[1]">()->get<int>().value(), 8);
 }

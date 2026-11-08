@@ -71,12 +71,12 @@ TEST_CASE("self-described CBOR: lazy reads through a leading tag 55799")
     auto const second = a->at(1);
     REQUIRE(second.has_value());
     CHECK_EQ(second->get<std::uint64_t>().value(), 6u);
-    auto const owned = cbor::lazy::take_ownership(std::string(document));
+    auto const owned = cbor::lazy::adopt(std::string(document));
     REQUIRE(owned.has_value());
     CHECK_EQ(owned->at("a"sv)->at(0)->get<std::uint64_t>().value(), 5u);
 }
 
-// runtime.md section 11: lazy::view and lazy::take_ownership read one leading tag 55799 as its content, and a
+// runtime.md section 11: lazy::view and lazy::adopt read one leading tag 55799 as its content, and a
 // second tag 55799 or a tag 55799 inside an item stays a tag. type() gives the kind of the item there, so it gives tag,
 // as decode and clone do, in each width of the argument. get, a key and a path pass the tag (runtime.md, path.md), so
 // they still give the content. A tag 55799 inside the item of a tag 24 is passed by a step and a path as well. The
@@ -85,10 +85,10 @@ TEST_CASE("self-described CBOR: type() of a second tag 55799 and of a tag 55799 
 {
     for (std::string const &head : {"\xd9\xd9\xf7"s, "\xda\x00\x00\xd9\xf7"s, "\xdb\x00\x00\x00\x00\x00\x00\xd9\xf7"s}) {
         CAPTURE(head.size());
-        auto const one = cbor::lazy::take_ownership(head + "\x01");
+        auto const one = cbor::lazy::adopt(head + "\x01");
         REQUIRE(one.has_value());
         CHECK_EQ(one->type().value(), cbor::type::unsigned_integer);
-        auto const two = cbor::lazy::take_ownership(head + head + "\x01");
+        auto const two = cbor::lazy::adopt(head + head + "\x01");
         REQUIRE(two.has_value());
         CHECK_EQ(two->type().value(), cbor::type::tag);
         CHECK_EQ(two->get<std::int64_t>().value(), 1);
@@ -98,7 +98,7 @@ TEST_CASE("self-described CBOR: type() of a second tag 55799 and of a tag 55799 
         auto const tree = cbor::decode(head + head + "\x01");
         REQUIRE(tree.has_value());
         CHECK_EQ((*tree)->type, cbor::type::tag);
-        auto const array = cbor::lazy::take_ownership("\x81" + head + "\x01");
+        auto const array = cbor::lazy::adopt("\x81" + head + "\x01");
         REQUIRE(array.has_value());
         auto const element = array->at(0);
         REQUIRE(element.has_value());
@@ -106,11 +106,11 @@ TEST_CASE("self-described CBOR: type() of a second tag 55799 and of a tag 55799 
         CHECK_EQ(element->get<std::int64_t>().value(), 1);
         CHECK_EQ((cbor::at_path<"$[0]", std::int64_t>("\x81" + head + "\x01")).value(), 1);
         std::string const map = "\xa1" + head + "\x61k\x01";
-        CHECK_EQ(cbor::lazy::take_ownership(std::string(map))->at("k"sv)->get<std::int64_t>().value(), 1);
+        CHECK_EQ(cbor::lazy::adopt(std::string(map))->at("k"sv)->get<std::int64_t>().value(), 1);
         CHECK_EQ((cbor::at_path<"$.k", std::int64_t>(map)).value(), 1);
         std::string const embedded = "\xa1\x61\x61\xd8\x18" + std::string(1, static_cast<char>(0x40 + head.size() + 3)) +
                                      head + "\x82\x01\x02";
-        CHECK_EQ(cbor::lazy::take_ownership(std::string(embedded))->at("a"sv)->at(1)->get<std::int64_t>().value(), 2);
+        CHECK_EQ(cbor::lazy::adopt(std::string(embedded))->at("a"sv)->at(1)->get<std::int64_t>().value(), 2);
         CHECK_EQ((cbor::at_path<"$.a[1]", std::int64_t>(embedded)).value(), 2);
     }
 }
@@ -132,8 +132,8 @@ TEST_CASE("self-described CBOR: a tag 55799 in the content of a bignum or a type
         for (char const bignum : {'\xc2', '\xc3'}) {
             std::string const tagged = std::string(1, bignum) + head + "\x41\x01";
             std::string const text = std::string(1, bignum) + "\x61\x61";
-            auto const l = cbor::lazy::take_ownership(std::string(tagged));
-            auto const t = cbor::lazy::take_ownership(std::string(text));
+            auto const l = cbor::lazy::adopt(std::string(tagged));
+            auto const t = cbor::lazy::adopt(std::string(text));
             REQUIRE(l.has_value());
             REQUIRE(t.has_value());
             same(l->type(), t->type());
@@ -155,8 +155,8 @@ TEST_CASE("self-described CBOR: a tag 55799 in the content of a bignum or a type
                 same((cbor::at_path<"$[-2]", std::int64_t>(map_tagged)), (cbor::at_path<"$[-2]", std::int64_t>(map_text)));
             std::string const array_tagged = "\x81" + tagged;
             std::string const array_text = "\x81" + text;
-            auto const fa = cbor::lazy::take_ownership(std::string(array_tagged))->at_path<"$[?@ == 1]", cbor::nodelist>();
-            auto const fb = cbor::lazy::take_ownership(std::string(array_text))->at_path<"$[?@ == 1]", cbor::nodelist>();
+            auto const fa = cbor::lazy::adopt(std::string(array_tagged))->at_path<"$[?@ == 1]", cbor::nodelist>();
+            auto const fb = cbor::lazy::adopt(std::string(array_text))->at_path<"$[?@ == 1]", cbor::nodelist>();
             REQUIRE_EQ(fa.has_value(), fb.has_value());
             if (fa.has_value())
                 CHECK_EQ(fa->size(), fb->size());
@@ -165,8 +165,8 @@ TEST_CASE("self-described CBOR: a tag 55799 in the content of a bignum or a type
         }
         std::string const typed = "\xd8\x40" + head + "\x42\x01\x02";
         std::string const typed_text = "\xd8\x40\x61\x61"s;
-        auto const l = cbor::lazy::take_ownership(std::string(typed));
-        auto const t = cbor::lazy::take_ownership(std::string(typed_text));
+        auto const l = cbor::lazy::adopt(std::string(typed));
+        auto const t = cbor::lazy::adopt(std::string(typed_text));
         REQUIRE(l.has_value());
         REQUIRE(t.has_value());
         CHECK_EQ(l->get<cbor::typed_array>().error(), t->get<cbor::typed_array>().error());

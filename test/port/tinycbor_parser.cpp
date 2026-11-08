@@ -972,7 +972,7 @@ TEST_CASE("tinycbor parser: compare with a text string")
         std::string const prefixes[] = {""s, "\xc1"s, "\xc1\xc2"s};
         for (std::string const &prefix : prefixes) {
             CAPTURE(prefix.size());
-            auto const doc = cbor::lazy::take_ownership(prefix + r.data);
+            auto const doc = cbor::lazy::adopt(prefix + r.data);
             REQUIRE(doc.has_value());
             auto const text = doc->get<std::string_view>();
             bool const equal = text.has_value() && **text == r.string;
@@ -1053,7 +1053,7 @@ TEST_CASE("tinycbor parser: find a key in a map")
     for (find_row const &r : rows) {
         CAPTURE(r.name);
         CAPTURE(r.expected);
-        auto const doc = cbor::lazy::take_ownership(std::string(r.data));
+        auto const doc = cbor::lazy::adopt(std::string(r.data));
         REQUIRE(doc.has_value());
         auto const value = doc->at("needle");
         CHECK_EQ(outcome(value), error_text(r.port));
@@ -1401,7 +1401,7 @@ TEST_CASE("tinycbor parser: validation of items that are not well-formed")
         CHECK_EQ(outcome(cbor::decode(r.data)), error_text(strict));
         CHECK_EQ(outcome(cbor::item_size(r.data)), error_text(strict));
         if (r.name.starts_with("map")) {
-            auto const doc = cbor::lazy::take_ownership(std::string(r.data));
+            auto const doc = cbor::lazy::adopt(std::string(r.data));
             REQUIRE(doc.has_value());
             auto const map = doc->at(std::size_t{0});
             auto const value = map ? map->at("foobar") : map;
@@ -1642,7 +1642,7 @@ TEST_CASE("tinycbor parser: deep nesting")
         else
             CHECK_EQ(size.value_or(0), r.data.size());
         if (r.find != no_error) {
-            auto const doc = cbor::lazy::take_ownership(std::string(r.data));
+            auto const doc = cbor::lazy::adopt(std::string(r.data));
             REQUIRE(doc.has_value());
             CHECK_EQ(outcome(doc->at("foo")), error_text(r.find));
         }

@@ -53,7 +53,7 @@ std::vector<std::span<site::entry const>> tables_in_order(std::string_view const
 void message_declared(site::session &s, std::string_view const encoded)
 {
     s.variables.push_back({"bytes", site::value_of(std::string(encoded)), false});
-    s.variables.push_back({"doc", site::value_of(cbor::lazy::take_ownership(std::string(encoded))), true});
+    s.variables.push_back({"doc", site::value_of(cbor::lazy::adopt(std::string(encoded))), true});
 }
 
 std::vector<std::string_view> lines_of(std::string_view const lines)

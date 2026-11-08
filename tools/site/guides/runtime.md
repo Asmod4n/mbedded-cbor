@@ -11,7 +11,7 @@ stays valid. The reference with examples that run in the browser:
 
 ```cpp
 // bytes: {"cars": [{"hp": 5}, {"hp": 7}]}
-auto const hp = cbor::lazy::take_ownership(std::move(bytes))
+auto const hp = cbor::lazy::adopt(std::move(bytes))
                     .and_then([](cbor::lazy const &doc) { return doc.at("cars"); })
                     .and_then([](cbor::lazy const &cars) { return cars.at(1); })
                     .and_then([](cbor::lazy const &car) { return car.at("hp"); })
@@ -20,13 +20,13 @@ if (hp)
     use(*hp);   // 7
 ```
 
-`cbor::lazy::take_ownership(std::move(bytes))` makes a lazy, a position
+`cbor::lazy::adopt(std::move(bytes))` makes a lazy, a position
 in the bytes. Bytes go into the library in three forms, and no form
 copies them:
 
 | Form | The bytes |
 |---|---|
-| `lazy::take_ownership(std::move(bytes))` | `bytes` is a `std::string`; it moves into storage that the lazy owns |
+| `lazy::adopt(std::move(bytes))` | `bytes` is a `std::string`; it moves into storage that the lazy owns |
 | `lazy::view(owner)` | `owner` is a `std::shared_ptr<std::string const>`; no copy, and every result keeps `owner` alive |
 | `lazy::view(owner, part)` | `part` is a `std::string_view` into memory that `owner`, a `std::shared_ptr<void const>`, keeps alive |
 
@@ -75,7 +75,7 @@ Another kind of value gives `incorrect_type`. A number that does not fit
 
 ```cpp
 // bytes: {"name": "ann", "age": 300}
-auto const doc = cbor::lazy::take_ownership(std::move(bytes));
+auto const doc = cbor::lazy::adopt(std::move(bytes));
 auto const name = doc->at("name")->get<std::string_view>();   // **name == "ann"
 doc->at("age")->get<std::int64_t>();                          // 300
 doc->at("age")->get<std::uint8_t>().error();                  // number_out_of_range
@@ -91,7 +91,7 @@ pairs of a map. Each element is a `std::expected` of its own.
 // bytes: [1, 2, 3]
 std::expected<std::int64_t, cbor::error> sum(std::string bytes)
 {
-    auto const array = cbor::lazy::take_ownership(std::move(bytes));
+    auto const array = cbor::lazy::adopt(std::move(bytes));
     if (!array)
         return std::unexpected(array.error());
     auto const elements = array->elements();
@@ -114,7 +114,7 @@ A pair of a map has the key in `first` and the value in `second`:
 
 ```cpp
 // bytes: {"a": 1, "b": 2}
-auto const map = cbor::lazy::take_ownership(std::move(bytes));
+auto const map = cbor::lazy::adopt(std::move(bytes));
 for (auto const pair : *map->entries())
     if (pair)
         use(pair->first.get<std::string_view>(), pair->second.get<std::int64_t>());   // "a" 1, then "b" 2
@@ -124,7 +124,7 @@ for (auto const pair : *map->entries())
 
 ```cpp
 // bytes: {"a": 1, "b": 2}
-auto const map = cbor::lazy::take_ownership(std::move(bytes));
+auto const map = cbor::lazy::adopt(std::move(bytes));
 map->size();          // 2, the pairs of a map or the elements of an array
 map->at("z").error(); // key_not_found, the key is not in the map
 ```

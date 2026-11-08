@@ -84,7 +84,7 @@ TEST_CASE("sequence_reader: each form of bytes that a user tries first")
 }
 
 // A literal holds a NUL after its last byte, which a range over the array would feed. A std::shared_ptr to bytes
-// that are not const can change under an item that views them. Both do not compile, as for lazy::take_ownership
+// that are not const can change under an item that views them. Both do not compile, as for lazy::adopt
 // and lazy::view. A null std::shared_ptr is a wrong use that the compiler cannot see.
 TEST_CASE("sequence_reader: a char array and a shared_ptr to bytes that are not const are refused")
 {

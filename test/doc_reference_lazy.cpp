@@ -26,31 +26,31 @@ namespace
 {
 
 template <class T>
-concept take_ownership_accepts = requires(T &&t) { cbor::lazy::take_ownership(std::forward<T>(t)); };
+concept adopt_accepts = requires(T &&t) { cbor::lazy::adopt(std::forward<T>(t)); };
 
 template <class V>
 concept front_callable = requires(V const &v) { v.front(); };
 
 }
 
-// lazy.hpp, snippet take_ownership: the bytes move into the lazy; an lvalue, a view and a literal do not compile.
-TEST_CASE("doc reference lazy: take_ownership")
+// lazy.hpp, snippet adopt: the bytes move into the lazy; an lvalue, a view and a literal do not compile.
+TEST_CASE("doc reference lazy: adopt")
 {
     std::string bytes = test::preferred(test::M("id"s, 42));
     std::int64_t id = 0;
-    // [take_ownership]
+    // [adopt]
     // bytes: a std::string with {"id": 42}
-    auto const doc = cbor::lazy::take_ownership(std::move(bytes));
+    auto const doc = cbor::lazy::adopt(std::move(bytes));
     if (doc)
         id = doc->at("id")->get<std::int64_t>().value_or(0);  // 42
-    // [take_ownership]
+    // [adopt]
     REQUIRE(doc);
     CHECK_EQ(id, 42);
-    CHECK(take_ownership_accepts<std::string>);
-    CHECK_FALSE(take_ownership_accepts<std::string &>);
-    CHECK_FALSE(take_ownership_accepts<std::string const &>);
-    CHECK_FALSE(take_ownership_accepts<std::string_view>);
-    CHECK_FALSE(take_ownership_accepts<char const (&)[3]>);
+    CHECK(adopt_accepts<std::string>);
+    CHECK_FALSE(adopt_accepts<std::string &>);
+    CHECK_FALSE(adopt_accepts<std::string const &>);
+    CHECK_FALSE(adopt_accepts<std::string_view>);
+    CHECK_FALSE(adopt_accepts<char const (&)[3]>);
 }
 
 // lazy.hpp, snippet view: both forms read the bytes in place; a null or an empty owner is a wrong use.
@@ -78,7 +78,7 @@ TEST_CASE("doc reference lazy: lazy")
     std::string bytes = test::preferred(test::A(1, 2));
     // [lazy]
     // bytes: a std::string with [1, 2]
-    auto const doc = cbor::lazy::take_ownership(std::move(bytes));
+    auto const doc = cbor::lazy::adopt(std::move(bytes));
     cbor::lazy const copy = *doc;
     auto const second = copy.at(1)->get<int>();  // 2
     // cbor::lazy{}.size() throws std::logic_error
@@ -96,7 +96,7 @@ TEST_CASE("doc reference lazy: at")
         test::preferred(test::M("cars"s, test::A(test::M("hp"s, 5), test::M("hp"s, 7)), 7, "seven"s));
     // [at]
     // bytes: a std::string with {"cars": [{"hp": 5}, {"hp": 7}], 7: "seven"}
-    auto const doc = cbor::lazy::take_ownership(std::move(bytes));
+    auto const doc = cbor::lazy::adopt(std::move(bytes));
     auto const hp = doc->at("cars")->at(1)->at("hp")->get<int>();  // 7
     auto const seven = doc->at(cbor::key{7})->get<std::string_view>();  // a ref to "seven"
     auto const bus = doc->at("bus");                                   // key_not_found
@@ -115,7 +115,7 @@ TEST_CASE("doc reference lazy: operator[]")
     std::string bytes = test::preferred(test::M("cars"s, test::A(5, 7)));
     // [operator_subscript]
     // bytes: a std::string with {"cars": [5, 7]}
-    auto const doc = cbor::lazy::take_ownership(std::move(bytes));
+    auto const doc = cbor::lazy::adopt(std::move(bytes));
     auto const second = (*(*doc)["cars"])[1]->get<int>();  // 7
     auto const bus = (*doc)["bus"];                        // key_not_found
     // [operator_subscript]
@@ -130,7 +130,7 @@ TEST_CASE("doc reference lazy: at_path")
     std::string bytes = test::preferred(test::M("user"s, test::M("id"s, 42, "tags"s, test::A("a"s, "b"s))));
     // [at_path]
     // bytes: a std::string with {"user": {"id": 42, "tags": ["a", "b"]}}
-    auto const doc = cbor::lazy::take_ownership(std::move(bytes));
+    auto const doc = cbor::lazy::adopt(std::move(bytes));
     auto const id = doc->at_path<"$.user.id", std::int64_t>();           // 42
     auto const last = doc->at_path<"$.user.tags[-1]", std::string_view>(); // a ref to "b"
     auto const tags = doc->at_path<"$.user.tags[*]", cbor::nodelist>();    // 2 nodes
@@ -151,7 +151,7 @@ TEST_CASE("doc reference lazy: size")
     std::string bytes = test::preferred(test::M("a"s, 1, "b"s, 2));
     // [size]
     // bytes: a std::string with {"a": 1, "b": 2}
-    auto const map = cbor::lazy::take_ownership(std::move(bytes));
+    auto const map = cbor::lazy::adopt(std::move(bytes));
     auto const pairs = map->size();          // 2
     auto const none = map->at("a")->size();  // not_indexable
     // [size]
@@ -165,7 +165,7 @@ TEST_CASE("doc reference lazy: empty")
     std::string bytes = test::preferred(test::M("a"s, test::A(), "b"s, test::A(1)));
     // [empty]
     // bytes: a std::string with {"a": [], "b": [1]}
-    auto const doc = cbor::lazy::take_ownership(std::move(bytes));
+    auto const doc = cbor::lazy::adopt(std::move(bytes));
     auto const a = doc->at("a")->empty();  // true
     auto const b = doc->at("b")->empty();  // false
     // [empty]
@@ -179,7 +179,7 @@ TEST_CASE("doc reference lazy: type")
     std::string bytes = "\x84\x01\x61\x61\xc2\x41\x05\xc1\x00"s;
     // [type]
     // bytes: a std::string with [1, "a", 2(h'05'), 1(0)]
-    auto const doc = cbor::lazy::take_ownership(std::move(bytes));
+    auto const doc = cbor::lazy::adopt(std::move(bytes));
     auto const one = doc->at(0)->type();     // cbor::type::unsigned_integer
     auto const text = doc->at(1)->type();    // cbor::type::text_string
     auto const bignum = doc->at(2)->type();  // cbor::type::unsigned_integer
@@ -197,7 +197,7 @@ TEST_CASE("doc reference lazy: get")
     std::string bytes = test::preferred(test::M("name"s, "ann"s, "age"s, 300));
     // [get]
     // bytes: a std::string with {"name": "ann", "age": 300}
-    auto const doc = cbor::lazy::take_ownership(std::move(bytes));
+    auto const doc = cbor::lazy::adopt(std::move(bytes));
     auto const name = doc->at("name")->get<std::string_view>();  // a ref to "ann"
     auto const age = doc->at("age")->get<std::int64_t>();        // 300
     auto const small = doc->at("age")->get<std::uint8_t>();      // number_out_of_range
@@ -215,7 +215,7 @@ TEST_CASE("doc reference lazy: elements")
     std::string bytes = test::preferred(test::A(1, 2, 3));
     // [elements]
     // bytes: a std::string with [1, 2, 3]
-    auto const array = cbor::lazy::take_ownership(std::move(bytes));
+    auto const array = cbor::lazy::adopt(std::move(bytes));
     int sum = 0;
     for (auto const element : *array->elements())
         if (element)
@@ -223,7 +223,7 @@ TEST_CASE("doc reference lazy: elements")
     // sum: 6
     // [elements]
     CHECK_EQ(sum, 6);
-    CHECK_EQ(cbor::lazy::take_ownership("\x9f\x01\xff"s)->elements().error(), cbor::error::indefinite_length);
+    CHECK_EQ(cbor::lazy::adopt("\x9f\x01\xff"s)->elements().error(), cbor::error::indefinite_length);
     CHECK_EQ(array->at(0)->elements().error(), cbor::error::not_indexable);
 }
 
@@ -235,7 +235,7 @@ TEST_CASE("doc reference lazy: entries")
     int values = 0;
     // [entries]
     // bytes: a std::string with {"a": 1, "b": 2}
-    auto const map = cbor::lazy::take_ownership(std::move(bytes));
+    auto const map = cbor::lazy::adopt(std::move(bytes));
     for (auto const pair : *map->entries()) {
         if (!pair)
             break;
@@ -255,7 +255,7 @@ TEST_CASE("doc reference lazy: clone")
         std::string bytes = test::preferred(test::M("a"s, test::A(1, "x"s)));
         // [clone]
         // bytes: a std::string with {"a": [1, "x"]}
-        auto const doc = cbor::lazy::take_ownership(std::move(bytes));
+        auto const doc = cbor::lazy::adopt(std::move(bytes));
         auto const copy = doc->at("a")->clone();  // the tree of [1, "x"], valid after doc ends
         // [clone]
         return copy;
@@ -277,7 +277,7 @@ TEST_CASE("doc reference lazy: lazy_elements")
     std::string bytes = test::preferred(test::A(test::M("age"s, 31), test::M("age"s, 20), test::M("age"s, 40)));
     // [lazy_elements]
     // bytes: a std::string with [{"age": 31}, {"age": 20}, {"age": 40}]
-    auto const people = cbor::lazy::take_ownership(std::move(bytes));
+    auto const people = cbor::lazy::adopt(std::move(bytes));
     auto const view = *people->elements();  // 3 elements
     auto const older = std::ranges::count_if(view, [](std::expected<cbor::lazy, cbor::error> const &e) {
         return e && e->at("age")->get<int>().value_or(0) > 30;
@@ -286,7 +286,7 @@ TEST_CASE("doc reference lazy: lazy_elements")
     CHECK_EQ(view.size(), 3u);
     CHECK_EQ(older, 2);
 
-    auto const broken = cbor::lazy::take_ownership("\x83\x1c\x00\x00"s)->elements();
+    auto const broken = cbor::lazy::adopt("\x83\x1c\x00\x00"s)->elements();
     REQUIRE(broken);
     std::vector<bool> read;
     for (auto const element : *broken)
@@ -304,7 +304,7 @@ TEST_CASE("doc reference lazy: lazy_entries")
     std::string bytes = test::preferred(test::M("a"s, 1, "b"s, 2, "c"s, 3));
     // [lazy_entries]
     // bytes: a std::string with {"a": 1, "b": 2, "c": 3}
-    auto const map = cbor::lazy::take_ownership(std::move(bytes));
+    auto const map = cbor::lazy::adopt(std::move(bytes));
     auto const view = *map->entries();                                // 3 pairs
     auto const rest = std::ranges::distance(view | std::views::drop(1));  // 2
     // [lazy_entries]

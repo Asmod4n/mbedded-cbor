@@ -126,12 +126,12 @@ inline void node_reads_compare(cbor::lazy const &a, cbor::lazy const &b)
 #endif
 }
 
-// The forms of the input that cbor::lazy takes: owned by take_ownership, a std::shared_ptr to the bytes, and an
+// The forms of the input that cbor::lazy takes: owned by adopt, a std::shared_ptr to the bytes, and an
 // owner with a view into it. Each form reads the same; operator[] is at; elements and entries give as many
 // iterations as size says, and the post-increment steps as the pre-increment does.
 inline void lazy_forms(std::string_view const input)
 {
-    auto const owned = cbor::lazy::take_ownership(std::string{input});
+    auto const owned = cbor::lazy::adopt(std::string{input});
     auto const shared = cbor::lazy::view(std::make_shared<std::string const>(input));
     auto const bytes = std::make_shared<std::vector<char> const>(input.begin(), input.end());
     auto const borrowed = cbor::lazy::view(bytes, std::span<char const>(*bytes));

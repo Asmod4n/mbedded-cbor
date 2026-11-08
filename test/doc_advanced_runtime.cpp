@@ -27,14 +27,14 @@ using cbor::error;
 // Each test in this file is one example of tools/site/guides/advanced/runtime.md. The tests exist so that every
 // example in the document compiles and gives the result that the document states.
 
-// The section "lazy::take_ownership and lazy::view" lists the three forms, and states that a form does not check that
+// The section "lazy::adopt and lazy::view" lists the three forms, and states that a form does not check that
 // the bytes are one complete item.
-TEST_CASE("doc advanced runtime: lazy::take_ownership and lazy::view in every form")
+TEST_CASE("doc advanced runtime: lazy::adopt and lazy::view in every form")
 {
     std::string bytes = "\x78\x28"s + std::string(40, 'x');
     char const *const data = bytes.data();
     std::string const kept = bytes;
-    auto const a = cbor::lazy::take_ownership(std::move(bytes));
+    auto const a = cbor::lazy::adopt(std::move(bytes));
     REQUIRE(a.has_value());
     CHECK_EQ(a->top_level.encoded.data(), data);
     auto const b = test::lazy_of_copy(std::string_view{kept});

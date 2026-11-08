@@ -118,7 +118,7 @@ std::string as_string(std::span<std::byte const> const bytes)
 
 std::expected<cbor::lazy, error> lazy_of(std::string encoded)
 {
-    return cbor::lazy::take_ownership(std::move(encoded));
+    return cbor::lazy::adopt(std::move(encoded));
 }
 
 template <class T>

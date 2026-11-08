@@ -89,7 +89,7 @@ TEST_CASE("doc path: read a text")
 TEST_CASE("doc path: start at a lazy")
 {
     std::string bytes = preferred(M("cars"s, A(M("hp"s, 5), M("hp"s, 7, "make"s, "kia"s))));
-    auto const cars = cbor::lazy::take_ownership(std::move(bytes)).and_then([](cbor::lazy const &doc) { return doc.at("cars"); });
+    auto const cars = cbor::lazy::adopt(std::move(bytes)).and_then([](cbor::lazy const &doc) { return doc.at("cars"); });
     REQUIRE(cars.has_value());
     if (cars) {
         CHECK_EQ(cars->at_path<"$[1].hp", std::int64_t>(), 7);

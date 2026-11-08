@@ -217,7 +217,7 @@ for (int const x : v)
 elements() gives a forward range. Each element is a std::expected<cbor::lazy, cbor::error>.
 
 ```cpp
-auto const doc = cbor::lazy::take_ownership(std::move(bytes)); // [1, 2, 3]
+auto const doc = cbor::lazy::adopt(std::move(bytes)); // [1, 2, 3]
 std::int64_t sum = 0;
 for (auto const e : *doc->elements())
     sum += e->get<std::int64_t>().value_or(0);

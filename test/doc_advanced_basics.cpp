@@ -174,11 +174,11 @@ TEST_CASE("doc advanced basics: threads" * doctest::skip(!test::threads_availabl
     CHECK_EQ(second, 2);
 }
 
-// A user moved a lazy out of the std::expected of lazy::take_ownership. The section "Threads" shows the move.
+// A user moved a lazy out of the std::expected of lazy::adopt. The section "Threads" shows the move.
 TEST_CASE("doc advanced basics: a lazy moved out of the expected to another thread" * doctest::skip(!test::threads_available))
 {
     std::string bytes = preferred(A(1, 2));
-    auto l = cbor::lazy::take_ownership(std::move(bytes));
+    auto l = cbor::lazy::adopt(std::move(bytes));
     std::int64_t read = 0;
     std::thread([&read](cbor::lazy const &v) { read = *v.at(1)->get<std::int64_t>(); }, std::move(*l)).join();
     CHECK_EQ(read, 2);
@@ -199,7 +199,7 @@ TEST_CASE("doc advanced basics: a lazy holds the owner")
     std::optional<cbor::lazy> keep;
     {
         std::string bytes = message();
-        keep = *cbor::lazy::take_ownership(std::move(bytes))->at("tags");
+        keep = *cbor::lazy::adopt(std::move(bytes))->at("tags");
     }
     CHECK(*keep->at(1)->get<std::string_view>() == "b"sv);
 }
@@ -259,7 +259,7 @@ TEST_CASE("doc advanced basics: the forms of cbor::sequence")
 TEST_CASE("doc advanced basics: no form copies the bytes")
 {
     auto const message = [] { return preferred(V("xyz"s)); };
-    CHECK_FALSE(([]<class S>(S &s) { return requires { cbor::lazy::take_ownership(s); }; }(*std::make_unique<std::string>())));
+    CHECK_FALSE(([]<class S>(S &s) { return requires { cbor::lazy::adopt(s); }; }(*std::make_unique<std::string>())));
     CHECK_FALSE(([]<class S>(S const &s) { return requires { cbor::lazy::view(s); }; }(std::string_view())));
 
     auto const shared = std::make_shared<std::string const>(message());
@@ -269,7 +269,7 @@ TEST_CASE("doc advanced basics: no form copies the bytes")
 
     std::string bytes = preferred(V(std::string(40, 'x')));
     std::span<char const> const data(bytes);
-    auto const b = cbor::lazy::take_ownership(std::move(bytes)).value();
+    auto const b = cbor::lazy::adopt(std::move(bytes)).value();
     auto const vb = b.get<std::string_view>().value();
     CHECK_EQ((*vb).data(), data.subspan(2).data());
 }

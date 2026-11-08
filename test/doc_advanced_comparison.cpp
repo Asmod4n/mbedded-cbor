@@ -37,7 +37,7 @@ TEST_CASE("doc advanced comparison: iterate an array")
 {
     std::string bytes = preferred(A(1, 2, 3));
     // begin iterate
-    auto const doc = cbor::lazy::take_ownership(std::move(bytes)); // [1, 2, 3]
+    auto const doc = cbor::lazy::adopt(std::move(bytes)); // [1, 2, 3]
     std::int64_t sum = 0;
     for (auto const e : *doc->elements())
         sum += e->get<std::int64_t>().value_or(0);

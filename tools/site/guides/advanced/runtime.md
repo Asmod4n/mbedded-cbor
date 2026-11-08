@@ -4,20 +4,20 @@ This page adds the details to [../runtime.md](../runtime.md). Every
 function is in the namespace `cbor`. A comment shows the CBOR in `bytes`
 as text. Where the bytes themselves matter, a comment gives them in hex.
 
-## 1. lazy::take_ownership and lazy::view
+## 1. lazy::adopt and lazy::view
 
 A `cbor::lazy` is a position in one top-level item.
-`lazy::take_ownership` and `lazy::view` make the lazy of the top-level
+`lazy::adopt` and `lazy::view` make the lazy of the top-level
 item. No form copies the bytes.
 
 | Form | The bytes |
 |---|---|
-| `lazy::take_ownership(std::string&&)` | moved into a new owner |
+| `lazy::adopt(std::string&&)` | moved into a new owner |
 | `lazy::view(std::shared_ptr<std::string const>)` | the shared pointer is the owner |
 | `lazy::view(std::shared_ptr<void const>, view)` | read in place; the first argument keeps them alive |
 
 ```cpp
-auto const a = cbor::lazy::take_ownership(std::move(bytes));   // moved
+auto const a = cbor::lazy::adopt(std::move(bytes));   // moved
 auto const held = std::make_shared<std::string const>(message());
 auto const b = cbor::lazy::view(held);                          // read in place
 ```
@@ -26,7 +26,7 @@ Each form gives `std::expected<lazy, error>`. A null pointer or an empty
 owner throws `std::logic_error`. A `std::string` lvalue, a
 `std::string_view` alone and a literal do not compile.
 
-`lazy::take_ownership` and `lazy::view` check no limit. They do not check that
+`lazy::adopt` and `lazy::view` check no limit. They do not check that
 the bytes are one complete item. It accepts `82 01`, an array of two
 elements with one element, and a read of the missing element gives
 `too_little_data`. It accepts bytes after the item, and no step reads
@@ -49,7 +49,7 @@ A path reads a chain: `l.at_path<"$.a.b">()` ([path.md](path.md)).
 
 ```cpp
 // {"cars": [{"hp": 5}, {"hp": 7}], 7: "seven"}
-auto const doc = *cbor::lazy::take_ownership(std::move(bytes));
+auto const doc = *cbor::lazy::adopt(std::move(bytes));
 doc.at(cbor::key{7});                     // the lazy of "seven"
 doc["cars"];                              // the lazy of [{"hp": 5}, {"hp": 7}]
 doc.at("bus").error();                    // key_not_found
@@ -97,7 +97,7 @@ An algorithm takes the view directly. Each element is a
 
 ```cpp
 // [{"age": 31}, {"age": 20}, {"age": 40}]
-auto const people = *cbor::lazy::take_ownership(std::move(bytes));
+auto const people = *cbor::lazy::adopt(std::move(bytes));
 std::ranges::count_if(*people.elements(), [](std::expected<cbor::lazy, cbor::error> const &e) {
     auto const age = e->at("age");
     return age && age->get<std::int64_t>().value_or(0) > 30;
@@ -353,7 +353,7 @@ auto const tree = cbor::decode(*owner);
 
 ## 11. Tag 55799
 
-Tag 55799 (RFC 8949 3.4.6) marks bytes as CBOR. `lazy::take_ownership`
+Tag 55799 (RFC 8949 3.4.6) marks bytes as CBOR. `lazy::adopt`
 and `lazy::view` read one leading tag 55799 as its content, in every
 width of the argument. So `clone` of that lazy gives the content.
 `cbor::decode` also reads one leading tag 55799 as its content, so the

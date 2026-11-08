@@ -403,7 +403,7 @@ TEST_CASE("qcbor BasicEncodeTest: a map with one boolean, inserted twice into an
         REQUIRE(e.simple_value(cbor::simple_value::true_value).has_value());
     });
     CHECK_EQ(hex_of(first), hex_of(as_string({0xa1, 0x18, 0x42, 0xf5})));
-    auto const one = cbor::lazy::take_ownership(std::string(first));
+    auto const one = cbor::lazy::adopt(std::string(first));
     REQUIRE(one.has_value());
     CHECK(one->at(cbor::key{66}).and_then([](cbor::lazy const &l) { return l.get<bool>(); }) == true);
 
@@ -411,7 +411,7 @@ TEST_CASE("qcbor BasicEncodeTest: a map with one boolean, inserted twice into an
                                preferred(std::int64_t{-70000}) + first;
     CHECK_EQ(hex_of(second), hex_of(as_string({0x83, 0x19, 0x01, 0xc3, 0xa1, 0x18, 0x42, 0xf5, 0xa1, 0x3a, 0x00,
                                                0x01, 0x11, 0x6f, 0xa1, 0x18, 0x42, 0xf5})));
-    auto const two = cbor::lazy::take_ownership(std::string(second));
+    auto const two = cbor::lazy::adopt(std::string(second));
     REQUIRE(two.has_value());
     CHECK(two->size() == 3u);
     CHECK(two->at(0).and_then([](cbor::lazy const &l) { return l.get<std::int64_t>(); }) == 451);
@@ -442,7 +442,7 @@ TEST_CASE("qcbor example.c: the car engine encodes and decodes back")
         out += preferred(c);
     out += text("Turbo") + preferred(false);
 
-    auto const engine = cbor::lazy::take_ownership(std::move(out));
+    auto const engine = cbor::lazy::adopt(std::move(out));
     REQUIRE(engine.has_value());
     auto field = [&engine](std::string_view const key) {
         auto const f = engine->at(key);

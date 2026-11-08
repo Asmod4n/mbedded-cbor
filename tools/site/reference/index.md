@@ -25,7 +25,7 @@ mbedded-cbor is a header-only C++ library for CBOR (RFC 8949).
 auto const id = cbor::at_path<"$.user.id", int>(bytes);     // 42
 auto const age = cbor::at_path<"$.user.age", int>(bytes);   // cbor::error::key_not_found
 
-auto const doc = cbor::lazy::take_ownership(std::move(bytes));
+auto const doc = cbor::lazy::adopt(std::move(bytes));
 auto const name = doc->at_path<"$.user.name", std::string_view>();  // "ann", a view into the message
 ```
 

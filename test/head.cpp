@@ -242,7 +242,7 @@ TEST_CASE("head: every head that Appendix C makes not well-formed is syntax_erro
         CHECK_EQ(cbor::diagnostic_notation(bytes).error(), cbor::error::syntax_error);
         CHECK_EQ((cbor::at_path<"$", int>(bytes)).error(), cbor::error::syntax_error);
         CHECK_EQ((cbor::at_path<"$", cbor::simple_value>(bytes)).error(), cbor::error::syntax_error);
-        auto const l = cbor::lazy::take_ownership(std::string(bytes));
+        auto const l = cbor::lazy::adopt(std::string(bytes));
         if (l) {
             CHECK_EQ(l->type().error(), cbor::error::syntax_error);
             CHECK_EQ(l->get<cbor::simple_value>().error(), cbor::error::syntax_error);

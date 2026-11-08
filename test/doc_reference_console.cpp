@@ -25,7 +25,7 @@ std::string user_message()
 // Read a field by its key: a text comes back as a ref into the message.
 TEST_CASE("doc reference console: a field by its key")
 {
-    auto const doc = cbor::lazy::take_ownership(user_message());
+    auto const doc = cbor::lazy::adopt(user_message());
     auto const name = doc->at("user")->at("name")->get<std::string_view>();
     REQUIRE(name);
     CHECK_EQ(**name, "ann"sv);
@@ -34,7 +34,7 @@ TEST_CASE("doc reference console: a field by its key")
 // Read an element by its index: the index counts from 0.
 TEST_CASE("doc reference console: an element by its index")
 {
-    auto const doc = cbor::lazy::take_ownership(test::preferred(test::M("tags"s, test::A("a"s, "b"s, "c"s))));
+    auto const doc = cbor::lazy::adopt(test::preferred(test::M("tags"s, test::A("a"s, "b"s, "c"s))));
     auto const tag = doc->at("tags")->at(1)->get<std::string_view>();
     REQUIRE(tag);
     CHECK_EQ(**tag, "b"sv);
@@ -43,14 +43,14 @@ TEST_CASE("doc reference console: an element by its index")
 // Read one value by its path.
 TEST_CASE("doc reference console: one value by its path")
 {
-    auto const doc = cbor::lazy::take_ownership(user_message());
+    auto const doc = cbor::lazy::adopt(user_message());
     CHECK_EQ(doc->at_path<"$.user.id">()->get<int>().value(), 42);
 }
 
 // Read all values of a path: [*] with cbor::nodelist gives every match.
 TEST_CASE("doc reference console: all values of a path")
 {
-    auto const doc = cbor::lazy::take_ownership(
+    auto const doc = cbor::lazy::adopt(
         test::preferred(test::M("users"s, test::A(test::M("name"s, "ann"s), test::M("name"s, "bob"s)))));
     CHECK_EQ(doc->at_path<"$.users[*].name", cbor::nodelist>()->size(), 2u);
 }
@@ -64,6 +64,6 @@ TEST_CASE("doc reference console: the message as text")
 // Read a value with the wrong type: the error is a value, not an exception.
 TEST_CASE("doc reference console: a value with the wrong type")
 {
-    auto const doc = cbor::lazy::take_ownership(user_message());
+    auto const doc = cbor::lazy::adopt(user_message());
     CHECK_EQ(doc->at("user")->at("name")->get<int>().error(), cbor::error::incorrect_type);
 }

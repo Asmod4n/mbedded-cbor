@@ -451,7 +451,7 @@ TEST_CASE("lazy: an entry iterator outlives the lazy that gave it")
     std::optional<cbor::lazy_entries::iterator> kept;
     {
         std::string message = encoded(M("a"s, 1, "b"s, 2, "c"s, 3));
-        auto const l = cbor::lazy::take_ownership(std::move(message));
+        auto const l = cbor::lazy::adopt(std::move(message));
         REQUIRE(l.has_value());
         kept = l->entries()->begin();
     }
@@ -746,7 +746,7 @@ TEST_CASE("lazy: copy, at and get as a chain")
 {
     std::string bytes = encoded(M("statuses"s, A(M("user"s, M("name"s, "ann"s)), M("user"s, M("name"s, "bob"s)))));
     std::span<char const> const data(bytes);
-    cbor::lazy const doc = *cbor::lazy::take_ownership(std::move(bytes));
+    cbor::lazy const doc = *cbor::lazy::adopt(std::move(bytes));
     auto const name = doc.at("statuses")
                           .and_then([](cbor::lazy const &s) { return s.at(1); })
                           .and_then([](cbor::lazy const &s) { return s.at("user"); })
@@ -838,7 +838,7 @@ TEST_CASE("lazy: view checks that the owner holds an object")
 // const range and a range that owns nothing do not compile, because each would either copy or dangle.
 TEST_CASE("lazy::take: only an owning rvalue range compiles")
 {
-    auto const takeable = []<class S>(S &&) { return requires(S &&t) { cbor::lazy::take_ownership(std::forward<S>(t)); }; };
+    auto const takeable = []<class S>(S &&) { return requires(S &&t) { cbor::lazy::adopt(std::forward<S>(t)); }; };
     std::string named = "\x78\x20"s + std::string(32, 'x');
     std::string const constant = "\x01"s;
     CHECK(takeable(std::string("\x01")));
@@ -850,7 +850,7 @@ TEST_CASE("lazy::take: only an owning rvalue range compiles")
     CHECK_FALSE(takeable(std::string_view("\x01")));
     CHECK_FALSE(takeable(std::span<char const>(constant)));
     std::span<char const> const data(named);
-    auto const l = cbor::lazy::take_ownership(std::move(named));
+    auto const l = cbor::lazy::adopt(std::move(named));
     REQUIRE(l.has_value());
     CHECK_EQ(l->top_level.encoded.data(), data.data());
 }
@@ -895,7 +895,7 @@ TEST_CASE("lazy: copy moves an rvalue string and copies everything else")
     std::string const message = encoded(M("k"s, text));
     auto buffer = std::make_unique<std::string>(message);
     std::span<char const> const data(*buffer);
-    auto const moved = cbor::lazy::take_ownership(std::move(*buffer));
+    auto const moved = cbor::lazy::adopt(std::move(*buffer));
     REQUIRE(moved.has_value());
     CHECK_EQ(static_cast<void const *>(moved->top_level.encoded.data()), static_cast<void const *>(data.data()));
     buffer->assign(message.size(), '\0');
@@ -912,7 +912,7 @@ TEST_CASE("lazy: copy moves an rvalue string and copies everything else")
 
     std::string again = message;
     char const *const again_data = again.data();
-    auto const from_moved = cbor::lazy::take_ownership(std::move(again));
+    auto const from_moved = cbor::lazy::adopt(std::move(again));
     CHECK_EQ(static_cast<void const *>(from_moved->top_level.encoded.data()), static_cast<void const *>(again_data));
     auto const from_lvalue = test::lazy_of_copy(message);
     CHECK_NE(static_cast<void const *>(from_lvalue->top_level.encoded.data()), static_cast<void const *>(message.data()));
@@ -1292,7 +1292,7 @@ TEST_CASE("lazy::copy: an rvalue std::string is moved")
 {
     std::string bytes = two_forms::long_text();
     std::span<char const> const data(bytes);
-    auto const l = cbor::lazy::take_ownership(std::move(bytes));
+    auto const l = cbor::lazy::adopt(std::move(bytes));
     REQUIRE(l.has_value());
     CHECK_EQ(two_forms::text_data(l), data.subspan(2).data());
 }
@@ -1777,7 +1777,7 @@ TEST_CASE("lazy: a typed array tag with content that is no byte string is refuse
     std::string const wire = "\xd8\x51\x88\x51\x51\x51\x51\x51\x51\x40\x40\x51\x6b\x40\x40\xf9\x04\x7c\x60\x00\xd8\x51\x0a\x00\x00\x51\xd8\x51\x88\x51\x51\x41\x51\x23\x51\x40\x51\x51\x40\x40\x00\x00\x0a\x51\x51\x51\x52\x51\x75\x40\x40\xc7\x81\x81\x81\xd8\x1c\xed\xd0\xf3\x0b\xa0"s;
     auto const refused = [](auto const &r) { return !r.has_value() && r.error() == error::inadmissible_type_for_tag_content; };
     CHECK(refused(cbor::decode(wire)));
-    auto const l = cbor::lazy::take_ownership(std::string(wire));
+    auto const l = cbor::lazy::adopt(std::string(wire));
     REQUIRE(l.has_value());
     for (char const *const p : {"$['a']", "$['a'][*].*", "$[*]", "$[0]", "$.*", "$..*"}) {
         CAPTURE(p);
@@ -1797,21 +1797,21 @@ TEST_CASE("lazy: a typed array tag with content that is no byte string is refuse
 TEST_CASE("lazy: a read through a temporary lazy keeps the bytes alive")
 {
     auto const message = [] { return "\x82\x63" "abc\x81\x63" "xyz"s; };
-    auto const first = cbor::lazy::take_ownership(message())->at(0)->get<std::string_view>();
+    auto const first = cbor::lazy::adopt(message())->at(0)->get<std::string_view>();
     REQUIRE(first.has_value());
     CHECK_EQ(**first, "abc"sv);
-    auto const inner = cbor::lazy::take_ownership(message())->at(1);
+    auto const inner = cbor::lazy::adopt(message())->at(1);
     REQUIRE(inner.has_value());
     auto const second = inner->at(0)->get<std::string_view>();
     REQUIRE(second.has_value());
     CHECK_EQ(**second, "xyz"sv);
-    auto const elements = cbor::lazy::take_ownership(message())->elements();
+    auto const elements = cbor::lazy::adopt(message())->elements();
     REQUIRE(elements.has_value());
     std::vector<cbor::type> types;
     for (auto const &e : *elements)
         types.push_back(*e->type());
     CHECK_EQ(types, std::vector{cbor::type::text_string, cbor::type::array});
-    auto const copy = cbor::lazy::take_ownership(message())->clone();
+    auto const copy = cbor::lazy::adopt(message())->clone();
     REQUIRE(copy.has_value());
     CHECK_EQ((*copy)->get<cbor::type::array>()->size(), 2u);
 }
@@ -1820,12 +1820,12 @@ TEST_CASE("lazy: a read through a temporary lazy keeps the bytes alive")
 // read, so a key that stands before the end of a short map is not found, and the elements end at the first step.
 TEST_CASE("lazy: a count longer than the bytes is too_little_data before the first item")
 {
-    auto const map = cbor::lazy::take_ownership("\xa2\x61\x6b\x01"s);
+    auto const map = cbor::lazy::adopt("\xa2\x61\x6b\x01"s);
     REQUIRE(map);
     CHECK_EQ(map->at("k").error(), error::too_little_data);
     // Three elements over three bytes pass the first check; after the element 100 (two bytes) two elements are
     // left over one byte.
-    auto const array = cbor::lazy::take_ownership("\x83\x18\x64\x01"s);
+    auto const array = cbor::lazy::adopt("\x83\x18\x64\x01"s);
     REQUIRE(array);
     auto const elements = array->elements();
     REQUIRE(elements);

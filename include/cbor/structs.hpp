@@ -1417,11 +1417,11 @@ class generic
  * message: {"id": 4}
  * call: auto const r = cbor::structs<reading>::encode(reading{4, std::nullopt})
  * result: 5 bytes: a1 62 69 64 04
- * call: cbor::lazy::take_ownership(*r)
+ * call: cbor::lazy::adopt(*r)
  * result: lazy of {"id": 4}
  * call: auto const s = cbor::structs<std::set<std::uint8_t>>::encode(std::set<std::uint8_t>{3, 1})
  * result: 6 bytes: d9 01 02 82 01 03
- * call: cbor::lazy::take_ownership(*s)
+ * call: cbor::lazy::adopt(*s)
  * result: lazy of 258([1, 3])
  * call: cbor::structs<reading>::decode(std::move(bytes))
  * result: ref to reading{4, std::nullopt}
@@ -1565,7 +1565,7 @@ public:
      * message: {"name": "ann", "age": 30}
      * call: auto const encoded = cbor::structs<person>::encode(person{"ann", 30})
      * result: 16 bytes: a2 63 61 67 65 18 1e 64 6e 61 6d 65 63 61 6e 6e
-     * call: cbor::lazy::take_ownership(*encoded)
+     * call: cbor::lazy::adopt(*encoded)
      * result: lazy of {"age": 30, "name": "ann"}
      * @endcode
      *

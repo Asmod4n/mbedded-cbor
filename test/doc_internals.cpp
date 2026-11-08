@@ -29,7 +29,7 @@ TEST_CASE("doc internals: encoded builds the input that a comment shows")
     CHECK_EQ(cbor::diagnostic_notation(preferred(A(1, 2.5, "a"s, simple{21}))), R"([1, 2.5, "a", true])");
 }
 
-// The section "A lazy reads heads" states that lazy::take_ownership and lazy::view read no head but a leading tag
+// The section "A lazy reads heads" states that lazy::adopt and lazy::view read no head but a leading tag
 // 55799, and that a step reads the head of its target.
 TEST_CASE("doc internals: a lazy reads heads when a step needs them")
 {

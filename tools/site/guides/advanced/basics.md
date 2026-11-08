@@ -121,7 +121,7 @@ the expansion of XML entities the same way.
 The library does not bound the size of the input. The program bounds it
 before it calls the library.
 
-A limit is checked by the step that reads the item. `lazy::take_ownership`
+A limit is checked by the step that reads the item. `lazy::adopt`
 and `lazy::view` check no limit. So a string that is too long gives
 `string_length_exceeded` at `get`, not when the lazy is made.
 
@@ -190,7 +190,7 @@ members use the default resource.
 | `item_size`, the iterator of `cbor::sequence` | nothing |
 | a step of a lazy (`at`, `get`) | nothing |
 | `lazy::view` | nothing |
-| `lazy::take_ownership` | one allocation: the `std::shared_ptr<std::string const>` that holds the bytes |
+| `lazy::adopt` | one allocation: the `std::shared_ptr<std::string const>` that holds the bytes |
 | `lazy::clone` | its items |
 | `diagnostic_notation`, the encoder into a `std::string` | the string |
 | the encoder into a span | nothing |
@@ -205,18 +205,18 @@ changes: the limits are constants.
 
 A call over bytes, for example `at_path<Path, T>(encoded)` and
 `item_size`, has no shared state. Two lazy values from two calls of
-`lazy::take_ownership` or `lazy::view` share nothing, also over the same
+`lazy::adopt` or `lazy::view` share nothing, also over the same
 bytes.
 
 A lazy holds only its owner, its bytes and its offset, and a read changes
 nothing in it. So several threads read one lazy, and the lazy values of
-one top-level item, at the same time. `lazy::take_ownership` gives a
+one top-level item, at the same time. `lazy::adopt` gives a
 `std::expected`,
 and `std::move(*l)` moves the lazy out of it:
 
 ```cpp
 // [1, 2]
-auto l = cbor::lazy::take_ownership(std::move(bytes));
+auto l = cbor::lazy::adopt(std::move(bytes));
 std::thread([](cbor::lazy const &v) {
     v.at(1)->get<std::int64_t>();   // 2
 }, std::move(*l)).join();
@@ -227,13 +227,13 @@ std::thread([](cbor::lazy const &v) {
 A `cbor::lazy` holds the owner of the bytes. So does every lazy that a
 step gives, and every iterator. A lazy from `at` stays valid after the
 lazy that gave it and after the `std::string` that went into
-`lazy::take_ownership` end.
+`lazy::adopt` end.
 
 ```cpp
 std::optional<cbor::lazy> keep;
 {
     std::string bytes = message();   // {"tags": ["a", "b"]}
-    keep = *cbor::lazy::take_ownership(std::move(bytes))->at("tags");
+    keep = *cbor::lazy::adopt(std::move(bytes))->at("tags");
 }
 keep->at(1)->get<std::string_view>();   // "b"
 ```
@@ -255,7 +255,7 @@ The owner of the bytes comes from one of these:
 
 | Call | Owner |
 |---|---|
-| `lazy::take_ownership(std::string&&)` | the library moves the string into a new `std::shared_ptr<std::string const>` |
+| `lazy::adopt(std::string&&)` | the library moves the string into a new `std::shared_ptr<std::string const>` |
 | `lazy::view(std::shared_ptr<std::string const>)` | the caller |
 | `lazy::view(owner, view)` | the caller: `owner` keeps the bytes of `view` alive |
 
@@ -265,7 +265,7 @@ because no form copies the bytes:
 ```cpp
 auto const shared = std::make_shared<std::string const>(message());
 auto const a = cbor::lazy::view(shared).value();   // shares the bytes, no copy
-auto const b = cbor::lazy::take_ownership(std::move(bytes)).value();   // moves the string, no copy
+auto const b = cbor::lazy::adopt(std::move(bytes)).value();   // moves the string, no copy
 ```
 
 `structs<T>::decode`, `schema<T>::decode`, `schema<T>::path` and

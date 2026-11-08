@@ -34,7 +34,7 @@ with reflection also `schema_decode` and `schema_encode`.
 
 ## 2. A lazy reads heads
 
-`lazy::take_ownership` and `lazy::view` read one head at most: a leading
+`lazy::adopt` and `lazy::view` read one head at most: a leading
 tag 55799, which they skip. A step reads the heads that it needs when it
 is called: the heads from the start of its map or array to the target,
 and the head of the target. It reads no byte after the head of the

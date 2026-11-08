@@ -20,7 +20,7 @@ TEST_CASE("doc reference index: the example")
     auto const age = cbor::at_path<"$.user.age", int>(bytes);
     CHECK_EQ(age.error(), cbor::error::key_not_found);
 
-    auto const doc = cbor::lazy::take_ownership(std::move(bytes));
+    auto const doc = cbor::lazy::adopt(std::move(bytes));
     auto const name = doc->at_path<"$.user.name", std::string_view>();
     REQUIRE(name);
     CHECK_EQ(**name, "ann"sv);

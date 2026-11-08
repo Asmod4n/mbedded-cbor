@@ -62,7 +62,7 @@ void byte_string_put(Encoder &out, std::string const &b, std::uint8_t const form
         std::string head;
         cbor::encoder<std::string> h(head);
         require(h.byte_string(bytes).has_value() && h.finish().has_value());
-        auto const node = cbor::lazy::take_ownership(std::move(head));
+        auto const node = cbor::lazy::adopt(std::move(head));
         require(node.has_value());
         auto const r = node->get<std::span<std::byte const>>();
         require(r.has_value());
@@ -90,7 +90,7 @@ void text_string_put(Encoder &out, std::string const &t, std::uint8_t const form
         std::string head;
         cbor::encoder<std::string> h(head);
         require(h.text_string(std::string_view(t)).has_value() && h.finish().has_value());
-        auto const node = cbor::lazy::take_ownership(std::move(head));
+        auto const node = cbor::lazy::adopt(std::move(head));
         require(node.has_value());
         auto const r = node->get<std::string_view>();
         require(r.has_value());

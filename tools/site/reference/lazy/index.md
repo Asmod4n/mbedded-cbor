@@ -5,7 +5,7 @@
 | Function | Does |
 |---|---|
 | [lazy](lazy.md) | the type: a position in one top-level item |
-| [take_ownership](take_ownership.md) | makes a lazy that owns the moved bytes |
+| [adopt](adopt.md) | makes a lazy that owns the moved bytes |
 | [view](view.md) | makes a lazy that reads bytes in place through their owner |
 | [at](at.md) | gives the child at a key or an index |
 | [operator[]](operator_subscript.md) | gives the same result as `at` |

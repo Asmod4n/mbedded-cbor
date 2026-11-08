@@ -118,14 +118,14 @@ inline constexpr bool is_path_query_v = false;
  *
  * It holds no decoded value.
  * Each member function reads the bytes at the offset when it is called.
- * cbor::lazy::view() and cbor::lazy::take_ownership() set the data members.
+ * cbor::lazy::view() and cbor::lazy::adopt() set the data members.
  * A copy of a lazy is a second position in the same bytes.
  * Several threads read one lazy at the same time.
  * A `nodelist` is the result of a path that selects many nodes.
  * A lazy made with `cbor::lazy{}` holds no top-level item; each member function then throws `std::logic_error`.
  *
  * @code{.callseq}
- * cbor::lazy::take_ownership(bytes) → std::expected<lazy, error>
+ * cbor::lazy::adopt(bytes) → std::expected<lazy, error>
  * cbor::lazy const copy = *doc
  * @endcode
  * @code{.example}
@@ -139,7 +139,7 @@ inline constexpr bool is_path_query_v = false;
  * @throws std::logic_error a member function of a lazy that holds no top-level item
  * @snippet doc_reference_lazy.cpp lazy
  * @see cbor::lazy::view()
- * @see cbor::lazy::take_ownership()
+ * @see cbor::lazy::adopt()
  *
  * @ingroup lazy
  */
@@ -180,7 +180,7 @@ public:
      *
      * @throws std::logic_error an empty `owner` in the first form
      * @snippet doc_reference_lazy.cpp view
-     * @see cbor::lazy::take_ownership()
+     * @see cbor::lazy::adopt()
      * @see cbor::lazy::at()
      */
     template <borrowed_range_of_chars Encoded>
@@ -203,22 +203,22 @@ public:
      * A step on the lazy reports broken input.
      *
      * @code{.callseq}
-     * cbor::lazy::take_ownership(std::move(bytes)) → std::expected<lazy, error>
+     * cbor::lazy::adopt(std::move(bytes)) → std::expected<lazy, error>
      * @endcode
      * @code{.example}
      * message: {"id": 42}
-     * call: auto const doc2 = cbor::lazy::take_ownership(std::move(bytes))
+     * call: auto const doc2 = cbor::lazy::adopt(std::move(bytes))
      * result: lazy of {"id": 42}
      * call: doc2->at("id")->get<std::int64_t>()
      * result: 42
      * @endcode
      *
-     * @snippet doc_reference_lazy.cpp take_ownership
+     * @snippet doc_reference_lazy.cpp adopt
      * @see cbor::lazy::view()
      * @see cbor::lazy::at()
      */
     template <owning_range_of_chars Encoded>
-    static std::expected<lazy, error> take_ownership(Encoded &&encoded);
+    static std::expected<lazy, error> adopt(Encoded &&encoded);
 
     /**
      * @brief Gives the lazy of one child.
@@ -1384,7 +1384,7 @@ std::expected<lazy, error> lazy::view(std::shared_ptr<Encoded const> owner)
 }
 
 template <owning_range_of_chars Encoded>
-std::expected<lazy, error> lazy::take_ownership(Encoded &&encoded)
+std::expected<lazy, error> lazy::adopt(Encoded &&encoded)
 {
     return view(std::make_shared<Encoded const>(std::move(encoded)));
 }

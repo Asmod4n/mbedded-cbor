@@ -208,7 +208,7 @@ through a `std::shared_ptr`. Both forms read the bytes where they are.
 
 ```cpp
 // bytes: a std::string with {"sensor": "t1", "value": 21.5, "samples": [3, 4, 5]}
-auto const doc = cbor::lazy::take_ownership(std::move(bytes)).value();
+auto const doc = cbor::lazy::adopt(std::move(bytes)).value();
 
 int sum = 0;
 if (auto const samples = doc.at("samples")) {

@@ -1006,7 +1006,7 @@ static void setup()
         cbor::encoder e(encoded);
         if (!e.byte_string(std::as_bytes(std::span(doc))) || !e.finish())
             std::abort();
-        auto const l = cbor::lazy::take_ownership(std::move(encoded));
+        auto const l = cbor::lazy::adopt(std::move(encoded));
         if (!l)
             std::abort();
         auto r = l->get<std::span<std::byte const>>();
