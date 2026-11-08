@@ -181,14 +181,44 @@ TEST_CASE("path equality: arrays in a filter")
     CHECK(values_equal("\x82\x01\x02"s, "\x81\x01"s) == false);
 }
 
-// The filter reads the item that tag 24 embeds and the content of tag 55799 at each level, as the walk does; a big
-// number stays a tag in a filter and is not an integer there.
+// The filter reads the item that tag 24 embeds and the content of tag 55799 at each level, as the walk does. The owner
+// decided on 2026-10-12 that the same value means the same value under RFC 8949 3.4.3, so a bignum whose magnitude
+// fits in 64 bits is that integer in a filter, also inside an array. A larger bignum and a tag 2 over a content that is
+// not a byte string stay tags.
 TEST_CASE("path equality: tags in a filter")
 {
     CHECK(values_equal("\xd8\x18\x43\x82\x01\x02"s, "\x82\x01\x02"s) == true);
     CHECK(values_equal("\xd9\xd9\xf7\x82\x01\x02"s, "\x82\x01\x02"s) == true);
-    CHECK(values_equal("\xc2\x41\x01"s, "\x01"s) == false);
+    CHECK(values_equal("\xc2\x41\x01"s, "\x01"s) == true);
+    CHECK(values_equal("\xc2\x42\x00\x01"s, "\x01"s) == true);
+    CHECK(values_equal("\xc3\x41\x00"s, "\x20"s) == true);
+    CHECK(values_equal("\xc2\x41\x01"s, "\xf9\x3c\x00"s) == true);
+    CHECK(values_equal("\x81\xc2\x41\x01"s, "\x81\x01"s) == true);
     CHECK(values_equal("\xc2\x41\x01"s, "\xc2\x41\x01"s) == true);
+    CHECK(values_equal("\xc2\x41\x02"s, "\x01"s) == false);
+    CHECK(values_equal("\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s, "\x1b\xff\xff\xff\xff\xff\xff\xff\xff"s) == false);
+    CHECK(values_equal("\xc2\x61\x61"s, "\x01"s) == false);
+}
+
+// RFC 9535 2.3.5.2.2 orders two numbers by value, and a bignum that fits in 64 bits is a number (owner, 2026-10-12).
+TEST_CASE("path equality: a bignum in an order comparison of a filter")
+{
+    std::string const items = "\x83\xc2\x41\x01\xc2\x42\x00\x01\xc3\x41\x00"s;
+    auto const count = [&](std::string_view const path) {
+        auto const l = test::lazy_of_copy(items);
+        REQUIRE(l.has_value());
+        auto const q = cbor::jsonpath::compile<cbor::nodelist>(path);
+        REQUIRE(q.has_value());
+        auto const r = l->at_path(*q);
+        REQUIRE(r.has_value());
+        return r->size();
+    };
+    CHECK_EQ(count("$[?@ == 1]"), 2u);
+    CHECK_EQ(count("$[?@ == -1]"), 1u);
+    CHECK_EQ(count("$[?@ == 1.0]"), 2u);
+    CHECK_EQ(count("$[?@ < 2]"), 3u);
+    CHECK_EQ(count("$[?@ > 0]"), 2u);
+    CHECK_EQ(count("$[?@ < 0]"), 1u);
 }
 
 // An element of a typed array (RFC 8746) is a number in a filter, compared with a number of the path.

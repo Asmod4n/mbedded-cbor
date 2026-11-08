@@ -198,8 +198,10 @@ is `invalid_path`, for example `$[?@.* == 1]`.
 | two tags | the same number and equal content | always false |
 | a side that selects nothing | equal only to another side that selects nothing | always false |
 
-A bignum (tag 2 or 3) is a tag, so it is not equal to an integer:
-`$[?@ == 1]` does not select `2(h'01')`. Values of two different kinds are
+A bignum (tag 2 or 3) whose magnitude fits in 64 bits is the same value
+as that integer (RFC 8949 3.4.3), so a comparison reads it as the integer:
+`$[?@ == 1]` selects `2(h'01')`, and `$[?@ < 0]` selects `3(h'00')`. A
+larger bignum is a tag. Values of two different kinds are
 not equal. `<=` is true when `<` or `==` is true, so two sides that select
 nothing give true for `<=` and false for `<`.
 

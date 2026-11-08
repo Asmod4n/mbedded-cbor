@@ -599,8 +599,11 @@ always false
 T}
 .TE
 .PP
-A bignum (tag 2 or 3) is a tag, so it is not equal to an integer:
-\f[CR]$[?\(at == 1]\f[R] does not select \f[CR]2(h\(aq01\(aq)\f[R].
+A bignum (tag 2 or 3) whose magnitude fits in 64 bits is the same value
+as that integer (RFC 8949 3.4.3), so a comparison reads it as the
+integer: \f[CR]$[?\(at == 1]\f[R] selects \f[CR]2(h\(aq01\(aq)\f[R], and
+\f[CR]$[?\(at < 0]\f[R] selects \f[CR]3(h\(aq00\(aq)\f[R].
+A larger bignum is a tag.
 Values of two different kinds are not equal.
 \f[CR]<=\f[R] is true when \f[CR]<\f[R] or \f[CR]==\f[R] is true, so two
 sides that select nothing give true for \f[CR]<=\f[R] and false for
