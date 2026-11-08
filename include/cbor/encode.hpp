@@ -1532,7 +1532,7 @@ inline item const *encoding::content_of(item const &node, major_type const major
 }
 
 template <class Writer>
-std::expected<void, std::errc> encoding::encode_head_and_payload(encoder<Writer> &out, item const &node,
+CBOR_ALWAYS_INLINE inline std::expected<void, std::errc> encoding::encode_head_and_payload(encoder<Writer> &out, item const &node,
                                                                  head_parts const &head)
 {
     std::expected<void, std::errc> written = out.encode_head(head.major, head.info, head.argument);
