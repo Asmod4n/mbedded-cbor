@@ -76,6 +76,44 @@ TEST_CASE("self-described CBOR: lazy reads through a leading tag 55799")
     CHECK_EQ(owned->at("a"sv)->at(0)->get<std::uint64_t>().value(), 5u);
 }
 
+// runtime.md section 11: lazy::view and lazy::take_ownership read one leading tag 55799 as its content, and a
+// second tag 55799 or a tag 55799 inside an item stays a tag. type() gives the kind of the item there, so it gives tag,
+// as decode and clone do, in each width of the argument. get, a key and a path pass the tag (runtime.md, path.md), so
+// they still give the content. A tag 55799 inside the item of a tag 24 is passed by a step and a path as well.
+TEST_CASE("self-described CBOR: type() of a second tag 55799 and of a tag 55799 inside an item is tag")
+{
+    for (std::string const &head : {"\xd9\xd9\xf7"s, "\xda\x00\x00\xd9\xf7"s, "\xdb\x00\x00\x00\x00\x00\x00\xd9\xf7"s}) {
+        CAPTURE(head.size());
+        auto const one = cbor::lazy::take_ownership(head + "\x01");
+        REQUIRE(one.has_value());
+        CHECK_EQ(one->type().value(), cbor::type::unsigned_integer);
+        auto const two = cbor::lazy::take_ownership(head + head + "\x01");
+        REQUIRE(two.has_value());
+        CHECK_EQ(two->type().value(), cbor::type::tag);
+        CHECK_EQ(two->get<std::int64_t>().value(), 1);
+        auto const cloned = two->clone();
+        REQUIRE(cloned.has_value());
+        CHECK_EQ((*cloned)->type, cbor::type::tag);
+        auto const tree = cbor::decode(head + head + "\x01");
+        REQUIRE(tree.has_value());
+        CHECK_EQ((*tree)->type, cbor::type::tag);
+        auto const array = cbor::lazy::take_ownership("\x81" + head + "\x01");
+        REQUIRE(array.has_value());
+        auto const element = array->at(0);
+        REQUIRE(element.has_value());
+        CHECK_EQ(element->type().value(), cbor::type::tag);
+        CHECK_EQ(element->get<std::int64_t>().value(), 1);
+        CHECK_EQ((cbor::at_path<"$[0]", std::int64_t>("\x81" + head + "\x01")).value(), 1);
+        std::string const map = "\xa1" + head + "\x61k\x01";
+        CHECK_EQ(cbor::lazy::take_ownership(std::string(map))->at("k"sv)->get<std::int64_t>().value(), 1);
+        CHECK_EQ((cbor::at_path<"$.k", std::int64_t>(map)).value(), 1);
+        std::string const embedded = "\xa1\x61\x61\xd8\x18" + std::string(1, static_cast<char>(0x40 + head.size() + 3)) +
+                                     head + "\x82\x01\x02";
+        CHECK_EQ(cbor::lazy::take_ownership(std::string(embedded))->at("a"sv)->at(1)->get<std::int64_t>().value(), 2);
+        CHECK_EQ((cbor::at_path<"$.a[1]", std::int64_t>(embedded)).value(), 2);
+    }
+}
+
 // Both forms of at_path read through a leading tag 55799: the typed read on the bytes and the form that gives a
 // lazy node.
 TEST_CASE("self-described CBOR: at_path reads through a leading tag 55799")

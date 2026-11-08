@@ -60,7 +60,8 @@ doc.at(0).error();                        // not_indexable, a map has no index
 
 A key is a text key or an integer key. A text key does not match a byte
 string with the same bytes. A key under tag 28 or tag 29 is a tag, and
-matches no text key and no integer key.
+matches no text key and no integer key. A key under tag 55799 matches as
+the key without the tag (RFC 8949 3.4.6).
 
 A map with a key twice is no error. `at`, `operator[]` and `at_path` give
 the first pair.
@@ -335,7 +336,8 @@ and `lazy::view` read one leading tag 55799 as its content, in every
 width of the argument. So `clone` of that lazy gives the content.
 `cbor::decode` also reads one leading tag 55799 as its content, so the
 root of its tree is the content. A second tag 55799, and a tag 55799
-inside an item, stay tags.
+inside an item, stay tags: `type()` gives `tag` there. `get`, `at` and a
+path read through such a tag to its content.
 
 ```cpp
 // owner: a std::shared_ptr<std::string const> with the bytes in the comment above each read

@@ -1575,9 +1575,7 @@ inline std::expected<cbor::type, error> lazy::type() const
             return std::unexpected(found.error());
         return heads::type_of(found->h.major, found->h.info, found->h.argument);
                             }
-                            detail::validity::offset const at =
-                                heads::self_described_cbor_content_at(top_level.encoded, detail::validity::offset{offset});
-                            auto const h = heads::read_raw_head<true>(top_level.encoded, at);
+                            auto const h = heads::read_raw_head<true>(top_level.encoded, detail::validity::offset{offset});
                             if (!h) [[unlikely]]
                                 return std::unexpected(h.error());
                             if (!heads::is_bignum(h->major, h->argument)) [[likely]]
