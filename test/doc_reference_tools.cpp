@@ -68,22 +68,27 @@ TEST_CASE("doc reference tools: sequence with a broken item")
     CHECK_THROWS_AS(cbor::sequence(std::shared_ptr<std::string const>{}), std::logic_error);
 }
 
-// sequence_reader.md: [1, 2] arrives in two pieces, and the second piece also holds 3. The item waits for its
-// last byte, and each piece is a std::string that the reader takes without a copy.
+// sequence_reader.hpp, snippet sequence_reader: [1, 2] arrives in two pieces, and the second piece also holds 3. The
+// item waits for its last byte, and each piece is a std::string that the reader takes by move.
 TEST_CASE("doc reference tools: sequence_reader")
 {
     std::string first = "\x82\x01"s;
     std::string second = "\x02\x03"s;
+    // [sequence_reader]
     cbor::sequence_reader r;
-    r.feed(std::move(first));
-    CHECK_EQ(r.next().error(), cbor::error::too_little_data);
-    r.feed(std::move(second));
-    CHECK_EQ(r.next()->size(), 2u);
-    CHECK_EQ(r.next()->get<std::int64_t>(), 3);
+    r.feed(std::move(first));       // 82 01: the start of [1, 2]
+    auto const waiting = r.next();  // too_little_data
+    r.feed(std::move(second));      // 02 03
+    auto const pair = r.next();     // [1, 2]
+    auto const three = r.next();    // 3
+    // [sequence_reader]
+    CHECK_EQ(waiting.error(), cbor::error::too_little_data);
+    CHECK_EQ(pair->size(), 2u);
+    CHECK_EQ(three->get<std::int64_t>(), 3);
     CHECK(r.empty());
 }
 
-// sequence_reader.md, section Errors: after bytes that are not well-formed every next() gives the error, and a
+// sequence_reader.hpp, the comment of next(): after bytes that are not well-formed every next() gives the error, and a
 // null piece throws.
 TEST_CASE("doc reference tools: sequence_reader errors")
 {

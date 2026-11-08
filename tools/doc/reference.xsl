@@ -233,7 +233,7 @@
 <xsl:template name="members">
   <xsl:param name="c"/>
   <xsl:param name="indent"/>
-  <xsl:variable name="public" select="$c/sectiondef[starts-with(@kind, 'public')]/memberdef"/>
+  <xsl:variable name="public" select="$c/sectiondef[starts-with(@kind, 'public')]/memberdef[not(contains(argsstring, '=delete'))]"/>
   <xsl:variable name="short" select="$c/compoundname"/>
   <xsl:variable name="ctor_name"><xsl:call-template name="last"><xsl:with-param name="s" select="$short"/></xsl:call-template></xsl:variable>
   <xsl:variable name="types" select="$public[@kind='typedef']"/>

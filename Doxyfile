@@ -1,7 +1,8 @@
 # Doxygen reads the API comments of the headers in INPUT and writes XML.
 PROJECT_NAME           = mbedded-cbor
 INPUT                  = include/cbor/item_size.hpp \
-                         include/cbor/sequence.hpp
+                         include/cbor/sequence.hpp \
+                         include/cbor/sequence_reader.hpp
 STRIP_FROM_PATH        = include
 STRIP_FROM_INC_PATH    = include
 EXCLUDE_SYMBOLS        = cbor::detail cbor::detail::* cbor::well_formedness
