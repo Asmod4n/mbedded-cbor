@@ -24,6 +24,10 @@ std::expected<ref<T>, error> at_path(std::shared_ptr<Encoded const> owner)
 std::expected<ref<T>, error> at_path(Encoded &&encoded)
     \f[B]requires\f[R] (is_singular_query_v<Path> && (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>));
 
+\f[B]template\f[R] <fixed_string Path, copied_value T>
+std::expected<T, error> at_path(std::string_view encoded)
+    \f[B]requires\f[R] is_singular_query_v<Path>;
+
 \f[B]template\f[R] <scalar_result T>
 std::expected<T, error> at_path(std::string_view encoded, jsonpath::query<T> const &e);
 
