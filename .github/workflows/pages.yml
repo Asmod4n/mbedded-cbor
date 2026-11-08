@@ -7,7 +7,6 @@ on:
       - 'include/**'
       - 'Doxyfile'
       - 'tools/doc/**'
-      - 'doc/reference/**'
       - 'tools/site/**'
       - 'test/doc_types.hpp'
       - 'containers/docs.Containerfile'

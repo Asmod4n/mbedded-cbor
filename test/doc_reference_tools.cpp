@@ -14,7 +14,7 @@
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 
-// Each test in this file is one example of a page in doc/reference/tools/ or of the API comment of a header.
+// Each test in this file is one example of a reference page of the tools group, from the API comment of a header.
 // The tests exist so that every example compiles and gives the result that its page states.
 
 // item_size.hpp, snippet item_size: item_size gives the bytes of the first item, and a cut item gives

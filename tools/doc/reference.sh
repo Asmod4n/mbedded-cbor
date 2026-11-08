@@ -20,12 +20,12 @@ podman run --rm --network none -v "$tree":/src:ro -v "$out":/out mbedded-cbor-do
     case $file in
       "operator[]") file=operator_subscript ;;
     esac
-    if [ ! -e doc/reference/$group/index.md ]; then
-      echo "reference: the group $group of $name has no doc/reference/$group/index.md" >&2
+    if [ ! -e tools/site/reference/$group/index.md ]; then
+      echo "reference: the group $group of $name has no tools/site/reference/$group/index.md" >&2
       exit 1
     fi
-    if [ -e doc/reference/$group/$file.md ]; then
-      echo "reference: doc/reference/$group/$file.md and the comments of $name both give the page" >&2
+    if [ -e tools/site/reference/$group/$file.md ]; then
+      echo "reference: tools/site/reference/$group/$file.md and the comments of $name both give the page" >&2
       exit 1
     fi
     if [ -e /out/$group/$file.md ]; then

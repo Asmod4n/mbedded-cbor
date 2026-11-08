@@ -32,8 +32,9 @@ TEST_CASE("path edn streamstring: forms 4.3 and 5.1 of the EDN draft do not have
 // RFC 8949 Appendix A: the diagnostic notation that cbor::diagnostic_notation writes for an example is a literal
 // of the same value. Every example that a selector reads as a key literal (not an integer, which is an index, and
 // not a text, which is a name of RFC 9535) selects the key of its own bytes. Not here: the examples whose key is
-// of indefinite length, as at_path does not read indefinite-length input (doc/basics.md). Three floats whose decimal
-// form has more digits than an exact conversion takes read back only where std::from_chars converts them.
+// of indefinite length, as at_path does not read indefinite-length input (tools/site/guides/basics.md). Three floats
+// whose decimal form has more digits than an exact conversion takes read back only where std::from_chars converts
+// them.
 TEST_CASE("path edn streamstring: the diagnostic notation of each example of RFC 8949 Appendix A is a key")
 {
     for (std::string_view const hex :

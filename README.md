@@ -76,17 +76,17 @@ and every other CBOR decoder can read it.
 
 ## How a read works
 
-<img src="doc/img/path-read.svg" alt="lazy::at_path reads the heads on its way, skips a text by its length, and stops at the value" width="100%">
+<img src="assets/path-read.svg" alt="lazy::at_path reads the heads on its way, skips a text by its length, and stops at the value" width="100%">
 
 A path compares the keys it meets. It skips every other value by the
 length in its head, and it stops at the value.
 
-<img src="doc/img/walk-or-jump.svg" alt="a CBOR walk visits every item before the field; cbor::schema jumps to the field in one step" width="100%">
+<img src="assets/walk-or-jump.svg" alt="a CBOR walk visits every item before the field; cbor::schema jumps to the field in one step" width="100%">
 
 With `cbor::schema`, the struct is the layout. The offset of a field
 comes from the compiler, so the read is one jump.
 
-<img src="doc/img/fixed-vector.svg" alt="a vector of fixed-size structs: the head is checked once, element i is at i times 8" width="100%">
+<img src="assets/fixed-vector.svg" alt="a vector of fixed-size structs: the head is checked once, element i is at i times 8" width="100%">
 
 A vector of fixed-size structs is checked once. After that, element `i`
 is at `i × sizeof(element)`, and a loop runs over raw bytes.
@@ -148,7 +148,7 @@ measures these tables on your machine, in the image of
 The run and its context:
 [bench/results/kinds-2026-11-07-052855Z.json](bench/results/kinds-2026-11-07-052855Z.json).
 The code of every library, task by task:
-[doc/comparison.md](doc/comparison.md).
+[tools/site/guides/comparison.md](tools/site/guides/comparison.md).
 
 ## Requirements
 
@@ -171,7 +171,7 @@ a description lists every member of an aggregate. It is the only
 dependency.
 
 CMake takes Boost 1.84 or later from the system, else its own copy in
-`third_party/boost_pfr`. Details: [doc/basics.md](doc/basics.md), section 5.
+`third_party/boost_pfr`. Details: [tools/site/guides/basics.md](tools/site/guides/basics.md), section 5.
 
 ## Installation
 
@@ -234,13 +234,14 @@ auto const age = doc.at_path<"$.user.age", int>();                 // cbor::erro
 
 - <https://asmod4n.github.io/mbedded-cbor/>: every function and type,
   with examples that run in the browser.
-- [doc/basics.md](doc/basics.md): errors, limits, memory, threads.
-- [doc/path.md](doc/path.md): JSONPath on CBOR.
-- [doc/schema.md](doc/schema.md): structs as Packed CBOR.
-- [doc/structs.md](doc/structs.md): any CBOR into a struct.
-- [doc/comparison.md](doc/comparison.md): other libraries, task by task.
-- [doc/reference/](doc/reference/index.md): every function and type, one page each.
-- [doc/man/man3/](doc/man/man3): the same reference as man pages, one page per class.
+- [tools/site/guides/basics.md](tools/site/guides/basics.md): errors, limits, memory, threads.
+- [tools/site/guides/path.md](tools/site/guides/path.md): JSONPath on CBOR.
+- [tools/site/guides/schema.md](tools/site/guides/schema.md): structs as Packed CBOR.
+- [tools/site/guides/structs.md](tools/site/guides/structs.md): any CBOR into a struct.
+- [tools/site/guides/comparison.md](tools/site/guides/comparison.md): other libraries, task by task.
+- The comments of the headers in `include/cbor/`: every function and type; Doxygen makes the site and the man
+  pages from them.
+- [man/man3](man/man3): the reference as man pages, one page per group; [man/man7](man/man7): the guides as man pages.
 
 ## Testing
 

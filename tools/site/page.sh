@@ -16,7 +16,7 @@ podman run --rm --network none -e COMMIT="$commit" -e SITE_GROUPS="${SITE_GROUPS
   work=/tmp/work
   markdown=$work/markdown
   mkdir -p $work
-  cp -r /src/doc/reference $markdown
+  cp -r /src/tools/site/reference $markdown
   cp -r /generated/. $markdown
   flags="-std=c++23 -O1 -Wall -Wextra -Werror -I/src/include -I/src/third_party/boost_pfr/include -I/usr/lib/llvm-23/include"
   g++-16 $flags $site/tokens.cpp -L/usr/lib/llvm-23/lib -lclang -Wl,-rpath,/usr/lib/llvm-23/lib -o /tmp/tokens

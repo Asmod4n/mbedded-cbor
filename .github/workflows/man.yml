@@ -7,8 +7,9 @@ on:
       - 'include/cbor/**'
       - 'Doxyfile'
       - 'tools/doc/**'
-      - 'doc/reference/**'
-      - 'doc/man/**'
+      - 'tools/site/reference/**'
+      - 'tools/site/guides/**'
+      - 'man/**'
       - 'tools/man/**'
       - 'containers/docs.Containerfile'
       - 'CMakeLists.txt'
@@ -40,7 +41,7 @@ jobs:
       - if: steps.image.outputs.cache-hit == 'true'
         name: Load the image
         run: podman load -q -i "$RUNNER_TEMP/image-docs/image.tar"
-      - name: Make the man pages and compare them with doc/man/man3
+      - name: Make the man pages and compare them with man/
         run: |
-          sh tools/man/man.sh "$RUNNER_TEMP/man3"
-          diff -r doc/man/man3 "$RUNNER_TEMP/man3"
+          sh tools/man/man.sh "$RUNNER_TEMP/man"
+          diff -r man "$RUNNER_TEMP/man"

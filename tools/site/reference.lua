@@ -39,10 +39,10 @@ local function link_target(target)
   if g then return g .. ".html#" .. page_id(file) end
   local guide = path:match("^%.%./%.%./([%w_/]+%.md)$") or path:match("^%.%./([%w_/]+%.md)$")
   if guide then
-    return "https://github.com/Asmod4n/mbedded-cbor/blob/" .. commit .. "/doc/" .. guide .. anchor
+    return "https://github.com/Asmod4n/mbedded-cbor/blob/" .. commit .. "/tools/site/" .. guide .. anchor
   end
   if path == ".." or path == "../" then
-    return "https://github.com/Asmod4n/mbedded-cbor/tree/" .. commit .. "/doc"
+    return "https://github.com/Asmod4n/mbedded-cbor/tree/" .. commit .. "/tools/site/guides"
   end
   error("reference.lua: a link with no target on the site: " .. target)
 end

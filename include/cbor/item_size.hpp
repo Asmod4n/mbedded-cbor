@@ -158,6 +158,7 @@ class well_formedness
  * @retval string_length_exceeded a string is longer than `limits::string_length`
  * @retval container_elements_exceeded the count of an array or a map is greater than `limits::container_elements`
  * @complexity O(n) time, n the bytes of the item. O(1) memory. No allocation.
+ * [The proof](../../guides/complexity.md#item_size).
  * @snippet doc_reference_tools.cpp item_size
  * @see cbor::sequence
  *

@@ -196,7 +196,7 @@ TEST_CASE(
     CHECK_EQ(cbor::item_size(two).error(), error::string_length_exceeded);
 }
 
-// doc/basics.md, section "Limits": the table names the error of each size limit.
+// tools/site/guides/basics.md, section "Limits": the table names the error of each size limit.
 TEST_CASE("doc basics: the error of each size limit")
 {
     CHECK_EQ(test::lazy_of_copy(preferred(V("xyz"s)))->get<std::string_view>().error(),
@@ -206,8 +206,8 @@ TEST_CASE("doc basics: the error of each size limit")
     CHECK_EQ(cbor::at_path<"$[0]", int>(three).error(), error::container_elements_exceeded);
 }
 
-// doc/advanced/basics.md, section "Limits": a limit is checked by the step that reads the item, so a string
-// that is too long gives string_length_exceeded at get, not at lazy::copy. A user expected it at lazy::copy.
+// tools/site/guides/advanced/basics.md, section "Limits": a limit is checked by the step that reads the item, so a
+// string that is too long gives string_length_exceeded at get, not at lazy::copy. A user expected it at lazy::copy.
 TEST_CASE("doc advanced basics: a string limit is checked at get")
 {
     auto const l = test::lazy_of_copy(preferred(V("xyz"s)));
@@ -216,7 +216,8 @@ TEST_CASE("doc advanced basics: a string limit is checked at get")
     CHECK_EQ(test::lazy_of_copy(array_of(3))->size().error(), error::container_elements_exceeded);
 }
 
-// doc/advanced/basics.md, section "Limits": the limits count what a call reads, and a skip does not count.
+// tools/site/guides/advanced/basics.md, section "Limits": the limits count what a call reads, and a skip does not
+// count.
 TEST_CASE("doc advanced basics: a skip does not count")
 {
     std::string const bytes = preferred(M("a"s, "xyz"s, "n"s, 1));
@@ -227,8 +228,8 @@ TEST_CASE("doc advanced basics: a skip does not count")
     CHECK_EQ(test::value_of(*test::lazy_of_copy(bytes)).error(), error::string_length_exceeded);
 }
 
-// doc/advanced/path.md, section "Limits": a string that a path reads counts, a string that it only skips does
-// not, and every container that the walk reads counts.
+// tools/site/guides/advanced/path.md, section "Limits": a string that a path reads counts, a string that it only
+// skips does not, and every container that the walk reads counts.
 TEST_CASE("doc advanced path: the size limits")
 {
     std::string const bytes = preferred(M("long"s, "xyz"s, "n"s, 1));
