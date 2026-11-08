@@ -175,10 +175,6 @@ class sequence_reader
             case major_type::tag:
                 children = 1;
                 break;
-            case major_type::simple_float:
-                if (!detail::validity::check_simple_value(h->info, h->argument)) [[unlikely]]
-                    return std::unexpected(error::syntax_error);
-                break;
             default:
                 break;
             }
