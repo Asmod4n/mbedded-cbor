@@ -49,7 +49,12 @@ std::vector<std::string> messages_of(std::string const &message, std::size_t con
 template <bool Verified>
 void open(benchmark::State &state)
 {
-    std::string const message = cbor::schema<car>::encode(car{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}});
+    auto const encoded = cbor::schema<car>::encode(car{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}});
+    if (!encoded) {
+        state.SkipWithError("cbor::schema<car>::encode refuses the car");
+        return;
+    }
+    std::string const message = *encoded;
     auto const sample = cbor::schema<car>::path(std::string(message));
     if (!sample || sample->at_path<"$.make">() != "Volvo") {
         state.SkipWithError("cbor::schema<car>::path does not give the make of the car");
