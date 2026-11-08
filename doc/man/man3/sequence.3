@@ -50,6 +50,10 @@ After an item with an error, the loop ends.
 \f[CR]std::logic_error\f[R]: the pointer \f[CR]e\f[R] is null
 .IP \(bu 2
 \f[CR]std::logic_error\f[R]: the owner \f[CR]o\f[R] owns nothing
+.SH NOTES
+A loop over all items: O(n) time, n the bytes of the sequence.
+O(1) memory.
+No allocation.
 .SH EXAMPLES
 .IP
 .EX

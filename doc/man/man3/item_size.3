@@ -34,6 +34,10 @@ the size of the item in bytes
 .IP \(bu 2
 \f[CR]container_elements_exceeded\f[R]: the count of an array or a map
 is greater than \f[CR]limits::container_elements\f[R]
+.SH NOTES
+O(n) time, n the bytes of the item.
+O(1) memory.
+No allocation.
 .SH EXAMPLES
 .IP
 .EX
