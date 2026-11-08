@@ -15,7 +15,12 @@ compilers=${COMPILERS:-"g++-16 clang++-23"}
 results=${RESULTS_DIR:-$src/bench/results}
 flags="-O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG"
 jobs=$(( $(nproc) > 1 ? $(nproc) - 1 : 1 ))
-work=${WORK:-$(mktemp -d)}
+if [ -n "${WORK:-}" ]; then
+	work=$WORK
+else
+	work=$(mktemp -d)
+	trap 'rm -rf "$work"' EXIT
+fi
 mkdir -p "$work/gen" "$work/bin" "$work/out" "$work/log"
 flatc --cpp --gen-object-api -o "$work/gen" "$src/bench/carsales.fbs"
 capnp compile -oc++:"$work/gen" --src-prefix="$src/bench" "$src/bench/carsales.capnp"

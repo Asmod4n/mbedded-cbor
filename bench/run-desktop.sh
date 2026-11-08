@@ -112,7 +112,7 @@ built=$(ls "$build/bin" | wc -l)
 echo "built $built binaries; $(ls "$build/log" | wc -l) did not compile"
 
 # Priority: nice -10 where the system allows it.
-if [ "$(nice -n -10 nice 2> /dev/null)" = -10 ]; then
+if [ "$(nice -n -10 nice 2>> "$build/out/err.txt")" = -10 ]; then
 	runner="nice -n -10"
 	priority="nice -10 granted"
 else
@@ -162,8 +162,8 @@ done
 
 mkdir -p "$RESULTS_DIR"
 stamp=$(date -u +%Y-%m-%d-%H%M%SZ)
-dirty=$(git -C "$repo" status --porcelain -- bench 2> /dev/null | head -n 1 || true)
-bench_commit=$(git -C "$repo" rev-parse HEAD 2> /dev/null || echo "${BENCH_COMMIT:-unknown}")
+dirty=$(git -C "$repo" status --porcelain -- bench 2>> "$build/out/err.txt" | head -n 1 || true)
+bench_commit=$(git -C "$repo" rev-parse HEAD 2>> "$build/out/err.txt" || echo "${BENCH_COMMIT:-unknown}")
 [ -z "$dirty" ] || bench_commit="$bench_commit-dirty"
 python3 -I - "$build" "$stamp" "$commit_a" "$commit_b" "$bench_commit" "$flags" "$ROUNDS" "$MIN_TIME" "$GXX" "$CLANGXX" \
 	"$priority" "$cpus" "$jobs" "$gate_out" "$bench" > "$RESULTS_DIR/$stamp.json.part" <<'PY'
