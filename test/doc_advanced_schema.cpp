@@ -305,7 +305,9 @@ TEST_CASE("doc advanced schema: a typed array view")
     CHECK_EQ(std::ranges::fold_left(*track, 0.0, std::plus<>{}), 6.0);
 }
 
-// The section "Errors" gives the error of a cut message, of a message of another struct and of a forged head.
+// The section "Errors" gives the error of a cut message, of a message of another struct and of a forged head. The
+// root is read from the end, so a message of another struct that is shorter than the table and the root of car gives
+// too_little_data, and a longer one gives incorrect_type.
 TEST_CASE("doc advanced schema: errors")
 {
     std::string const bytes = *cbor::schema<car>::encode(sample);

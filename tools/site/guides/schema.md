@@ -195,7 +195,7 @@ data->size() + cbor::schema<sensor>::description().size();   // the size of the 
 | Input | Error |
 |---|---|
 | a message that ends too early | `too_little_data` |
-| a message of another struct | `incorrect_type` |
+| a message of another struct | `incorrect_type`; `too_little_data` when the message is shorter than the table and the root of the struct that reads it |
 | an index past the end of a list | `index_out_of_bounds` |
 | a refused allocation in `decode` | `not_enough_memory` |
 
