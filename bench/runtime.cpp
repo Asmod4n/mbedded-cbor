@@ -991,7 +991,7 @@ static std::optional<cbor::ref<std::span<std::byte const>>> bytes_ref;
 static void setup()
 {
 #if defined(ARM_MB_TREE_ENCODE)
-    decoded.emplace(*cbor::decode(in));
+    decoded.emplace(*cbor::decode(doc));
 #endif
 #if defined(ARM_MB_VARIANT_ENCODE) || defined(ARM_MB_VARIANT_DECODE) || defined(ARM_MB_VARIANT_AT_PATH)
     variant_message = *cbor::schema<bench_variant::home>::encode(variant_sample);
