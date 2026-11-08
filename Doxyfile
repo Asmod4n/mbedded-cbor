@@ -2,7 +2,8 @@
 PROJECT_NAME           = mbedded-cbor
 INPUT                  = include/cbor/item_size.hpp \
                          include/cbor/sequence.hpp \
-                         include/cbor/sequence_reader.hpp
+                         include/cbor/sequence_reader.hpp \
+                         include/cbor/diagnostic_notation.hpp
 STRIP_FROM_PATH        = include
 STRIP_FROM_INC_PATH    = include
 EXCLUDE_SYMBOLS        = cbor::detail cbor::detail::* cbor::well_formedness

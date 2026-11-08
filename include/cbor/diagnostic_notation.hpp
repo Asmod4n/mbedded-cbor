@@ -1,8 +1,11 @@
-// Writes one encoded CBOR data item as text in diagnostic notation,
-// with its encoding indicators. Reads a literal in this notation into
-// CBOR for the path parser.
-// https://www.rfc-editor.org/rfc/rfc8949#section-8
-// https://datatracker.ietf.org/doc/html/draft-ietf-cbor-edn-literals-28
+/**
+ * @file
+ * Writes one encoded CBOR data item as text in diagnostic notation,
+ * with its encoding indicators. Reads a literal in this notation into
+ * CBOR for the path parser.
+ * https://www.rfc-editor.org/rfc/rfc8949#section-8
+ * https://datatracker.ietf.org/doc/html/draft-ietf-cbor-edn-literals-28
+ */
 #pragma once
 
 #include <algorithm>
@@ -1306,6 +1309,45 @@ class extended_diagnostic_notation
     friend std::expected<std::string, error> diagnostic_notation(std::string_view encoded);
 };
 
+/**
+ * @brief Gives the text of the item in @p encoded in the diagnostic notation of RFC 8949 section 8.
+ *
+ * A head that is not in preferred form carries its encoding indicator, for example `1_0`.
+ * Indefinite length is printed, for example `[_ 1]`.
+ * A tag is printed as its number and its content; tag 29 is not resolved.
+ * @p encoded holds exactly one item.
+ * The call does not check tag content, UTF-8 or duplicate keys.
+ *
+ * @code{.callseq}
+ * cbor::diagnostic_notation(bytes) → std::expected<std::string, error>
+ * @endcode
+ * @code{.example}
+ * bytes: a1 61 61 83 01 f9 41 00 41 01
+ * call: cbor::diagnostic_notation(bytes)
+ * result: "{\"a\": [1, 2.5, h'01']}"
+ * @endcode
+ * @code{.example}
+ * bytes: 9f 01 ff
+ * call: cbor::diagnostic_notation(bytes)
+ * result: "[_ 1]"
+ * @endcode
+ * @code{.example}
+ * bytes: c1 00
+ * call: cbor::diagnostic_notation(bytes)
+ * result: "1(0)"
+ * @endcode
+ *
+ * @param encoded the bytes of one item
+ * @return the text of the item
+ * @retval too_little_data the bytes end before the item ends
+ * @retval syntax_error a head is not well-formed, a chunk of an indefinite string has the wrong type, or bytes follow
+ * the item
+ * @retval nesting_depth_exceeded the item is deeper than the stack of the thread holds
+ * @retval string_length_exceeded a string is longer than `limits::string_length`
+ * @retval container_elements_exceeded the count of an array or a map is greater than `limits::container_elements`
+ * @snippet doc_reference_tools.cpp diagnostic_notation
+ * @see cbor::item_size()
+ */
 inline std::expected<std::string, error> diagnostic_notation(std::string_view const encoded)
 {
     heads::decoder<true> d{encoded};

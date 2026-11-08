@@ -105,11 +105,16 @@ TEST_CASE("doc reference tools: sequence_reader errors")
     CHECK(deep.next().has_value());
 }
 
-// diagnostic_notation.md: the text of RFC 8949 section 8 for an item; a byte after the item is syntax_error.
+// diagnostic_notation.hpp, snippet diagnostic_notation: the text of RFC 8949 section 8 for an item; a byte after the
+// item is syntax_error.
 TEST_CASE("doc reference tools: diagnostic_notation")
 {
     std::string const bytes = test::preferred(test::M("a"s, test::A(1, 2.5, test::bytes{"\x01"s})));
-    CHECK_EQ(cbor::diagnostic_notation(bytes), "{\"a\": [1, 2.5, h'01']}"s);
+    // [diagnostic_notation]
+    // bytes: {"a": [1, 2.5, h'01']}
+    auto const text = cbor::diagnostic_notation(bytes);   // "{\"a\": [1, 2.5, h'01']}"
+    // [diagnostic_notation]
+    CHECK_EQ(text, "{\"a\": [1, 2.5, h'01']}"s);
     CHECK_EQ(cbor::diagnostic_notation("\x9f\x01\xff"sv), "[_ 1]"s);
     CHECK_EQ(cbor::diagnostic_notation("\x01\x02"sv).error(), cbor::error::syntax_error);
 }
