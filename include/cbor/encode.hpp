@@ -231,6 +231,8 @@ private:
 
     static head_parts head_of(item const &node);
     static std::span<item const> children_of(item const &node, major_type major);
+    static item const *content_of(item const &node, major_type major);
+    static std::expected<bool, error> holds_reference(item const &node);
     static std::uint64_t size_of(item const &node, head_parts const &head);
     static std::uint64_t reference_size_of(item const &reference);
 
@@ -1427,9 +1429,6 @@ inline std::span<item const> encoding::children_of(item const &node, major_type 
     case major_type::map:
         return node.via.map;
     case major_type::tag:
-        if (node.type == cbor::type::shared_reference) [[unlikely]]
-            return {};
-        return std::span<item const>(node.via.tag.content, 1);
     case major_type::unsigned_integer:
     case major_type::negative_integer:
     case major_type::byte_string:
@@ -1438,6 +1437,36 @@ inline std::span<item const> encoding::children_of(item const &node, major_type 
         return {};
     }
     return {};
+}
+
+inline item const *encoding::content_of(item const &node, major_type const major)
+{
+    if (major != major_type::tag || node.type == cbor::type::shared_reference)
+        return nullptr;
+    return node.via.tag.content;
+}
+
+inline std::expected<bool, error> encoding::holds_reference(item const &node)
+{
+    if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    switch (node.type) {
+    case cbor::type::shared_reference:
+        return true;
+    case cbor::type::array:
+    case cbor::type::map:
+        for (item const &child : node.type == cbor::type::array ? node.via.array : node.via.map) {
+            auto const r = holds_reference(child);
+            if (!r || *r) [[unlikely]]
+                return r;
+        }
+        return false;
+    case cbor::type::tag:
+    case cbor::type::typed_array:
+        return holds_reference(*node.via.tag.content);
+    default:
+        return false;
+    }
 }
 
 inline std::uint64_t encoding::size_of(item const &node, head_parts const &head)
@@ -1498,27 +1527,32 @@ class encoding::depth_first_search
         frame const here{&node, 0, up};
         if (path_in_map) [[unlikely]]
             open.emplace(&node, 0);
-        for (item const &child : children_of(node, head.major)) {
-            bool const reference = child.type == cbor::type::shared_reference;
-            item const &next = reference ? *child.via.tag.content : child;
-            if (reference) [[unlikely]] {
-                if (!below)
-                    tree += reference_size_of(child);
-                if (!path_in_map)
-                    enter_path(here);
-            }
-            if (path_in_map && open.contains(&next)) [[unlikely]] {
-                targets.push_back(&next);
-                if (auto const r = count(back_edge_size, true); !r) [[unlikely]]
-                    return r;
-                continue;
-            }
-            if (auto const r = find_back_edges(next, &here, below || reference); !r) [[unlikely]]
+        for (item const &child : children_of(node, head.major))
+            if (auto const r = follow_edge(child, here, below); !r) [[unlikely]]
                 return r;
-        }
+        if (item const *const content = content_of(node, head.major))
+            if (auto const r = follow_edge(*content, here, below); !r) [[unlikely]]
+                return r;
         if (path_in_map) [[unlikely]]
             open.erase(&node);
         return {};
+    }
+
+    std::expected<void, error> follow_edge(item const &child, frame const &here, bool const below)
+    {
+        bool const reference = child.type == cbor::type::shared_reference;
+        item const &next = reference ? *child.via.tag.content : child;
+        if (reference) [[unlikely]] {
+            if (!below)
+                tree += reference_size_of(child);
+            if (!path_in_map)
+                enter_path(here);
+        }
+        if (path_in_map && open.contains(&next)) [[unlikely]] {
+            targets.push_back(&next);
+            return count(back_edge_size, true);
+        }
+        return find_back_edges(next, &here, below || reference);
     }
 
     template <class Writer>
@@ -1546,21 +1580,13 @@ class encoding::depth_first_search
         if (path_in_map) [[unlikely]]
             open.emplace(&node, index);
         for (item const &child : children_of(node, head.major)) {
-            bool const reference = child.type == cbor::type::shared_reference;
-            item const &next = reference ? *child.via.tag.content : child;
-            if (reference && !path_in_map) [[unlikely]]
-                enter_path(here);
-            if (path_in_map) [[unlikely]] {
-                if (auto const at = open.find(&next); at != open.end()) {
-                    written = out.encode_head(major_type::tag, std::to_underlying(rfc8949::tag_number::sharedref));
-                    if (written)
-                        written = out.encode_head(major_type::unsigned_integer, at->second);
-                    if (!written) [[unlikely]]
-                        return std::unexpected(detail::validity::writer_error(written.error()));
-                    continue;
-                }
-            }
-            auto const r = write(out, next, &here, marks);
+            auto const r = write_edge(out, child, here, marks);
+            if (!r) [[unlikely]]
+                return r;
+            marks = *r;
+        }
+        if (item const *const content = content_of(node, head.major)) {
+            auto const r = write_edge(out, *content, here, marks);
             if (!r) [[unlikely]]
                 return r;
             marks = *r;
@@ -1570,13 +1596,39 @@ class encoding::depth_first_search
         return marks;
     }
 
+    template <class Writer>
+    std::expected<std::uint64_t, error> write_edge(encoder<Writer> &out, item const &child, frame const &here,
+                                                   std::uint64_t const marks)
+    {
+        bool const reference = child.type == cbor::type::shared_reference;
+        item const &next = reference ? *child.via.tag.content : child;
+        if (reference && !path_in_map) [[unlikely]]
+            enter_path(here);
+        if (path_in_map) [[unlikely]] {
+            if (auto const at = open.find(&next); at != open.end()) {
+                std::expected<void, std::errc> written =
+                    out.encode_head(major_type::tag, std::to_underlying(rfc8949::tag_number::sharedref));
+                if (written)
+                    written = out.encode_head(major_type::unsigned_integer, at->second);
+                if (!written) [[unlikely]]
+                    return std::unexpected(detail::validity::writer_error(written.error()));
+                return marks;
+            }
+        }
+        return write(out, next, &here, marks);
+    }
+
 public:
     template <class Writer>
     std::expected<void, error> encode(encoder<Writer> &out, item const &root)
     {
         item const &start = root.type == cbor::type::shared_reference ? *root.via.tag.content : root;
-        if (auto const r = find_back_edges(start, nullptr, false); !r) [[unlikely]]
-            return r;
+        auto const shared = holds_reference(start);
+        if (!shared) [[unlikely]]
+            return std::unexpected(shared.error());
+        if (*shared) [[unlikely]]
+            if (auto const r = find_back_edges(start, nullptr, false); !r) [[unlikely]]
+                return r;
         std::ranges::sort(targets);
         auto const repeated = std::ranges::unique(targets);
         targets.erase(repeated.begin(), repeated.end());
