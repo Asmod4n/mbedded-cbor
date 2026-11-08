@@ -229,7 +229,7 @@ class extended_diagnostic_notation
                 return std::unexpected(error::invalid_path);
             value = value << rfc4648::base16_group_bits | static_cast<std::uint32_t>(v);
         }
-        return code_unit{at + 4, value};
+        return code_unit{at + hex4_digits, value};
     }
 
     static constexpr std::expected<std::size_t, error> parse_quoted(std::string_view const text, std::size_t at,
@@ -1084,7 +1084,7 @@ class extended_diagnostic_notation
                 out += "\\t";
                 break;
             default:
-                if (static_cast<std::uint8_t>(c) < 0x20) {
+                if (static_cast<std::uint8_t>(c) < unescaped_first) {
                     out += "\\u00";
                     out.push_back(digits[static_cast<std::uint8_t>(c) >> rfc4648::base16_group_bits]);
                     out.push_back(digits[static_cast<std::uint8_t>(c) & ((1 << rfc4648::base16_group_bits) - 1)]);
@@ -1104,10 +1104,13 @@ class extended_diagnostic_notation
             return value > 0 ? "Infinity" : "-Infinity";
         std::array<char, 400> text{};
         double const magnitude = std::fabs(value);
-        std::to_chars(text.data(), std::to_address(text.end()), value,
-                      magnitude == 0 || (magnitude >= 1e-7 && magnitude < 1e21) ? std::chars_format::fixed
-                                                                              : std::chars_format::scientific);
-        std::string out(text.begin(), std::ranges::find(text, '\0'));
+        auto const written =
+            std::to_chars(text.data(), std::to_address(text.end()), value,
+                          magnitude == 0 || (magnitude >= 1e-7 && magnitude < 1e21) ? std::chars_format::fixed
+                                                                                  : std::chars_format::scientific);
+        detail::validity::throw_logic_error_if(written.ec != std::errc{},
+                                               "cbor::diagnostic_notation: the text of a double does not fit");
+        std::string out(text.data(), written.ptr);
         std::size_t const e = out.find('e');
         std::string mantissa(std::string_view(out).substr(0, e));
         if (mantissa.find('.') == std::string::npos)

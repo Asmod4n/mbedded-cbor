@@ -522,7 +522,7 @@ struct encoding::encoder {
     {
         std::span<char> const out = block;
         std::size_t const at = used;
-        if (bytes.size() <= out.size() - at) {
+        if (bytes.size() <= out.size() - at) [[likely]] {
             copy_into(bytes, out.subspan(at));
             used = at + bytes.size();
             return {};
@@ -569,7 +569,7 @@ struct encoding::encoder {
             return r;
         std::span<char> const out = block;
         std::size_t const at = used;
-        if (text.size() <= out.size() - at) {
+        if (text.size() <= out.size() - at) [[likely]] {
             std::ranges::copy(text, out.subspan(at).begin());
             used = at + text.size();
             return {};

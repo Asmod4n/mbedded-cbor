@@ -272,6 +272,7 @@ public:
             stack_limit = low == stack_limit_not_known ? stack_limit_not_known : low + stack_reserve;
         }
         if (stack_limit == stack_limit_not_known || (frame < stack_limit && frame >= stack_limit - stack_reserve))
+            [[unlikely]]
             return std::unexpected(error::nesting_depth_exceeded);
         return {};
     }

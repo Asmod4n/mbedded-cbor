@@ -193,6 +193,35 @@ TEST_CASE("diagnostic_notation: encoding indicators of the EDN draft")
     CHECK_EQ(inspected("6a0a0d09085c2f0c011f7f"), "\"\\n\\r\\t\\b\\\\/\\f\\u0001\\u001f\x7f\"");
 }
 
+// RFC 8259 7, which diagnostic notation takes for text strings (RFC 8949 8): U+0000 to U+001F are escaped, U+0020
+// is not. b, t, n, f and r have their short escapes; the others take \u and four hex digits. The bound of the escape
+// is the named constant unescaped_first, so every member of the set from U+0000 to U+0020 is checked.
+TEST_CASE("diagnostic_notation: every character from U+0000 to U+0020 is escaped as RFC 8259 says")
+{
+    constexpr unsigned space = 0x20;
+    constexpr unsigned hex_digit_bits = 4;
+    constexpr unsigned hex_digit_mask = 0xf;
+    std::string const text_of_one_byte = "\x61"s;
+    for (unsigned c = 0; c <= space; ++c) {
+        CAPTURE(c);
+        std::string const item = text_of_one_byte + static_cast<char>(c);
+        std::string expected;
+        switch (c) {
+        case 0x08: expected = "\\b"; break;
+        case 0x09: expected = "\\t"; break;
+        case 0x0a: expected = "\\n"; break;
+        case 0x0c: expected = "\\f"; break;
+        case 0x0d: expected = "\\r"; break;
+        case space: expected = " "; break;
+        default: {
+            constexpr std::string_view digits = "0123456789abcdef";
+            expected = "\\u00"s + digits[c >> hex_digit_bits] + digits[c & hex_digit_mask];
+        }
+        }
+        CHECK_EQ(cbor::diagnostic_notation(item).value_or(""), "\"" + expected + "\"");
+    }
+}
+
 // An item that is not well-formed has no diagnostic notation: the error comes back.
 TEST_CASE("diagnostic_notation: an item that is not well-formed is an error")
 {

@@ -2214,7 +2214,7 @@ class reflection
                     [[unlikely]]
                     return std::unexpected(error::incorrect_type);
             std::size_t const length =
-                heads::read_unsigned<std::uint32_t>(std::span<char const>(encoded).subspan(item + 1).template first<sizeof(std::uint32_t)>());
+                heads::read_unsigned<std::uint32_t>(std::span<char const>(encoded).subspan(item + heads::initial_byte_size).template first<sizeof(std::uint32_t)>());
             auto const size = detail::validity::checked_mul(length, element);
             if (!size || !detail::validity::bytes_fit(*size, end - item - item_head)) [[unlikely]]
                 return std::unexpected(error::too_little_data);
@@ -3609,11 +3609,7 @@ consteval std::size_t reflection::fixed_size()
         static_assert(size.has_value(), "The fixed size must fit in std::size_t.");
         return *size;
     }
-    else if constexpr (requires(U const &v) {
-                           v.has_value();
-                           *v;
-                           typename U::value_type;
-                       } && !requires { typename U::error_type; })
+    else if constexpr (reflection::is_optional<U>)
         return reflection::dynamic_type_sizes;
     else if constexpr (std::ranges::sized_range<U>)
         return reflection::dynamic_type_sizes;

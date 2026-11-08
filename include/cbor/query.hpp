@@ -1191,13 +1191,6 @@ public:
         requires path_result<T>
     static std::expected<query<T>, error> compile(std::string_view const path)
     {
-        return query_compile<T>(path);
-    }
-
-private:
-    template <class T>
-    static std::expected<query<T>, error> query_compile(std::string_view const path)
-    {
         auto q = parse_query(path);
         if (!q) [[unlikely]]
             return std::unexpected(q.error());
@@ -1212,6 +1205,7 @@ private:
         return e;
     }
 
+private:
     template <class T>
     static std::expected<typename query<T>::result_type, error> apply_query(query<T> const &e,
                                                                             lazy const &root)
@@ -2037,9 +2031,7 @@ template <fixed_string Path>
 class is_singular_query
     : public std::bool_constant<
           [] {
-    std::array const text = Path.value;
-    auto const q =
-        path::parse_query(std::string_view(std::span(text).first(text.size() - 1)));
+    auto const q = path::parse_query(Path.view());
     return q.has_value() && q->top.singular;
 }()>
 {
