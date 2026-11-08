@@ -56,7 +56,7 @@ cbor::error>`: `*back` is the `ref`, and `**back` is the
 | `std::span<std::byte const>` | a byte string |
 | `std::vector` or `std::array` of `std::byte` or of a number type, for example `std::uint16_t` or `double` | a typed array of RFC 8746: its tag over the bytes of the elements, little endian |
 | `std::set` | tag 258 on an array |
-| `std::chrono::sys_seconds` | tag 1 on the seconds since 1970-01-01 |
+| `std::chrono::sys_seconds` | tag 1 on the seconds since 1970-01-01 as an integer; `decode` also takes a float whose value is a whole number |
 | `std::chrono::year_month_day` | tag 100 on the days since 1970-01-01 |
 | `std::vector`, `std::list` of other types | an array |
 | `std::map`, `std::unordered_map` | a map |

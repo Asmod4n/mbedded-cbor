@@ -340,6 +340,7 @@ std::expected<decoded_tree<Checked>, error> decode_tree(std::string_view const e
  * @brief Decodes the one top-level item in `encoded` into a tree of cbor::item.
  *
  * It checks every head.
+ * It does not check that a text string is UTF-8.
  * The tree holds a copy of each text and byte string, so it stays valid after `encoded` ends.
  * A bignum whose magnitude fits 64 bits becomes an integer node.
  * A tag 24 is a tag node, and cbor::encoded_cbor_data_item() gives its decoded content.

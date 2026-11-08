@@ -64,7 +64,7 @@ view, for example a `std::string_view`.
 | `std::span<std::byte const>` | a byte string |
 | `std::vector<E>`, `std::array<E, N>` with E `std::byte` or an integer of 8 to 64 bits, `float` or `double` | an RFC 8746 typed array, little endian: tag 64 for `std::byte` and `std::uint8_t` |
 | `std::set`, `std::flat_set` | tag 258 on an array (CBOR_SETS.md) |
-| `std::chrono::sys_seconds` | tag 1 on an integer (RFC 8949 3.4.2) |
+| `std::chrono::sys_seconds` | tag 1 on an integer (RFC 8949 3.4.2); `decode` also takes a float whose value is a whole number |
 | `std::chrono::year_month_day` | tag 100 on an integer of days (RFC 8943) |
 | `std::optional<E>` | the item of E, or `null` when empty |
 | `std::variant<E...>` | the item of the alternative it holds |
