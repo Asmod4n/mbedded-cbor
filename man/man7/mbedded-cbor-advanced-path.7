@@ -217,9 +217,10 @@ T}
 T{
 \f[CR]double\f[R]
 T}@T{
-a half, single or double float; an integer from \-2\(ha53 to 2\(ha53
+a half, single or double float; an integer that a \f[CR]double\f[R]
+holds exactly
 T}@T{
-\f[CR]incorrect_type\f[R]; an integer outside:
+\f[CR]incorrect_type\f[R]; another integer:
 \f[CR]number_out_of_range\f[R]
 T}
 T{
@@ -268,8 +269,9 @@ T}
 .TE
 .PP
 A typed read converts in one case only: a \f[CR]double\f[R] takes an
-integer when the double holds it exactly, that is from \-2\(ha53 to
-2\(ha53.
+integer when the double holds it exactly: an integer from \-2\(ha53 to
+2\(ha53, and also a larger one such as 2\(ha60 or \-2\(ha64 whose bits
+from the highest 1 to the lowest 1 fit in 53 bits.
 \f[CR]lazy::get<double>\f[R] does the same.
 A float is not an integer.
 .PP

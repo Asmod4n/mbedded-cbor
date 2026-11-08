@@ -869,7 +869,10 @@ class jsonpath
                         detail::validity::check_number_range<double>(negative, h.argument).error_or(error{});
                     c != error{}) [[unlikely]]
                     return std::unexpected(c);
-                return negative ? -1.0 - static_cast<double>(h.argument) : static_cast<double>(h.argument);
+                if (!negative)
+                    return static_cast<double>(h.argument);
+                return -static_cast<double>(
+                    h.argument == std::numeric_limits<std::uint64_t>::max() ? h.argument : h.argument + 1);
             }
             if (h.major != major_type::simple_float) [[unlikely]]
                 return std::unexpected(error::incorrect_type);

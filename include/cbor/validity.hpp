@@ -14,6 +14,7 @@
 #endif
 
 #include <algorithm>
+#include <bit>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
@@ -701,8 +702,10 @@ public:
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_number_range(bool const negative,
                                                                                       M const magnitude)
     {
-        constexpr std::uint64_t exact_max = std::uint64_t{1} << std::numeric_limits<double>::digits;
-        if (magnitude > (negative ? exact_max - 1 : exact_max)) [[unlikely]]
+        if (negative && magnitude == std::numeric_limits<M>::max())
+            return {};
+        M const value = negative ? magnitude + 1 : magnitude;
+        if (std::bit_width(value) - std::countr_zero(value) > std::numeric_limits<double>::digits) [[unlikely]]
             return std::unexpected(error::number_out_of_range);
         return {};
     }

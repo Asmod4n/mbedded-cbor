@@ -511,8 +511,10 @@ TEST_CASE("lazy: get refuses an integer it cannot hold")
     CHECK_EQ(get<std::uint64_t>("\xf9\x3c\x00"s).error(), error::incorrect_type);
 }
 
-// Floats of the three widths of Appendix A. An integer is a double where the double holds it exactly, up to 2^53 in
-// magnitude (IEEE 754 binary64 has 53 bits of significand). The owner decided this on 2026-10-10.
+// Floats of the three widths of Appendix A. An integer is a double where the double holds it exactly (owner,
+// 2026-10-10): IEEE 754 binary64 has 53 bits of significand, so an integer whose bits from the highest set bit to the
+// lowest set bit fit in 53 bits is exact. -2^63 and -2^64 are exact. 2^53 + 1 and -2^63 + 1 need 54 and 63 bits.
+// -(2^53 + 2) is exact, and its argument 2^53 + 1 is not, so the conversion must not round the argument first.
 TEST_CASE("lazy: get reads a float")
 {
     CHECK_EQ(*get<double>("\xf9\x3c\x00"s), 1.0);
@@ -521,6 +523,15 @@ TEST_CASE("lazy: get reads a float")
     CHECK_EQ(*get<double>("\x01"s), 1.0);
     CHECK_EQ(*get<double>("\x3b\x00\x1f\xff\xff\xff\xff\xff\xff"s), -0x1p53);
     CHECK_EQ(get<double>("\x1b\x00\x20\x00\x00\x00\x00\x00\x01"s).error(), error::number_out_of_range);
+    CHECK_EQ(*get<double>("\x00"s), 0.0);
+    CHECK_EQ(*get<double>("\x1b\x10\x00\x00\x00\x00\x00\x00\x00"s), 0x1p60);
+    CHECK_EQ(*get<double>("\x3b\x00\x20\x00\x00\x00\x00\x00\x01"s), -(0x1p53 + 2));
+    CHECK_EQ(get<double>("\x1b\xff\xff\xff\xff\xff\xff\xff\xff"s).error(), error::number_out_of_range);
+    CHECK_EQ(*get<double>("\x3b\x7f\xff\xff\xff\xff\xff\xff\xff"s), -0x1p63);
+    CHECK_EQ(get<double>("\x3b\x7f\xff\xff\xff\xff\xff\xff\xfe"s).error(), error::number_out_of_range);
+    CHECK_EQ(*get<double>("\x3b\xff\xff\xff\xff\xff\xff\xff\xff"s), -0x1p64);
+    CHECK_EQ(*get<double>("\xc3\x48\x7f\xff\xff\xff\xff\xff\xff\xff"s), -0x1p63);
+    CHECK_EQ(*get<double>("\xc3\x48\xff\xff\xff\xff\xff\xff\xff\xff"s), -0x1p64);
     CHECK_EQ(get<double>("\xf5"s).error(), error::incorrect_type);
 }
 
