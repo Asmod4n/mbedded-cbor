@@ -70,6 +70,7 @@
 #include <cbor/cbor.hpp>
 #include <doctest/doctest.h>
 
+#include "../small_stack.hpp"
 #include "../reference/value.hpp"
 
 #include <chrono>
@@ -390,15 +391,16 @@ TEST_CASE("qcbor ParseDeepArrayTest: seven nested arrays decode")
     CHECK(elements_of(*at).empty());
 }
 
-// ParseTooDeepArrayTest: upstream writes 259 heads 0x81 and no last element, and expects
-// QCBOR_ERR_ARRAY_DECODE_NESTING_TOO_DEEP after QCBOR_MAX_ARRAY_NESTING (15) levels. mbedded-cbor has no fixed
+// ParseTooDeepArrayTest: upstream writes nested heads 0x81 and no last element, and expects
+// QCBOR_ERR_ARRAY_DECODE_NESTING_TOO_DEEP at its own limit. The depth here is the one of this library,
+// test::levels_main_thread_reads (small_stack.hpp), not the limit of upstream. mbedded-cbor has no fixed
 // nesting limit: its limit is the stack of the thread (error.hpp: "nesting_depth_exceeded A reader that recurses
 // comes to the end of the stack of its thread"). RFC 8949 10 asks a decoder to manage the stack depth, and does not
 // fix a number. So the input is read to its end and is incomplete (RFC 8949 Appendix F, too little data). The same
 // heads with the last element 0x80 decode.
-TEST_CASE("qcbor ParseTooDeepArrayTest: 259 nested arrays are within the limit of mbedded-cbor")
+TEST_CASE("qcbor ParseTooDeepArrayTest: nested arrays are within the limit of mbedded-cbor")
 {
-    std::string const open(259, static_cast<char>(0x81));
+    std::string const open(test::levels_main_thread_reads, static_cast<char>(0x81));
     CHECK(cbor::decode(open).error_or(error{}) == error::too_little_data);
     CHECK(cbor::decode(open + static_cast<char>(0x80)).has_value());
 }
@@ -1116,11 +1118,11 @@ TEST_CASE("qcbor IndefiniteLengthArrayMapTest: indefinite-length arrays and thei
     CHECK(cbor::diagnostic_notation(as_string({0x9f, 0xd1, 0xff})).error_or(error{}) == error::syntax_error);
 }
 
-// IndefiniteLengthNestTest: arrays of indefinite length nested 1 to QCBOR_MAX_ARRAY_NESTING (15) deep are
-// well-formed. cbor::diagnostic_notation reads each; cbor::decode refuses them (decode.hpp: "indefinite_length").
+// IndefiniteLengthNestTest: arrays of indefinite length nested 1 to test::levels_every_stack_holds deep (the depth
+// of this library, not the limit of upstream) are well-formed. cbor::diagnostic_notation reads each; cbor::decode refuses them (decode.hpp: "indefinite_length").
 TEST_CASE("qcbor IndefiniteLengthNestTest: nested indefinite-length arrays are well-formed")
 {
-    for (std::size_t depth = 1; depth <= 15; ++depth) {
+    for (std::size_t depth = 1; depth <= test::levels_every_stack_holds; ++depth) {
         CAPTURE(depth);
         std::string const nested =
             std::string(depth, static_cast<char>(0x9f)) + std::string(depth, static_cast<char>(0xff));
