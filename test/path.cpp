@@ -837,8 +837,8 @@ TEST_CASE("path: a typed read with a negative index and with an integer key")
 
 // Each type of the read takes the CBOR items that RFC 8949 maps to it and refuses every other item as incorrect_type.
 // An integer that the type cannot hold is out of range (RFC 8949 3.1: a 64-bit magnitude and the sign in the major
-// type). A double takes an integer up to 2^53 in magnitude, where every integer is exact (IEEE 754 binary64), and the
-// owner decided on 2026-10-10 that this is the one conversion.
+// type). A double takes an integer that it holds exactly (IEEE 754 binary64, 53 bits of significand), and the owner
+// decided on 2026-10-10 that this is the one conversion.
 TEST_CASE("path: a typed read of each type")
 {
     check_path<"$", std::int64_t>("\x38\x63"s, {}, std::int64_t{-100});
@@ -865,6 +865,13 @@ TEST_CASE("path: a typed read of each type")
     check_path<"$", double>("\x1b\x00\x20\x00\x00\x00\x00\x00\x01"s, {}, std::unexpected(error::number_out_of_range));
     check_path<"$", double>("\x3b\x00\x20\x00\x00\x00\x00\x00\x00"s, {}, std::unexpected(error::number_out_of_range));
     check_path<"$", double>("\x1b\xff\xff\xff\xff\xff\xff\xff\xff"s, {}, std::unexpected(error::number_out_of_range));
+    check_path<"$", double>("\x1b\x10\x00\x00\x00\x00\x00\x00\x00"s, {}, std::bit_cast<std::uint64_t>(0x1p60));
+    check_path<"$", double>("\x3b\x00\x20\x00\x00\x00\x00\x00\x01"s, {}, std::bit_cast<std::uint64_t>(-(0x1p53 + 2)));
+    check_path<"$", double>("\x3b\x7f\xff\xff\xff\xff\xff\xff\xff"s, {}, std::bit_cast<std::uint64_t>(-0x1p63));
+    check_path<"$", double>("\x3b\x7f\xff\xff\xff\xff\xff\xff\xfe"s, {}, std::unexpected(error::number_out_of_range));
+    check_path<"$", double>("\x3b\xff\xff\xff\xff\xff\xff\xff\xff"s, {}, std::bit_cast<std::uint64_t>(-0x1p64));
+    check_path<"$", double>("\xc3\x48\x7f\xff\xff\xff\xff\xff\xff\xff"s, {}, std::bit_cast<std::uint64_t>(-0x1p63));
+    check_path<"$", double>("\xc3\x48\xff\xff\xff\xff\xff\xff\xff\xff"s, {}, std::bit_cast<std::uint64_t>(-0x1p64));
     check_path<"$", double>("\xc2\x41\x01"s, {}, std::bit_cast<std::uint64_t>(1.0));
     check_path<"$", double>("\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s, {},
                             std::unexpected(error::number_out_of_range));

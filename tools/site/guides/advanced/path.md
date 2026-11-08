@@ -90,7 +90,7 @@ It gives no error when a selector finds nothing.
 | T | CBOR item | Other items |
 |---|---|---|
 | a signed or unsigned integer type, also `char` | an integer, or a tag 2 or 3 with a magnitude up to 64 bits | `incorrect_type`; out of range: `number_out_of_range` |
-| `double` | a half, single or double float; an integer from -2^53 to 2^53 | `incorrect_type`; an integer outside: `number_out_of_range` |
+| `double` | a half, single or double float; an integer that a `double` holds exactly | `incorrect_type`; another integer: `number_out_of_range` |
 | `bool` | `true`, `false` | `incorrect_type` |
 | `std::nullptr_t` | `null` | `incorrect_type` |
 | `cbor::simple_value` | any simple value, also `false`, `true` and `null` | `incorrect_type` |
@@ -99,8 +99,9 @@ It gives no error when a selector finds nothing.
 | `cbor::typed_array` | a tag of RFC 8746 over a byte string | `incorrect_type` |
 
 A typed read converts in one case only: a `double` takes an integer when
-the double holds it exactly, that is from -2^53 to 2^53. `lazy::get<double>`
-does the same. A float is not an integer.
+the double holds it exactly: an integer from -2^53 to 2^53, and also a
+larger one such as 2^60 or -2^64 whose significant bits fit in 53 bits.
+`lazy::get<double>` does the same. A float is not an integer.
 
 | bytes | Call | Result |
 |---|---|---|
