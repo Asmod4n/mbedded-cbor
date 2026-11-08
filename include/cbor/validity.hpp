@@ -383,7 +383,7 @@ public:
 #endif
     }
 
-    static void throw_logic_error_if(bool const wrong, char const *const what)
+    CBOR_ALWAYS_INLINE static void throw_logic_error_if(bool const wrong, char const *const what)
     {
         if (wrong) [[unlikely]]
             throw_logic_error(what);

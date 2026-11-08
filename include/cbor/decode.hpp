@@ -224,9 +224,13 @@ template <bool Checked>
 std::expected<void, error> tree_decoder<Checked>::decode_content(std::pmr::vector<item> &into,
                                                                  heads::head const head)
 {
-    if (heads::is_bignum(head.major, head.argument))
-        if (auto const r = decode_bignum(into, head.argument); !r || *r)
-            return r.transform([](bool) {});
+    if (heads::is_bignum(head.major, head.argument)) {
+        auto const r = decode_bignum(into, head.argument);
+        if (!r) [[unlikely]]
+            return std::unexpected(r.error());
+        if (*r)
+            return {};
+    }
     item &node = into.emplace_back(
         item{heads::type_of(head.major, head.info, head.argument), head.info, {.u64 = head.argument}});
     switch (head.major) {
