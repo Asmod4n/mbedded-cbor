@@ -7,6 +7,7 @@
     extension-element-prefixes="str exsl">
 <xsl:output method="text" encoding="UTF-8"/>
 <xsl:param name="name"/>
+<xsl:param name="group"/>
 <xsl:variable name="nl" select="'&#10;'"/>
 <xsl:variable name="indent_step" select="'    '"/>
 <xsl:variable name="index" select="/"/>
@@ -85,14 +86,16 @@
   <xsl:variable name="paras" select="$d//para[not(ancestor::simplesect or ancestor::parameterlist or ancestor::sect1 or ancestor::sect2 or ancestor::sect3 or ancestor::table)][text()[normalize-space()] or computeroutput or ref or ulink or bold or emphasis or table]"/>
   <xsl:for-each select="$paras">
     <xsl:value-of select="$nl"/>
-    <xsl:if test="position() = 1 and normalize-space(../../briefdescription)">
-      <xsl:call-template name="inline"><xsl:with-param name="node" select="../../briefdescription/para"/></xsl:call-template>
-      <xsl:text> </xsl:text>
-    </xsl:if>
-    <xsl:variable name="text"><xsl:call-template name="inline"><xsl:with-param name="node" select="."/></xsl:call-template></xsl:variable>
-    <xsl:if test="normalize-space($text)"><xsl:value-of select="concat($text, $nl)"/></xsl:if>
+    <xsl:variable name="own"><xsl:call-template name="inline"><xsl:with-param name="node" select="."/></xsl:call-template></xsl:variable>
+    <xsl:variable name="brief">
+      <xsl:if test="position() = 1 and normalize-space(../../briefdescription)">
+        <xsl:call-template name="inline"><xsl:with-param name="node" select="../../briefdescription/para"/></xsl:call-template>
+      </xsl:if>
+    </xsl:variable>
+    <xsl:variable name="text" select="normalize-space(concat($brief, ' ', $own))"/>
+    <xsl:if test="$text != ''"><xsl:value-of select="concat($text, $nl)"/></xsl:if>
     <xsl:for-each select="table">
-      <xsl:if test="normalize-space($text) or position() > 1"><xsl:value-of select="$nl"/></xsl:if>
+      <xsl:if test="$text != '' or position() > 1"><xsl:value-of select="$nl"/></xsl:if>
       <xsl:for-each select="row">
         <xsl:text>|</xsl:text>
         <xsl:for-each select="entry">
@@ -210,7 +213,27 @@
 </xsl:template>
 <xsl:template match="ref" mode="md">
   <xsl:variable name="target"><xsl:call-template name="page_of"><xsl:with-param name="refid" select="@refid"/></xsl:call-template></xsl:variable>
-  <xsl:value-of select="concat('[', ., '](', $target, '.md)')"/>
+  <xsl:variable name="target_group"><xsl:call-template name="group_of"><xsl:with-param name="refid" select="@refid"/></xsl:call-template></xsl:variable>
+  <xsl:choose>
+    <xsl:when test="$target_group = '' or $target_group = $group"><xsl:value-of select="concat('[', ., '](', $target, '.md)')"/></xsl:when>
+    <xsl:otherwise><xsl:value-of select="concat('[', ., '](../', $target_group, '/', $target, '.md)')"/></xsl:otherwise>
+  </xsl:choose>
+</xsl:template>
+
+<xsl:template name="group_of">
+  <xsl:param name="refid"/>
+  <xsl:variable name="member" select="$index/doxygenindex/compound/member[@refid=$refid]"/>
+  <xsl:variable name="class_id">
+    <xsl:choose>
+      <xsl:when test="$member and ($member/../@kind='class' or $member/../@kind='struct')"><xsl:value-of select="$member/../@refid"/></xsl:when>
+      <xsl:otherwise><xsl:value-of select="$refid"/></xsl:otherwise>
+    </xsl:choose>
+  </xsl:variable>
+  <xsl:for-each select="$index/doxygenindex/compound[@kind='group']">
+    <xsl:if test="member/@refid = $refid or document(concat(@refid, '.xml'), $index)/doxygen/compounddef/innerclass/@refid = $class_id">
+      <xsl:value-of select="name"/>
+    </xsl:if>
+  </xsl:for-each>
 </xsl:template>
 <xsl:template match="simplesect|parameterlist|programlisting|sect1|sect2|sect3|title|table" mode="md"/>
 
@@ -220,7 +243,12 @@
   <xsl:variable name="member" select="$index/doxygenindex/compound/member[@refid=$refid]"/>
   <xsl:choose>
     <xsl:when test="$compound"><xsl:call-template name="last"><xsl:with-param name="s" select="normalize-space(str:split(concat($compound/name, '&lt;'), '&lt;')[1])"/></xsl:call-template></xsl:when>
-    <xsl:when test="($member/../@kind='class' or $member/../@kind='struct') and document(concat($member/../@refid, '.xml'), $index)//memberdef[name=$member/name][.//programlisting[@filename='.callseq']]"><xsl:value-of select="$member/name"/></xsl:when>
+    <xsl:when test="($member/../@kind='class' or $member/../@kind='struct') and document(concat($member/../@refid, '.xml'), $index)//memberdef[name=$member/name][.//programlisting[@filename='.callseq']]">
+      <xsl:choose>
+        <xsl:when test="$member/name = 'operator[]'">operator_subscript</xsl:when>
+        <xsl:otherwise><xsl:value-of select="$member/name"/></xsl:otherwise>
+      </xsl:choose>
+    </xsl:when>
     <xsl:when test="$member/../@kind='class' or $member/../@kind='struct'"><xsl:call-template name="last"><xsl:with-param name="s" select="$member/../name"/></xsl:call-template></xsl:when>
     <xsl:otherwise><xsl:value-of select="$member/name"/></xsl:otherwise>
   </xsl:choose>

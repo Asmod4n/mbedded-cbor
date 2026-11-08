@@ -16,6 +16,9 @@ podman run --rm --network none -v "$tree":/src:ro -v "$out":/out mbedded-cbor-do
     base=${name%%<*}
     base=${base% }
     file=${base##*::}
+    case $file in
+      "operator[]") file=operator_subscript ;;
+    esac
     if [ ! -e doc/reference/$group/index.md ]; then
       echo "reference: the group $group of $name has no doc/reference/$group/index.md" >&2
       exit 1
@@ -29,5 +32,5 @@ podman run --rm --network none -v "$tree":/src:ro -v "$out":/out mbedded-cbor-do
       exit 1
     fi
     mkdir -p /out/$group
-    xsltproc --stringparam name "$name" tools/doc/reference.xsl $xml/index.xml > /out/$group/$file.md
+    xsltproc --stringparam name "$name" --stringparam group "$group" tools/doc/reference.xsl $xml/index.xml > /out/$group/$file.md
   done < /tmp/names.txt'

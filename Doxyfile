@@ -9,11 +9,12 @@ INPUT                  = include/cbor/cbor.hpp \
                          include/cbor/validity.hpp \
                          include/cbor/ref.hpp \
                          include/cbor/describe.hpp \
-                         include/cbor/structs.hpp
+                         include/cbor/structs.hpp \
+                         include/cbor/lazy.hpp
 STRIP_FROM_PATH        = include
 STRIP_FROM_INC_PATH    = include
 EXCLUDE_SYMBOLS        = cbor::detail cbor::detail::* cbor::well_formedness
-HIDE_UNDOC_MEMBERS     = YES
+HIDE_UNDOC_MEMBERS     = NO
 HIDE_UNDOC_CLASSES     = YES
 HIDE_FRIEND_COMPOUNDS  = YES
 BUILTIN_STL_SUPPORT    = YES
@@ -24,6 +25,7 @@ ALIASES                = "complexity=@par Complexity^^"
 EXAMPLE_PATH           = test
 QUIET                  = YES
 WARN_NO_PARAMDOC       = NO
+WARN_IF_UNDOCUMENTED   = NO
 WARN_IF_INCOMPLETE_DOC = NO
 WARN_AS_ERROR          = YES
 GENERATE_HTML          = NO
