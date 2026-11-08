@@ -1,3 +1,4 @@
+#include "hex.hpp"
 #include "reference.hpp"
 #include "owned_copy.hpp"
 #include "item_head.hpp"
@@ -17,6 +18,7 @@
 #include <iterator>
 #include <optional>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -58,17 +60,6 @@ std::vector<vector_case> cases_of(std::string const &file)
     return cases;
 }
 
-std::string bytes_of_hex(std::string_view const hex)
-{
-    std::string bytes;
-    for (std::size_t i = 0; i + 1 < hex.size(); i += 2) {
-        unsigned value = 0;
-        std::from_chars(hex.substr(i, 2).data(), std::to_address(hex.substr(i, 2).end()), value, 16);
-        bytes.push_back(static_cast<char>(value));
-    }
-    return bytes;
-}
-
 } // namespace
 
 // Ported from test-vectors.rb: 'passes the official test vectors', the examples of RFC 8949
@@ -82,7 +73,7 @@ TEST_CASE("test vectors: RFC 8949 Appendix A")
     REQUIRE_EQ(cases.size(), 82);
     for (vector_case const &c : cases) {
         CAPTURE(c.hex);
-        std::string const wire = bytes_of_hex(c.hex);
+        std::string const wire = test::unhexlify(c.hex);
         auto const v = decoded(wire);
         if (!v) {
             CHECK_EQ(v.error(), error::indefinite_length);
@@ -109,7 +100,7 @@ TEST_CASE("test vectors: not well-formed items fail")
     REQUIRE_GT(cases.size(), 600);
     for (vector_case const &c : cases) {
         CAPTURE(c.hex);
-        std::string const wire = bytes_of_hex(c.hex);
+        std::string const wire = test::unhexlify(c.hex);
         auto const end = cbor::item_size(wire);
         bool const one_item = end.has_value() && *end == wire.size();
         CHECK_FALSE((one_item && decoded(wire).has_value()));
@@ -128,7 +119,7 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
     REQUIRE_EQ(cases.size(), 82);
     for (vector_case const &c : cases) {
         CAPTURE(c.hex);
-        std::string const wire = bytes_of_hex(c.hex);
+        std::string const wire = test::unhexlify(c.hex);
         auto const top_level = test::lazy_of_copy(wire);
         REQUIRE(top_level.has_value());
         auto const decoded_item = top_level->clone();
@@ -640,7 +631,7 @@ TEST_CASE("cbor-wg test vectors: indefinite length is refused")
             if (edn.at(at) != ' ')
                 hex.push_back(edn.at(at));
         CAPTURE(hex);
-        std::string const wire = bytes_of_hex(hex);
+        std::string const wire = test::unhexlify(hex);
         CHECK_EQ(decoded(wire).error(), error::indefinite_length);
         CHECK_EQ(lazy_value_of(wire).error(), error::indefinite_length);
         CHECK(cbor::diagnostic_notation(wire).has_value());
@@ -705,7 +696,7 @@ TEST_CASE("sequence_reader: RFC 8949 Appendix A fed byte by byte")
     std::string all;
     for (vector_case const &c : cases_of(TEST_VECTORS "/appendix_a.json")) {
         CAPTURE(c.hex);
-        std::string const wire = bytes_of_hex(c.hex);
+        std::string const wire = test::unhexlify(c.hex);
         sequence_reader_check(wire);
         if (test::sequence_outcome_of(wire).last == error::too_little_data)
             all += wire;
@@ -761,10 +752,24 @@ TEST_CASE("sequence_reader: not well-formed items give one error at every split"
 {
     for (vector_case const &c : cases_of(TEST_VECTORS "/fail.json")) {
         CAPTURE(c.hex);
-        sequence_reader_malformed_check(bytes_of_hex(c.hex));
+        sequence_reader_malformed_check(test::unhexlify(c.hex));
     }
     for (wg_vector const &v : wg_vectors_of(CBOR_TEST_VECTORS "/tests/rfc8949/bad.cbor")) {
         CAPTURE(v.encoded);
         sequence_reader_malformed_check(v.encoded);
     }
+}
+
+// Every test that reads hex digits goes through test::unhexlify, so a wrong literal must fail the test and not
+// become other bytes. binascii.unhexlify of Python takes both cases and refuses an odd count and a character that
+// is not a hex digit; test::hexlify writes lower case, as binascii.hexlify does.
+TEST_CASE("hex: unhexlify and hexlify of the tests read and write as binascii of Python")
+{
+    CHECK_EQ(test::unhexlify(""), "");
+    CHECK_EQ(test::unhexlify("00ff7F"), std::string("\x00\xff\x7f", 3));
+    CHECK_EQ(test::unhexlify("A2"), "\xa2");
+    CHECK_THROWS_AS(test::unhexlify("abc"), std::logic_error);
+    CHECK_THROWS_AS(test::unhexlify("0g"), std::logic_error);
+    CHECK_THROWS_AS(test::unhexlify(" 1"), std::logic_error);
+    CHECK_EQ(test::hexlify(std::string("\x00\xab\xff", 3)), "00abff");
 }

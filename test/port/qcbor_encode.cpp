@@ -71,6 +71,8 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include "../hex.hpp"
+
 #include <bit>
 #include <cbor/cbor.hpp>
 #include <doctest/doctest.h>
@@ -98,18 +100,6 @@ std::string as_string(std::initializer_list<std::uint8_t> const bytes)
     std::string out;
     for (std::uint8_t const b : bytes)
         out.push_back(static_cast<char>(b));
-    return out;
-}
-
-std::string hex_of(std::string_view const bytes)
-{
-    static constexpr std::string_view digits = "0123456789abcdef";
-    std::string out;
-    for (char const c : bytes) {
-        auto const b = static_cast<unsigned char>(c);
-        out.push_back(digits[b >> 4]);
-        out.push_back(digits[b & 0xf]);
-    }
     return out;
 }
 
@@ -225,11 +215,11 @@ std::vector<integer> const encoded_int_values = {
 // "std::variant<E...> | the item of the alternative").
 TEST_CASE("qcbor IntegerValuesTest1: integers encode with the shortest head")
 {
-    CHECK_EQ(hex_of(preferred(encoded_int_values)), hex_of(expected_encoded_ints));
+    CHECK_EQ(test::hexlify(preferred(encoded_int_values)), test::hexlify(expected_encoded_ints));
     std::string pieces = array_head(encoded_int_values.size());
     for (integer const &v : encoded_int_values)
         pieces += std::visit([](auto const n) { return preferred(n); }, v);
-    CHECK_EQ(hex_of(pieces), hex_of(expected_encoded_ints));
+    CHECK_EQ(test::hexlify(pieces), test::hexlify(expected_encoded_ints));
 }
 
 // SimpleValuesTest1: [true, false, null, undefined, {"UNDef": undefined}] (RFC 8949 3.3).
@@ -245,8 +235,8 @@ TEST_CASE("qcbor SimpleValuesTest1: true, false, null and undefined encode in on
         REQUIRE(e.text_string("UNDef").has_value());
         REQUIRE(e.simple_value(cbor::simple_value::undefined).has_value());
     });
-    CHECK_EQ(hex_of(out),
-             hex_of(as_string({0x85, 0xf5, 0xf4, 0xf6, 0xf7, 0xa1, 0x65, 0x55, 0x4e, 0x44, 0x65, 0x66, 0xf7})));
+    CHECK_EQ(test::hexlify(out),
+             test::hexlify(as_string({0x85, 0xf5, 0xf4, 0xf6, 0xf7, 0xa1, 0x65, 0x55, 0x4e, 0x44, 0x65, 0x66, 0xf7})));
 }
 
 // EncodeLengthThirtyoneTest: an array of 31 elements, a map of 31 pairs and a text of 31 bytes take a one-byte
@@ -279,7 +269,7 @@ TEST_CASE("qcbor EncodeLengthThirtyoneTest: a count of 31 takes a one-byte argum
         0x73, 0x74, 0x74, 0x65, 0x73, 0x74, 0x74, 0x65, 0x73, 0x74, 0x74, 0x65, 0x73, 0x74, 0x74, 0x65, 0x73, 0x74,
         0x71, 0x63, 0x62, 0x6f, 0x72, 0x31, 0x31,
     });
-    CHECK_EQ(hex_of(out), hex_of(expected));
+    CHECK_EQ(test::hexlify(out), test::hexlify(expected));
 }
 
 // EncodeDateTest: dates of RFC 8949 3.4.1 (tag 0), 3.4.2 (tag 1) and RFC 8943 (tag 100 and tag 1004). The epoch
@@ -293,9 +283,9 @@ TEST_CASE("qcbor EncodeDateTest: date strings, epoch dates and days encode under
 {
     using namespace std::chrono;
     std::string const epoch = preferred(sys_seconds{seconds{1363896240}});
-    CHECK_EQ(hex_of(epoch), hex_of(as_string({0xc1, 0x1a, 0x51, 0x4b, 0x67, 0xb0})));
+    CHECK_EQ(test::hexlify(epoch), test::hexlify(as_string({0xc1, 0x1a, 0x51, 0x4b, 0x67, 0xb0})));
     std::string const days = preferred(year_month_day{year{1940}, month{10}, day{9}});
-    CHECK_EQ(hex_of(days), hex_of(as_string({0xd8, 0x64, 0x39, 0x29, 0xb3})));
+    CHECK_EQ(test::hexlify(days), test::hexlify(as_string({0xd8, 0x64, 0x39, 0x29, 0xb3})));
 
     std::string out = array_head(9);
     out += text("2013-03-21T20:04:00Z");
@@ -328,7 +318,7 @@ TEST_CASE("qcbor EncodeDateTest: date strings, epoch dates and days encode under
         0x34, 0x2d, 0x31, 0x32, 0x54, 0x32, 0x33, 0x3a, 0x32, 0x30, 0x3a, 0x35, 0x30, 0x2e, 0x35, 0x32, 0x5a, 0x62,
         0x53, 0x59, 0xd8, 0x64, 0x39, 0x29, 0xb3, 0x18, 0x2d, 0x19, 0x0f, 0x9a,
     });
-    CHECK_EQ(hex_of(out), hex_of(expected));
+    CHECK_EQ(test::hexlify(out), test::hexlify(expected));
 
     // The epoch date and the days decode back to the same values.
     auto const t = cbor::structs<sys_seconds>::decode(std::string(epoch));
@@ -351,7 +341,7 @@ TEST_CASE("qcbor EncodeRawTest: two encoded items inserted into an array keep th
         REQUIRE(tree.has_value());
         CHECK(cbor::encode(**tree, out) == raw.size());
     }
-    CHECK_EQ(hex_of(out), hex_of(as_string({0x82}) + five_arrays + expected_encoded_ints));
+    CHECK_EQ(test::hexlify(out), test::hexlify(as_string({0x82}) + five_arrays + expected_encoded_ints));
 }
 
 // MapEncodeTest: the map of CreateMap, spValidMapEncoded. 42 and 98 take a one-byte argument (RFC 8949 4.1), which
@@ -390,7 +380,7 @@ TEST_CASE("qcbor MapEncodeTest: a map with nested array and map encodes")
         0x20, 0x64, 0x61, 0x6d, 0x6e, 0x20, 0x6c, 0x69, 0x65, 0x73, 0x20, 0x61, 0x6e, 0x64, 0x20, 0x73, 0x74, 0x61,
         0x74, 0x69, 0x73, 0x74, 0x69, 0x63, 0x73,
     });
-    CHECK_EQ(hex_of(out), hex_of(expected));
+    CHECK_EQ(test::hexlify(out), test::hexlify(expected));
 }
 
 // BasicEncodeTest: {66: true}, then [451, {66: true}, {-70000: {66: true}}] with the first map inserted as it is.
@@ -402,14 +392,14 @@ TEST_CASE("qcbor BasicEncodeTest: a map with one boolean, inserted twice into an
         REQUIRE(e.unsigned_integer(std::uint8_t{66}).has_value());
         REQUIRE(e.simple_value(cbor::simple_value::true_value).has_value());
     });
-    CHECK_EQ(hex_of(first), hex_of(as_string({0xa1, 0x18, 0x42, 0xf5})));
+    CHECK_EQ(test::hexlify(first), test::hexlify(as_string({0xa1, 0x18, 0x42, 0xf5})));
     auto const one = cbor::lazy::adopt(std::string(first));
     REQUIRE(one.has_value());
     CHECK(one->at(cbor::key{66}).and_then([](cbor::lazy const &l) { return l.get<bool>(); }) == true);
 
     std::string const second = array_head(3) + preferred(std::uint64_t{451}) + first + map_head(1) +
                                preferred(std::int64_t{-70000}) + first;
-    CHECK_EQ(hex_of(second), hex_of(as_string({0x83, 0x19, 0x01, 0xc3, 0xa1, 0x18, 0x42, 0xf5, 0xa1, 0x3a, 0x00,
+    CHECK_EQ(test::hexlify(second), test::hexlify(as_string({0x83, 0x19, 0x01, 0xc3, 0xa1, 0x18, 0x42, 0xf5, 0xa1, 0x3a, 0x00,
                                                0x01, 0x11, 0x6f, 0xa1, 0x18, 0x42, 0xf5})));
     auto const two = cbor::lazy::adopt(std::string(second));
     REQUIRE(two.has_value());

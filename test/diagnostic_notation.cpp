@@ -1,3 +1,4 @@
+#include "hex.hpp"
 #include "small_stack.hpp"
 #include "reference.hpp"
 
@@ -17,20 +18,9 @@ using cbor::error;
 namespace
 {
 
-std::string bytes_of_hex(std::string_view const hex)
-{
-    std::string bytes;
-    for (std::size_t i = 0; i + 1 < hex.size(); i += 2) {
-        unsigned value = 0;
-        std::from_chars(hex.substr(i, 2).data(), std::to_address(hex.substr(i, 2).end()), value, 16);
-        bytes.push_back(static_cast<char>(value));
-    }
-    return bytes;
-}
-
 std::string inspected(std::string_view const hex)
 {
-    auto const r = cbor::diagnostic_notation(bytes_of_hex(hex));
+    auto const r = cbor::diagnostic_notation(test::unhexlify(hex));
     REQUIRE(r.has_value());
     return *r;
 }
@@ -199,8 +189,6 @@ TEST_CASE("diagnostic_notation: encoding indicators of the EDN draft")
 TEST_CASE("diagnostic_notation: every character from U+0000 to U+0020 is escaped as RFC 8259 says")
 {
     constexpr unsigned space = 0x20;
-    constexpr unsigned hex_digit_bits = 4;
-    constexpr unsigned hex_digit_mask = 0xf;
     std::string const text_of_one_byte = "\x61"s;
     for (unsigned c = 0; c <= space; ++c) {
         CAPTURE(c);
@@ -213,10 +201,8 @@ TEST_CASE("diagnostic_notation: every character from U+0000 to U+0020 is escaped
         case 0x0c: expected = "\\f"; break;
         case 0x0d: expected = "\\r"; break;
         case space: expected = " "; break;
-        default: {
-            constexpr std::string_view digits = "0123456789abcdef";
-            expected = "\\u00"s + digits[c >> hex_digit_bits] + digits[c & hex_digit_mask];
-        }
+        default:
+            expected = "\\u00" + test::hexlify(std::string(1, static_cast<char>(c)));
         }
         CHECK_EQ(cbor::diagnostic_notation(item).value_or(""), "\"" + expected + "\"");
     }

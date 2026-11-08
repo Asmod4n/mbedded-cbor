@@ -48,13 +48,13 @@ TEST_CASE("path edn streamstring: the diagnostic notation of each example of RFC
           "8301820203820405"sv, "98190102030405060708090a0b0c0d0e0f101112131415161718181819"sv, "a0"sv,
           "a201020304"sv, "a26161016162820203"sv, "826161a161626163"sv,
           "a56161614161626142616361436164614461656145"sv}) {
-        auto const text = cbor::diagnostic_notation(bytes_of_hex(hex));
+        auto const text = cbor::diagnostic_notation(test::unhexlify(hex));
         REQUIRE(text.has_value());
         selects(*text, hex);
     }
     if (from_chars_reads_double)
         for (std::string_view const hex : {"fa7f7fffff"sv, "fb7e37e43c8800759c"sv, "f90001"sv}) {
-            auto const text = cbor::diagnostic_notation(bytes_of_hex(hex));
+            auto const text = cbor::diagnostic_notation(test::unhexlify(hex));
             REQUIRE(text.has_value());
             selects(*text, hex);
         }

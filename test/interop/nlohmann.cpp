@@ -25,10 +25,10 @@ std::string value_dump(nlohmann::ordered_json const &j)
     case nlohmann::json::value_t::number_float:
         return interop::float_dump(j.get<double>());
     case nlohmann::json::value_t::string:
-        return "t'" + interop::hex_of(j.get_ref<std::string const &>()) + "'";
+        return "t'" + test::hexlify(j.get_ref<std::string const &>()) + "'";
     case nlohmann::json::value_t::binary: {
         auto const &b = j.get_binary();
-        std::string const h = "h'" + interop::hex_of({reinterpret_cast<char const *>(b.data()), b.size()}) + "'";
+        std::string const h = "h'" + test::hexlify({reinterpret_cast<char const *>(b.data()), b.size()}) + "'";
         return b.has_subtype() ? interop::unsigned_dump(b.subtype()) + "(" + h + ")" : h;
     }
     case nlohmann::json::value_t::array: {
@@ -40,7 +40,7 @@ std::string value_dump(nlohmann::ordered_json const &j)
     case nlohmann::json::value_t::object: {
         std::vector<std::string> parts;
         for (auto const &[k, v] : j.items())
-            parts.push_back("t'" + interop::hex_of(k) + "':" + value_dump(v));
+            parts.push_back("t'" + test::hexlify(k) + "':" + value_dump(v));
         return interop::map_dump(parts);
     }
     default:

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../hex.hpp"
 #include "../reference.hpp"
 #include "../schema_golden.hpp"
 #include <cbor/describe.hpp>
@@ -1601,19 +1602,6 @@ void golden_fill(T &value, unsigned &seed)
         for (unsigned i = 0; i < 2; ++i)
             golden_fill(value.emplace_back(), seed);
     }
-}
-
-template <class = void>
-std::string golden_hex(std::string_view const bytes)
-{
-    std::string out;
-    for (char const c : bytes) {
-        constexpr std::string_view digits = "0123456789abcdef";
-        auto const byte = static_cast<std::size_t>(static_cast<unsigned char>(c));
-        out += digits[byte >> 4];
-        out += digits[byte & 0xf];
-    }
-    return out;
 }
 
 

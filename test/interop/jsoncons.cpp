@@ -28,10 +28,10 @@ std::string value_dump(jsoncons::ojson const &j)
     case jsoncons::json_type::double_value:
         return tag + interop::float_dump(j.as<double>());
     case jsoncons::json_type::string_value:
-        return tag + "t'" + interop::hex_of(j.as_string_view()) + "'";
+        return tag + "t'" + test::hexlify(j.as_string_view()) + "'";
     case jsoncons::json_type::byte_string_value: {
         auto const b = j.as_byte_string_view();
-        return tag + "h'" + interop::hex_of({reinterpret_cast<char const *>(b.data()), b.size()}) + "'";
+        return tag + "h'" + test::hexlify({reinterpret_cast<char const *>(b.data()), b.size()}) + "'";
     }
     case jsoncons::json_type::array_value: {
         std::vector<std::string> parts;
@@ -42,7 +42,7 @@ std::string value_dump(jsoncons::ojson const &j)
     case jsoncons::json_type::object_value: {
         std::vector<std::string> parts;
         for (auto const &m : j.object_range())
-            parts.push_back("t'" + interop::hex_of(m.key()) + "':" + value_dump(m.value()));
+            parts.push_back("t'" + test::hexlify(m.key()) + "':" + value_dump(m.value()));
         return tag + interop::map_dump(parts);
     }
     default:

@@ -36,6 +36,7 @@
 #include <cbor/cbor.hpp>
 #include <doctest/doctest.h>
 
+#include "../hex.hpp"
 #include "../reference/value.hpp"
 
 #include <bit>
@@ -59,18 +60,6 @@ std::string as_string(std::initializer_list<std::uint8_t> const bytes)
     std::string out;
     for (std::uint8_t const b : bytes)
         out.push_back(static_cast<char>(b));
-    return out;
-}
-
-std::string hex_of(std::string_view const bytes)
-{
-    static constexpr std::string_view digits = "0123456789abcdef";
-    std::string out;
-    for (char const c : bytes) {
-        auto const b = static_cast<unsigned char>(c);
-        out.push_back(digits[b >> 4]);
-        out.push_back(digits[b & 0xf]);
-    }
     return out;
 }
 
@@ -219,8 +208,8 @@ TEST_CASE("qcbor FloatValuesTests: doubles encode in preferred and 64-bit form, 
     for (auto const &c : double_test_cases) {
         double const number = c.number;
         CAPTURE(number);
-        CHECK_EQ(hex_of(preferred(c.number)), hex_of(c.preferred));
-        CHECK_EQ(hex_of(not_preferred(c.number)), hex_of(c.not_preferred));
+        CHECK_EQ(test::hexlify(preferred(c.number)), test::hexlify(c.preferred));
+        CHECK_EQ(test::hexlify(not_preferred(c.number)), test::hexlify(c.not_preferred));
         for (std::string const &in : {c.preferred, c.not_preferred}) {
             auto const d = double_of(in);
             REQUIRE(d.has_value());
@@ -240,8 +229,8 @@ TEST_CASE("qcbor FloatValuesTests: NaNs keep their payload in preferred and 64-b
         std::uint64_t const bits = c.bits;
         CAPTURE(bits);
         double const nan = std::bit_cast<double>(c.bits);
-        CHECK_EQ(hex_of(preferred(nan)), hex_of(c.preferred));
-        CHECK_EQ(hex_of(not_preferred(nan)), hex_of(c.not_preferred));
+        CHECK_EQ(test::hexlify(preferred(nan)), test::hexlify(c.preferred));
+        CHECK_EQ(test::hexlify(not_preferred(nan)), test::hexlify(c.not_preferred));
         for (std::string const &in : {c.preferred, c.not_preferred}) {
             auto const d = double_of(in);
             REQUIRE(d.has_value());
@@ -334,7 +323,7 @@ TEST_CASE("qcbor GeneralFloatEncodeTests: floats in preferred and full width for
     out += key(103) + preferred(3.1415926f);
     out += text("euler2") + preferred(2.71828182845904523536f);
     out += key(106) + not_preferred(0.0f);
-    CHECK_EQ(hex_of(out), hex_of(expected_floats));
+    CHECK_EQ(test::hexlify(out), test::hexlify(expected_floats));
 }
 
 // GeneralFloatDecodeTests: the first ten elements of spExpectedFloats decode to double, from each of the three

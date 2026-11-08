@@ -5,6 +5,7 @@
 // stands for a case with no expected bytes; the decoders must then only accept the written bytes. A writer
 // that refuses a value gives "!" and the error in place of written, so the driver reports it.
 #include <cbor/cbor.hpp>
+#include "../hex.hpp"
 #include "../owned_copy.hpp"
 
 #include <bit>
@@ -29,29 +30,6 @@
 namespace
 {
 
-std::string hex_of(std::string_view const bytes)
-{
-    static constexpr std::string_view digits = "0123456789abcdef";
-    std::string out;
-    for (char const c : bytes) {
-        auto const b = static_cast<unsigned char>(c);
-        out.push_back(digits[b >> 4]);
-        out.push_back(digits[b & 0xf]);
-    }
-    return out;
-}
-
-std::string bytes_of_hex(std::string_view const hex)
-{
-    std::string bytes;
-    for (std::size_t i = 0; i + 1 < hex.size(); i += 2) {
-        unsigned value = 0;
-        std::from_chars(hex.data() + i, hex.data() + i + 2, value, 16);
-        bytes.push_back(static_cast<char>(value));
-    }
-    return bytes;
-}
-
 std::string file_read(std::filesystem::path const &path)
 {
     std::ifstream in(path, std::ios::binary);
@@ -72,7 +50,7 @@ void case_print(std::string_view const name, std::string_view const section, std
 void result_print(std::string_view const name, std::string_view const section,
                   std::expected<std::string, cbor::error> const &written, std::string_view const expected)
 {
-    case_print(name, section, written ? hex_of(*written) : message_of(written.error()), expected);
+    case_print(name, section, written ? test::hexlify(*written) : message_of(written.error()), expected);
 }
 
 std::span<std::byte const> span_of(std::string_view const s)
@@ -173,19 +151,19 @@ void reencode(std::string_view const name, std::string_view const section, std::
     auto const doc = test::lazy_of_copy(std::string_view(input));
     auto const item = doc.and_then([](cbor::lazy const &d) { return d.clone(); });
     if (!item) {
-        case_print(std::string("decode/") + std::string(name), section, message_of(item.error()), hex_of(input));
+        case_print(std::string("decode/") + std::string(name), section, message_of(item.error()), test::hexlify(input));
         return;
     }
     std::string a;
     auto const size = cbor::encode(**item, a);
-    case_print(std::string("encode/") + std::string(name), section, size ? hex_of(a) : message_of(size.error()),
-               hex_of(input));
+    case_print(std::string("encode/") + std::string(name), section, size ? test::hexlify(a) : message_of(size.error()),
+               test::hexlify(input));
     std::string b;
     cbor::encoder e(b);
     auto const walked = item_walk(e, **item);
     auto const done = walked ? e.finish().transform([](auto) { return 0; }) : std::unexpected(walked.error());
-    case_print(std::string("encoder/") + std::string(name), section, done ? hex_of(b) : message_of(done.error()),
-               hex_of(input));
+    case_print(std::string("encoder/") + std::string(name), section, done ? test::hexlify(b) : message_of(done.error()),
+               test::hexlify(input));
 }
 
 // test-vectors/appendix_a.json is an array of flat objects; a search for "hex" finds each example.
@@ -197,7 +175,7 @@ void appendix_a(std::filesystem::path const &file)
         std::size_t const open = text.find('"', text.find(':', at)) + 1;
         std::size_t const close = text.find('"', open);
         reencode("appendix_a/" + std::to_string(n), "RFC 8949 Appendix A",
-                 bytes_of_hex(std::string_view(text).substr(open, close - open)));
+                 test::unhexlify(std::string_view(text).substr(open, close - open)));
         at = close;
     }
 }
@@ -272,30 +250,30 @@ std::string one_item(T const value)
 void native_widths()
 {
     char const *const s = "RFC 8949 3.1, 3.3";
-    case_print("native/uint8_max", s, hex_of(one_item(std::uint8_t{255})), "18ff");
-    case_print("native/uint8_zero", s, hex_of(one_item(std::uint8_t{0})), "00");
-    case_print("native/uint16_max", s, hex_of(one_item(std::uint16_t{65535})), "19ffff");
-    case_print("native/uint16_one", s, hex_of(one_item(std::uint16_t{1})), "01");
-    case_print("native/uint32_max", s, hex_of(one_item(std::uint32_t{4294967295})), "1affffffff");
-    case_print("native/uint32_zero", s, hex_of(one_item(std::uint32_t{0})), "00");
-    case_print("native/uint64_max", s, hex_of(one_item(std::numeric_limits<std::uint64_t>::max())),
+    case_print("native/uint8_max", s, test::hexlify(one_item(std::uint8_t{255})), "18ff");
+    case_print("native/uint8_zero", s, test::hexlify(one_item(std::uint8_t{0})), "00");
+    case_print("native/uint16_max", s, test::hexlify(one_item(std::uint16_t{65535})), "19ffff");
+    case_print("native/uint16_one", s, test::hexlify(one_item(std::uint16_t{1})), "01");
+    case_print("native/uint32_max", s, test::hexlify(one_item(std::uint32_t{4294967295})), "1affffffff");
+    case_print("native/uint32_zero", s, test::hexlify(one_item(std::uint32_t{0})), "00");
+    case_print("native/uint64_max", s, test::hexlify(one_item(std::numeric_limits<std::uint64_t>::max())),
                "1bffffffffffffffff");
-    case_print("native/uint64_zero", s, hex_of(one_item(std::uint64_t{0})), "00");
-    case_print("native/int8_min", s, hex_of(one_item(std::int8_t{-128})), "387f");
-    case_print("native/int8_max", s, hex_of(one_item(std::int8_t{127})), "187f");
-    case_print("native/int8_minus_one", s, hex_of(one_item(std::int8_t{-1})), "20");
-    case_print("native/int16_min", s, hex_of(one_item(std::int16_t{-32768})), "397fff");
-    case_print("native/int32_min", s, hex_of(one_item(std::numeric_limits<std::int32_t>::min())), "3a7fffffff");
-    case_print("native/int64_min", s, hex_of(one_item(std::numeric_limits<std::int64_t>::min())),
+    case_print("native/uint64_zero", s, test::hexlify(one_item(std::uint64_t{0})), "00");
+    case_print("native/int8_min", s, test::hexlify(one_item(std::int8_t{-128})), "387f");
+    case_print("native/int8_max", s, test::hexlify(one_item(std::int8_t{127})), "187f");
+    case_print("native/int8_minus_one", s, test::hexlify(one_item(std::int8_t{-1})), "20");
+    case_print("native/int16_min", s, test::hexlify(one_item(std::int16_t{-32768})), "397fff");
+    case_print("native/int32_min", s, test::hexlify(one_item(std::numeric_limits<std::int32_t>::min())), "3a7fffffff");
+    case_print("native/int64_min", s, test::hexlify(one_item(std::numeric_limits<std::int64_t>::min())),
                "3b7fffffffffffffff");
-    case_print("native/int64_max", s, hex_of(one_item(std::numeric_limits<std::int64_t>::max())),
+    case_print("native/int64_max", s, test::hexlify(one_item(std::numeric_limits<std::int64_t>::max())),
                "1b7fffffffffffffff");
     {
         std::string out;
         cbor::encoder e(out);
         (void)e.negative_integer(std::numeric_limits<std::uint64_t>::max());
         (void)e.finish();
-        case_print("native/nint_minus_2_64", s, hex_of(out), "3bffffffffffffffff");
+        case_print("native/nint_minus_2_64", s, test::hexlify(out), "3bffffffffffffffff");
     }
     char const *const f = "RFC 8949 3.3, IEEE 754";
     struct float_case {
@@ -316,7 +294,7 @@ void native_widths()
         {"1e300", 0x7e37e43c8800759c, "fb7e37e43c8800759c"},
     };
     for (auto const &c : doubles)
-        case_print(std::string("native/double_") + c.name, f, hex_of(one_item(std::bit_cast<double>(c.binary64))),
+        case_print(std::string("native/double_") + c.name, f, test::hexlify(one_item(std::bit_cast<double>(c.binary64))),
                    c.expected);
     struct single_case {
         char const *name;
@@ -333,7 +311,7 @@ void native_widths()
         {"one_tenth", 0x3dcccccd, "fa3dcccccd"},
     };
     for (auto const &c : singles)
-        case_print(std::string("native/float_") + c.name, f, hex_of(one_item(std::bit_cast<float>(c.binary32))),
+        case_print(std::string("native/float_") + c.name, f, test::hexlify(one_item(std::bit_cast<float>(c.binary32))),
                    c.expected);
     struct half_case {
         char const *name;
@@ -348,7 +326,7 @@ void native_widths()
     };
     for (auto const &c : halves)
         case_print(std::string("native/float16_") + c.name, f,
-                   hex_of(one_item(std::bit_cast<std::float16_t>(c.binary16))), c.expected);
+                   test::hexlify(one_item(std::bit_cast<std::float16_t>(c.binary16))), c.expected);
     struct simple_case {
         char const *name;
         std::uint8_t value;
@@ -364,7 +342,7 @@ void native_widths()
         auto const r = e.simple_value(static_cast<cbor::simple_value>(c.value));
         if (r)
             (void)e.finish();
-        case_print(std::string("native/simple_") + c.name, "RFC 8949 3.3", r ? hex_of(out) : message_of(r.error()),
+        case_print(std::string("native/simple_") + c.name, "RFC 8949 3.3", r ? test::hexlify(out) : message_of(r.error()),
                    c.expected);
     }
 }
@@ -382,7 +360,7 @@ void shared_values()
         (void)e.tag(29);
         (void)e.unsigned_integer(std::uint8_t{0});
         (void)e.finish();
-        case_print("shared/array_text", s, hex_of(out), "82d81c6178d81d00");
+        case_print("shared/array_text", s, test::hexlify(out), "82d81c6178d81d00");
     }
     {
         std::string out;
@@ -397,7 +375,7 @@ void shared_values()
         (void)e.tag(29);
         (void)e.unsigned_integer(std::uint8_t{0});
         (void)e.finish();
-        case_print("shared/map_array", s, hex_of(out), "a26161d81c8201026162d81d00");
+        case_print("shared/map_array", s, test::hexlify(out), "a26161d81c8201026162d81d00");
     }
     {
         std::string out;
@@ -412,7 +390,7 @@ void shared_values()
         (void)e.tag(29);
         (void)e.unsigned_integer(std::uint8_t{0});
         (void)e.finish();
-        case_print("shared/two_marks", s, hex_of(out), "84d81c6170d81c4171d81d01d81d00");
+        case_print("shared/two_marks", s, test::hexlify(out), "84d81c6170d81c4171d81d01d81d00");
     }
 }
 
@@ -420,7 +398,7 @@ void shared_values()
 // whole number of elements for every element size.
 void typed_arrays()
 {
-    std::string const payload = bytes_of_hex("000102030405060708090a0b0c0d0e0f");
+    std::string const payload = test::unhexlify("000102030405060708090a0b0c0d0e0f");
     for (std::uint64_t tag = 64; tag <= 87; ++tag) {
         if (tag == 76)
             continue;
@@ -429,8 +407,8 @@ void typed_arrays()
         auto const r = e.typed_array({tag, span_of(payload)});
         if (r)
             (void)e.finish();
-        case_print("typed_array/" + std::to_string(tag), "RFC 8746 2", r ? hex_of(out) : message_of(r.error()),
-                   "d8" + hex_of(std::string(1, static_cast<char>(tag))) + "50" + hex_of(payload));
+        case_print("typed_array/" + std::to_string(tag), "RFC 8746 2", r ? test::hexlify(out) : message_of(r.error()),
+                   "d8" + test::hexlify(std::string(1, static_cast<char>(tag))) + "50" + test::hexlify(payload));
     }
 }
 

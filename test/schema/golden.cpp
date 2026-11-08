@@ -15,8 +15,8 @@ std::string golden_line(std::string_view const name)
     if (!inside || !data)
         return std::string(name) + " no encoding\n";
     auto const description = form<T>::description();
-    return std::string(name) + " " + golden_hex(*inside) + " " + golden_hex(*data) + " " +
-           golden_hex(std::string_view(description.data(), description.size())) + "\n";
+    return std::string(name) + " " + test::hexlify(*inside) + " " + test::hexlify(*data) + " " +
+           test::hexlify(std::string_view(description.data(), description.size())) + "\n";
 }
 
 template <class = void>

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../hex.hpp"
 #include "../owned_copy.hpp"
 #include "../reference/path.hpp"
 #include "../reference/value.hpp"
@@ -29,28 +30,10 @@ inline constexpr bool from_chars_reads_double = true;
 inline constexpr bool from_chars_reads_double = false;
 #endif
 
-inline std::string bytes_of_hex(std::string_view const hex)
-{
-    std::string bytes;
-    int high = -1;
-    for (char const c : hex) {
-        int const v = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
-        if (v < 0)
-            continue;
-        if (high < 0) {
-            high = v;
-        } else {
-            bytes.push_back(static_cast<char>(high << 4 | v));
-            high = -1;
-        }
-    }
-    return bytes;
-}
-
 // A map with one entry: the key given in hex, the value the text "found".
 inline cbor::lazy keyed(std::string_view const key_hex)
 {
-    auto const l = test::lazy_of_copy("\xa1"s + bytes_of_hex(key_hex) + "\x65" "found"s);
+    auto const l = test::lazy_of_copy("\xa1"s + test::unhexlify(key_hex) + "\x65" "found"s);
     REQUIRE(l.has_value());
     return *l;
 }

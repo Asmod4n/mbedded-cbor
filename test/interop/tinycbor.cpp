@@ -38,7 +38,7 @@ result value_dump(CborValue &it)
         if (e)
             return fail(e);
         it = next;
-        return (text ? "t'" : "h'") + interop::hex_of(s) + "'";
+        return (text ? "t'" : "h'") + test::hexlify(s) + "'";
     }
     case CborArrayType:
     case CborMapType: {

@@ -5,6 +5,8 @@
 // through dump_of, which each program defines.
 #pragma once
 
+#include "../hex.hpp"
+
 #include <algorithm>
 #include <bit>
 #include <charconv>
@@ -19,29 +21,6 @@
 
 namespace interop
 {
-
-inline std::string hex_of(std::string_view const bytes)
-{
-    static constexpr std::string_view digits = "0123456789abcdef";
-    std::string out;
-    for (char const c : bytes) {
-        auto const b = static_cast<unsigned char>(c);
-        out.push_back(digits[b >> 4]);
-        out.push_back(digits[b & 0xf]);
-    }
-    return out;
-}
-
-inline std::string bytes_of_hex(std::string_view const hex)
-{
-    std::string bytes;
-    for (std::size_t i = 0; i + 1 < hex.size(); i += 2) {
-        unsigned value = 0;
-        std::from_chars(hex.data() + i, hex.data() + i + 2, value, 16);
-        bytes.push_back(static_cast<char>(value));
-    }
-    return bytes;
-}
 
 // The value of a float, independent of the width on the wire: the bits of the binary64 that holds it. All
 // NaNs are one, because RFC 8949 4.2.2 lets a decoder keep or drop the payload.
@@ -103,7 +82,7 @@ int run(Dump const dump_of)
         auto const result = [&](std::string_view const hex) -> std::string {
             if (hex == "-")
                 return "-";
-            std::expected<std::string, std::string> const r = dump_of(bytes_of_hex(hex));
+            std::expected<std::string, std::string> const r = dump_of(test::unhexlify(hex));
             return r ? *r : "!" + r.error();
         };
         std::cout << fields[0] << '\t' << result(fields[2]) << '\t' << result(fields[3]) << '\n';

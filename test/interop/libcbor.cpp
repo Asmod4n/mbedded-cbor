@@ -14,10 +14,10 @@ std::string item_dump(cbor_item_t *const item)
     case CBOR_TYPE_NEGINT:
         return interop::negative_dump(cbor_get_int(item));
     case CBOR_TYPE_BYTESTRING:
-        return "h'" + interop::hex_of({reinterpret_cast<char const *>(cbor_bytestring_handle(item)),
+        return "h'" + test::hexlify({reinterpret_cast<char const *>(cbor_bytestring_handle(item)),
                                        cbor_bytestring_length(item)}) + "'";
     case CBOR_TYPE_STRING:
-        return "t'" + interop::hex_of({reinterpret_cast<char const *>(cbor_string_handle(item)),
+        return "t'" + test::hexlify({reinterpret_cast<char const *>(cbor_string_handle(item)),
                                        cbor_string_length(item)}) + "'";
     case CBOR_TYPE_ARRAY: {
         std::vector<std::string> parts;
