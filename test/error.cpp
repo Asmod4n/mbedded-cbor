@@ -12,11 +12,12 @@ TEST_CASE("error: no error is the value-initialized enum")
     for (error const e :
          {error::too_little_data, error::syntax_error, error::indefinite_length,
           error::nesting_depth_exceeded, error::inadmissible_type_for_tag_content,
-          error::sharedref_index_not_marked, error::sharedref_index_out_of_range,
-          error::sharedref_not_complete, error::reserved_simple_value, error::unsupported_value,
+          error::sharedref_index_not_marked, error::sharedref_not_complete,
+          error::sharedref_not_defined, error::reserved_simple_value, error::unsupported_value,
           error::not_indexable, error::index_out_of_bounds, error::key_not_found, error::invalid_path,
           error::incorrect_type, error::number_out_of_range, error::cyclic_data_structure,
-          error::unpopulated_table_index, error::nodelist_too_long, error::duplicate_key})
+          error::unpopulated_table_index, error::nodelist_too_long, error::duplicate_key,
+          error::amplification_limit_breach})
         CHECK_NE(e, error{});
 }
 
@@ -31,11 +32,12 @@ TEST_CASE("error: every error has its own message")
     for (error const e :
          {error::too_little_data, error::syntax_error, error::indefinite_length,
           error::nesting_depth_exceeded, error::inadmissible_type_for_tag_content,
-          error::sharedref_index_not_marked, error::sharedref_index_out_of_range,
-          error::sharedref_not_complete, error::reserved_simple_value, error::unsupported_value,
+          error::sharedref_index_not_marked, error::sharedref_not_complete,
+          error::sharedref_not_defined, error::reserved_simple_value, error::unsupported_value,
           error::not_indexable, error::index_out_of_bounds, error::key_not_found, error::invalid_path,
           error::incorrect_type, error::number_out_of_range, error::cyclic_data_structure,
-          error::unpopulated_table_index, error::nodelist_too_long, error::duplicate_key})
+          error::unpopulated_table_index, error::nodelist_too_long, error::duplicate_key,
+          error::amplification_limit_breach})
         CHECK_NE(cbor::make_error_code(e).message(), "unknown cbor error");
 }
 
@@ -57,10 +59,11 @@ TEST_CASE("error: an error copied from std::errc compares equal to that std::err
     for (error const e :
          {error::too_little_data, error::syntax_error, error::indefinite_length,
           error::nesting_depth_exceeded, error::inadmissible_type_for_tag_content,
-          error::sharedref_index_not_marked, error::sharedref_index_out_of_range,
-          error::sharedref_not_complete, error::reserved_simple_value, error::unsupported_value,
+          error::sharedref_index_not_marked, error::sharedref_not_complete,
+          error::sharedref_not_defined, error::reserved_simple_value, error::unsupported_value,
           error::not_indexable, error::index_out_of_bounds, error::key_not_found, error::invalid_path,
           error::incorrect_type, error::number_out_of_range, error::cyclic_data_structure,
-          error::unpopulated_table_index, error::nodelist_too_long, error::duplicate_key})
+          error::unpopulated_table_index, error::nodelist_too_long, error::duplicate_key,
+          error::amplification_limit_breach})
         CHECK(std::error_code(e) == e);
 }

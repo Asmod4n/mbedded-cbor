@@ -61,8 +61,13 @@ limits count only what a call reads.
 ## 5. Tags 28 and 29
 
 A lazy keeps no marks of tag 28. It reads tags 28 and 29 as plain tags, so
-a read changes nothing in it and needs no lock. Only `cbor::structs`
-decode resolves them, with a table of the tags 28 of one call.
+a read changes nothing in it and needs no lock. `cbor::decode` resolves
+them, with a table of the tags 28 of one call: a tag 28 enters the
+address of the node of its content right after that node is made and
+before its children are read, and a tag 29 is a `shared_reference` node
+with that address. The vectors of the tree are reserved with their exact
+count, so no address changes. `cbor::structs` decode keeps a table of its
+own and reads a tag 29 into no plain member.
 
 ## 6. A compile-time path
 
@@ -80,7 +85,8 @@ the input, up to a bound. A count is checked against the bytes that
 are left before an element is read, and the sum of all open counts never
 exceeds the bytes that are left.
 
-A tag 28 and a tag 29 are tag items over their content. The resource
+In the tree of `clone`, a tag 28 and a tag 29 are tag items over their
+content. The resource
 holds one sorted table: each tag 24 item with the root of its embedded
 item. `cbor::encoded_cbor_data_item` searches the table. The result is a
 `cbor::owning<cbor::item>`. Its `std::shared_ptr` has a deleter that owns

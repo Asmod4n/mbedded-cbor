@@ -170,6 +170,7 @@ An item has two data members: `type` (a `cbor::type`) and
 | `array` | `std::span<cbor::item const>`, the elements |
 | `map` | `std::span<cbor::item const>`, each key and its value one after the other |
 | `tag`, `unsigned_bignum`, `negative_bignum`, `typed_array` | `std::pair<std::uint64_t, cbor::item const *>`, the tag number and the item of the content |
+| `shared_reference` | `std::pair<std::uint64_t, cbor::item const *>`, the index of the tag 29 and the item that the tag 28 of that index marks |
 | `half_float`, `single_float`, `double_float` | `double` |
 | `false_value`, `true_value`, `null`, `undefined`, `simple_value` | `cbor::simple_value` |
 
@@ -183,8 +184,8 @@ auto const tree = cbor::lazy::view(owner)->clone();
 cbor::lazy::view(owner)->clone().error();        // too_little_data
 ```
 
-A tag 28 stays a tag item over the value it marks. A tag 29 stays a tag
-item over its content. The decode resolves neither tag and checks no index.
+`cbor::decode` resolves tags 28 and 29 (section 10). `clone` keeps them as
+tag items.
 A tag 24 is a tag item over its byte string, and
 `cbor::encoded_cbor_data_item(tree, item)` gives a `std::expected` of the
 root of the embedded item, decoded as a top-level item of its own. It throws
@@ -196,7 +197,7 @@ element.
 `type()` of a lazy gives `std::expected<cbor::type, error>`: the major
 type, or for a tag 2, 3 or a typed array of RFC 8746 the kind of that
 tag. The data member `type` of an item holds the same value. A lazy and
-an item keep tags 28 and 29 as tags.
+the tree of `clone` keep tags 28 and 29 as tags.
 
 A bignum (tag 2 or 3) whose magnitude fits in 64 bits is the same value
 as a basic integer (RFC 8949 3.4.3). `clone` and `decode` make it an
@@ -311,7 +312,26 @@ well-formed and allocates nothing. The nesting depth does not limit it.
 Tag 28 marks a value as shared. Tag 29 with the index n stands for the
 value of the n-th tag 28 ([value-sharing](http://cbor.schmorp.de/value-sharing)).
 
-- A lazy, `clone`, `decode`, `at_path`, `query` and `diagnostic_notation` read tag 28
+- `cbor::decode` resolves both tags, with a table for one call. A tag 28
+  makes no node and marks the node of its content. A tag 29 with the index
+  n is a `shared_reference` item: `get<cbor::type::shared_reference>()`
+  gives the index and the item that the n-th tag 28 marks. That item can
+  be the item itself or an item above it, so the tree can hold a cycle.
+  An index with no tag 28 before it gives `sharedref_index_not_marked`,
+  and `28(29(0))` gives `sharedref_not_defined`.
+- `encode` writes no tag 28 or 29 of its own: a `shared_reference` gives
+  `unsupported_value`. `encode(tree, out, cbor::cycles)` writes
+  tags 28 and 29 only for a cycle. It walks the tree before it writes, depth first, and follows each
+  `shared_reference` to its item. An item that the walk reaches again
+  while it is inside that item gets a tag 28, and each such edge is a tag
+  29 with the index of that mark. A value that two references reach
+  without a cycle is written in full each time
+  ([basics.md](basics.md), section 4, bounds the growth). The path through
+  references can be deeper than the tree, so `encode` can give
+  `nesting_depth_exceeded` for a tree that `decode` gave. A tree of
+  `clone` keeps tags 28 and 29 as tags, and `encode` writes them as they
+  are.
+- A lazy, `clone`, `at_path`, `query` and `diagnostic_notation` read tag 28
   as a tag over its content and tag 29 as a tag over its content. They
   resolve nothing, check no index and give no error of their own. A step
   and `get` pass both tags, as they pass every tag that they do not
@@ -327,6 +347,8 @@ value of the n-th tag 28 ([value-sharing](http://cbor.schmorp.de/value-sharing))
 cbor::lazy::view(owner)->at(1)->type();                     // cbor::type::tag
 cbor::lazy::view(owner)->at(1)->get<std::int64_t>();        // 0
 cbor::diagnostic_notation(*owner);                           // "[28(1), 29(0)]"
+auto const tree = cbor::decode(*owner);
+(*tree)->get<cbor::type::array>()->at(1).type;              // cbor::type::shared_reference
 ```
 
 ## 11. Tag 55799

@@ -17,8 +17,8 @@ constexpr std::string_view error_names[] = {"",
                                             "nesting_depth_exceeded",
                                             "inadmissible_type_for_tag_content",
                                             "sharedref_index_not_marked",
-                                            "sharedref_index_out_of_range",
                                             "sharedref_not_complete",
+                                            "sharedref_not_defined",
                                             "reserved_simple_value",
                                             "unsupported_value",
                                             "not_indexable",
@@ -37,9 +37,10 @@ constexpr std::string_view error_names[] = {"",
                                             "io_error",
                                             "string_length_exceeded",
                                             "container_elements_exceeded",
-                                            "not_singular_query"};
+                                            "not_singular_query",
+                                            "amplification_limit_breach"};
 
-static_assert(std::size(error_names) == std::to_underlying(cbor::error::not_singular_query) + 1);
+static_assert(std::size(error_names) == std::to_underlying(cbor::error::amplification_limit_breach) + 1);
 
 template <>
 struct kind<cbor::error> {

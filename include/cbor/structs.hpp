@@ -1476,7 +1476,7 @@ public:
      * @retval indefinite_length a head uses indefinite length
      * @retval nesting_depth_exceeded the item is deeper than the stack of the thread holds
      * @retval inadmissible_type_for_tag_content a tag has content that its definition does not allow
-     * @retval sharedref_index_not_marked, sharedref_index_out_of_range, sharedref_not_complete a tag 29 that names no
+     * @retval sharedref_index_not_marked, sharedref_not_complete a tag 29 that names no
      * shared value that the decode holds
      * @retval string_length_exceeded a string is longer than `limits::string_length`
      * @retval container_elements_exceeded the count of an array or a map is greater than `limits::container_elements`

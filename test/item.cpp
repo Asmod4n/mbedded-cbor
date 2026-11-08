@@ -766,8 +766,9 @@ TEST_CASE("decode: the embedded item of a tag 24 lives as long as the result")
     CHECK_EQ(children[1]->get<cbor::type::text_string>().value(), "x");
 }
 
-// A tree decode keeps a tag 28 over its value and a tag 29 over its index.
-TEST_CASE("decode: a tag 28 and a tag 29 are tag nodes")
+// lazy::clone keeps a tag 28 over its value and a tag 29 over its index (owner decision: only cbor::decode
+// resolves them).
+TEST_CASE("clone: a tag 28 and a tag 29 are tag nodes")
 {
     std::string const wire = "\x82\xd8\x1c\x82\x01\x02\xd8\x1d\x00"s;
     auto const root = item_of(test::lazy_of_copy(std::string(wire))->clone());
@@ -1114,8 +1115,10 @@ struct sample {
     std::string_view encoded;
 };
 
-// One encoded item for each member of cbor::type, written from RFC 8949 Appendix A and RFC 8746.
-constexpr std::array<sample, 18> samples{{
+// One encoded item for each member of cbor::type, written from RFC 8949 Appendix A, RFC 8746 and the value-sharing
+// registration. A tag 29 needs a tag 28 before it, so the shared_reference stands as the second element of [28(1),
+// 29(0)], and the test reads that element.
+constexpr std::array<sample, 19> samples{{
     {cbor::type::unsigned_integer, "\x18\x64"sv},
     {cbor::type::negative_integer, "\x38\x63"sv},
     {cbor::type::byte_string, "\x44\x01\x02\x03\x04"sv},
@@ -1134,6 +1137,7 @@ constexpr std::array<sample, 18> samples{{
     {cbor::type::unsigned_bignum, "\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"sv},
     {cbor::type::negative_bignum, "\xc3\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"sv},
     {cbor::type::typed_array, "\xd8\x40\x42\x01\x02"sv},
+    {cbor::type::shared_reference, "\x82\xd8\x1c\x01\xd8\x1d\x00"sv},
 }};
 
 template <cbor::type K>
@@ -1156,7 +1160,7 @@ void check_every_kind(cbor::item const &it, std::index_sequence<I...>)
 
 } // namespace
 
-// get<K> must give its value for the type of the item and incorrect_type for each of the other 17 types: the set of
+// get<K> must give its value for the type of the item and incorrect_type for each of the other 18 types: the set of
 // types is finite, so every pair is checked.
 TEST_CASE("item get<K>: the value for its own type and incorrect_type for every other type")
 {
@@ -1164,8 +1168,12 @@ TEST_CASE("item get<K>: the value for its own type and incorrect_type for every 
         CAPTURE(std::to_underlying(s.type));
         auto const tree = cbor::decode(s.encoded);
         REQUIRE(tree.has_value());
-        REQUIRE_EQ((*tree)->type, s.type);
-        check_every_kind(**tree, std::make_index_sequence<samples.size()>{});
+        std::span<cbor::item const> const elements =
+            s.type == cbor::type::shared_reference ? (*tree)->get<cbor::type::array>().value()
+                                                   : std::span<cbor::item const>(&**tree, 1);
+        cbor::item const &it = elements.back();
+        REQUIRE_EQ(it.type, s.type);
+        check_every_kind(it, std::make_index_sequence<samples.size()>{});
     }
 }
 

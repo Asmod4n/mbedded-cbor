@@ -3,12 +3,15 @@
 #include "common.hpp"
 #include "../test/owned_copy.hpp"
 #include "../test/pieces.hpp"
+#include "../test/unfolding.hpp"
 
+#include <cbor/decode.hpp>
 #include <cbor/encode.hpp>
 #include <cbor/error.hpp>
 #include <cbor/item_size.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <span>
 #include <string>
@@ -100,10 +103,85 @@ inline void tree_encode(std::string_view const input)
     encode_targets(**tree, out);
 }
 
+// The nodes of a tree, reached through the elements, the pairs, the tag contents and the embedded item of each tag
+// 24, not through a shared_reference. A shared_reference points into the tree, so this walk ends on a cycle.
+inline std::vector<cbor::item const *> nodes_of(cbor::owning<cbor::item> const &tree)
+{
+    std::vector<cbor::item const *> nodes{&*tree};
+    for (std::size_t i = 0; i < nodes.size(); ++i) {
+        cbor::item const &n = *nodes[i];
+        if (auto const t = n.get<cbor::type::tag>(); t && t->first == 24)
+            if (auto const embedded = cbor::encoded_cbor_data_item(tree, n))
+                nodes.push_back(&embedded->get());
+        if (auto const a = n.get<cbor::type::array>())
+            for (cbor::item const &c : *a)
+                nodes.push_back(&c);
+        else if (auto const m = n.get<cbor::type::map>())
+            for (cbor::item const &c : *m)
+                nodes.push_back(&c);
+        else if (auto const t = n.get<cbor::type::tag>())
+            nodes.push_back(t->second);
+        else if (auto const u = n.get<cbor::type::unsigned_bignum>())
+            nodes.push_back(u->second);
+        else if (auto const v = n.get<cbor::type::negative_bignum>())
+            nodes.push_back(v->second);
+        else if (auto const w = n.get<cbor::type::typed_array>())
+            nodes.push_back(w->second);
+    }
+    return nodes;
+}
+
+// cbor::decode resolves tags 28 and 29 (theories/Cycles.v). A decode that succeeds reads a stream that clone
+// also reads; each shared_reference names a node of the tree (theorem read_no_dangling); the tree has no more nodes
+// than the tree of clone, which keeps one node per tag (read_no_expansion). encode with cbor::cycles writes a tree
+// with a shared_reference unless the amplification limit, the depth or the bounded span stops it, and decode reads back
+// a graph with the same unfolding (theories/Writer.v write_read_back). A tree with as many nodes as the tree of
+// clone holds no tag 28, so encode writes it as it writes the tree of clone.
+inline void resolving_decode(std::string_view const input)
+{
+    auto const resolved = cbor::decode(input);
+    if (!resolved)
+        return;
+    auto const top_level = test::lazy_of_copy(input);
+    require(top_level.has_value());
+    auto const plain = top_level->clone();
+    require(plain.has_value());
+    std::vector<cbor::item const *> const nodes = nodes_of(*resolved);
+    std::size_t const plain_nodes = nodes_of(*plain).size();
+    require(nodes.size() <= plain_nodes);
+    bool shared = false;
+    for (cbor::item const *const n : nodes)
+        if (auto const r = n->get<cbor::type::shared_reference>()) {
+            shared = true;
+            require(std::ranges::find(nodes, r->second) != nodes.end());
+        }
+    if (shared) {
+        std::array<char, 1 << 16> bounded;
+        auto const size = cbor::encode(**resolved, std::span(bounded), cbor::cycles);
+        if (!size) {
+            require(size.error() == cbor::error::amplification_limit_breach ||
+                    size.error() == cbor::error::nesting_depth_exceeded ||
+                    size.error() == cbor::error::no_buffer_space);
+            return;
+        }
+        auto const back = cbor::decode(std::string_view(bounded.data(), *size));
+        require(back.has_value() && test::unfoldings_equal(**resolved, **back));
+        return;
+    }
+    std::string out;
+    auto const written = cbor::encode(**resolved, out);
+    require(written.has_value());
+    if (nodes.size() != plain_nodes)
+        return;
+    std::string plain_out;
+    require(cbor::encode(**plain, plain_out).has_value() && out == plain_out);
+}
+
 inline void decode_target(std::string_view const input)
 {
     decode_encode_decode(input);
     tree_encode(input);
+    resolving_decode(input);
 }
 
 } // namespace fuzz

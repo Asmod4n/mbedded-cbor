@@ -276,7 +276,7 @@ bool const same = v[0] == v[1];
 
 ### mbedded-cbor
 
-Tags 28 and 29 are plain tags in a lazy, in a path and in a tree decode. Only `cbor::structs` decode resolves them. No writer of the library adds them by itself. `encode` of an item writes a tag 28 or 29 that the item holds, and a program writes them with `encoder::tag` ([runtime.md](runtime.md)).
+Tags 28 and 29 are plain tags in a lazy, in a path and in `clone`. `cbor::decode` resolves them: the second element is a `shared_reference` to the first. `cbor::structs` decode reads a tag 29 into no plain member. No writer of the library adds them by itself. `encode` of an item writes a tag 28 or 29 that the item holds, and a program writes them with `encoder::tag` ([runtime.md](runtime.md)).
 
 ```cpp
 // owner: a std::shared_ptr<std::string const> with [28("x"), 29(0)]

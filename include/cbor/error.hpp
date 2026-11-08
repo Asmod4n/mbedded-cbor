@@ -65,10 +65,10 @@ enum class error {
     inadmissible_type_for_tag_content,
     /** A tag 29 names no tag 28 before it. */
     sharedref_index_not_marked,
-    /** A tag 29 has an index that does not fit `std::size_t`. */
-    sharedref_index_out_of_range,
     /** `structs` decode meets a tag 29 that names a tag 28 in a skipped member. */
     sharedref_not_complete,
+    /** `decode` meets a tag 29 that names a tag 28 whose content is only tags 28 and this tag 29. */
+    sharedref_not_defined,
     /** An encode meets a simple value from 24 to 31. */
     reserved_simple_value,
     /** The encoder meets a typed array with a reserved tag or a tag outside RFC 8746. */
@@ -109,7 +109,12 @@ enum class error {
     /** A container has more items than `cbor::limits::container_elements`. */
     container_elements_exceeded,
     /** `jsonpath::compile<T>` gets a path that is not singular, and `T` is not `nodelist`. */
-    not_singular_query
+    not_singular_query,
+    /**
+     * cbor::encode() with cbor::cycles would write more than `cbor::limits::maximum_amplification` times the size of the
+     * tree, past `cbor::limits::amplification_activation_threshold`.
+     */
+    amplification_limit_breach
 };
 
 /**
@@ -184,10 +189,10 @@ public:
             return "inadmissible type for tag content";
         case error::sharedref_index_not_marked:
             return "sharedref index not marked";
-        case error::sharedref_index_out_of_range:
-            return "sharedref index out of range";
         case error::sharedref_not_complete:
             return "sharedref not complete";
+        case error::sharedref_not_defined:
+            return "sharedref not defined";
         case error::reserved_simple_value:
             return "reserved simple value";
         case error::unsupported_value:
@@ -226,6 +231,8 @@ public:
             return "container elements exceeded";
         case error::not_singular_query:
             return "not a singular query";
+        case error::amplification_limit_breach:
+            return "amplification limit breach";
         }
         return "unknown cbor error";
     }

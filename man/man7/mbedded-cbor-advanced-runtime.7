@@ -388,6 +388,12 @@ T}@T{
 and the item of the content
 T}
 T{
+\f[CR]shared_reference\f[R]
+T}@T{
+\f[CR]std::pair<std::uint64_t, cbor::item const *>\f[R], the index of
+the tag 29 and the item that the tag 28 of that index marks
+T}
+T{
 \f[CR]half_float\f[R], \f[CR]single_float\f[R], \f[CR]double_float\f[R]
 T}@T{
 \f[CR]double\f[R]
@@ -410,9 +416,8 @@ T}
 cbor::lazy::view(owner)\->clone().error();        \f[I]// too_little_data\f[R]
 .EE
 .PP
-A tag 28 stays a tag item over the value it marks.
-A tag 29 stays a tag item over its content.
-The decode resolves neither tag and checks no index.
+\f[CR]cbor::decode\f[R] resolves tags 28 and 29 (section 10).
+\f[CR]clone\f[R] keeps them as tag items.
 A tag 24 is a tag item over its byte string, and
 \f[CR]cbor::encoded_cbor_data_item(tree, item)\f[R] gives a
 \f[CR]std::expected\f[R] of the root of the embedded item, decoded as a
@@ -429,7 +434,7 @@ element.
 \f[CR]std::expected<cbor::type, error>\f[R]: the major type, or for a
 tag 2, 3 or a typed array of RFC 8746 the kind of that tag.
 The data member \f[CR]type\f[R] of an item holds the same value.
-A lazy and an item keep tags 28 and 29 as tags.
+A lazy and the tree of \f[CR]clone\f[R] keep tags 28 and 29 as tags.
 .PP
 A bignum (tag 2 or 3) whose magnitude fits in 64 bits is the same value
 as a basic integer (RFC 8949 3.4.3).
@@ -593,9 +598,22 @@ Tag 28 marks a value as shared.
 Tag 29 with the index n stands for the value of the n\-th tag 28
 (value\-sharing).
 .IP \(bu 2
-A lazy, \f[CR]clone\f[R], \f[CR]decode\f[R], \f[CR]at_path\f[R],
-\f[CR]query\f[R] and \f[CR]diagnostic_notation\f[R] read tag 28 as a tag
-over its content and tag 29 as a tag over its content.
+\f[CR]cbor::decode\f[R] resolves both tags, with a table for one call.
+A tag 28 makes no node and marks the node of its content.
+A tag 29 with the index n is a \f[CR]shared_reference\f[R] item:
+\f[CR]get<cbor::type::shared_reference>()\f[R] gives the index and the
+item that the n\-th tag 28 marks.
+That item can be the item itself or an item above it, so the tree can
+hold a cycle.
+An index with no tag 28 before it gives
+\f[CR]sharedref_index_not_marked\f[R], and \f[CR]28(29(0))\f[R] gives
+\f[CR]sharedref_not_defined\f[R].
+\f[CR]encode\f[R] of a tree with a \f[CR]shared_reference\f[R] gives
+\f[CR]unsupported_value\f[R].
+.IP \(bu 2
+A lazy, \f[CR]clone\f[R], \f[CR]at_path\f[R], \f[CR]query\f[R] and
+\f[CR]diagnostic_notation\f[R] read tag 28 as a tag over its content and
+tag 29 as a tag over its content.
 They resolve nothing, check no index and give no error of their own.
 A step and \f[CR]get\f[R] pass both tags, as they pass every tag that
 they do not interpret.
@@ -612,6 +630,8 @@ Several threads read one lazy at the same time.
 cbor::lazy::view(owner)\->at(1)\->type();                     \f[I]// cbor::type::tag\f[R]
 cbor::lazy::view(owner)\->at(1)\->get<std::int64_t>();        \f[I]// 0\f[R]
 cbor::diagnostic_notation(*owner);                           \f[I]// \(dq[28(1), 29(0)]\(dq\f[R]
+\f[B]auto\f[R] const tree = cbor::decode(*owner);
+(*tree)\->get<cbor::type::array>()\->at(1).type;              \f[I]// cbor::type::shared_reference\f[R]
 .EE
 .SS 11. Tag 55799
 Tag 55799 (RFC 8949 3.4.6) marks bytes as CBOR.

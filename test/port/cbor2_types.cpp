@@ -48,14 +48,18 @@ TEST_CASE("cbor2 types: TestCBORTag.test_attr")
 }
 
 // Upstream: TestCBORTag.test_self_referential_hash, test_self_referential_eq and test_self_referential_repr. The
-// payload 28(999(29(0))) refers to itself in cbor2. decode.hpp: "Tags 28 and 29 stay tag nodes", so cbor::decode
-// gives a tree of three tags and no cycle.
+// payload 28(999(29(0))) refers to itself, as in cbor2: cbor::decode resolves the tags (owner decision), so the
+// content of tag 999 is a shared_reference to the tag 999 node itself, a cycle through a tag that is not 28 (allowed
+// by the owner). The reference model shows the reference as 29(0).
 TEST_CASE("cbor2 types: TestCBORTag self-referential payload")
 {
     auto const decoded = cbor2::loads(unhexlify("d81cd903e7d81d00"));
     REQUIRE(decoded.has_value());
-    CHECK(*decoded ==
-          test::value{test::tagged{28, test::value{test::tagged{999, test::value{test::tagged{29, V(0)}}}}}});
+    CHECK(*decoded == test::value{test::tagged{999, test::value{test::tagged{29, V(0)}}}});
+    auto const tree = cbor::decode(unhexlify("d81cd903e7d81d00"));
+    REQUIRE(tree.has_value());
+    CHECK_EQ((*tree)->get<cbor::type::tag>().value().second->get<cbor::type::shared_reference>().value().second,
+             &**tree);
 }
 
 // Upstream: TestCBORSimpleValue.test_equals, the comparisons of two simple values. RFC 8949 5.6.1: "Simple values

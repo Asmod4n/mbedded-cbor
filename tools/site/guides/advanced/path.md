@@ -294,8 +294,8 @@ bignum, and an index on a bignum is `not_indexable`. A map key behind tag
 55799 is matched as the key without the tag. A key behind any other tag,
 tag 28 included, is a different key: `$.k` does not find `1000("k")`.
 
-A path does not resolve a tag 29. Only `cbor::structs` decode resolves
-tags 28 and 29.
+A path does not resolve a tag 29. `cbor::decode` resolves tags 28 and 29
+(runtime.md section 10).
 
 ### Typed arrays
 

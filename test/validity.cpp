@@ -358,9 +358,7 @@ TEST_CASE("value_sharing: check_sharedref_index for up to three marks")
     for (std::size_t marked = 0; marked <= 3; ++marked)
         for (std::uint64_t const argument : arguments) {
             auto const r = value_sharing::check_sharedref_index(argument, marked);
-            if (argument > std::numeric_limits<std::size_t>::max())
-                CHECK_EQ(r.error(), error::sharedref_index_out_of_range);
-            else if (argument >= marked)
+            if (argument >= marked)
                 CHECK_EQ(r.error(), error::sharedref_index_not_marked);
             else
                 CHECK_EQ(std::to_underlying(*r), argument);

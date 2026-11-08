@@ -25,8 +25,6 @@ public:
     CBOR_ALWAYS_INLINE static constexpr std::expected<index, error>
     check_sharedref_index(std::uint64_t const argument, std::size_t const marked)
     {
-        if (!std::in_range<std::size_t>(argument)) [[unlikely]]
-            return std::unexpected(error::sharedref_index_out_of_range);
         if (argument >= marked) [[unlikely]]
             return std::unexpected(error::sharedref_index_not_marked);
         return index{static_cast<std::size_t>(argument)};

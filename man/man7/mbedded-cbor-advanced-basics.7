@@ -113,19 +113,20 @@ T}
 T{
 \f[CR]sharedref_index_not_marked\f[R]
 T}@T{
-\f[CR]structs\f[R] decode meets a tag 29 that names no tag 28 before it.
-T}
-T{
-\f[CR]sharedref_index_out_of_range\f[R]
-T}@T{
-\f[CR]structs\f[R] decode meets a tag 29 whose index does not fit
-\f[CR]std::size_t\f[R].
+\f[CR]decode\f[R] or \f[CR]structs\f[R] decode meets a tag 29 that names
+no tag 28 before it.
 T}
 T{
 \f[CR]sharedref_not_complete\f[R]
 T}@T{
 \f[CR]structs\f[R] decode meets a tag 29 that names a tag 28 in a
 skipped member.
+T}
+T{
+\f[CR]sharedref_not_defined\f[R]
+T}@T{
+\f[CR]decode\f[R] meets a tag 29 that names a tag 28 whose content is
+only tags 28 and this tag 29, as in \f[CR]28(29(0))\f[R].
 T}
 T{
 \f[CR]reserved_simple_value\f[R]
