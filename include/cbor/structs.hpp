@@ -914,7 +914,7 @@ class generic
                            k->major == major_type::tag) [[unlikely]] {
                     if (k->major == major_type::tag &&
                         k->argument == std::to_underlying(rfc8949::tag_number::shareable))
-                        d.mark(d);
+                        d.mark();
                     std::uint64_t const items =
                         k->major == major_type::tag     ? 1
                         : k->major == major_type::array ? k->argument

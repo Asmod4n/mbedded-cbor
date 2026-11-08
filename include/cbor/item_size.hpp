@@ -34,8 +34,7 @@ struct lazy_entries;
 class well_formedness
 {
     struct no_marks {
-        template <bool Checked>
-        void mark(heads::decoder<Checked> const &)
+        void mark()
         {
         }
     };
@@ -79,7 +78,7 @@ class well_formedness
                     break;
                 case major_type::tag:
                     if (slow->argument == std::to_underlying(rfc8949::tag_number::shareable))
-                        marks.mark(d);
+                        marks.mark();
                     added = 1;
                     break;
                 default:

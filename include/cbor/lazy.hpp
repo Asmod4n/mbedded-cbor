@@ -580,8 +580,6 @@ public:
     std::expected<owning<item>, error> clone() const;
 
 private:
-    static std::expected<lazy, error> from(std::shared_ptr<void const> owner, std::string_view encoded);
-
     template <class Entries = lazy_entries>
     std::expected<typename Entries::iterator, error> find(std::string_view key) const;
 
@@ -865,6 +863,12 @@ namespace detail
 class canonical_ids
 {
 public:
+    canonical_ids() = default;
+    canonical_ids(canonical_ids const &) = delete;
+    canonical_ids &operator=(canonical_ids const &) = delete;
+    canonical_ids(canonical_ids &&) = delete;
+    canonical_ids &operator=(canonical_ids &&) = delete;
+
     enum class kind : std::uint8_t {
         positive_integer,
         negative_integer,
@@ -1356,15 +1360,6 @@ inline lazy_entries::iterator &lazy_entries::iterator::operator++()
     return *this;
 }
 
-inline std::expected<lazy, error> lazy::from(std::shared_ptr<void const> owner,
-                                             std::string_view const encoded)
-{
-    detail::validity::throw_logic_error_if_empty(
-        owner, "cbor::lazy::view: the owner of the encoded data item is empty");
-    std::string_view const content = heads::self_described_cbor_content(encoded);
-    return lazy{lazy::top_level_item{std::move(owner), content}, 0, {}};
-}
-
 inline void lazy::throw_logic_error_if_no_top_level(char const *const message) const
 {
     detail::validity::throw_logic_error_if(top_level.encoded.data() == nullptr, message);
@@ -1373,7 +1368,11 @@ inline void lazy::throw_logic_error_if_no_top_level(char const *const message) c
 template <borrowed_range_of_chars Encoded>
 std::expected<lazy, error> lazy::view(std::shared_ptr<void const> owner, Encoded const &encoded)
 {
-    return from(std::move(owner), std::string_view(std::span<char const>(encoded)));
+    detail::validity::throw_logic_error_if_empty(
+        owner, "cbor::lazy::view: the owner of the encoded data item is empty");
+    std::string_view const content =
+        heads::self_described_cbor_content(std::string_view(std::span<char const>(encoded)));
+    return lazy{lazy::top_level_item{std::move(owner), content}, 0, {}};
 }
 
 template <owning_range_of_chars Encoded>
@@ -1381,7 +1380,7 @@ std::expected<lazy, error> lazy::view(std::shared_ptr<Encoded const> owner)
 {
     detail::validity::throw_logic_error_if_null(owner, "cbor::lazy::view: the encoded data item is null");
     std::string_view const bytes{std::span<char const>(*owner)};
-    return from(std::move(owner), bytes);
+    return view(std::shared_ptr<void const>(std::move(owner)), bytes);
 }
 
 template <owning_range_of_chars Encoded>

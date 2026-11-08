@@ -17,6 +17,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <charconv>
 #include <iterator>
 #include <limits>
 #include <memory>
@@ -226,7 +227,13 @@ class path
         std::size_t digits_end = digits_at;
         while (digits_end < text.size() && extended_diagnostic_notation::digit(text[digits_end]))
             ++digits_end;
-        constexpr std::size_t exact_integer_digits = 16;
+        constexpr std::size_t exact_integer_digits = [] {
+            std::array<char, std::numeric_limits<std::int64_t>::digits10 + 1> decimal_text{};
+            return static_cast<std::size_t>(std::distance(
+                decimal_text.data(),
+                std::to_chars(decimal_text.data(), std::to_address(decimal_text.end()), rfc9535::exact_integer_max)
+                    .ptr));
+        }();
         if (digits_end == digits_at || digits_end - digits_at > exact_integer_digits ||
             (text[digits_at] == '0' && (digits_end > digits_at + 1 || negative)))
             return std::nullopt;
@@ -1711,7 +1718,7 @@ inline std::expected<std::optional<lazy>, error> path::comparable_value(query_vi
         if (auto const r = extended_diagnostic_notation::append_head(encoded, major_type::unsigned_integer, n, extended_diagnostic_notation::no_indicator); !r) [[unlikely]]
             return std::unexpected(r.error());
         auto const owner = std::make_shared<std::string const>(std::move(encoded));
-        auto const l = lazy::from(owner, *owner);
+        auto const l = lazy::view(owner);
         if (!l) [[unlikely]]
             return std::unexpected(l.error());
         return *l;
@@ -1720,7 +1727,7 @@ inline std::expected<std::optional<lazy>, error> path::comparable_value(query_vi
     case logical_expr::kind::literal: {
         auto const owner = std::make_shared<std::string const>(
             std::string_view(std::span(v.keys).subspan(e.first, e.second)));
-        auto const l = lazy::from(owner, *owner);
+        auto const l = lazy::view(owner);
         if (!l) [[unlikely]]
             return std::unexpected(l.error());
         return *l;

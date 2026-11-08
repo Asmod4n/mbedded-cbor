@@ -1146,14 +1146,8 @@ class extended_diagnostic_notation
         return number_of(value) + (width == preferred ? std::string{} : indicator);
     }
 
-    struct diagnostic_head {
-        major_type major;
-        std::uint8_t info;
-        std::uint64_t argument;
-    };
-
     template <bool Checked>
-    static std::expected<diagnostic_head, error> decode_diagnostic_head(heads::decoder<Checked> &d)
+    static std::expected<heads::head, error> decode_diagnostic_head(heads::decoder<Checked> &d)
     {
         if (auto const r = detail::validity::check_pending_items(heads::initial_byte_size, d.encoded.size());
             !r) [[unlikely]]
@@ -1165,9 +1159,9 @@ class extended_diagnostic_notation
             r != error{}) [[unlikely]]
             return std::unexpected(r);
         if (info != std::to_underlying(rfc8949::additional_information::indefinite_length))
-            return d.decode_head().transform([](heads::head const h) { return diagnostic_head{h.major, h.info, h.argument}; });
+            return d.decode_head();
         d.encoded.remove_prefix(1);
-        return diagnostic_head{major, info, 0};
+        return heads::head{major, info, 0};
     }
 
     template <bool Checked>
@@ -1184,7 +1178,7 @@ class extended_diagnostic_notation
 
     template <bool Checked>
     static std::expected<void, error>
-    write_diagnostic(std::string &out, heads::decoder<Checked> &d, std::string_view const encoded)
+    write_diagnostic(std::string &out, heads::decoder<Checked> &d)
     {
         if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
             return std::unexpected(r.error());
@@ -1234,7 +1228,7 @@ class extended_diagnostic_notation
                             .error_or(error{});
                     c != error{}) [[unlikely]]
                     return std::unexpected(c);
-                if (auto const r = write_diagnostic(out, d, encoded); !r) [[unlikely]]
+                if (auto const r = write_diagnostic(out, d); !r) [[unlikely]]
                     return r;
             }
             out += ")";
@@ -1254,11 +1248,11 @@ class extended_diagnostic_notation
             for (std::uint64_t i = 0; indefinite ? !break_found(d) : i < h->argument; ++i) {
                 if (i != 0)
                     out += ", ";
-                if (auto const r = write_diagnostic(out, d, encoded); !r) [[unlikely]]
+                if (auto const r = write_diagnostic(out, d); !r) [[unlikely]]
                     return r;
                 if (map) {
                     out += ": ";
-                    if (auto const r = write_diagnostic(out, d, encoded); !r) [[unlikely]]
+                    if (auto const r = write_diagnostic(out, d); !r) [[unlikely]]
                         return r;
                 }
             }
@@ -1267,7 +1261,7 @@ class extended_diagnostic_notation
         }
         case major_type::tag: {
             out += std::to_string(h->argument) + encoding_indicator(h->info, h->argument) + "(";
-            if (auto const r = write_diagnostic(out, d, encoded); !r) [[unlikely]]
+            if (auto const r = write_diagnostic(out, d); !r) [[unlikely]]
                 return r;
             out += ")";
             return {};
@@ -1356,7 +1350,7 @@ inline std::expected<std::string, error> diagnostic_notation(std::string_view co
     heads::decoder<true> d{encoded};
     std::string out;
     if (auto const r =
-            extended_diagnostic_notation::write_diagnostic(out, d, encoded);
+            extended_diagnostic_notation::write_diagnostic(out, d);
         !r) [[unlikely]]
         return std::unexpected(r.error());
     if (auto const one = detail::validity::check_one_data_item(d.encoded); !one) [[unlikely]]

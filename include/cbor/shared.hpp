@@ -46,7 +46,7 @@ struct value_sharing::sharing_decoder : heads::decoder<Checked> {
 
     std::vector<marked_value> marked_values;
 
-    void mark(heads::decoder<Checked> const &)
+    void mark()
     {
         marked_values.push_back(marked_value::in_skipped_member);
     }
