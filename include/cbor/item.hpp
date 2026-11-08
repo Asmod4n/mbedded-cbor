@@ -124,7 +124,7 @@ struct item {
     /**
      * @brief Gives the value of the node when `type` is `K`.
      *
-     * | K | Result | |---|---| | `unsigned_integer`, `negative_integer` | `std::uint64_t`, the argument | | `half_float`, `single_float`, `double_float` | `double` | | `text_string` | `std::string_view` | | `byte_string` | `std::span<std::byte const>` | | `array` | `std::span<item const>`, the elements | | `map` | `std::span<item const>`, each key and its value one after the other | | `tag`, `unsigned_bignum`, `negative_bignum`, `typed_array` | `std::pair<std::uint64_t, item const *>`: the tag number and the content | | `false_value`, `true_value`, `null`, `undefined`, `simple_value` | `cbor::simple_value` |
+     * | K | Result | |---|---| | `unsigned_integer`, `negative_integer` | `std::uint64_t`, the argument | | `half_float`, `single_float`, `double_float` | `double` | | `text_string` | `std::string_view` | | `byte_string` | `std::span<std::byte const>` | | `array` | `std::span<item const>`, the elements | | `map` | `std::span<item const>`, each key and its value one after the other | | `tag`, `unsigned_bignum`, `negative_bignum`, `typed_array` | `std::pair<std::uint64_t, item const *>`: the tag number and the content | | `shared_reference` | `std::pair<std::uint64_t, item const *>`: the index and the item that the tag 28 of that index marks | | `false_value`, `true_value`, `null`, `undefined`, `simple_value` | `cbor::simple_value` |
      * A negative integer gives its argument n, for the value -1 - n.
      * A view and a pointer in the result point into the tree.
      * `incorrect_type`: `type` is not `K`.

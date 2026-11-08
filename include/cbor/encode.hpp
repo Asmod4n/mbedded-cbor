@@ -84,6 +84,8 @@ class iov_writer;
  *
  * @retval no_buffer_space the span is too short
  * @retval nesting_depth_exceeded the tree is deeper than the limit
+ * @retval unsupported_value the tree holds a `shared_reference` node; the target then holds the bytes written before
+ * it
  * @retval value_too_large, not_enough_memory, io_error the error of a writer, from its `std::errc`
  * @snippet doc_reference_item.cpp encode
  * @see cbor::encode_iov()

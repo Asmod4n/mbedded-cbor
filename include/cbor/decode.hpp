@@ -398,7 +398,10 @@ std::expected<decoded_tree<Checked>, error> decode_tree(std::string_view const e
  * The tree holds a copy of each text and byte string, so it stays valid after `encoded` ends.
  * A bignum whose magnitude fits 64 bits becomes an integer node.
  * A tag 24 is a tag node, and cbor::encoded_cbor_data_item() gives its decoded content.
- * Tags 28 and 29 stay tag nodes.
+ * Tags 28 and 29 of the value-sharing registration are resolved, with a table for this call: a tag 28 makes no
+ * node and marks the node of its content, and a tag 29 with the index n is a `shared_reference` node whose target is
+ * the node that the n-th tag 28 marks. A target can be the node itself or a node above it, so the tree can hold a
+ * cycle. The content of a tag 24 has its own table.
  * One leading tag 55799 is read as its content, so the root is that content.
  * A second tag 55799 and a tag 55799 inside an item stay tag nodes.
  *
@@ -428,7 +431,10 @@ std::expected<decoded_tree<Checked>, error> decode_tree(std::string_view const e
  * the item is not read, so the input can be a CBOR sequence (RFC 8742)
  * @retval indefinite_length a string, an array or a map has an indefinite length
  * @retval nesting_depth_exceeded the item is deeper than the limit
- * @retval inadmissible_type_for_tag_content a typed array (RFC 8746) whose content is not a byte string of whole
+ * @retval sharedref_index_not_marked a tag 29 whose index names no tag 28 before it
+ * @retval sharedref_not_defined a tag 29 that names a tag 28 whose content is only tags 28 and this tag 29, as in
+ * `28(29(0))`
+ * @retval inadmissible_type_for_tag_content a tag 29 over an item that is not an unsigned integer, or a typed array (RFC 8746) whose content is not a byte string of whole
  * elements. A tag 2 or 3 over another content is an `unsigned_bignum` or `negative_bignum` item over that content,
  * a tag 24 over another content is a `tag` item over that content, and decode checks the content of no other tag.
  * @snippet doc_reference_item.cpp decode

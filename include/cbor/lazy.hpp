@@ -550,7 +550,8 @@ public:
     std::expected<lazy_entries, error> entries() const;
 
     /**
-     * @brief Decodes the whole item at the lazy into a tree of cbor::item, as cbor::decode() does.
+     * @brief Decodes the whole item at the lazy into a tree of cbor::item, as cbor::decode() does, except that tags 28
+     * and 29 stay tag nodes.
      *
      * The tree holds a copy of each text and byte string.
      * It does not view the bytes of the lazy, and stays valid after the lazy and its owner end.

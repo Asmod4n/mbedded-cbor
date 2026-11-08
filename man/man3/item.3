@@ -181,10 +181,12 @@ Gives the value of the node when \f[CR]type\f[R] is \f[CR]K\f[R].
 other | | \f[CR]tag\f[R], \f[CR]unsigned_bignum\f[R],
 \f[CR]negative_bignum\f[R], \f[CR]typed_array\f[R] |
 \f[CR]std::pair<std::uint64_t, item const *>\f[R]: the tag number and
-the content | | \f[CR]false_value\f[R], \f[CR]true_value\f[R],
-\f[CR]null\f[R], \f[CR]undefined\f[R], \f[CR]simple_value\f[R] |
-\f[CR]cbor::simple_value\f[R] | A negative integer gives its argument n,
-for the value \-1 \- n.
+the content | | \f[CR]shared_reference\f[R] |
+\f[CR]std::pair<std::uint64_t, item const *>\f[R]: the index and the
+item that the tag 28 of that index marks | | \f[CR]false_value\f[R],
+\f[CR]true_value\f[R], \f[CR]null\f[R], \f[CR]undefined\f[R],
+\f[CR]simple_value\f[R] | \f[CR]cbor::simple_value\f[R] | A negative
+integer gives its argument n, for the value \-1 \- n.
 A view and a pointer in the result point into the tree.
 \f[CR]incorrect_type\f[R]: \f[CR]type\f[R] is not \f[CR]K\f[R].
 .SS cbor::decode
@@ -197,7 +199,13 @@ after \f[CR]encoded\f[R] ends.
 A bignum whose magnitude fits 64 bits becomes an integer node.
 A tag 24 is a tag node, and cbor::encoded_cbor_data_item() gives its
 decoded content.
-Tags 28 and 29 stay tag nodes.
+Tags 28 and 29 of the value\-sharing registration are resolved, with a
+table for this call: a tag 28 makes no node and marks the node of its
+content, and a tag 29 with the index n is a \f[CR]shared_reference\f[R]
+node whose target is the node that the n\-th tag 28 marks.
+A target can be the node itself or a node above it, so the tree can hold
+a cycle.
+The content of a tag 24 has its own table.
 One leading tag 55799 is read as its content, so the root is that
 content.
 A second tag 55799 and a tag 55799 inside an item stay tag nodes.
@@ -390,8 +398,15 @@ indefinite length
 .IP \(bu 2
 \f[CR]nesting_depth_exceeded\f[R]: the item is deeper than the limit
 .IP \(bu 2
-\f[CR]inadmissible_type_for_tag_content\f[R]: a typed array (RFC 8746)
-whose content is not a byte string of whole elements.
+\f[CR]sharedref_index_not_marked\f[R]: a tag 29 whose index names no tag
+28 before it
+.IP \(bu 2
+\f[CR]sharedref_not_defined\f[R]: a tag 29 that names a tag 28 whose
+content is only tags 28 and this tag 29, as in \f[CR]28(29(0))\f[R]
+.IP \(bu 2
+\f[CR]inadmissible_type_for_tag_content\f[R]: a tag 29 over an item that
+is not an unsigned integer, or a typed array (RFC 8746) whose content is
+not a byte string of whole elements.
 A tag 2 or 3 over another content is an \f[CR]unsigned_bignum\f[R] or
 \f[CR]negative_bignum\f[R] item over that content, a tag 24 over another
 content is a \f[CR]tag\f[R] item over that content, and decode checks
@@ -405,6 +420,10 @@ string
 \f[CR]no_buffer_space\f[R]: the span is too short
 .IP \(bu 2
 \f[CR]nesting_depth_exceeded\f[R]: the tree is deeper than the limit
+.IP \(bu 2
+\f[CR]unsupported_value\f[R]: the tree holds a
+\f[CR]shared_reference\f[R] node; the target then holds the bytes
+written before it
 .IP \(bu 2
 \f[CR]value_too_large\f[R], \f[CR]not_enough_memory\f[R],
 \f[CR]io_error\f[R]: the error of a writer, from its
