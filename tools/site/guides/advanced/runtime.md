@@ -129,7 +129,7 @@ view that gave it end. An iterator belongs to one thread
 | T | Item | Result |
 |---|---|---|
 | an integer type, not `bool` | an integer, or a bignum (tag 2, 3) that fits T | T |
-| `double` | a float of 16, 32 or 64 bits, or an integer that a `double` holds exactly | `double` |
+| `double` | a float of 16, 32 or 64 bits, or an integer or a bignum that a `double` holds exactly | `double` |
 | `bool` | `false`, `true` | `bool` |
 | `std::nullptr_t` | `null` | `nullptr` |
 | `cbor::simple_value` | a simple value | the value |

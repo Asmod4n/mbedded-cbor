@@ -952,7 +952,7 @@ TEST_CASE("structs: the tags that each standard library type accepts")
 
 // RFC 8949 3.4.2: tag 1 holds the seconds since 1970-01-01T00:00Z; 1700000000 is 0x6553f100. RFC 8943 Table 1
 // (refs/rfc8943.txt:135-141): 1940-10-09 is day -10676 and 1980-12-08 is day 3994 under tag 100 ('d'). The content
-// of tag 1 is an integer or a float (RFC 8949 3.4.2), so a text, a byte string, a tag or true under tag 1 is
+// of tag 1 is an integer or a float (RFC 8949 3.4.2), so a text, a byte string, a tag, true or an array under tag 1 is
 // inadmissible_type_for_tag_content, as the doc of structs decode names it (RFC 8949 5.3.2).
 TEST_CASE("structs: sys_seconds is tag 1 and year_month_day is tag 100")
 {
