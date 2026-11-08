@@ -1022,10 +1022,12 @@ TEST_CASE("tinycbor parser: find a key in a map")
         {"absent-taggedstring-string", "\xa1\xc0\x68haystack\x66needle"s, false, nf},
         {"absent-string-taggedstring", "\xa1\xc0\x68haystack\xc0\x66needle"s, false, nf},
         {"absent-string-emptyarray", "\xa1\x68haystack\x80"s, false, nf},
+        {"absent-string-_emptyarray", "\xa1\x68haystack\x9f\xff"s, false, il},
         {"absent-string-array1", "\xa1\x68haystack\x81\0"s, false, nf},
         {"absent-string-array2", "\xa1\x68haystack\x85\0\1\2\3\4"s, false, nf},
         {"absent-string-array3", "\xa1\x68haystack\x85\x63one\x63two\x65three\x64""four\x64""five"s, false, nf},
         {"absent-string-emptymap", "\xa1\x68haystack\xa0"s, false, nf},
+        {"absent-string-_emptymap", "\xa1\x68haystack\xbf\xff"s, false, il},
         {"absent-string-map", "\xa1\x68haystack\xa1\x68haystack\x66needle"s, false, nf},
         {"absent-string-map2", "\xa1\x68haystack\xa1\x68haystack\x66needle\61z\62yx"s, false, nf},
         {"alone", "\xa1\x66needle\xd8\x2a\x68haystack"s, true, no_error},
@@ -1407,9 +1409,11 @@ TEST_CASE("tinycbor parser: validation of items that are not well-formed")
     }
 }
 
-// strictValidation, the rows of CborValidateStrictMode on tags. cbor::decode() gives
-// inadmissible_type_for_tag_content for "a value that RFC 8949 or RFC 8746 does not allow" (decode.hpp). The expected
-// result follows the table of RFC 8949 3.4. Three kinds of row differ from upstream:
+// strictValidation, the rows of CborValidateStrictMode on tags. RFC 8949 5.3.2 lets a decoder pass a tag that it does
+// not convert, and the owner decided that cbor::decode keeps a tag over a content that its definition does not allow
+// as a tag (decode.hpp: inadmissible_type_for_tag_content only for a typed array; "decode checks the content of no
+// other tag"). So each row where upstream gives InappropriateTagForType gives no error here. Three more kinds of row
+// differ from upstream:
 // - tags 21, 22 and 23 on a text string: the RFC table gives "(any)" as their content, so the port expects no error;
 // - tag 35 on a byte string: RFC 8949 3.4.5.3 does not define tag 35 any more, so no content is wrong;
 // - tag 24 on an empty byte string: RFC 8949 3.4.5.1 says that the content is valid only if it encodes a well-formed
@@ -1423,14 +1427,21 @@ TEST_CASE("tinycbor parser: strict validation of tag content")
         std::string_view upstream;
         error expected;
     };
-    [[maybe_unused]] error const bad = error::inadmissible_type_for_tag_content;
     tag_row const rows[] = {
+        {"tag-0-unsigned", "\xc0\x00"s, "InappropriateTagForType", no_error},
+        {"tag-0-bytearray", "\xc0\x40"s, "InappropriateTagForType", no_error},
         {"tag-0-string", "\xc0\x60"s, "NoError", no_error},
+        {"tag-0-tag-0-string", "\xc0\xc0\x60"s, "InappropriateTagForType", no_error},
         {"tag-1-unsigned", "\xc1\x00"s, "NoError", no_error},
         {"tag-1-negative", "\xc1\x20"s, "NoError", no_error},
+        {"tag-1-bytearray", "\xc1\x40"s, "InappropriateTagForType", no_error},
         {"tag-2-bytearray", "\xc2\x40"s, "NoError", no_error},
+        {"tag-2-string", "\xc2\x60"s, "InappropriateTagForType", no_error},
         {"tag-3-bytearray", "\xc3\x40"s, "NoError", no_error},
+        {"tag-3-string", "\xc3\x60"s, "InappropriateTagForType", no_error},
+        {"tag-4-string", "\xc4\x60"s, "InappropriateTagForType", no_error},
         {"tag-4-array", "\xc4\x82\0\1"s, "NoError", no_error},
+        {"tag-5-string", "\xc5\x60"s, "InappropriateTagForType", no_error},
         {"tag-5-array", "\xc5\x82\0\1"s, "NoError", no_error},
         {"tag-21-bytearray", "\xd5\x40"s, "NoError", no_error},
         {"tag-21-string", "\xd5\x60"s, "InappropriateTagForType", no_error},
@@ -1445,11 +1456,16 @@ TEST_CASE("tinycbor parser: strict validation of tag content")
         {"tag-23-array", "\xd7\x80"s, "NoError", no_error},
         {"tag-23-map", "\xd7\xa0"s, "NoError", no_error},
         {"tag-24-bytearray", "\xd8\x18\x40"s, "NoError", error::too_little_data},
+        {"tag-24-string", "\xd8\x18\x60"s, "InappropriateTagForType", no_error},
+        {"tag-32-bytearray", "\xd8\x20\x40"s, "InappropriateTagForType", no_error},
         {"tag-32-string", "\xd8\x20\x60"s, "NoError", no_error},
+        {"tag-33-bytearray", "\xd8\x21\x40"s, "InappropriateTagForType", no_error},
         {"tag-33-string", "\xd8\x21\x60"s, "NoError", no_error},
+        {"tag-34-bytearray", "\xd8\x22\x40"s, "InappropriateTagForType", no_error},
         {"tag-34-string", "\xd8\x22\x60"s, "NoError", no_error},
         {"tag-35-bytearray", "\xd8\x23\x40"s, "InappropriateTagForType", no_error},
         {"tag-35-string", "\xd8\x23\x60"s, "NoError", no_error},
+        {"tag-36-bytearray", "\xd8\x24\x40"s, "InappropriateTagForType", no_error},
         {"tag-36-string", "\xd8\x24\x60"s, "NoError", no_error},
         {"tag-55799-unsigned", "\xd9\xd9\xf7\x00"s, "NoError", no_error},
         {"tag-55799-negative", "\xd9\xd9\xf7\x20"s, "NoError", no_error},
@@ -1457,6 +1473,7 @@ TEST_CASE("tinycbor parser: strict validation of tag content")
         {"tag-55799-string", "\xd9\xd9\xf7\x60"s, "NoError", no_error},
         {"tag-55799-array", "\xd9\xd9\xf7\x80"s, "NoError", no_error},
         {"tag-55799-map", "\xd9\xd9\xf7\xa0"s, "NoError", no_error},
+        {"tag-55799-tag-0-unsigned", "\xd9\xd9\xf7\xc0\x00"s, "InappropriateTagForType", no_error},
         {"tag-55799-tag-0-string", "\xd9\xd9\xf7\xc0\x60"s, "NoError", no_error},
         {"tag-55799-simple0", "\xd9\xd9\xf7\xe0"s, "NoError", no_error},
         {"tag-55799-false", "\xd9\xd9\xf7\xf4"s, "NoError", no_error},
@@ -1507,15 +1524,17 @@ TEST_CASE("tinycbor parser: strict validation of a byte after the item")
 }
 
 // strictValidation, the rows of CborValidateStrictMode on keys that are not unique. cbor::structs gives duplicate_key
-// for "a key that comes twice" (structs.hpp). The row with arrays as keys differs from upstream: cbor::structs gives
-// unsupported_value for "a map key is an array, a map or a tag" (structs.hpp); RFC 8949 5.6 leaves the handling of
-// such keys to the protocol.
+// for "a key that comes twice" (structs.hpp). The row with arrays as keys differs from upstream: every item can be a
+// key (owner decision), but the key type std::string holds no array, so the first key is an item of another type and
+// gives incorrect_type (structs.hpp) before a second key is read.
 TEST_CASE("tinycbor parser: strict validation of keys that are not unique")
 {
     CHECK_EQ(outcome(cbor::structs<std::map<std::int64_t, std::int64_t>>::decode("\xa2\0\1\0\2"s)),
              error_text(error::duplicate_key));
     CHECK_EQ(outcome(cbor::structs<std::map<std::string, std::int64_t>>::decode("\xa2\x61z\1\x61z\2"s)),
              error_text(error::duplicate_key));
+    CHECK_EQ(outcome(cbor::structs<std::map<std::string, std::int64_t>>::decode("\xa2\x81\x65Hello\1\x81\x65Hello\2"s)),
+             error_text(error::incorrect_type));
 }
 
 // incompleteData: each prefix of an item that ends before the last byte but one is too little data. A prefix that
