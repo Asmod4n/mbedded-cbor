@@ -120,6 +120,8 @@ A key is a text key or an integer key.
 A text key does not match a byte string with the same bytes.
 A key under tag 28 or tag 29 is a tag, and matches no text key and no
 integer key.
+A key under tag 55799 matches as the key without the tag (RFC 8949
+3.4.6).
 .PP
 A map with a key twice is no error.
 \f[CR]at\f[R], \f[CR]operator[]\f[R] and \f[CR]at_path\f[R] give the
@@ -617,7 +619,10 @@ leading tag 55799 as its content, in every width of the argument.
 So \f[CR]clone\f[R] of that lazy gives the content.
 \f[CR]cbor::decode\f[R] also reads one leading tag 55799 as its content,
 so the root of its tree is the content.
-A second tag 55799, and a tag 55799 inside an item, stay tags.
+A second tag 55799, and a tag 55799 inside an item, stay tags:
+\f[CR]type()\f[R] gives \f[CR]tag\f[R] there.
+\f[CR]get\f[R], \f[CR]at\f[R] and a path read through such a tag to its
+content.
 .IP
 .EX
 \f[I]// owner: a std::shared_ptr<std::string const> with the bytes in the comment above each read\f[R]
