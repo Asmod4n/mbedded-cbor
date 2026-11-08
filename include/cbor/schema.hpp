@@ -1972,14 +1972,14 @@ class reflection
 
     static consteval std::size_t step_end(std::string_view const path, std::size_t const at)
     {
-        std::string_view const rest = path.substr(std::min(at + 1, path.size()));
+        std::string_view const rest{std::span(path).subspan(std::min(at + 1, path.size()))};
         return path.size() - rest.size() +
                static_cast<std::size_t>(std::ranges::find_first_of(rest, std::string_view(".[")) - rest.begin());
     }
 
     static consteval std::size_t index_end(std::string_view const path, std::size_t const at)
     {
-        std::string_view const rest = path.substr(std::min(at + 1, path.size()));
+        std::string_view const rest{std::span(path).subspan(std::min(at + 1, path.size()))};
         return path.size() - rest.size() + static_cast<std::size_t>(std::ranges::find(rest, ']') - rest.begin());
     }
 
@@ -2402,7 +2402,7 @@ class reflection
     template <fixed_string Path, std::size_t At>
     static consteval std::size_t index_argument()
     {
-        return index_arguments<Path>() - count_index_arguments(Path.view().substr(At));
+        return index_arguments<Path>() - count_index_arguments(std::string_view(std::span(Path.view()).subspan(At)));
     }
 
     template <class T, fixed_string Path, std::size_t At>

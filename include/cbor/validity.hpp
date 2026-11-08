@@ -673,7 +673,7 @@ public:
         if (!bytes_fit(std::to_underlying(at), encoded.size()) ||
             !bytes_fit(size, encoded.size() - std::to_underlying(at))) [[unlikely]]
             return std::unexpected(error::too_little_data);
-        return encoded.substr(std::to_underlying(at), size);
+        return std::string_view(std::span(encoded).subspan(std::to_underlying(at), size));
     }
 
     template <class T>

@@ -318,8 +318,8 @@ std::expected<void, error> tree_decoder<Checked, Resolve>::decode_content(std::p
             return {};
         }
         std::string_view const content_encoded =
-            tagged.substr(0, std::to_underlying(detail::validity::distance(tagged, d.encoded)));
-        tree_decoder inner{decoded, {content_encoded.substr(content_encoded.size() - content.via.bin.size())}, 0, {}};
+            std::string_view(std::span(tagged).first(std::to_underlying(detail::validity::distance(tagged, d.encoded))));
+        tree_decoder inner{decoded, {std::string_view(std::span(content_encoded).last(content.via.bin.size()))}, 0, {}};
         std::pmr::vector<item> &embedded = decoded.items_reserved(1);
         if (auto const r = inner.decode_item(embedded); !r) [[unlikely]]
             return r;

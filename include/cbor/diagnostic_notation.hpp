@@ -304,7 +304,7 @@ class extended_diagnostic_notation
                     return std::unexpected(error::invalid_path);
                 if (c1 >= high_surrogate_first && c1 < low_surrogate_first) {
                     if (!detail::validity::check_text_left(text, at, escape_prefix.size()) ||
-                        !text.substr(at).starts_with(escape_prefix)) [[unlikely]]
+                        !std::string_view(std::span(text).subspan(at)).starts_with(escape_prefix)) [[unlikely]]
                         return std::unexpected(error::invalid_path);
                     auto const low = parse_hex4(text, at + escape_prefix.size());
                     if (!low || low->value < low_surrogate_first || low->value > low_surrogate_last) [[unlikely]]
@@ -981,9 +981,9 @@ class extended_diagnostic_notation
             if (indefinite)
                 next = detail::validity::next(next, heads::initial_byte_size);
             if (map) {
-                std::string const region = out.substr(start);
+                std::string const region{std::string_view{std::span(out).subspan(start)}};
                 auto const key = [&region](canonical_pair const &p) {
-                    return std::string_view(region).substr(p.key, p.value - p.key);
+                    return std::string_view(std::span(region).subspan(p.key, p.value - p.key));
                 };
                 std::ranges::sort(pairs, {}, key);
                 if (error const c =
@@ -993,7 +993,7 @@ class extended_diagnostic_notation
                     return std::unexpected(c);
                 out.resize(start);
                 for (canonical_pair const &p : pairs)
-                    out += std::string_view(region).substr(p.key, p.end - p.key);
+                    out += std::string_view(std::span(region).subspan(p.key, p.end - p.key));
             }
             std::string head;
             if (auto const r = append_head(head, h->major, count, no_indicator); !r) [[unlikely]]

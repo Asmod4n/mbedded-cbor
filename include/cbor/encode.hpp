@@ -578,9 +578,9 @@ struct encoding::encoder {
             return std::unexpected(std::errc::no_buffer_space);
         } else if constexpr (blocks) {
             std::size_t const first = out.size() - at;
-            std::ranges::copy(text.substr(0, first), out.subspan(at).begin());
+            std::ranges::copy(std::span(text).first(first), out.subspan(at).begin());
             used = out.size();
-            std::string_view const rest = text.substr(first);
+            std::string_view const rest{std::span(text).subspan(first)};
             if (auto const r = refill(rest.size()); !r) [[unlikely]]
                 return r;
             std::ranges::copy(rest, block.begin());

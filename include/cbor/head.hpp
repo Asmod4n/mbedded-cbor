@@ -791,8 +791,8 @@ class heads
             !fits) [[unlikely]]
             return std::unexpected(fits.error());
         std::uint64_t argument = 0;
-        for (char const c : detail::validity::subspan(encoded, detail::validity::next(at, initial_byte_size))
-                                .substr(0, size))
+        for (char const c :
+             std::span(detail::validity::subspan(encoded, detail::validity::next(at, initial_byte_size))).first(size))
             argument = argument << std::numeric_limits<std::uint8_t>::digits | static_cast<std::uint8_t>(c);
         if (error const r = detail::validity::check_argument<Checked>(major, argument).error_or(error{});
             r != error{}) [[unlikely]]
