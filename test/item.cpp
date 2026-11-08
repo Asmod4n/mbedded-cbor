@@ -1193,3 +1193,31 @@ TEST_CASE("item get<K>: the values of the head")
     auto const yes = cbor::decode("\xf5"sv);
     CHECK_EQ(*(*yes)->get<cbor::type::true_value>(), cbor::simple_value{21});
 }
+
+// RFC 8949 5.3.2 and 5.4: a tag passes its content as it is, unless the decoder turns it into a native form. The
+// owner decided that a tree decode turns a tag 2 or 3 into an integer only over a byte string, and decodes the content
+// of a tag 24 only when it is a byte string; any other content stays under the tag. The type of a tag 2 or 3 item is
+// the kind of that tag (runtime.md). So decode accepts each of these tags over an item of each major type (the
+// finite set), and the documentation of decode says so.
+TEST_CASE("decode: tags 0 to 5, 21 to 24 and 32 to 36 over every major type stay tags or give their integer")
+{
+    std::array<std::string, 8> const contents{"\x00"s, "\x20"s, "\x41\x01"s, "\x61\x61"s,
+                                              "\x81\x00"s, "\xa1\x00\x00"s, "\xc6\x00"s, "\xf4"s};
+    for (int const tag : {0, 1, 2, 3, 4, 5, 21, 22, 23, 24, 32, 33, 34, 35, 36}) {
+        for (std::size_t major = 0; major < contents.size(); ++major) {
+            CAPTURE(tag);
+            CAPTURE(major);
+            std::string const bytes = (tag < 24 ? std::string(1, static_cast<char>(0xc0 + tag))
+                                                : "\xd8"s + static_cast<char>(tag)) +
+                                      contents[major];
+            auto const r = cbor::decode(bytes);
+            REQUIRE(r.has_value());
+            cbor::type const expected = tag == 2 && major == 2   ? cbor::type::unsigned_integer
+                                        : tag == 3 && major == 2 ? cbor::type::negative_integer
+                                        : tag == 2               ? cbor::type::unsigned_bignum
+                                        : tag == 3               ? cbor::type::negative_bignum
+                                                                 : cbor::type::tag;
+            CHECK_EQ((*r)->type, expected);
+        }
+    }
+}

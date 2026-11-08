@@ -379,7 +379,8 @@ A write after \f[CR]finish\f[R] throws \f[CR]std::logic_error\f[R].
 \f[CR]too_little_data\f[R]: the item is not complete, or a count is
 larger than the bytes that are left
 .IP \(bu 2
-\f[CR]syntax_error\f[R]: a head is not well\-formed.
+\f[CR]syntax_error\f[R]: a head is not well\-formed, or a simple value
+below 32 stands in the two\-byte form.
 A byte after the item is not read, so the input can be a CBOR sequence
 (RFC 8742)
 .IP \(bu 2
@@ -388,9 +389,12 @@ indefinite length
 .IP \(bu 2
 \f[CR]nesting_depth_exceeded\f[R]: the item is deeper than the limit
 .IP \(bu 2
-\f[CR]reserved_simple_value\f[R],
-\f[CR]inadmissible_type_for_tag_content\f[R]: a value that RFC 8949 or
-RFC 8746 does not allow
+\f[CR]inadmissible_type_for_tag_content\f[R]: a typed array (RFC 8746)
+whose content is not a byte string of whole elements.
+A tag 2 or 3 over another content is an \f[CR]unsigned_bignum\f[R] or
+\f[CR]negative_bignum\f[R] item over that content, a tag 24 over another
+content is a \f[CR]tag\f[R] item over that content, and decode checks
+the content of no other tag.
 .SS cbor::encoded_cbor_data_item
 .IP \(bu 2
 \f[CR]incorrect_type\f[R]: the content of the tag 24 is not a byte
