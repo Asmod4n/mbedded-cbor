@@ -10,7 +10,7 @@
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 
-// The example of doc/reference/index.md, the start page of the site. The test exists so that the example
+// The example of tools/site/reference/index.md, the start page of the site. The test exists so that the example
 // compiles and gives the results that its comments state.
 TEST_CASE("doc reference index: the example")
 {

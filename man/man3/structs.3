@@ -1,0 +1,472 @@
+'\" t
+.TH "cbor::structs" "3" "2026-11-08" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.SH NAME
+cbor::structs, cbor::structs<T>::encode, cbor::structs<T>::decode, cbor::describe_members<T>, cbor::member<P>, CBOR_MEMBER, CBOR_DEFINE_TYPE_MEMBERS, cbor::structs<T> \- any CBOR into a C++ struct and back
+.SH SYNOPSIS
+.IP
+.EX
+#include \f[B]<cbor/cbor.hpp>\f[R]
+.EE
+.IP
+.EX
+static std::expected<std::string, error> encode(T const &value);
+
+\f[B]template\f[R] <\f[B]class\f[R] Target>
+static std::expected<std::size_t, error> encode(T const &value, Target &&target);
+.EE
+.IP
+.EX
+\f[B]template\f[R] <owning_range_of_chars Encoded>
+static std::expected<ref<T>, error> decode(Encoded &&encoded);
+
+\f[B]template\f[R] <owning_range_of_chars Encoded>
+static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded);
+
+\f[B]template\f[R] <owning_range_of_chars Encoded>
+static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded, T &&target);
+
+\f[B]template\f[R] <borrowed_range_of_chars Encoded>
+static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded);
+
+\f[B]template\f[R] <borrowed_range_of_chars Encoded>
+static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded, T &&target);
+.EE
+.IP
+.EX
+\f[B]template\f[R] <\f[B]class\f[R] T>
+\f[B]struct\f[R] describe_members;
+.EE
+.IP
+.EX
+\f[B]template\f[R] <\f[B]class\f[R] P>
+\f[B]struct\f[R] member
+{
+    map_key key;
+    P pointer;
+};
+.EE
+.IP
+.EX
+#define CBOR_MEMBER(T, m) cbor::member{cbor::map_key(std::string_view{#m}), &T::m}
+.EE
+.IP
+.EX
+#define CBOR_DEFINE_TYPE_MEMBERS(T, TAG, ...) CBOR_DEFINE_TYPE(T, TAG, CBOR_MEMBERS(T, __VA_ARGS__))
+.EE
+.IP
+.EX
+\f[B]template\f[R] <\f[B]class\f[R] T>
+\f[B]class\f[R] structs
+{
+\f[B]public\f[R]:
+    \f[B]template\f[R] <owning_range_of_chars Encoded>
+    static std::expected<ref<T>, error> decode(Encoded &&encoded);
+    \f[B]template\f[R] <owning_range_of_chars Encoded>
+    static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded);
+    \f[B]template\f[R] <owning_range_of_chars Encoded>
+    static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded, T &&target);
+    \f[B]template\f[R] <borrowed_range_of_chars Encoded>
+    static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded);
+    \f[B]template\f[R] <borrowed_range_of_chars Encoded>
+    static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded, T &&target);
+
+    static std::expected<std::string, error> encode(T const &value);
+    \f[B]template\f[R] <\f[B]class\f[R] Target>
+    static std::expected<std::size_t, error> encode(T const &value, Target &&target);
+};
+.EE
+.SH DESCRIPTION
+\f[CR]cbor::structs<T>\f[R] writes a C++ value as CBOR and reads it
+back, with the types of a member and the description of a class.
+The result allocates its strings and containers.
+.PP
+The examples use the types in test/doc_types.hpp, namespace
+\f[CR]reference_structs\f[R].
+.SS cbor::structs<T>::encode
+Writes \f[CR]value\f[R] as one CBOR item in preferred serialization,
+into a new \f[CR]std::string\f[R].
+A struct is a map, and its keys come in the order of RFC 8949 4.2.1.
+The second form appends to \f[CR]target\f[R] and returns the count of
+bytes that it appended.
+\f[CR]target\f[R] is a \f[CR]std::string\f[R], a container of
+\f[CR]char\f[R], a \f[CR]std::span<char>\f[R] or a writer.
+The function writes no shared value (tag 28, tag 29).
+A type that \f[CR]structs\f[R] does not take does not compile.
+.PP
+\f[B]Parameters\f[R]
+.IP \(bu 2
+\f[CR]target\f[R]: a \f[CR]std::string\f[R], a container of
+\f[CR]char\f[R], a \f[CR]std::span<char>\f[R] or a writer
+.SS cbor::structs<T>::decode
+Reads one item into a \f[CR]T\f[R].
+The result is a cbor::ref that holds the owner of the bytes, so a
+\f[CR]std::string_view\f[R] in \f[CR]T\f[R] stays valid.
+No form copies the bytes.
+The first form moves an rvalue into a new owner; an lvalue does not
+compile.
+\f[CR]owner\f[R] keeps the bytes of a borrowed \f[CR]encoded\f[R] alive.
+A form with \f[CR]target\f[R] reads into the containers of
+\f[CR]target\f[R], with their allocator.
+The other forms start from \f[CR]T{}\f[R].
+A byte after the item is not read.
+.PP
+\f[B]Parameters\f[R]
+.IP \(bu 2
+\f[CR]target\f[R]: the value whose containers and allocator the read
+uses
+.SS cbor::describe_members<T>
+Describes how cbor::structs and cbor::schema write and read
+\f[CR]T\f[R].
+A specialization holds \f[CR]tag\f[R], a
+\f[CR]std::optional<cbor::tag>\f[R], and \f[CR]members\f[R], a
+\f[CR]std::tuple\f[R] of cbor::member entries.
+\f[CR]cbor::untagged\f[R] gives a map with no tag.
+The specialization stands outside every namespace, after \f[CR]T\f[R].
+\f[CR]cbor::has_describe_members<T>\f[R] is true when \f[CR]T\f[R] has a
+specialization.
+.PP
+A class that is not an aggregate, or that has a base class, needs a
+description.
+cbor::structs then reads the members, the keys and the tag from the
+description only.
+\f[CR]using base = B;\f[R] in the specialization names the direct base
+class \f[CR]B\f[R]; cbor::schema takes a class with a base class only
+so, and the members of \f[CR]B\f[R] stand in \f[CR]members\f[R] too.
+\f[CR]CBOR_DEFINE_DERIVED_TYPE\f[R] and
+\f[CR]CBOR_DEFINE_DERIVED_TYPE_MEMBERS\f[R] write such a specialization;
+they take \f[CR]BASE\f[R] after \f[CR]T\f[R].
+.PP
+\f[CR]CBOR_DEFINE_TYPE(T, TAG, members...)\f[R] writes this
+specialization.
+The macro stands at global scope.
+A type whose name holds a comma goes through an alias.
+Where each key is the name of its member, CBOR_DEFINE_TYPE_MEMBERS takes
+the names only.
+.PP
+\f[CR]decode\f[R] gives \f[CR]incorrect_type\f[R] for a missing tag or
+another tag.
+A description does not compile when it lists a member twice, gives two
+members one key, names a member of another class, or has no
+\f[CR]tag\f[R].
+A tag of a standard type or an invalid tag does not compile.
+With reflection, a list that differs from the public data members does
+not compile.
+An annotation on \f[CR]T\f[R] does not compile.
+.SS cbor::member<P>
+One entry of cbor::describe_members: the key of a member and a pointer
+to that member.
+The key is a text literal or an integer from \-2\(ha63 to 2\(ha64 \- 1.
+The text is the name as it is written.
+A pointer to a static member or to a member function does not compile.
+A \f[CR]bool\f[R] or a character type as the key does not compile.
+.PP
+.TS
+tab(@);
+l l.
+T{
+Member
+T}@T{
+Description
+T}
+_
+T{
+\f[CR]key\f[R]
+T}@T{
+The key of the member in the map.
+T}
+T{
+\f[CR]pointer\f[R]
+T}@T{
+The pointer to the member.
+T}
+.TE
+.SS CBOR_MEMBER
+Makes the cbor::member entry of \f[CR]T::m\f[R] with the text of the
+name \f[CR]m\f[R] as its key.
+A type whose name holds a comma needs a type alias.
+The errors of cbor::member apply.
+.PP
+\f[B]Parameters\f[R]
+.IP \(bu 2
+\f[CR]T\f[R]: the type that holds the member
+.IP \(bu 2
+\f[CR]m\f[R]: the name of the member
+.SS CBOR_DEFINE_TYPE_MEMBERS
+Writes the cbor::describe_members specialization of \f[CR]T\f[R] with
+the tag \f[CR]TAG\f[R] and one CBOR_MEMBER entry for each name in the
+list.
+The key of each member is its name.
+The list takes up to 343 names.
+The macro stands outside every namespace, after \f[CR]T\f[R].
+A type whose name holds a comma needs a type alias.
+The macro expands each name before it makes the key.
+A name that is also an object\-like macro gives the key of what the
+macro expands to.
+A name that is not a member of \f[CR]T\f[R] does not compile.
+A list of more than 343 names does not compile.
+The errors of cbor::describe_members apply.
+.PP
+\f[B]Parameters\f[R]
+.IP \(bu 2
+\f[CR]T\f[R]: the type to describe
+.IP \(bu 2
+\f[CR]TAG\f[R]: the tag of the type, or \f[CR]cbor::untagged\f[R]
+.IP \(bu 2
+\f[CR]...\f[R]: the names of the members
+.SS cbor::structs<T>
+Writes a C++ value as CBOR and reads it back.
+\f[CR]T\f[R], and each member of a struct in \f[CR]T\f[R], is one of the
+types in this table.
+\f[CR]encode\f[R] writes the item of the right column.
+\f[CR]decode\f[R] takes only that item, under its own tag.
+.PP
+.TS
+tab(@);
+l l.
+T{
+C++ type
+T}@T{
+CBOR item
+T}
+_
+T{
+\f[CR]bool\f[R], \f[CR]std::nullptr_t\f[R],
+\f[CR]cbor::simple_value\f[R]
+T}@T{
+\f[CR]true\f[R] or \f[CR]false\f[R], \f[CR]null\f[R], a simple value
+T}
+T{
+an integer of 8 to 64 bits; \f[CR]__int128\f[R]
+T}@T{
+an integer; a bignum (tag 2, 3)
+T}
+T{
+an enum with a fixed underlying type
+T}@T{
+the integer
+T}
+T{
+\f[CR]float\f[R], \f[CR]double\f[R]
+T}@T{
+the shortest float that holds the value
+T}
+T{
+\f[CR]std::basic_string<char>\f[R], \f[CR]std::string_view\f[R]
+T}@T{
+a text string
+T}
+T{
+\f[CR]std::span<std::byte const>\f[R]
+T}@T{
+a byte string
+T}
+T{
+\f[CR]std::vector\f[R], \f[CR]std::array\f[R] of \f[CR]std::byte\f[R],
+an integer, \f[CR]float\f[R], \f[CR]double\f[R]
+T}@T{
+an RFC 8746 typed array
+T}
+T{
+\f[CR]std::set\f[R], \f[CR]std::flat_set\f[R]
+T}@T{
+tag 258 on an array
+T}
+T{
+\f[CR]std::chrono::sys_seconds\f[R]
+T}@T{
+tag 1 on an integer
+T}
+T{
+\f[CR]std::chrono::year_month_day\f[R]
+T}@T{
+tag 100 on an integer of days
+T}
+T{
+\f[CR]std::optional<E>\f[R]
+T}@T{
+the item of E, or \f[CR]null\f[R]; no key when empty
+T}
+T{
+\f[CR]std::variant<E...>\f[R]
+T}@T{
+the item of the alternative
+T}
+T{
+\f[CR]std::tuple<E...>\f[R], \f[CR]std::array<E, N>\f[R]
+T}@T{
+an array of that count
+T}
+T{
+a map type; a multimap type
+T}@T{
+a map; a map to arrays
+T}
+T{
+another container
+T}@T{
+an array
+T}
+T{
+\f[CR]cbor::tagged_item<N, E>\f[R]
+T}@T{
+tag N on the item of E
+T}
+T{
+a struct
+T}@T{
+a map
+T}
+.TE
+.PP
+\f[CR]decode\f[R] gives \f[CR]incorrect_type\f[R] for another item: a
+\f[CR]std::vector<int>\f[R] takes a typed array, not an array.
+An enum with no fixed underlying type, a \f[CR]long double\f[R] and a
+struct under \f[CR]tagged_item\f[R] do not compile.
+.SH ERRORS
+.SS cbor::structs<T>::encode
+.IP \(bu 2
+\f[CR]value_too_large\f[R]: the size of the bytes does not fit in
+\f[CR]std::size_t\f[R]
+.IP \(bu 2
+\f[CR]no_buffer_space\f[R]: a \f[CR]std::span<char>\f[R] that is too
+small for the bytes, or the writer gives this error
+.IP \(bu 2
+\f[CR]not_enough_memory\f[R], \f[CR]io_error\f[R]: the writer gives this
+error
+.IP \(bu 2
+\f[CR]std::logic_error\f[R]: a \f[CR]std::chrono::year_month_day\f[R]
+that is no valid date
+.IP \(bu 2
+\f[CR]std::bad_alloc\f[R]: a refused allocation of the result
+.SS cbor::structs<T>::decode
+.IP \(bu 2
+\f[CR]incorrect_type\f[R]: an item of another type, or a missing or
+other tag
+.IP \(bu 2
+\f[CR]number_out_of_range\f[R]: a number that the type cannot hold
+.IP \(bu 2
+\f[CR]key_not_found\f[R]: no key for a member that is not
+\f[CR]std::optional\f[R]
+.IP \(bu 2
+\f[CR]duplicate_key\f[R]: a key that comes twice
+.IP \(bu 2
+\f[CR]too_little_data\f[R]: the input ends inside the item
+.IP \(bu 2
+\f[CR]syntax_error\f[R]: a head is not well\-formed
+.IP \(bu 2
+\f[CR]indefinite_length\f[R]: a head uses indefinite length
+.IP \(bu 2
+\f[CR]nesting_depth_exceeded\f[R]: the item is deeper than the stack of
+the thread holds
+.IP \(bu 2
+\f[CR]inadmissible_type_for_tag_content\f[R]: a tag has content that its
+definition does not allow
+.IP \(bu 2
+\f[CR]unsupported_value\f[R]: a map key is an array, a map or a tag
+.IP \(bu 2
+\f[CR]sharedref_index_not_marked\f[R],
+\f[CR]sharedref_index_out_of_range\f[R],
+\f[CR]sharedref_not_complete\f[R]: a tag 29 that names no shared value
+that the decode holds
+.IP \(bu 2
+\f[CR]string_length_exceeded\f[R]: a string is longer than
+\f[CR]limits::string_length\f[R]
+.IP \(bu 2
+\f[CR]container_elements_exceeded\f[R]: the count of an array or a map
+is greater than \f[CR]limits::container_elements\f[R]
+.IP \(bu 2
+\f[CR]not_enough_memory\f[R]: a refused allocation
+.IP \(bu 2
+\f[CR]std::logic_error\f[R]: \f[CR]encoded\f[R] is null
+.IP \(bu 2
+\f[CR]std::logic_error\f[R]: \f[CR]owner\f[R] is empty
+.SH EXAMPLES
+.SS cbor::structs<T>::encode
+.IP
+.EX
+\f[I]// person: struct { std::string name; int age; }\f[R]
+\f[B]auto\f[R] const bytes = cbor::structs<person>::encode(person{\(dqann\(dq, 30});  \f[I]// {\(dqage\(dq: 30, \(dqname\(dq: \(dqann\(dq}\f[R]
+.EE
+.SS cbor::structs<T>::decode
+.IP
+.EX
+\f[I]// bytes: a std::string with {\(dqname\(dq: \(dqann\(dq, \(dqage\(dq: 30}\f[R]
+\f[B]auto\f[R] const p = cbor::structs<person>::decode(std::move(bytes));
+\f[B]if\f[R] (p)
+    age = (*p)\->age;  \f[I]// 30\f[R]
+.EE
+.SS cbor::describe_members<T>
+.IP
+.EX
+\f[B]template\f[R] <>
+\f[B]struct\f[R] cbor::describe_members<reference_structs::header> {
+    static \f[B]constexpr\f[R] std::optional<cbor::tag> tag = cbor::tag{160060};
+    static \f[B]constexpr\f[R] std::tuple members{
+        cbor::member{\(dqcontent\-type\(dq, &reference_structs::header::content_type},
+    };
+};
+.EE
+.IP
+.EX
+\f[B]auto\f[R] const bytes = cbor::structs<header>::encode(header{\(dqtext/plain\(dq});  \f[I]// 160060({\(dqcontent\-type\(dq: \(dqtext/plain\(dq})\f[R]
+.EE
+.IP
+.EX
+CBOR_DEFINE_TYPE(reference_structs::trailer, cbor::tag{160061},
+                 cbor::member{\(dqchecksum\(dq, &reference_structs::trailer::checksum});
+.EE
+.IP
+.EX
+\f[I]// trailer: struct { std::uint8_t checksum; }\f[R]
+\f[B]auto\f[R] const bytes = cbor::structs<trailer>::encode(trailer{7});  \f[I]// 160061({\(dqchecksum\(dq: 7})\f[R]
+.EE
+.SS cbor::member<P>
+.IP
+.EX
+\f[B]template\f[R] <>
+\f[B]struct\f[R] cbor::describe_members<reference_structs::senml> {
+    static \f[B]constexpr\f[R] std::optional<cbor::tag> tag = cbor::untagged;
+    static \f[B]constexpr\f[R] std::tuple members{
+        cbor::member{0, &reference_structs::senml::n},
+        cbor::member{2, &reference_structs::senml::v},
+    };
+};
+.EE
+.IP
+.EX
+\f[B]auto\f[R] const bytes = cbor::structs<senml>::encode(senml{\(dqt\(dq, 1.5});  \f[I]// {0: \(dqt\(dq, 2: 1.5}\f[R]
+.EE
+.SS CBOR_MEMBER
+.IP
+.EX
+\f[B]template\f[R] <>
+\f[B]struct\f[R] cbor::describe_members<reference_structs::account> {
+    static \f[B]constexpr\f[R] std::optional<cbor::tag> tag = cbor::untagged;
+    static \f[B]constexpr\f[R] std::tuple members{
+        CBOR_MEMBER(reference_structs::account, user),
+        CBOR_MEMBER(reference_structs::account, level),
+    };
+};
+.EE
+.IP
+.EX
+\f[B]auto\f[R] const bytes = cbor::structs<account>::encode(account{\(dqann\(dq, 2});  \f[I]// {\(dquser\(dq: \(dqann\(dq, \(dqlevel\(dq: 2}\f[R]
+.EE
+.SS CBOR_DEFINE_TYPE_MEMBERS
+.IP
+.EX
+CBOR_DEFINE_TYPE_MEMBERS(reference_structs::device, cbor::untagged, name, port);
+.EE
+.IP
+.EX
+\f[B]auto\f[R] const bytes = cbor::structs<device>::encode(device{\(dqlamp\(dq, 3});  \f[I]// {\(dqname\(dq: \(dqlamp\(dq, \(dqport\(dq: 3}\f[R]
+.EE
+.SS cbor::structs<T>
+.IP
+.EX
+\f[I]// reading: struct { std::uint8_t id; std::optional<std::uint8_t> unit; }\f[R]
+\f[B]auto\f[R] const one = cbor::structs<reading>::encode(reading{4, std::nullopt});    \f[I]// {\(dqid\(dq: 4}\f[R]
+\f[B]auto\f[R] const set = cbor::structs<std::set<std::uint8_t>>::encode({3, 1});        \f[I]// 258([1, 3])\f[R]
+.EE
+.SH SEE ALSO
+mbedded\-cbor(3), cbor::lazy(3), cbor::at_path(3), cbor::item(3), cbor::schema(3), cbor::ref(3), cbor::item_size(3), cbor::sequence(3), cbor::sequence_reader(3), cbor::diagnostic_notation(3), cbor::error(3)

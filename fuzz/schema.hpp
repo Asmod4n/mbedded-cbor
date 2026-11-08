@@ -425,9 +425,10 @@ void read_all(std::string_view const message)
 template <class T>
 void compare_all(T const &native, std::string_view message);
 
-// The errors that an unverified form may give on raw input (doc/reference/schema/unverified.md): it skips the
-// checks of the data and keeps every check of a bound, so it never raises and never reads outside the input. The
-// head of a variant item chooses the alternative, so a type with a variant member also gives incorrect_type.
+// The errors that an unverified form may give on raw input (the comment of cbor::schema::unverified_path in
+// schema.hpp): it skips the checks of the data and keeps every check of a bound, so it never raises and never reads
+// outside the input. The head of a variant item chooses the alternative, so a type with a variant member also gives
+// incorrect_type.
 template <class T>
 bool unverified_error(cbor::error const e)
 {

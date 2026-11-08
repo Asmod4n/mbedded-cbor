@@ -1,8 +1,11 @@
-// Writes a described struct as Packed CBOR and reads it back. Reads a
-// member of fixed size at an offset that the compiler computes. decode
-// reads the whole struct into a cbor::ref.
-// https://datatracker.ietf.org/doc/html/draft-ietf-cbor-packed-19
-// https://www.rfc-editor.org/rfc/rfc8746
+/**
+ * @file
+ * Writes a described struct as Packed CBOR and reads it back. Reads a
+ * member of fixed size at an offset that the compiler computes. decode
+ * reads the whole struct into a cbor::ref.
+ * https://datatracker.ietf.org/doc/html/draft-ietf-cbor-packed-19
+ * https://www.rfc-editor.org/rfc/rfc8746
+ */
 #pragma once
 
 #include <algorithm>
@@ -225,6 +228,29 @@ public:
 
 }
 
+/**
+ * @brief Tells if a message holds the description of its structs (`inside`) or not (`apart`).
+ *
+ * Each of `encode`, `path`, `at_path`, `decode` and the unverified forms takes it as a template argument; the
+ * default is `inside`.
+ * The data form of `apart` and cbor::schema::description() together have the size of the message.
+ *
+ * @code{.callseq}
+ * cbor::schema<T>::encode<cbor::description_place::apart>(value) → std::expected<std::string, cbor::error>
+ * @endcode
+ * @code{.example}
+ * message: {}
+ * call: cbor::description_place::apart
+ * result: cbor::description_place::apart
+ * call: cbor::schema<car>::description().size()
+ * result: 76
+ * @endcode
+ *
+ * @snippet doc_reference_schema.cpp description
+ * @see cbor::schema::description()
+ *
+ * @ingroup schema
+ */
 enum class description_place { inside, apart };
 
 class reflection
@@ -3278,6 +3304,51 @@ class reflection
     friend class pfr;
 };
 
+/**
+ * @brief A random access, sized range over an RFC 8746 typed array in the message.
+ *
+ * `accessor::view` makes it.
+ * It holds the owner of the bytes.
+ * Each element is a value of `E`, read from little endian, not a reference.
+ * `begin` and `end` on a temporary do not compile.
+ *
+ * @code{.callseq}
+ * view.size()     → std::size_t
+ * view[i]         → E
+ * view.at(i)      → std::expected<E, cbor::error>
+ * view.first(n)   → std::expected<cbor::typed_array_view<E>, cbor::error>
+ * view.last(n)    → std::expected<cbor::typed_array_view<E>, cbor::error>
+ * view.front()    → E
+ * view.back()     → E
+ * view.begin()    → iterator
+ * @endcode
+ * @code{.example}
+ * bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
+ * call: auto const root = cbor::schema<car>::path(std::move(bytes))
+ * result: accessor of a car
+ * call: auto const track = root->view<"$.track">()
+ * result: typed_array_view<double> of 3 elements: 1, 2, 3
+ * call: std::accumulate(track->begin(), track->end(), 0.0)
+ * result: 6
+ * call: (*track)[1]
+ * result: 2
+ * call: track->at(2)
+ * result: 3
+ * call: track->last(2)->front()
+ * result: 2
+ * call: track->first(2)->size()
+ * result: 2
+ * call: (*track)[2]
+ * result: 3
+ * @endcode
+ *
+ * @retval at, first, last `index_out_of_bounds` as a value
+ * @snippet doc_reference_schema.cpp typed_array_view
+ * @see cbor::schema::accessor
+ * @throws std::logic_error `operator[]` outside the view, or `front` and `back` on an empty view
+ *
+ * @ingroup schema
+ */
 template <class E>
 class typed_array_view
 {
@@ -3565,6 +3636,9 @@ consteval std::size_t reflection::member_offset()
     return Member < describe::members_count<U> ? offset : detail::no_fixed_size<T>();
 }
 
+/**
+ * @ingroup schema
+ */
 template <class T>
 class schema
 {
@@ -3575,6 +3649,40 @@ class schema
                                                 !std::same_as<X, std::optional<std::string_view>>;
 
 public:
+    /**
+     * @brief Gives the count of bytes that a field of type `U` takes in a message of `T`.
+     *
+     * With no argument, it gives the size of the root record of `T`.
+     * The root record is the end of the message.
+     * A number takes its head and its argument of fixed width.
+     * A struct takes its class tag, its table reference, a record head of 5 bytes and its fields.
+     * A text, a list, a map, an optional of variable size or a `std::variant` takes a reference `6(N)` of 6 bytes.
+     * None.
+     * A type that has no fixed size, for example a struct with a base class, does not compile.
+     *
+     * @code{.callseq}
+     * cbor::schema<T>::fixed_size()    → std::size_t
+     * cbor::schema<T>::fixed_size<U>() → std::size_t
+     * @endcode
+     * @code{.example}
+     * bytes: d8 71 82 9a 00 00 00 10 d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 5a 00 00 00 00 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 08 d8 80 9a 00 00 00 02 19 00 11 fa 40 20 00 00
+     * call: cbor::schema<tire>::fixed_size()
+     * result: 18
+     * call: cbor::schema<tire>::fixed_size<std::uint16_t>()
+     * result: 3
+     * call: cbor::schema<tire>::fixed_size<double>()
+     * result: 9
+     * call: cbor::schema<car>::fixed_size<std::string>()
+     * result: 6
+     * call: bytes.size()
+     * result: 66
+     * call: bytes[48]
+     * result: '\xd9'
+     * @endcode
+     *
+     * @snippet doc_reference_schema.cpp fixed_size
+     * @see cbor::schema::member_offset()
+     */
     template <class U = T>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static consteval std::size_t fixed_size()
@@ -3582,6 +3690,61 @@ public:
         return reflection::fixed_size<U, T>();
     }
 
+    /**
+     * @brief `description()` gives the table entries that are the same in every message of `T`: the 114 entry of
+     * each struct and the description of each element type of a vector of fixed-size structs (`wire`).
+     *
+     * The bytes are a CBOR sequence (RFC 8742).
+     * The compiler makes them.
+     * Each of `encode`, `path`, `at_path`, `decode` and the unverified forms takes `description_place` as a template
+     * argument.
+     * The default is `inside`: the message holds the description.
+     * With `apart`, `encode` writes the message without the description, and the read forms read such a message.
+     * Use it to store the description once and the data of each key in another place, for example in two named
+     * databases of LMDB.
+     * The data form is one well-formed CBOR item: tag 113 on the table without the description and the rump.
+     * The count of the table counts only the entries that it holds.
+     * The references keep the indices of the message with the description, so only `cbor::schema<T>` with `apart`
+     * reads the data form.
+     * A generic decoder of Packed CBOR does not.
+     * The size of the data form plus the size of `description()` is the size of the message.
+     * Every other error of cbor::schema::path(), cbor::schema::at_path() and cbor::schema::decode().
+     *
+     * @code{.callseq}
+     * cbor::schema<T>::description()                                   → std::span<char const>
+     * cbor::schema<T>::encode<cbor::description_place::apart>(value)   → std::expected<std::string, cbor::error>
+     * cbor::schema<T>::path<cbor::description_place::apart>(std::move(data)) → std::expected<cbor::schema<T>::accessor<T>, cbor::error>
+     * cbor::schema<T>::at_path<"$.member", cbor::description_place::apart>(data) → std::expected<V, cbor::error>
+     * @endcode
+     * @code{.example}
+     * bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
+     * call: auto const data = cbor::schema<car>::encode<cbor::description_place::apart>(car{"Volvo", 5, std::vector<tire>{tire{17, 2.5f}, tire{18, 2.25f}}, std::vector<double>{1.0, 2.0, 3.0}})
+     * result: 130 bytes: d8 71 82 9a 00 00 00 10 5a 00 00 00 0c 00 00 00 25 00 00 00 2f 00 00 00 45 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
+     * call: data->size()
+     * result: 130
+     * call: cbor::schema<car>::description().size()
+     * result: 76
+     * call: bytes.size()
+     * result: 206
+     * call: cbor::schema<car>::at_path<"$.seats", cbor::description_place::apart>(*data)
+     * result: 5
+     * call: cbor::schema<car>::decode<cbor::description_place::apart>(*data)
+     * result: ref to car{"Volvo", 5, {tire{17, 2.5f}, tire{18, 2.25f}}, {1, 2, 3}}
+     * call: auto const owner = std::make_shared<std::string const>(*data)
+     * result: shared_ptr to 130 bytes: d8 71 82 9a 00 00 00 10 5a 00 00 00 0c 00 00 00 25 00 00 00 2f 00 00 00 45 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
+     * call: auto const root = cbor::schema<car>::path<cbor::description_place::apart>(owner)
+     * result: accessor of a car
+     * call: root->at_path<"$.tires[1].diameter">()
+     * result: 18
+     * @endcode
+     *
+     * @retval incorrect_type a message with the description read with `apart`, or the data form read with `inside`
+     * @retval too_little_data the data form read with `inside`, when it is shorter than the least message of `T`
+     * @snippet doc_reference_schema.cpp description
+     * @see cbor::description_place
+     * @see cbor::schema::encode()
+     * @see cbor::schema::path()
+     */
     template <class U = T>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static constexpr std::span<char const> description()
@@ -3589,6 +3752,38 @@ public:
         return reflection::description_of<U>();
     }
 
+    /**
+     * @brief Gives the offset of the head of `Member` from the start of the record of `U`.
+     *
+     * `Member` is a pointer to a described member, `&U::m`.
+     * With reflection, `Member` can also be a reflection of the member, `^^U::m`.
+     * The record starts with the class tag, the table reference and the record head.
+     * The fields follow the key order of RFC 8949 4.2.1: a shorter key first, then the bytes of the key.
+     * This order is not the order of declaration.
+     * The root record of `T` starts at `size - fixed_size()` of the message.
+     * None.
+     * A `Member` of another struct, or a member that the description does not list, does not compile.
+     *
+     * @code{.callseq}
+     * cbor::schema<T>::member_offset<&U::m>() → std::size_t
+     * @endcode
+     * @code{.example}
+     * bytes: d8 71 82 9a 00 00 00 10 d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 5a 00 00 00 00 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 08 d8 80 9a 00 00 00 02 19 00 11 fa 40 20 00 00
+     * call: cbor::schema<tire>::member_offset<&tire::diameter>()
+     * result: 10
+     * call: cbor::schema<tire>::member_offset<&tire::pressure>()
+     * result: 13
+     * call: bytes.size()
+     * result: 66
+     * call: bytes[58]
+     * result: '\x19'
+     * call: bytes[61]
+     * result: '\xfa'
+     * @endcode
+     *
+     * @snippet doc_reference_schema.cpp member_offset
+     * @see cbor::schema::fixed_size()
+     */
     template <auto Member, class U = T>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static consteval std::size_t member_offset()
@@ -3601,6 +3796,102 @@ public:
             return reflection::member_offset<U, reflection::member_index_of<std::remove_cv_t<U>>(Member), T>();
     }
 
+    /**
+     * @brief Reads the part `U` of a message of `T`.
+     *
+     * A path that starts with `@` starts at `U`.
+     * A path that starts with `$` starts at the root.
+     * The result is a `std::expected`: the value of a number, `bool` or enum; a `std::string_view` of a text; the
+     * accessor of a struct, a list or a map.
+     * Every result holds the owner of the bytes.
+     * The accessor of a `std::variant<A...>` member has `index()` and `get<A>()`.
+     * `index()` gives the index of the alternative that the head of its item names.
+     * `get<A>()` gives a class alternative as its accessor, a number, `bool` or enum as its value, and a text or
+     * byte string as a `std::string_view` into the message.
+     * Another alternative gives `incorrect_type`.
+     * A path ends at a variant member: `$.pet.name` does not compile.
+     * `view` gives a cbor::typed_array_view of a list of numbers.
+     * It exists on the root accessor only.
+     * `size()` gives the count of a list or a map.
+     * An accessor of a vector of fixed-size structs is a random access range of `fixed_element` accessors.
+     * `at_path` on a temporary does not compile.
+     *
+     * @code{.callseq}
+     * accessor.at_path<"@.member">(indexes...) → std::expected<V, cbor::error>
+     * accessor.at_path<"$.member">(indexes...) → std::expected<V, cbor::error>
+     * root.view<"$.list">(indexes...)          → std::expected<cbor::typed_array_view<E>, cbor::error>
+     * accessor.size()                          → std::size_t
+     * pet.index()                              → std::size_t
+     * pet.get<A>()                             → std::expected<accessor<A>, cbor::error>
+     * accessor.begin()                         → iterator
+     * accessor.end()                           → iterator
+     * @endcode
+     * @code{.example}
+     * bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
+     * call: auto const root = cbor::schema<car>::path(std::move(bytes))
+     * result: accessor of a car
+     * call: auto const tires = root->at_path<"$.tires">()
+     * result: accessor of a std::vector<tire> of 2 elements
+     * call: tires->size()
+     * result: 2
+     * call: tires->at_path<"@[1].diameter">()
+     * result: 18
+     * call: tires->at_path<"$.seats">()
+     * result: 5
+     * call: auto const t = *tires->begin()
+     * result: accessor of a tire in a std::vector<tire>
+     * call: t.at_path<"@.diameter">()
+     * result: 17
+     * call: auto const u = tires->begin()[1]
+     * result: accessor of a tire in a std::vector<tire>
+     * call: u.at_path<"@.diameter">()
+     * result: 18
+     * call: root->view<"$.track">()->size()
+     * result: 3
+     * call: tires->at_path<"@[]">(0u)
+     * result: accessor of a tire in a std::vector<tire>
+     * @endcode
+     * @code{.example}
+     * bytes: d8 71 82 9a 00 00 00 12 d8 72 81 63 70 65 74 d8 72 82 64 62 61 72 6b 64 6e 61 6d 65 d8 72 82 64 6e 61 6d 65 64 74 6f 79 73 5a 00 00 00 08 00 00 00 42 00 00 00 54 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 0b d8 81 9a 00 00 00 02 18 03 c6 3a 00 00 00 00 7a 00 00 00 03 72 65 78 d9 07 0d d8 80 9a 00 00 00 01 c6 1a 00 00 00 00
+     * call: auto const house = cbor::schema<home>::path(std::move(bytes))
+     * result: accessor of a home
+     * call: auto const pet = house->at_path<"$.pet">()
+     * result: accessor of a std::variant<dog, cat> that holds a dog
+     * call: pet->index()
+     * result: 0
+     * call: pet->get<dog>()->at_path<"@.name">()
+     * result: "rex"
+     * call: pet->get<dog>()->at_path<"@.bark">()
+     * result: 3
+     * call: pet->get<cat>()
+     * result: unexpected cbor::error::incorrect_type
+     * @endcode
+     * @code{.example}
+     * bytes: d8 71 82 9a 00 00 00 12 d8 72 82 64 6e 61 6d 65 65 76 61 6c 75 65 5a 00 00 00 08 00 00 00 31 00 00 00 3b f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 77 69 64 74 68 1b 00 00 00 00 00 00 00 f0 d9 07 0e d8 80 9a 00 00 00 02 c6 1a 00 00 00 00 c6 3a 00 00 00 00
+     * call: auto const width = cbor::schema<property>::path(std::move(bytes))
+     * result: accessor of a property
+     * call: auto const value = width->at_path<"$.value">()
+     * result: accessor of a std::variant<bool, std::int64_t, std::string> that holds a std::int64_t
+     * call: value->index()
+     * result: 1
+     * call: value->get<std::int64_t>()
+     * result: 240
+     * call: value->get<std::string>()
+     * result: unexpected cbor::error::incorrect_type
+     * @endcode
+     *
+     * @retval index_out_of_bounds an index past the end of a list
+     * @retval incorrect_type a wrong head or tag on the path; a variant item whose head names no alternative;
+     * `get<A>()` of another alternative
+     * @retval unpopulated_table_index, syntax_error a broken reference
+     * @snippet doc_reference_schema.cpp accessor
+     * @snippet doc_reference_schema.cpp accessor variant
+     * @see cbor::schema::path()
+     * @see cbor::typed_array_view
+     * @throws std::logic_error a call on a moved-from accessor
+     *
+     * @ingroup schema
+     */
     template <class U = T, bool Verified = true>
     class accessor
     {
@@ -3840,6 +4131,42 @@ public:
         }
     };
 
+    /**
+     * @brief Reads one element of type `S` in a vector of fixed-size structs.
+     *
+     * Such a vector is one byte string of its elements under tag 32873 (`wire`).
+     * A path that starts with `@` reads a member of the element at its offset.
+     * A path that starts with `$` starts at the root.
+     * `*it` of the cbor::schema::accessor of the vector, and `at_path<"@[]">` on it, give this accessor.
+     * It holds the owner of the bytes.
+     * A path with `$` gives the errors of cbor::schema::accessor.
+     * `at_path` on a temporary does not compile.
+     *
+     * @code{.callseq}
+     * element.at_path<"@.member">(indexes...) → std::expected<V, cbor::error>
+     * element.at_path<"$.member">(indexes...) → std::expected<V, cbor::error>
+     * @endcode
+     * @code{.example}
+     * bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
+     * call: auto const root = cbor::schema<car>::path(std::move(bytes))
+     * result: accessor of a car
+     * call: auto const second = root->at_path<"$.tires[]">(1u)
+     * result: accessor of a tire in a std::vector<tire>
+     * call: second->at_path<"@.diameter">()
+     * result: 18
+     * call: second->at_path<"@.pressure">()
+     * result: 2.25
+     * call: second->at_path<"$.seats">()
+     * result: 5
+     * @endcode
+     *
+     * @retval index_out_of_bounds an index past the end of the vector, from the step that gave the element
+     * @snippet doc_reference_schema.cpp fixed_element
+     * @see cbor::schema::accessor
+     * @throws std::logic_error a call on a moved-from accessor
+     *
+     * @ingroup schema
+     */
     template <class S, bool Verified>
     class accessor<fixed_element<S>, Verified>
     {
@@ -3968,6 +4295,39 @@ public:
         }
     };
 
+    /**
+     * @brief Opens a message and gives the root cbor::schema::accessor.
+     *
+     * An rvalue moves into a new owner.
+     * An owner is read in place.
+     * Nothing is copied.
+     * An lvalue `std::string` does not compile.
+     * `path` checks the length, the table, the directory and the tag of the root once.
+     * It reads no field.
+     *
+     * @code{.callseq}
+     * cbor::schema<T>::path(std::move(encoded)) → std::expected<cbor::schema<T>::accessor<T>, cbor::error>
+     * cbor::schema<T>::path(owner)              → std::expected<cbor::schema<T>::accessor<T>, cbor::error>
+     * cbor::schema<T>::path(owner, encoded)     → std::expected<cbor::schema<T>::accessor<T>, cbor::error>
+     * @endcode
+     * @code{.example}
+     * bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
+     * call: cbor::schema<car>::path(std::string(bytes)).has_value()
+     * result: true
+     * call: auto const root = cbor::schema<car>::path(std::move(bytes))
+     * result: accessor of a car
+     * call: root->at_path<"$.make">()
+     * result: "Volvo"
+     * @endcode
+     *
+     * @retval too_little_data the message is shorter than its table and root, or its end is missing
+     * @retval incorrect_type a message of another layout, or a wrong tag of the root
+     * @snippet doc_reference_schema.cpp path
+     * @see cbor::schema::accessor
+     * @see cbor::schema::at_path()
+     * @see cbor::schema::decode()
+     * @throws std::logic_error a null or empty owner
+     */
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(Encoded &&encoded)
@@ -3975,6 +4335,9 @@ public:
         return path_with_owner<true, D>(std::make_shared<Encoded const>(std::move(encoded)));
     }
 
+    /**
+     * @brief Opens the message that @p encoded owns, in place.
+     */
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(std::shared_ptr<Encoded const> encoded)
@@ -3982,6 +4345,9 @@ public:
         return path_with_owner<true, D>(std::move(encoded));
     }
 
+    /**
+     * @brief Opens the message in bytes that @p owner keeps alive, in place.
+     */
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(std::shared_ptr<void const> owner, Encoded const &encoded)
@@ -3989,6 +4355,45 @@ public:
         return path_with_owner<true, D>(std::move(owner), std::string_view(std::span<char const>(encoded)));
     }
 
+    /**
+     * @brief Reads one value at `Path` and returns a `std::expected` of it.
+     *
+     * It makes the checks of cbor::schema::path() and of an accessor in one call and keeps nothing.
+     * It exists only for a value that holds no view into the bytes: a number, a `bool`, an enum, or a
+     * `std::optional` of one.
+     * A path starts with `$`, names a member with `.name` and an element with `[n]`.
+     * `[]` takes its index from the next argument.
+     * On an array or a vector of `std::uint8_t` or `std::byte`, `[n]` reads one byte.
+     * A text, a list or a struct needs an cbor::schema::accessor.
+     * A member that `T` does not have, a wrong count of indexes, or a path to a text does not compile.
+     *
+     * @code{.callseq}
+     * cbor::schema<T>::at_path<"$.member">(encoded)         → std::expected<V, cbor::error>
+     * cbor::schema<T>::at_path<"$.list[].member">(encoded, i) → std::expected<V, cbor::error>
+     * @endcode
+     * @code{.example}
+     * bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
+     * call: cbor::schema<car>::at_path<"$.seats">(bytes)
+     * result: 5
+     * call: cbor::schema<car>::at_path<"$.tires[1].diameter">(bytes)
+     * result: 18
+     * call: cbor::schema<car>::at_path<"$.tires[].pressure">(bytes, 0u)
+     * result: 2.5
+     * call: cbor::schema<car>::at_path<"$.track[2]">(bytes)
+     * result: 3
+     * call: cbor::schema<car>::at_path<"$.tires[].diameter">(bytes, 1u)
+     * result: 18
+     * call: cbor::schema<car>::at_path<"$.tires[].pressure">(bytes, 1u)
+     * result: 2.25
+     * @endcode
+     *
+     * @retval too_little_data, incorrect_type as cbor::schema::path()
+     * @retval index_out_of_bounds an index past the end of a list
+     * @retval unpopulated_table_index, syntax_error a broken reference
+     * @snippet doc_reference_schema.cpp at_path
+     * @see cbor::schema::accessor
+     * @see cbor::schema::path()
+     */
     template <fixed_string Path, description_place D = description_place::inside, std::convertible_to<std::size_t>... Index>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && Path.view().starts_with('$') &&
                  reflection::path_valid<T, Path, 1>() && sizeof...(Index) == reflection::index_arguments<Path>() &&
@@ -3998,6 +4403,49 @@ public:
         return at_path_with_directory<Path, true, D>(encoded, indexes...);
     }
 
+    /**
+     * @brief Reads the whole message into a `T` and returns it in a `cbor::ref<T>` that holds the owner of the bytes.
+     *
+     * A `std::string_view` member views the bytes.
+     * Nothing is copied: an rvalue moves into a new owner, and an owner is read in place.
+     * An lvalue `std::string` does not compile.
+     * `target` gives the start value, for example `std::pmr` containers with their memory resource; the forms with
+     * `target` need a default constructor of `T`.
+     * A struct with a default constructor is made with it, and then each described member is set.
+     * A class with no default constructor is made by a constructor that takes the described members in the order of
+     * the description: decode reads them into a `std::tuple` and calls `std::make_from_tuple`.
+     * An element of a container with an allocator makes that tuple with the allocator of the container.
+     * `not_enough_memory`.
+     *
+     * @code{.callseq}
+     * cbor::schema<T>::decode(std::move(encoded))       → std::expected<cbor::ref<T>, cbor::error>
+     * cbor::schema<T>::decode(owner)                    → std::expected<cbor::ref<T>, cbor::error>
+     * cbor::schema<T>::decode(owner, target)            → std::expected<cbor::ref<T>, cbor::error>
+     * cbor::schema<T>::decode(owner, encoded)           → std::expected<cbor::ref<T>, cbor::error>
+     * cbor::schema<T>::decode(owner, encoded, target)   → std::expected<cbor::ref<T>, cbor::error>
+     * @endcode
+     * @code{.example}
+     * bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
+     * call: auto const back = cbor::schema<car>::decode(std::move(bytes))
+     * result: ref to car{"Volvo", 5, {tire{17, 2.5f}, tire{18, 2.25f}}, {1, 2, 3}}
+     * call: (*back)->make
+     * result: "Volvo"
+     * @endcode
+     *
+     * @retval too_little_data the message is shorter than its table and root
+     * @retval incorrect_type a message of another struct, or a wrong head; a variant item whose head names no
+     * alternative
+     * @retval syntax_error, unpopulated_table_index a broken directory
+     * @retval inadmissible_type_for_tag_content a typed array whose length is not a multiple of its element size
+     * @retval nesting_depth_exceeded a variant item, like a list, a map and an optional, is one level deeper than
+     * its parent
+     * @snippet doc_reference_schema.cpp decode
+     * @see cbor::schema::encode()
+     * @see cbor::schema::path()
+     * @see cbor::ref
+     * @retval not_enough_memory an allocation of the result fails
+     * @throws std::logic_error a null or empty owner
+     */
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> decode(Encoded &&encoded)
@@ -4005,6 +4453,9 @@ public:
         return decode_with_owner<true, D>(std::move(encoded));
     }
 
+    /**
+     * @brief Reads the whole message that @p encoded owns into a `T`.
+     */
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded)
@@ -4012,6 +4463,9 @@ public:
         return decode_with_owner<true, D>(std::move(encoded));
     }
 
+    /**
+     * @brief Reads the whole message that @p encoded owns into @p target.
+     */
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded, T target)
@@ -4019,6 +4473,9 @@ public:
         return decode_with_owner<true, D>(std::move(encoded), std::move(target));
     }
 
+    /**
+     * @brief Reads the whole message in bytes that @p owner keeps alive into a `T`.
+     */
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded)
@@ -4026,6 +4483,9 @@ public:
         return decode_with_owner<true, D>(std::move(owner), std::string_view(std::span<char const>(encoded)));
     }
 
+    /**
+     * @brief Reads the whole message in bytes that @p owner keeps alive into @p target.
+     */
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded, T target)
@@ -4034,6 +4494,62 @@ public:
                                      std::move(target));
     }
 
+    /**
+     * @brief Opens a message as cbor::schema::path() does, and does not check the data of the message.
+     *
+     * It checks every bound, so no read leaves the input.
+     * Use it for a message from a peer that you trust.
+     * `unverified_path` gives an `accessor<T, false>`.
+     * Every accessor that it gives on a path is unverified too, and so is each element of a vector of fixed-size
+     * structs.
+     * `view` of an unverified accessor does not check the tag of the typed array.
+     * A wrong byte of data gives a value, not an error.
+     *
+     * Not checked:
+     * - the tag of each struct;
+     * - the head of a number, a `bool`, a fixed string and a `std::array`;
+     * - the head byte of a text, a list and a map, and the tag of a typed array;
+     * - the prefix of a vector of fixed-size structs;
+     * - the start of the table and the fillers before the items;
+     * - that the length of a typed array is a multiple of its element size;
+     * - that a `bool` byte is 0 or 1: any other byte reads as `true`;
+     * - in `unverified_decode`, the order of the references and of the items.
+     *
+     * Checked:
+     * - that each head, length and item lies inside the message;
+     * - that each directory entry lies between the start and the end of the items;
+     * - each index against the count of its list, its table or its directory;
+     * - the limits of the build and, in `unverified_decode`, the nesting depth.
+     *
+     * @code{.callseq}
+     * cbor::schema<T>::unverified_path(std::move(encoded))       → std::expected<cbor::schema<T>::accessor<T, false>, cbor::error>
+     * cbor::schema<T>::unverified_at_path<"$.member">(encoded)   → std::expected<V, cbor::error>
+     * cbor::schema<T>::unverified_decode(std::move(encoded))     → std::expected<cbor::ref<T>, cbor::error>
+     * @endcode
+     * @code{.example}
+     * bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
+     * call: cbor::schema<car>::unverified_at_path<"$.seats">(bytes)
+     * result: 5
+     * call: cbor::schema<car>::unverified_at_path<"$.tires[].diameter">(bytes, 0u)
+     * result: 17
+     * call: auto const lane = cbor::schema<car>::unverified_path(std::string(bytes))
+     * result: unverified accessor of a car
+     * call: lane->at_path<"$.tires[1].diameter">()
+     * result: 18
+     * call: (*cbor::schema<car>::unverified_decode(std::string(bytes)))->make
+     * result: "Volvo"
+     * @endcode
+     *
+     * @retval too_little_data a message that ends too early, or a length past the end
+     * @retval index_out_of_bounds an index past the end of a list
+     * @retval unpopulated_table_index, syntax_error a reference or a directory entry outside the table or the items
+     * @retval incorrect_type a variant item whose head names no alternative. The head chooses the alternative, so
+     * these forms compare it too
+     * @snippet doc_reference_schema.cpp unverified
+     * @see cbor::schema::unverified_at_path()
+     * @see cbor::schema::unverified_decode()
+     * @see cbor::schema::path()
+     */
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_path(Encoded &&encoded)
@@ -4041,6 +4557,9 @@ public:
         return path_with_owner<false, D>(std::make_shared<Encoded const>(std::move(encoded)));
     }
 
+    /**
+     * @brief Opens the message that @p encoded owns, and does not check its data.
+     */
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_path(std::shared_ptr<Encoded const> encoded)
@@ -4048,6 +4567,9 @@ public:
         return path_with_owner<false, D>(std::move(encoded));
     }
 
+    /**
+     * @brief Opens the message in bytes that @p owner keeps alive, and does not check its data.
+     */
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_path(std::shared_ptr<void const> owner, Encoded const &encoded)
@@ -4055,6 +4577,26 @@ public:
         return path_with_owner<false, D>(std::move(owner), std::string_view(std::span<char const>(encoded)));
     }
 
+    /**
+     * @brief Reads one value as cbor::schema::at_path() does, and does not check the data of the message.
+     *
+     * The checks and the errors of cbor::schema::unverified_path() apply.
+     *
+     * @code{.callseq}
+     * cbor::schema<T>::unverified_at_path<Path>(bytes, indexes...) → std::expected<V, cbor::error>
+     * @endcode
+     * @code{.example}
+     * bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
+     * call: cbor::schema<car>::unverified_at_path<"$.seats">(bytes)
+     * result: 5
+     * call: cbor::schema<car>::unverified_at_path<"$.tires[].diameter">(bytes, 0u)
+     * result: 17
+     * @endcode
+     *
+     * @snippet doc_reference_schema.cpp unverified
+     * @see cbor::schema::unverified_path()
+     * @see cbor::schema::at_path()
+     */
     template <fixed_string Path, description_place D = description_place::inside, std::convertible_to<std::size_t>... Index>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && Path.view().starts_with('$') &&
                  reflection::path_valid<T, Path, 1>() && sizeof...(Index) == reflection::index_arguments<Path>() &&
@@ -4064,6 +4606,25 @@ public:
         return at_path_with_directory<Path, false, D>(encoded, indexes...);
     }
 
+    /**
+     * @brief Reads the whole message as cbor::schema::decode() does, and does not check the data of the message.
+     *
+     * The checks and the errors of cbor::schema::unverified_path() apply; it also checks the nesting depth.
+     * It does not check the order of the references and of the items.
+     *
+     * @code{.callseq}
+     * cbor::schema<T>::unverified_decode(std::move(bytes)) → std::expected<cbor::ref<T>, cbor::error>
+     * @endcode
+     * @code{.example}
+     * bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
+     * call: (*cbor::schema<car>::unverified_decode(std::string(bytes)))->make
+     * result: "Volvo"
+     * @endcode
+     *
+     * @snippet doc_reference_schema.cpp unverified
+     * @see cbor::schema::unverified_path()
+     * @see cbor::schema::decode()
+     */
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> unverified_decode(Encoded &&encoded)
@@ -4071,6 +4632,9 @@ public:
         return decode_with_owner<false, D>(std::move(encoded));
     }
 
+    /**
+     * @brief Reads the message that @p encoded owns into a `T`, and does not check its data.
+     */
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<Encoded const> encoded)
@@ -4078,6 +4642,9 @@ public:
         return decode_with_owner<false, D>(std::move(encoded));
     }
 
+    /**
+     * @brief Reads the message that @p encoded owns into @p target, and does not check its data.
+     */
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<Encoded const> encoded, T target)
@@ -4085,6 +4652,9 @@ public:
         return decode_with_owner<false, D>(std::move(encoded), std::move(target));
     }
 
+    /**
+     * @brief Reads the message in bytes that @p owner keeps alive into a `T`, and does not check its data.
+     */
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded)
@@ -4092,6 +4662,9 @@ public:
         return decode_with_owner<false, D>(std::move(owner), std::string_view(std::span<char const>(encoded)));
     }
 
+    /**
+     * @brief Reads the message in bytes that @p owner keeps alive into @p target, and does not check its data.
+     */
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
     static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded, T target)
@@ -4100,6 +4673,41 @@ public:
                                      std::move(target));
     }
 
+    /**
+     * @brief Writes `value` as one Packed CBOR message (`wire`).
+     *
+     * The first form returns a new `std::string`.
+     * The second form appends to `target` and returns the count of bytes of the message.
+     * `target` is a `std::string`, a container of `char`, a `std::span<char>` or a message writer.
+     * Only public members are written.
+     * Each field has a head of fixed width.
+     * So a value does not change the offset of a field.
+     * An error of the message writer comes back as its `cbor::error`.
+     * A struct with no cbor::tag, two structs with one tag, or a tag of a standard type does not compile.
+     *
+     * @code{.callseq}
+     * cbor::schema<T>::encode(value)         → std::expected<std::string, cbor::error>
+     * cbor::schema<T>::encode(value, target) → std::expected<std::size_t, cbor::error>
+     * @endcode
+     * @code{.example}
+     * bytes: d8 71 82 9a 00 00 00 10 d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 5a 00 00 00 00 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 08 d8 80 9a 00 00 00 02 19 00 11 fa 40 20 00 00
+     * call: cbor::schema<tire>::encode(tire{17, 2.5f})
+     * result: 66 bytes: d8 71 82 9a 00 00 00 10 d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 5a 00 00 00 00 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 08 d8 80 9a 00 00 00 02 19 00 11 fa 40 20 00 00
+     * call: std::string out = "x"
+     * result: "x"
+     * call: auto const n = cbor::schema<tire>::encode(tire{17, 2.5f}, out)
+     * result: 66
+     * call: out.size()
+     * result: 67
+     * @endcode
+     *
+     * @retval no_buffer_space a `std::span<char>` is shorter than the message
+     * @retval nesting_depth_exceeded the value is deeper than the stack of the thread holds
+     * @retval value_too_large the message is longer than 2^32 - 1 bytes
+     * @snippet doc_reference_schema.cpp encode
+     * @see cbor::schema::decode()
+     * @see cbor::tag
+     */
     template <description_place D = description_place::inside>
     CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode(T const &value)
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
@@ -4123,6 +4731,9 @@ public:
         return out;
     }
 
+    /**
+     * @brief Appends the message of @p value to @p target, and gives the count of bytes of the message.
+     */
     template <description_place D = description_place::inside, class Target>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(T const &value, Target &&target)

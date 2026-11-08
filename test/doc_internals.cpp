@@ -17,8 +17,8 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 using cbor::error;
 
-// Each test in this file is one claim of doc/advanced/internals.md that a caller can check. The tests exist so that a
-// change of the mechanism that breaks a claim fails here.
+// Each test in this file is one claim of tools/site/guides/advanced/internals.md that a caller can check. The tests
+// exist so that a change of the mechanism that breaks a claim fails here.
 
 // The section "How the documents are tested" states that preferred() builds the input that a comment shows as text.
 // The test exists because every document test depends on that.

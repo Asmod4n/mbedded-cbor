@@ -115,18 +115,46 @@ struct device {
 
 } // namespace reference_structs
 
-CBOR_DEFINE_TYPE(reference_structs::header, cbor::tag{160060},
-                 cbor::member{"content-type", &reference_structs::header::content_type});
+// The descriptions below are the examples of the reference pages of describe_members, member, CBOR_MEMBER and
+// CBOR_DEFINE_TYPE_MEMBERS; the comments of describe.hpp take them through the snippet markers.
 
-CBOR_DEFINE_TYPE(reference_structs::senml, cbor::untagged,
-                 cbor::member{0, &reference_structs::senml::n},
-                 cbor::member{2, &reference_structs::senml::v});
+// [describe_members]
+template <>
+struct cbor::describe_members<reference_structs::header> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160060};
+    static constexpr std::tuple members{
+        cbor::member{"content-type", &reference_structs::header::content_type},
+    };
+};
+// [describe_members]
 
-CBOR_DEFINE_TYPE(reference_structs::account, cbor::untagged,
-                 CBOR_MEMBER(reference_structs::account, user),
-                 CBOR_MEMBER(reference_structs::account, level));
+// [member]
+template <>
+struct cbor::describe_members<reference_structs::senml> {
+    static constexpr std::optional<cbor::tag> tag = cbor::untagged;
+    static constexpr std::tuple members{
+        cbor::member{0, &reference_structs::senml::n},
+        cbor::member{2, &reference_structs::senml::v},
+    };
+};
+// [member]
 
+// [CBOR_MEMBER]
+template <>
+struct cbor::describe_members<reference_structs::account> {
+    static constexpr std::optional<cbor::tag> tag = cbor::untagged;
+    static constexpr std::tuple members{
+        CBOR_MEMBER(reference_structs::account, user),
+        CBOR_MEMBER(reference_structs::account, level),
+    };
+};
+// [CBOR_MEMBER]
+
+// [CBOR_DEFINE_TYPE]
 CBOR_DEFINE_TYPE(reference_structs::trailer, cbor::tag{160061},
                  cbor::member{"checksum", &reference_structs::trailer::checksum});
+// [CBOR_DEFINE_TYPE]
 
+// [CBOR_DEFINE_TYPE_MEMBERS]
 CBOR_DEFINE_TYPE_MEMBERS(reference_structs::device, cbor::untagged, name, port);
+// [CBOR_DEFINE_TYPE_MEMBERS]

@@ -5,10 +5,11 @@ on:
     branches: [main]
     paths:
       - 'include/**'
-      - 'doc/reference/**'
+      - 'Doxyfile'
+      - 'tools/doc/**'
       - 'tools/site/**'
       - 'test/doc_types.hpp'
-      - 'containers/site.Containerfile'
+      - 'containers/docs.Containerfile'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -35,17 +36,17 @@ jobs:
       - id: image
         uses: actions/cache@v4
         with:
-          path: ${{ runner.temp }}/image-site
-          key: image-site-${{ steps.snapshot.outputs.snapshot }}-${{ hashFiles('containers/site.Containerfile') }}
+          path: ${{ runner.temp }}/image-docs
+          key: image-docs-${{ steps.snapshot.outputs.snapshot }}-${{ hashFiles('containers/docs.Containerfile') }}
       - if: steps.image.outputs.cache-hit != 'true'
         name: Build the image
         run: |
-          mkdir -p "$RUNNER_TEMP/image-site"
-          podman build -q -t mbedded-cbor-site -f containers/site.Containerfile containers
-          podman save -o "$RUNNER_TEMP/image-site/image.tar" mbedded-cbor-site
+          mkdir -p "$RUNNER_TEMP/image-docs"
+          podman build -q -t mbedded-cbor-docs -f containers/docs.Containerfile containers
+          podman save -o "$RUNNER_TEMP/image-docs/image.tar" mbedded-cbor-docs
       - if: steps.image.outputs.cache-hit == 'true'
         name: Load the image
-        run: podman load -q -i "$RUNNER_TEMP/image-site/image.tar"
+        run: podman load -q -i "$RUNNER_TEMP/image-docs/image.tar"
       - name: Build the site
         run: sh tools/site/page.sh "$RUNNER_TEMP/site"
       - uses: actions/upload-pages-artifact@v3

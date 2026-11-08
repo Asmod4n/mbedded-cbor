@@ -10,7 +10,7 @@
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 
-// Each test in this file is one example of doc/reference/console.md. The tests exist so that every example
+// Each test in this file is one example of tools/site/reference/console.md. The tests exist so that every example
 // compiles in C++ and gives the result that the page states. The site checks the same examples in the console.
 
 namespace {

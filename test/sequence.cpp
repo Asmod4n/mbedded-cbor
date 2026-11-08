@@ -2,6 +2,7 @@
 #include "owned_copy.hpp"
 #include <cbor/sequence.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <functional>
 #include <iterator>
@@ -184,4 +185,13 @@ TEST_CASE("sequence: a count larger than the bytes left is too_little_data befor
         REQUIRE_EQ(elements.size(), 1);
         CHECK_EQ(elements.front().error(), error::too_little_data);
     }
+}
+
+// tools/site/guides/complexity.md proves that a loop over a sequence reads each item once. A form that read the
+// sequence from its start for each item would take 10^10 steps here, and the test run would not end in its time.
+TEST_CASE("sequence: a loop over 100000 items reads each item once")
+{
+    auto const elements = elements_of(held(std::string(100000, '\x00')));
+    CHECK_EQ(elements.size(), 100000u);
+    CHECK(std::ranges::all_of(elements, [](auto const &e) { return e.has_value() && e->size() == 1; }));
 }

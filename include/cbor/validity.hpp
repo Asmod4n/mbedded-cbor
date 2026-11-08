@@ -109,8 +109,54 @@ class canonical_ids;
 
 }
 
+/**
+ * @brief Gives the limits of the build.
+ *
+ * The macro `CBOR_STRING_LENGTH_DEFAULT` sets `string_length`, and the macro `CBOR_CONTAINER_ELEMENTS_DEFAULT` sets
+ * `container_elements`.
+ * A macro that the build does not set gets its default, `SIZE_MAX`.
+ * No call reads a limit at run time.
+ * A limit at `SIZE_MAX` is not set, and its check is not in the program.
+ * A limit counts what a call reads or decodes.
+ * An item that a call only skips does not count.
+ * Every translation unit of one program uses the same values.
+ *
+ * Nesting has no fixed limit.
+ * A reader that recurses stops where the stack of its thread ends: a call that comes within 16 KiB of the end
+ * (32 KiB on Windows or with a sanitizer) returns `nesting_depth_exceeded`.
+ * Each thread reads the bounds of its own stack once, at its first check: from the system on Linux (glibc and musl),
+ * macOS and Windows, and from the linker on WebAssembly without threads and on picolibc.
+ * Another target does not compile.
+ * A frame outside these bounds, such as the stack of a fiber or of a signal handler, is not checked.
+ * The first check of a thread does not run in a signal handler.
+ * On Linux, a change of `RLIMIT_STACK` after the first check, and a mapping that a program places with `MAP_FIXED`
+ * below the stack of the main thread, are outside the bound.
+ * On picolibc, a stack smaller than the reserve refuses every nested item.
+ * cbor::item_size(), cbor::sequence_reader and a path of child segments do not recurse and read any depth.
+ * A deep value of a user type (`structs`, `schema`) is destroyed and copied by its own recursion: a thread with a
+ * smaller stack than the one that decoded it can overflow there.
+ *
+ * @code{.callseq}
+ * cbor::limits::string_length      → std::size_t
+ * cbor::limits::container_elements → std::size_t
+ * @endcode
+ * @code{.example}
+ * message: {}
+ * call: cbor::limits::string_length
+ * result: 4294967295
+ * call: cbor::limits::container_elements
+ * result: 4294967295
+ * @endcode
+ *
+ * @snippet doc_reference_errors.cpp limits
+ * @see cbor::error
+ *
+ * @ingroup errors
+ */
 struct limits {
+    /** @brief The bytes of one text or byte string; more give `string_length_exceeded`. */
     static constexpr std::size_t string_length = CBOR_STRING_LENGTH_DEFAULT;
+    /** @brief The elements of an array, or the pairs of a map; more give `container_elements_exceeded`. */
     static constexpr std::size_t container_elements = CBOR_CONTAINER_ELEMENTS_DEFAULT;
 };
 

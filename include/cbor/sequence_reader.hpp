@@ -1,8 +1,11 @@
-// Reads a CBOR Sequence that arrives in pieces. next() gives each
-// complete data item as a cbor::lazy, or too_little_data while the
-// item is not complete. Keeps a piece that it takes by move or in a
-// std::shared_ptr without a copy. Copies an item that spans two pieces.
-// https://www.rfc-editor.org/rfc/rfc8742#section-2
+/**
+ * @file
+ * Reads a CBOR Sequence that arrives in pieces. next() gives each
+ * complete data item as a cbor::lazy, or too_little_data while the
+ * item is not complete. Keeps a piece that it takes by move or in a
+ * std::shared_ptr without a copy. Copies an item that spans two pieces.
+ * https://www.rfc-editor.org/rfc/rfc8742#section-2
+ */
 #pragma once
 
 #include <algorithm>
@@ -29,6 +32,65 @@
 namespace cbor
 {
 
+/**
+ * @brief Reads a CBOR sequence (RFC 8742) whose bytes arrive in pieces, for example from a socket.
+ *
+ * `feed` gives the reader the next piece.
+ * `next` gives the next item as a cbor::lazy when all of its bytes are there, and `too_little_data` while it waits.
+ * `empty` is true when the reader holds no byte that no item took.
+ *
+ * `feed(std::move(s))` takes a `std::string` by move.
+ * `feed(shared_ptr)` holds the piece without a copy.
+ * `feed(view)` and `feed(s)` copy the bytes.
+ * An item that is whole in a piece that the reader holds is a view into that piece.
+ * The reader copies an item that the end of a piece cuts, and only the bytes of that item.
+ * Each item keeps its bytes alive after later feeds and after the reader is gone.
+ *
+ * A char array, such as a literal, does not compile, because it holds a NUL after its last byte.
+ * A `std::shared_ptr` to bytes that are not const does not compile.
+ * The reader cannot be copied.
+ *
+ * @code{.callseq}
+ * cbor::sequence_reader r  → sequence_reader
+ * r.feed(std::move(piece)) → void
+ * r.next()                 → std::expected<lazy, error>
+ * r.empty()                → bool
+ * @endcode
+ * @code{.example}
+ * bytes: 82 01 02 03
+ * call: cbor::sequence_reader r
+ * result: sequence_reader that holds no unread byte
+ * call: auto first = bytes.substr(0, 2)
+ * result: 2 bytes: 82 01
+ * call: r.feed(std::move(first))
+ * result: void
+ * call: r.empty()
+ * result: false
+ * call: auto second = bytes.substr(2)
+ * result: 2 bytes: 02 03
+ * call: r.feed(std::move(second))
+ * result: void
+ * call: r.next()->size()
+ * result: 2
+ * call: r.next()->get<std::int64_t>()
+ * result: 3
+ * call: r.empty()
+ * result: true
+ * @endcode
+ *
+ * @retval too_little_data the item is not complete yet; feed more bytes
+ * @retval syntax_error the bytes are not a well-formed item
+ * @retval indefinite_length a head uses indefinite length
+ * @throws std::logic_error a null `std::shared_ptr`, or a call on a reader that was moved from
+ *
+ * After an error other than `too_little_data`, every call of `next` gives that error, and `feed` keeps no byte.
+ *
+ * @snippet doc_reference_tools.cpp sequence_reader
+ * @see cbor::sequence
+ * @see cbor::lazy
+ *
+ * @ingroup tools
+ */
 class sequence_reader
 {
     enum class phase { head, argument, string_content, elements };
@@ -215,16 +277,26 @@ class sequence_reader
     }
 
 public:
+    /** @brief Makes a reader that holds no byte. */
     sequence_reader() = default;
 
     sequence_reader(sequence_reader const &) = delete;
 
     sequence_reader &operator=(sequence_reader const &) = delete;
 
-    sequence_reader(sequence_reader &&) = default;
+    /**
+     * @brief Takes the bytes and the state of @p other.
+     * @param other the reader that throws on its next call
+     */
+    sequence_reader(sequence_reader &&other) = default;
 
-    sequence_reader &operator=(sequence_reader &&) = default;
+    /**
+     * @brief Takes the bytes and the state of @p other.
+     * @param other the reader that throws on its next call
+     */
+    sequence_reader &operator=(sequence_reader &&other) = default;
 
+    /** @brief Copies the bytes of a view to the end of the sequence. */
     template <borrowed_range_of_chars Piece>
         requires(!std::is_array_v<Piece>)
     void feed(Piece const piece)
@@ -232,6 +304,7 @@ public:
         bytes_feed(std::string_view(std::span<char const>(piece)));
     }
 
+    /** @brief Copies the bytes of a container to the end of the sequence. */
     template <owning_range_of_chars Piece>
         requires(!std::is_array_v<Piece>)
     void feed(Piece const &piece)
@@ -239,12 +312,14 @@ public:
         bytes_feed(std::string_view(std::span<char const>(piece)));
     }
 
+    /** @brief Takes a container by move and holds it as the next bytes of the sequence. */
     template <owning_range_of_chars Piece>
     void feed(Piece &&piece)
     {
         feed(std::make_shared<Piece const>(std::move(piece)));
     }
 
+    /** @brief Holds the bytes of @p piece as the next bytes of the sequence, without a copy. */
     template <owning_range_of_chars Piece>
     void feed(std::shared_ptr<Piece const> piece)
     {
@@ -256,12 +331,17 @@ public:
         push_piece(held_piece{std::move(piece), bytes});
     }
 
+    /**
+     * @brief Tells if the reader holds no byte that no item took.
+     * @return `true` when every byte that was fed is in an item that `next` gave
+     */
     bool empty() const
     {
         throw_logic_error_if_moved_from();
         return buffer->size() == item_begin && piece_first == pieces.size();
     }
 
+    /** @brief Gives the next item when all of its bytes are there. */
     std::expected<lazy, error> next()
     {
         throw_logic_error_if_moved_from();

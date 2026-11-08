@@ -24,8 +24,9 @@
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 
-// Each test in this file is one example of a page in doc/reference/item/. The tests exist so that every
-// example compiles and gives the result that its page states.
+// Each test in this file is one example of a reference page of the item group; the comments of item.hpp, decode.hpp
+// and encode.hpp take the examples through the snippet markers. The tests exist so that every example compiles and
+// gives the result that its page states.
 
 namespace
 {
@@ -63,40 +64,56 @@ struct writer_target {
 
 }
 
-// item.md: the kind of the root and the count of its elements; only a decode makes an item.
+// item.hpp, snippet item: the kind of the root and the count of its elements; only a decode makes an item.
 TEST_CASE("doc reference item: item")
 {
     std::string const bytes = test::preferred(test::A(1, test::M("a"s, 2)));
+    // [item]
+    // bytes: a std::string with [1, {"a": 2}]
     auto const tree = cbor::decode(bytes);
+    auto const kind = (*tree)->type;                              // cbor::type::array
+    auto const count = (*tree)->get<cbor::type::array>()->size();  // 2
+    // [item]
     REQUIRE(tree);
-    CHECK_EQ((*tree)->type, cbor::type::array);
-    CHECK_EQ((*tree)->get<cbor::type::array>()->size(), 2u);
+    CHECK_EQ(kind, cbor::type::array);
+    CHECK_EQ(count, 2u);
     CHECK_FALSE(std::is_constructible_v<cbor::item, cbor::type, std::uint8_t>);
     CHECK(std::is_trivially_destructible_v<cbor::item>);
 }
 
-// get.md: a text key, the argument of a negative integer, and a wrong kind.
+// item.hpp, snippet get: a text key, the argument of a negative integer, and a wrong kind.
 TEST_CASE("doc reference item: item::get")
 {
     std::string const bytes = test::preferred(test::M("a"s, test::negative{2}));
+    // [get]
+    // bytes: a std::string with {"a": -3}
     auto const tree = cbor::decode(bytes);
-    REQUIRE(tree);
     auto const pairs = *(*tree)->get<cbor::type::map>();
+    auto const key = pairs[0].get<cbor::type::text_string>();        // "a"
+    auto const argument = pairs[1].get<cbor::type::negative_integer>(); // 2, for -3
+    auto const other = pairs[1].get<cbor::type::unsigned_integer>();    // incorrect_type
+    // [get]
+    REQUIRE(tree);
     REQUIRE_EQ(pairs.size(), 2u);
-    CHECK_EQ(pairs[0].get<cbor::type::text_string>().value(), "a"sv);
-    CHECK_EQ(pairs[1].get<cbor::type::negative_integer>().value(), 2u);
-    CHECK_EQ(pairs[1].get<cbor::type::unsigned_integer>().error(), cbor::error::incorrect_type);
+    CHECK_EQ(key.value(), "a"sv);
+    CHECK_EQ(argument.value(), 2u);
+    CHECK_EQ(other.error(), cbor::error::incorrect_type);
 }
 
-// decode.md: one item, a byte after it, a leading tag 55799, an indefinite length, and a tree that outlives
-// its input.
+// decode.hpp, snippet decode: one item, a byte after it, a leading tag 55799, an indefinite length, and a tree that
+// outlives its input.
 TEST_CASE("doc reference item: decode")
 {
     std::string const bytes = test::preferred(test::A("hi"s, 1));
+    // [decode]
+    // bytes: a std::string with ["hi", 1]
     auto const tree = cbor::decode(bytes);
+    auto const count = (*tree)->get<cbor::type::array>()->size();  // 2
+    auto const first = cbor::decode("\x01\x02"s);                    // the item 1; the byte 02 is not read
+    // [decode]
     REQUIRE(tree);
-    CHECK_EQ((*tree)->get<cbor::type::array>()->size(), 2u);
-    CHECK(cbor::decode("\x01\x02"s).has_value());
+    CHECK_EQ(count, 2u);
+    CHECK(first.has_value());
     auto const self_described = cbor::decode("\xd9\xd9\xf7\x01"s);
     CHECK_EQ((*self_described)->type, cbor::type::unsigned_integer);
     auto const second = cbor::decode("\xd9\xd9\xf7\xd9\xd9\xf7\x01"s);
@@ -115,15 +132,20 @@ TEST_CASE("doc reference item: decode")
     CHECK_EQ((*copy)->get<cbor::type::array>().value()[0].get<cbor::type::text_string>().value(), "hi"sv);
 }
 
-// encoded_cbor_data_item.md: the content of a tag 24, a content that is no byte string, and a wrong node.
+// decode.hpp, snippet encoded_cbor_data_item: the content of a tag 24, a content that is no byte string, and a wrong
+// node.
 TEST_CASE("doc reference item: encoded_cbor_data_item")
 {
     std::string const bytes = "\xd8\x18\x42\x61\x61"s;
+    // [encoded_cbor_data_item]
+    // bytes: a std::string with 24(h'6161'), a tag 24 over the text "a"
     auto const tree = cbor::decode(bytes);
-    REQUIRE(tree);
     auto const inner = cbor::encoded_cbor_data_item(*tree, **tree);
+    auto const text = inner->get().get<cbor::type::text_string>();  // "a"
+    // [encoded_cbor_data_item]
+    REQUIRE(tree);
     REQUIRE(inner);
-    CHECK_EQ(inner->get().get<cbor::type::text_string>().value(), "a"sv);
+    CHECK_EQ(text.value(), "a"sv);
 
     auto const no_bytes = cbor::decode("\xd8\x18\x01"s);
     REQUIRE(no_bytes);
@@ -135,14 +157,18 @@ TEST_CASE("doc reference item: encoded_cbor_data_item")
                     std::logic_error);
 }
 
-// encode.md: a container target gives the input again; a short span and a writer of the program.
+// encode.hpp, snippet encode: a container target gives the input again; a short span and a writer of the program.
 TEST_CASE("doc reference item: encode")
 {
     std::string const bytes = test::preferred(test::A(1, "a"s));
+    // [encode]
+    // bytes: a std::string with [1, "a"]
     auto const tree = cbor::decode(bytes);
-    REQUIRE(tree);
     std::string out;
-    CHECK_EQ(cbor::encode(**tree, out).value(), 4u);
+    auto const size = cbor::encode(**tree, out);  // 4; out == bytes
+    // [encode]
+    REQUIRE(tree);
+    CHECK_EQ(size.value(), 4u);
     CHECK_EQ(out, bytes);
 
     std::array<char, 2> small{};
@@ -156,13 +182,18 @@ TEST_CASE("doc reference item: encode")
 
 // The iov forms exist where the platform has <sys/uio.h>, as in the library (encode.hpp); Windows has none.
 #if __has_include(<sys/uio.h>)
-// encode_iov.md: one piece; written with writev, the pieces are the bytes of encode, shown as EDN on the page.
+// encode.hpp, snippet encode_iov: one piece; written with writev, the pieces are the bytes of encode, shown as EDN on
+// the page.
 TEST_CASE("doc reference item: encode_iov")
 {
     std::string const bytes = test::preferred(test::A(1, "a"s));
+    // [encode_iov]
+    // bytes: a std::string with [1, "a"]
     auto const tree = cbor::decode(bytes);
+    auto const pieces = cbor::encode_iov(**tree);  // 1 piece, the 4 bytes 82 01 61 61
+    // writev(fd, (*pieces)->data(), static_cast<int>((*pieces)->size()));
+    // [encode_iov]
     REQUIRE(tree);
-    auto const pieces = cbor::encode_iov(**tree);
     REQUIRE(pieces);
     CHECK_EQ((*pieces)->size(), 1u);
     auto const joined = test::joined(**pieces);
@@ -172,49 +203,63 @@ TEST_CASE("doc reference item: encode_iov")
 }
 #endif
 
-// encoder.md: a map written call by call; a copy does not compile.
+// encode.hpp, snippet encoder: a map written call by call; a copy does not compile.
 TEST_CASE("doc reference item: encoder")
 {
     CHECK_FALSE(std::is_copy_constructible_v<cbor::encoder<std::string>>);
+    // [encoder]
     std::string out;
     cbor::encoder e(out);
-    REQUIRE(e.map(1));
-    REQUIRE(e.text_string("a"));
-    REQUIRE(e.unsigned_integer(std::uint8_t{5}));
-    CHECK_EQ(e.finish().value(), 5u);
+    bool const written = e.map(1) && e.text_string("a") && e.unsigned_integer(std::uint8_t{5});
+    auto const size = e.finish();  // 5: out holds {"a": 5}, a1 61 61 18 05
+    // [encoder]
+    CHECK(written);
+    CHECK_EQ(size.value(), 5u);
     CHECK_EQ(out, "\xa1\x61\x61\x18\x05"s);
 }
 
-// encoder_unsigned_integer.md: the head takes the width of the type; bool is no integer argument.
+// encode.hpp, snippet unsigned_integer: the head takes the width of the type; bool is no integer argument.
 TEST_CASE("doc reference item: encoder::unsigned_integer")
 {
     CHECK_FALSE(unsigned_integer_accepts<bool>);
     CHECK_FALSE(unsigned_integer_accepts<char8_t>);
+    // [unsigned_integer]
     std::string out;
     cbor::encoder e(out);
-    REQUIRE(e.unsigned_integer(std::uint16_t{5}));
-    REQUIRE(e.finish());
+    bool const written = e.unsigned_integer(std::uint16_t{5}).has_value();
+    auto const size = e.finish();  // out holds 19 00 05
+    // [unsigned_integer]
+    CHECK(written);
+    CHECK(size.has_value());
     CHECK_EQ(out, "\x19\x00\x05"s);
 }
 
-// encoder_negative_integer.md: the argument 499 stands for -500.
+// encode.hpp, snippet negative_integer: the argument 499 stands for -500.
 TEST_CASE("doc reference item: encoder::negative_integer")
 {
+    // [negative_integer]
     std::string out;
     cbor::encoder e(out);
-    REQUIRE(e.negative_integer(std::uint16_t{499}));
-    REQUIRE(e.finish());
+    bool const written = e.negative_integer(std::uint16_t{499}).has_value();
+    auto const size = e.finish();  // out holds 39 01 f3, the value -500
+    // [negative_integer]
+    CHECK(written);
+    CHECK(size.has_value());
     CHECK_EQ(out, "\x39\x01\xf3"s);
 }
 
-// encoder_byte_string.md: a span of two bytes; a null owner is a wrong use.
+// encode.hpp, snippet byte_string: a span of two bytes; a null owner is a wrong use.
 TEST_CASE("doc reference item: encoder::byte_string")
 {
+    // [byte_string]
     std::array<std::uint8_t, 2> const ab{97, 98};
     std::string out;
     cbor::encoder e(out);
-    REQUIRE(e.byte_string(std::as_bytes(std::span(ab))));
-    REQUIRE(e.finish());
+    bool const written = e.byte_string(std::as_bytes(std::span(ab))).has_value();
+    auto const size = e.finish();  // out holds 42 61 62
+    // [byte_string]
+    CHECK(written);
+    CHECK(size.has_value());
     CHECK_EQ(out, "\x42\x61\x62"s);
 
     std::string other;
@@ -222,59 +267,74 @@ TEST_CASE("doc reference item: encoder::byte_string")
     CHECK_THROWS_AS((void)f.byte_string(std::shared_ptr<std::vector<std::byte> const>()), std::logic_error);
 }
 
-// encoder_text_string.md: a literal as a view.
+// encode.hpp, snippet text_string: a literal as a view.
 TEST_CASE("doc reference item: encoder::text_string")
 {
+    // [text_string]
     std::string out;
     cbor::encoder e(out);
-    REQUIRE(e.text_string("abc"));
-    REQUIRE(e.finish());
+    bool const written = e.text_string("abc").has_value();
+    auto const size = e.finish();  // out holds 63 61 62 63
+    // [text_string]
+    CHECK(written);
+    CHECK(size.has_value());
     CHECK_EQ(out, "\x63\x61\x62\x63"s);
 }
 
-// encoder_array.md: the head and then the two elements.
+// encode.hpp, snippet array: the head and then the two elements.
 TEST_CASE("doc reference item: encoder::array")
 {
+    // [array]
     std::string out;
     cbor::encoder e(out);
-    REQUIRE(e.array(2));
-    REQUIRE(e.unsigned_integer(std::uint8_t{1}));
-    REQUIRE(e.unsigned_integer(std::uint8_t{2}));
-    REQUIRE(e.finish());
+    bool const written = e.array(2) && e.unsigned_integer(std::uint8_t{1}) && e.unsigned_integer(std::uint8_t{2});
+    auto const size = e.finish();  // out holds 82 18 01 18 02
+    // [array]
+    CHECK(written);
+    CHECK(size.has_value());
     CHECK_EQ(out, "\x82\x18\x01\x18\x02"s);
 }
 
-// encoder_map.md: the head and then one key and its value.
+// encode.hpp, snippet map: the head and then one key and its value.
 TEST_CASE("doc reference item: encoder::map")
 {
+    // [map]
     std::string out;
     cbor::encoder e(out);
-    REQUIRE(e.map(1));
-    REQUIRE(e.text_string("a"));
-    REQUIRE(e.unsigned_integer(std::uint8_t{5}));
-    REQUIRE(e.finish());
+    bool const written = e.map(1) && e.text_string("a") && e.unsigned_integer(std::uint8_t{5});
+    auto const size = e.finish();  // out holds a1 61 61 18 05
+    // [map]
+    CHECK(written);
+    CHECK(size.has_value());
     CHECK_EQ(out, "\xa1\x61\x61\x18\x05"s);
 }
 
-// encoder_tag.md: tag 55799 takes a head of three bytes.
+// encode.hpp, snippet tag: tag 55799 takes a head of three bytes.
 TEST_CASE("doc reference item: encoder::tag")
 {
+    // [tag]
     std::string out;
     cbor::encoder e(out);
-    REQUIRE(e.tag(55799));
-    REQUIRE(e.unsigned_integer(std::uint8_t{1}));
-    REQUIRE(e.finish());
+    bool const written = e.tag(55799) && e.unsigned_integer(std::uint8_t{1});
+    auto const size = e.finish();  // out holds d9 d9 f7 18 01
+    // [tag]
+    CHECK(written);
+    CHECK(size.has_value());
     CHECK_EQ(out, "\xd9\xd9\xf7\x18\x01"s);
 }
 
-// encoder_simple_value.md: null, a value of two bytes, and a reserved value that ends the encoder.
+// encode.hpp, snippet simple_value: null, a value of two bytes, and a reserved value that ends the encoder.
 TEST_CASE("doc reference item: encoder::simple_value")
 {
+    // [simple_value]
     std::string out;
     cbor::encoder e(out);
-    REQUIRE(e.simple_value(cbor::simple_value::null));
-    REQUIRE(e.simple_value(static_cast<cbor::simple_value>(32)));
-    REQUIRE(e.finish());
+    bool const written =
+        e.simple_value(cbor::simple_value::null) && e.simple_value(static_cast<cbor::simple_value>(32));
+    auto const size = e.finish();  // out holds f6 f8 20
+    // [simple_value]
+    CHECK(written);
+    CHECK(size.has_value());
     CHECK_EQ(out, "\xf6\xf8\x20"s);
 
     std::string other;
@@ -283,13 +343,17 @@ TEST_CASE("doc reference item: encoder::simple_value")
     CHECK_THROWS_AS((void)f.simple_value(cbor::simple_value::null), std::logic_error);
 }
 
-// encoder_floating_point.md: a float takes 32 bits; a 16-bit type takes 16 bits.
+// encode.hpp, snippet floating_point: a float takes 32 bits; a 16-bit type takes 16 bits.
 TEST_CASE("doc reference item: encoder::floating_point")
 {
+    // [floating_point]
     std::string out;
     cbor::encoder e(out);
-    REQUIRE(e.floating_point(1.5f));
-    REQUIRE(e.finish());
+    bool const written = e.floating_point(1.5f).has_value();
+    auto const size = e.finish();  // out holds fa 3f c0 00 00
+    // [floating_point]
+    CHECK(written);
+    CHECK(size.has_value());
     CHECK_EQ(out, "\xfa\x3f\xc0\x00\x00"s);
 #if defined(__STDCPP_FLOAT16_T__)
     std::string half;
@@ -300,15 +364,19 @@ TEST_CASE("doc reference item: encoder::floating_point")
 #endif
 }
 
-// encoder_typed_array.md: tag 64 over two bytes; a tag that names no typed array; bytes that are no whole
+// encode.hpp, snippet typed_array: tag 64 over two bytes; a tag that names no typed array; bytes that are no whole
 // elements.
 TEST_CASE("doc reference item: encoder::typed_array")
 {
+    // [typed_array]
     std::array<std::uint8_t, 2> const two{1, 2};
     std::string out;
     cbor::encoder e(out);
-    REQUIRE(e.typed_array(cbor::typed_array{64, std::as_bytes(std::span(two))}));
-    REQUIRE(e.finish());
+    bool const written = e.typed_array(cbor::typed_array{64, std::as_bytes(std::span(two))}).has_value();
+    auto const size = e.finish();  // out holds d8 40 42 01 02, the tag 64 for uint8
+    // [typed_array]
+    CHECK(written);
+    CHECK(size.has_value());
     CHECK_EQ(out, "\xd8\x40\x42\x01\x02"s);
 
     std::array<std::uint8_t, 3> const three{1, 2, 3};
@@ -322,13 +390,17 @@ TEST_CASE("doc reference item: encoder::typed_array")
              cbor::error::inadmissible_type_for_tag_content);
 }
 
-// encoder_finish.md: the count of bytes in a span; every call after finish is a wrong use.
+// encode.hpp, snippet finish: the count of bytes in a span; every call after finish is a wrong use.
 TEST_CASE("doc reference item: encoder::finish")
 {
+    // [finish]
     std::array<char, 16> buffer{};
     cbor::encoder e{std::span<char>(buffer)};
-    REQUIRE(e.text_string("abc"));
-    auto const size = e.finish();
+    bool const written = e.text_string("abc").has_value();
+    auto const size = e.finish();  // 4: buffer starts with 63 61 62 63
+    // e.array(0) now throws std::logic_error
+    // [finish]
+    CHECK(written);
     REQUIRE(size);
     CHECK_EQ(*size, 4u);
     CHECK_EQ(std::string_view(buffer.data(), *size), "\x63\x61\x62\x63"sv);
@@ -338,14 +410,18 @@ TEST_CASE("doc reference item: encoder::finish")
 
 // The iov forms exist where the platform has <sys/uio.h>, as in the library (encode.hpp); Windows has none.
 #if __has_include(<sys/uio.h>)
-// iov_writer.md: a long text with its owner becomes a piece of its own, with no copy.
+// encode.hpp, snippet iov_writer: a long text with its owner becomes a piece of its own, with no copy.
 TEST_CASE("doc reference item: iov_writer")
 {
     auto const text = std::make_shared<std::string const>(std::string(40, 'x'));
+    // [iov_writer]
+    // text: a std::shared_ptr<std::string const> with 40 times "x"
     cbor::iov_writer w;
     cbor::encoder e(w);
-    REQUIRE(e.text_string(text));
-    auto const pieces = e.finish();
+    bool const written = e.text_string(text).has_value();
+    auto const pieces = e.finish();  // 2 pieces: the head 78 28, then *text with no copy
+    // [iov_writer]
+    CHECK(written);
     REQUIRE(pieces);
     REQUIRE_EQ((*pieces)->size(), 2u);
     auto const head = test::joined((*pieces)->first(1));

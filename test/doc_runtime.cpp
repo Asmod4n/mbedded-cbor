@@ -14,9 +14,9 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 using cbor::error;
 
-// Each test in this file is one example of doc/runtime.md. The tests exist so that every example in the document
-// compiles and gives the result that the document states. Where the document writes a comment with the input as
-// text, the test builds the same input with preferred().
+// Each test in this file is one example of tools/site/guides/runtime.md. The tests exist so that every example in the
+// document compiles and gives the result that the document states. Where the document writes a comment with the input
+// as text, the test builds the same input with preferred().
 
 namespace doc_runtime
 {

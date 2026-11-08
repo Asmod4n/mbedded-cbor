@@ -1,10 +1,13 @@
-// Reads a CBOR data item in place, in bytes with a shared owner.
-// Finds a value by key, by index or by path. Gives a number, a text
-// string, a byte string, an array or a map. Gives a string, an array
-// and a map as a view of these bytes. Reads one element of a typed
-// array. clone copies the data item into a tree of cbor::item.
-// https://www.rfc-editor.org/rfc/rfc8949
-// https://www.rfc-editor.org/rfc/rfc8746#section-2
+/**
+ * @file
+ * Reads a CBOR data item in place, in bytes with a shared owner.
+ * Finds a value by key, by index or by path. Gives a number, a text
+ * string, a byte string, an array or a map. Gives a string, an array
+ * and a map as a view of these bytes. Reads one element of a typed
+ * array. clone copies the data item into a tree of cbor::item.
+ * https://www.rfc-editor.org/rfc/rfc8949
+ * https://www.rfc-editor.org/rfc/rfc8746#section-2
+ */
 #pragma once
 
 #include <algorithm>
@@ -54,6 +57,42 @@ struct lazy_entries;
 
 struct lazy;
 
+/**
+ * @brief The result of a path that can select many nodes: a wildcard, a descendant segment, a slice, a filter or
+ * several selectors.
+ *
+ * Each node is a cbor::lazy and holds the owner of the bytes.
+ * A nodelist holds the values, not their places in the item.
+ * `lazy.at_path<Path, cbor::nodelist>()`, `compile<cbor::nodelist>` and cbor::at_path() with such a query give a
+ * nodelist.
+ * A path that selects nothing gives an empty nodelist and no error.
+ * The errors of the walk apply (cbor::at_path()).
+ * `nodelist_too_long`: one step selects more nodes than the top-level item has bytes, which tag 29 makes possible.
+ *
+ * @code{.callseq}
+ * doc->at_path<"$.a[*]", cbor::nodelist>() → std::expected<nodelist, error>
+ * nodes->size()                            → std::size_t
+ * (*nodes)[i]                              → lazy const &
+ * nodes->empty()                           → bool
+ * @endcode
+ * @code{.example}
+ * message: {"a": [1, 2, 3]}
+ * call: auto const nodes = doc->at_path<"$.a[*]", cbor::nodelist>()
+ * result: nodelist of 3 nodes: 1, 2, 3
+ * call: nodes->size()
+ * result: 3
+ * call: (*nodes)[2].get<int>()
+ * result: 3
+ * call: doc->at_path<"$.b", cbor::nodelist>()->empty()
+ * result: true
+ * @endcode
+ *
+ * @snippet doc_reference_path.cpp nodelist
+ * @see cbor::jsonpath::compile()
+ * @see cbor::lazy
+ *
+ * @ingroup path
+ */
 using nodelist = std::vector<lazy>;
 
 template <class T>
@@ -74,6 +113,36 @@ concept path_result = scalar_result<T> || view_result<T> || std::is_same_v<T, la
 template <class E>
 inline constexpr bool is_path_query_v = false;
 
+/**
+ * @brief A position in one top-level item: the owner of the bytes, the bytes and an offset.
+ *
+ * It holds no decoded value.
+ * Each member function reads the bytes at the offset when it is called.
+ * cbor::lazy::view() and cbor::lazy::take_ownership() set the data members.
+ * A copy of a lazy is a second position in the same bytes.
+ * Several threads read one lazy at the same time.
+ * A `nodelist` is the result of a path that selects many nodes.
+ * A lazy made with `cbor::lazy{}` holds no top-level item; each member function then throws `std::logic_error`.
+ *
+ * @code{.callseq}
+ * cbor::lazy::take_ownership(bytes) → std::expected<lazy, error>
+ * cbor::lazy const copy = *doc
+ * @endcode
+ * @code{.example}
+ * message: [1, 2]
+ * call: cbor::lazy const copy = *doc
+ * result: lazy of [1, 2]
+ * call: copy.at(1)->get<int>()
+ * result: 2
+ * @endcode
+ *
+ * @throws std::logic_error a member function of a lazy that holds no top-level item
+ * @snippet doc_reference_lazy.cpp lazy
+ * @see cbor::lazy::view()
+ * @see cbor::lazy::take_ownership()
+ *
+ * @ingroup lazy
+ */
 struct lazy {
 private:
     struct top_level_item {
@@ -86,25 +155,184 @@ public:
     std::size_t offset;
     std::uint64_t typed_array_tag{};
 
+    /**
+     * @brief Makes the lazy of the top-level item in the bytes, in place.
+     *
+     * Nothing is copied.
+     * The first form reads `encoded`, and `owner` keeps those bytes alive.
+     * The second form reads `*owner`.
+     * Every lazy, view and `ref` that comes from the result holds `owner`.
+     * The call does not check that the bytes are one complete item.
+     * A step on the lazy finds a missing part.
+     * No step reads bytes after the item.
+     * The call reads only the first head, to skip one tag 55799.
+     *
+     * @code{.callseq}
+     * cbor::lazy::view(owner) → std::expected<lazy, error>
+     * @endcode
+     * @code{.example}
+     * message: {"id": 42}
+     * call: auto const owner = std::make_shared<std::string const>(bytes)
+     * result: shared_ptr to 6 bytes: a1 62 69 64 18 2a
+     * call: cbor::lazy::view(owner)->at("id")->get<std::int64_t>()
+     * result: 42
+     * @endcode
+     *
+     * @throws std::logic_error an empty `owner` in the first form
+     * @snippet doc_reference_lazy.cpp view
+     * @see cbor::lazy::take_ownership()
+     * @see cbor::lazy::at()
+     */
     template <borrowed_range_of_chars Encoded>
     static std::expected<lazy, error> view(std::shared_ptr<void const> owner, Encoded const &encoded);
+    /**
+     * @brief Makes the lazy of the top-level item in `*owner`, in place.
+     * @throws std::logic_error a null `owner`
+     */
     template <owning_range_of_chars Encoded>
     static std::expected<lazy, error> view(std::shared_ptr<Encoded const> owner);
+    /**
+     * @brief Makes the lazy of the top-level item in @p encoded, and moves the bytes into a new owner.
+     *
+     * Nothing is copied.
+     * Every lazy, view and `ref` that comes from the result holds that owner, so the bytes stay alive as long as one
+     * of them lives.
+     * `Encoded` is a container of `char` that owns its bytes, for example `std::string`.
+     * An lvalue, a `std::string_view` and a literal do not compile.
+     * The call reads only the first head, to skip one tag 55799.
+     * A step on the lazy reports broken input.
+     *
+     * @code{.callseq}
+     * cbor::lazy::take_ownership(std::move(bytes)) → std::expected<lazy, error>
+     * @endcode
+     * @code{.example}
+     * message: {"id": 42}
+     * call: auto const doc2 = cbor::lazy::take_ownership(std::move(bytes))
+     * result: lazy of {"id": 42}
+     * call: doc2->at("id")->get<std::int64_t>()
+     * result: 42
+     * @endcode
+     *
+     * @snippet doc_reference_lazy.cpp take_ownership
+     * @see cbor::lazy::view()
+     * @see cbor::lazy::at()
+     */
     template <owning_range_of_chars Encoded>
     static std::expected<lazy, error> take_ownership(Encoded &&encoded);
 
+    /**
+     * @brief Gives the lazy of one child.
+     *
+     * `at(key)` gives the value of the first pair of a map whose key is the text `key`.
+     * `at(cbor::key{n})` gives the value of the first pair whose key is the integer `n`; a bignum key that holds `n`
+     * matches too.
+     * `at(index)` gives the element of an array or of a typed array, counted from 0.
+     * A text key does not match a byte string with the same bytes.
+     * The call passes a tag that it does not interpret, and reads into a tag 24.
+     * It reads no value; cbor::lazy::get() does.
+     *
+     * @code{.callseq}
+     * doc->at("key")       → std::expected<lazy, error>
+     * doc->at(cbor::key{7}) → std::expected<lazy, error>
+     * doc->at(1)            → std::expected<lazy, error>
+     * @endcode
+     * @code{.example}
+     * bytes: a2 64 63 61 72 73 82 a1 62 68 70 05 a1 62 68 70 07 07 65 73 65 76 65 6e
+     * call: doc->at("cars")->at(1)->at("hp")->get<int>()
+     * result: 7
+     * call: doc->at(cbor::key{7})->get<std::string_view>()
+     * result: ref to "seven"
+     * call: doc->at("cars")->size()
+     * result: 2
+     * call: doc->at("cars")->at(0)->at("hp")->get<int>()
+     * result: 5
+     * @endcode
+     *
+     * @retval key_not_found no pair has the key
+     * @retval index_out_of_bounds `index` is not less than the count
+     * @retval not_indexable a key on a value that is not a map, or an index on a value that is not an array
+     * @retval too_little_data, syntax_error, indefinite_length the bytes up to the child are broken
+     * @snippet doc_reference_lazy.cpp at
+     * @see cbor::lazy::operator[]()
+     * @see cbor::lazy::at_path()
+     * @see cbor::lazy::get()
+     * @see cbor::lazy::entries()
+     */
     std::expected<lazy, error> at(std::string_view key) const;
 
     std::expected<lazy, error> at(key k) const;
 
     std::expected<lazy, error> at(std::size_t index) const;
 
+    /**
+     * @brief Gives the same result as cbor::lazy::at() with the same argument.
+     *
+     * It does not throw for a missing key or a wrong index.
+     * The result is a `std::expected`, so `l["a"]["b"]` does not compile.
+     * A path reads a chain (cbor::lazy::at_path()).
+     * The errors of cbor::lazy::at() apply.
+     *
+     * @code{.callseq}
+     * (*doc)["key"]       → std::expected<lazy, error>
+     * (*doc)[cbor::key{7}] → std::expected<lazy, error>
+     * (*doc)[1]            → std::expected<lazy, error>
+     * @endcode
+     * @code{.example}
+     * message: {"cars": [5, 7]}
+     * call: (*(*doc)["cars"])[1]->get<int>()
+     * result: 7
+     * call: (*(*doc)["cars"])[0]->get<int>()
+     * result: 5
+     * @endcode
+     *
+     * @snippet doc_reference_lazy.cpp operator_subscript
+     * @see cbor::lazy::at()
+     * @see cbor::lazy::at_path()
+     */
     std::expected<lazy, error> operator[](std::string_view key) const;
 
     std::expected<lazy, error> operator[](key k) const;
 
     std::expected<lazy, error> operator[](std::size_t index) const;
 
+    /**
+     * @brief Reads the JSONPath (RFC 9535) `Path` from this lazy as the root `$`.
+     *
+     * Without `T` it gives the lazy of the node.
+     * With a scalar `T` it reads the value as cbor::lazy::get() does.
+     * A text, a byte string and a typed array come back as a `ref` that holds the owner.
+     * `nodelist` gives every selected node.
+     * The form with `e` gives the result type of the query; `e` comes from `cbor::jsonpath::compile<T>(path)`, which
+     * parses the path at run time.
+     * A path that is not valid does not compile.
+     * A path that can select more than one node does not compile, except with `nodelist`.
+     *
+     * @code{.callseq}
+     * doc->at_path<"$.user.id", std::int64_t>()        → std::expected<std::int64_t, error>
+     * doc->at_path<"$.user.name", std::string_view>()  → std::expected<ref<std::string_view>, error>
+     * doc->at_path<"$.user.tags[*]", cbor::nodelist>() → std::expected<nodelist, error>
+     * doc->at_path<"$.user">()                        → std::expected<lazy, error>
+     * @endcode
+     * @code{.example}
+     * message: {"user": {"id": 42, "tags": ["a", "b"]}}
+     * call: doc->at_path<"$.user.id", std::int64_t>()
+     * result: 42
+     * call: doc->at_path<"$.user.tags[-1]", std::string_view>()
+     * result: ref to "b"
+     * call: doc->at_path<"$.user.tags[*]", cbor::nodelist>()
+     * result: nodelist of 2 nodes: "a", "b"
+     * call: doc->at_path<"$.user">()
+     * result: lazy of {"id": 42, "tags": ["a", "b"]}
+     * @endcode
+     *
+     * @retval key_not_found, index_out_of_bounds, not_indexable a step finds no node
+     * @retval incorrect_type, number_out_of_range the node does not read as `T`
+     * @retval nesting_depth_exceeded a descendant segment goes deeper than the stack of the thread holds
+     * @throws std::logic_error a query that is empty or moved from
+     * @snippet doc_reference_lazy.cpp at_path
+     * @see cbor::lazy::at()
+     * @see cbor::lazy::get()
+     */
     template <fixed_string Path>
         requires is_valid_path_v<Path>
     std::expected<lazy, error> at_path() const;
@@ -133,12 +361,128 @@ public:
         requires is_path_query_v<E>
     std::expected<typename E::result_type, error> at_path(E const &e) const;
 
+    /**
+     * @brief Gives the count of the head: the elements of an array, the pairs of a map, or the elements of a typed
+     * array.
+     *
+     * It reads only the head.
+     * It does not read the children.
+     *
+     * @code{.callseq}
+     * doc->size() → std::expected<std::uint64_t, error>
+     * @endcode
+     * @code{.example}
+     * message: {"a": 1, "b": 2}
+     * call: doc->size()
+     * result: 2
+     * call: doc->empty()
+     * result: false
+     * @endcode
+     *
+     * @retval not_indexable the value is not an array, a map or a typed array
+     * @retval too_little_data the count is larger than the bytes that are left
+     * @snippet doc_reference_lazy.cpp size
+     * @see cbor::lazy::empty()
+     * @see cbor::lazy::elements()
+     * @see cbor::lazy::entries()
+     */
     std::expected<std::uint64_t, error> size() const;
 
+    /**
+     * @brief Gives `true` when cbor::lazy::size() gives 0, and `false` when it gives another count.
+     *
+     * The errors of cbor::lazy::size() apply.
+     *
+     * @code{.callseq}
+     * doc->empty() → std::expected<bool, error>
+     * @endcode
+     * @code{.example}
+     * message: {"a": [], "b": [1]}
+     * call: doc->at("a")->empty()
+     * result: true
+     * call: doc->at("b")->empty()
+     * result: false
+     * @endcode
+     *
+     * @snippet doc_reference_lazy.cpp empty
+     * @see cbor::lazy::size()
+     */
     std::expected<bool, error> empty() const;
 
+    /**
+     * @brief Gives the kind of the value at the lazy.
+     *
+     * A tag 2 or 3 whose magnitude fits 64 bits gives `unsigned_integer` or `negative_integer`.
+     * A larger bignum gives `unsigned_bignum` or `negative_bignum`.
+     * A typed array (RFC 8746) gives `typed_array`.
+     * Every other tag gives `tag`; the call does not pass it.
+     *
+     * @code{.callseq}
+     * doc->type() → std::expected<cbor::type, error>
+     * @endcode
+     * @code{.example}
+     * bytes: 84 01 61 61 c2 41 05 c1 00
+     * call: doc->at(0)->type()
+     * result: cbor::type::unsigned_integer
+     * call: doc->at(1)->type()
+     * result: cbor::type::text_string
+     * call: doc->at(2)->type()
+     * result: cbor::type::unsigned_integer
+     * call: doc->at(3)->type()
+     * result: cbor::type::tag
+     * @endcode
+     *
+     * @retval too_little_data, syntax_error the head is broken
+     * @snippet doc_reference_lazy.cpp type
+     * @see cbor::lazy::get()
+     * @see cbor::lazy::clone()
+     */
     std::expected<cbor::type, error> type() const;
 
+    /**
+     * @brief Reads the value at the lazy as `T`.
+     *
+     * | T | Reads |
+     * |---|---|
+     * | an integer type | an integer or a bignum that fits `T` |
+     * | `double` | a float, or an integer that a `double` holds exactly |
+     * | `bool`, `std::nullptr_t` | `false` or `true`, `null` |
+     * | `cbor::simple_value` | a simple value |
+     * | `std::string_view`, `std::span<std::byte const>` | a text, a byte string, as a `ref` |
+     * | `cbor::typed_array` | a typed array (RFC 8746), as a `ref` |
+     * | `std::float128_t` | an element of a typed array of 128-bit floats |
+     *
+     * A `ref` views the bytes and holds their owner.
+     * Nothing is copied.
+     * The call passes a tag that it does not interpret.
+     *
+     * @code{.callseq}
+     * doc->get<std::int64_t>()     → std::expected<std::int64_t, error>
+     * doc->get<double>()           → std::expected<double, error>
+     * doc->get<std::string_view>() → std::expected<ref<std::string_view>, error>
+     * @endcode
+     * @code{.example}
+     * message: {"name": "ann", "age": 300}
+     * call: auto const name = doc->at("name")->get<std::string_view>()
+     * result: ref to "ann"
+     * call: **name
+     * result: "ann"
+     * call: doc->at("age")->get<std::int64_t>()
+     * result: 300
+     * call: doc->at("age")->get<std::uint16_t>()
+     * result: 300
+     * call: doc->at("name")->type()
+     * result: cbor::type::text_string
+     * @endcode
+     *
+     * @retval incorrect_type the value is of another kind
+     * @retval number_out_of_range the number does not fit `T`
+     * @retval too_little_data a string is longer than the bytes that are left
+     * @snippet doc_reference_lazy.cpp get
+     * @see cbor::lazy::at()
+     * @see cbor::lazy::type()
+     * @see cbor::lazy::clone()
+     */
     template <class T>
         requires(std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
                  std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value> ||
@@ -151,10 +495,85 @@ public:
                                    std::is_same_v<T, typed_array>,
                                ref<T>, T>, error> get() const;
 
+    /**
+     * @brief Gives the elements of an array, or of a typed array, as a view.
+     *
+     * Each element of the view is a `std::expected<lazy, error>`.
+     * The call reads only the head.
+     * The view reads one element at each step.
+     *
+     * @code{.callseq}
+     * doc->elements() → std::expected<lazy_elements, error>
+     * @endcode
+     * @code{.example}
+     * message: [1, 2, 3]
+     * call: doc->elements()
+     * result: lazy_elements of 3 elements: 1, 2, 3
+     * call: doc->elements()->size()
+     * result: 3
+     * @endcode
+     *
+     * @retval not_indexable the value is not an array or a typed array
+     * @retval indefinite_length the array has an indefinite length
+     * @retval too_little_data the count is larger than the bytes that are left
+     * @snippet doc_reference_lazy.cpp elements
+     * @see cbor::lazy_elements
+     * @see cbor::lazy::entries()
+     * @see cbor::lazy::size()
+     */
     std::expected<lazy_elements, error> elements() const;
 
+    /**
+     * @brief Gives the pairs of a map, in the order of the bytes, as a view.
+     *
+     * Each element of the view is a `std::expected<std::pair<lazy, lazy>, error>`: the key in `first`, the value in
+     * `second`.
+     * A key that occurs twice occurs twice in the view.
+     *
+     * @code{.callseq}
+     * doc->entries() → std::expected<lazy_entries, error>
+     * @endcode
+     * @code{.example}
+     * message: {"a": 1, "b": 2}
+     * call: doc->entries()
+     * result: lazy_entries of 2 pairs: "a": 1, "b": 2
+     * @endcode
+     *
+     * @retval not_indexable the value is not a map
+     * @retval indefinite_length the map has an indefinite length
+     * @retval too_little_data the count is larger than the bytes that are left
+     * @snippet doc_reference_lazy.cpp entries
+     * @see cbor::lazy_entries
+     * @see cbor::lazy::elements()
+     * @see cbor::lazy::at()
+     */
     std::expected<lazy_entries, error> entries() const;
 
+    /**
+     * @brief Decodes the whole item at the lazy into a tree of cbor::item, as cbor::decode() does.
+     *
+     * The tree holds a copy of each text and byte string.
+     * It does not view the bytes of the lazy, and stays valid after the lazy and its owner end.
+     * The errors of cbor::decode() apply.
+     *
+     * @code{.callseq}
+     * doc->clone() → std::expected<owning<item>, error>
+     * @endcode
+     * @code{.example}
+     * message: {"a": [1, "x"]}
+     * call: doc->at("a")->clone()
+     * result: owning item of [1, "x"]
+     * call: (*doc->at("a")->clone())->type
+     * result: cbor::type::array
+     * @endcode
+     *
+     * @retval too_little_data, syntax_error, indefinite_length, nesting_depth_exceeded a broken item, as
+     * cbor::decode() gives
+     * @snippet doc_reference_lazy.cpp clone
+     * @see cbor::item
+     * @see cbor::decode()
+     * @see cbor::lazy::get()
+     */
     std::expected<owning<item>, error> clone() const;
 
 private:
@@ -214,6 +633,36 @@ private:
 };
 
 
+/**
+ * @brief The elements of one array, from cbor::lazy::elements().
+ *
+ * It is a forward range, a sized range and a borrowed range.
+ * `size()` gives the count of the head.
+ * `*it` gives the lazy of the element, or the error of the element.
+ * An iterator holds the owner of the bytes, so it stays valid after the lazy and the view end.
+ * `front()` does not compile.
+ * When the iterator cannot step over an element, `*it` gives `too_little_data` or another error of the bytes, and
+ * each later position gives that error.
+ * The view gives at most `size()` values.
+ *
+ * @code{.callseq}
+ * auto const view = *doc->elements()
+ * view.size() → std::uint64_t
+ * @endcode
+ * @code{.example}
+ * message: [{"age": 31}, {"age": 20}, {"age": 40}]
+ * call: auto const view = *doc->elements()
+ * result: lazy_elements of 3 elements: {"age": 31}, {"age": 20}, {"age": 40}
+ * call: view.size()
+ * result: 3
+ * @endcode
+ *
+ * @snippet doc_reference_lazy.cpp lazy_elements
+ * @see cbor::lazy::elements()
+ * @see cbor::lazy_entries
+ *
+ * @ingroup lazy
+ */
 struct lazy_elements : std::ranges::view_interface<lazy_elements> {
     struct iterator {
         using iterator_concept = std::forward_iterator_tag;
@@ -288,6 +737,36 @@ private:
     friend struct lazy;
 };
 
+/**
+ * @brief The pairs of one map, from cbor::lazy::entries(), in the order of the bytes.
+ *
+ * It is a forward range, a sized range and a borrowed range.
+ * `size()` gives the count of pairs in the head.
+ * `*it` gives the key in `first` and the value in `second`, or the error of the pair.
+ * An iterator holds the owner of the bytes, so it stays valid after the lazy and the view end.
+ * `front()` does not compile.
+ * When the iterator cannot step over a key or a value, `*it` gives `too_little_data` or another error of the bytes,
+ * and each later position gives that error.
+ * The view gives at most `size()` values.
+ *
+ * @code{.callseq}
+ * auto const view = *doc->entries()
+ * view.size() → std::uint64_t
+ * @endcode
+ * @code{.example}
+ * message: {"a": 1, "b": 2, "c": 3}
+ * call: auto const view = *doc->entries()
+ * result: lazy_entries of 3 pairs: "a": 1, "b": 2, "c": 3
+ * call: view.size()
+ * result: 3
+ * @endcode
+ *
+ * @snippet doc_reference_lazy.cpp lazy_entries
+ * @see cbor::lazy::entries()
+ * @see cbor::lazy_elements
+ *
+ * @ingroup lazy
+ */
 struct lazy_entries : std::ranges::view_interface<lazy_entries> {
     struct iterator {
         using iterator_concept = std::forward_iterator_tag;
@@ -366,11 +845,13 @@ private:
 
 }
 
+/// @cond
 template <>
 inline constexpr bool std::ranges::enable_borrowed_range<cbor::lazy_elements> = true;
 
 template <>
 inline constexpr bool std::ranges::enable_borrowed_range<cbor::lazy_entries> = true;
+/// @endcond
 
 namespace cbor
 {

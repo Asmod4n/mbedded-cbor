@@ -24,8 +24,8 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 using cbor::error;
 
-// Each test in this file is one example of doc/advanced/runtime.md. The tests exist so that every example in the
-// document compiles and gives the result that the document states.
+// Each test in this file is one example of tools/site/guides/advanced/runtime.md. The tests exist so that every
+// example in the document compiles and gives the result that the document states.
 
 // The section "lazy::take_ownership and lazy::view" lists the three forms, and states that a form does not check that
 // the bytes are one complete item.

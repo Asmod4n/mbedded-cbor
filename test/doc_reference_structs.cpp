@@ -20,9 +20,10 @@
 
 using namespace std::string_literals;
 
-// Each test in this file is one example of a page in doc/reference/structs/. The tests exist so that every
-// example compiles and gives the result that the page states. The input of each example is built with
-// preferred() from the text in the comment of the page.
+// Each test in this file is one example of a reference page of the structs group; the comments of structs.hpp and
+// describe.hpp take the examples through the snippet markers. The tests exist so that every example compiles and
+// gives the result that the page states. The input of each example is built with preferred() from the text in the
+// comment of the page.
 
 using reference_structs::device;
 using reference_structs::account;
@@ -30,16 +31,22 @@ using reference_structs::header;
 using reference_structs::person;
 using reference_structs::reading;
 using reference_structs::senml;
+using reference_structs::trailer;
 
-// encode.md: encode(value) gives the bytes of a map with the member names as keys, sorted by RFC 8949 4.2.1.
+// structs.hpp, snippet encode: encode(value) gives the bytes of a map with the member names as keys, sorted by
+// RFC 8949 4.2.1.
 TEST_CASE("doc reference structs: encode a value")
 {
-    auto const bytes = cbor::structs<person>::encode(person{"ann", 30});
+    // [encode]
+    // person: struct { std::string name; int age; }
+    auto const bytes = cbor::structs<person>::encode(person{"ann", 30});  // {"age": 30, "name": "ann"}
+    // [encode]
     REQUIRE(bytes.has_value());
     CHECK_EQ(*bytes, test::preferred(test::M("age"s, 30, "name"s, "ann"s)));
 }
 
-// encode.md: encode(value, target) appends to the target and returns the count of bytes that it appended.
+// structs.hpp, the comment of encode: encode(value, target) appends to the target and returns the count of bytes
+// that it appended.
 TEST_CASE("doc reference structs: encode appends to a target")
 {
     std::string out = "\x01"s;
@@ -49,7 +56,7 @@ TEST_CASE("doc reference structs: encode appends to a target")
     CHECK_EQ(out, "\x01\x02"s);
 }
 
-// encode.md, section Errors: a span that is too small for the bytes gives no_buffer_space.
+// structs.hpp, the comment of encode: a span that is too small for the bytes gives no_buffer_space.
 TEST_CASE("doc reference structs: encode into a span that is too small")
 {
     std::array<char, 2> small{};
@@ -58,17 +65,25 @@ TEST_CASE("doc reference structs: encode into a span that is too small")
     CHECK_EQ(n.error(), cbor::error::no_buffer_space);
 }
 
-// decode.md: the example moves the string in, and the result holds the value.
+// structs.hpp, snippet decode: the example moves the string in, and the result holds the value.
 TEST_CASE("doc reference structs: decode a moved string")
 {
     std::string bytes = test::preferred(test::M("name"s, "ann"s, "age"s, 30));
+    int age = 0;
+    // [decode]
+    // bytes: a std::string with {"name": "ann", "age": 30}
     auto const p = cbor::structs<person>::decode(std::move(bytes));
+    if (p)
+        age = (*p)->age;  // 30
+    // [decode]
+    CHECK_EQ(age, 30);
     REQUIRE(p.has_value());
     CHECK_EQ((*p)->age, 30);
     CHECK_EQ((*p)->name, "ann");
 }
 
-// decode.md: the forms with an owner read the bytes in place; a view in the result points into the owner.
+// structs.hpp, the comment of decode: the forms with an owner read the bytes in place; a view in the result points
+// into the owner.
 TEST_CASE("doc reference structs: decode with an owner")
 {
     auto const owner = std::make_shared<std::string const>(test::preferred(test::V("abc"s)));
@@ -91,7 +106,7 @@ TEST_CASE("doc reference structs: decode with an owner")
              cbor::error::incorrect_type);
 }
 
-// decode.md, section Errors: a missing key, bytes after the item, and an input that ends early.
+// structs.hpp, the comment of decode: a missing key, bytes after the item, and an input that ends early.
 TEST_CASE("doc reference structs: decode errors")
 {
     CHECK_EQ(cbor::structs<person>::decode(test::preferred(test::M("name"s, "ann"s))).error(),
@@ -107,7 +122,7 @@ TEST_CASE("doc reference structs: decode errors")
              cbor::error::duplicate_key);
 }
 
-// decode.md, section Errors: an empty owner is a wrong use and throws std::logic_error.
+// structs.hpp, the comment of decode: an empty owner is a wrong use and throws std::logic_error.
 TEST_CASE("doc reference structs: decode with an empty owner throws")
 {
     CHECK_THROWS_AS(std::ignore = cbor::structs<int>::decode(std::shared_ptr<std::string const>()), std::logic_error);
@@ -115,43 +130,60 @@ TEST_CASE("doc reference structs: decode with an empty owner throws")
                     std::logic_error);
 }
 
-// describe_members.md: a description gives the tag and the text key of each member.
+// describe.hpp, the comment of describe_members: a description gives the tag and the text key of each member.
 TEST_CASE("doc reference structs: cbor::describe_members")
 {
-    auto const bytes = cbor::structs<header>::encode(header{"text/plain"});
+    // [describe_members use]
+    auto const bytes = cbor::structs<header>::encode(header{"text/plain"});  // 160060({"content-type": "text/plain"})
+    // [describe_members use]
     REQUIRE(bytes.has_value());
     CHECK_EQ(*bytes, test::preferred(test::value{test::tagged{160060, test::M("content-type"s, "text/plain"s)}}));
     CHECK_EQ(cbor::structs<header>::decode(test::preferred(test::M("content-type"s, "x"s))).error(),
              cbor::error::incorrect_type);
 }
 
-// member.md: cbor::member takes an integer key; cbor::untagged gives a map with no tag.
+// describe.hpp, the comment of member: cbor::member takes an integer key; cbor::untagged gives a map with no tag.
 TEST_CASE("doc reference structs: cbor::member with integer keys")
 {
-    auto const bytes = cbor::structs<senml>::encode(senml{"t", 1.5});
+    // [member use]
+    auto const bytes = cbor::structs<senml>::encode(senml{"t", 1.5});  // {0: "t", 2: 1.5}
+    // [member use]
     REQUIRE(bytes.has_value());
     CHECK_EQ(*bytes, test::preferred(test::M(0, "t"s, 2, 1.5)));
 }
 
-// CBOR_MEMBER.md: the macro takes the name of the member as its key.
+// describe.hpp, the comment of CBOR_MEMBER: the macro takes the name of the member as its key.
 TEST_CASE("doc reference structs: CBOR_MEMBER")
 {
-    auto const bytes = cbor::structs<account>::encode(account{"ann", 2});
+    // [CBOR_MEMBER use]
+    auto const bytes = cbor::structs<account>::encode(account{"ann", 2});  // {"user": "ann", "level": 2}
+    // [CBOR_MEMBER use]
     REQUIRE(bytes.has_value());
     CHECK_EQ(*bytes, test::preferred(test::M("user"s, "ann"s, "level"s, 2)));
 }
 
-// CBOR_DEFINE_TYPE_MEMBERS.md: the macro takes the names of the members, and each name is its key.
+// describe.hpp, the comment of CBOR_DEFINE_TYPE_MEMBERS: the macro takes the names of the members, and each name is
+// its key.
 TEST_CASE("doc reference structs: CBOR_DEFINE_TYPE_MEMBERS")
 {
-    auto const bytes = cbor::structs<device>::encode(device{"lamp", 3});
+    // [CBOR_DEFINE_TYPE_MEMBERS use]
+    auto const bytes = cbor::structs<device>::encode(device{"lamp", 3});  // {"name": "lamp", "port": 3}
+    // [CBOR_DEFINE_TYPE_MEMBERS use]
     REQUIRE(bytes.has_value());
     CHECK_EQ(*bytes, test::preferred(test::M("name"s, "lamp"s, "port"s, 3)));
 }
 
-// types.md: one row of each kind that the table shows with a tag, and an empty optional member.
+// structs.hpp, the comment of structs: one row of each kind that the table shows with a tag, and an empty optional
+// member.
 TEST_CASE("doc reference structs: member types")
 {
+    // [structs]
+    // reading: struct { std::uint8_t id; std::optional<std::uint8_t> unit; }
+    auto const one = cbor::structs<reading>::encode(reading{4, std::nullopt});    // {"id": 4}
+    auto const set = cbor::structs<std::set<std::uint8_t>>::encode({3, 1});        // 258([1, 3])
+    // [structs]
+    CHECK_EQ(*one, test::preferred(test::M("id"s, 4)));
+    CHECK_EQ(*set, test::preferred(test::value{test::tagged{258, test::A(1, 3)}}));
     CHECK_EQ(*cbor::structs<std::set<std::uint8_t>>::encode({3, 1}),
              test::preferred(test::value{test::tagged{258, test::A(1, 3)}}));
     CHECK_EQ(*cbor::structs<std::array<std::byte, 2>>::encode({std::byte{1}, std::byte{2}}),
@@ -164,10 +196,14 @@ TEST_CASE("doc reference structs: member types")
     CHECK_FALSE((*back)->unit.has_value());
 }
 
-// describe_members.md: CBOR_DEFINE_TYPE writes the description; 160061 = 0x0002713d, "checksum" is 68 + 8 bytes.
+// describe.hpp, the comment of describe_members: CBOR_DEFINE_TYPE writes the description; 160061 = 0x0002713d,
+// "checksum" is 68 + 8 bytes.
 TEST_CASE("doc reference structs: CBOR_DEFINE_TYPE")
 {
-    auto const bytes = cbor::structs<reference_structs::trailer>::encode(reference_structs::trailer{7});
+    // [CBOR_DEFINE_TYPE use]
+    // trailer: struct { std::uint8_t checksum; }
+    auto const bytes = cbor::structs<trailer>::encode(trailer{7});  // 160061({"checksum": 7})
+    // [CBOR_DEFINE_TYPE use]
     REQUIRE(bytes.has_value());
     using namespace std::string_literals;
     CHECK_EQ(*bytes, "\xda\x00\x02\x71\x3d\xa1\x68"

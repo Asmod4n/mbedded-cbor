@@ -1,5 +1,17 @@
-// Includes all headers of the library.
+/**
+ * @file
+ * Includes all headers of the library.
+ */
 #pragma once
+
+/** @defgroup item item */
+/** @defgroup lazy lazy */
+/** @defgroup path path */
+/** @defgroup ref ref */
+/** @defgroup schema schema */
+/** @defgroup structs structs */
+/** @defgroup tools tools */
+/** @defgroup errors errors */
 
 #include "error.hpp"
 #include "rfc8949.hpp"

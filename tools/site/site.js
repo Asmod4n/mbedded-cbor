@@ -19,8 +19,16 @@ const boxOf = box => {
   const toNotation = async () => {
     if (!notation) return;
     try {
-      const text = (await (await run)(bytes(), "cbor::diagnostic_notation(bytes).value()", group))[0];
-      try { notation.value = JSON.parse(text); } catch { notation.value = text; }
+      const r = await run, items = [];
+      let rest = bytes();
+      do {
+        const size = Number((await r(rest, "cbor::item_size(bytes)", group))[0]);
+        const item = Number.isInteger(size) && size > 0 ? rest.subarray(0, size) : rest;
+        const text = (await r(item, "cbor::diagnostic_notation(bytes).value()", group))[0];
+        try { items.push(JSON.parse(text)); } catch { items.push(text); }
+        rest = rest.subarray(item.length);
+      } while (rest.length);
+      notation.value = items.join(", ");
     }
     catch (e) { notation.value = e.message; }
   };

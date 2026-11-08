@@ -1,8 +1,11 @@
-// Reads values from CBOR with a JSONPath query. Parses a path at
-// compile time or with jsonpath::compile at run time. A key or a
-// literal in a path can be in diagnostic notation.
-// https://www.rfc-editor.org/rfc/rfc9535
-// https://datatracker.ietf.org/doc/html/draft-ietf-cbor-edn-literals-28
+/**
+ * @file
+ * Reads values from CBOR with a JSONPath query. Parses a path at
+ * compile time or with jsonpath::compile at run time. A key or a
+ * literal in a path can be in diagnostic notation.
+ * https://www.rfc-editor.org/rfc/rfc9535
+ * https://datatracker.ietf.org/doc/html/draft-ietf-cbor-edn-literals-28
+ */
 #pragma once
 
 #include <algorithm>
@@ -40,6 +43,55 @@ namespace cbor
 
 struct lazy;
 
+/**
+ * @brief Reads the value at a JSONPath (RFC 9535) in `encoded`, with no decode of the rest.
+ *
+ * The first five forms take the path as a string literal, and the compiler checks it.
+ * The other forms take a cbor::jsonpath::query that cbor::jsonpath::compile() made at run time.
+ * A number, `bool`, `std::nullptr_t` or `simple_value` comes back as a value from a `std::string_view`.
+ * A text, a byte string or a typed array comes back as a view in a `ref<T>`, and the `ref` holds the owner of the
+ * bytes.
+ * `T` `std::string` or `std::vector<std::byte>` copies the value out of the bytes.
+ * A `lazy` or a cbor::nodelist comes only from a query.
+ * No form copies the input bytes.
+ * The `Encoded &&` forms move the bytes into a new owner.
+ * A path that is not valid or not singular does not compile.
+ *
+ * @code{.callseq}
+ * cbor::at_path<"$.user.id", std::int64_t>(bytes)       → std::expected<std::int64_t, error>
+ * cbor::at_path<"$.user.name", std::string_view>(owner) → std::expected<ref<std::string_view>, error>
+ * cbor::at_path(bytes, q)                               → std::expected<T, error>
+ * cbor::at_path(owner, q)                               → std::expected<query<T>::result_type, error>
+ * @endcode
+ * @code{.example}
+ * message: {"user": {"id": 42, "name": "ann"}}
+ * call: cbor::at_path<"$.user.id", std::int64_t>(bytes)
+ * result: 42
+ * call: auto const owner = std::make_shared<std::string const>(std::move(bytes))
+ * result: shared_ptr to 21 bytes: a1 64 75 73 65 72 a2 62 69 64 18 2a 64 6e 61 6d 65 63 61 6e 6e
+ * call: auto const name = cbor::at_path<"$.user.name", std::string_view>(owner)
+ * result: ref to "ann"
+ * call: **name
+ * result: "ann"
+ * call: auto const q = cbor::jsonpath::compile<std::int64_t>("$.user.id")
+ * result: cbor::jsonpath::query<long long>
+ * call: cbor::at_path(*owner, *q)
+ * result: 42
+ * @endcode
+ *
+ * @retval key_not_found, index_out_of_bounds, not_indexable a step finds no node
+ * @retval incorrect_type, number_out_of_range the node does not read as `T`
+ * @retval too_little_data, syntax_error, indefinite_length the bytes up to the node are broken
+ * @retval string_length_exceeded, container_elements_exceeded a limit of cbor::limits is set and the item goes past
+ * it
+ * @throws std::logic_error a null or empty owner, or a moved-from query
+ * @snippet doc_reference_path.cpp at_path
+ * @see cbor::jsonpath::compile()
+ * @see cbor::nodelist
+ * @see cbor::lazy::at_path()
+ *
+ * @ingroup path
+ */
 template <fixed_string Path, class T>
     requires(is_singular_query_v<Path> &&
              ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
@@ -50,28 +102,45 @@ template <fixed_string Path, class T>
               ))
 std::expected<T, error> at_path(std::string_view encoded);
 
+/**
+ * @brief Reads a view at a path in bytes that `owner` keeps alive.
+ * @ingroup path
+ */
 template <fixed_string Path, class T, borrowed_range_of_chars Encoded>
     requires(is_singular_query_v<Path> &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
               std::is_same_v<T, typed_array>))
 std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded);
 
+/**
+ * @brief Reads a view at a path in the bytes of `*owner`.
+ * @ingroup path
+ */
 template <fixed_string Path, class T, owning_range_of_chars Encoded>
     requires(is_singular_query_v<Path> &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
               std::is_same_v<T, typed_array>))
 std::expected<ref<T>, error> at_path(std::shared_ptr<Encoded const> owner);
 
+/**
+ * @brief Reads a view at a path, and moves the bytes into a new owner.
+ * @ingroup path
+ */
 template <fixed_string Path, class T, owning_range_of_chars Encoded>
     requires(is_singular_query_v<Path> &&
              (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
               std::is_same_v<T, typed_array>))
 std::expected<ref<T>, error> at_path(Encoded &&encoded);
 
+/**
+ * @brief Copies the text or the bytes at a path out of `encoded`.
+ * @ingroup path
+ */
 template <fixed_string Path, copied_value T>
     requires is_singular_query_v<Path>
 std::expected<T, error> at_path(std::string_view encoded);
 
+/** @ingroup path */
 class jsonpath
 {
     struct selector {
@@ -973,6 +1042,7 @@ class jsonpath
         return ref<T>(std::move(owner), *r);
     }
 
+    /// @cond
     template <fixed_string Path, copied_value T>
         requires is_singular_query_v<Path>
     friend std::expected<T, error> at_path(std::string_view encoded);
@@ -1000,8 +1070,44 @@ class jsonpath
     friend class is_valid_path;
 
     friend struct lazy;
+    /// @endcond
 
 public:
+    /**
+     * @brief A parsed run-time path with the result type `T`.
+     *
+     * Only cbor::jsonpath::compile() makes one.
+     * The query holds its own copy of the path data, and no view into the text of the path.
+     * One query reads any number of items.
+     * cbor::at_path() and cbor::lazy::at_path() apply it.
+     * `result_type` is `ref<T>` for a view type `T`, and `T` otherwise.
+     * A moved-from query throws `std::logic_error` when it is applied.
+     *
+     * @code{.callseq}
+     * cbor::jsonpath::compile<std::int64_t>("$.id").value() → query<std::int64_t>
+     * cbor::at_path(bytes, q)                               → std::expected<std::int64_t, error>
+     * @endcode
+     * @code{.example}
+     * message: {"id": 1}
+     * call: auto const q = cbor::jsonpath::compile<std::int64_t>("$.id").value()
+     * result: cbor::jsonpath::query<long long>
+     * call: cbor::at_path(bytes, q)
+     * result: 1
+     * @endcode
+     * @code{.example}
+     * message: {"id": 2, "x": 0}
+     * call: auto const q = cbor::jsonpath::compile<std::int64_t>("$.id").value()
+     * result: cbor::jsonpath::query<long long>
+     * call: cbor::at_path(bytes, q)
+     * result: 2
+     * @endcode
+     *
+     * @snippet doc_reference_path.cpp query
+     * @see cbor::jsonpath::compile()
+     * @see cbor::at_path()
+     *
+     * @ingroup path
+     */
     template <class T>
         requires path_result<T>
     class query
@@ -1044,6 +1150,41 @@ public:
         friend class jsonpath;
     };
 
+    /**
+     * @brief Parses a JSONPath (RFC 9535) at run time and gives a cbor::jsonpath::query.
+     *
+     * The query owns its data, so `path` can end after the call.
+     * An apply of the query does not parse again.
+     * `T` is the result type: a scalar, a view type, `cbor::lazy` or cbor::nodelist.
+     * The call reads no CBOR.
+     * A path at run time reads the same grammar as a path at compile time, with EDN literals in brackets and in
+     * filters.
+     * `T` outside `path_result` does not compile.
+     *
+     * @code{.callseq}
+     * cbor::jsonpath::compile<T>(path) → std::expected<query<T>, error>
+     * @endcode
+     * @code{.example}
+     * message: {"a": [1, 2, 3]}
+     * call: auto const owner = std::make_shared<std::string const>(bytes)
+     * result: shared_ptr to 7 bytes: a1 61 61 83 01 02 03
+     * call: auto const q = cbor::jsonpath::compile<cbor::nodelist>("$.a[?@ > 1]")
+     * result: cbor::jsonpath::query<cbor::nodelist>
+     * call: cbor::at_path(owner, *q)->size()
+     * result: 2
+     * call: cbor::at_path(owner, *cbor::jsonpath::compile<cbor::nodelist>("$.a[0]"))->size()
+     * result: 1
+     * call: cbor::jsonpath::compile<cbor::lazy>("$.a[1]").has_value()
+     * result: true
+     * @endcode
+     *
+     * @retval invalid_path the text is not valid, or it calls `match` or `search`
+     * @retval not_singular_query the path selects many nodes and `T` is not `nodelist`
+     * @retval nesting_depth_exceeded the path is nested deeper than the stack of the thread holds
+     * @snippet doc_reference_path.cpp compile
+     * @see cbor::jsonpath::query
+     * @see cbor::at_path()
+     */
     template <class T>
         requires path_result<T>
     static std::expected<query<T>, error> compile(std::string_view const path)
@@ -1114,23 +1255,33 @@ private:
                                                "cbor::jsonpath::query: the query is empty or moved from");
     }
 
+    /// @cond
     template <scalar_result T>
     friend std::expected<T, error> at_path(std::string_view encoded, query<T> const &e);
 
     template <view_result T, borrowed_range_of_chars Encoded>
     friend std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded,
                                                        query<T> const &e);
+    /// @endcond
 };
 
 template <class T>
 inline constexpr bool is_path_query_v<jsonpath::query<T>> = true;
 
+/**
+ * @brief Reads a scalar at a query in `encoded`.
+ * @ingroup path
+ */
 template <scalar_result T>
 std::expected<T, error> at_path(std::string_view const encoded, jsonpath::query<T> const &e)
 {
     return jsonpath::apply_query(e, encoded);
 }
 
+/**
+ * @brief Reads a view at a query in bytes that `owner` keeps alive.
+ * @ingroup path
+ */
 template <view_result T, borrowed_range_of_chars Encoded>
 std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded,
                                             jsonpath::query<T> const &e)
@@ -1141,6 +1292,10 @@ std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded 
                                  std::string_view(std::span<char const>(encoded)));
 }
 
+/**
+ * @brief Gives the lazy or the nodelist at a query in bytes that `owner` keeps alive.
+ * @ingroup path
+ */
 template <class T, borrowed_range_of_chars Encoded>
     requires(std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
 std::expected<T, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded,
@@ -1149,6 +1304,10 @@ std::expected<T, error> at_path(std::shared_ptr<void const> owner, Encoded const
     return lazy::view(std::move(owner), encoded).and_then([&e](lazy const &root) { return root.at_path(e); });
 }
 
+/**
+ * @brief Reads the result of a query in the bytes of `*owner`.
+ * @ingroup path
+ */
 template <class T, owning_range_of_chars Encoded>
     requires(view_result<T> || std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
 std::expected<typename jsonpath::query<T>::result_type, error> at_path(std::shared_ptr<Encoded const> owner,
@@ -1159,6 +1318,10 @@ std::expected<typename jsonpath::query<T>::result_type, error> at_path(std::shar
     return at_path(std::move(owner), bytes, e);
 }
 
+/**
+ * @brief Reads the result of a query, and moves the bytes into a new owner.
+ * @ingroup path
+ */
 template <class T, owning_range_of_chars Encoded>
     requires(view_result<T> || std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
 std::expected<typename jsonpath::query<T>::result_type, error> at_path(Encoded &&encoded,

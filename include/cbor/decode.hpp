@@ -1,8 +1,11 @@
-// Decodes the first CBOR data item in a buffer into a tree of
-// cbor::item. The tree holds a copy of each string in its own memory.
-// Decodes a bignum that fits in 64 bits as an integer. Decodes the
-// content of a tag 24 as one more data item.
-// https://www.rfc-editor.org/rfc/rfc8949
+/**
+ * @file
+ * Decodes the first CBOR data item in a buffer into a tree of
+ * cbor::item. The tree holds a copy of each string in its own memory.
+ * Decodes a bignum that fits in 64 bits as an integer. Decodes the
+ * content of a tag 24 as one more data item.
+ * https://www.rfc-editor.org/rfc/rfc8949
+ */
 #ifndef CBOR_DECODE_HPP
 #define CBOR_DECODE_HPP
 
@@ -90,6 +93,32 @@ struct zone_owner {
 
 }
 
+/**
+ * @brief Gives the root of the item that a tag 24 (RFC 8949 3.4.5.1) holds in its byte string.
+ *
+ * `tagged` is the tag node in `tree`.
+ * cbor::decode() decodes that content when it decodes the tree, so the call only looks it up.
+ *
+ * @code{.callseq}
+ * cbor::encoded_cbor_data_item(*tree, **tree) → std::expected<std::reference_wrapper<item const>, error>
+ * @endcode
+ * @code{.example}
+ * bytes: d8 18 42 61 61
+ * call: auto const tree = cbor::decode(bytes)
+ * result: owning item of 24(h'6161')
+ * call: auto const inner = cbor::encoded_cbor_data_item(*tree, **tree)
+ * result: reference to item of "a"
+ * call: inner->get().get<cbor::type::text_string>()
+ * result: "a"
+ * @endcode
+ *
+ * @retval incorrect_type the content of the tag 24 is not a byte string
+ * @snippet doc_reference_item.cpp encoded_cbor_data_item
+ * @see cbor::decode()
+ * @see cbor::item
+ *
+ * @ingroup item
+ */
 inline std::expected<std::reference_wrapper<item const>, error>
 encoded_cbor_data_item(owning<item> const &tree, item const &tagged)
 {
@@ -306,6 +335,50 @@ std::expected<decoded_tree<Checked>, error> decode_tree(std::string_view const e
 
 }
 
+/**
+ * @brief Decodes the one top-level item in `encoded` into a tree of cbor::item.
+ *
+ * It checks every head.
+ * The tree holds a copy of each text and byte string, so it stays valid after `encoded` ends.
+ * A bignum whose magnitude fits 64 bits becomes an integer node.
+ * A tag 24 is a tag node, and cbor::encoded_cbor_data_item() gives its decoded content.
+ * Tags 28 and 29 stay tag nodes.
+ * One leading tag 55799 is read as its content, so the root is that content.
+ * A second tag 55799 and a tag 55799 inside an item stay tag nodes.
+ *
+ * @code{.callseq}
+ * cbor::decode(bytes) → std::expected<owning<item>, error>
+ * @endcode
+ * @code{.example}
+ * message: ["hi", 1]
+ * call: auto const tree = cbor::decode(bytes)
+ * result: owning item of ["hi", 1]
+ * call: (*tree)->get<cbor::type::array>()->size()
+ * result: 2
+ * @endcode
+ * @code{.example}
+ * bytes: 01 02
+ * call: cbor::decode(bytes)
+ * result: owning item of 1
+ * @endcode
+ * @code{.example}
+ * bytes: c1 00
+ * call: cbor::decode(bytes)
+ * result: owning item of 1(0)
+ * @endcode
+ *
+ * @retval too_little_data the item is not complete, or a count is larger than the bytes that are left
+ * @retval syntax_error a head is not well-formed. A byte after the item is not read, so the input can be a CBOR
+ * sequence (RFC 8742)
+ * @retval indefinite_length a string, an array or a map has an indefinite length
+ * @retval nesting_depth_exceeded the item is deeper than the limit
+ * @retval reserved_simple_value, inadmissible_type_for_tag_content a value that RFC 8949 or RFC 8746 does not allow
+ * @snippet doc_reference_item.cpp decode
+ * @see cbor::item
+ * @see cbor::encode()
+ *
+ * @ingroup item
+ */
 inline std::expected<owning<item>, error> decode(std::string_view const encoded)
 {
     auto const decoded = detail::decode_tree<true>(heads::self_described_cbor_content(encoded));
