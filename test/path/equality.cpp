@@ -182,8 +182,9 @@ TEST_CASE("path equality: arrays in a filter")
 }
 
 // The filter reads the item that tag 24 embeds and the content of tag 55799 at each level, as the walk does. The owner
-// decided on 2026-10-12 that the same value means the same value under RFC 8949 3.4.3, so a bignum whose magnitude
-// fits in 64 bits is that integer in a filter, also inside an array. A larger bignum and a tag 2 over a content that is
+// decided on 2026-10-12 that correct means the same value in the RFC 8949 data model (3.4.3 for tags 2 and 3), so a
+// bignum whose magnitude fits in 64 bits is that integer in a filter, also inside an array and a map, as a value and
+// as a key. A leading zero byte does not count. A larger bignum and a tag 2 over a content that is
 // not a byte string stay tags.
 TEST_CASE("path equality: tags in a filter")
 {
@@ -198,6 +199,10 @@ TEST_CASE("path equality: tags in a filter")
     CHECK(values_equal("\xc2\x41\x02"s, "\x01"s) == false);
     CHECK(values_equal("\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s, "\x1b\xff\xff\xff\xff\xff\xff\xff\xff"s) == false);
     CHECK(values_equal("\xc2\x61\x61"s, "\x01"s) == false);
+    CHECK(values_equal("\xc3\x40"s, "\x20"s) == true);
+    CHECK(values_equal("\xc2\x49\x00\xff\xff\xff\xff\xff\xff\xff\xff"s, "\x1b\xff\xff\xff\xff\xff\xff\xff\xff"s) == true);
+    CHECK(values_equal("\xa1\x61\x61\xc2\x41\x01"s, "\xa1\x61\x61\x01"s) == true);
+    CHECK(values_equal("\xa1\xc2\x41\x01\x61\x61"s, "\xa1\x01\x61\x61"s) == true);
 }
 
 // RFC 9535 2.3.5.2.2 orders two numbers by value, and a bignum that fits in 64 bits is a number (owner, 2026-10-12).
