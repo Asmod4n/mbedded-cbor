@@ -1,6 +1,9 @@
-// Gives cbor::ref, a value with views into encoded bytes, together
-// with a shared owner of those bytes. Gives cbor::owning, a value that
-// holds its own memory. ref::clone copies the views into new memory.
+/**
+ * @file
+ * Gives cbor::ref, a value with views into encoded bytes, together
+ * with a shared owner of those bytes. Gives cbor::owning, a value that
+ * holds its own memory. ref::clone copies the views into new memory.
+ */
 #pragma once
 
 #include <concepts>
@@ -71,6 +74,41 @@ void copy_views_into_zone(T &value, bump &zone);
 
 }
 
+/**
+ * @brief A value and a `std::shared_ptr` to the owner of the bytes that it views.
+ *
+ * `*r` gives a view by value and any other `T` as `T const &`.
+ * `r->` reaches the members.
+ * `==` compares the values.
+ * A copy shares the owner and copies no bytes.
+ * A move leaves `T{}` and no owner behind.
+ *
+ * A view in the value stays valid while one `ref` with that owner lives.
+ * A view copied out of the `ref` does not keep the bytes.
+ * `clone` copies the bytes: into a `std::string`, a byte vector, or a cbor::owning.
+ * Only the library makes a `ref`.
+ * `*` and `->` on a temporary `ref` do not compile.
+ *
+ * @code{.callseq}
+ * cbor::structs<std::string_view>::decode(std::move(bytes)) → std::expected<ref<std::string_view>, error>
+ * *r                                                        → std::string_view
+ * r->member                                                 → the member of T
+ * r.clone()                                                 → std::string
+ * @endcode
+ * @code{.example}
+ * message: "abc"
+ * call: auto const r = cbor::structs<std::string_view>::decode(std::move(bytes))
+ * result: ref to "abc"
+ * call: std::string_view const v = **r
+ * result: "abc"
+ * call: r->clone()
+ * result: "abc"
+ * @endcode
+ *
+ * @tparam T the type of the value
+ * @snippet doc_reference_ref.cpp ref
+ * @see cbor::owning
+ */
 template <class T>
 class CBOR_OWNER ref
 {
@@ -96,9 +134,23 @@ class CBOR_OWNER ref
     friend class iov_writer;
 
 public:
-    ref(ref const &) = default;
-    ref &operator=(ref const &) = default;
+    /**
+     * @brief Shares the owner and copies the value.
+     * @param other the ref to copy
+     */
+    ref(ref const &other) = default;
 
+    /**
+     * @brief Shares the owner and copies the value.
+     * @param other the ref to copy
+     * @return this ref
+     */
+    ref &operator=(ref const &other) = default;
+
+    /**
+     * @brief Takes the owner and the value of @p o, and leaves `T{}` and no owner in @p o.
+     * @param o the ref to move from
+     */
     ref(ref &&o) noexcept(std::is_nothrow_move_constructible_v<T> &&
                                         std::is_nothrow_default_constructible_v<T>)
         requires std::is_default_constructible_v<T>
@@ -106,6 +158,11 @@ public:
     {
     }
 
+    /**
+     * @brief Takes the owner and the value of @p o, and leaves `T{}` and no owner in @p o.
+     * @param o the ref to move from
+     * @return this ref
+     */
     ref &operator=(ref &&o) noexcept(std::is_nothrow_move_assignable_v<T> &&
                                                    std::is_nothrow_default_constructible_v<T>)
         requires std::is_default_constructible_v<T>
@@ -115,6 +172,10 @@ public:
         return *this;
     }
 
+    /**
+     * @brief Gives the value: a view by value, any other `T` as `T const &`.
+     * @return the value
+     */
     std::conditional_t<is_view<T>, T, T const &> operator*() const & CBOR_LIFETIMEBOUND
     {
         return value;
@@ -122,6 +183,10 @@ public:
 
     void operator*() const && = delete;
 
+    /**
+     * @brief Gives the address of the value, so that `r->` reaches its members.
+     * @return the address of the value
+     */
     T const *operator->() const & CBOR_LIFETIMEBOUND
     {
         return &value;
@@ -129,18 +194,30 @@ public:
 
     void operator->() const && = delete;
 
+    /**
+     * @brief Copies the text into a `std::string`.
+     * @return the copy
+     */
     std::string clone() const
         requires std::same_as<T, std::string_view>
     {
         return std::string(value);
     }
 
+    /**
+     * @brief Copies the bytes into a byte vector.
+     * @return the copy
+     */
     std::vector<std::byte> clone() const
         requires std::same_as<T, std::span<std::byte const>>
     {
         return std::vector<std::byte>(value.begin(), value.end());
     }
 
+    /**
+     * @brief Copies the value and the bytes of each view in it into a cbor::owning.
+     * @return the copy
+     */
     owning<T> clone() const
         requires(!std::same_as<T, std::string_view> && !std::same_as<T, std::span<std::byte const>>)
     {
@@ -158,12 +235,24 @@ public:
         return owning<T>(std::shared_ptr<T const>(h, &h->value));
     }
 
+    /**
+     * @brief Compares the values of two refs.
+     * @param a the first ref
+     * @param b the second ref
+     * @return `true` when the values are equal
+     */
     friend bool operator==(ref const &a, ref const &b)
         requires std::equality_comparable<T>
     {
         return a.value == b.value;
     }
 
+    /**
+     * @brief Compares the value of a ref with a value.
+     * @param a the ref
+     * @param b the value
+     * @return `true` when the values are equal
+     */
     friend bool operator==(ref const &a, T const &b)
         requires std::equality_comparable<T>
     {
@@ -178,6 +267,35 @@ struct zone_owner;
 
 }
 
+/**
+ * @brief A value that holds its own copy of the bytes of each view in it.
+ *
+ * cbor::ref::clone() makes it for a `T` that is not a single text or byte view.
+ * The copy and the value share one `std::shared_ptr`, so a view in it stays valid after the bytes of the `ref` end.
+ * A copy of an `owning` shares the value and copies nothing.
+ * It has no `==` and no public constructor.
+ * The value is `const`.
+ * `*` and `->` on a temporary `owning` do not compile.
+ *
+ * @code{.callseq}
+ * p.clone() → owning<person>
+ * *own      → person const &
+ * own->name → std::string_view
+ * @endcode
+ * @code{.example}
+ * message: {"name": "ann", "age": 30}
+ * call: auto const p = cbor::structs<person>::decode(std::move(bytes)).value()
+ * result: ref to person{"ann", 30}
+ * call: auto const own = p.clone()
+ * result: owning of person{"ann", 30}
+ * call: own->name
+ * result: "ann"
+ * @endcode
+ *
+ * @tparam T the type of the value
+ * @snippet doc_reference_ref.cpp owning
+ * @see cbor::ref
+ */
 template <class T>
 class CBOR_OWNER owning
 {
@@ -193,6 +311,10 @@ class CBOR_OWNER owning
     friend class ref;
 
 public:
+    /**
+     * @brief Gives the value.
+     * @return the value
+     */
     T const &operator*() const & CBOR_LIFETIMEBOUND
     {
         return *held;
@@ -200,6 +322,10 @@ public:
 
     void operator*() const && = delete;
 
+    /**
+     * @brief Gives the address of the value, so that `own->` reaches its members.
+     * @return the address of the value
+     */
     T const *operator->() const & CBOR_LIFETIMEBOUND
     {
         return held.get();

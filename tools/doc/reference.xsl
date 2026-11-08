@@ -31,6 +31,11 @@
   <xsl:variable name="d" select="detaileddescription"/>
   <xsl:text># </xsl:text>
   <xsl:call-template name="type"><xsl:with-param name="t" select="compoundname|qualifiedname"/></xsl:call-template>
+  <xsl:if test="self::compounddef and templateparamlist/param">
+    <xsl:text>&lt;</xsl:text>
+    <xsl:apply-templates select="templateparamlist/param" mode="argument"/>
+    <xsl:text>&gt;</xsl:text>
+  </xsl:if>
   <xsl:value-of select="concat($nl, $nl, '```cpp', $nl)"/>
   <xsl:apply-templates select="." mode="declaration"/>
   <xsl:value-of select="concat('```', $nl)"/>
@@ -223,17 +228,15 @@
   </xsl:choose>
 </xsl:template>
 
-<xsl:template match="memberdef[@kind='function']" mode="declaration">
+<xsl:template match="memberdef[@kind='function' or @kind='friend']" mode="declaration">
   <xsl:param name="indent" select="''"/>
   <xsl:if test="templateparamlist">
     <xsl:value-of select="concat($indent, 'template &lt;')"/>
-    <xsl:for-each select="templateparamlist/param">
-      <xsl:if test="position() > 1">, </xsl:if>
-      <xsl:value-of select="concat(type, ' ', declname)"/>
-    </xsl:for-each>
+    <xsl:apply-templates select="templateparamlist/param" mode="template"/>
     <xsl:value-of select="concat('&gt;', $nl)"/>
   </xsl:if>
   <xsl:value-of select="$indent"/>
+  <xsl:if test="@kind='friend'">friend </xsl:if>
   <xsl:if test="@explicit='yes'">explicit </xsl:if>
   <xsl:variable name="t"><xsl:call-template name="type"><xsl:with-param name="t" select="type"/></xsl:call-template></xsl:variable>
   <xsl:call-template name="joined"><xsl:with-param name="left" select="$t"/><xsl:with-param name="right" select="name"/></xsl:call-template>
@@ -241,9 +244,34 @@
   <xsl:apply-templates select="param" mode="declaration"/>
   <xsl:text>)</xsl:text>
   <xsl:if test="@const='yes'"> const</xsl:if>
-  <xsl:if test="@noexcept='yes'"> noexcept</xsl:if>
+  <xsl:if test="@refqual='lvalue'"> &amp;</xsl:if>
+  <xsl:if test="@refqual='rvalue'"> &amp;&amp;</xsl:if>
+  <xsl:choose>
+    <xsl:when test="@noexceptexpression">
+      <xsl:text> noexcept(</xsl:text>
+      <xsl:call-template name="type"><xsl:with-param name="t" select="str:replace(@noexceptexpression, '&amp;&amp;', ' &amp;&amp; ')"/></xsl:call-template>
+      <xsl:text>)</xsl:text>
+    </xsl:when>
+    <xsl:when test="@noexcept='yes'"> noexcept</xsl:when>
+  </xsl:choose>
   <xsl:if test="contains(argsstring, ' override')"> override</xsl:if>
+  <xsl:if test="requiresclause">
+    <xsl:value-of select="concat($nl, $indent, $indent_step, 'requires ', normalize-space(requiresclause))"/>
+  </xsl:if>
   <xsl:value-of select="concat(';', $nl)"/>
+</xsl:template>
+
+<xsl:template match="param" mode="template">
+  <xsl:if test="position() > 1">, </xsl:if>
+  <xsl:value-of select="normalize-space(concat(type, ' ', declname))"/>
+</xsl:template>
+
+<xsl:template match="param" mode="argument">
+  <xsl:if test="position() > 1">, </xsl:if>
+  <xsl:choose>
+    <xsl:when test="declname"><xsl:value-of select="declname"/></xsl:when>
+    <xsl:otherwise><xsl:value-of select="str:split(normalize-space(type), ' ')[last()]"/></xsl:otherwise>
+  </xsl:choose>
 </xsl:template>
 
 <xsl:template match="memberdef[@kind='variable']" mode="declaration">
@@ -287,13 +315,14 @@
   <xsl:variable name="ctors" select="$public[@kind='function' and name=$ctor_name]"/>
   <xsl:variable name="nested" select="$c/innerclass[@prot='public']"/>
   <xsl:variable name="functions" select="$public[@kind='function' and name!=$ctor_name]"/>
+  <xsl:variable name="friends" select="$c/sectiondef[@kind='friend']/memberdef[@kind='friend' and @prot='public' and normalize-space(argsstring)]"/>
   <xsl:apply-templates select="$types" mode="declaration"><xsl:with-param name="indent" select="$indent"/></xsl:apply-templates>
   <xsl:if test="$types and ($variables or $ctors or $nested or $functions)"><xsl:value-of select="$nl"/></xsl:if>
   <xsl:apply-templates select="$variables" mode="declaration"><xsl:with-param name="indent" select="$indent"/></xsl:apply-templates>
   <xsl:if test="$variables and ($ctors or $nested or $functions)"><xsl:value-of select="$nl"/></xsl:if>
   <xsl:for-each select="$ctors">
     <xsl:apply-templates select="." mode="declaration"><xsl:with-param name="indent" select="$indent"/></xsl:apply-templates>
-    <xsl:if test="templateparamlist or (position() = last() and ($nested or $functions))"><xsl:value-of select="$nl"/></xsl:if>
+    <xsl:if test="templateparamlist or (position() = last() and ($nested or $functions or $friends))"><xsl:value-of select="$nl"/></xsl:if>
   </xsl:for-each>
   <xsl:for-each select="$nested">
     <xsl:variable name="inner" select="document(concat(@refid, '.xml'), $index)/doxygen/compounddef"/>
@@ -308,6 +337,8 @@
     <xsl:if test="$functions"><xsl:value-of select="$nl"/></xsl:if>
   </xsl:for-each>
   <xsl:apply-templates select="$functions" mode="declaration"><xsl:with-param name="indent" select="$indent"/></xsl:apply-templates>
+  <xsl:if test="$friends and ($ctors or $nested or $functions)"><xsl:value-of select="$nl"/></xsl:if>
+  <xsl:apply-templates select="$friends" mode="declaration"><xsl:with-param name="indent" select="$indent"/></xsl:apply-templates>
 </xsl:template>
 
 <xsl:template match="compounddef" mode="declaration">
@@ -317,7 +348,11 @@
       <xsl:otherwise><xsl:call-template name="type"><xsl:with-param name="t" select="compoundname"/></xsl:call-template></xsl:otherwise>
     </xsl:choose>
   </xsl:variable>
-  <xsl:if test="templateparamlist and not(templateparamlist/param)"><xsl:value-of select="concat('template &lt;&gt;', $nl)"/></xsl:if>
+  <xsl:if test="templateparamlist">
+    <xsl:text>template &lt;</xsl:text>
+    <xsl:apply-templates select="templateparamlist/param" mode="template"/>
+    <xsl:value-of select="concat('&gt;', $nl)"/>
+  </xsl:if>
   <xsl:value-of select="concat(@kind, ' ', $n)"/>
   <xsl:for-each select="basecompoundref">
     <xsl:choose>
