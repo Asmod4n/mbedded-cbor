@@ -31,6 +31,7 @@
 // cbor::diagnostic_notation() does. Space between items has no meaning in either notation (RFC 8259 section 2), so
 // the expected text takes the space of RFC 8949 Appendix A.
 
+#include "../small_stack.hpp"
 #include "tinycbor.hpp"
 
 #include <doctest/doctest.h>
@@ -163,9 +164,11 @@ TEST_CASE("tinycbor tojson: maps")
 // limit of nesting with CborErrorNestingTooDeep. The library has no fixed limit of nesting (validity.hpp, "Nesting has
 // no fixed limit"), so it reads to the end of the bytes and finds that the item is not complete: too_little_data
 // (RFC 8949 Appendix F).
+// The main thread holds 1026 levels where test::main_thread_holds_deep_input says so; elsewhere, as in a Windows debug
+// build, the test reads test::levels_every_stack_holds levels (small_stack.hpp; a test does not make a stack larger).
 TEST_CASE("tinycbor tojson: deep nesting with no end")
 {
-    constexpr std::size_t recursions = 1024 + 2;
+    constexpr std::size_t recursions = test::main_thread_holds_deep_input ? 1024 + 2 : test::levels_every_stack_holds;
     std::string maps;
     for (std::size_t i = 0; i < recursions; ++i)
         maps += "\xa1\x60"s;

@@ -38,6 +38,7 @@
 // reads an indefinite-length item with another function, the port expects indefinite_length. RFC 8949 section 5.1
 // lets a protocol leave out indefinite length.
 
+#include "../small_stack.hpp"
 #include "tinycbor.hpp"
 
 #include <doctest/doctest.h>
@@ -1603,9 +1604,11 @@ TEST_CASE("tinycbor parser: the end of the first item")
 // that recurses stops where the stack of its thread ends, and cbor::item_size() does not recurse (validity.hpp,
 // "Nesting has no fixed limit"). The port expects the size of the item, and key_not_found where upstream looks for
 // the key "foo" in a map.
+// The main thread holds 1026 levels where test::main_thread_holds_deep_input says so; elsewhere, as in a Windows debug
+// build, the test reads test::levels_every_stack_holds levels (small_stack.hpp; a test does not make a stack larger).
 TEST_CASE("tinycbor parser: deep nesting")
 {
-    constexpr std::size_t recursions = 1024 + 2;
+    constexpr std::size_t recursions = test::main_thread_holds_deep_input ? 1024 + 2 : test::levels_every_stack_holds;
     struct deep_row {
         std::string_view name;
         std::string data;

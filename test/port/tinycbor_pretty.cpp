@@ -29,6 +29,7 @@
 // ported where its flags print all that the bytes hold. The floats and an empty indefinite-length string take the
 // form of RFC 8949 section 8 and the EDN draft, as the comment at the top of tinycbor_parser.cpp says.
 
+#include "../small_stack.hpp"
 #include "tinycbor.hpp"
 
 #include <doctest/doctest.h>
@@ -347,9 +348,11 @@ TEST_CASE("tinycbor pretty: input that is not well-formed")
 // "<nesting too deep, recursion stopped>" at its limit. The library has no fixed limit of nesting: a reader that
 // recurses stops where the stack of its thread ends (validity.hpp, "Nesting has no fixed limit"). The port expects the
 // whole text.
+// The main thread holds 1026 levels where test::main_thread_holds_deep_input says so; elsewhere, as in a Windows debug
+// build, the test reads test::levels_every_stack_holds levels (small_stack.hpp; a test does not make a stack larger).
 TEST_CASE("tinycbor pretty: deep nesting")
 {
-    constexpr std::size_t recursions = 1024 + 2;
+    constexpr std::size_t recursions = test::main_thread_holds_deep_input ? 1024 + 2 : test::levels_every_stack_holds;
     struct deep_row {
         std::string_view name;
         std::string data;
