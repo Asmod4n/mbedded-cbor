@@ -9,7 +9,7 @@ today=$(date -u +%F)
 generated=$(mktemp -d)
 trap 'rm -rf "$generated"' EXIT
 sh "$tree/tools/doc/reference.sh" "$generated"
-podman run --rm --network none -e VERSION="$version" -e TODAY="$today" -v "$tree":/src:ro -v "$generated":/generated:ro -v "$out":/out mbedded-cbor-man sh -ec '
+podman run --rm --network none -e VERSION="$version" -e TODAY="$today" -v "$tree":/src:ro -v "$generated":/generated:ro -v "$out":/out mbedded-cbor-docs sh -ec '
   pandoc --version | head -1
   work=/tmp/man
   mkdir -p $work/reference

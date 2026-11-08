@@ -11,7 +11,7 @@ generated=$(mktemp -d)
 trap 'rm -rf "$generated"' EXIT
 sh "$tree/tools/doc/reference.sh" "$generated"
 commit=$(git -C "$tree" rev-parse HEAD)
-podman run --rm --network none -e COMMIT="$commit" -e SITE_GROUPS="${SITE_GROUPS:-}" -v "$tree":/src:ro -v "$generated":/generated:ro -v "$out":/out mbedded-cbor-site sh -ec '
+podman run --rm --network none -e COMMIT="$commit" -e SITE_GROUPS="${SITE_GROUPS:-}" -v "$tree":/src:ro -v "$generated":/generated:ro -v "$out":/out mbedded-cbor-docs sh -ec '
   site=/src/tools/site
   work=/tmp/work
   markdown=$work/markdown

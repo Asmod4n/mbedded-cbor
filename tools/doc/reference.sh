@@ -4,7 +4,7 @@ tree=$(cd "$(dirname "$0")/../.." && pwd)
 out=${1:?output directory}
 mkdir -p "$out"
 out=$(cd "$out" && pwd)
-podman run --rm --network none -v "$tree":/src:ro -v "$out":/out mbedded-cbor-doxygen sh -ec '
+podman run --rm --network none -v "$tree":/src:ro -v "$out":/out mbedded-cbor-docs sh -ec '
   echo "doxygen $(doxygen --version)"
   xsltproc --version | head -1
   xml=/tmp/doxygen/xml

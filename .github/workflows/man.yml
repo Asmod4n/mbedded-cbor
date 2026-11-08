@@ -7,11 +7,10 @@ on:
       - 'include/cbor/**'
       - 'Doxyfile'
       - 'tools/doc/**'
-      - 'containers/doxygen.Containerfile'
       - 'doc/reference/**'
       - 'doc/man/**'
       - 'tools/man/**'
-      - 'containers/man.Containerfile'
+      - 'containers/docs.Containerfile'
       - 'CMakeLists.txt'
       - '.github/workflows/man.yml'
 
@@ -23,10 +22,24 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Build the Doxygen image
-        run: podman build -q -t mbedded-cbor-doxygen -f containers/doxygen.Containerfile containers
-      - name: Build the image
-        run: podman build -q -t mbedded-cbor-man -f containers/man.Containerfile containers
+      - id: snapshot
+        name: Read the date of Debian sid
+        run: |
+          echo "snapshot=$(curl -sSf https://deb.debian.org/debian/dists/sid/InRelease | sed -n 's/^Date: //p' | head -1 | date -u -f - +%Y%m%dT%H%M%S)" >> "$GITHUB_OUTPUT"
+      - id: image
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/image-docs
+          key: image-docs-${{ steps.snapshot.outputs.snapshot }}-${{ hashFiles('containers/docs.Containerfile') }}
+      - if: steps.image.outputs.cache-hit != 'true'
+        name: Build the image
+        run: |
+          mkdir -p "$RUNNER_TEMP/image-docs"
+          podman build -q -t mbedded-cbor-docs -f containers/docs.Containerfile containers
+          podman save -o "$RUNNER_TEMP/image-docs/image.tar" mbedded-cbor-docs
+      - if: steps.image.outputs.cache-hit == 'true'
+        name: Load the image
+        run: podman load -q -i "$RUNNER_TEMP/image-docs/image.tar"
       - name: Make the man pages and compare them with doc/man/man3
         run: |
           sh tools/man/man.sh "$RUNNER_TEMP/man3"
