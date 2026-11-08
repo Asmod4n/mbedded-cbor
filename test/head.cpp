@@ -1,11 +1,15 @@
 #include "reference.hpp"
 
+#include <cbor/sequence_reader.hpp>
+#include <cbor/structs.hpp>
+
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <vector>
 
 using namespace std::string_view_literals;
 using cbor::error;
@@ -210,4 +214,45 @@ TEST_CASE("head: encode returns io_error for any other error of the Writer")
 {
     broken_writer w;
     CHECK_EQ(test::encode(w, U(0)).error(), cbor::error::io_error);
+}
+
+struct one_simple_value {
+    cbor::simple_value v;
+};
+
+// RFC 8949 3 and Appendix C: a simple value below 32 in the two-byte form (f8 00 to f8 1f), the additional
+// information 28 to 30 of every major type, and the additional information 31 on major types 0, 1 and 6 are not
+// well-formed. This is the whole finite set of heads that are not well-formed for a reason of their own byte, and
+// every reader of the library gives syntax_error for each of them, with no other error and no value.
+TEST_CASE("head: every head that Appendix C makes not well-formed is syntax_error in every reader")
+{
+    std::vector<std::string> heads;
+    for (int argument = 0; argument < 32; ++argument)
+        heads.push_back(std::string("\xf8") + static_cast<char>(argument));
+    for (int major = 0; major < 8; ++major)
+        for (int info = 28; info <= 30; ++info)
+            heads.push_back(std::string(1, static_cast<char>(major << 5 | info)) + std::string(8, '\0'));
+    for (int const major : {0, 1, 6})
+        heads.push_back(std::string(1, static_cast<char>(major << 5 | 31)) + std::string(8, '\0'));
+    REQUIRE_EQ(heads.size(), 59u);
+    for (std::string const &bytes : heads) {
+        CAPTURE(bytes);
+        CHECK_EQ(cbor::item_size(bytes).error(), cbor::error::syntax_error);
+        CHECK_EQ(cbor::decode(bytes).error(), cbor::error::syntax_error);
+        CHECK_EQ(cbor::diagnostic_notation(bytes).error(), cbor::error::syntax_error);
+        CHECK_EQ((cbor::at_path<"$", int>(bytes)).error(), cbor::error::syntax_error);
+        CHECK_EQ((cbor::at_path<"$", cbor::simple_value>(bytes)).error(), cbor::error::syntax_error);
+        auto const l = cbor::lazy::take_ownership(std::string(bytes));
+        if (l) {
+            CHECK_EQ(l->type().error(), cbor::error::syntax_error);
+            CHECK_EQ(l->get<cbor::simple_value>().error(), cbor::error::syntax_error);
+        } else {
+            CHECK_EQ(l.error(), cbor::error::syntax_error);
+        }
+        cbor::sequence_reader r;
+        r.feed(std::string_view{bytes});
+        CHECK_EQ(r.next().error(), cbor::error::syntax_error);
+        CHECK_EQ(cbor::structs<one_simple_value>::decode("\xa1\x61v" + bytes).error(), cbor::error::syntax_error);
+        CHECK_EQ(cbor::structs<one_simple_value>::decode("\xa1" + bytes + '\0').error(), cbor::error::syntax_error);
+    }
 }

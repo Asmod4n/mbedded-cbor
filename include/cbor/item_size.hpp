@@ -82,11 +82,6 @@ class well_formedness
                         marks.mark(d);
                     added = 1;
                     break;
-                case major_type::simple_float:
-                    if (!detail::validity::check_simple_value(slow->info, slow->argument).has_value())
-                        [[unlikely]]
-                        return std::unexpected(error::syntax_error);
-                    continue;
                 default:
                     continue;
                 }
