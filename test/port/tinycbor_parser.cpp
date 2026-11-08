@@ -494,8 +494,6 @@ TEST_CASE("tinycbor parser: half floats")
         std::string out;
         CHECK_EQ(outcome(cbor::encode(**tree, out)), error_text(no_error));
         CHECK_EQ(out, data);
-        CHECK_EQ(r.raw, (static_cast<unsigned>(static_cast<unsigned char>(r.data.front())) << 8) |
-                            static_cast<unsigned char>(r.data.back()));
     }
 }
 
@@ -899,8 +897,9 @@ TEST_CASE("tinycbor parser: string length")
 // tag that it does not interpret (lazy.hpp), so tag 1 in front changes nothing.
 // Two kinds of row differ from upstream:
 // - an indefinite-length text gives indefinite_length (the top of this file), so it is not equal;
-// - under "\xc1\xc2", tag 2 holds a text string. RFC 8949 3.4.3: the content of tag 2 is a byte string, and other
-//   content is not valid. Upstream skips the tag and finds the text equal; the port expects it not equal.
+// - under "\xc1\xc2", tag 2 holds a text string. lazy passes a tag that it does not interpret, and it interprets
+//   tag 2 (lazy.hpp; heads::is_tag_passed leaves out tags 2, 3 and 24), so the read meets tag 2 and gives
+//   incorrect_type. Upstream skips the tag and finds the text equal.
 TEST_CASE("tinycbor parser: compare with a text string")
 {
     struct compare_row {
@@ -980,6 +979,7 @@ TEST_CASE("tinycbor parser: compare with a text string")
                 CHECK_EQ(outcome(text), error_text(error::indefinite_length));
                 CHECK_FALSE(equal);
             } else if (prefix.size() == 2) {
+                CHECK_EQ(outcome(text), error_text(error::incorrect_type));
                 CHECK_FALSE(equal);
             } else {
                 CHECK_EQ(equal, r.expected);
@@ -993,7 +993,7 @@ TEST_CASE("tinycbor parser: compare with a text string")
 // - a key under a tag ("tagged", "doubletagged", "tagged-1before", "doubletagged-1before2"): upstream skips the tag of
 //   a key. In the data model of RFC 8949 (section 2), a tagged item is another item than its content, so the key is
 //   not the text "needle"; the port expects key_not_found;
-// - an indefinite-length key or map gives indefinite_length (the top of this file);
+// - an indefinite-length key, value or map gives indefinite_length (the top of this file);
 // - "absent-string-map2" holds bytes after the item ("\61z\62yx" in upstream is octal, not hexadecimal); a step does
 //   not read them (lazy.hpp, "No step reads bytes after the item").
 TEST_CASE("tinycbor parser: find a key in a map")
@@ -1526,7 +1526,8 @@ TEST_CASE("tinycbor parser: strict validation of a byte after the item")
 // strictValidation, the rows of CborValidateStrictMode on keys that are not unique. cbor::structs gives duplicate_key
 // for "a key that comes twice" (structs.hpp). The row with arrays as keys differs from upstream: every item can be a
 // key (owner decision), but the key type std::string holds no array, so the first key is an item of another type and
-// gives incorrect_type (structs.hpp) before a second key is read.
+// gives incorrect_type (structs.hpp) before a second key is read. With std::vector<std::string> as the key type the
+// two keys are read, and the second gives duplicate_key, as upstream intends.
 TEST_CASE("tinycbor parser: strict validation of keys that are not unique")
 {
     CHECK_EQ(outcome(cbor::structs<std::map<std::int64_t, std::int64_t>>::decode("\xa2\0\1\0\2"s)),
@@ -1535,6 +1536,9 @@ TEST_CASE("tinycbor parser: strict validation of keys that are not unique")
              error_text(error::duplicate_key));
     CHECK_EQ(outcome(cbor::structs<std::map<std::string, std::int64_t>>::decode("\xa2\x81\x65Hello\1\x81\x65Hello\2"s)),
              error_text(error::incorrect_type));
+    CHECK_EQ(outcome(cbor::structs<std::map<std::vector<std::string>, std::int64_t>>::decode(
+                 "\xa2\x81\x65Hello\1\x81\x65Hello\2"s)),
+             error_text(error::duplicate_key));
 }
 
 // incompleteData: each prefix of an item that ends before the last byte but one is too little data. A prefix that

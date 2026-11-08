@@ -446,9 +446,10 @@ TEST_CASE("tinycbor encoder: strings")
 }
 
 // arraysAndMaps, the definite rows: a C++ container that cbor::structs writes as an array or a map. A std::tuple is
-// an array, and a std::map is a map (structs.hpp). Two rows are not here: "map-array3" has keys of two types, and
-// "map-1(2):3(4)" has a tag as a key, which cbor::structs refuses (structs.hpp, "unsupported_value a map key is an
-// array, a map or a tag"); the round trip in "tinycbor encoder: tags, arrays and maps" writes both.
+// an array, and a std::map is a map (structs.hpp). Two rows are not here, and the round trip in "tinycbor encoder:
+// tags, arrays and maps" writes both: "map-array3" has keys of two types, which one std::map does not hold, and
+// "map-1(2):3(4)" has a tag as a key; every item can be a key (owner decision), but cbor::tagged_item has no order,
+// so a std::map does not take it as its key type.
 TEST_CASE("tinycbor encoder: arrays and maps")
 {
     using pairs = std::map<int, int>;
