@@ -101,13 +101,16 @@ inline void tree_encode(std::string_view const input)
     encode_targets(**tree, out);
 }
 
-// The nodes of a tree, reached through the elements, the pairs and the tag contents, not through a shared_reference.
-// A shared_reference points into the tree, so this walk ends on a cycle.
-inline std::vector<cbor::item const *> nodes_of(cbor::item const &root)
+// The nodes of a tree, reached through the elements, the pairs, the tag contents and the embedded item of each tag
+// 24, not through a shared_reference. A shared_reference points into the tree, so this walk ends on a cycle.
+inline std::vector<cbor::item const *> nodes_of(cbor::owning<cbor::item> const &tree)
 {
-    std::vector<cbor::item const *> nodes{&root};
+    std::vector<cbor::item const *> nodes{&*tree};
     for (std::size_t i = 0; i < nodes.size(); ++i) {
         cbor::item const &n = *nodes[i];
+        if (auto const t = n.get<cbor::type::tag>(); t && t->first == 24)
+            if (auto const embedded = cbor::encoded_cbor_data_item(tree, n))
+                nodes.push_back(&embedded->get());
         if (auto const a = n.get<cbor::type::array>())
             for (cbor::item const &c : *a)
                 nodes.push_back(&c);
@@ -140,8 +143,8 @@ inline void resolving_decode(std::string_view const input)
     require(top_level.has_value());
     auto const plain = top_level->clone();
     require(plain.has_value());
-    std::vector<cbor::item const *> const nodes = nodes_of(**resolved);
-    std::size_t const plain_nodes = nodes_of(**plain).size();
+    std::vector<cbor::item const *> const nodes = nodes_of(*resolved);
+    std::size_t const plain_nodes = nodes_of(*plain).size();
     require(nodes.size() <= plain_nodes);
     bool shared = false;
     for (cbor::item const *const n : nodes)

@@ -242,14 +242,16 @@ std::expected<void, error> tree_decoder<Checked, Resolve>::decode_content(std::p
             return std::unexpected(r.error());
         if (*r) {
             if constexpr (Resolve)
-                marks.insert(marks.end(), marked, &into.back());
+                if (marked != 0) [[unlikely]]
+                    marks.insert(marks.end(), marked, &into.back());
             return {};
         }
     }
     item &node = into.emplace_back(
         item{heads::type_of(head.major, head.info, head.argument), head.info, {.u64 = head.argument}});
     if constexpr (Resolve)
-        marks.insert(marks.end(), marked, &node);
+        if (marked != 0) [[unlikely]]
+            marks.insert(marks.end(), marked, &node);
     switch (head.major) {
     case major_type::unsigned_integer:
     case major_type::negative_integer:

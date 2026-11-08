@@ -948,3 +948,46 @@ TEST_CASE("value sharing: lazy::clone keeps tags 28 and 29")
     REQUIRE(tree.has_value());
     CHECK_EQ((*tree)->get<cbor::type::tag>().value().first, 28u);
 }
+
+// The marks of the model reach every kind of node: a bignum that decode reads as an integer, a tag 24 and a typed
+// array. The tags of an embedded item are resolved with its own table (RFC 8949 3.4.5.1). The model gives
+// sharedref_index_not_marked for an index past the marks before the chain, and an item that ends in its tag 28 or
+// tag 29 is too little data.
+TEST_CASE("value sharing: cbor::decode marks every kind of node and resolves inside a tag 24")
+{
+    using shared_test::elements_of;
+    using shared_test::target_of;
+    for (std::string_view const wire : {"\x82\xd8\x1c\xc2\x41\x01\xd8\x1d\x00"sv, "\x82\xd8\x1c\xd8\x18\x41\x01\xd8\x1d\x00"sv,
+                                        "\x82\xd8\x1c\xd8\x40\x42\x01\x02\xd8\x1d\x00"sv}) {
+        CAPTURE(wire.size());
+        auto const tree = cbor::decode(wire);
+        REQUIRE(tree.has_value());
+        auto const e = elements_of(**tree);
+        CHECK_EQ(target_of(e[1]), &e[0]);
+    }
+    auto const outer = cbor::decode("\xd8\x18\x47\x82\xd8\x1c\x01\xd8\x1d\x00"sv);
+    REQUIRE(outer.has_value());
+    auto const embedded = cbor::encoded_cbor_data_item(*outer, **outer);
+    REQUIRE(embedded.has_value());
+    auto const e = elements_of(embedded->get());
+    CHECK_EQ(target_of(e[1]), &e[0]);
+    CHECK_EQ(cbor::decode("\xd8\x1c\xd8\x1c\xd8\x1d\x02"sv).error(), error::sharedref_index_not_marked);
+    CHECK_EQ(cbor::decode("\xd8\x1d"sv).error(), error::too_little_data);
+    CHECK_EQ(cbor::decode("\xd8\x1c"sv).error(), error::too_little_data);
+}
+
+// clone of a lazy inside the top-level item keeps tags 28 and 29 and a tag 55799 as tag nodes: only cbor::decode
+// resolves tags 28 and 29, and a tag 55799 inside an item stays a tag (owner decisions).
+TEST_CASE("value sharing: clone at an inner offset keeps tags 28, 29 and 55799")
+{
+    auto const top_level = test::lazy_of_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
+    REQUIRE(top_level.has_value());
+    auto const reference = top_level->at(1).and_then([](cbor::lazy const &l) { return l.clone(); });
+    REQUIRE(reference.has_value());
+    CHECK_EQ((*reference)->get<cbor::type::tag>().value().first, 29u);
+    auto const marked = test::lazy_of_copy("\x81\xd9\xd9\xf7\x01"s);
+    REQUIRE(marked.has_value());
+    auto const inner = marked->at(0).and_then([](cbor::lazy const &l) { return l.clone(); });
+    REQUIRE(inner.has_value());
+    CHECK_EQ((*inner)->get<cbor::type::tag>().value().first, 55799u);
+}

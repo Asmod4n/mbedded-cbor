@@ -71,8 +71,14 @@ limit, because the limits count only what a call reads.
 A lazy keeps no marks of tag 28.
 It reads tags 28 and 29 as plain tags, so a read changes nothing in it
 and needs no lock.
-Only \f[CR]cbor::structs\f[R] decode resolves them, with a table of the
-tags 28 of one call.
+\f[CR]cbor::decode\f[R] resolves them, with a table of the tags 28 of
+one call: a tag 28 enters the address of the node of its content right
+after that node is made and before its children are read, and a tag 29
+is a \f[CR]shared_reference\f[R] node with that address.
+The vectors of the tree are reserved with their exact count, so no
+address changes.
+\f[CR]cbor::structs\f[R] decode keeps a table of its own and reads a tag
+29 into no plain member.
 .SS 6. A compile\-time path
 The compiler parses a compile\-time path once.
 At run time it is a set of constant arrays.
@@ -88,7 +94,8 @@ A count is checked against the bytes that are left before an element is
 read, and the sum of all open counts never exceeds the bytes that are
 left.
 .PP
-A tag 28 and a tag 29 are tag items over their content.
+In the tree of \f[CR]clone\f[R], a tag 28 and a tag 29 are tag items
+over their content.
 The resource holds one sorted table: each tag 24 item with the root of
 its embedded item.
 \f[CR]cbor::encoded_cbor_data_item\f[R] searches the table.

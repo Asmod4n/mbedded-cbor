@@ -846,7 +846,7 @@ A key behind any other tag, tag 28 included, is a different key:
 \f[CR]$.k\f[R] does not find \f[CR]1000(\(dqk\(dq)\f[R].
 .PP
 A path does not resolve a tag 29.
-Only \f[CR]cbor::structs\f[R] decode resolves tags 28 and 29.
+\f[CR]cbor::decode\f[R] resolves tags 28 and 29 (runtime.md section 10).
 .SS Typed arrays
 A typed array (RFC 8746) is a tag over a byte string.
 The tag gives the type, the sign and the byte order of the elements.

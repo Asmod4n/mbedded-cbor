@@ -551,7 +551,7 @@ public:
 
     /**
      * @brief Decodes the whole item at the lazy into a tree of cbor::item, as cbor::decode() does, except that tags 28
-     * and 29 stay tag nodes.
+     * and 29 stay tag nodes, and that a tag 55799 inside the top-level item stays a tag node.
      *
      * The tree holds a copy of each text and byte string.
      * It does not view the bytes of the lazy, and stays valid after the lazy and its owner end.
