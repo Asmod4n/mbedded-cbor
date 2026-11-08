@@ -7,7 +7,9 @@ INPUT                  = include/cbor/cbor.hpp \
                          include/cbor/diagnostic_notation.hpp \
                          include/cbor/error.hpp \
                          include/cbor/validity.hpp \
-                         include/cbor/ref.hpp
+                         include/cbor/ref.hpp \
+                         include/cbor/describe.hpp \
+                         include/cbor/structs.hpp
 STRIP_FROM_PATH        = include
 STRIP_FROM_INC_PATH    = include
 EXCLUDE_SYMBOLS        = cbor::detail cbor::detail::* cbor::well_formedness

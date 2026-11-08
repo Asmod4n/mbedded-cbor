@@ -14,6 +14,10 @@
 <xsl:template match="/">
   <xsl:variable name="class" select="doxygenindex/compound[(@kind='class' or @kind='struct') and name=$name]"/>
   <xsl:variable name="function" select="doxygenindex/compound[@kind='namespace']/member[(@kind='function' or @kind='enum') and concat(../name, '::', name)=$name]"/>
+  <xsl:variable name="define" select="doxygenindex/compound[@kind='group']/member[@kind='define' and name=$name]"/>
+  <xsl:variable name="member_name"><xsl:call-template name="last"><xsl:with-param name="s" select="$name"/></xsl:call-template></xsl:variable>
+  <xsl:variable name="owner_name" select="substring($name, 1, string-length($name) - string-length($member_name) - 2)"/>
+  <xsl:variable name="owner" select="doxygenindex/compound[(@kind='class' or @kind='struct') and name=$owner_name]"/>
   <xsl:choose>
     <xsl:when test="$class">
       <xsl:apply-templates select="document(concat($class/@refid, '.xml'), /)/doxygen/compounddef" mode="page"/>
@@ -24,23 +28,53 @@
       <xsl:variable name="holder" select="($holders[@kind='group'] | $holders[@kind='namespace'][not($holders[@kind='group'])])[1]"/>
       <xsl:apply-templates select="document(concat($holder/@refid, '.xml'), /)//memberdef[@id=$id]" mode="page"/>
     </xsl:when>
+    <xsl:when test="$define">
+      <xsl:apply-templates select="document(concat($define[1]/../@refid, '.xml'), /)//memberdef[@id=$define[1]/@refid]" mode="page"/>
+    </xsl:when>
+    <xsl:when test="$owner">
+      <xsl:variable name="c" select="document(concat($owner/@refid, '.xml'), /)/doxygen/compounddef"/>
+      <xsl:variable name="all" select="$c/sectiondef[starts-with(@kind, 'public')]/memberdef[@kind='function' and name=$member_name][not(contains(argsstring, '=delete'))]"/>
+      <xsl:apply-templates select="$all[.//programlisting[@filename='.callseq']][1]" mode="page">
+        <xsl:with-param name="all" select="$all"/>
+        <xsl:with-param name="owner" select="$c"/>
+      </xsl:apply-templates>
+    </xsl:when>
     <xsl:otherwise>
-      <xsl:message terminate="yes">reference.xsl: no class, no enum and no function has the name <xsl:value-of select="$name"/></xsl:message>
+      <xsl:message terminate="yes">reference.xsl: no class, no enum, no macro, no member and no function has the name <xsl:value-of select="$name"/></xsl:message>
     </xsl:otherwise>
   </xsl:choose>
 </xsl:template>
 
 <xsl:template match="compounddef|memberdef" mode="page">
+  <xsl:param name="all" select="."/>
+  <xsl:param name="owner" select="/.."/>
   <xsl:variable name="d" select="detaileddescription"/>
+  <xsl:variable name="ds" select="$all/detaileddescription"/>
   <xsl:text># </xsl:text>
-  <xsl:call-template name="type"><xsl:with-param name="t" select="compoundname|qualifiedname"/></xsl:call-template>
-  <xsl:if test="self::compounddef and templateparamlist/param">
-    <xsl:text>&lt;</xsl:text>
-    <xsl:apply-templates select="templateparamlist/param" mode="argument"/>
-    <xsl:text>&gt;</xsl:text>
-  </xsl:if>
+  <xsl:choose>
+    <xsl:when test="$owner">
+      <xsl:call-template name="type"><xsl:with-param name="t" select="$owner/compoundname"/></xsl:call-template>
+      <xsl:if test="$owner/templateparamlist/param">
+        <xsl:text>&lt;</xsl:text>
+        <xsl:apply-templates select="$owner/templateparamlist/param" mode="argument"/>
+        <xsl:text>&gt;</xsl:text>
+      </xsl:if>
+      <xsl:value-of select="concat('::', name)"/>
+    </xsl:when>
+    <xsl:otherwise>
+      <xsl:call-template name="type"><xsl:with-param name="t" select="compoundname|qualifiedname|self::memberdef[@kind='define']/name"/></xsl:call-template>
+      <xsl:if test="self::compounddef and templateparamlist/param">
+        <xsl:text>&lt;</xsl:text>
+        <xsl:apply-templates select="templateparamlist/param" mode="argument"/>
+        <xsl:text>&gt;</xsl:text>
+      </xsl:if>
+    </xsl:otherwise>
+  </xsl:choose>
   <xsl:value-of select="concat($nl, $nl, '```cpp', $nl)"/>
-  <xsl:apply-templates select="." mode="declaration"/>
+  <xsl:for-each select="$all">
+    <xsl:if test="position() > 1 and (templateparamlist or preceding-sibling::memberdef[1]/templateparamlist)"><xsl:value-of select="$nl"/></xsl:if>
+    <xsl:apply-templates select="." mode="declaration"/>
+  </xsl:for-each>
   <xsl:value-of select="concat('```', $nl)"/>
   <xsl:for-each select="$d//programlisting[@filename='.callseq']">
     <xsl:call-template name="fence"><xsl:with-param name="info" select="'call-seq'"/></xsl:call-template>
@@ -48,15 +82,32 @@
   <xsl:for-each select="$d//programlisting[@filename='.example']">
     <xsl:call-template name="fence"><xsl:with-param name="info" select="'example'"/></xsl:call-template>
   </xsl:for-each>
-  <xsl:variable name="paras" select="$d//para[not(ancestor::simplesect or ancestor::parameterlist or ancestor::sect1 or ancestor::sect2 or ancestor::sect3)][text()[normalize-space()] or computeroutput or ref or ulink or bold or emphasis]"/>
+  <xsl:variable name="paras" select="$d//para[not(ancestor::simplesect or ancestor::parameterlist or ancestor::sect1 or ancestor::sect2 or ancestor::sect3 or ancestor::table)][text()[normalize-space()] or computeroutput or ref or ulink or bold or emphasis or table]"/>
   <xsl:for-each select="$paras">
     <xsl:value-of select="$nl"/>
     <xsl:if test="position() = 1 and normalize-space(../../briefdescription)">
       <xsl:call-template name="inline"><xsl:with-param name="node" select="../../briefdescription/para"/></xsl:call-template>
       <xsl:text> </xsl:text>
     </xsl:if>
-    <xsl:call-template name="inline"><xsl:with-param name="node" select="."/></xsl:call-template>
-    <xsl:value-of select="$nl"/>
+    <xsl:variable name="text"><xsl:call-template name="inline"><xsl:with-param name="node" select="."/></xsl:call-template></xsl:variable>
+    <xsl:if test="normalize-space($text)"><xsl:value-of select="concat($text, $nl)"/></xsl:if>
+    <xsl:for-each select="table">
+      <xsl:if test="normalize-space($text) or position() > 1"><xsl:value-of select="$nl"/></xsl:if>
+      <xsl:for-each select="row">
+        <xsl:text>|</xsl:text>
+        <xsl:for-each select="entry">
+          <xsl:text> </xsl:text>
+          <xsl:call-template name="inline"><xsl:with-param name="node" select="para"/></xsl:call-template>
+          <xsl:text> |</xsl:text>
+        </xsl:for-each>
+        <xsl:value-of select="$nl"/>
+        <xsl:if test="entry/@thead='yes'">
+          <xsl:text>|</xsl:text>
+          <xsl:for-each select="entry">---|</xsl:for-each>
+          <xsl:value-of select="$nl"/>
+        </xsl:if>
+      </xsl:for-each>
+    </xsl:for-each>
   </xsl:for-each>
   <xsl:if test="enumvalue[normalize-space(briefdescription) or normalize-space(detaileddescription)]">
     <xsl:value-of select="concat($nl, '| Value | Description |', $nl, '|---|---|', $nl)"/>
@@ -78,7 +129,8 @@
       <xsl:value-of select="concat(' |', $nl)"/>
     </xsl:for-each>
   </xsl:if>
-  <xsl:variable name="params" select="$d//parameterlist[@kind='templateparam' or @kind='param']/parameteritem"/>
+  <xsl:variable name="params_all" select="$ds//parameterlist[@kind='templateparam' or @kind='param']/parameteritem"/>
+  <xsl:variable name="params" select="$params_all[not(normalize-space(parameternamelist/parametername) = preceding::parameteritem[count(. | $params_all) = count($params_all)]/parameternamelist/parametername)]"/>
   <xsl:if test="$params">
     <xsl:value-of select="concat($nl, '## Parameters', $nl, $nl)"/>
     <xsl:for-each select="$params">
@@ -92,9 +144,12 @@
     <xsl:call-template name="inline"><xsl:with-param name="node" select="para"/></xsl:call-template>
     <xsl:value-of select="$nl"/>
   </xsl:for-each>
-  <xsl:variable name="retvals" select="$d//parameterlist[@kind='retval']/parameteritem"/>
+  <xsl:variable name="retvals_all" select="$ds//parameterlist[@kind='retval']/parameteritem"/>
+  <xsl:variable name="retvals" select="$retvals_all[not(normalize-space(parameternamelist/parametername) = preceding::parameteritem[count(. | $retvals_all) = count($retvals_all)]/parameternamelist/parametername)]"/>
   <xsl:variable name="error_paras" select="$d//*[title='Errors']/para[not(ancestor::simplesect)][text()[normalize-space()] or computeroutput or ref or ulink or bold or emphasis]"/>
-  <xsl:variable name="throws" select="$d//parameterlist[@kind='exception']/parameteritem | sectiondef[starts-with(@kind, 'public')]/memberdef/detaileddescription//parameterlist[@kind='exception']/parameteritem"/>
+  <xsl:variable name="paged" select="sectiondef[starts-with(@kind, 'public')]/memberdef[@kind='function'][.//programlisting[@filename='.callseq']]/name"/>
+  <xsl:variable name="throws_all" select="$ds//parameterlist[@kind='exception']/parameteritem | sectiondef[starts-with(@kind, 'public')]/memberdef[not(name = $paged)]/detaileddescription//parameterlist[@kind='exception']/parameteritem"/>
+  <xsl:variable name="throws" select="$throws_all[not(string(parameterdescription) = preceding::parameteritem[count(. | $throws_all) = count($throws_all)]/parameterdescription)]"/>
   <xsl:if test="$retvals or $throws or $error_paras">
     <xsl:value-of select="concat($nl, '## Errors', $nl, $nl)"/>
     <xsl:for-each select="$retvals">
@@ -124,7 +179,7 @@
     <xsl:value-of select="$nl"/>
   </xsl:for-each>
   <xsl:for-each select="$d//programlisting[not(starts-with(@filename, '.'))]">
-    <xsl:value-of select="concat($nl, '## Example', $nl)"/>
+    <xsl:if test="position() = 1"><xsl:value-of select="concat($nl, '## Example', $nl)"/></xsl:if>
     <xsl:call-template name="fence"><xsl:with-param name="info" select="'cpp'"/></xsl:call-template>
   </xsl:for-each>
   <xsl:variable name="see" select="$d//simplesect[@kind='see']"/>
@@ -157,7 +212,7 @@
   <xsl:variable name="target"><xsl:call-template name="page_of"><xsl:with-param name="refid" select="@refid"/></xsl:call-template></xsl:variable>
   <xsl:value-of select="concat('[', ., '](', $target, '.md)')"/>
 </xsl:template>
-<xsl:template match="simplesect|parameterlist|programlisting|sect1|sect2|sect3|title" mode="md"/>
+<xsl:template match="simplesect|parameterlist|programlisting|sect1|sect2|sect3|title|table" mode="md"/>
 
 <xsl:template name="page_of">
   <xsl:param name="refid"/>
@@ -165,6 +220,7 @@
   <xsl:variable name="member" select="$index/doxygenindex/compound/member[@refid=$refid]"/>
   <xsl:choose>
     <xsl:when test="$compound"><xsl:call-template name="last"><xsl:with-param name="s" select="normalize-space(str:split(concat($compound/name, '&lt;'), '&lt;')[1])"/></xsl:call-template></xsl:when>
+    <xsl:when test="($member/../@kind='class' or $member/../@kind='struct') and document(concat($member/../@refid, '.xml'), $index)//memberdef[name=$member/name][.//programlisting[@filename='.callseq']]"><xsl:value-of select="$member/name"/></xsl:when>
     <xsl:when test="$member/../@kind='class' or $member/../@kind='struct'"><xsl:call-template name="last"><xsl:with-param name="s" select="$member/../name"/></xsl:call-template></xsl:when>
     <xsl:otherwise><xsl:value-of select="$member/name"/></xsl:otherwise>
   </xsl:choose>
@@ -240,6 +296,7 @@
   </xsl:if>
   <xsl:value-of select="$indent"/>
   <xsl:if test="@kind='friend'">friend </xsl:if>
+  <xsl:if test="@static='yes'">static </xsl:if>
   <xsl:if test="@explicit='yes'">explicit </xsl:if>
   <xsl:variable name="t"><xsl:call-template name="type"><xsl:with-param name="t" select="type"/></xsl:call-template></xsl:variable>
   <xsl:call-template name="joined"><xsl:with-param name="left" select="$t"/><xsl:with-param name="right" select="name"/></xsl:call-template>
@@ -275,6 +332,19 @@
     <xsl:when test="declname"><xsl:value-of select="declname"/></xsl:when>
     <xsl:otherwise><xsl:value-of select="str:split(normalize-space(type), ' ')[last()]"/></xsl:otherwise>
   </xsl:choose>
+</xsl:template>
+
+<xsl:template match="memberdef[@kind='define']" mode="declaration">
+  <xsl:value-of select="concat('#define ', name)"/>
+  <xsl:if test="param">
+    <xsl:text>(</xsl:text>
+    <xsl:for-each select="param">
+      <xsl:if test="position() > 1">, </xsl:if>
+      <xsl:value-of select="defname"/>
+    </xsl:for-each>
+    <xsl:text>)</xsl:text>
+  </xsl:if>
+  <xsl:value-of select="concat(' ', normalize-space(initializer), $nl)"/>
 </xsl:template>
 
 <xsl:template match="memberdef[@kind='variable']" mode="declaration">
@@ -339,7 +409,10 @@
     <xsl:value-of select="concat($indent, '};', $nl)"/>
     <xsl:if test="$functions"><xsl:value-of select="$nl"/></xsl:if>
   </xsl:for-each>
-  <xsl:apply-templates select="$functions" mode="declaration"><xsl:with-param name="indent" select="$indent"/></xsl:apply-templates>
+  <xsl:for-each select="$functions">
+    <xsl:if test="position() > 1 and (templateparamlist or preceding-sibling::memberdef[1]/templateparamlist) and name != preceding-sibling::memberdef[1]/name"><xsl:value-of select="$nl"/></xsl:if>
+    <xsl:apply-templates select="." mode="declaration"><xsl:with-param name="indent" select="$indent"/></xsl:apply-templates>
+  </xsl:for-each>
   <xsl:if test="$friends and ($ctors or $nested or $functions)"><xsl:value-of select="$nl"/></xsl:if>
   <xsl:apply-templates select="$friends" mode="declaration"><xsl:with-param name="indent" select="$indent"/></xsl:apply-templates>
 </xsl:template>
@@ -375,7 +448,8 @@
       </xsl:call-template>
       <xsl:value-of select="concat('};', $nl)"/>
     </xsl:when>
-    <xsl:otherwise><xsl:value-of select="concat(' {};', $nl)"/></xsl:otherwise>
+    <xsl:when test="basecompoundref"><xsl:value-of select="concat(' {};', $nl)"/></xsl:when>
+    <xsl:otherwise><xsl:value-of select="concat(';', $nl)"/></xsl:otherwise>
   </xsl:choose>
 </xsl:template>
 

@@ -1,14 +1,17 @@
-// Writes a C++ value as CBOR and reads it back into a value of the
-// same type. Writes a struct as a map with one key for each member
-// that holds a value. Finds the members by reflection, by Boost.PFR or
-// in describe_members. Writes std::chrono times and dates, sets and
-// arrays of numbers under their standard tags. Reads values marked as
-// shareable.
-// https://www.rfc-editor.org/rfc/rfc8949
-// https://www.rfc-editor.org/rfc/rfc8943#section-2.1
-// https://www.rfc-editor.org/rfc/rfc8746#section-2
-// https://github.com/input-output-hk/cbor-sets-spec/blob/master/CBOR_SETS.md
-// http://cbor.schmorp.de/value-sharing
+/**
+ * @file
+ * Writes a C++ value as CBOR and reads it back into a value of the
+ * same type. Writes a struct as a map with one key for each member
+ * that holds a value. Finds the members by reflection, by Boost.PFR or
+ * in describe_members. Writes std::chrono times and dates, sets and
+ * arrays of numbers under their standard tags. Reads values marked as
+ * shareable.
+ * https://www.rfc-editor.org/rfc/rfc8949
+ * https://www.rfc-editor.org/rfc/rfc8943#section-2.1
+ * https://www.rfc-editor.org/rfc/rfc8746#section-2
+ * https://github.com/input-output-hk/cbor-sets-spec/blob/master/CBOR_SETS.md
+ * http://cbor.schmorp.de/value-sharing
+ */
 #pragma once
 
 #include <algorithm>
@@ -1368,10 +1371,116 @@ class generic
     }
 };
 
+/**
+ * @brief Writes a C++ value as CBOR and reads it back.
+ *
+ * `T`, and each member of a struct in `T`, is one of the types in this table.
+ * `encode` writes the item of the right column.
+ * `decode` takes only that item, under its own tag.
+ *
+ * | C++ type | CBOR item |
+ * |---|---|
+ * | `bool`, `std::nullptr_t`, `cbor::simple_value` | `true` or `false`, `null`, a simple value |
+ * | an integer of 8 to 64 bits; `__int128` | an integer; a bignum (tag 2, 3) |
+ * | an enum with a fixed underlying type | the integer |
+ * | `float`, `double` | the shortest float that holds the value |
+ * | `std::basic_string<char>`, `std::string_view` | a text string |
+ * | `std::span<std::byte const>` | a byte string |
+ * | `std::vector`, `std::array` of `std::byte`, an integer, `float`, `double` | an RFC 8746 typed array |
+ * | `std::set`, `std::flat_set` | tag 258 on an array |
+ * | `std::chrono::sys_seconds` | tag 1 on an integer |
+ * | `std::chrono::year_month_day` | tag 100 on an integer of days |
+ * | `std::optional<E>` | the item of E, or `null`; no key when empty |
+ * | `std::variant<E...>` | the item of the alternative |
+ * | `std::tuple<E...>`, `std::array<E, N>` | an array of that count |
+ * | a map type; a multimap type | a map; a map to arrays |
+ * | another container | an array |
+ * | `cbor::tagged_item<N, E>` | tag N on the item of E |
+ * | a struct | a map |
+ *
+ * `decode` gives `incorrect_type` for another item: a `std::vector<int>` takes a typed array, not an array.
+ * An enum with no fixed underlying type, a `long double` and a struct under `tagged_item` do not compile.
+ *
+ * @code{.callseq}
+ * cbor::structs<T>::encode(value)              → std::expected<std::string, cbor::error>
+ * cbor::structs<T>::decode(std::move(encoded)) → std::expected<cbor::ref<T>, cbor::error>
+ * @endcode
+ * @code{.example}
+ * message: {"id": 4}
+ * call: auto const r = cbor::structs<reading>::encode(reading{4, std::nullopt})
+ * result: 5 bytes: a1 62 69 64 04
+ * call: cbor::lazy::take_ownership(*r)
+ * result: lazy of {"id": 4}
+ * call: auto const s = cbor::structs<std::set<std::uint8_t>>::encode(std::set<std::uint8_t>{3, 1})
+ * result: 6 bytes: d9 01 02 82 01 03
+ * call: cbor::lazy::take_ownership(*s)
+ * result: lazy of 258([1, 3])
+ * call: cbor::structs<reading>::decode(std::move(bytes))
+ * result: ref to reading{4, std::nullopt}
+ * @endcode
+ *
+ * @tparam T the type of the value
+ * @snippet doc_reference_structs.cpp structs
+ * @see cbor::structs::encode()
+ * @see cbor::structs::decode()
+ * @see cbor::describe_members
+ * @see cbor::ref
+ *
+ * @ingroup structs
+ */
 template <class T>
 class structs
 {
 public:
+    /**
+     * @brief Reads one item into a `T`.
+     *
+     * The result is a cbor::ref that holds the owner of the bytes, so a `std::string_view` in `T` stays valid.
+     * No form copies the bytes.
+     * The first form moves an rvalue into a new owner; an lvalue does not compile.
+     * `owner` keeps the bytes of a borrowed `encoded` alive.
+     * A form with `target` reads into the containers of `target`, with their allocator.
+     * The other forms start from `T{}`.
+     * A byte after the item is not read.
+     *
+     * @code{.callseq}
+     * cbor::structs<T>::decode(std::move(encoded))                → std::expected<cbor::ref<T>, cbor::error>
+     * cbor::structs<T>::decode(owner)                             → std::expected<cbor::ref<T>, cbor::error>
+     * cbor::structs<T>::decode(owner, std::move(target))          → std::expected<cbor::ref<T>, cbor::error>
+     * cbor::structs<T>::decode(owner, encoded)                    → std::expected<cbor::ref<T>, cbor::error>
+     * cbor::structs<T>::decode(owner, encoded, std::move(target)) → std::expected<cbor::ref<T>, cbor::error>
+     * @endcode
+     * @code{.example}
+     * message: {"name": "ann", "age": 30}
+     * call: auto const p = cbor::structs<person>::decode(std::move(bytes))
+     * result: ref to person{"ann", 30}
+     * call: (*p)->age
+     * result: 30
+     * call: (*p)->name
+     * result: "ann"
+     * @endcode
+     *
+     * @param encoded the bytes of one item
+     * @return the value with the owner of its bytes
+     * @retval incorrect_type an item of another type, or a missing or other tag
+     * @retval number_out_of_range a number that the type cannot hold
+     * @retval key_not_found no key for a member that is not `std::optional`
+     * @retval duplicate_key a key that comes twice
+     * @retval too_little_data the input ends inside the item
+     * @retval syntax_error a head is not well-formed
+     * @retval indefinite_length a head uses indefinite length
+     * @retval nesting_depth_exceeded the item is deeper than the stack of the thread holds
+     * @retval inadmissible_type_for_tag_content a tag has content that its definition does not allow
+     * @retval unsupported_value a map key is an array, a map or a tag
+     * @retval sharedref_index_not_marked, sharedref_index_out_of_range, sharedref_not_complete a tag 29 that names no
+     * shared value that the decode holds
+     * @retval string_length_exceeded a string is longer than `limits::string_length`
+     * @retval container_elements_exceeded the count of an array or a map is greater than `limits::container_elements`
+     * @retval not_enough_memory a refused allocation
+     * @snippet doc_reference_structs.cpp decode
+     * @see cbor::structs::encode()
+     * @see cbor::ref
+     */
     template <owning_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(Encoded &&encoded)
     {
@@ -1386,6 +1495,12 @@ public:
 #endif
     }
 
+    /**
+     * @brief Reads one item into a `T` from the bytes that @p encoded owns.
+     * @param encoded the owner of the bytes of one item
+     * @return the value with the owner of its bytes
+     * @throws std::logic_error @p encoded is null
+     */
     template <owning_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded)
     {
@@ -1393,6 +1508,13 @@ public:
         return decode(std::move(encoded), T{});
     }
 
+    /**
+     * @brief Reads one item into @p target from the bytes that @p encoded owns.
+     * @param encoded the owner of the bytes of one item
+     * @param target the value whose containers and allocator the read uses
+     * @return the value with the owner of its bytes
+     * @throws std::logic_error @p encoded is null
+     */
     template <owning_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded, T &&target)
     {
@@ -1402,6 +1524,13 @@ public:
         return decode(std::shared_ptr<void const>(std::move(encoded)), bytes, std::move(target));
     }
 
+    /**
+     * @brief Reads one item into a `T` from bytes that @p owner keeps alive.
+     * @param owner the owner of the bytes
+     * @param encoded the bytes of one item
+     * @return the value with the owner of its bytes
+     * @throws std::logic_error @p owner is empty
+     */
     template <borrowed_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
@@ -1409,6 +1538,14 @@ public:
         return decode(std::move(owner), encoded, T{});
     }
 
+    /**
+     * @brief Reads one item into @p target from bytes that @p owner keeps alive.
+     * @param owner the owner of the bytes
+     * @param encoded the bytes of one item
+     * @param target the value whose containers and allocator the read uses
+     * @return the value with the owner of its bytes
+     * @throws std::logic_error @p owner is empty
+     */
     template <borrowed_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded,
                                                T &&target)
@@ -1417,6 +1554,35 @@ public:
                             std::move(target));
     }
 
+    /**
+     * @brief Writes @p value as one CBOR item in preferred serialization, into a new `std::string`.
+     *
+     * A struct is a map, and its keys come in the order of RFC 8949 4.2.1.
+     * The second form appends to `target` and returns the count of bytes that it appended.
+     * `target` is a `std::string`, a container of `char`, a `std::span<char>` or a writer.
+     * The function writes no shared value (tag 28, tag 29).
+     * A type that `structs` does not take does not compile.
+     *
+     * @code{.callseq}
+     * cbor::structs<T>::encode(value)         → std::expected<std::string, cbor::error>
+     * cbor::structs<T>::encode(value, target) → std::expected<std::size_t, cbor::error>
+     * @endcode
+     * @code{.example}
+     * message: {"name": "ann", "age": 30}
+     * call: auto const encoded = cbor::structs<person>::encode(person{"ann", 30})
+     * result: 16 bytes: a2 63 61 67 65 18 1e 64 6e 61 6d 65 63 61 6e 6e
+     * call: cbor::lazy::take_ownership(*encoded)
+     * result: lazy of {"age": 30, "name": "ann"}
+     * @endcode
+     *
+     * @param value the value to write
+     * @return the bytes
+     * @retval value_too_large the size of the bytes does not fit in `std::size_t`
+     * @throws std::logic_error a `std::chrono::year_month_day` that is no valid date
+     * @throws std::bad_alloc a refused allocation of the result
+     * @snippet doc_reference_structs.cpp encode
+     * @see cbor::structs::decode()
+     */
     CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode(T const &value)
     {
         auto const counted = generic::generic_size(value);
@@ -1434,6 +1600,16 @@ public:
         return out;
     }
 
+    /**
+     * @brief Appends @p value as one CBOR item in preferred serialization to @p target.
+     * @param value the value to write
+     * @param target a `std::string`, a container of `char`, a `std::span<char>` or a writer
+     * @return the count of bytes that it appended
+     * @retval no_buffer_space a `std::span<char>` that is too small for the bytes, or the writer gives this error
+     * @retval value_too_large the size of the bytes does not fit in `std::size_t`, or the writer gives this error
+     * @retval not_enough_memory, io_error the writer gives this error
+     * @throws std::logic_error a `std::chrono::year_month_day` that is no valid date
+     */
     template <class Target>
     CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(T const &value, Target &&target)
     {

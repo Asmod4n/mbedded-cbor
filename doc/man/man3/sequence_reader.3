@@ -15,6 +15,7 @@ cbor::sequence_reader \- gives the items of a CBOR sequence whose bytes arrive i
     sequence_reader(sequence_reader &&other);
 
     sequence_reader &\f[B]operator\f[R]=(sequence_reader &&other);
+
     \f[B]template\f[R] <borrowed_range_of_chars Piece>
     void feed(Piece piece)
         \f[B]requires\f[R] (!std::is_array_v<Piece>);
@@ -25,6 +26,7 @@ cbor::sequence_reader \- gives the items of a CBOR sequence whose bytes arrive i
     void feed(Piece &&piece);
     \f[B]template\f[R] <owning_range_of_chars Piece>
     void feed(std::shared_ptr<Piece const> piece);
+
     bool empty() const;
     std::expected<lazy, error> next();
 };
