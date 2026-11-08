@@ -703,7 +703,9 @@ std::string out = \(dqx\(dq;
 .EX
 \f[I]// bytes: a std::string from schema<car>::encode(car{\(dqVolvo\(dq, 5, ...})\f[R]
 \f[B]auto\f[R] const back = cbor::schema<car>::decode(std::move(bytes));
-std::string_view const make = back ? (*back)\->make : \(dq\(dq;  \f[I]// \(dqVolvo\(dq\f[R]
+std::string make;
+\f[B]if\f[R] (back)
+    make = (*back)\->make;  \f[I]// \(dqVolvo\(dq\f[R]
 .EE
 .SS cbor::schema<T>::path
 .IP

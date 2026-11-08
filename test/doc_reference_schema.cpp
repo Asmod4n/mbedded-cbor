@@ -81,7 +81,9 @@ TEST_CASE("doc reference schema: decode")
     // [decode]
     // bytes: a std::string from schema<car>::encode(car{"Volvo", 5, ...})
     auto const back = cbor::schema<car>::decode(std::move(bytes));
-    std::string_view const make = back ? (*back)->make : "";  // "Volvo"
+    std::string make;
+    if (back)
+        make = (*back)->make;  // "Volvo"
     // [decode]
     REQUIRE(back.has_value());
     CHECK_EQ(make, "Volvo");

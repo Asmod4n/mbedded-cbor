@@ -86,6 +86,9 @@
   <xsl:for-each select="$d//programlisting[@filename='.example']">
     <xsl:call-template name="fence"><xsl:with-param name="info" select="'example'"/></xsl:call-template>
   </xsl:for-each>
+  <xsl:for-each select="$d//programlisting[@filename='.output']">
+    <xsl:call-template name="fence"><xsl:with-param name="info" select="'output'"/></xsl:call-template>
+  </xsl:for-each>
   <xsl:variable name="paras" select="$d//para[not(ancestor::simplesect or ancestor::parameterlist or ancestor::sect1 or ancestor::sect2 or ancestor::sect3 or ancestor::table or ancestor::itemizedlist)][text()[normalize-space()] or computeroutput or ref or ulink or bold or emphasis or table or itemizedlist]"/>
   <xsl:for-each select="$paras">
     <xsl:value-of select="$nl"/>

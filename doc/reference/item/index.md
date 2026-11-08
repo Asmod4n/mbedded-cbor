@@ -11,15 +11,15 @@
 | [encode](encode.md) | writes a tree into a container, a span or a writer |
 | [encode_iov](encode_iov.md) | writes a tree into a list of pieces |
 | [encoder](encoder.md) | the type: writes one data item per call |
-| [encoder::unsigned_integer](encoder_unsigned_integer.md) | writes an unsigned integer |
-| [encoder::negative_integer](encoder_negative_integer.md) | writes a negative integer |
-| [encoder::byte_string](encoder_byte_string.md) | writes a byte string |
-| [encoder::text_string](encoder_text_string.md) | writes a text string |
-| [encoder::array](encoder_array.md) | writes the head of an array |
-| [encoder::map](encoder_map.md) | writes the head of a map |
-| [encoder::tag](encoder_tag.md) | writes the head of a tag |
-| [encoder::simple_value](encoder_simple_value.md) | writes a simple value |
-| [encoder::floating_point](encoder_floating_point.md) | writes a float |
-| [encoder::typed_array](encoder_typed_array.md) | writes a typed array |
-| [encoder::finish](encoder_finish.md) | ends the encoder and gives the result |
+| [encoder::unsigned_integer](unsigned_integer.md) | writes an unsigned integer |
+| [encoder::negative_integer](negative_integer.md) | writes a negative integer |
+| [encoder::byte_string](byte_string.md) | writes a byte string |
+| [encoder::text_string](text_string.md) | writes a text string |
+| [encoder::array](array.md) | writes the head of an array |
+| [encoder::map](map.md) | writes the head of a map |
+| [encoder::tag](tag.md) | writes the head of a tag |
+| [encoder::simple_value](simple_value.md) | writes a simple value |
+| [encoder::floating_point](floating_point.md) | writes a float |
+| [encoder::typed_array](typed_array.md) | writes a typed array |
+| [encoder::finish](finish.md) | ends the encoder and gives the result |
 | [iov_writer](iov_writer.md) | the target that collects pieces |

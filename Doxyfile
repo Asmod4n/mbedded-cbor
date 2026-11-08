@@ -14,7 +14,10 @@ INPUT                  = include/cbor/cbor.hpp \
                          include/cbor/rfc9535.hpp \
                          include/cbor/query.hpp \
                          include/cbor/rfc8949.hpp \
-                         include/cbor/schema.hpp
+                         include/cbor/schema.hpp \
+                         include/cbor/item.hpp \
+                         include/cbor/decode.hpp \
+                         include/cbor/encode.hpp
 STRIP_FROM_PATH        = include
 STRIP_FROM_INC_PATH    = include
 EXCLUDE_SYMBOLS        = cbor::detail cbor::detail::* cbor::well_formedness
@@ -24,7 +27,7 @@ HIDE_FRIEND_COMPOUNDS  = YES
 BUILTIN_STL_SUPPORT    = YES
 MACRO_EXPANSION        = YES
 EXPAND_ONLY_PREDEF     = YES
-PREDEFINED             = CBOR_OWNER= CBOR_LIFETIMEBOUND= CBOR_ALWAYS_INLINE=
+PREDEFINED             = CBOR_OWNER= CBOR_LIFETIMEBOUND= CBOR_ALWAYS_INLINE= "__has_include(x)=1"
 ALIASES                = "complexity=@par Complexity^^"
 EXAMPLE_PATH           = test
 QUIET                  = YES
