@@ -83,3 +83,13 @@ TEST_CASE("item_size: a cut item inside tag 24 is framed, and decode refuses it"
     CHECK_EQ(top_level->clone().error(), error::too_little_data);
     CHECK_EQ(cbor::item_size("\xd8\x1c\xd8\x18\x41"sv).error(), error::too_little_data);
 }
+
+// tools/site/guides/complexity.md proves that item_size takes one pass for each data item. A form that read an item
+// again for each item after it would take 10^10 steps for these inputs, and the test run would not end in its time.
+TEST_CASE("item_size: an array and a map of 100000 data items are read in one pass each")
+{
+    std::string const array = "\x9a\x00\x01\x86\xa0"s + std::string(100000, '\x00');
+    CHECK_EQ(cbor::item_size(array).value(), array.size());
+    std::string const map = "\xba\x00\x00\xc3\x50"s + std::string(100000, '\x00');
+    CHECK_EQ(cbor::item_size(map).value(), map.size());
+}
