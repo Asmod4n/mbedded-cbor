@@ -453,8 +453,10 @@ struct named_pair {
 // The owner decided on 2026-10-13 that an eager decode keeps one table of the tags 28 of one call. A tag 28
 // on a plain member is allowed and keeps the value. A tag 29 needs a member that can share a value; no plain
 // member can, so it gives incorrect_type. A tag 29 to a mark in a skipped member gives
-// sharedref_not_complete, a forward index sharedref_index_not_marked, and a tag 28 or 29 on a key
-// unsupported_value. A typed array holds no tag, so the marks stand in a vector of std::optional, which is a
+// sharedref_not_complete and a forward index sharedref_index_not_marked. A key that no member has is skipped
+// whatever its type (owner, 2026-11-08): a skipped key 28("a") and its skipped value 28(1) mark values in a skipped
+// member, so a later 29(1) gives sharedref_not_complete; a skipped key 29(0) and its value leave the member a
+// without a key, so key_not_found. A typed array holds no tag, so the marks stand in a vector of std::optional, which is a
 // plain array.
 TEST_CASE("structs: the table of tags 28 and 29 of one decode")
 {
@@ -466,9 +468,9 @@ TEST_CASE("structs: the table of tags 28 and 29 of one decode")
     CHECK_EQ(cbor::structs<pair_marks>::decode(
                  "\xa2\xd8\x1c\x61\x61\xd8\x1c\x01\x61\x62\x82\xd8\x1d\x01\xd8\x1d\x01"s)
                  .error(),
-             error::unsupported_value);
+             error::sharedref_not_complete);
     CHECK_EQ(cbor::structs<named_pair>::decode("\xa2\x61\x62\x81\xd8\x1c\x61\x61\xd8\x1d\x00\x07"s).error(),
-             error::unsupported_value);
+             error::key_not_found);
     CHECK_EQ(cbor::structs<marked_numbers>::decode("\x81\xd8\x1d\x00"s).error(),
              error::sharedref_index_not_marked);
     CHECK_EQ(

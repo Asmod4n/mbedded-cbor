@@ -410,17 +410,15 @@ CBOR_DEFINE_TYPE(senml, cbor::untagged, cbor::member{0, &senml::n}, cbor::member
 .PP
 \f[CR]decode\f[R] reads the entries of a map in any order:
 .IP \(bu 2
-a key that no member has: the entry is skipped;
+a key that no member has: the entry is skipped, whatever the type of the
+key, an array, a map and a tag included;
 .IP \(bu 2
 a key of a member that comes twice: \f[CR]error::duplicate_key\f[R] (RFC
 8949 5.6); a \f[CR]std::map\f[R], a \f[CR]std::unordered_map\f[R] and a
 \f[CR]std::flat_map\f[R] give the same error on a key that comes twice;
 .IP \(bu 2
 a missing key of a member that is not optional:
-\f[CR]error::key_not_found\f[R];
-.IP \(bu 2
-a key that is an array, a map or a tag:
-\f[CR]error::unsupported_value\f[R].
+\f[CR]error::key_not_found\f[R].
 .SS 5. Tags
 A described struct carries the tag of its description (section 4).
 \f[CR]cbor::tagged_item<N, E>\f[R] (RFC 8949 3.4, \(dqtagged data
@@ -589,11 +587,6 @@ T{
 a missing key of a member that is not optional
 T}@T{
 \f[CR]key_not_found\f[R]
-T}
-T{
-a map key that is an array, a map or a tag
-T}@T{
-\f[CR]unsupported_value\f[R]
 T}
 T{
 the input ends inside the item

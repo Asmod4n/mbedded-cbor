@@ -910,7 +910,21 @@ class generic
                         return std::unexpected(b.error());
                 } else if (k->major == major_type::array || k->major == major_type::map ||
                            k->major == major_type::tag) [[unlikely]] {
-                    return std::unexpected(error::unsupported_value);
+                    if (k->major == major_type::tag &&
+                        k->argument == std::to_underlying(rfc8949::tag_number::shareable))
+                        d.mark(d);
+                    std::uint64_t const items =
+                        k->major == major_type::tag     ? 1
+                        : k->major == major_type::array ? k->argument
+                                                        : detail::validity::checked_mul(
+                                                              k->argument, rfc8949::data_items_per_pair)
+                                                              .value_or(std::numeric_limits<std::uint64_t>::max());
+                    if (auto const p = detail::validity::check_pending_items(items, d.encoded.size()); !p)
+                        [[unlikely]]
+                        return std::unexpected(p.error());
+                    for (std::uint64_t i = 0; i < items; ++i)
+                        if (auto const e = well_formedness::skip_item(d, d); !e) [[unlikely]]
+                            return e;
                 }
             }
             std::expected<void, error> r;
@@ -1460,7 +1474,6 @@ public:
      * @retval indefinite_length a head uses indefinite length
      * @retval nesting_depth_exceeded the item is deeper than the stack of the thread holds
      * @retval inadmissible_type_for_tag_content a tag has content that its definition does not allow
-     * @retval unsupported_value a map key is an array, a map or a tag
      * @retval sharedref_index_not_marked, sharedref_index_out_of_range, sharedref_not_complete a tag 29 that names no
      * shared value that the decode holds
      * @retval string_length_exceeded a string is longer than `limits::string_length`

@@ -212,12 +212,12 @@ CBOR_DEFINE_TYPE(senml, cbor::untagged, cbor::member{0, &senml::n}, cbor::member
 
 `decode` reads the entries of a map in any order:
 
-- a key that no member has: the entry is skipped;
+- a key that no member has: the entry is skipped, whatever the type of
+  the key, an array, a map and a tag included;
 - a key of a member that comes twice: `error::duplicate_key` (RFC 8949
   5.6); a `std::map`, a `std::unordered_map` and a `std::flat_map` give
   the same error on a key that comes twice;
-- a missing key of a member that is not optional: `error::key_not_found`;
-- a key that is an array, a map or a tag: `error::unsupported_value`.
+- a missing key of a member that is not optional: `error::key_not_found`.
 
 ## 5. Tags
 
@@ -307,7 +307,6 @@ describes the memory of every API.
 | a plain array for a `std::vector` or a `std::array` of a number type | `incorrect_type` |
 | a variant with no alternative that accepts the item | `incorrect_type` |
 | a missing key of a member that is not optional | `key_not_found` |
-| a map key that is an array, a map or a tag | `unsupported_value` |
 | the input ends inside the item | `too_little_data` |
 | a refused allocation | `not_enough_memory` |
 
