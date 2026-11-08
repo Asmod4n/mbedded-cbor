@@ -1,7 +1,7 @@
 // A description must not take a tag that a standard type has (RFC 8949 3.4: 0, 1, 2, 3 and 24; RFC 8746: 64 to 87;
 // RFC 8943: 100 and 1004; CBOR_SETS.md: 258), because decode would read that tag as the standard type in one place
 // and as the struct in another. Nor may it take a tag that the IANA registry calls always invalid
-// (refs/cbor-tags.xml: 65535, 4294967295 and 18446744073709551615; refs/draft-bormann-cbor-notable-tags.md: 21334).
+// (refs/cbor-tags.xml: 65535, 4294967295 and 18446744073709551615; refs/draft-bormann-cbor-notable-tags-12.txt: 21334).
 // CBOR_TEST_TAGS is a whole set, so one run of the compiler checks every member of it: each tag is a type of its
 // own, and each type gives one error. A set of neighbours compiles.
 #include <cbor/cbor.hpp>
