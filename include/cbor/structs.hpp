@@ -1380,7 +1380,7 @@ class generic
  * | `std::span<std::byte const>` | a byte string |
  * | `std::vector`, `std::array` of `std::byte`, an integer, `float`, `double` | an RFC 8746 typed array |
  * | `std::set`, `std::flat_set` | tag 258 on an array |
- * | `std::chrono::sys_seconds` | tag 1 on an integer |
+ * | `std::chrono::sys_seconds` | tag 1 on an integer; `decode` also takes a float whose value is a whole number |
  * | `std::chrono::year_month_day` | tag 100 on an integer of days |
  * | `std::optional<E>` | the item of E, or `null`; no key when empty |
  * | `std::variant<E...>` | the item of the alternative |
