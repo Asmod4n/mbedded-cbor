@@ -21,7 +21,7 @@ using cbor::error;
 namespace
 {
 
-constexpr std::size_t held = test::levels_every_stack_holds;
+constexpr std::size_t held = test::levels_main_thread_reads;
 constexpr std::size_t beyond = test::levels_beyond_small_stack;
 
 std::string arrays_around(std::size_t const n, std::string_view const innermost)
@@ -139,16 +139,19 @@ TEST_CASE("recursion limit: encode")
     std::string out;
     CHECK(cbor::encode(**read, out).has_value());
     auto const deep = test::lazy_of_copy(arrays_around(test::levels_main_thread_holds, "\x00"sv))->clone();
-    if (!deep) {
-        CHECK_EQ(deep.error(), error::nesting_depth_exceeded);
-        return;
+    if constexpr (!test::main_thread_holds_deep_input) {
+        if (!deep) {
+            CHECK_EQ(deep.error(), error::nesting_depth_exceeded);
+            return;
+        }
     }
+    REQUIRE(deep.has_value());
     auto const failure = test::error_on_small_stack([&deep] {
         std::string written;
         return cbor::encode(**deep, written);
     });
-    if (failure)
-        CHECK_EQ(*failure, error::nesting_depth_exceeded);
+    REQUIRE(failure.has_value());
+    CHECK_EQ(*failure, error::nesting_depth_exceeded);
 }
 
 // A shared value and a reference to it: a lazy at the second element meets the reference and reads the mark at the
@@ -165,10 +168,11 @@ TEST_CASE("recursion limit: a shared value read through its reference")
     CHECK(second->clone().has_value());
 }
 
-// structs::read_generic recurses once for the array of each struct and once for its element.
+// structs::read_generic recurses once for the array of each struct and once for its element. nests_around(n) nests a
+// map and an array for each struct, so held / 2 structs are held levels of CBOR.
 TEST_CASE("recursion limit: structs")
 {
-    CHECK(cbor::structs<nest>::decode(nests_around(held)).has_value());
+    CHECK(cbor::structs<nest>::decode(nests_around(held / 2)).has_value());
     std::string const deep = nests_around(beyond);
     refused_on_small_stack([&deep] { return cbor::structs<nest>::decode(std::string(deep)); });
 }
