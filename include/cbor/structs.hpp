@@ -735,13 +735,15 @@ class generic
         rep seconds = 0;
         if (h->major == major_type::simple_float) {
             if (!head_accepted<double>(*h)) [[unlikely]]
-                return std::unexpected(error::incorrect_type);
+                return std::unexpected(error::inadmissible_type_for_tag_content);
             d.encoded = look.encoded;
             auto const whole =
                 detail::validity::check_whole_number<rep>(heads::decode_float(h->info, h->argument));
             if (!whole) [[unlikely]]
                 return std::unexpected(whole.error());
             seconds = *whole;
+        } else if (h->major != major_type::unsigned_integer && h->major != major_type::negative_integer) [[unlikely]] {
+            return std::unexpected(error::inadmissible_type_for_tag_content);
         } else if (auto const r = read_integer<rep>(d, seconds); !r) [[unlikely]] {
             return r;
         }
