@@ -608,8 +608,22 @@ hold a cycle.
 An index with no tag 28 before it gives
 \f[CR]sharedref_index_not_marked\f[R], and \f[CR]28(29(0))\f[R] gives
 \f[CR]sharedref_not_defined\f[R].
-\f[CR]encode\f[R] of a tree with a \f[CR]shared_reference\f[R] gives
-\f[CR]unsupported_value\f[R].
+.IP \(bu 2
+\f[CR]encode\f[R] writes no tag 28 or 29 of its own: a
+\f[CR]shared_reference\f[R] gives \f[CR]unsupported_value\f[R].
+\f[CR]encode(tree, out, cbor::cycles)\f[R] writes tags 28 and 29 only
+for a cycle.
+It walks the tree before it writes, depth first, and follows each
+\f[CR]shared_reference\f[R] to its item.
+An item that the walk reaches again while it is inside that item gets a
+tag 28, and each such edge is a tag 29 with the index of that mark.
+A value that two references reach without a cycle is written in full
+each time (basics.md, section 4, bounds the growth).
+The path through references can be deeper than the tree, so
+\f[CR]encode\f[R] can give \f[CR]nesting_depth_exceeded\f[R] for a tree
+that \f[CR]decode\f[R] gave.
+A tree of \f[CR]clone\f[R] keeps tags 28 and 29 as tags, and
+\f[CR]encode\f[R] writes them as they are.
 .IP \(bu 2
 A lazy, \f[CR]clone\f[R], \f[CR]at_path\f[R], \f[CR]query\f[R] and
 \f[CR]diagnostic_notation\f[R] read tag 28 as a tag over its content and

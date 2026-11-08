@@ -211,6 +211,12 @@ T}@T{
 \f[CR]jsonpath::compile<T>\f[R] gets a path that is not singular, and
 \f[CR]T\f[R] is not \f[CR]nodelist\f[R] (path.md, section 10).
 T}
+T{
+\f[CR]amplification_limit_breach\f[R]
+T}@T{
+\f[CR]encode\f[R] with \f[CR]cbor::cycles\f[R] would write more than the
+amplification limits allow (section 4).
+T}
 .TE
 .IP
 .EX
@@ -273,6 +279,28 @@ T}@T{
 T}@T{
 \f[CR]container_elements_exceeded\f[R]
 T}
+T{
+\f[CR]CBOR_AMPLIFICATION_ACTIVATION_THRESHOLD_DEFAULT\f[R]
+T}@T{
+\f[CR]cbor::limits::amplification_activation_threshold\f[R]
+T}@T{
+8388608 (8 MiB)
+T}@T{
+\f[CR]SIZE_MAX\f[R]
+T}@T{
+\f[CR]amplification_limit_breach\f[R]
+T}
+T{
+\f[CR]CBOR_MAXIMUM_AMPLIFICATION_DEFAULT\f[R]
+T}@T{
+\f[CR]cbor::limits::maximum_amplification\f[R]
+T}@T{
+100
+T}@T{
+\f[CR]SIZE_MAX\f[R]
+T}@T{
+\f[CR]amplification_limit_breach\f[R]
+T}
 .TE
 .IP
 .EX
@@ -282,6 +310,19 @@ g++ \-DCBOR_STRING_LENGTH_DEFAULT=4096 ...
 A value above the bound does not compile.
 All translation units of one program use the same values: a different
 value is a violation of the one definition rule.
+.PP
+\f[CR]encode\f[R] with \f[CR]cbor::cycles\f[R] writes a value that two
+references without a cycle reach twice, so each level of such references
+doubles the output.
+Before it writes, \f[CR]encode\f[R] counts the bytes that it would write
+and the bytes of the tree.
+Past \f[CR]amplification_activation_threshold\f[R] bytes, the output may
+be \f[CR]maximum_amplification\f[R] times the tree and no more; past
+that, \f[CR]encode\f[R] gives \f[CR]amplification_limit_breach\f[R] and
+writes nothing.
+The check runs at each node, so it can stop before the whole tree is
+counted.
+expat bounds the expansion of XML entities the same way.
 .PP
 The library does not bound the size of the input.
 The program bounds it before it calls the library.

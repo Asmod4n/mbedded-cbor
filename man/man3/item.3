@@ -34,10 +34,14 @@ std::expected<std::reference_wrapper<item const>, error> encoded_cbor_data_item(
 .EX
 \f[B]template\f[R] <\f[B]class\f[R] Target>
 std::expected<std::size_t, error> encode(item const &root, Target &&target);
+
+\f[B]template\f[R] <\f[B]class\f[R] Target>
+std::expected<std::size_t, error> encode(item const &root, Target &&target, cycles_t);
 .EE
 .IP
 .EX
 std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &root);
+std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &root, cycles_t);
 .EE
 .IP
 .EX
@@ -220,7 +224,12 @@ Writes the tree at \f[CR]root\f[R] and gives the count of bytes written.
 Each integer, length and tag number keeps the width of its head, from
 \f[CR]additional_information\f[R].
 A float keeps its width.
-A tag 28 and a tag 29 are written as they are.
+The call walks the tree once and writes no tag 28 or 29 of its own.
+A tag 28 and a tag 29 of a tree of cbor::lazy::clone() are written as
+they are.
+A \f[CR]shared_reference\f[R] gives \f[CR]unsupported_value\f[R]; the
+target then holds the bytes written before it.
+The form with cbor::cycles writes it as the overload below says.
 The target is one of these:
 .IP \(bu 2
 a container of bytes, for example \f[CR]std::string\f[R]: the call
@@ -240,6 +249,10 @@ last completion of the request.
 The bytes are those of cbor::encode().
 The function exists where \f[CR]<sys/uio.h>\f[R] exists.
 \f[CR]nesting_depth_exceeded\f[R]: the tree is deeper than the limit.
+\f[CR]unsupported_value\f[R]: the tree holds a
+\f[CR]shared_reference\f[R].
+The form with cbor::cycles writes tags 28 and 29 as cbor::encode() with
+cbor::cycles does.
 A piece that refers to the string of an owner points into memory that
 the owner holds as const; a call that writes into the pieces, such as
 \f[CR]readv\f[R], is a wrong use.
@@ -422,12 +435,16 @@ string
 \f[CR]nesting_depth_exceeded\f[R]: the tree is deeper than the limit
 .IP \(bu 2
 \f[CR]unsupported_value\f[R]: the tree holds a
-\f[CR]shared_reference\f[R] node; the target then holds the bytes
-written before it
+\f[CR]shared_reference\f[R]
 .IP \(bu 2
 \f[CR]value_too_large\f[R], \f[CR]not_enough_memory\f[R],
 \f[CR]io_error\f[R]: the error of a writer, from its
 \f[CR]std::errc\f[R]
+.IP \(bu 2
+\f[CR]amplification_limit_breach\f[R]: the output would be larger than
+\f[CR]cbor::limits::amplification_activation_threshold\f[R] and than
+\f[CR]cbor::limits::maximum_amplification\f[R] times the tree; nothing
+is written
 .SS cbor::encoder<Target>::simple_value
 .IP \(bu 2
 \f[CR]reserved_simple_value\f[R]: \f[CR]value\f[R] is from 24 to 31 (RFC

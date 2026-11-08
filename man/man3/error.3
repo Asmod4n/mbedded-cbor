@@ -36,7 +36,8 @@ cbor::error, cbor::category, cbor::error_category, cbor::make_error_code, std::i
     io_error,
     string_length_exceeded,
     container_elements_exceeded,
-    not_singular_query
+    not_singular_query,
+    amplification_limit_breach
 };
 .EE
 .IP
@@ -68,6 +69,8 @@ std::error_code make_error_code(error e) \f[B]noexcept\f[R];
 {
     static \f[B]constexpr\f[R] std::size_t string_length = CBOR_STRING_LENGTH_DEFAULT;
     static \f[B]constexpr\f[R] std::size_t container_elements = CBOR_CONTAINER_ELEMENTS_DEFAULT;
+    static \f[B]constexpr\f[R] std::size_t amplification_activation_threshold = CBOR_AMPLIFICATION_ACTIVATION_THRESHOLD_DEFAULT;
+    static \f[B]constexpr\f[R] std::size_t maximum_amplification = CBOR_MAXIMUM_AMPLIFICATION_DEFAULT;
 };
 .EE
 .SH DESCRIPTION
@@ -238,6 +241,13 @@ T}@T{
 \f[CR]jsonpath::compile<T>\f[R] gets a path that is not singular, and
 \f[CR]T\f[R] is not \f[CR]nodelist\f[R].
 T}
+T{
+\f[CR]amplification_limit_breach\f[R]
+T}@T{
+cbor::encode() with cbor::cycles would write more than
+\f[CR]cbor::limits::maximum_amplification\f[R] times the size of the
+tree, past \f[CR]cbor::limits::amplification_activation_threshold\f[R].
+T}
 .TE
 .SS cbor::category
 Gives the one cbor::error_category of cbor::error.
@@ -331,6 +341,18 @@ T{
 T}@T{
 The elements of an array, or the pairs of a map; more give
 \f[CR]container_elements_exceeded\f[R].
+T}
+T{
+\f[CR]amplification_activation_threshold\f[R]
+T}@T{
+The bytes that cbor::encode() of a tree writes before
+\f[CR]maximum_amplification\f[R] applies.
+T}
+T{
+\f[CR]maximum_amplification\f[R]
+T}@T{
+The most bytes that cbor::encode() writes for each byte of the tree;
+more give \f[CR]amplification_limit_breach\f[R].
 T}
 .TE
 .SH EXAMPLES
