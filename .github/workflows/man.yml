@@ -16,13 +16,19 @@ on:
       - '.github/workflows/man.yml'
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: man
+  cancel-in-progress: true
 
 jobs:
   pages:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - id: snapshot
         name: Read the date of Debian sid
         run: |
@@ -41,7 +47,18 @@ jobs:
       - if: steps.image.outputs.cache-hit == 'true'
         name: Load the image
         run: podman load -q -i "$RUNNER_TEMP/image-docs/image.tar"
-      - name: Make the man pages and compare them with man/
+      - name: Make the man pages
+        run: sh tools/man/man.sh "$RUNNER_TEMP/man"
+      - name: Commit the man pages that changed
         run: |
-          sh tools/man/man.sh "$RUNNER_TEMP/man"
-          diff -r man "$RUNNER_TEMP/man"
+          git rm -r -q man
+          cp -r "$RUNNER_TEMP/man" man
+          git add -A man
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -q -m 'Make the man pages again'
+          git pull -q --rebase origin main
+          git push origin HEAD:main
