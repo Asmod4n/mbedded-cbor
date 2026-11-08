@@ -124,6 +124,8 @@ std::expected<void, cbor::error> item_walk(cbor::encoder<Target> &e, cbor::item 
         return tagged(node.get<type::unsigned_bignum>().value());
     case type::negative_bignum:
         return tagged(node.get<type::negative_bignum>().value());
+    case type::shared_reference:
+        return std::unexpected(cbor::error::unsupported_value);
     case type::half_float:
         return e.floating_point(std::bit_cast<std::float16_t>(static_cast<std::uint16_t>(bits())));
     case type::single_float:
