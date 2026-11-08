@@ -60,6 +60,7 @@ std::expected<std::pair<std::uint16_t, double>, cbor::error> first_message()
     return std::pair{*id, *second};
 }
 
+// The test runs the first program of the guide, so the guide shows code that works.
 TEST_CASE("doc schema: write a message and read one field")
 {
     CHECK(first_message() == std::pair<std::uint16_t, double>{7, 2.5});
@@ -197,6 +198,7 @@ struct track {
 CBOR_DEFINE_TYPE_MEMBERS(doc_packed::point, cbor::tag{1703}, x, y);
 CBOR_DEFINE_TYPE_MEMBERS(doc_packed::track, cbor::tag{1704}, points);
 
+// The test runs the example of the guide with a list of fixed-size structs, so the guide shows code that works.
 TEST_CASE("doc schema: a list of fixed-size structs is a range of elements")
 {
     using namespace doc_packed;

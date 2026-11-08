@@ -644,6 +644,8 @@ void multimap_check()
     CHECK_EQ(cbor::structs<M>::decode("\x81\x82\x01\x02"s).error(), error::incorrect_type);
 }
 
+// RFC 8949 5.6 refuses two equal keys in a map, so a std::multimap goes as one key with the array of its values. The
+// test exists so that a multimap goes and comes back with no duplicate key.
 TEST_CASE("structs: a multimap is a map from each key to the array of its values")
 {
     multimap_check<std::multimap<int, int>>();

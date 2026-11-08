@@ -119,6 +119,8 @@ TEST_CASE("golden bytes: every type of this file encodes as before")
     CHECK_EQ(golden_report(), expected);
 }
 
+// Each case below checks one type alone. The test above fails for all types at once; these name the type whose bytes
+// changed.
 TEST_CASE("golden bytes: wheel encodes as before")
 {
     CHECK_FALSE(golden_expected_line("wheel").empty());

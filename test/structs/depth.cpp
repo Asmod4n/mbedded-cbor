@@ -110,6 +110,8 @@ TEST_CASE("structs depth: a struct that holds a vector of itself")
     end_nested(std::move(deep));
 }
 
+// A struct that holds an optional vector of itself recurses through std::optional. The test exists so that this path
+// counts the depth too: a deep value gives nesting_depth_exceeded and not an overflow of the stack.
 TEST_CASE("structs depth: a struct with an optional vector of itself")
 {
     auto const held = cbor::structs<optional_node>::encode(nested_optional(steps_held));

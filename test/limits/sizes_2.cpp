@@ -50,6 +50,8 @@ std::string map_of(std::size_t const n)
 
 } // namespace
 
+// Each test below depends on the limits of this build. The test exists so that a build without the -D values fails
+// here, and not with a wrong reason below.
 TEST_CASE("limits sizes 2: the build sets both size limits")
 {
     CHECK_EQ(cbor::limits::string_length, limit);

@@ -438,6 +438,8 @@ void number_range_check()
         }
 }
 
+// The standard integer widths and signednesses are a finite set, so each member is checked: a range check that one
+// width misses would change a value without an error.
 TEST_CASE("validity: check_number_range for every standard integer width and signedness")
 {
     number_range_check<std::int8_t>();
