@@ -29,6 +29,7 @@
 // IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 // CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+#include "../small_stack.hpp"
 #include "cbor2.hpp"
 
 #include <bit>
@@ -1015,12 +1016,12 @@ TEST_CASE("cbor2 decoder: test_set_non_array")
     CHECK_EQ(set.error(), error::incorrect_type);
 }
 
-// Upstream: TestMaximumDepth.test_default. cbor2 refuses 401 nested arrays. validity.hpp: "Nesting has no fixed
-// limit"; cbor::decode stops only near the end of the stack of the thread. RFC 8949 sets no depth limit.
+// Upstream: TestMaximumDepth.test_default. cbor2 refuses nesting past its own limit. The depth here is the one of
+// this library, test::levels_main_thread_reads (small_stack.hpp), not the limit of upstream. validity.hpp: "Nesting
+// has no fixed limit"; cbor::decode stops only near the end of the stack of the thread. RFC 8949 sets no depth limit.
 TEST_CASE("cbor2 decoder: TestMaximumDepth.test_default")
 {
-    constexpr std::size_t cbor2_max_depth = 400;
-    std::string payload(cbor2_max_depth + 1, '\x81');
+    std::string payload(test::levels_main_thread_reads, '\x81');
     payload += '\x80';
     CHECK(cbor::decode(payload).has_value());
 }
