@@ -445,7 +445,7 @@ public:
      * | T | Reads |
      * |---|---|
      * | an integer type | an integer or a bignum that fits `T` |
-     * | `double` | a float, or an integer that a `double` holds exactly |
+     * | `double` | a float, or an integer or a bignum that a `double` holds exactly |
      * | `bool`, `std::nullptr_t` | `false` or `true`, `null` |
      * | `cbor::simple_value` | a simple value |
      * | `std::string_view`, `std::span<std::byte const>` | a text, a byte string, as a `ref` |
