@@ -1089,9 +1089,10 @@ std::expected<std::int64_t, error> day_of(std::string_view const text)
 } // namespace
 
 // RFC 8943 2: tag 100 holds the number of days since 1970-01-01, with no bound. std::chrono::year_month_day holds the
-// years from year::min() to year::max() (C++ [time.cal.year]); a count of days outside them is no date that it
-// holds, so decode gives number_out_of_range and does not give another date. The bounds are computed with
-// std::chrono, which is not the code under test.
+// years from -32767 to 32767 (C++ [time.cal.year]). Their first and last days, -32767-01-01 and 32767-12-31, are
+// -12687428 and 11248737 days from the epoch, counted year by year in the proleptic Gregorian calendar outside
+// std::chrono. A count outside them is no date that year_month_day holds: decode gives number_out_of_range, gives no
+// other date, and computes nothing that overflows (a count near 2^31 overflowed the int days of libc++).
 TEST_CASE("structs: tag 100 outside the years of year_month_day is number_out_of_range")
 {
     using namespace std::chrono;
@@ -1103,18 +1104,21 @@ TEST_CASE("structs: tag 100 outside the years of year_month_day is number_out_of
             bytes += static_cast<char>((argument >> shift) & 0xff);
         return cbor::structs<year_month_day>::decode(std::move(bytes));
     };
-    std::int64_t const first = sys_days{year::min() / January / 1}.time_since_epoch().count();
-    std::int64_t const last = sys_days{year::max() / December / 31}.time_since_epoch().count();
-    auto const lowest = days_tag(first);
+    constexpr std::int64_t first_day = -12687428;
+    constexpr std::int64_t last_day = 11248737;
+    auto const lowest = days_tag(first_day);
     REQUIRE(lowest.has_value());
-    CHECK(**lowest == year::min() / January / 1);
-    auto const highest = days_tag(last);
+    CHECK(**lowest == year{-32767} / January / 1);
+    auto const highest = days_tag(last_day);
     REQUIRE(highest.has_value());
-    CHECK(**highest == year::max() / December / 31);
-    for (std::int64_t const n : {first - 1, last + 1, std::int64_t{2147483647}, std::int64_t{-2147483648},
-                                 std::numeric_limits<std::int64_t>::max(), std::numeric_limits<std::int64_t>::min()}) {
+    CHECK(**highest == year{32767} / December / 31);
+    for (std::int64_t const n : {first_day - 1, last_day + 1, std::int64_t{2146764180}, std::int64_t{2147483647},
+                                 std::int64_t{-2147483648}, std::numeric_limits<std::int64_t>::max(),
+                                 std::numeric_limits<std::int64_t>::min()}) {
         CAPTURE(n);
-        CHECK_EQ(days_tag(n).error(), error::number_out_of_range);
+        auto const r = days_tag(n);
+        REQUIRE_FALSE(r.has_value());
+        CHECK_EQ(r.error(), error::number_out_of_range);
     }
 }
 

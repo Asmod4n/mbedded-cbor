@@ -14,6 +14,7 @@
 #endif
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -669,6 +670,18 @@ public:
     {
         if (count > size) [[unlikely]]
             return std::unexpected(error::index_out_of_bounds);
+        return {};
+    }
+
+    template <class Rep>
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_day_count(Rep const days)
+    {
+        constexpr auto first_day =
+            std::chrono::sys_days{std::chrono::year::min() / std::chrono::January / 1}.time_since_epoch().count();
+        constexpr auto last_day =
+            std::chrono::sys_days{std::chrono::year::max() / std::chrono::December / 31}.time_since_epoch().count();
+        if (days < first_day || days > last_day) [[unlikely]]
+            return std::unexpected(error::number_out_of_range);
         return {};
     }
 
