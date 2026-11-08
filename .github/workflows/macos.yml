@@ -2,15 +2,8 @@ name: macos
 
 on:
   push:
-    paths:
-      - 'include/**'
-      - 'test/**'
-      - 'cmake/**'
-      - 'CMakeLists.txt'
-      - 'third_party/**'
-      - 'cbor-test-vectors/**'
-      - 'test-vectors/**'
-      - '.github/workflows/macos.yml'
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
