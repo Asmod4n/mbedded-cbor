@@ -1,7 +1,7 @@
 /**
  * @file
  * Reads values from CBOR with a JSONPath query. Parses a path at
- * compile time or with jsonpath::compile at run time. A key or a
+ * compile time or with path::compile at run time. A key or a
  * literal in a path can be in diagnostic notation.
  * https://www.rfc-editor.org/rfc/rfc9535
  * https://datatracker.ietf.org/doc/html/draft-ietf-cbor-edn-literals-28
@@ -47,7 +47,7 @@ struct lazy;
  * @brief Reads the value at a JSONPath (RFC 9535) in `encoded`, with no decode of the rest.
  *
  * The first five forms take the path as a string literal, and the compiler checks it.
- * The other forms take a cbor::jsonpath::query that cbor::jsonpath::compile() made at run time.
+ * The other forms take a cbor::path::query that cbor::path::compile() made at run time.
  * A number, `bool`, `std::nullptr_t` or `simple_value` comes back as a value from a `std::string_view`.
  * A text, a byte string or a typed array comes back as a view in a `ref<T>`, and the `ref` holds the owner of the
  * bytes.
@@ -73,8 +73,8 @@ struct lazy;
  * result: ref to "ann"
  * call: **name
  * result: "ann"
- * call: auto const q = cbor::jsonpath::compile<std::int64_t>("$.user.id")
- * result: cbor::jsonpath::query<long long>
+ * call: auto const q = cbor::path::compile<std::int64_t>("$.user.id")
+ * result: cbor::path::query<long long>
  * call: cbor::at_path(*owner, *q)
  * result: 42
  * @endcode
@@ -86,7 +86,7 @@ struct lazy;
  * it
  * @throws std::logic_error a null or empty owner, or a moved-from query
  * @snippet doc_reference_path.cpp at_path
- * @see cbor::jsonpath::compile()
+ * @see cbor::path::compile()
  * @see cbor::nodelist
  * @see cbor::lazy::at_path()
  *
@@ -141,7 +141,7 @@ template <fixed_string Path, copied_value T>
 std::expected<T, error> at_path(std::basic_string_view<char> encoded);
 
 /** @ingroup path */
-class jsonpath
+class path
 {
     struct selector {
         enum class kind { key, index, wildcard, slice, filter } kind;
@@ -1078,7 +1078,7 @@ public:
     /**
      * @brief A parsed run-time path with the result type `T`.
      *
-     * Only cbor::jsonpath::compile() makes one.
+     * Only cbor::path::compile() makes one.
      * The query holds its own copy of the path data, and no view into the text of the path.
      * One query reads any number of items.
      * cbor::at_path() and cbor::lazy::at_path() apply it.
@@ -1086,26 +1086,26 @@ public:
      * A moved-from query throws `std::logic_error` when it is applied.
      *
      * @code{.callseq}
-     * cbor::jsonpath::compile<std::int64_t>("$.id").value() → query<std::int64_t>
+     * cbor::path::compile<std::int64_t>("$.id").value() → query<std::int64_t>
      * cbor::at_path(bytes, q)                               → std::expected<std::int64_t, error>
      * @endcode
      * @code{.example}
      * message: {"id": 1}
-     * call: auto const q = cbor::jsonpath::compile<std::int64_t>("$.id").value()
-     * result: cbor::jsonpath::query<long long>
+     * call: auto const q = cbor::path::compile<std::int64_t>("$.id").value()
+     * result: cbor::path::query<long long>
      * call: cbor::at_path(bytes, q)
      * result: 1
      * @endcode
      * @code{.example}
      * message: {"id": 2, "x": 0}
-     * call: auto const q = cbor::jsonpath::compile<std::int64_t>("$.id").value()
-     * result: cbor::jsonpath::query<long long>
+     * call: auto const q = cbor::path::compile<std::int64_t>("$.id").value()
+     * result: cbor::path::query<long long>
      * call: cbor::at_path(bytes, q)
      * result: 2
      * @endcode
      *
      * @snippet doc_reference_path.cpp query
-     * @see cbor::jsonpath::compile()
+     * @see cbor::path::compile()
      * @see cbor::at_path()
      *
      * @ingroup path
@@ -1149,11 +1149,11 @@ public:
 
         ~query() = default;
 
-        friend class jsonpath;
+        friend class path;
     };
 
     /**
-     * @brief Parses a JSONPath (RFC 9535) at run time and gives a cbor::jsonpath::query.
+     * @brief Parses a JSONPath (RFC 9535) at run time and gives a cbor::path::query.
      *
      * The query owns its data, so `path` can end after the call.
      * An apply of the query does not parse again.
@@ -1164,19 +1164,19 @@ public:
      * `T` outside `path_result` does not compile.
      *
      * @code{.callseq}
-     * cbor::jsonpath::compile<T>(path) → std::expected<query<T>, error>
+     * cbor::path::compile<T>(path) → std::expected<query<T>, error>
      * @endcode
      * @code{.example}
      * message: {"a": [1, 2, 3]}
      * call: auto const owner = std::make_shared<std::string const>(bytes)
      * result: shared_ptr to 7 bytes: a1 61 61 83 01 02 03
-     * call: auto const q = cbor::jsonpath::compile<cbor::nodelist>("$.a[?@ > 1]")
-     * result: cbor::jsonpath::query<cbor::nodelist>
+     * call: auto const q = cbor::path::compile<cbor::nodelist>("$.a[?@ > 1]")
+     * result: cbor::path::query<cbor::nodelist>
      * call: cbor::at_path(owner, *q)->size()
      * result: 2
-     * call: cbor::at_path(owner, *cbor::jsonpath::compile<cbor::nodelist>("$.a[0]"))->size()
+     * call: cbor::at_path(owner, *cbor::path::compile<cbor::nodelist>("$.a[0]"))->size()
      * result: 1
-     * call: cbor::jsonpath::compile<cbor::lazy>("$.a[1]").has_value()
+     * call: cbor::path::compile<cbor::lazy>("$.a[1]").has_value()
      * result: true
      * @endcode
      *
@@ -1184,7 +1184,7 @@ public:
      * @retval not_singular_query the path selects many nodes and `T` is not `nodelist`
      * @retval nesting_depth_exceeded the path is nested deeper than the stack of the thread holds
      * @snippet doc_reference_path.cpp compile
-     * @see cbor::jsonpath::query
+     * @see cbor::path::query
      * @see cbor::at_path()
      */
     template <class T>
@@ -1254,7 +1254,7 @@ private:
     static void throw_logic_error_if_query_empty(query<T> const &e)
     {
         detail::validity::throw_logic_error_if(e.top.at == 0,
-                                               "cbor::jsonpath::query: the query is empty or moved from");
+                                               "cbor::path::query: the query is empty or moved from");
     }
 
     /// @cond
@@ -1268,16 +1268,16 @@ private:
 };
 
 template <class T>
-inline constexpr bool is_path_query_v<jsonpath::query<T>> = true;
+inline constexpr bool is_path_query_v<path::query<T>> = true;
 
 /**
  * @brief Reads a scalar at a query in `encoded`.
  * @ingroup path
  */
 template <scalar_result T>
-std::expected<T, error> at_path(std::string_view const encoded, jsonpath::query<T> const &e)
+std::expected<T, error> at_path(std::string_view const encoded, path::query<T> const &e)
 {
-    return jsonpath::apply_query(e, encoded);
+    return path::apply_query(e, encoded);
 }
 
 /**
@@ -1286,11 +1286,11 @@ std::expected<T, error> at_path(std::string_view const encoded, jsonpath::query<
  */
 template <view_result T, borrowed_range_of_chars Encoded>
 std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded,
-                                            jsonpath::query<T> const &e)
+                                            path::query<T> const &e)
 {
     detail::validity::throw_logic_error_if_empty(
         owner, "cbor::at_path: the owner of the encoded data item is empty");
-    return jsonpath::apply_query(e, std::move(owner),
+    return path::apply_query(e, std::move(owner),
                                  std::string_view(std::span<char const>(encoded)));
 }
 
@@ -1301,7 +1301,7 @@ std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded 
 template <class T, borrowed_range_of_chars Encoded>
     requires(std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
 std::expected<T, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded,
-                                jsonpath::query<T> const &e)
+                                path::query<T> const &e)
 {
     return lazy::view(std::move(owner), encoded).and_then([&e](lazy const &root) { return root.at_path(e); });
 }
@@ -1312,8 +1312,8 @@ std::expected<T, error> at_path(std::shared_ptr<void const> owner, Encoded const
  */
 template <class T, owning_range_of_chars Encoded>
     requires(view_result<T> || std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
-std::expected<typename jsonpath::query<T>::result_type, error> at_path(std::shared_ptr<Encoded const> owner,
-                                                                       jsonpath::query<T> const &e)
+std::expected<typename path::query<T>::result_type, error> at_path(std::shared_ptr<Encoded const> owner,
+                                                                       path::query<T> const &e)
 {
     detail::validity::throw_logic_error_if_null(owner, "cbor::at_path: the encoded data item is null");
     std::string_view const bytes{std::span<char const>(*owner)};
@@ -1326,19 +1326,19 @@ std::expected<typename jsonpath::query<T>::result_type, error> at_path(std::shar
  */
 template <class T, owning_range_of_chars Encoded>
     requires(view_result<T> || std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
-std::expected<typename jsonpath::query<T>::result_type, error> at_path(Encoded &&encoded,
-                                                                       jsonpath::query<T> const &e)
+std::expected<typename path::query<T>::result_type, error> at_path(Encoded &&encoded,
+                                                                       path::query<T> const &e)
 {
     return at_path(std::make_shared<Encoded const>(std::move(encoded)), e);
 }
 
 template <fixed_string Path>
 class is_valid_path
-    : public std::bool_constant<jsonpath::parse_query(Path.view()).has_value()>
+    : public std::bool_constant<path::parse_query(Path.view()).has_value()>
 {
 };
 
-inline std::expected<lazy, error> jsonpath::select_index(lazy const &node, std::int64_t const index)
+inline std::expected<lazy, error> path::select_index(lazy const &node, std::int64_t const index)
 {
     node.throw_logic_error_if_no_top_level();
     auto found = lazy::resolve<true>(node);
@@ -1349,7 +1349,7 @@ inline std::expected<lazy, error> jsonpath::select_index(lazy const &node, std::
     return lazy::select_index(*found, index);
 }
 
-inline std::expected<lazy, error> jsonpath::find_key(lazy const &node, std::string_view const key)
+inline std::expected<lazy, error> path::find_key(lazy const &node, std::string_view const key)
 {
     heads::decoder<false> text_key{key};
     auto const literal = text_key.decode_head();
@@ -1378,7 +1378,7 @@ inline std::expected<lazy, error> jsonpath::find_key(lazy const &node, std::stri
             return std::unexpected(error::key_not_found);
 }
 
-inline jsonpath::exact_number jsonpath::number_of(heads::head const &n)
+inline path::exact_number path::number_of(heads::head const &n)
 {
     if (n.major == major_type::unsigned_integer)
         return {false, true, false, n.argument, 0.0};
@@ -1397,7 +1397,7 @@ inline jsonpath::exact_number jsonpath::number_of(heads::head const &n)
 }
 
 inline std::expected<std::pair<heads::head, heads::decoder<true>>, error>
-jsonpath::integer_of(heads::head const &n, heads::decoder<true> const content)
+path::integer_of(heads::head const &n, heads::decoder<true> const content)
 {
     if (!heads::is_bignum(n.major, n.argument))
         return std::pair{n, content};
@@ -1418,7 +1418,7 @@ jsonpath::integer_of(heads::head const &n, heads::decoder<true> const content)
                      d};
 }
 
-inline std::partial_ordering jsonpath::compare_numbers(exact_number const &a, exact_number const &b)
+inline std::partial_ordering path::compare_numbers(exact_number const &a, exact_number const &b)
 {
     if (a.nan || b.nan)
         return std::partial_ordering::unordered;
@@ -1452,7 +1452,7 @@ inline std::partial_ordering jsonpath::compare_numbers(exact_number const &a, ex
 }
 
 inline std::expected<std::pair<std::uint64_t, detail::validity::offset>, error>
-jsonpath::intern_value(detail::canonical_ids &ids, lazy::top_level_item const &source, detail::validity::offset const at)
+path::intern_value(detail::canonical_ids &ids, lazy::top_level_item const &source, detail::validity::offset const at)
 {
     if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
         return std::unexpected(r.error());
@@ -1561,7 +1561,7 @@ jsonpath::intern_value(detail::canonical_ids &ids, lazy::top_level_item const &s
     }
 }
 
-inline std::expected<bool, error> jsonpath::value_equal(lazy const &a, lazy const &b)
+inline std::expected<bool, error> path::value_equal(lazy const &a, lazy const &b)
 {
     if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
         return std::unexpected(r.error());
@@ -1655,7 +1655,7 @@ inline std::expected<bool, error> jsonpath::value_equal(lazy const &a, lazy cons
             }
 }
 
-inline std::expected<bool, error> jsonpath::value_less(lazy const &a, lazy const &b)
+inline std::expected<bool, error> path::value_less(lazy const &a, lazy const &b)
 {
     a.throw_logic_error_if_no_top_level();
     auto const x = a.typed_array_tag != 0 ? lazy::resolve<true>(a)
@@ -1700,7 +1700,7 @@ inline std::expected<bool, error> jsonpath::value_less(lazy const &a, lazy const
                 [](char const c) { return static_cast<unsigned char>(c); });
 }
 
-inline std::expected<std::optional<lazy>, error> jsonpath::comparable_value(query_view const v,
+inline std::expected<std::optional<lazy>, error> path::comparable_value(query_view const v,
                                                                             std::size_t const index,
                                                                             lazy const &current,
                                                                             lazy const &root)
@@ -1770,7 +1770,7 @@ inline std::expected<std::optional<lazy>, error> jsonpath::comparable_value(quer
     }
 }
 
-inline std::expected<bool, error> jsonpath::test_expression(query_view const v, std::size_t const index,
+inline std::expected<bool, error> path::test_expression(query_view const v, std::size_t const index,
                                                             lazy const &current, lazy const &root)
 {
     if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
@@ -1848,7 +1848,7 @@ inline std::expected<bool, error> jsonpath::test_expression(query_view const v, 
     return false;
 }
 
-inline std::expected<void, error> jsonpath::apply_selector(query_view const v, selector const &s,
+inline std::expected<void, error> path::apply_selector(query_view const v, selector const &s,
                                                            lazy const &node, lazy const &root,
                                                            std::vector<lazy> &nodes)
 {
@@ -1932,7 +1932,7 @@ inline std::expected<void, error> jsonpath::apply_selector(query_view const v, s
             return {};
 }
 
-inline std::expected<void, error> jsonpath::apply_segment(query_view const v, segment const &s,
+inline std::expected<void, error> path::apply_segment(query_view const v, segment const &s,
                                                           lazy const &node, lazy const &root,
                                                           std::vector<lazy> &nodes)
 {
@@ -1953,7 +1953,7 @@ inline std::expected<void, error> jsonpath::apply_segment(query_view const v, se
     return {};
 }
 
-inline std::expected<std::vector<lazy>, error> jsonpath::apply_segments(query_view const v,
+inline std::expected<std::vector<lazy>, error> path::apply_segments(query_view const v,
                                                                         std::size_t const segment_at,
                                                                         std::size_t const segment_count,
                                                                         lazy const &start, lazy const &root)
@@ -1970,7 +1970,7 @@ inline std::expected<std::vector<lazy>, error> jsonpath::apply_segments(query_vi
     return nodes;
 }
 
-inline std::expected<lazy, error> jsonpath::walk_singular_query(query_view const v, parsed_query const &top,
+inline std::expected<lazy, error> path::walk_singular_query(query_view const v, parsed_query const &top,
                                                                 lazy const &root)
 {
     detail::validity::throw_logic_error_if(root.top_level.encoded.data() == nullptr,
@@ -1989,7 +1989,7 @@ inline std::expected<lazy, error> jsonpath::walk_singular_query(query_view const
     return node;
 }
 
-inline std::expected<std::vector<lazy>, error> jsonpath::walk_query(query_view const v,
+inline std::expected<std::vector<lazy>, error> path::walk_query(query_view const v,
                                                                     parsed_query const &top, lazy const &root)
 {
     detail::validity::throw_logic_error_if(root.top_level.encoded.data() == nullptr,
@@ -2004,7 +2004,7 @@ inline std::expected<std::vector<lazy>, error> jsonpath::walk_query(query_view c
 }
 
 template <fixed_string Path, class Walk>
-auto jsonpath::apply_compiled(Walk const &walk)
+auto path::apply_compiled(Walk const &walk)
 {
     constexpr auto q = [] { return *parse_query(Path.view()); };
     constexpr std::size_t segments = q().segments.size();
@@ -2037,7 +2037,7 @@ class is_singular_query
           [] {
     std::array const text = Path.value;
     auto const q =
-        jsonpath::parse_query(std::string_view(std::span(text).first(text.size() - 1)));
+        path::parse_query(std::string_view(std::span(text).first(text.size() - 1)));
     return q.has_value() && q->top.singular;
 }()>
 {
@@ -2053,7 +2053,7 @@ template <fixed_string Path, class T>
               ))
 std::expected<T, error> at_path(std::string_view const encoded)
 {
-    return jsonpath::walk_query<Path, T>(encoded);
+    return path::walk_query<Path, T>(encoded);
 }
 
 template <fixed_string Path, class T, borrowed_range_of_chars Encoded>
@@ -2064,7 +2064,7 @@ std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded 
 {
     detail::validity::throw_logic_error_if_empty(
         owner, "cbor::at_path: the owner of the encoded data item is empty");
-    return jsonpath::walk_query<Path, T>(std::move(owner),
+    return path::walk_query<Path, T>(std::move(owner),
                                          std::string_view(std::span<char const>(encoded)));
 }
 
@@ -2093,7 +2093,7 @@ template <fixed_string Path, copied_value T>
 std::expected<T, error> at_path(std::string_view const encoded)
 {
     using view = std::conditional_t<std::same_as<T, std::string>, std::string_view, std::span<std::byte const>>;
-    return jsonpath::walk_query<Path, view>(encoded).transform([](view const v) { return T(v.begin(), v.end()); });
+    return path::walk_query<Path, view>(encoded).transform([](view const v) { return T(v.begin(), v.end()); });
 }
 
 inline std::expected<lazy, error> lazy::operator[](std::string_view const key) const
@@ -2115,12 +2115,12 @@ template <fixed_string Path>
     requires is_valid_path_v<Path>
 std::expected<lazy, error> lazy::at_path() const
 {
-    static_assert(jsonpath::parse_query(Path.view())->top.singular,
+    static_assert(path::parse_query(Path.view())->top.singular,
                   "cbor::lazy::at_path: the path is not a singular query (RFC 9535 2.3.5.1); cbor::nodelist "
                   "as the result type reads its nodelist");
-    return jsonpath::apply_compiled<Path>(
-        [this](jsonpath::query_view const v, jsonpath::parsed_query const &top) {
-            return jsonpath::walk_singular_query(v, top, *this);
+    return path::apply_compiled<Path>(
+        [this](path::query_view const v, path::parsed_query const &top) {
+            return path::walk_singular_query(v, top, *this);
         });
 }
 
@@ -2128,9 +2128,9 @@ template <fixed_string Path, std::same_as<nodelist> T>
     requires is_valid_path_v<Path>
 std::expected<nodelist, error> lazy::at_path() const
 {
-    return jsonpath::apply_compiled<Path>(
-        [this](jsonpath::query_view const v, jsonpath::parsed_query const &top) {
-            return jsonpath::walk_query(v, top, *this);
+    return path::apply_compiled<Path>(
+        [this](path::query_view const v, path::parsed_query const &top) {
+            return path::walk_query(v, top, *this);
         });
 }
 
@@ -2144,7 +2144,7 @@ template <fixed_string Path, class T>
               ))
 std::expected<T, error> lazy::at_path() const
 {
-    return jsonpath::walk_query<Path, T>(*this);
+    return path::walk_query<Path, T>(*this);
 }
 
 template <fixed_string Path, class T>
@@ -2153,14 +2153,14 @@ template <fixed_string Path, class T>
               std::is_same_v<T, typed_array>))
 std::expected<ref<T>, error> lazy::at_path() const
 {
-    return jsonpath::walk_owned_query<Path, T>(*this);
+    return path::walk_owned_query<Path, T>(*this);
 }
 
 template <class E>
     requires is_path_query_v<E>
 std::expected<typename E::result_type, error> lazy::at_path(E const &e) const
 {
-    return jsonpath::apply_query(e, *this);
+    return path::apply_query(e, *this);
 }
 
 }

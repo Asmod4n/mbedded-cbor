@@ -15,8 +15,8 @@ namespace test
 // The value of the node that a singular query selects.
 inline std::expected<value, error> at_path(std::string_view const path, cbor::lazy const &l)
 {
-    return cbor::jsonpath::compile<cbor::lazy>(path).and_then(
-        [&l](cbor::jsonpath::query<cbor::lazy> const &e) { return value_of(l.at_path(e)); });
+    return cbor::path::compile<cbor::lazy>(path).and_then(
+        [&l](cbor::path::query<cbor::lazy> const &e) { return value_of(l.at_path(e)); });
 }
 
 template <cbor::fixed_string Path>
@@ -42,8 +42,8 @@ inline std::expected<value, error> values_of(std::expected<std::vector<cbor::laz
 
 inline std::expected<value, error> query(std::string_view const path, cbor::lazy const &l)
 {
-    return cbor::jsonpath::compile<cbor::nodelist>(path).and_then(
-        [&l](cbor::jsonpath::query<cbor::nodelist> const &e) { return values_of(l.at_path(e)); });
+    return cbor::path::compile<cbor::nodelist>(path).and_then(
+        [&l](cbor::path::query<cbor::nodelist> const &e) { return values_of(l.at_path(e)); });
 }
 
 template <cbor::fixed_string Path>

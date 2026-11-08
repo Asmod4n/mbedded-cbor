@@ -23,12 +23,12 @@ std::size_t safe_member(cbor::lazy const &l)
 
 std::size_t safe_expression(std::shared_ptr<std::string const> const &owner)
 {
-    auto const e = cbor::jsonpath::compile<std::string_view>("$.name");
+    auto const e = cbor::path::compile<std::string_view>("$.name");
     auto const result = cbor::at_path(owner, *e);
     auto const &name = *result;
-    auto const one = cbor::jsonpath::compile<cbor::lazy>("$.name");
+    auto const one = cbor::path::compile<cbor::lazy>("$.name");
     auto const node = cbor::at_path(owner, *one);
-    auto const all = cbor::jsonpath::compile<cbor::nodelist>("$.*");
+    auto const all = cbor::path::compile<cbor::nodelist>("$.*");
     auto const nodes = cbor::at_path(owner, *all);
     return (*name).size() + nodes->size() + (node ? 1u : 0u);
 }

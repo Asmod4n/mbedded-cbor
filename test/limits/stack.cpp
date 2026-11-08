@@ -115,7 +115,7 @@ std::string nodes_around_empty(std::size_t const steps)
 std::expected<std::vector<cbor::lazy>, error> query(std::string const &message, std::string const &path)
 {
     auto const l = test::lazy_of_copy(message);
-    auto const q = cbor::jsonpath::compile<cbor::nodelist>(path);
+    auto const q = cbor::path::compile<cbor::nodelist>(path);
     CHECK(l.has_value());
     CHECK(q.has_value());
     if (!l || !q)
@@ -157,7 +157,7 @@ void every_reader(std::size_t const levels, kept_values &kept, outcome const exp
     reads(cbor::diagnostic_notation(deep), expected);
     // item_size counts the items that are still to read and does not recurse: it reads every depth.
     reads(cbor::item_size(deep), outcome::value);
-    reads(cbor::jsonpath::compile<cbor::lazy>("$[" + std::string(levels, '[') + "1" + std::string(levels, ']') + "]"),
+    reads(cbor::path::compile<cbor::lazy>("$[" + std::string(levels, '[') + "1" + std::string(levels, ']') + "]"),
           expected);
     reads(query(deep, "$..*"), expected);
     reads(query(deep, "$..[?@ == 1]"), expected);

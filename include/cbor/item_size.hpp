@@ -125,7 +125,7 @@ class well_formedness
 
     friend struct lazy_entries;
 
-    friend class jsonpath;
+    friend class path;
 
     friend class generic;
 

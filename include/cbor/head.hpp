@@ -846,7 +846,7 @@ class heads
 
     friend class extended_diagnostic_notation;
 
-    friend class jsonpath;
+    friend class path;
 
     template <class>
     friend class encoder;

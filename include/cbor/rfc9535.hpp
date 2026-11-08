@@ -97,21 +97,21 @@ class is_valid_path;
  *
  * @code{.callseq}
  * cbor::is_valid_path_v<"$..a">                               → bool
- * cbor::jsonpath::compile<cbor::nodelist>("$..a").has_value() → bool
+ * cbor::path::compile<cbor::nodelist>("$..a").has_value() → bool
  * @endcode
  * @code{.example}
  * message: {"a": 1}
- * call: cbor::jsonpath::compile<cbor::nodelist>("$..a").has_value()
+ * call: cbor::path::compile<cbor::nodelist>("$..a").has_value()
  * result: true
- * call: cbor::jsonpath::compile<cbor::nodelist>("$.a[").has_value()
+ * call: cbor::path::compile<cbor::nodelist>("$.a[").has_value()
  * result: false
- * call: cbor::jsonpath::compile<cbor::nodelist>("$[?match(@.t, 'a.c')]").has_value()
+ * call: cbor::path::compile<cbor::nodelist>("$[?match(@.t, 'a.c')]").has_value()
  * result: false
  * @endcode
  *
  * @snippet doc_reference_path.cpp is_valid_path_v
  * @see cbor::is_singular_query_v
- * @see cbor::jsonpath::compile()
+ * @see cbor::path::compile()
  *
  * @ingroup path
  */
@@ -133,17 +133,17 @@ class is_singular_query;
  *
  * @code{.callseq}
  * cbor::is_singular_query_v<"$.a[0]">                       → bool
- * cbor::jsonpath::compile<cbor::lazy>("$.a[0]").has_value() → bool
+ * cbor::path::compile<cbor::lazy>("$.a[0]").has_value() → bool
  * @endcode
  * @code{.example}
  * message: {"a": [{"b": 1}]}
- * call: cbor::jsonpath::compile<cbor::lazy>("$.a[0]['b']").has_value()
+ * call: cbor::path::compile<cbor::lazy>("$.a[0]['b']").has_value()
  * result: true
- * call: cbor::jsonpath::compile<cbor::lazy>("$.a[*]").has_value()
+ * call: cbor::path::compile<cbor::lazy>("$.a[*]").has_value()
  * result: false
- * call: cbor::jsonpath::compile<cbor::lazy>("$..a").has_value()
+ * call: cbor::path::compile<cbor::lazy>("$..a").has_value()
  * result: false
- * call: cbor::jsonpath::compile<cbor::lazy>("$.a[").has_value()
+ * call: cbor::path::compile<cbor::lazy>("$.a[").has_value()
  * result: false
  * @endcode
  *
@@ -161,7 +161,7 @@ class rfc9535
     static constexpr std::int64_t exact_integer_max =
         (std::int64_t{1} << std::numeric_limits<double>::digits) - 1;
 
-    friend class jsonpath;
+    friend class path;
 };
 
 }

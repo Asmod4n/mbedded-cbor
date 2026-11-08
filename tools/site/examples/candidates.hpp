@@ -191,7 +191,7 @@ inline void lazy_at_path_candidates(value const &self, std::string_view const pa
     std::vector<std::pair<std::string, cbor::lazy>> nodes;
     for (std::size_t n = typed.size(); n > 0 && nodes.size() < 2; --n) {
         std::string const prefix = typed.substr(0, n);
-        auto const query = cbor::jsonpath::compile<cbor::lazy>(prefix);
+        auto const query = cbor::path::compile<cbor::lazy>(prefix);
         if (!query)
             continue;
         auto const found = l->at_path(*query);

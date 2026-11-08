@@ -27,7 +27,7 @@ std::expected<bool, error> values_equal(std::string const &x, std::string const 
     auto const l = test::lazy_of_copy("\x81\x82"s + x + y);
     if (!l)
         return std::unexpected(l.error());
-    auto const q = cbor::jsonpath::compile<cbor::nodelist>("$[?@[0] == @[1]]");
+    auto const q = cbor::path::compile<cbor::nodelist>("$[?@[0] == @[1]]");
     if (!q)
         return std::unexpected(q.error());
     auto const r = l->at_path(*q);
@@ -41,7 +41,7 @@ std::expected<bool, error> value_less(std::string const &x, std::string const &y
     auto const l = test::lazy_of_copy("\x81\x82"s + x + y);
     if (!l)
         return std::unexpected(l.error());
-    auto const q = cbor::jsonpath::compile<cbor::nodelist>("$[?@[0] < @[1]]");
+    auto const q = cbor::path::compile<cbor::nodelist>("$[?@[0] < @[1]]");
     if (!q)
         return std::unexpected(q.error());
     auto const r = l->at_path(*q);
@@ -57,7 +57,7 @@ std::expected<bool, error> key_found(std::string const &key, std::string_view co
     auto const l = test::lazy_of_copy("\xa1"s + key + "\x01"s);
     if (!l)
         return std::unexpected(l.error());
-    auto const q = cbor::jsonpath::compile<cbor::lazy>(path);
+    auto const q = cbor::path::compile<cbor::lazy>(path);
     if (!q)
         return std::unexpected(q.error());
     auto const r = l->at_path(*q);
@@ -212,7 +212,7 @@ TEST_CASE("path equality: a bignum in an order comparison of a filter")
     auto const count = [&](std::string_view const path) {
         auto const l = test::lazy_of_copy(items);
         REQUIRE(l.has_value());
-        auto const q = cbor::jsonpath::compile<cbor::nodelist>(path);
+        auto const q = cbor::path::compile<cbor::nodelist>(path);
         REQUIRE(q.has_value());
         auto const r = l->at_path(*q);
         REQUIRE(r.has_value());
@@ -231,7 +231,7 @@ TEST_CASE("path equality: an element of a typed array in a filter")
 {
     auto const l = test::lazy_of_copy("\x81\xd8\x40\x42\x01\x02"s);
     REQUIRE(l.has_value());
-    auto const q = cbor::jsonpath::compile<cbor::nodelist>("$[0][?@ == 2]");
+    auto const q = cbor::path::compile<cbor::nodelist>("$[0][?@ == 2]");
     REQUIRE(q.has_value());
     auto const r = l->at_path(*q);
     REQUIRE(r.has_value());

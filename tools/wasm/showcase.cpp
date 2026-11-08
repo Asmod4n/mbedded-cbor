@@ -31,7 +31,7 @@ namespace {
 
 struct reactor_state {
     std::optional<cbor::lazy> root;
-    std::optional<cbor::jsonpath::query<cbor::nodelist>> query;
+    std::optional<cbor::path::query<cbor::nodelist>> query;
     std::string result;
     std::optional<cbor::ref<std::string_view>> text;
     std::optional<cbor::ref<std::span<std::byte const>>> bytes;
@@ -75,7 +75,7 @@ std::string path_run(std::string_view const path)
 {
     if (!state.root) [[unlikely]]
         return "error: no document loaded";
-    auto const e = cbor::jsonpath::compile<cbor::nodelist>(path);
+    auto const e = cbor::path::compile<cbor::nodelist>(path);
     if (!e) [[unlikely]]
         return error_named(e.error());
     auto const nodes = state.root->at_path(*e);
@@ -153,9 +153,9 @@ std::int32_t js_values_built(std::expected<cbor::nodelist, cbor::error> const &n
 }
 
 template <class T>
-std::expected<typename cbor::jsonpath::query<T>::result_type, cbor::error> leaf_found(char const *const ptr, std::size_t const len)
+std::expected<typename cbor::path::query<T>::result_type, cbor::error> leaf_found(char const *const ptr, std::size_t const len)
 {
-    auto const e = cbor::jsonpath::compile<T>(std::string_view{ptr, len});
+    auto const e = cbor::path::compile<T>(std::string_view{ptr, len});
     if (!e) [[unlikely]]
         return std::unexpected(e.error());
     return state.root->at_path(*e);
@@ -208,7 +208,7 @@ __attribute__((export_name("edn"))) std::uint64_t edn(char const *const ptr, std
 
 __attribute__((export_name("compile"))) std::int32_t compile(char const *const path_ptr, std::size_t const path_len)
 {
-    auto e = cbor::jsonpath::compile<cbor::nodelist>(std::string_view{path_ptr, path_len});
+    auto e = cbor::path::compile<cbor::nodelist>(std::string_view{path_ptr, path_len});
     if (!e) [[unlikely]]
         return static_cast<std::int32_t>(e.error());
     state.query = std::move(*e);

@@ -68,7 +68,7 @@ inline void selects(std::string_view const literal, std::string_view const key_h
 inline void refused(std::string_view const literal)
 {
     CAPTURE(literal);
-    auto const q = cbor::jsonpath::compile<cbor::lazy>("$[" + std::string(literal) + "]");
+    auto const q = cbor::path::compile<cbor::lazy>("$[" + std::string(literal) + "]");
     REQUIRE_FALSE(q.has_value());
     CHECK_EQ(q.error(), error::invalid_path);
 }

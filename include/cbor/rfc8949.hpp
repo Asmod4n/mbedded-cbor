@@ -147,7 +147,7 @@ class rfc8949
 
     friend class extended_diagnostic_notation;
 
-    friend class jsonpath;
+    friend class path;
 
     friend class encoding;
 

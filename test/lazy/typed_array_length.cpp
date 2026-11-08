@@ -28,7 +28,7 @@ void refuses(char const tag, error const expected)
     REQUIRE(l.has_value());
     CHECK_EQ(l->elements().error(), expected);
     CHECK_EQ(l->at(std::size_t{0}).error(), expected);
-    auto const q = cbor::jsonpath::compile<cbor::lazy>("$[0]");
+    auto const q = cbor::path::compile<cbor::lazy>("$[0]");
     REQUIRE(q.has_value());
     CHECK_EQ(l->at_path(*q).error(), expected);
 }

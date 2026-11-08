@@ -1304,7 +1304,7 @@ class extended_diagnostic_notation
         }
     }
 
-    friend class jsonpath;
+    friend class path;
 
     friend std::expected<std::string, error> diagnostic_notation(std::string_view encoded);
 };

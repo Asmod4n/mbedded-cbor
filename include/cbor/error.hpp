@@ -108,7 +108,7 @@ enum class error {
     string_length_exceeded,
     /** A container has more items than `cbor::limits::container_elements`. */
     container_elements_exceeded,
-    /** `jsonpath::compile<T>` gets a path that is not singular, and `T` is not `nodelist`. */
+    /** `path::compile<T>` gets a path that is not singular, and `T` is not `nodelist`. */
     not_singular_query,
     /**
      * cbor::encode() with cbor::cycles would write more than `cbor::limits::maximum_amplification` times the size of the

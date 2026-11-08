@@ -149,11 +149,11 @@ inline result lazy_at_path(call const &c)
     std::string_view const path = c.template_arguments.front();
     std::string_view const type =
         c.template_arguments.size() == 2 ? std::string_view(c.template_arguments[1]) : "cbor::lazy";
-    if (!cbor::jsonpath::compile<cbor::lazy>(path) && cbor::jsonpath::compile<cbor::nodelist>(path) &&
+    if (!cbor::path::compile<cbor::lazy>(path) && cbor::path::compile<cbor::nodelist>(path) &&
         type != "cbor::nodelist") [[unlikely]]
         return std::unexpected("the path is not a singular query, so it does not compile; cbor::nodelist reads it");
     return typed(type, [&]<class T>(type_tag<T>) -> result {
-        auto const query = cbor::jsonpath::compile<T>(path);
+        auto const query = cbor::path::compile<T>(path);
         if (!query) [[unlikely]]
             return std::unexpected("the path does not compile: " + kind<cbor::error>::text(query.error()));
         return value_of((*self)->at_path(*query));

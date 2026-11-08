@@ -390,7 +390,7 @@ void path_forms_check(std::string const &document)
                           std::is_same_v<T, cbor::typed_array>;
     auto const owner = std::make_shared<std::string const>(document);
     auto const bytes = std::make_shared<std::vector<char> const>(document.begin(), document.end());
-    auto const query = cbor::jsonpath::compile<T>(Path.view());
+    auto const query = cbor::path::compile<T>(Path.view());
     require(query.has_value());
     auto const copied = *query;
     auto moved = *query;

@@ -68,7 +68,7 @@ TEST_CASE("path edn comments: the JSONPath around a literal takes no comment and
     refused("/c/ 1");
     for (std::string_view const path : {"$[?@.a == 1 /c/]"sv, "$[?/c/ @.a]"sv, "$['a\nb']"sv, "$['a\rb']"sv, "$[\"a\nb\"]"sv}) {
         CAPTURE(path);
-        auto const q = cbor::jsonpath::compile<cbor::lazy>(path);
+        auto const q = cbor::path::compile<cbor::lazy>(path);
         REQUIRE_FALSE(q.has_value());
         CHECK_EQ(q.error(), error::invalid_path);
     }

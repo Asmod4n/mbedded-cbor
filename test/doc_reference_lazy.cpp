@@ -139,7 +139,7 @@ TEST_CASE("doc reference lazy: at_path")
     CHECK_EQ(**last, "b"sv);
     CHECK_EQ(tags->size(), 2u);
     CHECK_EQ(doc->at_path<"$.user.id">()->get<int>().value(), 42);
-    auto const query = cbor::jsonpath::compile<std::int64_t>("$.user.id");
+    auto const query = cbor::path::compile<std::int64_t>("$.user.id");
     REQUIRE(query);
     CHECK_EQ(doc->at_path(*query).value(), 42);
     CHECK_EQ(doc->at_path<"$.user.age", int>().error(), cbor::error::key_not_found);

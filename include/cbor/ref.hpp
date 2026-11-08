@@ -40,7 +40,7 @@ class structs;
 
 struct lazy;
 
-class jsonpath;
+class path;
 
 class encoding;
 
@@ -128,7 +128,7 @@ class CBOR_OWNER ref
 
     friend struct lazy;
 
-    friend class jsonpath;
+    friend class path;
 
     friend class encoding;
 

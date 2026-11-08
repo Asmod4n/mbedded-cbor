@@ -18,13 +18,13 @@ struct name_joined {
     static constexpr std::string_view value{std::span<char const>(characters)};
 };
 
-constexpr std::string_view query_name_start = "cbor::jsonpath::query<";
+constexpr std::string_view query_name_start = "cbor::path::query<";
 constexpr std::string_view template_name_end = ">";
 
 template <class T>
-struct kind<cbor::jsonpath::query<T>> {
+struct kind<cbor::path::query<T>> {
     static constexpr std::string_view name = name_joined<query_name_start, kind<T>::name, template_name_end>::value;
-    static std::string text(cbor::jsonpath::query<T> const &)
+    static std::string text(cbor::path::query<T> const &)
     {
         return std::string(name);
     }

@@ -8,9 +8,9 @@ namespace site
 template <class F>
 result path_typed(value const &v, F const f)
 {
-    result out = std::unexpected("the argument 2 is not a cbor::jsonpath::query");
+    result out = std::unexpected("the argument 2 is not a cbor::path::query");
     auto const tried = [&]<class T>(type_tag<T>) {
-        if (auto const *q = held_if<cbor::jsonpath::query<T>>(v)) {
+        if (auto const *q = held_if<cbor::path::query<T>>(v)) {
             out = f(*q);
             return true;
         }
@@ -27,7 +27,7 @@ result path_typed(value const &v, F const f)
 }
 
 template <class T>
-result query_applied(value const &encoded, cbor::jsonpath::query<T> const &q)
+result query_applied(value const &encoded, cbor::path::query<T> const &q)
 {
     if (auto const *s = held_if<std::string>(encoded)) {
         std::string const &bytes = *s;
@@ -43,7 +43,7 @@ result query_applied(value const &encoded, cbor::jsonpath::query<T> const &q)
             return value_of(cbor::at_path(*o, q));
     }
     return std::unexpected("no cbor::at_path takes " + std::string(encoded.kind) + " and a " +
-                           std::string(kind<cbor::jsonpath::query<T>>::name));
+                           std::string(kind<cbor::path::query<T>>::name));
 }
 
 inline result at_path_free(call const &c)
@@ -58,11 +58,11 @@ inline result at_path_free(call const &c)
     return typed(c.template_arguments[1], [&]<class T>(type_tag<T>) -> result {
         if constexpr (!cbor::scalar_result<T> && !cbor::view_result<T>)
             return std::unexpected("cbor::at_path with a path at compile time does not take " + c.template_arguments[1] +
-                                   "; a query from cbor::jsonpath::compile reads it");
+                                   "; a query from cbor::path::compile reads it");
         else {
-            if (!cbor::jsonpath::compile<cbor::nodelist>(path)) [[unlikely]]
+            if (!cbor::path::compile<cbor::nodelist>(path)) [[unlikely]]
                 return std::unexpected("the path is not valid, so it does not compile");
-            auto const query = cbor::jsonpath::compile<T>(path);
+            auto const query = cbor::path::compile<T>(path);
             if (!query) [[unlikely]]
                 return std::unexpected("the path is not a singular query, so it does not compile");
             return query_applied(c.arguments.front(), *query);
@@ -73,15 +73,15 @@ inline result at_path_free(call const &c)
 inline result query_compiled(call const &c)
 {
     if (c.template_arguments.size() != 1) [[unlikely]]
-        return std::unexpected("cbor::jsonpath::compile takes one type: compile<int>(\"$.a\")");
+        return std::unexpected("cbor::path::compile takes one type: compile<int>(\"$.a\")");
     auto const path = text_argument(c, 0);
     if (!path || c.arguments.size() != 1) [[unlikely]]
-        return std::unexpected("cbor::jsonpath::compile takes the path as one text");
+        return std::unexpected("cbor::path::compile takes the path as one text");
     return typed(c.template_arguments.front(), [&]<class T>(type_tag<T>) -> result {
         if constexpr (cbor::path_result<T>)
-            return value_of(cbor::jsonpath::compile<T>(*path));
+            return value_of(cbor::path::compile<T>(*path));
         else
-            return std::unexpected("cbor::jsonpath::compile does not take " + c.template_arguments.front());
+            return std::unexpected("cbor::path::compile does not take " + c.template_arguments.front());
     });
 }
 
@@ -105,7 +105,7 @@ inline result shared_string_star(call const &c)
 
 inline constexpr entry path_functions[] = {
     {"cbor::at_path()", at_path_free},
-    {"cbor::jsonpath::compile()", query_compiled},
+    {"cbor::path::compile()", query_compiled},
     {"cbor::nodelist.empty()", nodelist_empty},
     {"std::shared_ptr<std::string const>.operator*()", shared_string_star},
 };

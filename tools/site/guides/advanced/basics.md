@@ -68,7 +68,7 @@ the compiler cannot see a wrong use, the library throws
 | `duplicate_key` | A deterministic check finds a key twice in one map. |
 | `no_buffer_space`, `value_too_large`, `not_enough_memory`, `io_error` | The writer of an encode gives this error. `not_enough_memory` also comes from a refused allocation in `structs` and `schema` decode. |
 | `string_length_exceeded`, `container_elements_exceeded` | A limit is set and the input goes past it (section 4). |
-| `not_singular_query` | `jsonpath::compile<T>` gets a path that is not singular, and `T` is not `nodelist` ([path.md](path.md), section 10). |
+| `not_singular_query` | `path::compile<T>` gets a path that is not singular, and `T` is not `nodelist` ([path.md](path.md), section 10). |
 | `amplification_limit_breach` | `encode` with `cbor::cycles` would write more than the amplification limits allow (section 4). |
 
 ```cpp

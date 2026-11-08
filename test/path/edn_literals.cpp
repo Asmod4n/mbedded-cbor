@@ -162,7 +162,7 @@ TEST_CASE("path edn literals: indefinite-length containers of the EDN draft and 
     selects("[_ 1, 2]", "820102");
     selects("{_ 1: 2}", "a10102");
     refused("[1, 2");
-    auto const q = cbor::jsonpath::compile<cbor::lazy>("$[{1: 2, 1: 3}]");
+    auto const q = cbor::path::compile<cbor::lazy>("$[{1: 2, 1: 3}]");
     REQUIRE_FALSE(q.has_value());
     CHECK_EQ(q.error(), error::duplicate_key);
 }

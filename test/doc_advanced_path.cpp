@@ -124,10 +124,10 @@ TEST_CASE("doc advanced path: every form of the table")
     REQUIRE(moved.has_value());
     CHECK_EQ((**moved).data(), data.subspan(8).data());
 
-    auto const n = cbor::jsonpath::compile<std::int64_t>("$.n");
+    auto const n = cbor::path::compile<std::int64_t>("$.n");
     REQUIRE(n.has_value());
     CHECK_EQ(cbor::at_path(std::string_view(*owner), *n), 7);
-    auto const name = cbor::jsonpath::compile<std::string_view>("$.name");
+    auto const name = cbor::path::compile<std::string_view>("$.name");
     REQUIRE(name.has_value());
     auto const a = cbor::at_path(any, std::string_view(*owner), *name);
     REQUIRE(a.has_value());
@@ -138,10 +138,10 @@ TEST_CASE("doc advanced path: every form of the table")
     auto const c = cbor::at_path(std::string(*owner), *name);
     REQUIRE(c.has_value());
     CHECK_EQ(**c, std::string(40, 'a'));
-    auto const node = cbor::jsonpath::compile<cbor::lazy>("$.n");
+    auto const node = cbor::path::compile<cbor::lazy>("$.n");
     REQUIRE(node.has_value());
     CHECK_EQ(cbor::at_path(owner, *node)->get<std::int64_t>(), 7);
-    auto const all = cbor::jsonpath::compile<cbor::nodelist>("$.*");
+    auto const all = cbor::path::compile<cbor::nodelist>("$.*");
     REQUIRE(all.has_value());
     CHECK_EQ(cbor::at_path(any, std::string_view(*owner), *all)->size(), 3u);
 }
@@ -187,7 +187,7 @@ TEST_CASE("doc advanced path: a node at compile time and at run time")
     CHECK(*test::query<"$.a[*]">(l) == A(1, 2, 3));
     CHECK(*test::query("$.a[?@ > 1]", l) == A(2, 3));
     CHECK(*test::query("$.b", l) == A());
-    auto const e = cbor::jsonpath::compile<cbor::nodelist>("$.a[?@ > 1]");
+    auto const e = cbor::path::compile<cbor::nodelist>("$.a[?@ > 1]");
     REQUIRE(e.has_value());
     CHECK(*test::values_of(l.at_path(*e)) == A(2, 3));
     CHECK(*test::values_of(l.at_path<"$.b", cbor::nodelist>()) == A());
@@ -252,7 +252,7 @@ TEST_CASE("doc advanced path: the functions")
     CHECK_EQ(test::query("$[?match(@.t, 'a.c')]", l).error(), error::invalid_path);
     CHECK_EQ(test::query("$[?search(@.t, 'b')]", l).error(), error::invalid_path);
     CHECK(*test::query<"$[?length(@.t) == 3].t">(l) == A("abc"s));
-    CHECK_EQ(cbor::jsonpath::compile<cbor::nodelist>("$[?match(@.t, 'a.c')]").error(), error::invalid_path);
+    CHECK_EQ(cbor::path::compile<cbor::nodelist>("$[?match(@.t, 'a.c')]").error(), error::invalid_path);
     CHECK_FALSE(cbor::is_valid_path_v<"$[?match(@.t, 'a.c')]">);
 }
 
@@ -473,7 +473,7 @@ TEST_CASE("doc advanced path: tags in detail")
     CHECK(*test::at_path("$.a[1]", *test::lazy_of_copy(inside)) == V(2));
     CHECK_EQ(cbor::at_path<"$.a", int>("\xa1\x61\x61\xd8\x18\x05"s).error(), error::inadmissible_type_for_tag_content);
     CHECK(test::lazy_of_copy("\xd8\x1c\x81\xd8\x1d\x00"s)
-              ->at_path(*cbor::jsonpath::compile<cbor::lazy>("$[0]"))
+              ->at_path(*cbor::path::compile<cbor::lazy>("$[0]"))
               .has_value());
     std::string const many = "\x82\xd8\x1c\x88\x00\x00\x00\x00\x00\x00\x00\x00\xd8\x1d\x00"s;
     CHECK(*test::query("$[*][*]", *test::lazy_of_copy(many)) == A(0, 0, 0, 0, 0, 0, 0, 0));

@@ -29,7 +29,7 @@ TEST_CASE("doc reference path: at_path")
     auto const id = cbor::at_path<"$.user.id", std::int64_t>(bytes);          // 42
     auto const owner = std::make_shared<std::string const>(std::move(bytes));
     auto const name = cbor::at_path<"$.user.name", std::string_view>(owner);  // **name: "ann"
-    auto const q = cbor::jsonpath::compile<std::int64_t>("$.user.id");
+    auto const q = cbor::path::compile<std::int64_t>("$.user.id");
     if (q)
         run_time = cbor::at_path(*owner, *q).value_or(0);                    // 42
     // [at_path]
@@ -44,7 +44,7 @@ TEST_CASE("doc reference path: at_path")
 TEST_CASE("doc reference path: at_path with a moved-from query throws")
 {
     std::string const bytes = test::preferred(test::M("id"s, 42));
-    auto q = cbor::jsonpath::compile<std::int64_t>("$.id").value();
+    auto q = cbor::path::compile<std::int64_t>("$.id").value();
     auto const kept = std::move(q);
     CHECK_THROWS_AS((void)cbor::at_path(bytes, q), std::logic_error);
     CHECK_EQ(cbor::at_path(bytes, kept), 42);
@@ -64,11 +64,11 @@ TEST_CASE("doc reference path: compile")
     std::size_t found = 0;
     // [compile]
     // owner: a std::shared_ptr<std::string const> with {"a": [1, 2, 3]}
-    auto const q = cbor::jsonpath::compile<cbor::nodelist>("$.a[?@ > 1]");
+    auto const q = cbor::path::compile<cbor::nodelist>("$.a[?@ > 1]");
     if (q)
         found = cbor::at_path(owner, *q)->size();                    // 2
-    auto const many = cbor::jsonpath::compile<int>("$.a[*]");         // not_singular_query
-    auto const broken = cbor::jsonpath::compile<cbor::lazy>("$.a[");  // invalid_path
+    auto const many = cbor::path::compile<int>("$.a[*]");         // not_singular_query
+    auto const broken = cbor::path::compile<cbor::lazy>("$.a[");  // invalid_path
     // [compile]
     REQUIRE(q.has_value());
     CHECK_EQ(found, 2u);
@@ -83,14 +83,14 @@ TEST_CASE("doc reference path: query")
     std::string const second = test::preferred(test::M("id"s, 2, "x"s, 0));
     // [query]
     // first: {"id": 1}, second: {"id": 2, "x": 0}
-    auto const q = cbor::jsonpath::compile<std::int64_t>("$.id").value();
+    auto const q = cbor::path::compile<std::int64_t>("$.id").value();
     auto const one = cbor::at_path(first, q);   // 1
     auto const two = cbor::at_path(second, q);  // 2
     // [query]
     CHECK_EQ(one, 1);
     CHECK_EQ(two, 2);
-    CHECK((std::is_same_v<cbor::jsonpath::query<std::string_view>::result_type, cbor::ref<std::string_view>>));
-    CHECK((std::is_same_v<cbor::jsonpath::query<int>::result_type, int>));
+    CHECK((std::is_same_v<cbor::path::query<std::string_view>::result_type, cbor::ref<std::string_view>>));
+    CHECK((std::is_same_v<cbor::path::query<int>::result_type, int>));
 }
 
 // lazy.hpp, snippet nodelist: a path with a wildcard gives every match as a lazy in a nodelist; no match is an empty

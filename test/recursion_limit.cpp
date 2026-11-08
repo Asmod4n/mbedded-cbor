@@ -96,7 +96,7 @@ TEST_CASE("recursion limit: keys_equivalent")
     refused_on_small_stack([&checked] { return checked(beyond); });
 }
 
-// jsonpath::value_equal compares two equal values of RFC 9535 2.3.5.2.2 through every level.
+// path::value_equal compares two equal values of RFC 9535 2.3.5.2.2 through every level.
 TEST_CASE("recursion limit: a comparison in a filter")
 {
     auto const found = [](std::size_t const n) {
@@ -114,7 +114,7 @@ TEST_CASE("recursion limit: a comparison in a filter")
     refused_on_small_stack([&found] { return found(beyond); });
 }
 
-// jsonpath::apply_segment recurses once for each level that a descendant segment enters.
+// path::apply_segment recurses once for each level that a descendant segment enters.
 TEST_CASE("recursion limit: a descendant segment")
 {
     CHECK(test::query("$..[0]", *test::lazy_of_copy(arrays_around(held, "\x00"sv))).has_value());
