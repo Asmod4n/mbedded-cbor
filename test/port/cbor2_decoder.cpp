@@ -341,12 +341,10 @@ TEST_CASE("cbor2 decoder: test_string")
 
 // Upstream: test_string_invalid_utf8 and TestStrErrorsAttribute.test_str_errors_handling[strict_mode]. RFC 8949
 // 5.3.1 calls a text string that is not UTF-8 invalid, and lets a decoder check it or not. cbor2 raises an
-// error. The documentation of cbor::decode does not say whether it checks UTF-8, so the test expects the error of
-// cbor2.
+// error. decode.hpp says "It does not check that a text string is UTF-8", as the owner decided.
 TEST_CASE("cbor2 decoder: test_string_invalid_utf8")
 {
-    // Upstream refuses a text string that is not UTF-8. The owner decided that the library never checks UTF-8, and
-    // the decode doc says that decode does not check it, so decode gives the tree with the bytes as they are.
+    // So decode gives the tree with the bytes as they are.
     std::string const long_payload = unhexlify("7a00010000") + std::string(65535, 'a') + unhexlify("c3");
     std::vector<std::pair<std::string, std::size_t>> const cases = {
         {unhexlify("6198"), 1}, {long_payload, 65536}, {unhexlify("6b68656c6c6fff776f726c64"), 11}};
@@ -634,7 +632,8 @@ TEST_CASE("cbor2 decoder: test_datetime as std::chrono::sys_seconds")
 TEST_CASE("cbor2 decoder: test_datetime_overflow")
 {
     check_decoded({{"c11b9b9b9b0000000000", tag_of(1, test::value{std::uint64_t{0x9b9b9b0000000000}})}});
-    CHECK_FALSE(cbor::structs<std::chrono::sys_seconds>::decode(unhexlify("c11b9b9b9b0000000000")).has_value());
+    CHECK_EQ(cbor::structs<std::chrono::sys_seconds>::decode(unhexlify("c11b9b9b9b0000000000")).error_or(error{}),
+             error::number_out_of_range);
 }
 
 // Upstream: test_datetime_value_too_large. cbor2 raises an error because the year is past the range of a Python
@@ -650,7 +649,7 @@ TEST_CASE("cbor2 decoder: test_datetime_value_too_large")
     CHECK_EQ((*t)->time_since_epoch().count(), 0x1616161616161616);
 }
 
-// Upstream: test_datetime_date_out_of_range. The map of six pairs has a break where its sixth value is
+// Upstream: test_datetime_date_out_of_range. The map of six pairs has a break where its third value is
 // expected, so it is not well-formed (RFC 8949 3.2.1).
 TEST_CASE("cbor2 decoder: test_datetime_date_out_of_range")
 {
@@ -848,7 +847,8 @@ TEST_CASE("cbor2 decoder: TestSharedReference read by cbor::structs")
     auto const first = cbor::structs<std::string>::decode(unhexlify("d81c6b66697273745f76616c7565"));
     REQUIRE(first.has_value());
     CHECK_EQ(**first, "first_value");
-    CHECK_FALSE(cbor::structs<std::uint64_t>::decode(unhexlify("d81d00")).has_value());
+    CHECK_EQ(cbor::structs<std::uint64_t>::decode(unhexlify("d81d00")).error_or(error{}),
+             error::sharedref_index_not_marked);
 
     // TestSharedReference.test_bad_reference: no value is marked, so the index 5 names none. error.hpp:
     // "sharedref_index_not_marked: A tag 29 names no tag 28 before it."
