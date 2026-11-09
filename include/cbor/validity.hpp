@@ -630,10 +630,17 @@ public:
         return check_typed_array(tag, size);
     }
 
+    CBOR_ALWAYS_INLINE static constexpr std::size_t checked_size(index const i)
+    {
+        if (!std::in_range<std::size_t>(std::to_underlying(i))) [[unlikely]]
+            throw_logic_error("cbor::detail::validity: the index does not fit std::size_t");
+        return static_cast<std::size_t>(std::to_underlying(i));
+    }
+
     CBOR_ALWAYS_INLINE static constexpr offset element_offset(offset const start, std::size_t const element_size,
                                                               index const i)
     {
-        return offset{std::to_underlying(start) + static_cast<std::size_t>(std::to_underlying(i)) * element_size};
+        return offset{std::to_underlying(start) + checked_size(i) * element_size};
     }
 
     CBOR_ALWAYS_INLINE static constexpr offset next(offset const at, std::size_t const size)
@@ -661,7 +668,7 @@ public:
     CBOR_ALWAYS_INLINE static constexpr std::span<char const> element_span(std::span<char const> const elements,
                                                                            index const i, std::size_t const size)
     {
-        auto const end = checked_mul(static_cast<std::size_t>(std::to_underlying(i)) + 1, size);
+        auto const end = checked_mul(checked_size(i) + 1, size);
         if (!end || !bytes_fit(*end, elements.size())) [[unlikely]]
             throw_logic_error("cbor::detail::validity: the element is after the end of its elements");
         return elements.subspan(*end - size, size);
