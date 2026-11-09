@@ -48,5 +48,20 @@ void path_filter_compiled(benchmark::State &state)
 
 }
 
+void path_descendant_compiled(benchmark::State &state)
+{
+    std::vector<cbor::lazy> lazies;
+    for (std::size_t total = 0; total < cold_bytes(); total += message.size())
+        lazies.push_back(*cbor::lazy::view(std::make_shared<std::string const>(message)));
+    for (auto _ : state) {
+        for (cbor::lazy const &each : lazies) {
+            auto r = each.at_path<"$..[1:3]", cbor::nodelist>();
+            benchmark::DoNotOptimize(r);
+        }
+    }
+    state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * lazies.size()));
+}
+
 BENCHMARK(path_filter_compiled)->Unit(benchmark::kMillisecond);
+BENCHMARK(path_descendant_compiled)->Unit(benchmark::kMillisecond);
 BENCHMARK_MAIN();
