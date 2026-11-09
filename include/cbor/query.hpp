@@ -719,18 +719,24 @@ class path
     static std::expected<bool, error> compared(comparison_op op, comparable const &a, comparable const &b);
 
     template <class F>
-    static std::expected<void, error> for_each_child(lazy const &node, F const &f);
+    static std::expected<bool, error> for_each_child(lazy const &node, F const &f);
 
     template <class F>
-    static std::expected<void, error> for_each_sliced(lazy const &node, selector const &s, F const &f);
+    static std::expected<bool, error> for_each_sliced(lazy const &node, selector const &s, F const &f);
 
     template <fixed_string Path>
     static consteval bool generated_form();
 
+    static constexpr std::uint64_t nodes_that_decide_existence = 1;
+    static constexpr std::uint64_t nodes_that_decide_value = 2;
+
+    template <fixed_string Path, std::size_t Index>
+    static consteval std::uint64_t nodes_that_decide();
+
     template <fixed_string Path, std::size_t First, std::size_t End>
     static std::expected<lazy, error> generated_singular(lazy const &current);
 
-    template <fixed_string Path, std::size_t Index>
+    template <fixed_string Path, std::size_t Index, std::uint64_t Limit>
     static std::expected<std::pair<std::uint64_t, std::optional<lazy>>, error>
     generated_query(lazy const &start, lazy const &root, std::span<std::expected<std::pair<std::uint64_t, std::optional<lazy>>, error> const> absolutes);
 
@@ -743,12 +749,12 @@ class path
                                                      std::span<std::expected<std::pair<std::uint64_t, std::optional<lazy>>, error> const> absolutes);
 
     template <fixed_string Path, std::size_t Segment, std::size_t Selector, std::size_t End, std::size_t Count, class F>
-    static std::expected<void, error> generated_selector(lazy const &node, lazy const &root,
+    static std::expected<bool, error> generated_selector(lazy const &node, lazy const &root,
                                                          std::span<std::expected<std::pair<std::uint64_t, std::optional<lazy>>, error> const> absolutes,
                                                          std::span<std::size_t, Count> counts, F const &f);
 
     template <fixed_string Path, std::size_t Segment, std::size_t End, std::size_t Count, class F>
-    static std::expected<void, error> generated_segment(lazy const &node, lazy const &root,
+    static std::expected<bool, error> generated_segment(lazy const &node, lazy const &root,
                                                         std::span<std::expected<std::pair<std::uint64_t, std::optional<lazy>>, error> const> absolutes,
                                                         std::span<std::size_t, Count> counts, F const &f);
 
@@ -1812,11 +1818,11 @@ inline std::expected<void, error> path::apply_selector(query_view const v, selec
                                                            std::vector<lazy> &nodes)
 {
     std::size_t const limit = root.top_level.encoded.size();
-    auto const append = [&nodes, limit](lazy const &l) -> std::expected<void, error> {
+    auto const append = [&nodes, limit](lazy const &l) -> std::expected<bool, error> {
         if (nodes.size() >= limit) [[unlikely]]
             return std::unexpected(error::nodelist_too_long);
         nodes.push_back(l);
-        return {};
+        return true;
     };
     if (s.kind == selector::kind::key || s.kind == selector::kind::index) {
         auto const child =
@@ -1824,23 +1830,23 @@ inline std::expected<void, error> path::apply_selector(query_view const v, selec
                 ? select_index(node, s.index)
                 : find_key(node, std::string_view(std::span(v.keys).subspan(s.key_at, s.key_size)));
         if (child)
-            return append(*child);
+            return append(*child).transform([](bool) {});
         if (!selects_nothing(child.error())) [[unlikely]]
             return std::unexpected(child.error());
         return {};
     }
     if (s.kind != selector::kind::slice)
-        return for_each_child(node, [&](lazy const &child) -> std::expected<void, error> {
+        return for_each_child(node, [&](lazy const &child) -> std::expected<bool, error> {
             if (s.kind == selector::kind::filter) {
                 auto const tested = test_expression(v, s.expression, child, root);
                 if (!tested) [[unlikely]]
                     return std::unexpected(tested.error());
                 if (!*tested)
-                    return {};
+                    return true;
             }
             return append(child);
-        });
-    return for_each_sliced(node, s, append);
+        }).transform([](bool) {});
+    return for_each_sliced(node, s, append).transform([](bool) {});
 }
 
 inline std::expected<void, error> path::apply_segment(query_view const v, segment const &s,
@@ -2049,7 +2055,7 @@ inline std::expected<bool, error> path::compared(comparison_op const op, compara
 }
 
 template <class F>
-std::expected<void, error> path::for_each_child(lazy const &node, F const &f)
+std::expected<bool, error> path::for_each_child(lazy const &node, F const &f)
 {
     node.throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
     auto const found = lazy::resolve<true>(node);
@@ -2063,7 +2069,7 @@ std::expected<void, error> path::for_each_child(lazy const &node, F const &f)
         for (auto const element : *elements) {
             if (!element) [[unlikely]]
                 return std::unexpected(element.error());
-            if (auto const r = f(*element); !r) [[unlikely]]
+            if (auto const r = f(*element); !r || !*r)
                 return r;
         }
     } else if (found->h.major == major_type::map) {
@@ -2073,22 +2079,22 @@ std::expected<void, error> path::for_each_child(lazy const &node, F const &f)
         for (auto const entry : *entries) {
             if (!entry) [[unlikely]]
                 return std::unexpected(entry.error());
-            if (auto const r = f(entry->second); !r) [[unlikely]]
+            if (auto const r = f(entry->second); !r || !*r)
                 return r;
         }
     }
-    return {};
+    return true;
 }
 
 template <class F>
-std::expected<void, error> path::for_each_sliced(lazy const &node, selector const &s, F const &f)
+std::expected<bool, error> path::for_each_sliced(lazy const &node, selector const &s, F const &f)
 {
     node.throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
     auto const found = lazy::resolve<true>(node);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     if (s.step == 0 || (found->h.major != major_type::array && !heads::is_typed_array(found->h)))
-        return {};
+        return true;
     lazy const content{found->source, std::to_underlying(found->item_at), {}};
     auto const elements = content.elements();
     if (!elements) [[unlikely]]
@@ -2105,11 +2111,11 @@ std::expected<void, error> path::for_each_sliced(lazy const &node, selector cons
             if (!element) [[unlikely]]
                 return std::unexpected(element.error());
             if (lower <= i && i < upper && (i - lower) % s.step == 0)
-                if (auto const r = f(*element); !r) [[unlikely]]
+                if (auto const r = f(*element); !r || !*r)
                     return r;
             ++i;
         }
-        return {};
+        return true;
     }
     std::vector<lazy> children;
     for (auto const element : *elements) {
@@ -2120,9 +2126,9 @@ std::expected<void, error> path::for_each_sliced(lazy const &node, selector cons
     std::int64_t const upper = std::min(std::max(start, std::int64_t{-1}), len - 1);
     std::int64_t const lower = std::min(std::max(end, std::int64_t{-1}), len - 1);
     for (std::int64_t i = upper; lower < i; i += s.step)
-        if (auto const r = f(children[static_cast<std::size_t>(i)]); !r) [[unlikely]]
+        if (auto const r = f(children[static_cast<std::size_t>(i)]); !r || !*r)
             return r;
-    return {};
+    return true;
 }
 
 template <fixed_string Path>
@@ -2148,6 +2154,20 @@ consteval bool path::generated_form()
     return true;
 }
 
+template <fixed_string Path, std::size_t Index>
+consteval std::uint64_t path::nodes_that_decide()
+{
+    for (logical_expr const &e : std::get<2>(compiled_of<Path>())) {
+        if (e.kind == logical_expr::kind::count && e.first == Index)
+            return std::numeric_limits<std::uint64_t>::max();
+        if ((e.kind == logical_expr::kind::value || e.kind == logical_expr::kind::length) && e.first == Index)
+            return nodes_that_decide_value;
+        if (e.kind == logical_expr::kind::comparison && (e.first == Index || e.second == Index))
+            return nodes_that_decide_value;
+    }
+    return nodes_that_decide_existence;
+}
+
 template <fixed_string Path, std::size_t First, std::size_t End>
 std::expected<lazy, error> path::generated_singular(lazy const &current)
 {
@@ -2167,7 +2187,7 @@ std::expected<lazy, error> path::generated_singular(lazy const &current)
     return node;
 }
 
-template <fixed_string Path, std::size_t Index>
+template <fixed_string Path, std::size_t Index, std::uint64_t Limit>
 std::expected<std::pair<std::uint64_t, std::optional<lazy>>, error>
 path::generated_query(lazy const &start, lazy const &root, std::span<std::expected<std::pair<std::uint64_t, std::optional<lazy>>, error> const> const absolutes)
 {
@@ -2178,11 +2198,11 @@ path::generated_query(lazy const &start, lazy const &root, std::span<std::expect
     } else {
         std::array<std::size_t, e.second> counts{};
         auto const r = generated_segment<Path, e.first, e.first + e.second, e.second>(
-            start, root, absolutes, counts, [&counted](lazy const &node) -> std::expected<void, error> {
+            start, root, absolutes, counts, [&counted](lazy const &node) -> std::expected<bool, error> {
                 if (counted.first == 0)
                     counted.second = node;
                 ++counted.first;
-                return {};
+                return counted.first < Limit;
             });
         if (!r) [[unlikely]]
             return std::unexpected(r.error());
@@ -2219,8 +2239,11 @@ std::expected<path::comparable, error> path::generated_operand(lazy const &curre
             return *node;
         } else {
             auto const counted = [&] {
-                if constexpr (query.relative)
-                    return generated_query<Path, at>(current, root, absolutes);
+                if constexpr (query.relative && e.kind == logical_expr::kind::count)
+                    return generated_query<Path, at, std::numeric_limits<std::uint64_t>::max()>(current, root,
+                                                                                                absolutes);
+                else if constexpr (query.relative)
+                    return generated_query<Path, at, nodes_that_decide_value>(current, root, absolutes);
                 else
                     return absolutes[at];
             }();
@@ -2262,7 +2285,7 @@ std::expected<bool, error> path::generated_test(lazy const &current, lazy const 
     } else if constexpr (e.kind == logical_expr::kind::filter_query) {
         auto const counted = [&] {
             if constexpr (e.relative)
-                return generated_query<Path, Index>(current, root, absolutes);
+                return generated_query<Path, Index, nodes_that_decide_existence>(current, root, absolutes);
             else
                 return absolutes[Index];
         }();
@@ -2281,12 +2304,12 @@ std::expected<bool, error> path::generated_test(lazy const &current, lazy const 
 }
 
 template <fixed_string Path, std::size_t Segment, std::size_t Selector, std::size_t End, std::size_t Count, class F>
-std::expected<void, error> path::generated_selector(lazy const &node, lazy const &root, std::span<std::expected<std::pair<std::uint64_t, std::optional<lazy>>, error> const> const absolutes,
+std::expected<bool, error> path::generated_selector(lazy const &node, lazy const &root, std::span<std::expected<std::pair<std::uint64_t, std::optional<lazy>>, error> const> const absolutes,
                                                     std::span<std::size_t, Count> const counts, F const &f)
 {
     constexpr auto const &q = compiled_of<Path>();
     constexpr selector s = std::get<1>(q)[Selector];
-    auto const down = [&](lazy const &child) -> std::expected<void, error> {
+    auto const down = [&](lazy const &child) -> std::expected<bool, error> {
         std::size_t &count = counts[Segment - (End - Count)];
         if (count >= root.top_level.encoded.size()) [[unlikely]]
             return std::unexpected(error::nodelist_too_long);
@@ -2309,15 +2332,15 @@ std::expected<void, error> path::generated_selector(lazy const &node, lazy const
             return down(*child);
         if (!selects_nothing(child.error())) [[unlikely]]
             return std::unexpected(child.error());
-        return {};
+        return true;
     } else {
-        return for_each_child(node, [&](lazy const &child) -> std::expected<void, error> {
+        return for_each_child(node, [&](lazy const &child) -> std::expected<bool, error> {
             if constexpr (s.kind == selector::kind::filter) {
                 auto const tested = generated_test<Path, s.expression>(child, root, absolutes);
                 if (!tested) [[unlikely]]
                     return std::unexpected(tested.error());
                 if (!*tested)
-                    return {};
+                    return true;
             }
             return down(child);
         });
@@ -2325,20 +2348,21 @@ std::expected<void, error> path::generated_selector(lazy const &node, lazy const
 }
 
 template <fixed_string Path, std::size_t Segment, std::size_t End, std::size_t Count, class F>
-std::expected<void, error> path::generated_segment(lazy const &node, lazy const &root, std::span<std::expected<std::pair<std::uint64_t, std::optional<lazy>>, error> const> const absolutes,
+std::expected<bool, error> path::generated_segment(lazy const &node, lazy const &root, std::span<std::expected<std::pair<std::uint64_t, std::optional<lazy>>, error> const> const absolutes,
                                                    std::span<std::size_t, Count> const counts, F const &f)
 {
     if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
         return std::unexpected(r.error());
     constexpr segment s = std::get<0>(compiled_of<Path>())[Segment];
-    std::expected<void, error> r;
+    std::expected<bool, error> r = true;
     [[maybe_unused]] bool const applied = [&]<std::size_t... J>(std::index_sequence<J...>) {
-        return ((r = generated_selector<Path, Segment, s.selector_at + J, End, Count>(node, root, absolutes, counts, f))
-                    .has_value() &&
+        return (((r = generated_selector<Path, Segment, s.selector_at + J, End, Count>(node, root, absolutes, counts, f))
+                     .has_value() &&
+                 *r) &&
                 ...);
     }(std::make_index_sequence<s.selector_count>{});
     if constexpr (s.descendant) {
-        if (!r) [[unlikely]]
+        if (!r || !*r)
             return r;
         return for_each_child(node, [&](lazy const &child) {
             return generated_segment<Path, Segment, End, Count>(child, root, absolutes, counts, f);
@@ -2360,7 +2384,7 @@ std::expected<std::vector<lazy>, error> path::generated_walk(lazy const &root)
         auto const step = [&]<std::size_t J>() {
             constexpr logical_expr e = std::get<2>(q)[J];
             if constexpr (e.kind == logical_expr::kind::filter_query && !e.relative)
-                absolutes[J] = generated_query<Path, J>(root, root, absolutes);
+                absolutes[J] = generated_query<Path, J, nodes_that_decide<Path, J>()>(root, root, absolutes);
         };
         (step.template operator()<I>(), ...);
     }(std::make_index_sequence<expressions>{});
@@ -2370,9 +2394,9 @@ std::expected<std::vector<lazy>, error> path::generated_walk(lazy const &root)
     } else {
         std::array<std::size_t, top.segment_count> counts{};
         auto const r = generated_segment<Path, top.segment_at, top.segment_at + top.segment_count, top.segment_count>(
-            root, root, absolutes, counts, [&nodes](lazy const &node) -> std::expected<void, error> {
+            root, root, absolutes, counts, [&nodes](lazy const &node) -> std::expected<bool, error> {
                 nodes.push_back(node);
-                return {};
+                return true;
             });
         if (!r) [[unlikely]]
             return std::unexpected(r.error());
