@@ -1549,16 +1549,9 @@ path::intern_value(detail::canonical_ids &ids, lazy::top_level_item const &sourc
                 return std::unexpected(value.error());
             pairs.emplace_back(*key, *value);
         }
-        if (map) {
-            std::ranges::sort(pairs);
-            if (std::ranges::adjacent_find(pairs, {}, &std::pair<std::uint64_t, std::uint64_t>::first) != pairs.end())
-                ids.mark_unequal();
-            for (auto const &[key, value] : pairs) {
-                items.push_back(key);
-                items.push_back(value);
-            }
-        }
-        return done(ids.id_of(map ? kind::map : kind::array, 0, items));
+        if (map)
+            return done(ids.id_of(std::move(pairs)));
+        return done(ids.id_of(kind::array, 0, items));
     }
     case major_type::tag: {
         auto const content = intern_value(ids, inner, detail::validity::distance(inner.encoded, d.encoded));

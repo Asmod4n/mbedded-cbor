@@ -914,6 +914,19 @@ public:
         return id_of({of, number, {}, first, items.size()});
     }
 
+    std::uint64_t id_of(std::vector<std::pair<std::uint64_t, std::uint64_t>> pairs)
+    {
+        std::ranges::sort(pairs);
+        if (std::ranges::adjacent_find(pairs, {}, &std::pair<std::uint64_t, std::uint64_t>::first) != pairs.end())
+            mark_unequal();
+        std::size_t const first = children.size();
+        for (auto const &[key, value] : pairs) {
+            children.push_back(key);
+            children.push_back(value);
+        }
+        return id_of({kind::map, 0, {}, first, children.size() - first});
+    }
+
     std::size_t size() const
     {
         return ids.size();
@@ -1023,14 +1036,9 @@ detail::validity::intern_key(canonical_ids &ids, Message &message, offset const 
             next = value->second;
             pairs.emplace_back(key->first, value->first);
         }
-        if (map) {
-            std::ranges::sort(pairs);
-            for (auto const &[key, value] : pairs) {
-                items.push_back(key);
-                items.push_back(value);
-            }
-        }
-        return std::pair{ids.id_of(map ? kind::map : kind::array, 0, items), next};
+        if (map)
+            return std::pair{ids.id_of(std::move(pairs)), next};
+        return std::pair{ids.id_of(kind::array, 0, items), next};
     }
     case major_type::tag: {
         auto const content = intern_key<Checked>(ids, message, h->at);
