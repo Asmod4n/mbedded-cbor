@@ -169,6 +169,37 @@ TEST_CASE("bignum: a magnitude that fits 64 bits is an integer in decode and in 
     CHECK_EQ(*test::lazy_of_copy("\xc3\x40"s)->get<std::int64_t>(), -1);
 }
 
+// A path read as double gives a bignum as the number of its magnitude (RFC 8949 3.4.3), with the errors of
+// lazy::get<double>, in each form of at_path: over bytes, over a lazy with a compiled query, and in the compile mode.
+// The form over bytes once took a second walk for a bignum; the value and the errors must not depend on the form.
+TEST_CASE("bignum: at_path as double reads a bignum in every form")
+{
+    auto const query = cbor::path::compile<double>("$.a");
+    REQUIRE(query.has_value());
+    auto const read = [&](std::string const &encoded) {
+        auto const bytes = cbor::at_path(std::string_view(encoded), *query);
+        auto const doc = test::lazy_of_copy(encoded);
+        REQUIRE(doc.has_value());
+        auto const run_time = doc->at_path(*query);
+        auto const compiled = doc->at_path<"$.a", double>();
+        REQUIRE_EQ(bytes.has_value(), run_time.has_value());
+        REQUIRE_EQ(bytes.has_value(), compiled.has_value());
+        if (!bytes) {
+            CHECK_EQ(bytes.error(), run_time.error());
+            CHECK_EQ(bytes.error(), compiled.error());
+        } else {
+            CHECK_EQ(*bytes, *run_time);
+            CHECK_EQ(*bytes, *compiled);
+        }
+        return bytes;
+    };
+    CHECK_EQ(*read("\xa1\x61\x61\xc3\x41\x05"s), -6.0);
+    CHECK_EQ(*read("\xa1\x61\x61\xc2\x41\x05"s), 5.0);
+    CHECK_EQ(read("\xa1\x61\x61\xc3\x49"s + std::string(9, '\x01')).error(), error::number_out_of_range);
+    CHECK_EQ(read("\xa1\x61\x61\xc3\x61x"s).error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(read("\xa1\x61\x61\xc3\x42\x05"s).error(), error::too_little_data);
+}
+
 // RFC 8949 3.4.3 admits only a byte string as the content of tag 2 or 3. The owner decided that decode and type()
 // interpret only a definite byte string, and leave a tag over any other content (Q4 a). A content that ends early
 // gives too_little_data and reads no byte past the input.
