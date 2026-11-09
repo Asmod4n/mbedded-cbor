@@ -1869,26 +1869,32 @@ inline std::expected<void, error> path::apply_selector(query_view const v, selec
             s.kind == selector::kind::index
                 ? select_index(node, s.index)
                 : find_key(node, std::string_view(std::span(v.keys).subspan(s.key_at, s.key_size)));
-        if (child)
-            return append(*child).transform([](bool) {});
+        if (child) {
+            if (auto const r = append(*child); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            return {};
+        }
         if (!selects_nothing(child.error())) [[unlikely]]
             return std::unexpected(child.error());
         return {};
     }
-    if (s.kind != selector::kind::slice)
-        return for_each_child(node,
-                              [&](lazy const &child) -> std::expected<bool, error> {
-                                  if (s.kind == selector::kind::filter) {
-                                      auto const tested = test_expression(v, s.expression, child, root);
-                                      if (!tested) [[unlikely]]
-                                          return std::unexpected(tested.error());
-                                      if (!*tested)
-                                          return true;
-                                  }
-                                  return append(child);
-                              })
-            .transform([](bool) {});
-    return for_each_sliced(node, s, append).transform([](bool) {});
+    auto const walked = s.kind != selector::kind::slice
+                            ? for_each_child(node,
+                                             [&](lazy const &child) -> std::expected<bool, error> {
+                                                 if (s.kind == selector::kind::filter) {
+                                                     auto const tested =
+                                                         test_expression(v, s.expression, child, root);
+                                                     if (!tested) [[unlikely]]
+                                                         return std::unexpected(tested.error());
+                                                     if (!*tested)
+                                                         return true;
+                                                 }
+                                                 return append(child);
+                                             })
+                            : for_each_sliced(node, s, append);
+    if (!walked) [[unlikely]]
+        return std::unexpected(walked.error());
+    return {};
 }
 
 inline std::expected<void, error> path::apply_segment(query_view const v, segment const &s, lazy const &node,
