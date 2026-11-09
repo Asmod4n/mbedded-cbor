@@ -75,6 +75,8 @@ for name, (section, written, expected) in cases.items():
             notes["input refused by the library: " + written[1:]] += 1
         else:
             findings.append(("library", name, section, written, expected, written, ""))
+# A decoder that refuses the written bytes and the expected bytes with the same message has a limit, as when
+# it refuses the expected bytes alone: cbor2 6 refuses a nesting depth over 400 in the cbor-wg vectors.
 counts = {}
 for arg in sys.argv[3:]:
     decoder, path = arg.split("=", 1)
@@ -86,6 +88,8 @@ for arg in sys.argv[3:]:
             entry = next((u for u in UNSUPPORTED if u[0] == decoder and re.search(u[3], got)), None)
             if entry:
                 unsupported[entry] += 1
+            elif got == want:
+                limits[decoder].append((name, "refused as the expected bytes: " + want))
             else:
                 findings.append((decoder, name, section, written, expected, got, want))
         elif want.startswith("!"):
