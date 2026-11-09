@@ -36,7 +36,7 @@ struct map_key {
     consteval map_key(I const n)
         : major(std::is_signed_v<I> && n < 0 ? major_type::negative_integer : major_type::unsigned_integer),
           argument(std::is_signed_v<I> && n < 0
-                       ? static_cast<std::uint64_t>(-1 - static_cast<std::int64_t>(n))
+                       ? ~static_cast<std::uint64_t>(static_cast<std::int64_t>(n))
                        : static_cast<std::uint64_t>(n))
     {
     }

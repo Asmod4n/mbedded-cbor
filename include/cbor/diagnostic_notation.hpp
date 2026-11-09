@@ -30,6 +30,8 @@
 #include "error.hpp"
 #include "validity.hpp"
 #include "head.hpp"
+#include "rfc2781.hpp"
+#include "rfc3629.hpp"
 #include "rfc4648.hpp"
 
 namespace cbor
@@ -67,9 +69,6 @@ class extended_diagnostic_notation
     static constexpr int decimal = 10;
     static constexpr int hexadecimal = 16;
 
-    static constexpr std::uint32_t high_surrogate_first = 0xd800;
-    static constexpr std::uint32_t low_surrogate_first = 0xdc00;
-    static constexpr std::uint32_t low_surrogate_last = 0xdfff;
     static constexpr unsigned char unescaped_first = 0x20;
 
     static constexpr bool blank(char const c)
@@ -192,20 +191,24 @@ class extended_diagnostic_notation
 
     static constexpr void append_utf8(std::string &out, std::uint32_t const c)
     {
-        if (c < 0x80) {
+        constexpr int bits = rfc3629::following_octet_bits;
+        auto const following = [](std::uint32_t const v) {
+            return static_cast<char>(rfc3629::following_octet | (v & rfc3629::following_octet_mask));
+        };
+        if (c <= rfc3629::one_octet_last) {
             out.push_back(static_cast<char>(c));
-        } else if (c < 0x800) {
-            out.push_back(static_cast<char>(0xc0 | c >> 6));
-            out.push_back(static_cast<char>(0x80 | (c & 0x3f)));
-        } else if (c < 0x10000) {
-            out.push_back(static_cast<char>(0xe0 | c >> 12));
-            out.push_back(static_cast<char>(0x80 | (c >> 6 & 0x3f)));
-            out.push_back(static_cast<char>(0x80 | (c & 0x3f)));
+        } else if (c <= rfc3629::two_octets_last) {
+            out.push_back(static_cast<char>(rfc3629::two_octets_initial | c >> bits));
+            out.push_back(following(c));
+        } else if (c <= rfc3629::three_octets_last) {
+            out.push_back(static_cast<char>(rfc3629::three_octets_initial | c >> bits >> bits));
+            out.push_back(following(c >> bits));
+            out.push_back(following(c));
         } else {
-            out.push_back(static_cast<char>(0xf0 | c >> 18));
-            out.push_back(static_cast<char>(0x80 | (c >> 12 & 0x3f)));
-            out.push_back(static_cast<char>(0x80 | (c >> 6 & 0x3f)));
-            out.push_back(static_cast<char>(0x80 | (c & 0x3f)));
+            out.push_back(static_cast<char>(rfc3629::four_octets_initial | c >> bits >> bits >> bits));
+            out.push_back(following(c >> bits >> bits));
+            out.push_back(following(c >> bits));
+            out.push_back(following(c));
         }
     }
 
@@ -292,7 +295,7 @@ class extended_diagnostic_notation
                         c1 = c1 << rfc4648::base16_group_bits | static_cast<std::uint32_t>(v);
                     }
                     at = close + 1;
-                    if (c1 > 0x10ffff || (c1 >= high_surrogate_first && c1 <= low_surrogate_last)) [[unlikely]]
+                    if (c1 > rfc3629::char_number_last || (c1 >= rfc2781::high_surrogate_first && c1 <= rfc2781::low_surrogate_last)) [[unlikely]]
                         return std::unexpected(error::invalid_path);
                     append_utf8(out, c1);
                     break;
@@ -302,18 +305,19 @@ class extended_diagnostic_notation
                     return std::unexpected(next.error());
                 at = next->at;
                 c1 = next->value;
-                if (c1 >= low_surrogate_first && c1 <= low_surrogate_last) [[unlikely]]
+                if (c1 >= rfc2781::low_surrogate_first && c1 <= rfc2781::low_surrogate_last) [[unlikely]]
                     return std::unexpected(error::invalid_path);
-                if (c1 >= high_surrogate_first && c1 < low_surrogate_first) {
+                if (c1 >= rfc2781::high_surrogate_first && c1 < rfc2781::low_surrogate_first) {
                     if (!detail::validity::check_text_left(text, at, escape_prefix.size()) ||
                         !std::string_view(std::span(text).subspan(at)).starts_with(escape_prefix)) [[unlikely]]
                         return std::unexpected(error::invalid_path);
                     auto const low = parse_hex4(text, at + escape_prefix.size());
-                    if (!low || low->value < low_surrogate_first || low->value > low_surrogate_last) [[unlikely]]
+                    if (!low || low->value < rfc2781::low_surrogate_first || low->value > rfc2781::low_surrogate_last) [[unlikely]]
                         return std::unexpected(error::invalid_path);
                     std::uint32_t const c2 = low->value;
                     at = low->at;
-                    c1 = 0x10000 + ((c1 - high_surrogate_first) << 10) + (c2 - low_surrogate_first);
+                    c1 = rfc2781::surrogate_pair_first + ((c1 - rfc2781::high_surrogate_first) << rfc2781::surrogate_bits) +
+                         (c2 - rfc2781::low_surrogate_first);
                 }
                 append_utf8(out, c1);
                 break;

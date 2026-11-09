@@ -38,6 +38,7 @@
 #include "diagnostic_notation.hpp"
 #include "lazy.hpp"
 #include "ref.hpp"
+#include "rfc3629.hpp"
 #include "rfc9535.hpp"
 
 namespace cbor
@@ -211,7 +212,7 @@ class path
 
     static constexpr bool name_first(char const c)
     {
-        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || static_cast<unsigned char>(c) >= 0x80;
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || static_cast<unsigned char>(c) > rfc3629::one_octet_last;
     }
 
     static constexpr bool function_name_char(char const c)
@@ -259,7 +260,7 @@ class path
             auto const next = extended_diagnostic_notation::parse_quoted(text, at, name);
             if (!next) [[unlikely]]
                 return next;
-            for (char const c : std::span(text).subspan(at + 1, *next - at - 2))
+            for (char const c : std::span(text).subspan(at + 1, (*next - 1) - (at + 1)))
                 if (static_cast<unsigned char>(c) < extended_diagnostic_notation::unescaped_first) [[unlikely]]
                     return std::unexpected(error::invalid_path);
             if (auto const r = extended_diagnostic_notation::append_head(keys, major_type::text_string, name.size(), extended_diagnostic_notation::no_indicator); !r) [[unlikely]]
@@ -1717,7 +1718,9 @@ inline std::expected<path::comparable, error> path::length_of(comparable const &
     if (!s) [[unlikely]]
         return std::unexpected(s.error());
     return static_cast<std::uint64_t>(std::ranges::count_if(
-        *s, [](char const c) { return (static_cast<unsigned char>(c) & 0xc0) != 0x80; }));
+        *s, [](char const c) {
+            return (static_cast<unsigned char>(c) & rfc3629::following_octet_high_bits) != rfc3629::following_octet;
+        }));
 }
 
 inline std::expected<path::comparable, error> path::comparable_value(query_view const v,

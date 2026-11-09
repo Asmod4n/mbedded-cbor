@@ -1,9 +1,11 @@
 // Gives the tag numbers of Packed CBOR that cbor::schema writes and reads:
 // the reference tag 6, the Basic Packed CBOR tag 113, the record function
-// tag 114 and the straight argument references 128 to 135.
+// tag 114, the straight argument references 128 to 135, and the two elements of
+// the content of tags 6 and 113.
 // https://datatracker.ietf.org/doc/html/draft-ietf-cbor-packed-19
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 namespace cbor
@@ -18,6 +20,8 @@ class packed_cbor
         straight_argument_first = 128,
         straight_argument_last = 135
     };
+
+    static constexpr std::size_t tag_content_elements = 2;
 
     friend class reflection;
 };

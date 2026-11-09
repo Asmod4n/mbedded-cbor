@@ -1459,7 +1459,7 @@ std::expected<bool, error> lazy::integer_key_equivalent(heads::decoder<Checked> 
                                                         std::int64_t const key)
 {
     std::uint64_t const magnitude =
-        key < 0 ? static_cast<std::uint64_t>(-1 - key) : static_cast<std::uint64_t>(key);
+        key < 0 ? ~static_cast<std::uint64_t>(key) : static_cast<std::uint64_t>(key);
     if (heads::is_bignum(k.major, k.argument)) [[unlikely]] {
         heads::decoder<Checked> d = probe;
         auto const read = d.decode_bignum(k.argument);

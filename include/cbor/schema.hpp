@@ -637,7 +637,7 @@ class reflection
             constexpr std::size_t classes = []<std::size_t... K>(std::index_sequence<K...>) {
                 return (std::size_t{has_describe_members<std::remove_cv_t<std::variant_alternative_t<K, V>>>} + ... + 0);
             }(std::make_index_sequence<std::variant_size_v<V>>{});
-            if constexpr (classes < 2)
+            if constexpr (classes <= 1)
                 return true;
             else
                 return []<std::size_t... K>(std::index_sequence<K...>) {
@@ -1203,17 +1203,37 @@ class reflection
         }
     }
 
+    static constexpr std::size_t description_elements = 2;
+
+    static constexpr std::size_t description_field_elements = 2;
+
+    static constexpr std::size_t counted_description_field_elements = 3;
+
+    static constexpr std::size_t fixed_array_elements = 2;
+
+    static constexpr std::size_t inline_optional_elements = 2;
+
+    static constexpr std::size_t table_count_at = [] consteval {
+        std::vector<char> encoded;
+        heads::append_head(encoded, major_type::tag, std::to_underlying(packed_cbor::tag_number::basic_packed_cbor));
+        heads::append_head(encoded, major_type::array, packed_cbor::tag_content_elements);
+        return encoded.size() + heads::initial_byte_size;
+    }();
+
+    static constexpr std::size_t table_count_end = table_count_at + sizeof(std::uint32_t);
+
     template <class S>
     static consteval void encode_description(std::vector<char> &encoded)
     {
-        heads::append_head(encoded, major_type::array, 2);
+        heads::append_head(encoded, major_type::array, description_elements);
         heads::append_head(encoded, major_type::unsigned_integer, *tag_number_of<S>());
         heads::append_head(encoded, major_type::array, describe::members_count<S>);
         for_each_field<S>([&](auto i) {
             using M = describe::member_t<S, decltype(i)::value>;
             constexpr std::string_view key = describe::key_of<S, decltype(i)::value>.text;
             constexpr bool counted = !is_fixed_leaf<M> && requires { fixed_length<M>::value; };
-            heads::append_head(encoded, major_type::array, counted ? 3 : 2);
+            heads::append_head(encoded, major_type::array,
+                               counted ? counted_description_field_elements : description_field_elements);
             heads::append_head(encoded, major_type::text_string, key.size());
             encoded.insert(encoded.end(), key.begin(), key.end());
             if constexpr (is_fixed_leaf<M>) {
@@ -1364,7 +1384,7 @@ class reflection
             std::ranges::copy(count, std::span(encoded).template last<sizeof(std::uint32_t)>().begin());
             for_each_field<U>([&](auto i) { encode_zero_initialized<Root, describe::member_t<U, decltype(i)::value>>(encoded); });
         } else if constexpr (is_inline_optional<U>) {
-            heads::append_head(encoded, major_type::array, 2);
+            heads::append_head(encoded, major_type::array, inline_optional_elements);
             heads::append_head(encoded, major_type::simple_float, std::to_underlying(simple_value::false_value));
             encode_zero_initialized<Root, typename U::value_type>(encoded);
         } else {
@@ -1465,7 +1485,7 @@ class reflection
             std::vector<char> encoded;
             heads::append_head(encoded, major_type::tag,
                                std::to_underlying(detail::validity::tag_number::fixed_array));
-            heads::append_head(encoded, major_type::array, 2);
+            heads::append_head(encoded, major_type::array, fixed_array_elements);
             std::size_t const j = std::tuple_size_v<packing_table_of<Root>> + index_in<S>(description_types_of<Root>{});
             if (j < shared_first) {
                 heads::append_head(encoded, major_type::simple_float, j);
@@ -1499,7 +1519,7 @@ class reflection
                                std::to_underlying(packed_cbor::tag_number::straight_argument_first) + i);
         } else {
             heads::append_head(encoded, major_type::tag, std::to_underlying(packed_cbor::tag_number::reference));
-            heads::append_head(encoded, major_type::array, 2);
+            heads::append_head(encoded, major_type::array, packed_cbor::tag_content_elements);
             heads::append_head(encoded, major_type::unsigned_integer, i - straight_argument_count);
         }
     }
@@ -1534,7 +1554,7 @@ class reflection
         return static_bytes<[]() consteval {
             std::vector<char> encoded;
             heads::append_head(encoded, major_type::tag, std::to_underlying(packed_cbor::tag_number::basic_packed_cbor));
-            heads::append_head(encoded, major_type::array, 2);
+            heads::append_head(encoded, major_type::array, packed_cbor::tag_content_elements);
             encode_fixed_width_head(encoded, major_type::array, sizeof(std::uint32_t));
             if constexpr (D == description_place::inside) {
                 constexpr auto description = description_of<Root>();
@@ -2302,10 +2322,10 @@ class reflection
     {
         static constexpr auto prefix = packing_prefix_of<T, D>();
         return detail::validity::bytes_fit(prefix.size() + heads::initial_byte_size, encoded.size()) &&
-               std::ranges::equal(std::span(encoded).template first<4>(),
-                                  std::span(prefix).template first<4>()) &&
-               std::ranges::equal(std::span(encoded).template subspan<8, prefix.size() - 8>(),
-                                  std::span(prefix).template subspan<8>()) &&
+               std::ranges::equal(std::span(encoded).template first<table_count_at>(),
+                                  std::span(prefix).template first<table_count_at>()) &&
+               std::ranges::equal(std::span(encoded).template subspan<table_count_end, prefix.size() - table_count_end>(),
+                                  std::span(prefix).template subspan<table_count_end>()) &&
                encoded[prefix.size()] ==
                    heads::initial_byte(
                        major_type::byte_string,
@@ -2331,7 +2351,7 @@ class reflection
     {
         static constexpr auto prefix = packing_prefix_of<T, D>();
         constexpr std::size_t fillers = fillers_of<T>();
-        static_assert(prefix.size() >= 8, "The packing prefix must hold the eight bytes that are compared and read.");
+        static_assert(prefix.size() >= table_count_end, "The packing prefix must hold the table count that is read.");
         constexpr auto least_size =
             detail::validity::checked_add(directory_at<T, D>(), fillers).and_then([](std::size_t const head) {
                 return detail::validity::checked_add(head, fixed_size<T, T>());
@@ -3265,7 +3285,7 @@ class reflection
         constexpr std::size_t fillers = fillers_of<T>();
         std::size_t const size = encoded.size() - (Exact ? 0 : heads::head_padding);
         std::ranges::copy(prefix, encoded.template first<prefix.size()>().begin());
-        heads::write_u32(encoded, 4, table_first_of<T, D>() + second.items);
+        heads::write_u32(encoded, table_count_at, table_first_of<T, D>() + second.items);
         heads::write_item_head(encoded, prefix.size(), major_type::byte_string, sizeof(std::uint32_t) * second.items);
         std::size_t const data = directory_at<T, D>() + sizeof(std::uint32_t) * second.items;
         std::ranges::fill(encoded.subspan(data, fillers),

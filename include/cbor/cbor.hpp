@@ -15,6 +15,8 @@
 
 #include "error.hpp"
 #include "rfc8949.hpp"
+#include "rfc2781.hpp"
+#include "rfc3629.hpp"
 #include "rfc4648.hpp"
 #include "rfc8746.hpp"
 #include "rfc8943.hpp"

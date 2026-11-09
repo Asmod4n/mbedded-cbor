@@ -127,6 +127,25 @@ TEST_CASE("sequence_reader: an empty sequence and empty pieces")
 
 // The bytes of several pieces wait until next() is called. The items come in the order of the bytes, also
 // where the forms of the pieces differ.
+// The reader asks for the next piece where the piece it reads is the last one. With no piece left, or after every
+// held piece was read whole, that check must not read past the list of pieces: ASan sees such a read.
+TEST_CASE("sequence_reader: next() with no piece left")
+{
+    cbor::sequence_reader r;
+    CHECK_EQ(r.next().error(), error::too_little_data);
+    r.feed(std::make_shared<std::string const>("\x01"s));
+    REQUIRE(r.next().has_value());
+    CHECK_EQ(r.next().error(), error::too_little_data);
+    CHECK(r.empty());
+    r.feed(std::make_shared<std::string const>("\x82"s));
+    CHECK_EQ(r.next().error(), error::too_little_data);
+    CHECK_EQ(r.next().error(), error::too_little_data);
+    r.feed(std::make_shared<std::string const>("\x01\x02"s));
+    REQUIRE(r.next().has_value());
+    CHECK_EQ(r.next().error(), error::too_little_data);
+    CHECK(r.empty());
+}
+
 TEST_CASE("sequence_reader: several pieces before one next()")
 {
     for (test::feed_form const form : test::feed_forms) {

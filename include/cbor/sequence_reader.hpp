@@ -369,7 +369,7 @@ public:
                 return std::unexpected(r.error());
             }
             if (!copied) {
-                if (pieces.size() - piece_first < 2)
+                if (pieces.size() - piece_first <= 1)
                     return std::unexpected(error::too_little_data);
                 append_bytes(window);
                 piece_drop();
