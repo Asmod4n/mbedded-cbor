@@ -53,7 +53,7 @@ void lazy_adopt(benchmark::State &state)
             benchmark::DoNotOptimize(r);
         }
     }
-    state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * count));
+    state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(count));
 }
 
 void lazy_view(benchmark::State &state)
@@ -68,7 +68,7 @@ void lazy_view(benchmark::State &state)
             benchmark::DoNotOptimize(r);
         }
     }
-    state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * count));
+    state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(count));
 }
 
 }

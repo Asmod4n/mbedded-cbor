@@ -47,7 +47,7 @@ void path_filter_compiled(benchmark::State &state)
             benchmark::DoNotOptimize(r);
         }
     }
-    state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * lazies.size()));
+    state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(lazies.size()));
 }
 
 }
@@ -63,7 +63,7 @@ void path_descendant_compiled(benchmark::State &state)
             benchmark::DoNotOptimize(r);
         }
     }
-    state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * lazies.size()));
+    state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(lazies.size()));
 }
 
 template <cbor::fixed_string Path>
@@ -83,7 +83,7 @@ void path_nested_compiled(benchmark::State &state, std::size_t const selected)
             benchmark::DoNotOptimize(r);
         }
     }
-    state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * lazies.size()));
+    state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(lazies.size()));
 }
 
 void path_existence_compiled(benchmark::State &state)

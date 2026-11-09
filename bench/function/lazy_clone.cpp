@@ -61,7 +61,7 @@ void run(benchmark::State &state, bool const inside)
             benchmark::DoNotOptimize(r);
         }
     }
-    state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * lazies.size()));
+    state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(lazies.size()));
 }
 
 void lazy_clone_element(benchmark::State &state)

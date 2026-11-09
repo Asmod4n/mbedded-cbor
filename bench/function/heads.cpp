@@ -95,12 +95,12 @@ void heads_encoder(benchmark::State &state)
         out.clear();
         for (std::size_t i = 0; i < count; ++i) {
             cbor::encoder<std::string> e(out);
-            auto const r = heads_written(e);
+            auto r = heads_written(e);
             benchmark::DoNotOptimize(r);
         }
         benchmark::DoNotOptimize(out.data());
     }
-    state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * count));
+    state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(count));
 }
 
 std::string wide_message()
@@ -132,7 +132,7 @@ void heads_encode_iov(benchmark::State &state)
             benchmark::DoNotOptimize(r);
         }
     }
-    state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * count));
+    state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(count));
 }
 
 car const sample_car{"Volvo", 5, {{69, 2.5f}, {69, 2.5f}, {70, 2.25f}, {70, 2.25f}}, {1.5, 1.25, 0.1}};
@@ -150,12 +150,12 @@ void encode_car(benchmark::State &state)
     for (auto _ : state) {
         for (std::size_t i = 0; i < count; ++i) {
             out.clear();
-            auto const n = Codec<car>::encode(sample_car, out);
+            auto n = Codec<car>::encode(sample_car, out);
             benchmark::DoNotOptimize(n);
         }
         benchmark::DoNotOptimize(out.data());
     }
-    state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * count));
+    state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(count));
 }
 
 void heads_structs_encode(benchmark::State &state)
@@ -183,7 +183,7 @@ void heads_decode_wide(benchmark::State &state)
             benchmark::DoNotOptimize(r);
         }
     }
-    state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * count));
+    state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(count));
 }
 
 void heads_item_size_long(benchmark::State &state)
@@ -210,7 +210,7 @@ void heads_item_size_long(benchmark::State &state)
             benchmark::DoNotOptimize(r);
         }
     }
-    state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * count));
+    state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(count));
 }
 
 void heads_encode_large(benchmark::State &state)
@@ -229,11 +229,11 @@ void heads_encode_large(benchmark::State &state)
     }
     for (auto _ : state) {
         out.clear();
-        auto const n = cbor::encode(**tree, out);
+        auto n = cbor::encode(**tree, out);
         benchmark::DoNotOptimize(n);
         benchmark::DoNotOptimize(out.data());
     }
-    state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()));
+    state.SetItemsProcessed(state.iterations());
 }
 
 }

@@ -75,7 +75,7 @@ void open(benchmark::State &state)
             }
         }
     }
-    state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * count));
+    state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(count));
 }
 
 }

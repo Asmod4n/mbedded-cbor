@@ -43,7 +43,7 @@ void at_path_fixed(benchmark::State &state)
             benchmark::DoNotOptimize(r);
         }
     }
-    state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * count));
+    state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(count));
 }
 
 void at_path_query(benchmark::State &state)
@@ -68,7 +68,7 @@ void at_path_query(benchmark::State &state)
             benchmark::DoNotOptimize(r);
         }
     }
-    state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * count));
+    state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(count));
 }
 
 }

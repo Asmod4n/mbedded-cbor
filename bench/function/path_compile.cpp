@@ -61,7 +61,7 @@ void path_compile(benchmark::State &state)
             benchmark::DoNotOptimize(q);
         }
     }
-    state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * texts.size()));
+    state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(texts.size()));
 }
 
 }

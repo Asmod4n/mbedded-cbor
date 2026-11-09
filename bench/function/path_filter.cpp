@@ -47,7 +47,7 @@ void path_filter(benchmark::State &state)
             benchmark::DoNotOptimize(r);
         }
     }
-    state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * owners.size()));
+    state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(owners.size()));
 }
 
 }

@@ -66,7 +66,7 @@ void diagnostic_notation(benchmark::State &state)
         }
         benchmark::DoNotOptimize(written);
     }
-    state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * items.size()));
+    state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(items.size()));
 }
 
 }

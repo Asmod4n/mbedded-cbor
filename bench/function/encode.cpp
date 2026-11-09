@@ -46,20 +46,20 @@ void encode(benchmark::State &state)
         if constexpr (Span) {
             std::span<char> rest(out);
             for (std::size_t i = 0; i < count; ++i) {
-                auto const n = cbor::encode(**sample, rest);
+                auto n = cbor::encode(**sample, rest);
                 benchmark::DoNotOptimize(n);
                 rest = rest.subspan(*n);
             }
         } else {
             out.clear();
             for (std::size_t i = 0; i < count; ++i) {
-                auto const n = cbor::encode(**sample, out);
+                auto n = cbor::encode(**sample, out);
                 benchmark::DoNotOptimize(n);
             }
         }
         benchmark::DoNotOptimize(out.data());
     }
-    state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * count));
+    state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(count));
 }
 
 }

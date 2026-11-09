@@ -3,7 +3,7 @@
 # /run-dir/out/result.json.
 set -eu
 dir=/run-dir
-flags=${FLAGS:-"-std=c++26 -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -DNDEBUG -pipe"}
+flags=${FLAGS:-"-std=c++26 -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -DNDEBUG -pipe"}
 link_flags="-pie -fuse-ld=mold"
 compilers="gxx:g++-16 clang:clang++-23"
 variants="a aa b"

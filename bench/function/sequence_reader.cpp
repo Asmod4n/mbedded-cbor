@@ -72,7 +72,7 @@ void run(benchmark::State &state, std::size_t const piece_size, bool const queue
             return;
         }
     }
-    state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * expected));
+    state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(expected));
 }
 
 void sequence_reader_whole(benchmark::State &state)

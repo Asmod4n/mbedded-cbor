@@ -40,7 +40,7 @@ void decode(benchmark::State &state)
             benchmark::DoNotOptimize(r);
         }
     }
-    state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * messages.size()));
+    state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(messages.size()));
 }
 
 }

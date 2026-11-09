@@ -52,7 +52,7 @@ void lazy_read(benchmark::State &state)
         }
         benchmark::DoNotOptimize(sum);
     }
-    state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * lazies.size()));
+    state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(lazies.size()));
 }
 
 }

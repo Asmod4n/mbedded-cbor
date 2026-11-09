@@ -65,7 +65,7 @@ void schema_at_path(benchmark::State &state)
         }
         benchmark::DoNotOptimize(sum);
     }
-    state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * accessors.size()));
+    state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(accessors.size()));
 }
 
 }
