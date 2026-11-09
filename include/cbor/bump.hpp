@@ -24,21 +24,21 @@ class bump {
     std::pmr::forward_list<std::pmr::string> chars;
     std::pmr::forward_list<std::pmr::vector<std::byte>> bytes;
 
-    template <class Chunk>
-    CBOR_NEVER_INLINE static void chunk_added(std::pmr::forward_list<Chunk> &chunks, std::size_t const size)
+    template <auto Chunks>
+    CBOR_NEVER_INLINE void chunk_added(std::size_t const size)
     {
-        chunks.emplace_front().reserve(size);
+        (this->*Chunks).emplace_front().reserve(size);
     }
 
-    template <class Chunk, class E>
-    CBOR_ALWAYS_INLINE static std::span<E const> appended(std::pmr::forward_list<Chunk> &chunks,
-                                                          std::span<E const> const part, std::size_t const chunk_size)
+    template <auto Chunks, class E>
+    CBOR_ALWAYS_INLINE std::span<E const> appended(std::span<E const> const part, std::size_t const chunk_size)
     {
+        auto &chunks = this->*Chunks;
         if (chunks.empty() ||
             !detail::validity::bytes_fit(part.size(), chunks.front().capacity() - chunks.front().size()))
             [[unlikely]]
-            chunk_added(chunks, std::max(part.size(), chunk_size));
-        Chunk &chunk = chunks.front();
+            chunk_added<Chunks>(std::max(part.size(), chunk_size));
+        auto &chunk = chunks.front();
         std::size_t const at = chunk.size();
         chunk.append_range(part);
         return std::span<E const>(chunk).subspan(at);
@@ -51,12 +51,12 @@ public:
 
     CBOR_ALWAYS_INLINE std::string_view alloc_str(std::string_view const text, std::size_t const chunk_size)
     {
-        return std::string_view(appended(chars, std::span(text), chunk_size));
+        return std::string_view(appended<&bump::chars>(std::span(text), chunk_size));
     }
 
     std::span<std::byte const> alloc_slice_copy(std::span<std::byte const> const from, std::size_t const chunk_size)
     {
-        return appended(bytes, from, chunk_size);
+        return appended<&bump::bytes>(from, chunk_size);
     }
 };
 
