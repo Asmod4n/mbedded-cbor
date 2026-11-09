@@ -719,6 +719,9 @@ class path
     template <class F>
     static std::expected<void, error> for_each_child(lazy const &node, F const &f);
 
+    template <class F>
+    static std::expected<void, error> for_each_sliced(lazy const &node, selector const &s, F const &f);
+
     template <fixed_string Path>
     static consteval bool generated_form();
 
@@ -1822,43 +1825,7 @@ inline std::expected<void, error> path::apply_selector(query_view const v, selec
             }
             return append(child);
         });
-    node.throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
-    auto const found = lazy::resolve<true>(node);
-    if (!found) [[unlikely]]
-        return std::unexpected(found.error());
-    lazy const content{found->source, std::to_underlying(found->item_at), {}};
-    bool const elements_first = found->h.major == major_type::array || heads::is_typed_array(found->h);
-    std::vector<lazy> children;
-    if (elements_first) {
-        auto const elements = content.elements();
-        if (!elements) [[unlikely]]
-            return std::unexpected(elements.error());
-        for (auto const element : *elements) {
-            if (!element) [[unlikely]]
-                return std::unexpected(element.error());
-            children.push_back(*element);
-        }
-    }
-    auto const len = static_cast<std::int64_t>(children.size());
-    if (s.step == 0)
-        return {};
-    auto const normalize = [len](std::int64_t const i) { return i >= 0 ? i : len + i; };
-    std::int64_t const start = normalize(s.start.value_or(s.step >= 0 ? 0 : len - 1));
-    std::int64_t const end = s.end ? normalize(*s.end) : (s.step >= 0 ? len : -1);
-    if (s.step > 0) {
-        std::int64_t const lower = std::min(std::max(start, std::int64_t{0}), len);
-        std::int64_t const upper = std::min(std::max(end, std::int64_t{0}), len);
-        for (std::int64_t i = lower; i < upper; i += s.step)
-            if (auto const r = append(children[static_cast<std::size_t>(i)]); !r) [[unlikely]]
-                return r;
-    } else {
-        std::int64_t const upper = std::min(std::max(start, std::int64_t{-1}), len - 1);
-        std::int64_t const lower = std::min(std::max(end, std::int64_t{-1}), len - 1);
-        for (std::int64_t i = upper; lower < i; i += s.step)
-            if (auto const r = append(children[static_cast<std::size_t>(i)]); !r) [[unlikely]]
-                return r;
-    }
-    return {};
+    return for_each_sliced(node, s, append);
 }
 
 inline std::expected<void, error> path::apply_segment(query_view const v, segment const &s,
@@ -2098,16 +2065,52 @@ std::expected<void, error> path::for_each_child(lazy const &node, F const &f)
     return {};
 }
 
+template <class F>
+std::expected<void, error> path::for_each_sliced(lazy const &node, selector const &s, F const &f)
+{
+    node.throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
+    auto const found = lazy::resolve<true>(node);
+    if (!found) [[unlikely]]
+        return std::unexpected(found.error());
+    lazy const content{found->source, std::to_underlying(found->item_at), {}};
+    bool const elements_first = found->h.major == major_type::array || heads::is_typed_array(found->h);
+    std::vector<lazy> children;
+    if (elements_first) {
+        auto const elements = content.elements();
+        if (!elements) [[unlikely]]
+            return std::unexpected(elements.error());
+        for (auto const element : *elements) {
+            if (!element) [[unlikely]]
+                return std::unexpected(element.error());
+            children.push_back(*element);
+        }
+    }
+    auto const len = static_cast<std::int64_t>(children.size());
+    if (s.step == 0)
+        return {};
+    auto const normalize = [len](std::int64_t const i) { return i >= 0 ? i : len + i; };
+    std::int64_t const start = normalize(s.start.value_or(s.step >= 0 ? 0 : len - 1));
+    std::int64_t const end = s.end ? normalize(*s.end) : (s.step >= 0 ? len : -1);
+    if (s.step > 0) {
+        std::int64_t const lower = std::min(std::max(start, std::int64_t{0}), len);
+        std::int64_t const upper = std::min(std::max(end, std::int64_t{0}), len);
+        for (std::int64_t i = lower; i < upper; i += s.step)
+            if (auto const r = f(children[static_cast<std::size_t>(i)]); !r) [[unlikely]]
+                return r;
+    } else {
+        std::int64_t const upper = std::min(std::max(start, std::int64_t{-1}), len - 1);
+        std::int64_t const lower = std::min(std::max(end, std::int64_t{-1}), len - 1);
+        for (std::int64_t i = upper; lower < i; i += s.step)
+            if (auto const r = f(children[static_cast<std::size_t>(i)]); !r) [[unlikely]]
+                return r;
+    }
+    return {};
+}
+
 template <fixed_string Path>
 consteval bool path::generated_form()
 {
     constexpr auto const &q = compiled_of<Path>();
-    for (segment const &s : std::get<0>(q))
-        if (s.descendant)
-            return false;
-    for (selector const &s : std::get<1>(q))
-        if (s.kind == selector::kind::slice)
-            return false;
     for (logical_expr const &e : std::get<2>(q)) {
         switch (e.kind) {
         case logical_expr::kind::logical_or:
@@ -2219,7 +2222,9 @@ std::expected<void, error> path::generated_selector(lazy const &node, lazy const
             return generated_segment<Path, Segment + 1, Count>(child, root, nodes, counts);
         }
     };
-    if constexpr (s.kind == selector::kind::key || s.kind == selector::kind::index) {
+    if constexpr (s.kind == selector::kind::slice) {
+        return for_each_sliced(node, s, down);
+    } else if constexpr (s.kind == selector::kind::key || s.kind == selector::kind::index) {
         auto const child = [&] {
             if constexpr (s.kind == selector::kind::index)
                 return select_index(node, s.index);
@@ -2257,7 +2262,15 @@ std::expected<void, error> path::generated_segment(lazy const &node, lazy const 
         return ((r = generated_selector<Path, Segment, s.selector_at + J, Count>(node, root, nodes, counts)).has_value() &&
                 ...);
     }(std::make_index_sequence<s.selector_count>{});
-    return r;
+    if constexpr (s.descendant) {
+        if (!r) [[unlikely]]
+            return r;
+        return for_each_child(node, [&](lazy const &child) {
+            return generated_segment<Path, Segment, Count>(child, root, nodes, counts);
+        });
+    } else {
+        return r;
+    }
 }
 
 template <fixed_string Path>

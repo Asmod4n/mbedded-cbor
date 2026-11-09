@@ -1441,7 +1441,7 @@ void same_in_both_modes(std::span<std::string const> const messages)
 
 } // namespace
 
-// Each kind of selector (key, index, wildcard, filter), each comparison (==, !=, <, <=, >, >=), each logical operator
+// Each kind of selector (key, index, wildcard, slice, filter), the descendant segment, each comparison (==, !=, <, <=, >, >=), each logical operator
 // (&&, ||, !), the existence test, a literal of each major kind and the operands @, @.a and @[0] run in the compile
 // mode and at run time over the same messages. The messages hold an array, a map, nested items, floats, an item that
 // ends too early and a path that selects more nodes than the item has bytes, where the two modes could differ.
@@ -1489,4 +1489,16 @@ TEST_CASE("path: the compile mode and the run-time mode give the same nodelist o
     same_in_both_modes<"$[?count(@[*]) == length(@)]">(messages);
     same_in_both_modes<"$[?length(length(@)) == 1]">(messages);
     same_in_both_modes<"$[?length(@) == 1.0]">(messages);
+    same_in_both_modes<"$..a">(messages);
+    same_in_both_modes<"$..*">(messages);
+    same_in_both_modes<"$..[0]">(messages);
+    same_in_both_modes<"$..[?@ == 1]">(messages);
+    same_in_both_modes<"$.a..[*]">(messages);
+    same_in_both_modes<"$[1:3]">(messages);
+    same_in_both_modes<"$[-2:]">(messages);
+    same_in_both_modes<"$[::2]">(messages);
+    same_in_both_modes<"$[::-1]">(messages);
+    same_in_both_modes<"$[3:0:-2]">(messages);
+    same_in_both_modes<"$[0:0]">(messages);
+    same_in_both_modes<"$[*][1:]">(messages);
 }
