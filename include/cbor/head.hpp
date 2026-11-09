@@ -118,7 +118,6 @@ class heads
 
     static constexpr std::size_t head_padding = sizeof(std::uint64_t);
 
-    template <bool Exact = false>
     CBOR_ALWAYS_INLINE static std::size_t write_head(std::span<char> const out, std::size_t const at, major_type const major,
                                                      std::uint8_t const info, std::uint64_t const argument)
     {
@@ -131,26 +130,16 @@ class heads
         auto const bytes = big_endian(argument << ((std::numeric_limits<std::uint64_t>::digits -
                                                     std::numeric_limits<std::uint8_t>::digits * width) &
                                                    (std::numeric_limits<std::uint64_t>::digits - 1)));
-        if constexpr (Exact) {
-            if (!detail::validity::bytes_fit(initial_byte_size + sizeof(std::uint64_t), out.size() - at))
-                [[unlikely]] {
-                auto const field = out.subspan(at, initial_byte_size + width);
-                field.front() = initial_byte(major, info);
-                std::ranges::copy(std::span(bytes).first(width), field.subspan(initial_byte_size).begin());
-                return initial_byte_size + width;
-            }
-        }
         auto const field = out.subspan(at).template first<initial_byte_size + sizeof(std::uint64_t)>();
         field.front() = initial_byte(major, info);
         std::copy(bytes.begin(), bytes.end(), field.template last<sizeof(std::uint64_t)>().begin());
         return initial_byte_size + width;
     }
 
-    template <bool Exact = false>
     CBOR_ALWAYS_INLINE static std::size_t write_head(std::span<char> const out, std::size_t const at, major_type const major,
                                                      std::uint64_t const argument)
     {
-        return write_head<Exact>(out, at, major, preferred_argument_info(argument), argument);
+        return write_head(out, at, major, preferred_argument_info(argument), argument);
     }
 
     template <class Container>
