@@ -118,22 +118,30 @@ class heads
 
     static constexpr std::size_t head_padding = sizeof(std::uint64_t);
 
-    CBOR_ALWAYS_INLINE static std::size_t write_head(std::span<char> const out, std::size_t const at, major_type const major,
-                                                     std::uint8_t const info, std::uint64_t const argument)
+    static constexpr std::size_t head_size_max = initial_byte_size + sizeof(std::uint64_t);
+
+    CBOR_ALWAYS_INLINE static constexpr std::size_t head_encode(std::span<char, head_size_max> const field,
+                                                                major_type const major, std::uint8_t const info,
+                                                                std::uint64_t const argument)
     {
         static_assert(argument_size(std::to_underlying(
                           rfc8949::additional_information::eight_byte_argument)) <= sizeof(std::uint64_t),
                       "The widest argument must fit in the bytes of one std::uint64_t.");
-        static_assert(head_padding >= sizeof(std::uint64_t),
-                      "The padding after the last head must hold the bytes that a head writes past its own size.");
         std::size_t const width = argument_size(info);
         auto const bytes = big_endian(argument << ((std::numeric_limits<std::uint64_t>::digits -
                                                     std::numeric_limits<std::uint8_t>::digits * width) &
                                                    (std::numeric_limits<std::uint64_t>::digits - 1)));
-        auto const field = out.subspan(at).template first<initial_byte_size + sizeof(std::uint64_t)>();
         field.front() = initial_byte(major, info);
         std::copy(bytes.begin(), bytes.end(), field.template last<sizeof(std::uint64_t)>().begin());
         return initial_byte_size + width;
+    }
+
+    CBOR_ALWAYS_INLINE static std::size_t write_head(std::span<char> const out, std::size_t const at, major_type const major,
+                                                     std::uint8_t const info, std::uint64_t const argument)
+    {
+        static_assert(head_padding >= sizeof(std::uint64_t),
+                      "The padding after the last head must hold the bytes that a head writes past its own size.");
+        return head_encode(out.subspan(at).template first<head_size_max>(), major, info, argument);
     }
 
     CBOR_ALWAYS_INLINE static std::size_t write_head(std::span<char> const out, std::size_t const at, major_type const major,

@@ -434,41 +434,26 @@ struct encoding::binary_writer {
 
     std::expected<void, std::errc> encode_head(major_type const major, std::uint8_t const info, std::uint64_t const argument)
     {
-        std::size_t const bytes = heads::argument_size(info);
-        std::uint64_t const big =
-            std::byteswap(argument << ((std::numeric_limits<std::uint64_t>::digits -
-                                        std::numeric_limits<std::uint8_t>::digits * bytes) &
-                                       (std::numeric_limits<std::uint64_t>::digits - 1)));
         if constexpr (!direct) {
-            if (!detail::validity::bytes_fit(heads::initial_byte_size + sizeof(std::uint64_t),
-                                             block.size() - used)) [[unlikely]]
+            if (!detail::validity::bytes_fit(heads::head_size_max, block.size() - used)) [[unlikely]]
                 if (auto const r = refill(item_size_max); !r) [[unlikely]]
                     return r;
-            std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> head;
-            static_assert(heads::initial_byte_size + sizeof big <= std::tuple_size_v<decltype(head)>,
-                          "A head must hold the initial byte and the eight argument bytes.");
-            std::get<0>(head) = heads::initial_byte(major, info);
-            std::ranges::copy(std::bit_cast<std::array<char, sizeof big>>(big),
-                              std::span(head).template subspan<heads::initial_byte_size>().begin());
+            std::array<char, heads::head_size_max> head;
+            std::size_t const size = heads::head_encode(head, major, info, argument);
             std::ranges::copy(head, std::span(block).subspan(used).begin());
-            used += heads::initial_byte_size + bytes;
+            used += size;
             return {};
         } else {
             std::span<char> const out = block;
             std::size_t const at = used;
-            std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> tail;
-            static_assert(heads::initial_byte_size + sizeof big <= std::tuple_size_v<decltype(tail)>,
-                          "A head must hold the initial byte and the eight argument bytes.");
+            std::array<char, heads::head_size_max> tail;
             bool const near_end = !detail::validity::bytes_fit(tail.size(), out.size() - at);
-            std::span<char, heads::initial_byte_size + sizeof(std::uint64_t)> const item =
-                near_end ? std::span(tail)
-                         : out.subspan(at).template first<heads::initial_byte_size + sizeof(std::uint64_t)>();
-            item.front() = heads::initial_byte(major, info);
-            std::ranges::copy(std::bit_cast<std::array<char, sizeof big>>(big),
-                              item.template subspan<heads::initial_byte_size>().begin());
+            std::span<char, heads::head_size_max> const item =
+                near_end ? std::span(tail) : out.subspan(at).template first<heads::head_size_max>();
+            std::size_t const size = heads::head_encode(item, major, info, argument);
             if (near_end) [[unlikely]]
-                return write_item(tail, heads::initial_byte_size + bytes);
-            used = at + heads::initial_byte_size + bytes;
+                return write_item(tail, size);
+            used = at + size;
             return {};
         }
     }
