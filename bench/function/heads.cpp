@@ -7,6 +7,8 @@
 // of doubles, written by cbor::structs and by cbor::schema.
 // heads_decode_wide: cbor::decode of a message with arguments of 2, 4 and 8 bytes and a text with a 2-byte length.
 // heads_item_size_long: cbor::item_size of an array of 256 maps, so the fast read of a head has 9 bytes after it.
+// heads_encode_large: cbor::encode of a tree of 100000 texts into one std::string, a message far larger than the
+// buffer of the encoder.
 // Each iteration handles every message or value of a buffer of COLD_BYTES bytes.
 #include <benchmark/benchmark.h>
 #include <cbor/cbor.hpp>
@@ -50,6 +52,7 @@ constexpr std::size_t long_array = 256;
 constexpr std::size_t long_text = 300;
 constexpr std::size_t encoder_elements = 9;
 constexpr std::size_t wide_elements = 5;
+constexpr std::size_t large_texts = 100000;
 
 std::size_t cold_bytes()
 {
@@ -210,6 +213,29 @@ void heads_item_size_long(benchmark::State &state)
     state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * count));
 }
 
+void heads_encode_large(benchmark::State &state)
+{
+    std::string message;
+    cbor::encoder<std::string> e(message);
+    (void)e.array(large_texts);
+    for (std::size_t i = 0; i < large_texts; ++i)
+        (void)e.text_string("abcdefgh"sv);
+    (void)e.finish();
+    auto const tree = cbor::decode(message);
+    std::string out;
+    if (!tree || !cbor::encode(**tree, out) || out != message) {
+        state.SkipWithError("cbor::encode does not give the large message back");
+        return;
+    }
+    for (auto _ : state) {
+        out.clear();
+        auto const n = cbor::encode(**tree, out);
+        benchmark::DoNotOptimize(n);
+        benchmark::DoNotOptimize(out.data());
+    }
+    state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()));
+}
+
 }
 
 BENCHMARK(heads_encoder)->Unit(benchmark::kMillisecond);
@@ -218,4 +244,5 @@ BENCHMARK(heads_structs_encode)->Unit(benchmark::kMillisecond);
 BENCHMARK(heads_schema_encode)->Unit(benchmark::kMillisecond);
 BENCHMARK(heads_decode_wide)->Unit(benchmark::kMillisecond);
 BENCHMARK(heads_item_size_long)->Unit(benchmark::kMillisecond);
+BENCHMARK(heads_encode_large)->Unit(benchmark::kMillisecond);
 BENCHMARK_MAIN();
