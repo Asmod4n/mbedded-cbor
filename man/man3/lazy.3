@@ -1,7 +1,7 @@
 '\" t
-.TH "cbor::lazy" "3" "2026-11-08" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.TH "cbor::lazy" "3" "2026-11-09" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
 .SH NAME
-cbor::lazy, cbor::lazy::take_ownership, cbor::lazy::view, cbor::lazy::at, cbor::lazy::operator[], cbor::lazy::at_path, cbor::lazy::get, cbor::lazy::type, cbor::lazy::size, cbor::lazy::empty, cbor::lazy::elements, cbor::lazy::entries, cbor::lazy::clone, cbor::lazy_elements, cbor::lazy_entries \- read a message in place, step by step
+cbor::lazy, cbor::lazy::adopt, cbor::lazy::view, cbor::lazy::at, cbor::lazy::operator[], cbor::lazy::at_path, cbor::lazy::get, cbor::lazy::type, cbor::lazy::size, cbor::lazy::empty, cbor::lazy::elements, cbor::lazy::entries, cbor::lazy::clone, cbor::lazy_elements, cbor::lazy_entries \- read a message in place, step by step
 .SH SYNOPSIS
 .IP
 .EX
@@ -21,7 +21,7 @@ cbor::lazy, cbor::lazy::take_ownership, cbor::lazy::view, cbor::lazy::at, cbor::
     static std::expected<lazy, error> view(std::shared_ptr<Encoded const> owner);
 
     \f[B]template\f[R] <owning_range_of_chars Encoded>
-    static std::expected<lazy, error> take_ownership(Encoded &&encoded);
+    static std::expected<lazy, error> adopt(Encoded &&encoded);
     std::expected<lazy, error> at(std::string_view key) const;
     std::expected<lazy, error> at(key k) const;
     std::expected<lazy, error> at(std::size_t index) const;
@@ -61,7 +61,7 @@ cbor::lazy, cbor::lazy::take_ownership, cbor::lazy::view, cbor::lazy::at, cbor::
 .IP
 .EX
 \f[B]template\f[R] <owning_range_of_chars Encoded>
-static std::expected<lazy, error> take_ownership(Encoded &&encoded);
+static std::expected<lazy, error> adopt(Encoded &&encoded);
 .EE
 .IP
 .EX
@@ -190,14 +190,13 @@ A position in one top\-level item: the owner of the bytes, the bytes and
 an offset.
 It holds no decoded value.
 Each member function reads the bytes at the offset when it is called.
-cbor::lazy::view() and cbor::lazy::take_ownership() set the data
-members.
+cbor::lazy::view() and cbor::lazy::adopt() set the data members.
 A copy of a lazy is a second position in the same bytes.
 Several threads read one lazy at the same time.
 A \f[CR]nodelist\f[R] is the result of a path that selects many nodes.
 A lazy made with \f[CR]cbor::lazy{}\f[R] holds no top\-level item; each
 member function then throws \f[CR]std::logic_error\f[R].
-.SS cbor::lazy::take_ownership
+.SS cbor::lazy::adopt
 Makes the lazy of the top\-level item in \f[CR]encoded\f[R], and moves
 the bytes into a new owner.
 Nothing is copied.
@@ -375,6 +374,9 @@ The view gives at most \f[CR]size()\f[R] values.
 .IP \(bu 2
 \f[CR]std::logic_error\f[R]: a member function of a lazy that holds no
 top\-level item
+.SS cbor::lazy::adopt
+.IP \(bu 2
+\f[CR]not_enough_memory\f[R]: an allocation of the owner fails
 .SS cbor::lazy::view
 .IP \(bu 2
 \f[CR]std::logic_error\f[R]: an empty \f[CR]owner\f[R] in the first form
@@ -448,16 +450,16 @@ broken item, as cbor::decode() gives
 .IP
 .EX
 \f[I]// bytes: a std::string with [1, 2]\f[R]
-\f[B]auto\f[R] const doc = cbor::lazy::take_ownership(std::move(bytes));
+\f[B]auto\f[R] const doc = cbor::lazy::adopt(std::move(bytes));
 cbor::lazy const copy = *doc;
 \f[B]auto\f[R] const second = copy.at(1)\->get<int>();  \f[I]// 2\f[R]
 \f[I]// cbor::lazy{}.size() throws std::logic_error\f[R]
 .EE
-.SS cbor::lazy::take_ownership
+.SS cbor::lazy::adopt
 .IP
 .EX
 \f[I]// bytes: a std::string with {\(dqid\(dq: 42}\f[R]
-\f[B]auto\f[R] const doc = cbor::lazy::take_ownership(std::move(bytes));
+\f[B]auto\f[R] const doc = cbor::lazy::adopt(std::move(bytes));
 \f[B]if\f[R] (doc)
     id = doc\->at(\(dqid\(dq)\->get<std::int64_t>().value_or(0);  \f[I]// 42\f[R]
 .EE
@@ -472,7 +474,7 @@ cbor::lazy const copy = *doc;
 .IP
 .EX
 \f[I]// bytes: a std::string with {\(dqcars\(dq: [{\(dqhp\(dq: 5}, {\(dqhp\(dq: 7}], 7: \(dqseven\(dq}\f[R]
-\f[B]auto\f[R] const doc = cbor::lazy::take_ownership(std::move(bytes));
+\f[B]auto\f[R] const doc = cbor::lazy::adopt(std::move(bytes));
 \f[B]auto\f[R] const hp = doc\->at(\(dqcars\(dq)\->at(1)\->at(\(dqhp\(dq)\->get<int>();  \f[I]// 7\f[R]
 \f[B]auto\f[R] const seven = doc\->at(cbor::key{7})\->get<std::string_view>();  \f[I]// a ref to \(dqseven\(dq\f[R]
 \f[B]auto\f[R] const bus = doc\->at(\(dqbus\(dq);                                   \f[I]// key_not_found\f[R]
@@ -482,7 +484,7 @@ cbor::lazy const copy = *doc;
 .IP
 .EX
 \f[I]// bytes: a std::string with {\(dqcars\(dq: [5, 7]}\f[R]
-\f[B]auto\f[R] const doc = cbor::lazy::take_ownership(std::move(bytes));
+\f[B]auto\f[R] const doc = cbor::lazy::adopt(std::move(bytes));
 \f[B]auto\f[R] const second = (*(*doc)[\(dqcars\(dq])[1]\->get<int>();  \f[I]// 7\f[R]
 \f[B]auto\f[R] const bus = (*doc)[\(dqbus\(dq];                        \f[I]// key_not_found\f[R]
 .EE
@@ -490,7 +492,7 @@ cbor::lazy const copy = *doc;
 .IP
 .EX
 \f[I]// bytes: a std::string with {\(dquser\(dq: {\(dqid\(dq: 42, \(dqtags\(dq: [\(dqa\(dq, \(dqb\(dq]}}\f[R]
-\f[B]auto\f[R] const doc = cbor::lazy::take_ownership(std::move(bytes));
+\f[B]auto\f[R] const doc = cbor::lazy::adopt(std::move(bytes));
 \f[B]auto\f[R] const id = doc\->at_path<\(dq$.user.id\(dq, std::int64_t>();           \f[I]// 42\f[R]
 \f[B]auto\f[R] const last = doc\->at_path<\(dq$.user.tags[\-1]\(dq, std::string_view>(); \f[I]// a ref to \(dqb\(dq\f[R]
 \f[B]auto\f[R] const tags = doc\->at_path<\(dq$.user.tags[*]\(dq, cbor::nodelist>();    \f[I]// 2 nodes\f[R]
@@ -499,7 +501,7 @@ cbor::lazy const copy = *doc;
 .IP
 .EX
 \f[I]// bytes: a std::string with {\(dqname\(dq: \(dqann\(dq, \(dqage\(dq: 300}\f[R]
-\f[B]auto\f[R] const doc = cbor::lazy::take_ownership(std::move(bytes));
+\f[B]auto\f[R] const doc = cbor::lazy::adopt(std::move(bytes));
 \f[B]auto\f[R] const name = doc\->at(\(dqname\(dq)\->get<std::string_view>();  \f[I]// a ref to \(dqann\(dq\f[R]
 \f[B]auto\f[R] const age = doc\->at(\(dqage\(dq)\->get<std::int64_t>();        \f[I]// 300\f[R]
 \f[B]auto\f[R] const small = doc\->at(\(dqage\(dq)\->get<std::uint8_t>();      \f[I]// number_out_of_range\f[R]
@@ -509,7 +511,7 @@ cbor::lazy const copy = *doc;
 .IP
 .EX
 \f[I]// bytes: a std::string with [1, \(dqa\(dq, 2(h\(aq05\(aq), 1(0)]\f[R]
-\f[B]auto\f[R] const doc = cbor::lazy::take_ownership(std::move(bytes));
+\f[B]auto\f[R] const doc = cbor::lazy::adopt(std::move(bytes));
 \f[B]auto\f[R] const one = doc\->at(0)\->type();     \f[I]// cbor::type::unsigned_integer\f[R]
 \f[B]auto\f[R] const text = doc\->at(1)\->type();    \f[I]// cbor::type::text_string\f[R]
 \f[B]auto\f[R] const bignum = doc\->at(2)\->type();  \f[I]// cbor::type::unsigned_integer\f[R]
@@ -519,7 +521,7 @@ cbor::lazy const copy = *doc;
 .IP
 .EX
 \f[I]// bytes: a std::string with {\(dqa\(dq: 1, \(dqb\(dq: 2}\f[R]
-\f[B]auto\f[R] const map = cbor::lazy::take_ownership(std::move(bytes));
+\f[B]auto\f[R] const map = cbor::lazy::adopt(std::move(bytes));
 \f[B]auto\f[R] const pairs = map\->size();          \f[I]// 2\f[R]
 \f[B]auto\f[R] const none = map\->at(\(dqa\(dq)\->size();  \f[I]// not_indexable\f[R]
 .EE
@@ -527,7 +529,7 @@ cbor::lazy const copy = *doc;
 .IP
 .EX
 \f[I]// bytes: a std::string with {\(dqa\(dq: [], \(dqb\(dq: [1]}\f[R]
-\f[B]auto\f[R] const doc = cbor::lazy::take_ownership(std::move(bytes));
+\f[B]auto\f[R] const doc = cbor::lazy::adopt(std::move(bytes));
 \f[B]auto\f[R] const a = doc\->at(\(dqa\(dq)\->empty();  \f[I]// true\f[R]
 \f[B]auto\f[R] const b = doc\->at(\(dqb\(dq)\->empty();  \f[I]// false\f[R]
 .EE
@@ -535,7 +537,7 @@ cbor::lazy const copy = *doc;
 .IP
 .EX
 \f[I]// bytes: a std::string with [1, 2, 3]\f[R]
-\f[B]auto\f[R] const array = cbor::lazy::take_ownership(std::move(bytes));
+\f[B]auto\f[R] const array = cbor::lazy::adopt(std::move(bytes));
 int sum = 0;
 \f[B]for\f[R] (\f[B]auto\f[R] const element : *array\->elements())
     \f[B]if\f[R] (element)
@@ -546,7 +548,7 @@ int sum = 0;
 .IP
 .EX
 \f[I]// bytes: a std::string with {\(dqa\(dq: 1, \(dqb\(dq: 2}\f[R]
-\f[B]auto\f[R] const map = cbor::lazy::take_ownership(std::move(bytes));
+\f[B]auto\f[R] const map = cbor::lazy::adopt(std::move(bytes));
 \f[B]for\f[R] (\f[B]auto\f[R] const pair : *map\->entries()) {
     \f[B]if\f[R] (!pair)
         \f[B]break\f[R];
@@ -559,14 +561,14 @@ int sum = 0;
 .IP
 .EX
 \f[I]// bytes: a std::string with {\(dqa\(dq: [1, \(dqx\(dq]}\f[R]
-\f[B]auto\f[R] const doc = cbor::lazy::take_ownership(std::move(bytes));
+\f[B]auto\f[R] const doc = cbor::lazy::adopt(std::move(bytes));
 \f[B]auto\f[R] const copy = doc\->at(\(dqa\(dq)\->clone();  \f[I]// the tree of [1, \(dqx\(dq], valid after doc ends\f[R]
 .EE
 .SS cbor::lazy_elements
 .IP
 .EX
 \f[I]// bytes: a std::string with [{\(dqage\(dq: 31}, {\(dqage\(dq: 20}, {\(dqage\(dq: 40}]\f[R]
-\f[B]auto\f[R] const people = cbor::lazy::take_ownership(std::move(bytes));
+\f[B]auto\f[R] const people = cbor::lazy::adopt(std::move(bytes));
 \f[B]auto\f[R] const view = *people\->elements();  \f[I]// 3 elements\f[R]
 \f[B]auto\f[R] const older = std::ranges::count_if(view, [](std::expected<cbor::lazy, cbor::error> const &e) {
     \f[B]return\f[R] e && e\->at(\(dqage\(dq)\->get<int>().value_or(0) > 30;
@@ -576,7 +578,7 @@ int sum = 0;
 .IP
 .EX
 \f[I]// bytes: a std::string with {\(dqa\(dq: 1, \(dqb\(dq: 2, \(dqc\(dq: 3}\f[R]
-\f[B]auto\f[R] const map = cbor::lazy::take_ownership(std::move(bytes));
+\f[B]auto\f[R] const map = cbor::lazy::adopt(std::move(bytes));
 \f[B]auto\f[R] const view = *map\->entries();                                \f[I]// 3 pairs\f[R]
 \f[B]auto\f[R] const rest = std::ranges::distance(view | std::views::drop(1));  \f[I]// 2\f[R]
 .EE
