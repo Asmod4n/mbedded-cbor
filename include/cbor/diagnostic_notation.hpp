@@ -1168,24 +1168,6 @@ class extended_diagnostic_notation
     }
 
     template <bool Checked>
-    static std::expected<heads::head, error> decode_diagnostic_head(heads::decoder<Checked> &d)
-    {
-        if (auto const r = detail::validity::check_pending_items(heads::initial_byte_size, d.encoded.size());
-            !r) [[unlikely]]
-            return std::unexpected(r.error());
-        auto const initial = static_cast<std::uint8_t>(d.encoded.front());
-        auto const major = static_cast<major_type>(initial >> rfc8949::additional_information_bits);
-        std::uint8_t const info = heads::additional_information_of(initial);
-        if (error const r = detail::validity::check_additional_information(major, info).error_or(error{});
-            r != error{}) [[unlikely]]
-            return std::unexpected(r);
-        if (info != std::to_underlying(rfc8949::additional_information::indefinite_length))
-            return d.decode_head();
-        d.encoded.remove_prefix(1);
-        return heads::head{major, info, 0};
-    }
-
-    template <bool Checked>
     static bool break_consumed(heads::decoder<Checked> &d)
     {
         if (!detail::validity::bytes_fit(heads::initial_byte_size, d.encoded.size()) ||
@@ -1203,9 +1185,10 @@ class extended_diagnostic_notation
     {
         if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
             return std::unexpected(r.error());
-        auto const h = decode_diagnostic_head(d);
+        auto const h = heads::read_raw_head<Checked>(d.encoded, detail::validity::offset{});
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
+        d.encoded = detail::validity::subspan(d.encoded, h->at);
         bool const indefinite =
             h->info == std::to_underlying(rfc8949::additional_information::indefinite_length);
         switch (h->major) {
