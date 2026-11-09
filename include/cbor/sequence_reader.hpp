@@ -9,19 +9,17 @@
 #pragma once
 
 #include <algorithm>
-#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <expected>
 #include <limits>
 #include <memory>
-#include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 #include "error.hpp"
 #include "head.hpp"
@@ -102,8 +100,7 @@ class sequence_reader
 
     std::shared_ptr<std::string> buffer = std::make_shared<std::string>();
     std::size_t item_begin = 0;
-    std::vector<held_piece> pieces;
-    std::size_t piece_first = 0;
+    std::deque<held_piece> pieces;
     std::size_t piece_offset = 0;
     std::size_t scanned = 0;
     std::uint64_t phase_end = 0;
@@ -228,17 +225,12 @@ class sequence_reader
     {
         if (p.bytes.empty())
             return;
-        if (piece_first >= pieces.size() - piece_first) {
-            pieces.erase(pieces.begin(), std::ranges::next(pieces.begin(), static_cast<std::ptrdiff_t>(piece_first), pieces.end()));
-            piece_first = 0;
-        }
         pieces.push_back(std::move(p));
     }
 
     void piece_drop()
     {
-        pieces[piece_first] = held_piece{};
-        ++piece_first;
+        pieces.pop_front();
         piece_offset = 0;
     }
 
@@ -247,7 +239,7 @@ class sequence_reader
         throw_logic_error_if_moved_from();
         if (failure != error{}) [[unlikely]]
             return;
-        if (piece_first == pieces.size()) {
+        if (pieces.empty()) {
             append_bytes(bytes);
             return;
         }
@@ -260,7 +252,6 @@ class sequence_reader
     {
         failure = e;
         pieces.clear();
-        piece_first = 0;
         piece_offset = 0;
         buffer->resize(item_begin);
     }
@@ -334,7 +325,7 @@ public:
     bool empty() const
     {
         throw_logic_error_if_moved_from();
-        return buffer->size() == item_begin && piece_first == pieces.size();
+        return buffer->size() == item_begin && pieces.empty();
     }
 
     /** @brief Gives the next item when all of its bytes are there. */
@@ -348,17 +339,17 @@ public:
             std::string_view window;
             if (copied)
                 window = std::string_view{std::span(std::as_const(*buffer)).subspan(item_begin)};
-            else if (piece_first != pieces.size())
-                window = std::string_view{std::span(pieces[piece_first].bytes).subspan(piece_offset)};
+            else if (!pieces.empty())
+                window = std::string_view{std::span(pieces.front().bytes).subspan(piece_offset)};
             auto const r = scan_item(window);
             if (r) {
                 std::string_view const item{std::span(window).first(scanned)};
-                std::shared_ptr<void const> owner = copied ? buffer : pieces[piece_first].owner;
+                std::shared_ptr<void const> owner = copied ? buffer : pieces.front().owner;
                 if (copied) {
                     item_begin += scanned;
                 } else {
                     piece_offset += scanned;
-                    if (piece_offset == pieces[piece_first].bytes.size())
+                    if (piece_offset == pieces.front().bytes.size())
                         piece_drop();
                 }
                 reset_item_state();
@@ -369,20 +360,20 @@ public:
                 return std::unexpected(r.error());
             }
             if (!copied) {
-                if (pieces.size() - piece_first < 2)
+                if (pieces.size() < 2)
                     return std::unexpected(error::too_little_data);
                 append_bytes(window);
                 piece_drop();
                 continue;
             }
-            if (piece_first == pieces.size())
+            if (pieces.empty())
                 return std::unexpected(error::too_little_data);
-            std::string_view const source{std::span(pieces[piece_first].bytes).subspan(piece_offset)};
+            std::string_view const source{std::span(pieces.front().bytes).subspan(piece_offset)};
             std::size_t const n = static_cast<std::size_t>(
                 std::min<std::uint64_t>(bytes_missing(window.size()), source.size()));
             append_bytes(std::string_view{std::span(source).first(n)});
             piece_offset += n;
-            if (piece_offset == pieces[piece_first].bytes.size())
+            if (piece_offset == pieces.front().bytes.size())
                 piece_drop();
         }
     }

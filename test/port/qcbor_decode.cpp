@@ -958,8 +958,10 @@ auto const other_type = std::unexpected(error::incorrect_type);
 
 std::vector<std::uint8_t> extreme_bignum(std::uint8_t const tag)
 {
-    std::vector<std::uint8_t> in = {tag, 0x59, 0x01, 0x90};
-    in.insert(in.end(), 400, 0xf0);
+    constexpr std::size_t bignum_length = 0x190;
+    std::array<std::uint8_t, 4> const head = {tag, 0x59, 0x01, 0x90};
+    std::vector<std::uint8_t> in(head.size() + bignum_length, 0xf0);
+    std::ranges::copy(head, in.begin());
     return in;
 }
 
