@@ -23,6 +23,9 @@
 #   in a container that stays up between runs, and runs each test program among them.
 #   iter check-changed: builds the test programs that a change touches and runs each program whose program or data
 #   changed since its last run that passed. CBOR_TEST_PATTERN selects the test cases of these runs.
+#   iter base: runs iter check-changed on a tree that equals HEAD and keeps the map of each program to the lines of
+#   include/ and test/ that became its code (test/changed_programs.py). After it, iter check-changed builds and runs
+#   only the programs whose code the change since that commit touches.
 # Each build keeps its directory in $CBOR_BUILD_ROOT/<branch>/<build>,
 # and every build shares the compiler cache in $CCACHE_HOST_DIR.
 # The builds run one after the other. Each build compiles as many jobs at once as its share of the memory
@@ -142,6 +145,33 @@ iter() {
 			-e CCACHE_SLOPPINESS=pch_defines,time_macros,include_file_mtime,include_file_ctime \
 			"$image" sleep infinity >/dev/null 9>&- || return 1
 	fi
+	targets=$iter_targets
+	[ "$iter_targets" = base ] && targets=check-changed
+	if [ "$iter_targets" = base ] && ! git -C "$src" diff --quiet HEAD -- include test CMakeLists.txt cmake; then
+		echo "iter base: include/, test/ or the build files differ from HEAD; commit them first" >&2
+		return 2
+	fi
+	if [ "$iter_targets" = check-changed ] && [ -z "$pattern" ]; then
+		base=
+		for map in "$dir"/maps/*/; do
+			[ -f "$map/lines.json" ] || continue
+			commit=$(basename "$map")
+			git -C "$src" merge-base --is-ancestor "$commit" HEAD || continue
+			if [ -z "$base" ] || [ "$(git -C "$src" log -1 --format=%ct "$commit")" -gt "$(git -C "$src" log -1 --format=%ct "$base")" ]; then
+				base=$commit
+			fi
+		done
+		if [ -n "$base" ]; then
+			changed=$({ git -C "$src" diff --name-only "$base"; git -C "$src" ls-files --others --exclude-standard; } | sort -u)
+			programs=$(podman exec "$name" python3 /src/test/changed_programs.py select "/b/maps/$base" "/b/maps/$base/tree" /src $changed) ||
+				return 1
+			targets=$(for p in $programs; do printf '%s.passed ' "$p"; done)
+			echo "iter: the map of $base selects $(echo $programs | wc -w) programs"
+			[ -n "$targets" ] || { echo "iter: no test program reaches the change" >"$root/$branch/iter.result"; return 0; }
+		else
+			echo "iter: no map of an ancestor commit (test/run.sh iter base); every program that the change reaches through the build"
+		fi
+	fi
 	podman exec -e CBOR_TEST_PATTERN="$pattern" "$name" bash -c '
 		s=${EPOCHREALTIME/./}
 		if [ ! -f /b/build.ninja ] || ! grep -q "^CBOR_TEST_GROUPS:BOOL=ON$" /b/CMakeCache.txt ||
@@ -155,13 +185,13 @@ iter() {
 		fi
 		export CMAKE_BUILD_PARALLEL_LEVEL=$(sed -n "s/^CBOR_PARALLEL_JOBS:INTERNAL=//p" /b/CMakeCache.txt)
 		ccache -z >/dev/null
-		cmake --build /b --target '"$iter_targets"' -j"$CMAKE_BUILD_PARALLEL_LEVEL" >/b/build.log 2>&1
+		cmake --build /b --target '"$targets"' -j"$CMAKE_BUILD_PARALLEL_LEVEL" >/b/build.log 2>&1
 		r=$?; b=${EPOCHREALTIME/./}
 		ccache -s
 		printf "iter build rc=%s build=%ds\n" $r $(((b - s) / 1000000))
 		grep -o "Running [^ ]*$" /b/build.log | sort | uniq -c
 		[ $r = 0 ] || { tail -n 30 /b/build.log; exit $r; }
-		for t in '"$iter_targets"'; do
+		for t in '"$targets"'; do
 			[ -f /b/$t ] && [ -x /b/$t ] || continue
 			p=${EPOCHREALTIME/./}
 			/b/$t ${CBOR_TEST_PATTERN:+"-tc=*$CBOR_TEST_PATTERN*"} >/b/$t.log 2>&1
@@ -169,7 +199,15 @@ iter() {
 			printf "%s rc=%s test=%ds %s\n" $t $q $(((e - p) / 1000000)) "$(tail -2 /b/$t.log | head -1)"
 			[ $q = 0 ] || { tail -n 30 /b/$t.log; r=$q; }
 		done
-		exit $r' >"$root/$branch/iter.result" 2>&1
+		exit $r' >"$root/$branch/iter.result" 2>&1 || return 1
+	if [ "$iter_targets" = base ]; then
+		commit=$(git -C "$src" rev-parse HEAD)
+		mkdir -p "$dir/maps/$commit/tree"
+		git -C "$src" archive "$commit" include test | tar -x -C "$dir/maps/$commit/tree" || return 1
+		[ "$(id -u)" = 0 ] && chown -R 65534:65534 "$dir/maps"
+		podman exec "$name" python3 /src/test/changed_programs.py map /b "/b/maps/$commit" || return 1
+		echo "iter base: map of $commit"
+	fi
 }
 
 first_error() {
