@@ -67,7 +67,7 @@ std::expected<std::string, error> diagnostic_notation(std::string_view encoded);
 class heads
 {
     template <class V>
-    static V read_unsigned(std::span<char const, sizeof(V)> const field)
+    static constexpr V read_unsigned(std::span<char const, sizeof(V)> const field)
     {
         std::array<char, sizeof(V)> big;
         std::copy(field.begin(), field.end(), big.begin());
@@ -286,22 +286,8 @@ class heads
                     detail::validity::check_bytes_left(initial_byte_size + size, encoded.size());
                 !fits) [[unlikely]]
                 return std::unexpected(fits.error());
-            std::span<char const> const rest = std::span(encoded).subspan(initial_byte_size, size);
-            std::uint64_t argument;
-            switch (static_cast<rfc8949::additional_information>(info)) {
-            case rfc8949::additional_information::one_byte_argument:
-                argument = static_cast<std::uint8_t>(rest.front());
-                break;
-            case rfc8949::additional_information::two_byte_argument:
-                argument = read_unsigned<std::uint16_t>(rest.first<sizeof(std::uint16_t)>());
-                break;
-            case rfc8949::additional_information::four_byte_argument:
-                argument = read_unsigned<std::uint32_t>(rest.first<sizeof(std::uint32_t)>());
-                break;
-            default:
-                argument = read_unsigned<std::uint64_t>(rest.first<sizeof(std::uint64_t)>());
-                break;
-            }
+            std::uint64_t const argument =
+                read_argument(info, std::span(encoded).subspan(initial_byte_size, size));
             if (error const r = detail::validity::check_argument<Checked>(major, argument).error_or(error{});
                 r != error{}) [[unlikely]]
                 return std::unexpected(r);
@@ -773,6 +759,21 @@ class heads
         detail::validity::offset at;
     };
 
+    CBOR_ALWAYS_INLINE static constexpr std::uint64_t read_argument(std::uint8_t const info,
+                                                                    std::span<char const> const bytes)
+    {
+        switch (static_cast<rfc8949::additional_information>(info)) {
+        case rfc8949::additional_information::one_byte_argument:
+            return static_cast<std::uint8_t>(bytes.front());
+        case rfc8949::additional_information::two_byte_argument:
+            return read_unsigned<std::uint16_t>(bytes.first<sizeof(std::uint16_t)>());
+        case rfc8949::additional_information::four_byte_argument:
+            return read_unsigned<std::uint32_t>(bytes.first<sizeof(std::uint32_t)>());
+        default:
+            return read_unsigned<std::uint64_t>(bytes.first<sizeof(std::uint64_t)>());
+        }
+    }
+
     template <bool Checked>
     CBOR_ALWAYS_INLINE static constexpr std::expected<raw_head, error>
     read_raw_head(std::string_view const encoded, detail::validity::offset const at)
@@ -799,10 +800,8 @@ class heads
         if (auto const fits = detail::validity::check_bytes_left(size, rest.size() - initial_byte_size);
             !fits) [[unlikely]]
             return std::unexpected(fits.error());
-        std::uint64_t argument = 0;
-        for (char const c :
-             std::span(detail::validity::subspan(encoded, detail::validity::next(at, initial_byte_size))).first(size))
-            argument = argument << std::numeric_limits<std::uint8_t>::digits | static_cast<std::uint8_t>(c);
+        std::uint64_t const argument = read_argument(
+            info, std::span(detail::validity::subspan(encoded, detail::validity::next(at, initial_byte_size))).first(size));
         if (error const r = detail::validity::check_argument<Checked>(major, argument).error_or(error{});
             r != error{}) [[unlikely]]
             return std::unexpected(r);
