@@ -1,3 +1,4 @@
+#include "hex.hpp"
 #include "small_stack.hpp"
 #include "reference.hpp"
 #include "owned_copy.hpp"
@@ -1405,4 +1406,79 @@ TEST_CASE("path: a tag 24 over a text inside an embedded item is inadmissible")
     auto const doc = cbor::lazy::adopt(std::string(bytes));
     REQUIRE(doc);
     CHECK_EQ(doc->at_path<"$[*]", cbor::nodelist>().error(), error::inadmissible_type_for_tag_content);
+}
+
+namespace
+{
+
+// The compile mode makes the path program code where every part of the path has a generated step; cbor::path::
+// compile reads the same text at run time. Both read the same message: the same nodes in the same order, or the
+// same error.
+template <cbor::fixed_string Path>
+void same_in_both_modes(std::span<std::string const> const messages)
+{
+    auto const query = cbor::path::compile<cbor::nodelist>(Path.view());
+    REQUIRE(query.has_value());
+    for (std::string const &message : messages) {
+        CAPTURE(Path.view());
+        CAPTURE(test::hexlify(message));
+        auto const doc = cbor::lazy::adopt(std::string(message));
+        REQUIRE(doc.has_value());
+        auto const compiled = doc->at_path<Path, cbor::nodelist>();
+        auto const run_time = doc->at_path(*query);
+        REQUIRE_EQ(compiled.has_value(), run_time.has_value());
+        if (!compiled) {
+            CHECK_EQ(compiled.error(), run_time.error());
+            continue;
+        }
+        REQUIRE_EQ(compiled->size(), run_time->size());
+        for (std::size_t i = 0; i < compiled->size(); ++i) {
+            CHECK_EQ((*compiled)[i].top_level.encoded.data(), (*run_time)[i].top_level.encoded.data());
+            CHECK_EQ((*compiled)[i].offset, (*run_time)[i].offset);
+        }
+    }
+}
+
+} // namespace
+
+// Each kind of selector (key, index, wildcard, filter), each comparison (==, !=, <, <=, >, >=), each logical operator
+// (&&, ||, !), the existence test, a literal of each major kind and the operands @, @.a and @[0] run in the compile
+// mode and at run time over the same messages. The messages hold an array, a map, nested items, floats, an item that
+// ends too early and a path that selects more nodes than the item has bytes, where the two modes could differ.
+TEST_CASE("path: the compile mode and the run-time mode give the same nodelist or the same error")
+{
+    std::array const messages{
+        "\x83\x01\x02\x03"s,
+        "\xa2\x61\x61\x01\x61\x62\x02"s,
+        "\x84\xa2\x61\x61\x01\x61\x62\x02\xa1\x61\x61\x02\x81\x01\x61x"s,
+        "\xa1\x61\x61\x82\xf9\x3e\x00\x02"s,
+        "\x82\x01"s,
+        "\x81\x01"s,
+        "\x82\x81\x01\xa1\x61\x61\x81\x61x"s,
+    };
+    same_in_both_modes<"$">(messages);
+    same_in_both_modes<"$.a">(messages);
+    same_in_both_modes<"$[0]">(messages);
+    same_in_both_modes<"$[-1]">(messages);
+    same_in_both_modes<"$[*]">(messages);
+    same_in_both_modes<"$.a[*]">(messages);
+    same_in_both_modes<"$[0,1]">(messages);
+    same_in_both_modes<"$[*][0]">(messages);
+    same_in_both_modes<"$[*,*,*,*]">(messages);
+    same_in_both_modes<"$[?@ == 1]">(messages);
+    same_in_both_modes<"$[?@ != 1]">(messages);
+    same_in_both_modes<"$[?@ < 2]">(messages);
+    same_in_both_modes<"$[?@ <= 2]">(messages);
+    same_in_both_modes<"$[?@ > 1]">(messages);
+    same_in_both_modes<"$[?@ >= 2]">(messages);
+    same_in_both_modes<"$[?@.a]">(messages);
+    same_in_both_modes<"$[?!@.a]">(messages);
+    same_in_both_modes<"$[?@.a == 1 && @.b == 2]">(messages);
+    same_in_both_modes<"$[?@.a == 2 || @[0] == 1]">(messages);
+    same_in_both_modes<"$[?@[0] == \"x\"]">(messages);
+    same_in_both_modes<"$[?@ == \"x\"]">(messages);
+    same_in_both_modes<"$.a[?@ == 1.5]">(messages);
+    same_in_both_modes<"$[?@ == [1]]">(messages);
+    same_in_both_modes<"$[?@ == {\"a\": 2}]">(messages);
+    same_in_both_modes<"$[?@ == null || @ == true]">(messages);
 }
