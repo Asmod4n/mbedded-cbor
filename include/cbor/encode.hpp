@@ -12,6 +12,10 @@
 #define CBOR_ENCODER_BLOCK_SIZE 16384
 #endif
 
+#ifndef CBOR_ENCODER_INLINE_BUFFER_SIZE
+#define CBOR_ENCODER_INLINE_BUFFER_SIZE 4096
+#endif
+
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -213,6 +217,8 @@ public:
     static constexpr std::size_t item_size_max = heads::initial_byte_size + sizeof(std::uint64_t);
     static constexpr std::size_t ref_size = 32;
     static_assert(block_size >= item_size_max, "A block must hold one whole head or float.");
+    static constexpr std::size_t inline_buffer_size = CBOR_ENCODER_INLINE_BUFFER_SIZE;
+    static_assert(inline_buffer_size >= item_size_max, "The inline buffer must hold one whole head or float.");
 
 private:
     template <class Writer>
@@ -354,7 +360,7 @@ struct encoding::binary_writer {
     };
 
     Writer &writer;
-    std::conditional_t<direct || blocks, std::span<char>, std::array<char, block_size>> block;
+    std::conditional_t<direct || blocks, std::span<char>, std::array<char, inline_buffer_size>> block;
     std::size_t used = 0;
     std::size_t closed = 0;
     std::size_t written = 0;
