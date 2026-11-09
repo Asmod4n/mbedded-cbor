@@ -1481,4 +1481,12 @@ TEST_CASE("path: the compile mode and the run-time mode give the same nodelist o
     same_in_both_modes<"$[?@ == [1]]">(messages);
     same_in_both_modes<"$[?@ == {\"a\": 2}]">(messages);
     same_in_both_modes<"$[?@ == null || @ == true]">(messages);
+    same_in_both_modes<"$[?count(@.*) == 2]">(messages);
+    same_in_both_modes<"$[?count(@.a) == 1]">(messages);
+    same_in_both_modes<"$[?length(@) == 2]">(messages);
+    same_in_both_modes<"$[?length(@) > 1]">(messages);
+    same_in_both_modes<"$[?1 < length(@)]">(messages);
+    same_in_both_modes<"$[?count(@[*]) == length(@)]">(messages);
+    same_in_both_modes<"$[?length(length(@)) == 1]">(messages);
+    same_in_both_modes<"$[?length(@) == 1.0]">(messages);
 }

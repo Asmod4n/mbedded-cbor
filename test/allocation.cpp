@@ -149,8 +149,9 @@ TEST_CASE("lazy::adopt and at_path give not_enough_memory when the owner cannot 
     CHECK_EQ(view_error, error::not_enough_memory);
 }
 
-// A filter compared each element with its literal through a std::string and a std::shared_ptr, and copied the
-// elements into a std::vector first, so the allocations of one call grew with the elements. The literal is now a
+// A filter compared each element with its literal, or with the number of length() or count(), through a std::string
+// and a std::shared_ptr, and copied the elements into a std::vector first, so the allocations of one call grew with
+// the elements. The literal is now a
 // lazy over the bytes of the parsed path, and the elements are tested in place: an array of 40 elements costs the
 // allocations of an array of 4, in the compile mode and in the run-time mode.
 TEST_CASE("path: a filter with a literal allocates nothing for each element")
@@ -179,6 +180,10 @@ TEST_CASE("path: a filter with a literal allocates nothing for each element")
     auto const query = cbor::path::compile<cbor::nodelist>("$[?@ == 99]");
     REQUIRE(query.has_value());
     CHECK_EQ(counted([&] { return small.at_path(*query); }), counted([&] { return large.at_path(*query); }));
+    CHECK_EQ(counted([&] { return small.at_path<"$[?length(@) == 99]", cbor::nodelist>(); }),
+             counted([&] { return large.at_path<"$[?length(@) == 99]", cbor::nodelist>(); }));
+    CHECK_EQ(counted([&] { return small.at_path<"$[?count(@.a) == 99]", cbor::nodelist>(); }),
+             counted([&] { return large.at_path<"$[?count(@.a) == 99]", cbor::nodelist>(); }));
 }
 
 // The path that succeeds compares a key of the top-level item with a literal by value without an allocation: the

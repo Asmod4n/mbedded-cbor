@@ -28,6 +28,7 @@
 #include <tuple>
 #include <type_traits>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "item_size.hpp"
@@ -675,8 +676,14 @@ class path
 
     static std::expected<bool, error> value_less(lazy const &a, lazy const &b);
 
-    static std::expected<std::optional<lazy>, error> comparable_value(query_view const v, std::size_t index,
-                                                                      lazy const &current, lazy const &root);
+    using comparable = std::variant<std::monostate, lazy, std::uint64_t>;
+
+    static std::expected<lazy::resolved<true>, error> resolved_of(lazy const &node);
+
+    static std::expected<std::optional<exact_number>, error> number_in(lazy const &node);
+
+    static std::expected<comparable, error> comparable_value(query_view const v, std::size_t index,
+                                                             lazy const &current, lazy const &root);
 
     static std::expected<bool, error> test_expression(query_view const v, std::size_t index,
                                                       lazy const &current, lazy const &root);
@@ -707,8 +714,7 @@ class path
 
     static constexpr bool selects_nothing(error e);
 
-    static std::expected<bool, error> compared(comparison_op op, std::optional<lazy> const &a,
-                                               std::optional<lazy> const &b);
+    static std::expected<bool, error> compared(comparison_op op, comparable const &a, comparable const &b);
 
     template <class F>
     static std::expected<void, error> for_each_child(lazy const &node, F const &f);
@@ -720,7 +726,7 @@ class path
     static std::expected<lazy, error> generated_singular(lazy const &current);
 
     template <fixed_string Path, std::size_t Index>
-    static std::expected<std::optional<lazy>, error> generated_operand(lazy const &current);
+    static std::expected<comparable, error> generated_operand(lazy const &current);
 
     template <fixed_string Path, std::size_t Index>
     static std::expected<bool, error> generated_test(lazy const &current, lazy const &root);
@@ -1556,13 +1562,10 @@ inline std::expected<bool, error> path::value_equal(lazy const &a, lazy const &b
 {
     if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
         return std::unexpected(r.error());
-    a.throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
-    auto const x = a.typed_array_tag != 0 ? lazy::resolve<true>(a)
-                                          : lazy::resolve_container<true>(a.top_level, detail::validity::offset{a.offset});
+    auto const x = resolved_of(a);
     if (!x) [[unlikely]]
         return std::unexpected(x.error());
-    auto const y = b.typed_array_tag != 0 ? lazy::resolve<true>(b)
-                                          : lazy::resolve_container<true>(b.top_level, detail::validity::offset{b.offset});
+    auto const y = resolved_of(b);
     if (!y) [[unlikely]]
         return std::unexpected(y.error());
     auto const x_number = integer_of(x->h, x->d);
@@ -1643,13 +1646,10 @@ inline std::expected<bool, error> path::value_equal(lazy const &a, lazy const &b
 
 inline std::expected<bool, error> path::value_less(lazy const &a, lazy const &b)
 {
-    a.throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
-    auto const x = a.typed_array_tag != 0 ? lazy::resolve<true>(a)
-                                          : lazy::resolve_container<true>(a.top_level, detail::validity::offset{a.offset});
+    auto const x = resolved_of(a);
     if (!x) [[unlikely]]
         return std::unexpected(x.error());
-    auto const y = b.typed_array_tag != 0 ? lazy::resolve<true>(b)
-                                          : lazy::resolve_container<true>(b.top_level, detail::validity::offset{b.offset});
+    auto const y = resolved_of(b);
     if (!y) [[unlikely]]
         return std::unexpected(y.error());
     auto const x_number = integer_of(x->h, x->d);
@@ -1681,24 +1681,14 @@ inline std::expected<bool, error> path::value_less(lazy const &a, lazy const &b)
                 [](char const c) { return static_cast<unsigned char>(c); });
 }
 
-inline std::expected<std::optional<lazy>, error> path::comparable_value(query_view const v,
-                                                                            std::size_t const index,
-                                                                            lazy const &current,
-                                                                            lazy const &root)
+inline std::expected<path::comparable, error> path::comparable_value(query_view const v,
+                                                                     std::size_t const index,
+                                                                     lazy const &current,
+                                                                     lazy const &root)
 {
     if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
         return std::unexpected(r.error());
     logical_expr const &e = v.expressions[index];
-    auto const unsigned_integer = [](std::uint64_t const n) -> std::expected<std::optional<lazy>, error> {
-        std::string encoded;
-        if (auto const r = extended_diagnostic_notation::append_head(encoded, major_type::unsigned_integer, n, extended_diagnostic_notation::no_indicator); !r) [[unlikely]]
-            return std::unexpected(r.error());
-        auto const owner = std::make_shared<std::string const>(std::move(encoded));
-        auto const l = lazy::view(owner);
-        if (!l) [[unlikely]]
-            return std::unexpected(l.error());
-        return *l;
-    };
     switch (e.kind) {
     case logical_expr::kind::literal:
         return literal_of(v.keys, e);
@@ -1707,13 +1697,15 @@ inline std::expected<std::optional<lazy>, error> path::comparable_value(query_vi
     case logical_expr::kind::value: {
         std::size_t const at = e.kind == logical_expr::kind::filter_query ? index : e.first;
         logical_expr const &q = v.expressions[at];
-        if (q.relative && q.singular && e.kind != logical_expr::kind::count) {
+        if (q.relative && q.singular) {
             auto const node = walk_singular_query(v, parsed_query{0, q.first, q.second, true}, current);
-            if (node)
-                return *node;
-            if (!selects_nothing(node.error())) [[unlikely]]
+            if (!node && !selects_nothing(node.error())) [[unlikely]]
                 return std::unexpected(node.error());
-            return std::nullopt;
+            if (e.kind == logical_expr::kind::count)
+                return std::uint64_t{node.has_value()};
+            if (!node)
+                return std::monostate{};
+            return *node;
         }
         std::expected<std::vector<lazy>, error> relative;
         if (q.relative)
@@ -1722,31 +1714,31 @@ inline std::expected<std::optional<lazy>, error> path::comparable_value(query_vi
         if (!nodes) [[unlikely]]
             return std::unexpected(nodes.error());
         if (e.kind == logical_expr::kind::count)
-            return unsigned_integer(nodes->size());
+            return std::uint64_t{nodes->size()};
         if (nodes->size() != 1)
-            return std::nullopt;
+            return std::monostate{};
         return nodes->front();
     }
     case logical_expr::kind::length: {
         auto const argument = comparable_value(v, e.first, current, root);
-        if (!argument || !*argument) [[unlikely]]
+        if (!argument) [[unlikely]]
             return argument;
-        (*argument)->throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
-        auto const found = (*argument)->typed_array_tag != 0
-                               ? lazy::resolve<true>(**argument)
-                               : lazy::resolve_container<true>((*argument)->top_level, detail::validity::offset{(*argument)->offset});
+        lazy const *const node = std::get_if<lazy>(&*argument);
+        if (node == nullptr)
+            return std::monostate{};
+        auto const found = resolved_of(*node);
         if (!found) [[unlikely]]
             return std::unexpected(found.error());
         if (found->h.major == major_type::array || found->h.major == major_type::map)
-            return unsigned_integer(found->h.argument);
+            return std::uint64_t{found->h.argument};
         if (found->h.major != major_type::text_string)
-            return std::nullopt;
+            return std::monostate{};
         heads::decoder d = found->d;
         auto const s = d.decode_byte_string(found->h.argument);
         if (!s) [[unlikely]]
             return std::unexpected(s.error());
-        return unsigned_integer(static_cast<std::uint64_t>(std::ranges::count_if(
-            *s, [](char const c) { return (static_cast<unsigned char>(c) & 0xc0) != 0x80; })));
+        return static_cast<std::uint64_t>(std::ranges::count_if(
+            *s, [](char const c) { return (static_cast<unsigned char>(c) & 0xc0) != 0x80; }));
     }
     [[unlikely]] default:
         return std::unexpected(error::invalid_path);
@@ -1987,18 +1979,66 @@ constexpr bool path::selects_nothing(error const e)
     return e == error::not_indexable || e == error::index_out_of_bounds || e == error::key_not_found;
 }
 
-inline std::expected<bool, error> path::compared(comparison_op const op, std::optional<lazy> const &a,
-                                                 std::optional<lazy> const &b)
+inline std::expected<lazy::resolved<true>, error> path::resolved_of(lazy const &node)
 {
-    auto const equal = [&]() -> std::expected<bool, error> {
-        if (!a || !b)
-            return !a && !b;
-        return value_equal(*a, *b);
+    node.throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
+    if (node.typed_array_tag != 0)
+        return lazy::resolve<true>(node);
+    return lazy::resolve_container<true>(node.top_level, detail::validity::offset{node.offset});
+}
+
+inline std::expected<std::optional<path::exact_number>, error> path::number_in(lazy const &node)
+{
+    auto const found = resolved_of(node);
+    if (!found) [[unlikely]]
+        return std::unexpected(found.error());
+    auto const folded = integer_of(found->h, found->d);
+    if (!folded) [[unlikely]]
+        return std::unexpected(folded.error());
+    heads::head const &h = folded->first;
+    if (h.major != major_type::unsigned_integer && h.major != major_type::negative_integer &&
+        !heads::is_floating_point(h.major, h.info))
+        return std::nullopt;
+    return number_of(h);
+}
+
+inline std::expected<bool, error> path::compared(comparison_op const op, comparable const &a, comparable const &b)
+{
+    auto const order = [](comparable const &x, comparable const &y) -> std::expected<std::partial_ordering, error> {
+        auto const number = [](comparable const &c) -> std::expected<std::optional<exact_number>, error> {
+            if (auto const *const n = std::get_if<std::uint64_t>(&c))
+                return exact_number{false, true, false, *n, 0.0};
+            return number_in(std::get<lazy>(c));
+        };
+        auto const m = number(x);
+        if (!m) [[unlikely]]
+            return std::unexpected(m.error());
+        auto const n = number(y);
+        if (!n) [[unlikely]]
+            return std::unexpected(n.error());
+        if (!*m || !*n)
+            return std::partial_ordering::unordered;
+        return compare_numbers(**m, **n);
     };
-    auto const less = [](std::optional<lazy> const &x, std::optional<lazy> const &y) -> std::expected<bool, error> {
-        if (!x || !y)
+    auto const equal = [&]() -> std::expected<bool, error> {
+        if (std::holds_alternative<std::monostate>(a) || std::holds_alternative<std::monostate>(b))
+            return std::holds_alternative<std::monostate>(a) && std::holds_alternative<std::monostate>(b);
+        if (std::holds_alternative<lazy>(a) && std::holds_alternative<lazy>(b))
+            return value_equal(std::get<lazy>(a), std::get<lazy>(b));
+        auto const o = order(a, b);
+        if (!o) [[unlikely]]
+            return std::unexpected(o.error());
+        return *o == 0;
+    };
+    auto const less = [&](comparable const &x, comparable const &y) -> std::expected<bool, error> {
+        if (std::holds_alternative<std::monostate>(x) || std::holds_alternative<std::monostate>(y))
             return false;
-        return value_less(*x, *y);
+        if (std::holds_alternative<lazy>(x) && std::holds_alternative<lazy>(y))
+            return value_less(std::get<lazy>(x), std::get<lazy>(y));
+        auto const o = order(x, y);
+        if (!o) [[unlikely]]
+            return std::unexpected(o.error());
+        return *o < 0;
     };
     auto const either = [](std::expected<bool, error> const &x, auto const &y) -> std::expected<bool, error> {
         if (!x || *x)
@@ -2107,7 +2147,7 @@ std::expected<lazy, error> path::generated_singular(lazy const &current)
 }
 
 template <fixed_string Path, std::size_t Index>
-std::expected<std::optional<lazy>, error> path::generated_operand(lazy const &current)
+std::expected<path::comparable, error> path::generated_operand(lazy const &current)
 {
     if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
         return std::unexpected(r.error());
@@ -2121,7 +2161,7 @@ std::expected<std::optional<lazy>, error> path::generated_operand(lazy const &cu
             return *node;
         if (!selects_nothing(node.error())) [[unlikely]]
             return std::unexpected(node.error());
-        return std::nullopt;
+        return std::monostate{};
     }
 }
 
