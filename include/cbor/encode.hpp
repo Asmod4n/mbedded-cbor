@@ -13,7 +13,7 @@
 #endif
 
 #ifndef CBOR_ENCODER_INLINE_BUFFER_SIZE
-#define CBOR_ENCODER_INLINE_BUFFER_SIZE 1024
+#define CBOR_ENCODER_INLINE_BUFFER_SIZE 512
 #endif
 
 #include <algorithm>
