@@ -1,4 +1,4 @@
-.TH "cbor::at_path" "3" "2026-11-08" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.TH "cbor::at_path" "3" "2026-11-09" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
 .SH NAME
 cbor::at_path, cbor::path::compile, cbor::path::query<T>, cbor::nodelist, cbor::fixed_string<N>, cbor::is_valid_path_v, cbor::is_singular_query_v \- read a value by its JSONPath (RFC 9535), with CBOR keys that are not text, tags and typed arrays
 .SH SYNOPSIS
@@ -146,7 +146,8 @@ give a nodelist.
 A path that selects nothing gives an empty nodelist and no error.
 The errors of the walk apply (cbor::at_path()).
 \f[CR]nodelist_too_long\f[R]: one step selects more nodes than the
-top\-level item has bytes, which tag 29 makes possible.
+top\-level item has bytes, for example a step that repeats one selector
+many times.
 .SS cbor::fixed_string<N>
 The type of a path at compile time.
 A string literal converts to it, so
@@ -195,6 +196,8 @@ not read as \f[CR]T\f[R]
 \f[CR]container_elements_exceeded\f[R]: a limit of cbor::limits is set
 and the item goes past it
 .IP \(bu 2
+\f[CR]not_enough_memory\f[R]: an allocation of the owner fails
+.IP \(bu 2
 \f[CR]std::logic_error\f[R]: a null or empty owner, or a moved\-from
 query
 .SS cbor::path::compile
@@ -241,7 +244,7 @@ stack of the thread holds
 .IP
 .EX
 \f[I]// bytes: a std::string with {\(dqa\(dq: [1, 2, 3]}\f[R]
-\f[B]auto\f[R] const doc = cbor::lazy::take_ownership(std::move(bytes)).value();
+\f[B]auto\f[R] const doc = cbor::lazy::adopt(std::move(bytes)).value();
 \f[B]auto\f[R] const nodes = doc.at_path<\(dq$.a[*]\(dq, cbor::nodelist>();  \f[I]// 3 nodes\f[R]
 \f[B]auto\f[R] const third = (*nodes)[2].get<int>();                   \f[I]// 3\f[R]
 \f[B]auto\f[R] const none = doc.at_path<\(dq$.b\(dq, cbor::nodelist>();      \f[I]// an empty nodelist\f[R]

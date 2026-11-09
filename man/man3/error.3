@@ -1,5 +1,5 @@
 '\" t
-.TH "cbor::error" "3" "2026-11-08" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.TH "cbor::error" "3" "2026-11-09" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
 .SH NAME
 cbor::error, cbor::category, cbor::error_category, cbor::make_error_code, std::is_error_code_enum<cbor::error>, cbor::limits \- the error values of the library, their conversion to std::error_code, and the limits of a build
 .SH SYNOPSIS
@@ -148,7 +148,7 @@ T{
 \f[CR]unsupported_value\f[R]
 T}@T{
 The encoder meets a typed array with a reserved tag or a tag outside RFC
-8746.
+8746, or a tag 29 that cbor::encode() writes without cbor::cycles.
 T}
 T{
 \f[CR]not_indexable\f[R]

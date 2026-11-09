@@ -1,5 +1,5 @@
 '\" t
-.TH "cbor::schema" "3" "2026-11-08" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.TH "cbor::schema" "3" "2026-11-09" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
 .SH NAME
 cbor::schema, cbor::schema<T>::encode, cbor::schema<T>::decode, cbor::schema<T>::path, cbor::schema<T>::at_path, cbor::schema<T>::unverified_path, cbor::schema<T>::unverified_at_path, cbor::schema<T>::unverified_decode, cbor::schema<T>::description, cbor::description_place, cbor::schema<T>::fixed_size, cbor::schema<T>::member_offset, cbor::schema::accessor<U, cbor::schema::Verified>, cbor::schema::accessor<fixed_element<S>, cbor::schema::Verified>, cbor::typed_array_view<E>, cbor::tag \- structs as Packed CBOR, fields at fixed offsets
 .SH SYNOPSIS
@@ -302,7 +302,6 @@ the described members in the order of the description: decode reads them
 into a \f[CR]std::tuple\f[R] and calls \f[CR]std::make_from_tuple\f[R].
 An element of a container with an allocator makes that tuple with the
 allocator of the container.
-\f[CR]not_enough_memory\f[R].
 .SS cbor::schema<T>::path
 Opens a message and gives the root cbor::schema::accessor.
 An rvalue moves into a new owner.
@@ -324,7 +323,7 @@ and an element with \f[CR][n]\f[R].
 \f[CR][]\f[R] takes its index from the next argument.
 On an array or a vector of \f[CR]std::uint8_t\f[R] or
 \f[CR]std::byte\f[R], \f[CR][n]\f[R] reads one byte.
-A text, a list or a struct needs an cbor::schema::accessor.
+A text, a list or a struct needs a cbor::schema::accessor.
 A member that \f[CR]T\f[R] does not have, a wrong count of indexes, or a
 path to a text does not compile.
 .SS cbor::schema<T>::unverified_path
@@ -405,8 +404,8 @@ form.
 A generic decoder of Packed CBOR does not.
 The size of the data form plus the size of \f[CR]description()\f[R] is
 the size of the message.
-Every other error of cbor::schema::path(), cbor::schema::at_path() and
-cbor::schema::decode().
+The other errors are the errors of cbor::schema::path(),
+cbor::schema::at_path() and cbor::schema::decode().
 .SS cbor::description_place
 Tells if a message holds the description of its structs
 (\f[CR]inside\f[R]) or not (\f[CR]apart\f[R]).
@@ -425,7 +424,7 @@ A struct takes its class tag, its table reference, a record head of 5
 bytes and its fields.
 A text, a list, a map, an optional of variable size or a
 \f[CR]std::variant\f[R] takes a reference \f[CR]6(N)\f[R] of 6 bytes.
-None.
+It gives no error at run time.
 A type that has no fixed size, for example a struct with a base class,
 does not compile.
 .SS cbor::schema<T>::member_offset
@@ -441,7 +440,7 @@ then the bytes of the key.
 This order is not the order of declaration.
 The root record of \f[CR]T\f[R] starts at
 \f[CR]size \- fixed_size()\f[R] of the message.
-None.
+It gives no error at run time.
 A \f[CR]Member\f[R] of another struct, or a member that the description
 does not list, does not compile.
 .SS cbor::schema::accessor<U, Verified>
@@ -631,6 +630,9 @@ root, or its end is missing
 \f[CR]incorrect_type\f[R]: a message of another layout, or a wrong tag
 of the root
 .IP \(bu 2
+\f[CR]not_enough_memory\f[R]: an allocation of the owner fails (the
+rvalue form)
+.IP \(bu 2
 \f[CR]std::logic_error\f[R]: a null or empty owner
 .SS cbor::schema<T>::at_path
 .IP \(bu 2
@@ -654,6 +656,9 @@ or a directory entry outside the table or the items
 \f[CR]incorrect_type\f[R]: a variant item whose head names no
 alternative.
 The head chooses the alternative, so these forms compare it too
+.IP \(bu 2
+\f[CR]not_enough_memory\f[R]: an allocation of the owner fails (the
+rvalue form)
 .SS cbor::schema<T>::description
 .IP \(bu 2
 \f[CR]incorrect_type\f[R]: a message with the description read with
