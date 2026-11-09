@@ -1445,6 +1445,9 @@ void same_in_both_modes(std::span<std::string const> const messages)
 // (&&, ||, !), the existence test, a literal of each major kind and the operands @, @.a and @[0] run in the compile
 // mode and at run time over the same messages. The messages hold an array, a map, nested items, floats, an item that
 // ends too early and a path that selects more nodes than the item has bytes, where the two modes could differ.
+// Embedded queries run in each place where RFC 9535 2.3.5 lets them stand: the existence test of a query that is
+// not singular, a nested filter, count(), value(), length() over value() and over count(), and absolute queries,
+// also inside an absolute query and inside a nested filter.
 TEST_CASE("path: the compile mode and the run-time mode give the same nodelist or the same error")
 {
     std::array const messages{
@@ -1455,6 +1458,7 @@ TEST_CASE("path: the compile mode and the run-time mode give the same nodelist o
         "\x82\x01"s,
         "\x81\x01"s,
         "\x82\x81\x01\xa1\x61\x61\x81\x61x"s,
+        "\x81\x81\x01"s,
     };
     same_in_both_modes<"$">(messages);
     same_in_both_modes<"$.a">(messages);
@@ -1501,4 +1505,25 @@ TEST_CASE("path: the compile mode and the run-time mode give the same nodelist o
     same_in_both_modes<"$[3:0:-2]">(messages);
     same_in_both_modes<"$[0:0]">(messages);
     same_in_both_modes<"$[*][1:]">(messages);
+    same_in_both_modes<"$[?@.*]">(messages);
+    same_in_both_modes<"$[?@..a]">(messages);
+    same_in_both_modes<"$[?@[?@ == 1]]">(messages);
+    same_in_both_modes<"$[?count(@..*) == 3]">(messages);
+    same_in_both_modes<"$[?count(@[?@ > 1]) == 1]">(messages);
+    same_in_both_modes<"$[?count(@[1:]) == 1]">(messages);
+    same_in_both_modes<"$[?count(@[*,*,*,*]) > 1]">(messages);
+    same_in_both_modes<"$[?value(@..a) == 1]">(messages);
+    same_in_both_modes<"$[?value(@.*) == 2]">(messages);
+    same_in_both_modes<"$[?length(value(@..a)) == 1]">(messages);
+    same_in_both_modes<"$[?length(count(@.*)) == 1]">(messages);
+    same_in_both_modes<"$[?$.a]">(messages);
+    same_in_both_modes<"$[?$[0] == @]">(messages);
+    same_in_both_modes<"$[?count($..*) > 2]">(messages);
+    same_in_both_modes<"$[?count($[*]) == 2]">(messages);
+    same_in_both_modes<"$[?count($[*,*,*,*]) > 1]">(messages);
+    same_in_both_modes<"$[?value($..a) == 1]">(messages);
+    same_in_both_modes<"$[?@ == value($[*])]">(messages);
+    same_in_both_modes<"$[?$[?$.a]]">(messages);
+    same_in_both_modes<"$[?@[?@ == $[0]]]">(messages);
+    same_in_both_modes<"$..[?@[1:]]">(messages);
 }

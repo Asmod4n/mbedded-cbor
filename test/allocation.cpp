@@ -186,6 +186,43 @@ TEST_CASE("path: a filter with a literal allocates nothing for each element")
              counted([&] { return large.at_path<"$[?count(@.a) == 99]", cbor::nodelist>(); }));
 }
 
+// The compile mode walks a query inside a filter (count(), value(), an existence test, a nested filter, a slice) with
+// no list of nodes, and walks an absolute query once for the call. The interpreter builds a std::vector for such a
+// query at each element. Each path selects nothing, so the nodelist does not grow: 40 elements cost the allocations
+// of 4 only when nothing is allocated for each element.
+TEST_CASE("path: a query inside a filter allocates nothing for each element in the compile mode")
+{
+    auto const arrays_of = [](std::size_t const n) {
+        std::string bytes(1, static_cast<char>(0x98));
+        bytes.push_back(static_cast<char>(n));
+        for (std::size_t i = 0; i < n; ++i)
+            bytes.append("\x82\x00\x01"sv);
+        return *test::lazy_of_copy(std::move(bytes));
+    };
+    constexpr std::size_t few = 4;
+    constexpr std::size_t many = 40;
+    auto const small = arrays_of(few);
+    auto const large = arrays_of(many);
+    auto const counted = [](auto const &call) {
+        std::size_t const before = allocations;
+        auto const r = call();
+        std::size_t const after = allocations;
+        REQUIRE(r.has_value());
+        CHECK(r->empty());
+        return after - before;
+    };
+    CHECK_EQ(counted([&] { return small.at_path<"$[?count(@.*) == 3]", cbor::nodelist>(); }),
+             counted([&] { return large.at_path<"$[?count(@.*) == 3]", cbor::nodelist>(); }));
+    CHECK_EQ(counted([&] { return small.at_path<"$[?count(@[1:]) == 2]", cbor::nodelist>(); }),
+             counted([&] { return large.at_path<"$[?count(@[1:]) == 2]", cbor::nodelist>(); }));
+    CHECK_EQ(counted([&] { return small.at_path<"$[?value(@..a) == 1]", cbor::nodelist>(); }),
+             counted([&] { return large.at_path<"$[?value(@..a) == 1]", cbor::nodelist>(); }));
+    CHECK_EQ(counted([&] { return small.at_path<"$[?@[?@ == 5]]", cbor::nodelist>(); }),
+             counted([&] { return large.at_path<"$[?@[?@ == 5]]", cbor::nodelist>(); }));
+    CHECK_EQ(counted([&] { return small.at_path<"$[?$.a]", cbor::nodelist>(); }),
+             counted([&] { return large.at_path<"$[?$.a]", cbor::nodelist>(); }));
+}
+
 // The path that succeeds compares a key of the top-level item with a literal by value without an allocation: the
 // top-level item holds no shared value, and the literal [1, "x"] is parsed at compile time.
 TEST_CASE("path: a key is compared without an allocation")
