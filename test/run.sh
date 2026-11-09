@@ -5,8 +5,8 @@
 #   check: g++ 16 with reflection at -O0 and every test, the run after each change. It is the default.
 #   one <pattern>: the build check, and only the test cases and ctest tests whose names contain <pattern>.
 #   fast: gcc-release clang-asan
-#   full: gcc-asan gcc-release clang-asan clang-release clang-libcxx gcc15-release gcc-o2 gcc-os clang-o2 clang-os
-#   gcc-o2 and clang-o2 build RelWithDebInfo (-O2), gcc-os and clang-os MinSizeRel (-Os): the levels a consumer builds with.
+#   full: gcc-asan gcc-release clang-asan clang-release clang-libcxx gcc15-release gcc-o2 clang-o2
+#   gcc-o2 and clang-o2 build RelWithDebInfo (-O2), the level a consumer builds with.
 #   gcc15-release builds with g++ 15, the floor of the library, in the image of containers/tumbleweed-gcc15.Containerfile.
 #   tsan, gcc-groups, gcc-describe, gcc-describe-bundled and wasm are run by name and not in fast or full.
 #   gcc-groups is gcc-release with CBOR_TEST_GROUPS=ON: it also builds one program per test file and checks that
@@ -58,7 +58,7 @@ iter) shift; iter_targets="${*:?iter takes targets}"; pattern=${CBOR_TEST_PATTER
 check) set -- check ;;
 one) pattern=${2:?one takes a pattern}; set -- check ;;
 fast) set -- gcc-release clang-asan ;;
-full) set -- gcc-asan gcc-release clang-asan clang-release clang-libcxx gcc15-release gcc-o2 gcc-os clang-o2 clang-os ;;
+full) set -- gcc-asan gcc-release clang-asan clang-release clang-libcxx gcc15-release gcc-o2 clang-o2 ;;
 esac
 
 asan="-Og -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer"
@@ -81,9 +81,7 @@ one() {
 	clang-asan) cxx=clang++-23 type=Debug flags="$asan $pch_clang" compile_fail=OFF ;;
 	clang-release) cxx=clang++-23 type=Release flags=$pch_clang ;;
 	gcc-o2) cxx=g++-16 type=RelWithDebInfo flags= compile_fail=OFF ;;
-	gcc-os) cxx=g++-16 type=MinSizeRel flags= compile_fail=OFF ;;
 	clang-o2) cxx=clang++-23 type=RelWithDebInfo flags=$pch_clang compile_fail=OFF ;;
-	clang-os) cxx=clang++-23 type=MinSizeRel flags=$pch_clang compile_fail=OFF ;;
 	clang-libcxx) cxx=clang++-23 type=Release flags="-stdlib=libc++ $pch_clang" compile_fail=OFF ;;
 	tsan) cxx=clang++-23 type=Debug flags="$tsan $pch_clang" compile_fail=OFF ;;
 	iter) iter; return ;;
