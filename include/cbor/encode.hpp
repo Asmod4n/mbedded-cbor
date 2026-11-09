@@ -476,24 +476,10 @@ struct encoding::binary_writer {
 
     CBOR_ALWAYS_INLINE std::expected<void, std::errc> encode_head(major_type const major, std::uint64_t const argument)
     {
-        using info = rfc8949::additional_information;
-        if (detail::validity::bytes_fit(item_size_max, block.size() - used)) [[likely]] {
-            if (argument < std::to_underlying(info::one_byte_argument)) {
-                std::span<char> const out = block;
-                out[used] = heads::initial_byte(major, static_cast<std::uint8_t>(argument));
-                used += heads::initial_byte_size;
-            } else if (argument <= std::numeric_limits<std::uint8_t>::max()) {
-                put_item(heads::initial_byte(major, std::to_underlying(info::one_byte_argument)),
-                         static_cast<std::uint8_t>(argument));
-            } else if (argument <= std::numeric_limits<std::uint16_t>::max()) {
-                put_item(heads::initial_byte(major, std::to_underlying(info::two_byte_argument)),
-                         static_cast<std::uint16_t>(argument));
-            } else if (argument <= std::numeric_limits<std::uint32_t>::max()) {
-                put_item(heads::initial_byte(major, std::to_underlying(info::four_byte_argument)),
-                         static_cast<std::uint32_t>(argument));
-            } else {
-                put_item(heads::initial_byte(major, std::to_underlying(info::eight_byte_argument)), argument);
-            }
+        if (detail::validity::bytes_fit(heads::head_size_max, block.size() - used)) [[likely]] {
+            std::span<char> const out = block;
+            used += heads::head_encode(out.subspan(used).template first<heads::head_size_max>(), major,
+                                       heads::preferred_argument_info(argument), argument);
             return {};
         }
         return encode_head(major, heads::preferred_argument_info(argument), argument);
