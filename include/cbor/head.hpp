@@ -118,22 +118,31 @@ class heads
 
     static constexpr std::size_t head_padding = sizeof(std::uint64_t);
 
-    CBOR_ALWAYS_INLINE static std::size_t write_head(std::span<char> const out, std::size_t const at, major_type const major,
-                                                     std::uint8_t const info, std::uint64_t const argument)
+    static constexpr std::size_t head_size_max = initial_byte_size + sizeof(std::uint64_t);
+
+    CBOR_ALWAYS_INLINE static constexpr std::array<char, head_size_max>
+    head_encode(major_type const major, std::uint8_t const info, std::uint64_t const argument)
     {
         static_assert(argument_size(std::to_underlying(
                           rfc8949::additional_information::eight_byte_argument)) <= sizeof(std::uint64_t),
                       "The widest argument must fit in the bytes of one std::uint64_t.");
-        static_assert(head_padding >= sizeof(std::uint64_t),
-                      "The padding after the last head must hold the bytes that a head writes past its own size.");
         std::size_t const width = argument_size(info);
         auto const bytes = big_endian(argument << ((std::numeric_limits<std::uint64_t>::digits -
                                                     std::numeric_limits<std::uint8_t>::digits * width) &
                                                    (std::numeric_limits<std::uint64_t>::digits - 1)));
-        auto const field = out.subspan(at).template first<initial_byte_size + sizeof(std::uint64_t)>();
-        field.front() = initial_byte(major, info);
-        std::copy(bytes.begin(), bytes.end(), field.template last<sizeof(std::uint64_t)>().begin());
-        return initial_byte_size + width;
+        std::array<char, head_size_max> head{};
+        head.front() = initial_byte(major, info);
+        std::ranges::copy(bytes, std::span(head).template subspan<initial_byte_size>().begin());
+        return head;
+    }
+
+    CBOR_ALWAYS_INLINE static std::size_t write_head(std::span<char> const out, std::size_t const at, major_type const major,
+                                                     std::uint8_t const info, std::uint64_t const argument)
+    {
+        static_assert(head_padding >= sizeof(std::uint64_t),
+                      "The padding after the last head must hold the bytes that a head writes past its own size.");
+        std::ranges::copy(head_encode(major, info, argument), out.subspan(at).template first<head_size_max>().begin());
+        return initial_byte_size + argument_size(info);
     }
 
     CBOR_ALWAYS_INLINE static std::size_t write_head(std::span<char> const out, std::size_t const at, major_type const major,
@@ -146,9 +155,8 @@ class heads
     static constexpr void append_head(Container &out, major_type const major, std::uint8_t const info,
                                       std::uint64_t const argument)
     {
-        out.push_back(initial_byte(major, info));
-        for (std::size_t i = argument_size(info); i-- > 0;)
-            out.push_back(static_cast<char>(argument >> (std::numeric_limits<std::uint8_t>::digits * i)));
+        auto const head = head_encode(major, info, argument);
+        out.append_range(std::span(head).first(initial_byte_size + argument_size(info)));
     }
 
     template <class Container>
@@ -181,9 +189,10 @@ class heads
     CBOR_ALWAYS_INLINE static void write_item_head(std::span<char> const out, std::size_t const at, major_type const major,
                                                   std::size_t const length)
     {
-        out[at] =
-            initial_byte(major, std::to_underlying(rfc8949::additional_information::four_byte_argument));
-        write_u32(out, at + initial_byte_size, length);
+        auto const head = head_encode(
+            major, std::to_underlying(rfc8949::additional_information::four_byte_argument), length);
+        std::ranges::copy(std::span(head).template first<initial_byte_size + sizeof(std::uint32_t)>(),
+                          out.subspan(at).template first<initial_byte_size + sizeof(std::uint32_t)>().begin());
     }
 
 #ifdef CBOR_HAS_INT128
