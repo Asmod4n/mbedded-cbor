@@ -165,7 +165,7 @@ iter() {
 			changed=$({ git -C "$src" diff --name-only "$base"; git -C "$src" ls-files --others --exclude-standard; } | sort -u)
 			programs=$(podman exec "$name" python3 /src/test/changed_programs.py select "/b/maps/$base" "/b/maps/$base/tree" /src $changed) ||
 				return 1
-			targets=$(for p in $programs; do printf '%s.passed ' "$p"; done)
+			targets=$(for p in $programs; do printf 'check-%s ' "$p"; done)
 			echo "iter: the map of $base selects $(echo $programs | wc -w) programs"
 			[ -n "$targets" ] || { echo "iter: no test program reaches the change" >"$root/$branch/iter.result"; return 0; }
 		else
