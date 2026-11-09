@@ -464,6 +464,16 @@ struct encoding::binary_writer {
         }
     }
 
+    template <std::unsigned_integral T>
+    CBOR_ALWAYS_INLINE void put_item(char const initial, T const argument)
+    {
+        std::span<char> const out = std::span<char>(block).subspan(used);
+        out.front() = initial;
+        std::ranges::copy(std::bit_cast<std::array<char, sizeof(T)>>(std::byteswap(argument)),
+                          out.subspan(heads::initial_byte_size).begin());
+        used += heads::initial_byte_size + sizeof(T);
+    }
+
     CBOR_ALWAYS_INLINE std::expected<void, std::errc> encode_head(major_type const major, std::uint64_t const argument)
     {
         if (detail::validity::bytes_fit(heads::head_size_max, block.size() - used)) [[likely]] {
@@ -655,10 +665,8 @@ struct encoding::binary_writer {
     {
         constexpr std::uint8_t info = static_cast<std::uint8_t>(
             std::to_underlying(rfc8949::additional_information::one_byte_argument) + std::countr_zero(sizeof(T)));
-        if (detail::validity::bytes_fit(heads::head_size_max, block.size() - used)) [[likely]] {
-            std::span<char> const out = block;
-            used += heads::head_encode(out.subspan(used).template first<heads::head_size_max>(), major, info,
-                                       argument);
+        if (detail::validity::bytes_fit(item_size_max, block.size() - used)) [[likely]] {
+            put_item(heads::initial_byte(major, info), argument);
             return {};
         }
         return encode_head(major, info, argument);
