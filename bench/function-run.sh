@@ -12,7 +12,7 @@ steal_limit_percent=3
 
 pch_of() {
 	local tag=$1 cc=$2 key header
-	key=$( { cat "$dir/std.hpp"; "$cc" --version; echo "$flags"; "$cc" -march=native -Q --help=target 2>&1 | grep -E '^\s+-march='; } |
+	key=$( { cat "$dir/std.hpp"; "$cc" --version; echo "$flags"; "$cc" -march=native -### -E -x c++ - < /dev/null 2>&1 | grep -oE '(-march=[a-z0-9_-]+|"-target-cpu" "[a-z0-9_-]+")'; } |
 		sha256sum | cut -c1-16)
 	header=/pch/$tag-$key/std.hpp
 	if [ ! -e "$header.done" ]; then
