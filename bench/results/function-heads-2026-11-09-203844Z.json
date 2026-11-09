@@ -1,0 +1,1024 @@
+{
+ "time": "2026-11-09-203844Z",
+ "block": "heads",
+ "what": "each function of bench/function/heads.cpp over a buffer of COLD_BYTES bytes of items; a = commit a, aa = commit a built again, b = commit b",
+ "commit_a": {
+  "given": "4f439f2",
+  "id": "4f439f2ac5b594668c485b5200327f9f65dbe877"
+ },
+ "commit_b": {
+  "given": "bf9f6a9",
+  "id": "bf9f6a9acca053b612156e665a6cefaa35cdcc75"
+ },
+ "bench_sources_commit": "7a3c58654ed9f9a3c5e5ad84a210e73570f79003",
+ "image": "mbedded-cbor-sid-bench",
+ "flags": "-std=c++26 -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -DNDEBUG -pipe",
+ "link_flags": "-pie -fuse-ld=mold",
+ "resolved_march": "sapphirerapids",
+ "compilers": [
+  "g++-16 (Debian 16.2.0-4) 16.2.0",
+  "Debian clang version 23.1.5 (2)"
+ ],
+ "gxx_binary": {
+  "comment": "String dump of section '.comment':\n  [     0]  GCC: (Debian 16.2.0-4) 16.2.0\n  [    1f]  mold 3.0.0 (compatible with GNU ld)",
+  "libraries": {
+   "libbenchmark.so.1.9.1": "/usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1",
+   "libstdc++.so.6": "/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.36",
+   "libc.so.6": "/usr/lib/x86_64-linux-gnu/libc.so.6",
+   "libm.so.6": "/usr/lib/x86_64-linux-gnu/libm.so.6"
+  }
+ },
+ "clang_binary": {
+  "comment": "String dump of section '.comment':\n  [     0]  GCC: (Debian 16.2.0-4) 16.2.0\n  [    1e]  Debian clang version 23.1.5 (2)\n  [    3f]  mold 3.0.0 (compatible with GNU ld)",
+  "libraries": {
+   "libbenchmark.so.1.9.1": "/usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1",
+   "libstdc++.so.6": "/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.36",
+   "libm.so.6": "/usr/lib/x86_64-linux-gnu/libm.so.6",
+   "libc.so.6": "/usr/lib/x86_64-linux-gnu/libc.so.6"
+  }
+ },
+ "libc": "ldd (Debian GLIBC 2.43-7) 2.43",
+ "rounds": 9,
+ "min_time": "0.05s",
+ "cold_bytes": 4194304,
+ "level_two_cache": "2048K",
+ "build": "build: 0.13 s for 6 binaries",
+ "kernel": "6.18.44-fc-v310",
+ "scheduler": "cat: /sys/kernel/sched_ext/state: No such file or directory",
+ "virtualization": "docker ",
+ "container": "podman mbedded-cbor-sid-bench, user 65534, network none",
+ "host_in_container": "no",
+ "host_user": "root 0",
+ "cpu": {
+  "model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "flags_sha256": "19139faa5b3c177a2d253ee9520b13713aee71074562456de06d1ba7833e7890",
+  "cpus": 4
+ },
+ "uid": 65534,
+ "priority": "nice -10 granted",
+ "threads": 1,
+ "pinned": false,
+ "cpu_left_to_the_machine": "each bench process is single-threaded on 4 cpus",
+ "gate_before_build": [
+  "gate: vmstat 1 2",
+  "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+  " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+  " 0  0      0 13193320  35384 2870556    0    0   794  3017  838    1 46  2 51  1  1  0",
+  " 0  0      0 13201824  35384 2870744    0    0     0     0   99   69  0  0 100  0  0  0",
+  "gate: ps --sort=-pcpu (top 7)",
+  "  PID USER     %CPU  NI COMMAND",
+  "   93 root      1.2   0 claude",
+  "15393 nobody    0.0   0 ld.mold",
+  "14987 nobody    0.0   0 ld.mold",
+  "14746 nobody    0.0   0 ld.mold",
+  "14490 nobody    0.0   0 ld.mold",
+  "14450 nobody    0.0   0 ld.mold",
+  "    1 root      0.0   0 process_api",
+  "gate: busy 0.0% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough"
+ ],
+ "gate_before_runs": [
+  "gate: vmstat 1 2",
+  "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+  " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+  " 1  0      0 13197924  35384 2871476    0    0   794  3015  839    1 46  2 51  1  1  0",
+  " 0  0      0 13208988  35384 2871408    0    0     0     0  163  107  0  0 99  0  0  0",
+  "gate: ps --sort=-pcpu (top 7)",
+  "  PID USER     %CPU  NI COMMAND",
+  "   93 root      1.2   0 claude",
+  "15393 nobody    0.0   0 ld.mold",
+  "14987 nobody    0.0   0 ld.mold",
+  "14746 nobody    0.0   0 ld.mold",
+  "14490 nobody    0.0   0 ld.mold",
+  "14450 nobody    0.0   0 ld.mold",
+  "    1 root      0.0   0 process_api",
+  "gate: busy 1.0% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough"
+ ],
+ "steal_limit_percent": 3,
+ "rounds_detail": [
+  {
+   "round": 1,
+   "attempt": 1,
+   "wall_s": 3.876852035522461,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.32216494845360827
+  },
+  {
+   "round": 2,
+   "attempt": 2,
+   "wall_s": 3.9433951377868652,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.4438807863031072
+  },
+  {
+   "round": 3,
+   "attempt": 3,
+   "wall_s": 3.791577100753784,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.3295978905735003
+  },
+  {
+   "round": 4,
+   "attempt": 4,
+   "wall_s": 3.862165927886963,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.1941747572815534
+  },
+  {
+   "round": 5,
+   "attempt": 5,
+   "wall_s": 3.8320229053497314,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.1951854261548471
+  },
+  {
+   "round": 6,
+   "attempt": 6,
+   "wall_s": 3.81836199760437,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.4581151832460733
+  },
+  {
+   "round": 7,
+   "attempt": 7,
+   "wall_s": 3.7873761653900146,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.19815059445178335
+  },
+  {
+   "round": 8,
+   "attempt": 8,
+   "wall_s": 3.845123052597046,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.45454545454545453
+  },
+  {
+   "round": 9,
+   "attempt": 9,
+   "wall_s": 3.866284132003784,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.38734667527437056
+  }
+ ],
+ "failed": [],
+ "stderr_of_runs": "2026-11-09T20:38:47+00:00\nRunning /run-dir/bin/a.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.04, 2.09, 2.00\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-09T20:38:48+00:00\nRunning /run-dir/bin/aa.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.04, 2.09, 2.00\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-09T20:38:48+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.04, 2.07, 1.99\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-09T20:38:49+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.04, 2.07, 1.99\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-09T20:38:50+00:00\nRunning /run-dir/bin/b.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.04, 2.07, 1.99\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-09T20:38:50+00:00\nRunning /run-dir/bin/a.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.04, 2.07, 1.99\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-09T20:38:51+00:00\nRunning /run-dir/bin/aa.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.04, 2.07, 1.99\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-09T20:38:51+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.04, 2.07, 1.99\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-09T20:38:52+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.04, 2.07, 1.99\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-09T20:38:53+00:00\nRunning /run-dir/bin/b.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.04, 2.07, 1.99\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-09T20:38:53+00:00\nRunning /run-dir/bin/a.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.03, 2.05, 1.99\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-09T20:38:54+00:00\nRunning /run-dir/bin/a.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.03, 2.05, 1.99\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-09T20:38:55+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.03, 2.05, 1.99\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-09T20:38:55+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 K",
+ "noise_floor": {
+  "a_over_a_max_deviation_percent": 9.505592200975643
+ },
+ "difference_test": "two-tailed Mann-Whitney U test of compare.py of Google Benchmark over the rounds, alpha 0.05, and B/A further from 1 than A/A and than the noise floor of the machine (10 %)",
+ "compare_text": {
+  "gxx": {
+   "a_aa": "Comparing /run-dir/out/merged.a.gxx.json to /run-dir/out/merged.aa.gxx.json\nBenchmark                              Time             CPU      Time Old      Time New       CPU Old       CPU New\n-------------------------------------------------------------------------------------------------------------------\nheads_encoder                       +0.0019         -0.0017             2             2             2             2\nheads_encoder                       +0.2798         +0.1109             2             3             2             3\nheads_encoder                       -0.1004         -0.1018             3             3             3             3\nheads_encoder                       +0.0437         +0.0453             2             2             2             2\nheads_encoder                       +0.8473         +0.8469             2             4             2             4\nheads_encoder                       +0.1587         +0.1552             2             3             2             3\nheads_encoder                       +0.0436         +0.0459             2             3             2             3\nheads_encoder                       -0.0066         -0.0137             3             3             3             3\nheads_encoder                       -0.0513         -0.0217             3             2             2             2\nheads_encoder_pvalue                 0.1333          0.1120      U Test, Repetitions: 9 vs 9\nheads_encode_iov                    +0.0254         +0.0260             2             2             2             2\nheads_encode_iov                    -0.0607         -0.0575             2             2             2             2\nheads_encode_iov                    +0.0085         -0.0038             2             2             2             2\nheads_encode_iov                    +0.0031         +0.0095             2             2             2             2\nheads_encode_iov                    +0.1051         +0.1059             2             2             2             2\nheads_encode_iov                    +0.0803         -0.0173             2             2             2             2\nheads_encode_iov                    -0.0937         -0.0924             2             2             2             2\nheads_encode_iov                    +0.1179         +0.0262             2             2             2             2\nheads_encode_iov                    -0.0777         -0.0697             2             2             2             2\nheads_encode_iov_pvalue              0.9296          0.5962      U Test, Repetitions: 9 vs 9\nheads_structs_encode                -0.3287         -0.3289             3             2             3             2\nheads_structs_encode                -0.2415         -0.2539             3             3             3             2\nheads_structs_encode                +0.2546         +0.2669             2             2             2             2\nheads_structs_encode                -0.0953         -0.0912             2             2             2             2\nheads_structs_encode                +0.1179         +0.1150             2             2             2             2\nheads_structs_encode                -0.0414         -0.0469             2             2             2             2\nheads_structs_encode                +0.0490         +0.0859             2             2             2             2\nheads_structs_encode                +0.0058         +0.0121             2             2             2             2\nheads_structs_encode                -0.0732         -0.0578             2             2             2             2\nheads_structs_encode_pvalue          0.9296          0.9296      U Test, Repetitions: 9 vs 9\nheads_schema_encode                 -0.2598         -0.2615             1             1             1             1\nheads_schema_encode                 -0.1437         -0.1524             1             1             1             1\nheads_schema_encode                 +0.2352         +0.2484             1             1             1             1\nheads_schema_encode                 -0.0553         -0.0621             1             1             1             1\nheads_schema_encode                 +0.1163         +0.1168             1             1             1             1\nheads_schema_encode                 +0.0055         -0.0150             1             1             1             1\nheads_schema_encode                 +0.1377         +0.1436             1             1             1             1\nheads_schema_encode                 -0.1115         -0.0996             1             1             1             1\nheads_schema_encode                 -0.0957         -0.0953             1             1             1             1\nheads_schema_encode_pvalue           1.0000          0.9296      U Test, Repetitions: 9 vs 9\nheads_decode_wide                   -0.0903         -0.0914             2             2             2             2\nheads_decode_wide                   +0.1982         +0.1941             1             2             1             2\nheads_decode_wide                   +0.2314         +0.2470             1             2             1             2\nheads_decode_wide                   -0.0340         -0.0340             2             1             2             1\nheads_decode_wide                   +0.9492         +0.9406             1             3             1             3\nheads_decode_wide                   +0.3089         +0.0397             2             2             2             2\nheads_decode_wide                   +0.1107         +0.1098             1             2             1             2\nheads_decode_wide                   +0.0076         +0.0012             2             2             2             2\nheads_decode_wide                   -0.0638         -0.0666             2             2             2             2\nheads_decode_wide_pvalue             0.1333          0.1577      U Test, Repetitions: 9 vs 9\nheads_item_size_long                -0.1511         -0.1505             7             6             7             6\nheads_item_size_long                +0.4301         +0.4349             6             8             6             8\nheads_item_size_long                -0.0600         -0.0599             6             6             6             6\nheads_item_size_long                +0.0068         +0.0072             6             6             6             6\nheads_item_size_long                +0.2425         +0.2450             6             8             6             8\nheads_item_size_long                +0.0350         +0.0374             7             7             7             7\nheads_item_size_long                +0.1007         +0.1021             6             6             6             6\nheads_item_size_long                +0.0995         +0.0578             7             7             7             7\nheads_item_size_long                -0.0502         -0.0695             6             6             6             6\nheads_item_size_long_pvalue          0.4268          0.4799      U Test, Repetitions: 9 vs 9\nheads_encode_large                  -0.1545         -0.1516             1             1             1             1\nheads_encode_large                  +0.1781         +0.2722             1             1             1             1\nheads_encode_large                  -0.3650         -0.3634             1             1             1             1\nheads_encode_large                  -0.0049         -0.0051             1             1             1             1\nheads_encode_large                  +0.1838         +0.1841             1             1             1             1\nheads_encode_large                  +0.1657         +0.0694             1             1             1             1\nheads_encode_large                  +0.1518         +0.1528             1             1             1             1\nheads_encode_large                  +0.0061         -0.0327             1             1             1             1\nheads_encode_large                  -0.1485         -0.1438             1             1             1             1\nheads_encode_large_pvalue            0.9296          0.9296      U Test, Repetitions: 9 vs 9\nOVERALL_GEOMEAN                     +0.0299         +0.0204             0             0             0             0",
+   "a_b": "Comparing /run-dir/out/merged.a.gxx.json to /run-dir/out/merged.b.gxx.json\nBenchmark                              Time             CPU      Time Old      Time New       CPU Old       CPU New\n-------------------------------------------------------------------------------------------------------------------\nheads_encoder                       +0.0842         +0.0730             2             3             2             3\nheads_encoder                       -0.1645         -0.1211             2             2             2             2\nheads_encoder                       -0.1143         -0.1188             3             3             3             3\nheads_encoder                       -0.0752         -0.0888             2             2             2             2\nheads_encoder                       +0.3983         +0.3746             2             3             2             3\nheads_encoder                       +0.7706         +0.7708             2             4             2             4\nheads_encoder                       +0.0746         +0.0779             2             3             2             3\nheads_encoder                       -0.1903         -0.2136             3             2             3             2\nheads_encoder                       +0.5965         +0.5891             3             4             2             4\nheads_encoder_pvalue                 0.5365          0.4799      U Test, Repetitions: 9 vs 9\nheads_encode_iov                    +0.1204         +0.1221             2             2             2             2\nheads_encode_iov                    -0.2479         -0.2335             2             2             2             2\nheads_encode_iov                    -0.0346         -0.0465             2             2             2             2\nheads_encode_iov                    +0.1838         +0.1908             2             2             2             2\nheads_encode_iov                    +0.0869         +0.0875             2             2             2             2\nheads_encode_iov                    +0.3731         +0.3731             2             3             2             3\nheads_encode_iov                    -0.0294         -0.0289             2             2             2             2\nheads_encode_iov                    -0.1869         -0.1916             2             2             2             2\nheads_encode_iov                    +0.6049         +0.6197             2             4             2             4\nheads_encode_iov_pvalue              0.7239          0.7239      U Test, Repetitions: 9 vs 9\nheads_structs_encode                -0.3017         -0.3023             3             2             3             2\nheads_structs_encode                -0.4536         -0.4409             3             2             3             2\nheads_structs_encode                +0.2732         +0.2861             2             2             2             2\nheads_structs_encode                +0.0664         +0.0685             2             2             2             2\nheads_structs_encode                +0.0113         +0.0097             2             2             2             2\nheads_structs_encode                +0.0663         +0.0695             2             2             2             2\nheads_structs_encode                +0.0496         +0.0876             2             2             2             2\nheads_structs_encode                -0.2251         -0.2021             2             2             2             2\nheads_structs_encode                +0.4045         +0.4348             2             3             2             3\nheads_structs_encode_pvalue          0.7911          0.9296      U Test, Repetitions: 9 vs 9\nheads_schema_encode                 -0.2277         -0.2291             1             1             1             1\nheads_schema_encode                 -0.1517         -0.1745             1             1             1             1\nheads_schema_encode                 +0.2459         +0.2593             1             1             1             1\nheads_schema_encode                 +0.0829         +0.0802             1             1             1             1\nheads_schema_encode                 +0.0074         +0.0060             1             1             1             1\nheads_schema_encode                 +0.0045         +0.0012             1             1             1             1\nheads_schema_encode                 +0.1212         +0.1277             1             1             1             1\nheads_schema_encode                 -0.1946         -0.1775             1             1             1             1\nheads_schema_encode                 +0.0067         +0.0039             1             1             1             1\nheads_schema_encode_pvalue           0.8598          0.7911      U Test, Repetitions: 9 vs 9\nheads_decode_wide                   +0.0070         +0.0058             2             2             2             2\nheads_decode_wide                   -0.0123         -0.0410             1             1             1             1\nheads_decode_wide                   +0.2590         +0.2785             1             2             1             2\nheads_decode_wide                   +0.2646         +0.1309             2             2             2             2\nheads_decode_wide                   +0.0907         +0.1005             1             2             1             2\nheads_decode_wide                   -0.0353         -0.0399             2             2             2             2\nheads_decode_wide                   +0.2469         +0.2474             1             2             1             2\nheads_decode_wide                   +0.0664         +0.0370             2             2             2             2\nheads_decode_wide                   +0.0450         +0.0355             2             2             2             2\nheads_decode_wide_pvalue             0.0341          0.0521      U Test, Repetitions: 9 vs 9\nheads_item_size_long                -0.0534         -0.0578             7             7             7             7\nheads_item_size_long                +0.0066         +0.0119             6             6             6             6\nheads_item_size_long                +0.1986         +0.1949             6             7             6             7\nheads_item_size_long                +0.0982         +0.0986             6             7             6             7\nheads_item_size_long                -0.0054         -0.0035             6             6             6             6\nheads_item_size_long                -0.0855         -0.0844             7             6             7             6\nheads_item_size_long                +0.1431         +0.1440             6             7             6             7\nheads_item_size_long                +0.0266         +0.0310             7             7             7             7\nheads_item_size_long                +0.0723         +0.0730             6             7             6             6\nheads_item_size_long_pvalue          0.3314          0.3314      U Test, Repetitions: 9 vs 9\nheads_encode_large                  +0.0405         +0.0427             1             1             1             1\nheads_encode_large                  +0.1719         +0.2649             1             1             1             1\nheads_encode_large                  -0.4015         -0.3980             1             1             1             1\nheads_encode_large                  +0.1139         +0.1118             1             1             1             1\nheads_encode_large                  +0.1198         +0.1215             1             1             1             1\nheads_encode_large                  -0.0610         -0.0651             1             1             1             1\nheads_encode_large                  +0.2666         +0.2550             1             1             1             1\nheads_encode_large                  +0.0253         +0.0274             1             1             1             1\nheads_encode_large                  +0.1518         +0.0622             1             1             1             1\nheads_encode_large_pvalue            0.3772          0.3314      U Test, Repetitions: 9 vs 9\nOVERALL_GEOMEAN                     +0.0376         +0.0368             0             0             0             0"
+  },
+  "clang": {
+   "a_aa": "Comparing /run-dir/out/merged.a.clang.json to /run-dir/out/merged.aa.clang.json\nBenchmark                              Time             CPU      Time Old      Time New       CPU Old       CPU New\n-------------------------------------------------------------------------------------------------------------------\nheads_encoder                       +0.2481         +0.2505             2             3             2             3\nheads_encoder                       +0.1279         +0.1340             1             2             1             2\nheads_encoder                       -0.2622         -0.2250             2             1             2             1\nheads_encoder                       +0.7878         +0.7878             2             3             2             3\nheads_encoder                       -0.1258         -0.1165             2             2             2             2\nheads_encoder                       +0.0400         -0.0323             2             2             2             2\nheads_encoder                       +0.0092         -0.0112             2             2             2             2\nheads_encoder                       +0.3396         +0.4830             2             2             1             2\nheads_encoder                       +0.0063         +0.0112             2             2             2             2\nheads_encoder_pvalue                 0.3772          0.7239      U Test, Repetitions: 9 vs 9\nheads_encode_iov                    -0.0709         +0.0028             2             2             2             2\nheads_encode_iov                    -0.2943         -0.2942             3             2             3             2\nheads_encode_iov                    -0.3250         -0.2809             3             2             2             2\nheads_encode_iov                    -0.0135         -0.0155             2             2             2             2\nheads_encode_iov                    -0.0139         -0.0145             2             2             2             2\nheads_encode_iov                    -0.0443         -0.0461             2             2             2             2\nheads_encode_iov                    -0.0130         -0.0151             2             2             2             2\nheads_encode_iov                    +0.0808         +0.0441             2             2             2             2\nheads_encode_iov                    -0.0954         -0.0444             2             2             2             2\nheads_encode_iov_pvalue              0.0521          0.0341      U Test, Repetitions: 9 vs 9\nheads_structs_encode                -0.0133         -0.0067             2             2             2             2\nheads_structs_encode                +0.0289         +0.0270             2             2             2             2\nheads_structs_encode                -0.3094         -0.3176             2             1             2             1\nheads_structs_encode                -0.0861         -0.0873             2             2             2             2\nheads_structs_encode                -0.0130         -0.0213             2             2             2             2\nheads_structs_encode                -0.0024         -0.0039             2             2             2             2\nheads_structs_encode                -0.0347         -0.0036             2             2             2             2\nheads_structs_encode                +0.6835         +0.7379             2             3             2             3\nheads_structs_encode                -0.1025         -0.0827             2             2             2             2\nheads_structs_encode_pvalue          0.4799          0.4799      U Test, Repetitions: 9 vs 9\nheads_schema_encode                 -0.1406         -0.1352             1             1             1             1\nheads_schema_encode                 +0.0269         +0.0262             1             1             1             1\nheads_schema_encode                 -0.3022         -0.2914             1             1             1             1\nheads_schema_encode                 -0.0955         -0.0951             1             1             1             1\nheads_schema_encode                 -0.1368         -0.1385             1             1             1             1\nheads_schema_encode                 +0.0252         +0.0184             1             1             1             1\nheads_schema_encode                 -0.0597         -0.0080             1             1             1             1\nheads_schema_encode                 +0.1778         +0.1724             1             1             1             1\nheads_schema_encode                 -0.0295         -0.0135             1             1             1             1\nheads_schema_encode_pvalue           0.1577          0.1333      U Test, Repetitions: 9 vs 9\nheads_decode_wide                   -0.3989         -0.3987             3             2             3             2\nheads_decode_wide                   -0.0826         -0.0826             2             2             2             2\nheads_decode_wide                   -0.1640         -0.1649             2             2             2             2\nheads_decode_wide                   -0.1837         -0.1979             2             2             2             2\nheads_decode_wide                   -0.1780         -0.1786             2             2             2             2\nheads_decode_wide                   +0.0551         +0.0451             2             2             2             2\nheads_decode_wide                   -0.0380         -0.0587             2             2             2             2\nheads_decode_wide                   -0.0325         -0.0177             2             2             2             2\nheads_decode_wide                   +0.1761         +0.1835             2             2             2             2\nheads_decode_wide_pvalue             0.1577          0.2164      U Test, Repetitions: 9 vs 9\nheads_item_size_long                -0.0386         -0.0397            10            10            10            10\nheads_item_size_long                -0.0748         -0.0756            10             9            10             9\nheads_item_size_long                -0.1150         -0.1260            10             9            10             9\nheads_item_size_long                -0.1567         -0.1682            10             8            10             8\nheads_item_size_long                -0.0034         -0.0051            10            10            10            10\nheads_item_size_long                +0.0524         +0.0332             9            10             9            10\nheads_item_size_long                +0.0146         +0.0000            10            10            10            10\nheads_item_size_long                +0.2630         +0.2528             8            10             8            10\nheads_item_size_long                +0.0375         +0.0702             9            10             9            10\nheads_item_size_long_pvalue          0.7239          0.3314      U Test, Repetitions: 9 vs 9\nheads_encode_large                  +0.0221         +0.0167             1             1             1             1\nheads_encode_large                  -0.0993         -0.0865             1             1             1             1\nheads_encode_large                  +0.0277         -0.0134             1             1             1             1\nheads_encode_large                  -0.3275         -0.3236             1             1             1             1\nheads_encode_large                  -0.0215         -0.0207             1             1             1             1\nheads_encode_large                  +0.0695         +0.0620             1             1             1             1\nheads_encode_large                  +0.0250         +0.0234             1             1             1             1\nheads_encode_large                  +0.2188         +0.2450             1             1             1             1\nheads_encode_large                  +0.1810         +0.1998             1             1             1             1\nheads_encode_large_pvalue            0.7239          0.7239      U Test, Repetitions: 9 vs 9\nOVERALL_GEOMEAN                     -0.0302         -0.0254             0             0             0             0",
+   "a_b": "Comparing /run-dir/out/merged.a.clang.json to /run-dir/out/merged.b.clang.json\nBenchmark                              Time             CPU      Time Old      Time New       CPU Old       CPU New\n-------------------------------------------------------------------------------------------------------------------\nheads_encoder                       -0.1858         -0.1849             2             2             2             2\nheads_encoder                       +0.3626         +0.3033             1             2             1             2\nheads_encoder                       +0.7668         +0.8554             2             3             2             3\nheads_encoder                       +0.1073         +0.1032             2             2             2             2\nheads_encoder                       -0.1308         -0.1225             2             2             2             2\nheads_encoder                       +0.1823         +0.1686             2             2             2             2\nheads_encoder                       +0.0974         +0.0983             2             2             2             2\nheads_encoder                       +0.6319         +0.8088             2             3             1             3\nheads_encoder                       +0.6438         +0.6861             2             3             2             3\nheads_encoder_pvalue                 0.0217          0.0217      U Test, Repetitions: 9 vs 9\nheads_encode_iov                    -0.0832         -0.0076             2             2             2             2\nheads_encode_iov                    -0.2733         -0.2881             3             2             3             2\nheads_encode_iov                    -0.1786         -0.1160             3             2             2             2\nheads_encode_iov                    -0.0364         -0.0364             2             2             2             2\nheads_encode_iov                    -0.0397         -0.0471             2             2             2             2\nheads_encode_iov                    +0.0192         +0.0050             2             2             2             2\nheads_encode_iov                    -0.0539         -0.0664             2             2             2             2\nheads_encode_iov                    +0.2677         +0.2816             2             2             2             2\nheads_encode_iov                    +0.0226         +0.0886             2             3             2             3\nheads_encode_iov_pvalue              0.2893          0.2164      U Test, Repetitions: 9 vs 9\nheads_structs_encode                -0.0012         +0.0069             2             2             2             2\nheads_structs_encode                +0.0396         +0.0400             2             2             2             2\nheads_structs_encode                -0.1534         -0.1534             2             2             2             2\nheads_structs_encode                -0.0837         -0.0891             2             2             2             2\nheads_structs_encode                -0.0528         -0.0528             2             2             2             2\nheads_structs_encode                +0.0324         +0.0251             2             2             2             2\nheads_structs_encode                -0.1488         -0.1125             2             2             2             2\nheads_structs_encode                +0.0690         +0.1015             2             2             2             2\nheads_structs_encode                -0.1573         -0.1372             2             2             2             2\nheads_structs_encode_pvalue          0.1333          0.2510      U Test, Repetitions: 9 vs 9\nheads_schema_encode                 -0.1307         -0.1248             1             1             1             1\nheads_schema_encode                 +0.0325         +0.0323             1             1             1             1\nheads_schema_encode                 -0.1761         -0.1380             1             1             1             1\nheads_schema_encode                 -0.0910         -0.0921             1             1             1             1\nheads_schema_encode                 -0.2515         -0.2755             1             1             1             1\nheads_schema_encode                 +0.0259         +0.0190             1             1             1             1\nheads_schema_encode                 -0.1326         -0.0717             1             1             1             1\nheads_schema_encode                 -0.0194         -0.0187             1             1             1             1\nheads_schema_encode                 -0.0452         -0.0280             1             1             1             1\nheads_schema_encode_pvalue           0.0217          0.0217      U Test, Repetitions: 9 vs 9\nheads_decode_wide                   -0.3963         -0.3968             3             2             3             2\nheads_decode_wide                   +0.0037         +0.0044             2             2             2             2\nheads_decode_wide                   -0.0184         -0.0192             2             2             2             2\nheads_decode_wide                   +0.0050         +0.0007             2             2             2             2\nheads_decode_wide                   -0.3305         -0.3315             2             2             2             2\nheads_decode_wide                   +0.2178         +0.1976             2             2             2             2\nheads_decode_wide                   +0.3344         +0.3367             2             3             2             3\nheads_decode_wide                   -0.0283         -0.0120             2             2             2             2\nheads_decode_wide                   -0.0144         -0.0056             2             2             2             2\nheads_decode_wide_pvalue             0.2893          0.3772      U Test, Repetitions: 9 vs 9\nheads_item_size_long                -0.1755         -0.1808            10             8            10             8\nheads_item_size_long                +0.0038         +0.0049            10            10            10            10\nheads_item_size_long                -0.0063         -0.0066            10            10            10            10\nheads_item_size_long                -0.0185         -0.0071            10            10            10            10\nheads_item_size_long                +0.0005         -0.0122            10            10            10            10\nheads_item_size_long                -0.1553         -0.1564             9             8             9             8\nheads_item_size_long                -0.0583         -0.0587            10             9            10             9\nheads_item_size_long                +0.2744         +0.2760             8            10             8            10\nheads_item_size_long                +0.0369         +0.0717             9            10             9            10\nheads_item_size_long_pvalue          0.5962          0.3772      U Test, Repetitions: 9 vs 9\nheads_encode_large                  -0.1526         -0.1547             1             1             1             1\nheads_encode_large                  -0.0142         +0.0005             1             1             1             1\nheads_encode_large                  -0.0486         -0.0492             1             1             1             1\nheads_encode_large                  -0.3060         -0.3138             1             1             1             1\nheads_encode_large                  -0.0268         -0.0263             1             1             1             1\nheads_encode_large                  +0.1901         +0.1204             1             1             1             1\nheads_encode_large                  -0.1259         -0.1225             1             1             1             1\nheads_encode_large                  +0.2031         +0.2304             1             1             1             1\nheads_encode_large                  +0.1988         +0.2218             1             1             1             1\nheads_encode_large_pvalue            0.7911          0.9296      U Test, Repetitions: 9 vs 9\nOVERALL_GEOMEAN                     -0.0127         -0.0047             0             0             0             0"
+  }
+ },
+ "cells": {
+  "gxx": {
+   "heads_decode_wide": {
+    "a": {
+     "repetitions_ns": [
+      1718930.5128153928,
+      1445145.8181797122,
+      1365719.3148143657,
+      1535822.3260848362,
+      1490308.4347877111,
+      1638750.0000030529,
+      1377208.6399967521,
+      1681840.7500006123,
+      1684358.523810997
+     ],
+     "median_ns": 1535822.3260848362,
+     "spread": 0.2586264938700358
+    },
+    "aa": {
+     "repetitions_ns": [
+      1563744.6190556234,
+      1731644.9285707287,
+      1681811.3333339992,
+      1483549.0624989234,
+      2904913.1666657296,
+      2144927.7750093644,
+      1529633.2666669816,
+      1694610.783783286,
+      1576826.930241348
+     ],
+     "median_ns": 1681811.3333339992,
+     "spread": 0.9580836523010763
+    },
+    "b": {
+     "repetitions_ns": [
+      1731005.707314602,
+      1427361.2884625646,
+      1719403.5121974593,
+      1942204.829269829,
+      1625524.9565307642,
+      1580830.5111123547,
+      1717267.349999929,
+      1793525.2750021392,
+      1760081.4594639027
+     ],
+     "median_ns": 1719403.5121974593,
+     "spread": 0.3606960234726635
+    },
+    "a_over_a_ratio": 1.0950559220097564,
+    "b_over_a_ratio": 1.119532828110797,
+    "utest_a_aa": {
+     "time_pvalue": 0.1333202155896274,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.034069195144143936,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": true
+   },
+   "heads_encode_iov": {
+    "a": {
+     "repetitions_ns": [
+      1963344.9411792431,
+      2271952.0645237467,
+      2202820.2083295886,
+      1920664.972228931,
+      1930734.9999988016,
+      1897858.1621578652,
+      2258767.3666597162,
+      2169928.3749967436,
+      2217848.5312451813
+     ],
+     "median_ns": 2169928.3749967436,
+     "spread": 0.19711373053323267
+    },
+    "aa": {
+     "repetitions_ns": [
+      2013171.0909040659,
+      2134129.9696938554,
+      2221596.750004551,
+      1926618.0540546123,
+      2133564.875009597,
+      2050345.6666615834,
+      2047018.8235321986,
+      2425789.2903205496,
+      2045455.029420897
+     ],
+     "median_ns": 2050345.6666615834,
+     "spread": 0.25909195401518215
+    },
+    "b": {
+     "repetitions_ns": [
+      2199718.9687539274,
+      1708825.8750050045,
+      2126507.05128535,
+      2273705.138893294,
+      2098465.919989394,
+      2606006.149994755,
+      2192302.562505688,
+      1764367.9249999877,
+      3559352.31578099
+     ],
+     "median_ns": 2192302.562505688,
+     "spread": 1.082922764597397
+    },
+    "a_over_a_ratio": 0.944890942155941,
+    "b_over_a_ratio": 1.010311025823135,
+    "utest_a_aa": {
+     "time_pvalue": 0.9296365245070707,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.7239320396139757,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "heads_encode_large": {
+    "a": {
+     "repetitions_ns": [
+      928809.0135165426,
+      800884.5578938475,
+      1270184.2380942078,
+      817085.7441856179,
+      772775.9204540647,
+      876233.6774159321,
+      731276.0978256057,
+      876311.7894695345,
+      933794.9736857952
+     ],
+     "median_ns": 876233.6774159321,
+     "spread": 0.7369420959757949
+    },
+    "aa": {
+     "repetitions_ns": [
+      785326.4000004856,
+      943537.8333306196,
+      806611.7471236961,
+      813058.0919541167,
+      914844.1600033644,
+      1021445.0135147155,
+      842292.9058831547,
+      881685.4399992735,
+      795123.5368445371
+     ],
+     "median_ns": 842292.9058831547,
+     "spread": 0.3006630281550242
+    },
+    "b": {
+     "repetitions_ns": [
+      966449.5217399183,
+      938548.4558793799,
+      760164.4210509269,
+      910185.1948042923,
+      865317.9012341113,
+      822780.3902417046,
+      926207.7631582973,
+      898439.5232568373,
+      1075544.9868431818
+     ],
+     "median_ns": 910185.1948042923,
+     "spread": 0.41488467107713545
+    },
+    "a_over_a_ratio": 0.9612651597312821,
+    "b_over_a_ratio": 1.0387471039557454,
+    "utest_a_aa": {
+     "time_pvalue": 0.9296365245070707,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.37722461666745344,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "heads_encoder": {
+    "a": {
+     "repetitions_ns": [
+      2390620.8695695135,
+      2444930.2666653236,
+      2868500.299996413,
+      2310058.241383903,
+      2140137.0356995487,
+      2234206.892857011,
+      2453580.6428665244,
+      2607017.333334456,
+      2579900.3749966687
+     ],
+     "median_ns": 2444930.2666653236,
+     "spread": 0.3403348720885919
+    },
+    "aa": {
+     "repetitions_ns": [
+      2395061.1724197594,
+      3129127.079992031,
+      2580433.384624624,
+      2411024.520006322,
+      3953420.4285830907,
+      2588876.4285766575,
+      2560643.428556172,
+      2589847.962974966,
+      2447454.6785638398
+     ],
+     "median_ns": 2580433.384624624,
+     "spread": 0.6506553043857757
+    },
+    "b": {
+     "repetitions_ns": [
+      2591989.814812189,
+      2042655.4411802925,
+      2540701.999990873,
+      2136431.848488097,
+      2992594.777778221,
+      3955911.0769355004,
+      2636653.555563734,
+      2110901.870970162,
+      4118743.444434114
+     ],
+     "median_ns": 2591989.814812189,
+     "spread": 1.0163672058436886
+    },
+    "a_over_a_ratio": 1.0554220788244055,
+    "b_over_a_ratio": 1.0601487699473089,
+    "utest_a_aa": {
+     "time_pvalue": 0.1333202155896274,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.5364994693194564,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "heads_item_size_long": {
+    "a": {
+     "repetitions_ns": [
+      7009225.599995261,
+      5637795.500016789,
+      5946984.769252595,
+      6068568.500002887,
+      6178339.714291984,
+      6611791.909067092,
+      5759509.500004848,
+      6749541.454568813,
+      6130751.222220472
+     ],
+     "median_ns": 6130751.222220472,
+     "spread": 0.24325644659767964
+    },
+    "aa": {
+     "repetitions_ns": [
+      5950462.4999817675,
+      8062670.333351385,
+      5590249.769249147,
+      6110002.500008704,
+      7676301.374999639,
+      6842877.45451167,
+      6339226.749976963,
+      7421108.090883618,
+      5823222.749995694
+     ],
+     "median_ns": 6339226.749976963,
+     "spread": 0.44227372052363956
+    },
+    "b": {
+     "repetitions_ns": [
+      6634671.416653266,
+      5674961.692315824,
+      7128025.399970284,
+      6664788.545466846,
+      6144771.727287496,
+      6046342.090940015,
+      6583649.166676272,
+      6928941.399974065,
+      6573733.272737379
+     ],
+     "median_ns": 6583649.166676272,
+     "spread": 0.25604819669919165
+    },
+    "a_over_a_ratio": 1.0340048911136512,
+    "b_over_a_ratio": 1.0738731564925197,
+    "utest_a_aa": {
+     "time_pvalue": 0.42677673653298365,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.331387096247615,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "heads_schema_encode": {
+    "a": {
+     "repetitions_ns": [
+      845837.2907001788,
+      779454.7647095255,
+      528401.6356587341,
+      606623.7719288007,
+      583448.6583315387,
+      583573.5983614317,
+      548035.674420353,
+      682072.6448580406,
+      658016.8425932276
+     ],
+     "median_ns": 606623.7719288007,
+     "spread": 0.6007469198041224
+    },
+    "aa": {
+     "repetitions_ns": [
+      626102.7798170681,
+      667435.7499984277,
+      652703.1121498954,
+      573054.6615408318,
+      651329.0092563558,
+      586772.1983468223,
+      623484.618554545,
+      605997.9285737427,
+      595064.3620696516
+     ],
+     "median_ns": 623484.618554545,
+     "spread": 0.1646982300149582
+    },
+    "b": {
+     "repetitions_ns": [
+      653206.4766378145,
+      661177.1605824215,
+      658324.4095227633,
+      656912.2830149113,
+      587767.0749972216,
+      586221.661016248,
+      614432.7631581721,
+      549353.9999977417,
+      662435.0480749924
+     ],
+     "median_ns": 653206.4766378145,
+     "spread": 0.20584367835260253
+    },
+    "a_over_a_ratio": 1.027794569560197,
+    "b_over_a_ratio": 1.076790107583323,
+    "utest_a_aa": {
+     "time_pvalue": 1.0,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.859819205054158,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "heads_structs_encode": {
+    "a": {
+     "repetitions_ns": [
+      3418308.888891867,
+      3404374.5416549123,
+      1897342.2105246803,
+      2243075.9354832727,
+      2113489.2727290704,
+      2205238.218749628,
+      2197825.4062560154,
+      2469344.4137922376,
+      2445152.9655317278
+     ],
+     "median_ns": 2243075.9354832727,
+     "spread": 0.8016301276228852
+    },
+    "aa": {
+     "repetitions_ns": [
+      2294645.9062467283,
+      2582323.190489704,
+      2380432.344831081,
+      2029205.6363525095,
+      2362717.8064441155,
+      2113906.3999877786,
+      2305424.677424819,
+      2483697.5862070112,
+      2266270.77419776
+     ],
+     "median_ns": 2305424.677424819,
+     "spread": 0.27257836476909314
+    },
+    "b": {
+     "repetitions_ns": [
+      2386978.3999998616,
+      1860167.2368396593,
+      2415750.82758698,
+      2392110.965517751,
+      2137294.5624875682,
+      2351554.718742932,
+      2306826.2333254097,
+      1913389.8918954474,
+      3434252.4737009
+     ],
+     "median_ns": 2351554.718742932,
+     "spread": 0.8462063010719085
+    },
+    "a_over_a_ratio": 1.0277960906072106,
+    "b_over_a_ratio": 1.0483616187680636,
+    "utest_a_aa": {
+     "time_pvalue": 0.9296365245070707,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.7910815129207817,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   }
+  },
+  "clang": {
+   "heads_decode_wide": {
+    "a": {
+     "repetitions_ns": [
+      3262050.5217377995,
+      1943955.2222214236,
+      1976024.5555491766,
+      1978960.0555542265,
+      2369438.1666700793,
+      1904255.1388868862,
+      2141785.6944354856,
+      2013128.1111035708,
+      1971290.9444504273
+     ],
+     "median_ns": 1978960.0555542265,
+     "spread": 0.7130322797209829
+    },
+    "aa": {
+     "repetitions_ns": [
+      1960673.3611175916,
+      1783466.694455961,
+      1651891.92856425,
+      1615505.3783861788,
+      1947791.888887372,
+      2009106.1714213407,
+      2060486.6176520716,
+      1947756.4285677676,
+      2318390.3333321926
+     ],
+     "median_ns": 1947791.888887372,
+     "spread": 0.43508673158870326
+    },
+    "b": {
+     "repetitions_ns": [
+      1969271.5000019234,
+      1951161.4166655515,
+      1939690.3333270329,
+      1988847.6666665156,
+      1586322.086960417,
+      2318989.3142833686,
+      2857914.4117670427,
+      1956253.916672621,
+      1942968.777787731
+     ],
+     "median_ns": 1956253.916672621,
+     "spread": 0.8015978187904758
+    },
+    "a_over_a_ratio": 0.9842502295185915,
+    "b_over_a_ratio": 0.9885262267836697,
+    "utest_a_aa": {
+     "time_pvalue": 0.1577043874630777,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.28931483238198774,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "heads_encode_iov": {
+    "a": {
+     "repetitions_ns": [
+      2434062.656249125,
+      3138586.8947405755,
+      2677606.3125026897,
+      2273193.967744925,
+      2229515.2857103464,
+      2197943.56249281,
+      2255282.2580667366,
+      1903336.4473647166,
+      2487793.8064433224
+     ],
+     "median_ns": 2273193.967744925,
+     "spread": 0.6489921679827741
+    },
+    "aa": {
+     "repetitions_ns": [
+      2261379.608685472,
+      2214899.375005075,
+      1807384.8499966515,
+      2242581.322588517,
+      2198463.967752398,
+      2100567.062498726,
+      2225981.093744167,
+      2057135.560978456,
+      2250512.3846223378
+     ],
+     "median_ns": 2214899.375005075,
+     "spread": 0.25118875965440424
+    },
+    "b": {
+     "repetitions_ns": [
+      2231560.906253094,
+      2280673.5624953946,
+      2199322.593739339,
+      2190515.1999969045,
+      2141102.9393868484,
+      2240047.967740294,
+      2133652.1034409716,
+      2412939.809519663,
+      2543991.250013278
+     ],
+     "median_ns": 2231560.906253094,
+     "spread": 0.1923177381685357
+    },
+    "a_over_a_ratio": 0.9743556451552261,
+    "b_over_a_ratio": 0.9816852138081589,
+    "utest_a_aa": {
+     "time_pvalue": 0.052058768750600205,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.28931483238198774,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "heads_encode_large": {
+    "a": {
+     "repetitions_ns": [
+      805137.8139561863,
+      832364.1162818138,
+      842919.2643725609,
+      1203532.4999985842,
+      821320.80952609,
+      781704.8089890797,
+      808960.4651178338,
+      662770.7547188107,
+      684457.287034261
+     ],
+     "median_ns": 808960.4651178338,
+     "spread": 0.8159106922410886
+    },
+    "aa": {
+     "repetitions_ns": [
+      822943.6000018562,
+      749725.791663991,
+      866246.7000021935,
+      809333.2735842403,
+      803651.5697672575,
+      836058.0344815808,
+      829202.5058782361,
+      807799.183908121,
+      808336.0689695461
+     ],
+     "median_ns": 809333.2735842403,
+     "spread": 0.15541803367813745
+    },
+    "b": {
+     "repetitions_ns": [
+      682276.6857112583,
+      820570.0705890623,
+      801981.9534839308,
+      835295.9310328494,
+      799329.5505585092,
+      930302.7850449742,
+      707086.9687500666,
+      797398.8863599598,
+      820506.3977274304
+     ],
+     "median_ns": 801981.9534839308,
+     "spread": 0.36352715038936756
+    },
+    "a_over_a_ratio": 1.0004608488084177,
+    "b_over_a_ratio": 0.9913734824693979,
+    "utest_a_aa": {
+     "time_pvalue": 0.7239320396139757,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.7910815129207817,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "heads_encoder": {
+    "a": {
+     "repetitions_ns": [
+      2252446.5641067647,
+      1474496.3947290864,
+      1807443.951215313,
+      1649037.6585307987,
+      1907766.4000064943,
+      1664454.0000037877,
+      1709915.1951231584,
+      1657427.3829761257,
+      1718817.2926846785
+     ],
+     "median_ns": 1709915.1951231584,
+     "spread": 0.5276039820501652
+    },
+    "aa": {
+     "repetitions_ns": [
+      2811342.9615272116,
+      1663051.6341515097,
+      1333522.4200000083,
+      2948212.4583447934,
+      1667674.8292722062,
+      1731043.3055526018,
+      1725616.0731671026,
+      2220216.624991167,
+      1729711.0000093933
+     ],
+     "median_ns": 1729711.0000093933,
+     "spread": 1.210845812659659
+    },
+    "b": {
+     "repetitions_ns": [
+      1834053.40540294,
+      2009133.297289392,
+      3193338.2857200094,
+      1826014.756753048,
+      1658202.475005055,
+      1967957.9473679615,
+      1876455.944435899,
+      2704692.0833223946,
+      2825393.458332807
+     ],
+     "median_ns": 1967957.9473679615,
+     "spread": 0.9257830897341257
+    },
+    "a_over_a_ratio": 1.0115770682327956,
+    "b_over_a_ratio": 1.150909678433624,
+    "utest_a_aa": {
+     "time_pvalue": 0.37722461666745344,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.021684111364991994,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": true
+   },
+   "heads_item_size_long": {
+    "a": {
+     "repetitions_ns": [
+      10083278.142896492,
+      9653178.142863387,
+      9768847.142822778,
+      9867376.571427096,
+      9729057.57141364,
+      9397751.142906988,
+      9681140.00001411,
+      7619883.875008781,
+      9364201.428590083
+     ],
+     "median_ns": 9681140.00001411,
+     "spread": 0.3232850143513337
+    },
+    "aa": {
+     "repetitions_ns": [
+      9693603.000024658,
+      8931126.124991806,
+      8644941.999995759,
+      8321184.333302275,
+      9696351.571424853,
+      9889850.14289158,
+      9822593.285727113,
+      9623835.142844785,
+      9715742.999950245
+     ],
+     "median_ns": 9693603.000024658,
+     "spread": 0.18851472900454036
+    },
+    "b": {
+     "repetitions_ns": [
+      8313976.142874578,
+      9690015.571452802,
+      9707545.142906124,
+      9685304.428590566,
+      9733933.444446543,
+      7938219.142878162,
+      9116438.749970257,
+      9711078.000041848,
+      9709515.857139194
+     ],
+     "median_ns": 9690015.571452802,
+     "spread": 0.2262112281416948
+    },
+    "a_over_a_ratio": 1.0012873483918763,
+    "b_over_a_ratio": 1.0009167899068374,
+    "utest_a_aa": {
+     "time_pvalue": 0.7239320396139757,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.5962416305866567,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "heads_schema_encode": {
+    "a": {
+     "repetitions_ns": [
+      826924.9673918714,
+      683772.8932031963,
+      850944.5618002564,
+      776101.115381887,
+      825892.1604948104,
+      698064.9399974936,
+      772065.2899979542,
+      723305.6710566942,
+      734803.2474238636
+     ],
+     "median_ns": 772065.2899979542,
+     "spread": 0.24448419973761926
+    },
+    "aa": {
+     "repetitions_ns": [
+      710636.8979599879,
+      702158.161618512,
+      593780.1562510004,
+      702020.3232316661,
+      712889.8383837282,
+      715646.1717129033,
+      725962.0505042543,
+      851936.7857150515,
+      713119.4545469742
+     ],
+     "median_ns": 712889.8383837282,
+     "spread": 0.4347680311413509
+    },
+    "b": {
+     "repetitions_ns": [
+      718880.6105276806,
+      706013.484850333,
+      701095.2600012388,
+      705478.2121201123,
+      618176.9687524744,
+      716157.5918333404,
+      669724.437500463,
+      709288.9599971386,
+      701605.5700023571
+     ],
+     "median_ns": 705478.2121201123,
+     "spread": 0.16290422785959402
+    },
+    "a_over_a_ratio": 0.9233543427209598,
+    "b_over_a_ratio": 0.9137546024403994,
+    "utest_a_aa": {
+     "time_pvalue": 0.1577043874630777,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.021684111364991994,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "heads_structs_encode": {
+    "a": {
+     "repetitions_ns": [
+      1739933.4146386713,
+      1652136.6341427292,
+      1966148.8974331103,
+      1876984.7179450712,
+      1733137.628577554,
+      1683074.3809458953,
+      1788688.450005793,
+      1594824.5319084385,
+      2026311.1111060223
+     ],
+     "median_ns": 1739933.4146386713,
+     "spread": 0.2705542651022852
+    },
+    "aa": {
+     "repetitions_ns": [
+      1716720.6829293629,
+      1699920.878053956,
+      1357868.9423026775,
+      1715311.3414634592,
+      1710644.756102982,
+      1679024.7209322588,
+      1726695.902439909,
+      2684964.4583345857,
+      1818640.0731637394
+     ],
+     "median_ns": 1715311.3414634592,
+     "spread": 0.9773369687515028
+    },
+    "b": {
+     "repetitions_ns": [
+      1737816.975614029,
+      1717636.9268249467,
+      1664502.926836931,
+      1719860.3589769425,
+      1641712.7435838315,
+      1737546.2926881993,
+      1522562.4666729546,
+      1704884.5121923767,
+      1707489.4047666367
+     ],
+     "median_ns": 1707489.4047666367,
+     "spread": 0.14137647134533693
+    },
+    "a_over_a_ratio": 0.9858488417039077,
+    "b_over_a_ratio": 0.9813533037534242,
+    "utest_a_aa": {
+     "time_pvalue": 0.47992869214595724,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.1333202155896274,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   }
+  }
+ }
+}
