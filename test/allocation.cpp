@@ -149,6 +149,38 @@ TEST_CASE("lazy::adopt and at_path give not_enough_memory when the owner cannot 
     CHECK_EQ(view_error, error::not_enough_memory);
 }
 
+// A filter compared each element with its literal through a std::string and a std::shared_ptr, and copied the
+// elements into a std::vector first, so the allocations of one call grew with the elements. The literal is now a
+// lazy over the bytes of the parsed path, and the elements are tested in place: an array of 40 elements costs the
+// allocations of an array of 4, in the compile mode and in the run-time mode.
+TEST_CASE("path: a filter with a literal allocates nothing for each element")
+{
+    auto const array_of = [](std::size_t const n) {
+        std::string bytes(1, static_cast<char>(0x98));
+        bytes.push_back(static_cast<char>(n));
+        for (std::size_t i = 0; i < n; ++i)
+            bytes.push_back(static_cast<char>(i % 0x18));
+        return *test::lazy_of_copy(std::move(bytes));
+    };
+    constexpr std::size_t few = 4;
+    constexpr std::size_t many = 40;
+    auto const small = array_of(few);
+    auto const large = array_of(many);
+    auto const counted = [](auto const &call) {
+        std::size_t const before = allocations;
+        auto const r = call();
+        std::size_t const after = allocations;
+        REQUIRE(r.has_value());
+        CHECK(r->empty());
+        return after - before;
+    };
+    CHECK_EQ(counted([&] { return small.at_path<"$[?@ == 99]", cbor::nodelist>(); }),
+             counted([&] { return large.at_path<"$[?@ == 99]", cbor::nodelist>(); }));
+    auto const query = cbor::path::compile<cbor::nodelist>("$[?@ == 99]");
+    REQUIRE(query.has_value());
+    CHECK_EQ(counted([&] { return small.at_path(*query); }), counted([&] { return large.at_path(*query); }));
+}
+
 // The path that succeeds compares a key of the top-level item with a literal by value without an allocation: the
 // top-level item holds no shared value, and the literal [1, "x"] is parsed at compile time.
 TEST_CASE("path: a key is compared without an allocation")
@@ -315,20 +347,6 @@ TEST_CASE("path: a typed read with a key that is not text allocates nothing")
     std::size_t const after = allocations;
     CHECK_EQ(after, before);
     CHECK_EQ(value, 7);
-}
-
-// A filter with a literal builds a value for the literal at each child it tests, so the allocations grow with the
-// children.
-TEST_CASE("path: a filter with a literal allocates for each child")
-{
-    auto const three = *test::lazy_of_copy(encoded(A(1, 2, 3)));
-    auto const six = *test::lazy_of_copy(encoded(A(4, 5, 6, 7, 8, 9)));
-    std::size_t const before = allocations;
-    (void)test::query("$[?@ == 1]", three);
-    std::size_t const middle = allocations;
-    (void)test::query("$[?@ == 1]", six);
-    std::size_t const after = allocations;
-    CHECK_GT(after - middle, middle - before);
 }
 
 // The public encoder over a span of the caller writes into that memory only: a whole data item of every kind of

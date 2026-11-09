@@ -1664,19 +1664,26 @@ inline std::expected<std::optional<lazy>, error> path::comparable_value(query_vi
         return *l;
     };
     switch (e.kind) {
-    case logical_expr::kind::literal: {
-        auto const owner = std::make_shared<std::string const>(
-            std::string_view(std::span(v.keys).subspan(e.first, e.second)));
-        auto const l = lazy::view(owner);
-        if (!l) [[unlikely]]
-            return std::unexpected(l.error());
-        return *l;
-    }
+    case logical_expr::kind::literal:
+        return lazy{lazy::top_level_item{std::shared_ptr<void const>{},
+                                         heads::self_described_cbor_content(
+                                             std::string_view(std::span(v.keys).subspan(e.first, e.second)))},
+                    0,
+                    {}};
     case logical_expr::kind::filter_query:
     case logical_expr::kind::count:
     case logical_expr::kind::value: {
         std::size_t const at = e.kind == logical_expr::kind::filter_query ? index : e.first;
         logical_expr const &q = v.expressions[at];
+        if (q.relative && q.singular && e.kind != logical_expr::kind::count) {
+            auto const node = walk_singular_query(v, parsed_query{0, q.first, q.second, true}, current);
+            if (node)
+                return *node;
+            if (node.error() != error::not_indexable && node.error() != error::index_out_of_bounds &&
+                node.error() != error::key_not_found) [[unlikely]]
+                return std::unexpected(node.error());
+            return std::nullopt;
+        }
         std::expected<std::vector<lazy>, error> relative;
         if (q.relative)
             relative = apply_segments(v, q.first, q.second, current, root);
@@ -1821,8 +1828,43 @@ inline std::expected<void, error> path::apply_selector(query_view const v, selec
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     lazy const content{found->source, std::to_underlying(found->item_at), {}};
+    bool const elements_first = found->h.major == major_type::array || heads::is_typed_array(found->h);
+    if (s.kind != selector::kind::slice) {
+        auto const chosen = [&](lazy const &child) -> std::expected<void, error> {
+            if (s.kind == selector::kind::filter) {
+                auto const tested = test_expression(v, s.expression, child, root);
+                if (!tested) [[unlikely]]
+                    return std::unexpected(tested.error());
+                if (!*tested)
+                    return {};
+            }
+            return append(child);
+        };
+        if (elements_first) {
+            auto const elements = content.elements();
+            if (!elements) [[unlikely]]
+                return std::unexpected(elements.error());
+            for (auto const element : *elements) {
+                if (!element) [[unlikely]]
+                    return std::unexpected(element.error());
+                if (auto const r = chosen(*element); !r) [[unlikely]]
+                    return r;
+            }
+        } else if (found->h.major == major_type::map) {
+            auto const entries = content.entries();
+            if (!entries) [[unlikely]]
+                return std::unexpected(entries.error());
+            for (auto const entry : *entries) {
+                if (!entry) [[unlikely]]
+                    return std::unexpected(entry.error());
+                if (auto const r = chosen(entry->second); !r) [[unlikely]]
+                    return r;
+            }
+        }
+        return {};
+    }
     std::vector<lazy> children;
-    if (found->h.major == major_type::array || heads::is_typed_array(found->h)) {
+    if (elements_first) {
         auto const elements = content.elements();
         if (!elements) [[unlikely]]
             return std::unexpected(elements.error());
@@ -1831,50 +1873,27 @@ inline std::expected<void, error> path::apply_selector(query_view const v, selec
                 return std::unexpected(element.error());
             children.push_back(*element);
         }
-            } else if (found->h.major == major_type::map && s.kind != selector::kind::slice) {
-                auto const entries = content.entries();
-                if (!entries) [[unlikely]]
-                    return std::unexpected(entries.error());
-                for (auto const entry : *entries) {
-                    if (!entry) [[unlikely]]
-                        return std::unexpected(entry.error());
-                    children.push_back(entry->second);
-                }
-            }
-            if (s.kind == selector::kind::slice) {
-                auto const len = static_cast<std::int64_t>(children.size());
-                if (s.step == 0)
-                    return {};
-                auto const normalize = [len](std::int64_t const i) { return i >= 0 ? i : len + i; };
-                std::int64_t const start = normalize(s.start.value_or(s.step >= 0 ? 0 : len - 1));
-                std::int64_t const end = s.end ? normalize(*s.end) : (s.step >= 0 ? len : -1);
-                if (s.step > 0) {
-                    std::int64_t const lower = std::min(std::max(start, std::int64_t{0}), len);
-                    std::int64_t const upper = std::min(std::max(end, std::int64_t{0}), len);
-                    for (std::int64_t i = lower; i < upper; i += s.step)
-                        if (auto const r = append(children[static_cast<std::size_t>(i)]); !r) [[unlikely]]
-                            return r;
-                } else {
-                    std::int64_t const upper = std::min(std::max(start, std::int64_t{-1}), len - 1);
-                    std::int64_t const lower = std::min(std::max(end, std::int64_t{-1}), len - 1);
-                    for (std::int64_t i = upper; lower < i; i += s.step)
-                        if (auto const r = append(children[static_cast<std::size_t>(i)]); !r) [[unlikely]]
-                            return r;
-                }
-                return {};
-            }
-            for (lazy const &child : children) {
-                if (s.kind == selector::kind::filter) {
-                    auto const chosen = test_expression(v, s.expression, child, root);
-                    if (!chosen) [[unlikely]]
-                        return std::unexpected(chosen.error());
-                    if (!*chosen)
-                        continue;
-                }
-                if (auto const r = append(child); !r) [[unlikely]]
-                    return r;
-            }
-            return {};
+    }
+    auto const len = static_cast<std::int64_t>(children.size());
+    if (s.step == 0)
+        return {};
+    auto const normalize = [len](std::int64_t const i) { return i >= 0 ? i : len + i; };
+    std::int64_t const start = normalize(s.start.value_or(s.step >= 0 ? 0 : len - 1));
+    std::int64_t const end = s.end ? normalize(*s.end) : (s.step >= 0 ? len : -1);
+    if (s.step > 0) {
+        std::int64_t const lower = std::min(std::max(start, std::int64_t{0}), len);
+        std::int64_t const upper = std::min(std::max(end, std::int64_t{0}), len);
+        for (std::int64_t i = lower; i < upper; i += s.step)
+            if (auto const r = append(children[static_cast<std::size_t>(i)]); !r) [[unlikely]]
+                return r;
+    } else {
+        std::int64_t const upper = std::min(std::max(start, std::int64_t{-1}), len - 1);
+        std::int64_t const lower = std::min(std::max(end, std::int64_t{-1}), len - 1);
+        for (std::int64_t i = upper; lower < i; i += s.step)
+            if (auto const r = append(children[static_cast<std::size_t>(i)]); !r) [[unlikely]]
+                return r;
+    }
+    return {};
 }
 
 inline std::expected<void, error> path::apply_segment(query_view const v, segment const &s,
@@ -1955,8 +1974,8 @@ auto path::apply_compiled(Walk const &walk)
     constexpr std::size_t expressions = q().expressions.size();
     constexpr std::size_t keys = q().keys.size();
     constexpr auto top = q().top;
-    constexpr auto compiled = [q] {
-        auto const parsed = q();
+    static constexpr auto compiled = [] {
+        auto const parsed = *parse_query(Path.view());
         std::tuple<std::array<segment, segments>, std::array<selector, selectors>,
                    std::array<logical_expr, expressions>, std::array<char, keys>>
             c{};
