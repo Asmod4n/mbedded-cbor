@@ -36,6 +36,17 @@ TEST_CASE("path edn numbers: decimal floats rounded to the nearest binary64")
     }
 }
 
+// draft-ietf-cbor-edn-literals-28 5.1: a hexadecimal float is its mantissa times 2 to its exponent, rounded once to
+// the nearest binary64. 0x5p-1077 is 5/8 of the smallest subnormal and rounds to it; a mantissa halved step by step
+// rounds at each step and reaches 0. 0x1p-1074 is the smallest subnormal exactly, and 0x1.8p1023 is exact too.
+TEST_CASE("path edn numbers: a hexadecimal float with a subnormal result rounds once")
+{
+    selects("0x5p-1077", "fb0000000000000001");
+    selects("0x1p-1074", "fb0000000000000001");
+    selects("0x3p-1076", "fb0000000000000001");
+    selects("0x1.8p1023", "fb7fe8000000000000");
+}
+
 // 5.1, note on decnumber: the range needs to fit a binary64. A value beyond the largest finite binary64, or below
 // half the smallest subnormal, which would round to zero, is no literal on either path.
 TEST_CASE("path edn numbers: decimal floats outside the range of a binary64")

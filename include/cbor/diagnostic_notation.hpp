@@ -573,11 +573,26 @@ class extended_diagnostic_notation
         } else if (base == hexadecimal) {
             if (overflow || mantissa > exact_max) [[unlikely]]
                 return std::unexpected(error::invalid_path);
-            value = static_cast<double>(mantissa);
-            for (int i = 0; i < exponent; ++i)
-                value *= 2.0;
-            for (int i = 0; i > exponent; --i)
-                value *= 0.5;
+            constexpr int highest = std::numeric_limits<double>::max_exponent - 1;
+            constexpr int lowest_normal = std::numeric_limits<double>::min_exponent - 1;
+            constexpr int lowest = std::numeric_limits<double>::min_exponent - std::numeric_limits<double>::digits;
+            auto const power_of_two = [](int const e) {
+                double power = 1.0;
+                for (int i = 0; i < e; ++i)
+                    power *= 2.0;
+                for (int i = 0; i > e; --i)
+                    power *= 0.5;
+                return power;
+            };
+            int const exact_step = std::clamp(exponent, lowest_normal, highest);
+            int const rounded_step = exponent - exact_step;
+            value = static_cast<double>(mantissa) * power_of_two(exact_step);
+            if (rounded_step < lowest)
+                value = 0.0;
+            else if (rounded_step > highest)
+                value = std::numeric_limits<double>::infinity();
+            else
+                value *= power_of_two(rounded_step);
         } else {
 #if defined(__cpp_lib_to_chars) || (defined(_LIBCPP_VERSION) && _LIBCPP_AVAILABILITY_HAS_FROM_CHARS_FLOATING_POINT)
             if !consteval {
