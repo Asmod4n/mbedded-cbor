@@ -13,3 +13,10 @@ cts.cbor holds the same cases in CBOR. cts_to_cbor.py writes it:
 A valid case is [name, selector, document, results]; results is the
 array of every nodelist that the suite allows. A case with an invalid
 selector is [name, selector].
+
+test/cts/at_path_1.cpp to at_path_4.cpp hold every selector of the suite
+as a path of the compile mode. cts_to_cpp.py writes them, and
+clang-format gives them the layout of the tree:
+
+    python3 -I cts_to_cpp.py cts.json ../cts
+    clang-format -i ../cts/at_path_*.cpp
