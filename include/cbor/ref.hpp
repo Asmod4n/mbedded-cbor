@@ -18,7 +18,7 @@
 #include <type_traits>
 #include <utility>
 
-#include "bump.hpp"
+#include "string_saver.hpp"
 #include "rfc8746.hpp"
 
 #if defined(__clang__)
@@ -70,7 +70,7 @@ namespace detail
 {
 
 template <class T>
-void copy_views_into_zone(T &value, bump &zone);
+void copy_views_into_zone(T &value, string_saver &zone);
 
 }
 
@@ -195,7 +195,7 @@ public:
     {
         struct held {
             std::pmr::monotonic_buffer_resource memory;
-            detail::bump zone{memory};
+            detail::string_saver zone{memory};
             T value;
 
             explicit held(T const &v) : value(v)

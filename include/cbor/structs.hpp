@@ -196,7 +196,7 @@ class pfr
     friend class structs;
 
     template <class T>
-    friend void detail::copy_views_into_zone(T &value, detail::bump &zone);
+    friend void detail::copy_views_into_zone(T &value, detail::string_saver &zone);
 };
 
 class generic
@@ -205,7 +205,7 @@ class generic
     friend class structs;
 
     template <class T>
-    friend void detail::copy_views_into_zone(T &value, detail::bump &zone);
+    friend void detail::copy_views_into_zone(T &value, detail::string_saver &zone);
 
     template <class U>
     static constexpr bool is_std_tuple = false;
@@ -1680,12 +1680,12 @@ namespace detail
 {
 
 template <class T>
-void copy_views_into_zone(T &value, bump &zone)
+void copy_views_into_zone(T &value, string_saver &zone)
 {
     if constexpr (std::is_same_v<T, std::string_view>) {
-        value = zone.alloc_str(value, detail::validity::bump_chunk_size);
+        value = zone.save(value, detail::validity::string_saver_chunk_size);
     } else if constexpr (std::is_same_v<T, std::span<std::byte const>>) {
-        value = zone.alloc_slice_copy(value, detail::validity::bump_chunk_size);
+        value = zone.save(value, detail::validity::string_saver_chunk_size);
     } else if constexpr (std::is_same_v<T, typed_array>) {
         detail::copy_views_into_zone(value.bytes, zone);
     } else if constexpr (std::is_arithmetic_v<T> || std::is_enum_v<T> || generic::is_sys_time<T> ||

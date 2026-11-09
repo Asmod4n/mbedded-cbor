@@ -23,7 +23,7 @@
 #include <utility>
 #include <vector>
 
-#include "bump.hpp"
+#include "string_saver.hpp"
 #include "error.hpp"
 #include "head.hpp"
 #include "item.hpp"
@@ -45,7 +45,7 @@ struct zone {
     using link = std::pair<item const *, item const *>;
 
     std::pmr::monotonic_buffer_resource memory;
-    bump strings{memory};
+    string_saver strings{memory};
     std::pmr::forward_list<std::pmr::vector<item>> items{&memory};
     std::vector<link> encoded_cbor_data_items;
 
@@ -166,8 +166,8 @@ std::expected<void, error> tree_decoder<Checked, Resolve>::decode_scalar(item &n
         auto const string = d.decode_string(h.argument);
         if (!string) [[unlikely]]
             return std::unexpected(string.error());
-        std::string_view const own = decoded.strings.alloc_str(
-            *string, string->size() + std::min(detail::validity::bump_chunk_size, d.encoded.size()));
+        std::string_view const own = decoded.strings.save(
+            *string, string->size() + std::min(detail::validity::string_saver_chunk_size, d.encoded.size()));
         if (h.major == major_type::text_string)
             node.via.str = own;
         else

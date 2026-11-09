@@ -1,9 +1,9 @@
-// Gives cbor::detail::bump, an arena that copies strings and byte
-// strings into chunks on a memory resource and gives views of the
-// copies. A chunk is reserved once and only appended to, so a view
-// stays valid while the bump lives. The names follow the Rust crate
-// bumpalo.
-// https://docs.rs/bumpalo/latest/bumpalo/struct.Bump.html
+// Gives cbor::detail::string_saver, which copies strings and byte strings
+// into chunks on a memory resource and gives views of the copies. A chunk
+// is reserved once and only appended to, so a view stays valid while the
+// string_saver lives. The name follows llvm::StringSaver, which does the
+// same work for text.
+// https://llvm.org/doxygen/classllvm_1_1StringSaver.html
 #pragma once
 
 #include <algorithm>
@@ -20,7 +20,7 @@
 namespace cbor::detail
 {
 
-class bump {
+class string_saver {
     std::pmr::forward_list<std::pmr::string> chars;
     std::pmr::forward_list<std::pmr::vector<std::byte>> bytes;
 
@@ -45,18 +45,18 @@ class bump {
     }
 
 public:
-    explicit bump(std::pmr::memory_resource &memory) : chars(&memory), bytes(&memory)
+    explicit string_saver(std::pmr::memory_resource &memory) : chars(&memory), bytes(&memory)
     {
     }
 
-    CBOR_ALWAYS_INLINE std::string_view alloc_str(std::string_view const text, std::size_t const chunk_size)
+    CBOR_ALWAYS_INLINE std::string_view save(std::string_view const text, std::size_t const chunk_size)
     {
-        return std::string_view(appended<&bump::chars>(std::span(text), chunk_size));
+        return std::string_view(appended<&string_saver::chars>(std::span(text), chunk_size));
     }
 
-    std::span<std::byte const> alloc_slice_copy(std::span<std::byte const> const from, std::size_t const chunk_size)
+    std::span<std::byte const> save(std::span<std::byte const> const from, std::size_t const chunk_size)
     {
-        return appended<&bump::bytes>(from, chunk_size);
+        return appended<&string_saver::bytes>(from, chunk_size);
     }
 };
 
