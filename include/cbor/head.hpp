@@ -256,47 +256,14 @@ class heads
 
         CBOR_ALWAYS_INLINE std::expected<head, error> decode_head()
         {
-            if (auto const fits = detail::validity::check_bytes_left(initial_byte_size, encoded.size());
-                !fits) [[unlikely]]
-                return std::unexpected(fits.error());
-            auto const initial = static_cast<std::uint8_t>(encoded.front());
-            auto const major = static_cast<major_type>(initial >> rfc8949::additional_information_bits);
-            std::uint8_t const info = additional_information_of(initial);
-            if (info < std::to_underlying(rfc8949::additional_information::one_byte_argument)) {
-                if (error const r = detail::validity::check_argument<Checked>(major, info).error_or(error{});
-                    r != error{}) [[unlikely]]
-                    return std::unexpected(r);
-                encoded.remove_prefix(initial_byte_size);
-                return head{major, info, info};
-            }
-            if (error const r = detail::validity::check_definite_length(major, info).error_or(error{});
+            auto const h = read_raw_head<Checked>(encoded, detail::validity::offset{});
+            if (!h) [[unlikely]]
+                return std::unexpected(h.error());
+            if (error const r = detail::validity::check_definite_length(h->major, h->info).error_or(error{});
                 r != error{}) [[unlikely]]
                 return std::unexpected(r);
-            static_assert(argument_size(std::to_underlying(
-                              rfc8949::additional_information::two_byte_argument)) >= sizeof(std::uint16_t),
-                          "A two-byte argument must cover the bytes of one std::uint16_t.");
-            static_assert(argument_size(std::to_underlying(
-                              rfc8949::additional_information::four_byte_argument)) >= sizeof(std::uint32_t),
-                          "A four-byte argument must cover the bytes of one std::uint32_t.");
-            static_assert(argument_size(std::to_underlying(
-                              rfc8949::additional_information::eight_byte_argument)) >= sizeof(std::uint64_t),
-                          "An eight-byte argument must cover the bytes of one std::uint64_t.");
-            std::size_t const size = argument_size(info);
-            if (auto const fits =
-                    detail::validity::check_bytes_left(initial_byte_size + size, encoded.size());
-                !fits) [[unlikely]]
-                return std::unexpected(fits.error());
-            std::uint64_t const argument =
-                read_argument(info, std::span(encoded).subspan(initial_byte_size, size));
-            if (error const r = detail::validity::check_argument<Checked>(major, argument).error_or(error{});
-                r != error{}) [[unlikely]]
-                return std::unexpected(r);
-            if (major == major_type::simple_float)
-                if (error const r = detail::validity::check_simple_value(info, argument).error_or(error{});
-                    r != error{}) [[unlikely]]
-                    return std::unexpected(r);
-            encoded.remove_prefix(initial_byte_size + size);
-            return head{major, info, argument};
+            encoded = detail::validity::subspan(encoded, h->at);
+            return head{h->major, h->info, h->argument};
         }
 
         CBOR_ALWAYS_INLINE std::optional<head> try_decode_head()
