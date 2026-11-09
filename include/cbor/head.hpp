@@ -363,6 +363,93 @@ class heads
                 return std::nullopt;
             return magnitude_value(magnitude);
         }
+
+        template <class T>
+            requires(std::integral<T> || std::same_as<T, double> || std::same_as<T, simple_value> ||
+                     std::same_as<T, std::nullptr_t> || std::same_as<T, std::string_view> ||
+                     std::same_as<T, std::span<std::byte const>>)
+        CBOR_ALWAYS_INLINE std::expected<T, error> decode_value(head h)
+        {
+            if constexpr (std::integral<T> && !std::same_as<T, bool>) {
+                bool negative = h.major == major_type::negative_integer;
+                std::uint64_t argument = h.argument;
+                if (is_bignum(h.major, h.argument)) {
+                    negative = h.argument == std::to_underlying(rfc8949::tag_number::negative_bignum);
+                    auto const read = decode_bignum(h.argument);
+                    if (!read) [[unlikely]]
+                        return std::unexpected(read.error());
+                    if (!*read) [[unlikely]]
+                        return std::unexpected(error::number_out_of_range);
+                    argument = **read;
+                } else if (h.major != major_type::unsigned_integer && !negative) [[unlikely]] {
+                    return std::unexpected(error::incorrect_type);
+                }
+                if (error const c = detail::validity::check_number_range<T>(negative, argument).error_or(error{});
+                    c != error{}) [[unlikely]]
+                    return std::unexpected(c);
+                T const magnitude = static_cast<T>(argument);
+                return static_cast<T>(negative ? ~magnitude : magnitude);
+            } else if constexpr (std::same_as<T, double>) {
+                if (is_bignum(h.major, h.argument)) [[unlikely]] {
+                    auto const read = decode_bignum(h.argument);
+                    if (!read) [[unlikely]]
+                        return std::unexpected(read.error());
+                    if (!*read) [[unlikely]]
+                        return std::unexpected(error::number_out_of_range);
+                    h.major = h.argument == std::to_underlying(rfc8949::tag_number::negative_bignum)
+                                  ? major_type::negative_integer
+                                  : major_type::unsigned_integer;
+                    h.argument = **read;
+                }
+                if (h.major == major_type::unsigned_integer || h.major == major_type::negative_integer) {
+                    bool const negative = h.major == major_type::negative_integer;
+                    if (error const c =
+                            detail::validity::check_number_range<double>(negative, h.argument).error_or(error{});
+                        c != error{}) [[unlikely]]
+                        return std::unexpected(c);
+                    if (!negative)
+                        return static_cast<double>(h.argument);
+                    return -static_cast<double>(
+                        h.argument == std::numeric_limits<std::uint64_t>::max() ? h.argument : h.argument + 1);
+                }
+                if (h.major != major_type::simple_float) [[unlikely]]
+                    return std::unexpected(error::incorrect_type);
+                switch (static_cast<rfc8949::simple_float_information>(h.info)) {
+                case rfc8949::simple_float_information::half_precision_float:
+                case rfc8949::simple_float_information::single_precision_float:
+                case rfc8949::simple_float_information::double_precision_float:
+                    return decode_float(h.info, h.argument);
+                [[unlikely]] default:
+                    return std::unexpected(error::incorrect_type);
+                }
+            } else if constexpr (std::same_as<T, bool>) {
+                if (!is_boolean(h)) [[unlikely]]
+                    return std::unexpected(error::incorrect_type);
+                return h.info == std::to_underlying(simple_value::true_value);
+            } else if constexpr (std::same_as<T, simple_value>) {
+                if (!is_simple_value(h)) [[unlikely]]
+                    return std::unexpected(error::incorrect_type);
+                if (error const c = detail::validity::check_simple_value(h.info, h.argument).error_or(error{});
+                    c != error{}) [[unlikely]]
+                    return std::unexpected(c);
+                return static_cast<simple_value>(h.argument);
+            } else if constexpr (std::same_as<T, std::nullptr_t>) {
+                if (!is_null(h)) [[unlikely]]
+                    return std::unexpected(error::incorrect_type);
+                return nullptr;
+            } else if constexpr (std::same_as<T, std::string_view>) {
+                if (h.major != major_type::text_string) [[unlikely]]
+                    return std::unexpected(error::incorrect_type);
+                return decode_string(h.argument);
+            } else {
+                if (h.major != major_type::byte_string) [[unlikely]]
+                    return std::unexpected(error::incorrect_type);
+                auto const bytes = decode_string(h.argument);
+                if (!bytes) [[unlikely]]
+                    return std::unexpected(bytes.error());
+                return std::as_bytes(std::span(*bytes));
+            }
+        }
     };
 
     static constexpr bool is_typed_array(head const h)
