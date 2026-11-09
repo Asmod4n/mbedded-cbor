@@ -136,7 +136,7 @@ std::string usr_of(CXCursor const cursor)
     return out;
 }
 
-std::string spelling_of(CXCursor const cursor)
+std::string name_of(CXCursor const cursor)
 {
     CXString const s = clang_getCursorSpelling(cursor);
     std::string out = clang_getCString(s);
@@ -162,10 +162,10 @@ std::string display_of(CXCursor const cursor)
 
 std::string qualified_of(CXCursor const cursor)
 {
-    std::string out = spelling_of(cursor);
+    std::string out = name_of(cursor);
     for (CXCursor p = clang_getCursorSemanticParent(cursor);
          !clang_Cursor_isNull(p) && clang_getCursorKind(p) != CXCursor_TranslationUnit; p = clang_getCursorSemanticParent(p))
-        out = spelling_of(p) + "::" + out;
+        out = name_of(p) + "::" + out;
     return out;
 }
 
@@ -219,7 +219,7 @@ CXChildVisitResult declaration_visit(CXCursor const cursor, CXCursor, CXClientDa
         std::string const path = file ? clang_getCString(name) : "";
         clang_disposeString(name);
         if (path.starts_with(walk.include))
-            walk.found.push_back({kind == CXCursor_MacroDefinition ? spelling_of(cursor) : qualified_of(cursor),
+            walk.found.push_back({kind == CXCursor_MacroDefinition ? name_of(cursor) : qualified_of(cursor),
                                   display_of(cursor), clang_isCursorDefinition(cursor) != 0, kind_record(kind),
                                   line_range{path, first, last}});
     }
