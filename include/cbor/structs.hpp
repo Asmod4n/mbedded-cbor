@@ -414,7 +414,7 @@ class generic
             if (error const c = detail::validity::check_tag_content(h->argument, b->major).error_or(error{});
                 c != error{}) [[unlikely]]
                 return std::unexpected(c);
-            auto const bytes = d.decode_byte_string(b->argument);
+            auto const bytes = d.decode_string(b->argument);
             if (!bytes) [[unlikely]]
                 return std::unexpected(bytes.error());
             std::span<char const> const digits = heads::magnitude_without_leading_zeros(std::span(*bytes));
@@ -567,7 +567,7 @@ class generic
                 return std::unexpected(h.error());
             if (h->major != major_type::text_string) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            auto const text = d.decode_byte_string(h->argument);
+            auto const text = d.decode_string(h->argument);
             if (!text) [[unlikely]]
                 return std::unexpected(text.error());
             if constexpr (is_basic_string<U>)
@@ -581,7 +581,7 @@ class generic
                 return std::unexpected(h.error());
             if (h->major != major_type::byte_string) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            auto const bytes = d.decode_byte_string(h->argument);
+            auto const bytes = d.decode_string(h->argument);
             if (!bytes) [[unlikely]]
                 return std::unexpected(bytes.error());
             out = std::as_bytes(std::span(*bytes));
@@ -759,7 +759,7 @@ class generic
             return std::unexpected(h.error());
         if (h->major != major_type::text_string) [[unlikely]]
             return std::unexpected(error::incorrect_type);
-        auto const text = d.decode_byte_string(h->argument);
+        auto const text = d.decode_string(h->argument);
         if (!text) [[unlikely]]
             return std::unexpected(text.error());
         for (char const *const format : formats) {
@@ -831,7 +831,7 @@ class generic
             if (error const c = detail::validity::check_tag_content(tag.argument, b->major).error_or(error{});
                 c != error{}) [[unlikely]]
                 return std::unexpected(c);
-            auto const bytes = d.decode_byte_string(b->argument);
+            auto const bytes = d.decode_string(b->argument);
             if (!bytes) [[unlikely]]
                 return std::unexpected(bytes.error());
             if (auto const r = detail::validity::check_typed_array(tag.argument, bytes->size()); !r)
@@ -900,13 +900,13 @@ class generic
                                         : major_type::unsigned_integer,
                                     heads::preferred_argument_info(**read), **read};
             } else if (k->major == major_type::text_string) {
-                auto const t = d.decode_byte_string(k->argument);
+                auto const t = d.decode_string(k->argument);
                 if (!t) [[unlikely]]
                     return std::unexpected(t.error());
                 text = *t;
             } else if (k->major != major_type::unsigned_integer && k->major != major_type::negative_integer) {
                 if (k->major == major_type::byte_string) {
-                    if (auto const b = d.decode_byte_string(k->argument); !b) [[unlikely]]
+                    if (auto const b = d.decode_string(k->argument); !b) [[unlikely]]
                         return std::unexpected(b.error());
                 } else if (k->major == major_type::array || k->major == major_type::map ||
                            k->major == major_type::tag) [[unlikely]] {

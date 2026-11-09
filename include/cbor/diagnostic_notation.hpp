@@ -944,7 +944,7 @@ class extended_diagnostic_notation
             std::string content;
             if (!indefinite) {
                 heads::decoder<false> d{detail::validity::subspan(encoded, next)};
-                auto const s = d.decode_byte_string(h->argument);
+                auto const s = d.decode_string(h->argument);
                 if (!s) [[unlikely]]
                     return std::unexpected(s.error());
                 content = *s;
@@ -1186,7 +1186,7 @@ class extended_diagnostic_notation
     }
 
     template <bool Checked>
-    static bool break_found(heads::decoder<Checked> &d)
+    static bool break_consumed(heads::decoder<Checked> &d)
     {
         if (!detail::validity::bytes_fit(heads::initial_byte_size, d.encoded.size()) ||
             d.encoded.front() !=
@@ -1221,19 +1221,19 @@ class extended_diagnostic_notation
         case major_type::text_string: {
             bool const text = h->major == major_type::text_string;
             if (!indefinite) {
-                auto const s = d.decode_byte_string(h->argument);
+                auto const s = d.decode_string(h->argument);
                 if (!s) [[unlikely]]
                     return std::unexpected(s.error());
                 out += text ? quoted_of(*s) : "h'" + hex_of(*s) + "'";
                 out += encoding_indicator(h->info, h->argument);
                 return {};
             }
-            if (break_found(d)) {
+            if (break_consumed(d)) {
                 out += text ? "\"\"_" : "''_";
                 return {};
             }
             out += "(_ ";
-            for (bool first = true; !break_found(d); first = false) {
+            for (bool first = true; !break_consumed(d); first = false) {
                 if (!first)
                     out += ", ";
                 if (auto const r =
@@ -1266,7 +1266,7 @@ class extended_diagnostic_notation
             std::string const indicator = indefinite ? std::string("_") : encoding_indicator(h->info, h->argument);
             if (!indicator.empty())
                 out += indicator + " ";
-            for (std::uint64_t i = 0; indefinite ? !break_found(d) : i < h->argument; ++i) {
+            for (std::uint64_t i = 0; indefinite ? !break_consumed(d) : i < h->argument; ++i) {
                 if (i != 0)
                     out += ", ";
                 if (auto const r = write_diagnostic(out, d); !r) [[unlikely]]

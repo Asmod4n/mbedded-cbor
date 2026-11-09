@@ -778,7 +778,7 @@ class path
                     detail::validity::check_typed_array_content(tag, r->major, r->argument).error_or(error{});
                 c != error{}) [[unlikely]]
                 return std::unexpected(c);
-            auto const bytes = d.decode_byte_string(r->argument);
+            auto const bytes = d.decode_string(r->argument);
             if (!bytes) [[unlikely]]
                 return std::unexpected(bytes.error());
             return *bytes;
@@ -807,7 +807,7 @@ class path
                     return std::unexpected(r.error());
                 if (!detail::validity::check_tag_content(h.argument, r->major).has_value()) [[unlikely]]
                     return std::unexpected(error::inadmissible_type_for_tag_content);
-                auto const embedded = d.decode_byte_string(r->argument);
+                auto const embedded = d.decode_string(r->argument);
                 if (!embedded) [[unlikely]]
                     return std::unexpected(embedded.error());
                 d = heads::decoder<Checked>{*embedded};
@@ -880,7 +880,7 @@ class path
                     return std::unexpected(k.error());
                 if (each.kind == selector::kind::key) {
                     if (k->major == major_type::text_string) {
-                        auto const content = probe.decode_byte_string(k->argument);
+                        auto const content = probe.decode_string(k->argument);
                         if (!content) [[unlikely]]
                             return std::unexpected(content.error());
                         found = *content == named.encoded;
@@ -961,7 +961,7 @@ class path
         } else if constexpr (std::is_same_v<T, std::string_view>) {
             if (h.major != major_type::text_string) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            auto const text = d.decode_byte_string(h.argument);
+            auto const text = d.decode_string(h.argument);
             if (!text) [[unlikely]]
                 return std::unexpected(text.error());
             return *text;
@@ -984,7 +984,7 @@ class path
         } else {
             if (h.major != major_type::byte_string) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            auto const bytes = d.decode_byte_string(h.argument);
+            auto const bytes = d.decode_string(h.argument);
             if (!bytes) [[unlikely]]
                 return std::unexpected(bytes.error());
             return std::as_bytes(std::span(*bytes));
@@ -1515,7 +1515,7 @@ path::intern_value(detail::canonical_ids &ids, lazy::top_level_item const &sourc
     switch (h.major) {
     case major_type::byte_string:
     case major_type::text_string: {
-        auto const s = d.decode_byte_string(h.argument);
+        auto const s = d.decode_string(h.argument);
         if (!s) [[unlikely]]
             return std::unexpected(s.error());
         return done(ids.id_of(
@@ -1611,10 +1611,10 @@ inline std::expected<bool, error> path::value_equal(lazy const &a, lazy const &b
     case major_type::text_string: {
         heads::decoder d = x->d;
         heads::decoder e = y->d;
-        auto const s = d.decode_byte_string(h.argument);
+        auto const s = d.decode_string(h.argument);
         if (!s) [[unlikely]]
             return std::unexpected(s.error());
-        auto const t = e.decode_byte_string(k.argument);
+        auto const t = e.decode_string(k.argument);
         if (!t) [[unlikely]]
             return std::unexpected(t.error());
         return *s == *t;
@@ -1690,10 +1690,10 @@ inline std::expected<bool, error> path::value_less(lazy const &a, lazy const &b)
                 return false;
             heads::decoder d = x->d;
             heads::decoder e = y->d;
-            auto const s = d.decode_byte_string(h.argument);
+            auto const s = d.decode_string(h.argument);
             if (!s) [[unlikely]]
                 return std::unexpected(s.error());
-            auto const t = e.decode_byte_string(k.argument);
+            auto const t = e.decode_string(k.argument);
             if (!t) [[unlikely]]
                 return std::unexpected(t.error());
             return std::ranges::lexicographical_compare(
@@ -1714,7 +1714,7 @@ inline std::expected<path::comparable, error> path::length_of(comparable const &
     if (found->h.major != major_type::text_string)
         return std::monostate{};
     heads::decoder d = found->d;
-    auto const s = d.decode_byte_string(found->h.argument);
+    auto const s = d.decode_string(found->h.argument);
     if (!s) [[unlikely]]
         return std::unexpected(s.error());
     return static_cast<std::uint64_t>(std::ranges::count_if(

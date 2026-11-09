@@ -993,7 +993,7 @@ detail::validity::intern_key(canonical_ids &ids, Message &message, offset const 
     case major_type::byte_string:
     case major_type::text_string: {
         heads::decoder<Checked> d{subspan(encoded, h->at)};
-        auto const s = d.decode_byte_string(h->argument);
+        auto const s = d.decode_string(h->argument);
         if (!s) [[unlikely]]
             return std::unexpected(s.error());
         return scalar(h->major == major_type::byte_string ? kind::byte_string : kind::text_string, 0, *s,
@@ -1123,11 +1123,11 @@ detail::validity::keys_equivalent(First const &first, offset const first_at, Sec
     case major_type::byte_string:
     case major_type::text_string: {
         heads::decoder<Checked> d{subspan(a, h->at)};
-        auto const s = d.decode_byte_string(h->argument);
+        auto const s = d.decode_string(h->argument);
         if (!s) [[unlikely]]
             return std::unexpected(s.error());
         heads::decoder<Checked> e{subspan(b, k->at)};
-        auto const t = e.decode_byte_string(k->argument);
+        auto const t = e.decode_string(k->argument);
         if (!t) [[unlikely]]
             return std::unexpected(t.error());
         return *s == *t;
@@ -1221,7 +1221,7 @@ std::expected<lazy::resolved<Checked>, error> lazy::resolve_container(lazy::top_
         if (error const c = detail::validity::check_tag_content(h->argument, r->major).error_or(error{});
             c != error{}) [[unlikely]]
             return std::unexpected(c);
-        auto const embedded = d.decode_byte_string(r->argument);
+        auto const embedded = d.decode_string(r->argument);
         if (!embedded) [[unlikely]]
             return std::unexpected(embedded.error());
         source = lazy::top_level_item{source.owner, *embedded};
@@ -1266,7 +1266,7 @@ std::expected<lazy::tag_content, error> lazy::read_typed_array_bytes(resolved<Ch
         c != error{}) [[unlikely]]
         return std::unexpected(c);
     auto const offset = detail::validity::offset{detail::validity::distance(found.source.encoded, d.encoded)};
-    auto const bytes = d.decode_byte_string(r->argument);
+    auto const bytes = d.decode_string(r->argument);
     if (!bytes) [[unlikely]]
         return std::unexpected(bytes.error());
     return tag_content{offset, *bytes};
@@ -1437,7 +1437,7 @@ std::expected<std::pair<Iterator, bool>, error> lazy::find_key(Iterator it, Last
         bool equal = false;
         if constexpr (std::same_as<Key, std::string_view>) {
             if (k->major == major_type::text_string) {
-                auto const content = probe.decode_byte_string(k->argument);
+                auto const content = probe.decode_string(k->argument);
                 if (!content) [[unlikely]]
                     return std::unexpected(content.error());
                 equal = *content == key;
@@ -1746,7 +1746,7 @@ std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_
             } else if constexpr (std::is_same_v<T, std::string_view>) {
                 if (h.major != major_type::text_string) [[unlikely]]
                     return std::unexpected(error::incorrect_type);
-                auto const text = d.decode_byte_string(h.argument);
+                auto const text = d.decode_string(h.argument);
                 if (!text) [[unlikely]]
                     return std::unexpected(text.error());
                 return ref<T>(source.owner, *text);
@@ -1758,7 +1758,7 @@ std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_
             } else {
                 if (h.major != major_type::byte_string) [[unlikely]]
                     return std::unexpected(error::incorrect_type);
-                auto const bytes = d.decode_byte_string(h.argument);
+                auto const bytes = d.decode_string(h.argument);
                 if (!bytes) [[unlikely]]
                     return std::unexpected(bytes.error());
                 return ref<T>(source.owner, std::as_bytes(std::span(*bytes)));

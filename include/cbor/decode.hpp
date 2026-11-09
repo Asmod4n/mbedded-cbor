@@ -163,7 +163,7 @@ std::expected<void, error> tree_decoder<Checked, Resolve>::decode_scalar(item &n
     switch (h.major) {
     case major_type::byte_string:
     case major_type::text_string: {
-        auto const string = d.decode_byte_string(h.argument);
+        auto const string = d.decode_string(h.argument);
         if (!string) [[unlikely]]
             return std::unexpected(string.error());
         std::string_view const own = decoded.strings.alloc_str(

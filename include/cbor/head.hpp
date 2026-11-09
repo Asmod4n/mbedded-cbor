@@ -350,7 +350,7 @@ class heads
             return std::nullopt;
         }
 
-        constexpr std::expected<std::string_view, error> decode_byte_string(std::uint64_t const length)
+        constexpr std::expected<std::string_view, error> decode_string(std::uint64_t const length)
         {
             if (auto const fits = detail::validity::check_bytes_left(length, encoded.size()); !fits)
                 [[unlikely]]
@@ -372,7 +372,7 @@ class heads
             if (error const c = detail::validity::check_definite_length(r->major, r->info).error_or(error{});
                 c != error{}) [[unlikely]]
                 return std::unexpected(c);
-            auto const bytes = decode_byte_string(r->argument);
+            auto const bytes = decode_string(r->argument);
             if (!bytes) [[unlikely]]
                 return std::unexpected(bytes.error());
             std::span<char const> const magnitude = magnitude_without_leading_zeros(std::span(*bytes));

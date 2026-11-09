@@ -49,7 +49,7 @@ Proof.
      to 8 only after `bytes_fit(9)`. It copies 8 bytes
      with `std::copy`: 8 assignments by [alg.copy]. It never reads past
      the view. `decode_head` reads at most 9 bytes in the same way.
-   - `heads::decoder::decode_byte_string` checks the length, takes
+   - `heads::decoder::decode_string` checks the length, takes
      `std::span::first` ([span.overview]) and calls `remove_prefix`
      ([string.view.template.general]). It does not read the bytes of the
      string.

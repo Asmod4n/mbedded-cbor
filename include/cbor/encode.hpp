@@ -216,7 +216,7 @@ public:
 
 private:
     template <class Writer>
-    struct encoder;
+    struct binary_writer;
 
     template <class C>
     struct container_message {
@@ -303,19 +303,19 @@ private:
     static std::span<item const> children_of(item const &node, major_type major);
     static item const *content_of(item const &node, major_type major);
     template <class Writer>
-    static std::expected<void, error> encode_item(encoder<Writer> &out, item const &node);
+    static std::expected<void, error> encode_item(binary_writer<Writer> &out, item const &node);
     template <class Writer>
-    static std::expected<void, std::errc> encode_head_and_payload(encoder<Writer> &out, item const &node,
+    static std::expected<void, std::errc> encode_head_and_payload(binary_writer<Writer> &out, item const &node,
                                                                   head_parts const &head);
     template <class Writer>
-    static std::expected<void, std::errc> encode_sharedref(encoder<Writer> &out, std::uint64_t index);
+    static std::expected<void, std::errc> encode_sharedref(binary_writer<Writer> &out, std::uint64_t index);
     static std::uint64_t size_of(item const &node, head_parts const &head);
     static std::uint64_t reference_size_of(item const &reference);
 
     class depth_first_search;
 
     template <bool Cycles, class Writer>
-    static std::expected<void, error> encode_tree(encoder<Writer> &out, item const &root);
+    static std::expected<void, error> encode_tree(binary_writer<Writer> &out, item const &root);
 
     template <bool Cycles, class Target>
     static std::expected<std::size_t, error> encode_into(item const &root, Target &&target);
@@ -347,7 +347,7 @@ private:
 };
 
 template <class Writer>
-struct encoding::encoder {
+struct encoding::binary_writer {
     static constexpr bool direct = std::same_as<Writer, encoding::span_message<char>>;
     static constexpr bool blocks = requires(Writer &w, std::size_t const n) {
         { w.preallocate(n) } -> std::same_as<std::span<char>>;
@@ -359,7 +359,7 @@ struct encoding::encoder {
     std::size_t closed = 0;
     std::size_t written = 0;
 
-    explicit encoder(Writer &w) : writer(w)
+    explicit binary_writer(Writer &w) : writer(w)
     {
         if constexpr (direct) {
             block = w.out;
@@ -839,7 +839,7 @@ class encoder
     using message_type = decltype(encoding::message_of(std::declval<Target &>(), 0));
 
     message_type message;
-    encoding::encoder<std::remove_reference_t<message_type>> out;
+    encoding::binary_writer<std::remove_reference_t<message_type>> out;
     bool usable = true;
 
     void throw_logic_error_if_unusable() const
@@ -1532,7 +1532,7 @@ inline item const *encoding::content_of(item const &node, major_type const major
 }
 
 template <class Writer>
-CBOR_ALWAYS_INLINE inline std::expected<void, std::errc> encoding::encode_head_and_payload(encoder<Writer> &out, item const &node,
+CBOR_ALWAYS_INLINE inline std::expected<void, std::errc> encoding::encode_head_and_payload(binary_writer<Writer> &out, item const &node,
                                                                  head_parts const &head)
 {
     std::expected<void, std::errc> written = out.encode_head(head.major, head.info, head.argument);
@@ -1544,7 +1544,7 @@ CBOR_ALWAYS_INLINE inline std::expected<void, std::errc> encoding::encode_head_a
 }
 
 template <class Writer>
-std::expected<void, std::errc> encoding::encode_sharedref(encoder<Writer> &out, std::uint64_t const index)
+std::expected<void, std::errc> encoding::encode_sharedref(binary_writer<Writer> &out, std::uint64_t const index)
 {
     std::expected<void, std::errc> const written =
         out.encode_head(major_type::tag, std::to_underlying(rfc8949::tag_number::sharedref));
@@ -1554,7 +1554,7 @@ std::expected<void, std::errc> encoding::encode_sharedref(encoder<Writer> &out, 
 }
 
 template <class Writer>
-std::expected<void, error> encoding::encode_item(encoder<Writer> &out, item const &node)
+std::expected<void, error> encoding::encode_item(binary_writer<Writer> &out, item const &node)
 {
     if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
         return r;
@@ -1659,7 +1659,7 @@ class encoding::depth_first_search
     }
 
     template <class Writer>
-    std::expected<std::uint64_t, error> write(encoder<Writer> &out, item const &node, frame const *const up,
+    std::expected<std::uint64_t, error> write(binary_writer<Writer> &out, item const &node, frame const *const up,
                                               std::uint64_t marks)
     {
         if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
@@ -1696,7 +1696,7 @@ class encoding::depth_first_search
     }
 
     template <class Writer>
-    std::expected<std::uint64_t, error> write_edge(encoder<Writer> &out, item const &child, frame const &here,
+    std::expected<std::uint64_t, error> write_edge(binary_writer<Writer> &out, item const &child, frame const &here,
                                                    std::uint64_t const marks)
     {
         bool const reference = child.type == cbor::type::shared_reference;
@@ -1716,7 +1716,7 @@ class encoding::depth_first_search
 
 public:
     template <class Writer>
-    std::expected<void, error> encode(encoder<Writer> &out, item const &root)
+    std::expected<void, error> encode(binary_writer<Writer> &out, item const &root)
     {
         item const &start = root.type == cbor::type::shared_reference ? *root.via.tag.content : root;
         if (auto const r = find_back_edges(start, nullptr, false); !r) [[unlikely]]
@@ -1733,7 +1733,7 @@ public:
 };
 
 template <bool Cycles, class Writer>
-std::expected<void, error> encoding::encode_tree(encoder<Writer> &out, item const &root)
+std::expected<void, error> encoding::encode_tree(binary_writer<Writer> &out, item const &root)
 {
     if constexpr (Cycles) {
         depth_first_search walk;
@@ -1747,7 +1747,7 @@ template <bool Cycles, class Target>
 std::expected<std::size_t, error> encoding::encode_into(item const &root, Target &&target)
 {
     decltype(auto) message = message_of(target, 0);
-    encoder<std::remove_reference_t<decltype(message)>> out(message);
+    binary_writer<std::remove_reference_t<decltype(message)>> out(message);
     if (auto const r = encode_tree<Cycles>(out, root); !r) [[unlikely]]
         return std::unexpected(r.error());
     if (auto const r = out.flush(); !r) [[unlikely]]
@@ -1774,7 +1774,7 @@ template <bool Cycles>
 std::expected<ref<std::span<iovec const>>, error> encoding::encode_iov_of(item const &root)
 {
     iov_writer writer;
-    encoder<iov_writer> out(writer);
+    binary_writer<iov_writer> out(writer);
     if (auto const r = encode_tree<Cycles>(out, root); !r) [[unlikely]]
         return std::unexpected(r.error());
     return out.release();

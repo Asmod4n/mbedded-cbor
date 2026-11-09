@@ -48,7 +48,7 @@ class well_formedness
             std::uint64_t added = 0;
             if (auto const h = d.try_decode_head()) [[likely]] {
                 if (h->major == major_type::byte_string || h->major == major_type::text_string) [[likely]] {
-                    if (auto const s = d.decode_byte_string(h->argument); !s) [[unlikely]]
+                    if (auto const s = d.decode_string(h->argument); !s) [[unlikely]]
                         return std::unexpected(s.error());
                     continue;
                 }
@@ -66,7 +66,7 @@ class well_formedness
                 switch (slow->major) {
                 case major_type::byte_string:
                 case major_type::text_string:
-                    if (auto const s = d.decode_byte_string(slow->argument); !s) [[unlikely]]
+                    if (auto const s = d.decode_string(slow->argument); !s) [[unlikely]]
                         return std::unexpected(s.error());
                     continue;
                 case major_type::array:
