@@ -278,9 +278,11 @@ class extended_diagnostic_notation
             case 'u': {
                 std::uint32_t c1 = 0;
                 if (at < text.size() && text[at] == '{') {
-                    std::size_t const close = text.find('}', at);
+                    auto const rest = std::span(text).subspan(at);
+                    auto const brace = std::ranges::find(rest, '}');
+                    std::size_t const close = at + static_cast<std::size_t>(std::ranges::distance(rest.begin(), brace));
                     constexpr std::size_t braced_hex_digits_max = 8;
-                    if (close == std::string_view::npos || close == at + 1 || close > at + 1 + braced_hex_digits_max)
+                    if (brace == rest.end() || close == at + 1 || close > at + 1 + braced_hex_digits_max)
                         [[unlikely]]
                         return std::unexpected(error::invalid_path);
                     for (char const h : std::span(text).subspan(at + 1, close - at - 1)) {
