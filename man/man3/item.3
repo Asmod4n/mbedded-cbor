@@ -1,5 +1,5 @@
 '\" t
-.TH "cbor::item" "3" "2026-11-09" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.TH "cbor::item" "3" "2026-11-10" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
 .SH NAME
 cbor::item, cbor::item::get, cbor::decode, cbor::encoded_cbor_data_item, cbor::encode, cbor::encode_iov, cbor::encoder<Target>, cbor::encoder<Target>::unsigned_integer, cbor::encoder<Target>::negative_integer, cbor::encoder<Target>::byte_string, cbor::encoder<Target>::text_string, cbor::encoder<Target>::array, cbor::encoder<Target>::map, cbor::encoder<Target>::tag, cbor::encoder<Target>::simple_value, cbor::encoder<Target>::floating_point, cbor::encoder<Target>::typed_array, cbor::encoder<Target>::finish, cbor::iov_writer \- a decoded tree and the encoder
 .SH SYNOPSIS
@@ -432,7 +432,8 @@ target.
 A second \f[CR]finish\f[R] throws \f[CR]std::logic_error\f[R].
 .SS cbor::iov_writer
 A target of cbor::encoder that collects pieces, not one buffer.
-The encoder writes heads and short strings into blocks of 16 KiB.
+The encoder writes heads and short strings into blocks of
+CBOR_ENCODER_BLOCK_SIZE bytes.
 A text or a byte string of 32 bytes or more that the program hands over
 with its owner becomes a piece of its own, with no copy.
 cbor::encoder::finish() gives the pieces as \f[CR]struct iovec\f[R], in
