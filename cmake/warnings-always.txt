@@ -1,0 +1,8 @@
+-Wall
+-Wextra
+-Wpedantic
+-Wshadow
+-Wconversion
+-Wsign-conversion
+-Wold-style-cast
+-Werror

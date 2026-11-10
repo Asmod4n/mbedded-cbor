@@ -2,6 +2,8 @@
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(dirname "$here")
+WARNINGS_DIR=$root/cmake
+. "$WARNINGS_DIR/warnings.sh"
 build=${BUILD:?the build directory}
 PROCESSES=${PROCESSES:-10}
 MIN_TIME=${MIN_TIME:-0.2s}
@@ -9,7 +11,7 @@ docs=${DOCS:-"twitter floats records"}
 arms=${ARMS:-"MB_DECODE LC_DECODE JC_DECODE READ TC_READ JC_READ LC_READ FB_READ FB_READ_V MP_READ MB_PATH MB_AT_PATH TC_PATH JC_PATH FB_PATH FB_PATH_V"}
 compilers=${COMPILERS:-"g++-16 clang++-23"}
 JOBS=4
-flags="-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG -Werror"
+flags="-O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG"
 
 arm_libraries() {
 	case "$1" in
@@ -21,7 +23,7 @@ arm_libraries() {
 
 compile() {
 	local cc=$1 a=$2 d=$3 out=$4
-	"$cc" -std=c++23 $flags -DDOCTEST_CONFIG_DISABLE -DARM_$a -DARM_NAME="\"$a\"" -DDOC_$d \
+	"$cc" -std=c++23 $flags $(warnings_for "$cc") -DDOCTEST_CONFIG_DISABLE -DARM_$a -DARM_NAME="\"$a\"" -DDOC_$d \
 		-DDOC_PATH="\"$here/docs/$d.cbor\"" -I"$root/include" \
 		"$here/runtime.cpp" $(arm_libraries "$a") -lbenchmark -lpthread -o "$out"
 }

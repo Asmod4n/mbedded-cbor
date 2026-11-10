@@ -12,6 +12,8 @@ refuse_root
 commit_a=$1
 commit_b=$2
 repo=${REPO:-$(dirname "$here")}
+WARNINGS_DIR=$repo/cmake
+. "$WARNINGS_DIR/warnings.sh"
 bench=$repo/bench
 GXX=${GXX:-$(command -v g++-16 || command -v g++)}
 CLANGXX=${CLANGXX:-$(command -v clang++-23 || command -v clang++)}
@@ -70,7 +72,7 @@ compile() {
 	case $arm in
 	AP_*_[0-9]) defs="-DARM_${arm%_*} -DAP_PATH=${arm##*_}" ;;
 	esac
-	if "$cc" $std $flags -DDOCTEST_CONFIG_DISABLE $defs -DARM_NAME="\"$arm\"" -DDOC_"$doc" \
+	if "$cc" $std $flags $(warnings_for "$cc") -DDOCTEST_CONFIG_DISABLE $defs -DARM_NAME="\"$arm\"" -DDOC_"$doc" \
 		-DDOC_PATH="\"$build/docs/$doc.cbor\"" -I"$build/src/$variant/include" -I"$build/src/$variant/bench" \
 		"$build/src/$variant/bench/runtime.cpp" -lbenchmark -lpthread -o "$build/bin/$name" > "$build/log/$name" 2>&1; then
 		rm -f "${build:?}/log/${name:?}"
@@ -143,10 +145,11 @@ python3 -I "$here/context.py" "$build" "$steal_limit_percent" "$GXX" "$CLANGXX" 
 	$(ls "$build"/bin/a.gxx.* 2>> "$build/out/err.txt" | head -n 1) \
 	$(ls "$build"/bin/a.clang.* 2>> "$build/out/err.txt" | head -n 1) > "$build/out/context.json"
 python3 -I - "$build" "$stamp" "$commit_a" "$commit_b" "$bench_commit" "$flags" "$ROUNDS" "$MIN_TIME" \
+	"$(warnings_for "$GXX" | tr '\n' ' ')" "$(warnings_for "$CLANGXX" | tr '\n' ' ')" \
 	> "$RESULTS_DIR/$stamp.json.part" <<'PY'
 import collections, glob, json, os, statistics, sys
 
-build, stamp, commit_a, commit_b, bench_commit, flags, rounds, min_time = sys.argv[1:9]
+build, stamp, commit_a, commit_b, bench_commit, flags, rounds, min_time, warnings_gxx, warnings_clang = sys.argv[1:11]
 
 
 def read(path):
@@ -195,6 +198,7 @@ print(json.dumps({
     "what": os.environ.get("WHAT", "READ, lazy path (MB_PATH), at_path (MB_AT_PATH) and struct decode (MB_STRUCT)") + "; a = commit a, aa = commit a built again, b = commit b",
     "documents": os.environ.get("DOCS", "twitter floats records") + "; MB_STRUCT on twitter only",
     "flags": flags,
+    "warnings": {"gxx": warnings_gxx.strip(), "clang": warnings_clang.strip()},
     "pie": "-fPIE -pie" if {"-fPIE", "-pie"} <= set(flags.split()) else "default of the compiler",
     "elf_type_count": dict(collections.Counter(l.split(" ", 1)[1] for l in read(os.path.join(build, "out", "elf_type")).splitlines())),
     "rounds": int(rounds),

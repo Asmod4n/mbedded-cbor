@@ -19,6 +19,8 @@ Close other programs first. The process runs on the cpu that the scheduler gives
 - Compilers: g++-16 and clang++-23. The script takes g++ and clang++ when these names are absent.
 - Flags: -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG.
   The environment variable FLAGS replaces them.
+- Warnings: the lists cmake/warnings-always.txt, cmake/warnings-optimized.txt and, for clang++,
+  cmake/warnings-clang.txt. They always apply, with -Werror. FLAGS does not carry them.
 
 ## Method
 
@@ -80,7 +82,8 @@ a as commit b. The image is built with
 2. The gate of gate.sh runs on the host before the build and before the first round.
 3. The script exports include/ of each commit with `git archive`. The bench file comes from the working tree.
 4. One container builds g++-16 and clang++-23 binaries for a, aa (commit a again) and b, as many at once as there are
-   cpus. It uses a precompiled header of the standard headers and of Google Benchmark, ccache and mold.
+   cpus. It uses a precompiled header of the standard headers and of Google Benchmark, ccache and mold. The warnings
+   of cmake/warnings-*.txt and -Werror always apply. FLAGS does not carry them.
 5. A second container runs the rounds as user 65534 with no network. Each round runs every binary once, in an order
    that rotates. A round whose steal is not under 3 percent of its cpu time is discarded and run again.
 6. B differs from A when the two-tailed Mann-Whitney U test of compare.py (Google Benchmark) finds a difference at

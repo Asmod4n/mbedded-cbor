@@ -3,24 +3,26 @@
 # /run-dir/out/result.json.
 set -eu
 dir=/run-dir
-flags=${FLAGS:-"-std=c++26 -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -DNDEBUG -pipe"}
+flags=${FLAGS:-"-std=c++26 -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -DNDEBUG -pipe"}
 link_flags="-pie -fuse-ld=mold"
 compilers="gxx:g++-16 clang:clang++-23"
 variants="a aa b"
 export GLIBC_TUNABLES=glibc.malloc.trim_threshold=1073741824:glibc.malloc.mmap_threshold=33554432:glibc.malloc.top_pad=268435456
 . /bench/round.sh
+. /cmake/warnings.sh
 
 pch_of() {
-	local tag=$1 cc=$2 key header
-	key=$( { cat "$dir/std.hpp"; "$cc" --version; echo "$flags"; "$cc" -march=native -### -E -x c++ - < /dev/null 2>&1 | grep -oE '(-march=[a-z0-9_-]+|"-target-cpu" "[a-z0-9_-]+")'; } |
+	local tag=$1 cc=$2 key header warnings
+	warnings=$(warnings_for "$cc")
+	key=$( { cat "$dir/std.hpp"; "$cc" --version; echo "$flags $warnings"; "$cc" -march=native -### -E -x c++ - < /dev/null 2>&1 | grep -oE '(-march=[a-z0-9_-]+|"-target-cpu" "[a-z0-9_-]+")'; } |
 		sha256sum | cut -c1-16)
 	header=/pch/$tag-$key/std.hpp
 	if [ ! -e "$header.done" ]; then
 		mkdir -p "/pch/$tag-$key"
 		cp "$dir/std.hpp" "$header"
 		case $tag in
-		gxx) "$cc" $flags -x c++-header "$header" -o "$header.gch" ;;
-		clang) "$cc" $flags -Xclang -fno-pch-timestamp -x c++-header "$header" -o "$header.pch" ;;
+		gxx) "$cc" $flags $warnings -x c++-header "$header" -o "$header.gch" ;;
+		clang) "$cc" $flags $warnings -Xclang -fno-pch-timestamp -x c++-header "$header" -o "$header.pch" ;;
 		esac
 		touch "$header.done"
 	fi
@@ -34,7 +36,7 @@ compile() {
 	local tag=$1 cc=$2 v=$3 pch=$4 src=$v
 	[ "$v" = aa ] && src=a
 	mkdir -p "$dir/bin" "$dir/log"
-	if ccache "$cc" $flags $pch -I"$dir/src/$src/include" -c "$dir/bench.cpp" -o "$dir/bin/$v.$tag.o" > "$dir/log/$v.$tag" 2>&1 &&
+	if ccache "$cc" $flags $(warnings_for "$cc") $pch -I"$dir/src/$src/include" -c "$dir/bench.cpp" -o "$dir/bin/$v.$tag.o" > "$dir/log/$v.$tag" 2>&1 &&
 		"$cc" $flags $link_flags "$dir/bin/$v.$tag.o" -lbenchmark -lpthread -o "$dir/bin/$v.$tag" >> "$dir/log/$v.$tag" 2>&1; then
 		rm -f "${dir:?}/log/${v:?}.${tag:?}" "${dir:?}/bin/${v:?}.${tag:?}.o"
 	else
@@ -83,10 +85,11 @@ measure() {
 	run_rounds "$ROUNDS" "$dir/out" one_round
 	python3 -I /bench/context.py "$dir" "$steal_limit_percent" g++-16 clang++-23 -- "$dir/bin/a.gxx" "$dir/bin/a.clang" \
 		> "$dir/out/context.json"
-	python3 -I - "$dir" "$flags" > "$dir/out/result.json" <<'PY'
+	python3 -I - "$dir" "$flags" "$(warnings_for g++-16 | tr '\n' ' ')" "$(warnings_for clang++-23 | tr '\n' ' ')" \
+		> "$dir/out/result.json" <<'PY'
 import collections, glob, json, os, statistics, subprocess, sys
 
-d, flags = sys.argv[1:3]
+d, flags, warnings_gxx, warnings_clang = sys.argv[1:5]
 env = os.environ
 utest_alpha = 0.05
 machine_floor = float(env["NOISE_FLOOR_PERCENT"]) / 100
@@ -172,6 +175,7 @@ print(json.dumps({
     "bench_sources_commit": env["BENCH_COMMIT"],
     "image": env["IMAGE"],
     "flags": flags,
+    "warnings": {"gxx": warnings_gxx.strip(), "clang": warnings_clang.strip()},
     "link_flags": env.get("LINK_FLAGS_USED", "-pie -fuse-ld=mold"),
     "gxx_binary": binaries.get("a.gxx", {}),
     "clang_binary": binaries.get("a.clang", {}),

@@ -458,6 +458,9 @@ static std::uint64_t tc_string(CborValue *const it)
     tc_check(cbor_value_finish_string_iteration(it));
     return sum;
 }
+#endif
+
+#if defined(ARM_TC_READ)
 static std::uint64_t tc_float(CborValue const *const it)
 {
     double d = 0;
@@ -474,9 +477,6 @@ static std::uint64_t tc_float(CborValue const *const it)
     }
     return std::bit_cast<std::uint64_t>(d);
 }
-#endif
-
-#if defined(ARM_TC_READ)
 static std::uint64_t tc_read(CborValue *const it, int const depth)
 {
     if (depth > 128) [[unlikely]]
@@ -665,8 +665,32 @@ static std::uint64_t item_sum(cbor_item_t const *i)
     case CBOR_TYPE_NEGINT: return cbor_get_int(x);
     case CBOR_TYPE_BYTESTRING: return bytes_sum(std::string_view(reinterpret_cast<char const *>(cbor_bytestring_handle(x)), cbor_bytestring_length(x)));
     case CBOR_TYPE_STRING: return bytes_sum(std::string_view(reinterpret_cast<char const *>(cbor_string_handle(x)), cbor_string_length(x)));
-    case CBOR_TYPE_ARRAY: { std::uint64_t s = cbor_array_size(x); for (std::size_t k = 0; k < cbor_array_size(x); ++k) s += item_sum(cbor_array_handle(x)[k]); return s; }
-    case CBOR_TYPE_MAP: { std::uint64_t s = cbor_map_size(x); for (std::size_t k = 0; k < cbor_map_size(x); ++k) s += item_sum(cbor_map_handle(x)[k].key) + item_sum(cbor_map_handle(x)[k].value); return s; }
+    case CBOR_TYPE_ARRAY: {
+#if defined(__clang__)
+#pragma clang unsafe_buffer_usage begin
+#endif
+        std::span<cbor_item_t *const> const elements(cbor_array_handle(x), cbor_array_size(x));
+#if defined(__clang__)
+#pragma clang unsafe_buffer_usage end
+#endif
+        std::uint64_t s = elements.size();
+        for (cbor_item_t const *const e : elements)
+            s += item_sum(e);
+        return s;
+    }
+    case CBOR_TYPE_MAP: {
+#if defined(__clang__)
+#pragma clang unsafe_buffer_usage begin
+#endif
+        std::span<cbor_pair const> const entries(cbor_map_handle(x), cbor_map_size(x));
+#if defined(__clang__)
+#pragma clang unsafe_buffer_usage end
+#endif
+        std::uint64_t s = entries.size();
+        for (cbor_pair const &e : entries)
+            s += item_sum(e.key) + item_sum(e.value);
+        return s;
+    }
     case CBOR_TYPE_TAG: return cbor_tag_value(x) + item_sum(cbor_tag_item(x));
     case CBOR_TYPE_FLOAT_CTRL:
         if (cbor_float_ctrl_is_ctrl(x)) return cbor_ctrl_value(x);
@@ -1206,11 +1230,11 @@ static std::uint64_t op()
     return tc_string(&it);
 #endif
 #elif defined(ARM_JC_DECODE)
-    auto j = jsoncons::cbor::decode_cbor<jsoncons::json>(std::span<std::uint8_t const>(reinterpret_cast<std::uint8_t const *>(in.data()), in.size()));
+    auto j = jsoncons::cbor::decode_cbor<jsoncons::json>(std::as_bytes(std::span(in)));
     benchmark::DoNotOptimize(&j);
     return std::uint64_t(j.type());
 #elif defined(ARM_JC_PATH)
-    jc_cursor c(std::span<std::uint8_t const>(reinterpret_cast<std::uint8_t const *>(in.data()), in.size()));
+    jc_cursor c(std::as_bytes(std::span(in)));
 #if defined(DOC_twitter)
     jc_key(c, "statuses");
     jc_index(c, 50);
@@ -1266,11 +1290,12 @@ static std::uint64_t op()
         c.undefined = [](void *x) { *static_cast<std::uint64_t *>(x) += 23; };
         return c;
     }();
-    auto const *p = reinterpret_cast<cbor_data>(in.data());
+    auto const input = std::as_bytes(std::span(in));
     std::uint64_t sum = 0;
     std::size_t at = 0;
-    while (at < in.size()) {
-        auto const r = cbor_stream_decode(p + at, in.size() - at, &cb, &sum);
+    while (at < input.size()) {
+        auto const rest = input.subspan(at);
+        auto const r = cbor_stream_decode(reinterpret_cast<cbor_data>(rest.data()), rest.size(), &cb, &sum);
         if (r.status != CBOR_DECODER_FINISHED)
             std::abort();
         at += r.read;
@@ -1282,7 +1307,7 @@ static std::uint64_t op()
     benchmark::ClobberMemory();
     return jcbuf.size();
 #elif defined(ARM_JC_READ)
-    jsoncons::cbor::cbor_bytes_cursor cursor(std::span<std::uint8_t const>(reinterpret_cast<std::uint8_t const *>(in.data()), in.size()));
+    jsoncons::cbor::cbor_bytes_cursor cursor(std::as_bytes(std::span(in)));
     std::uint64_t sum = 0;
     for (; !cursor.done(); cursor.next()) {
         auto const &e = cursor.current();
@@ -1421,7 +1446,7 @@ int main(int argc, char **argv)
         cbor_decref(&it);
     }
 #elif defined(ARM_JC_DECODE)
-    benchmark::AddCustomContext("check", std::to_string(json_sum(jsoncons::cbor::decode_cbor<jsoncons::json>(std::span<std::uint8_t const>(reinterpret_cast<std::uint8_t const *>(doc.data()), doc.size())))));
+    benchmark::AddCustomContext("check", std::to_string(json_sum(jsoncons::cbor::decode_cbor<jsoncons::json>(std::as_bytes(std::span(doc))))));
 #else
     benchmark::AddCustomContext("check", std::to_string(op()));
 #endif

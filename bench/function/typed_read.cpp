@@ -97,9 +97,11 @@ void at_path_text(benchmark::State &state)
     std::size_t const count = cold_bytes() / text_message.size() + 1;
     std::vector<std::shared_ptr<std::string const>> messages;
     std::vector<std::shared_ptr<void const>> owners;
-    for (std::size_t i = 0; i < count; ++i)
-        messages.push_back(std::make_shared<std::string const>(text_message));
-    owners.assign(messages.begin(), messages.end());
+    for (std::size_t i = 0; i < count; ++i) {
+        auto message = std::make_shared<std::string const>(text_message);
+        owners.push_back(message);
+        messages.push_back(std::move(message));
+    }
     auto const sample = cbor::at_path(owners.front(), std::string_view(*messages.front()), *query);
     if (!sample || **sample != "abc"sv) {
         state.SkipWithError("the query $.a does not give the text abc");
