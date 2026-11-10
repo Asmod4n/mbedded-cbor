@@ -2,7 +2,7 @@
 // A key with no text and no number, or with a text that is known only at run time, would name no member and could
 // point at a text that does not live. Each case of this file must not compile; the test that builds it expects the
 // build to fail.
-#include <cbor/rfc9535.hpp>
+#include <cbor/path.hpp>
 
 int main(int const argc, char const *const argv[])
 {

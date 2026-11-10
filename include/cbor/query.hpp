@@ -39,6 +39,7 @@
 #include "lazy.hpp"
 #include "ref.hpp"
 #include "rfc3629.hpp"
+#include "path.hpp"
 #include "rfc9535.hpp"
 
 namespace cbor

@@ -27,7 +27,6 @@
 #endif
 
 #include "rfc8746.hpp"
-#include "rfc9535.hpp"
 #include "error.hpp"
 #include "rfc8949.hpp"
 #include "validity.hpp"

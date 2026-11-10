@@ -53,7 +53,7 @@
 #include "ref.hpp"
 #include "rfc8746.hpp"
 #include "rfc8943.hpp"
-#include "rfc9535.hpp"
+#include "path.hpp"
 #include "validity.hpp"
 
 namespace cbor

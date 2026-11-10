@@ -7,6 +7,8 @@
  */
 #pragma once
 
+#include "path.hpp"
+
 #include <cstddef>
 #include <cstdint>
 
@@ -22,13 +24,6 @@ template <bool>
 struct tree_decoder;
 
 }
-
-
-template <std::size_t N>
-struct fixed_string;
-
-template <fixed_string Path>
-class is_singular_query;
 
 enum class major_type : std::uint8_t {
     unsigned_integer,

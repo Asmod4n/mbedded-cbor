@@ -11,7 +11,7 @@ INPUT                  = include/cbor/cbor.hpp \
                          include/cbor/describe.hpp \
                          include/cbor/structs.hpp \
                          include/cbor/lazy.hpp \
-                         include/cbor/rfc9535.hpp \
+                         include/cbor/path.hpp \
                          include/cbor/query.hpp \
                          include/cbor/rfc8949.hpp \
                          include/cbor/schema.hpp \
