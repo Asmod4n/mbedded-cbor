@@ -5,7 +5,7 @@
 #   check: g++ 16 with reflection at -O0 and every test, the run after each change. It is the default.
 #   one <pattern>: the build check, and only the test cases and ctest tests whose names contain <pattern>.
 #   fast: gcc-release clang-asan
-#   full: gcc-asan clang-asan, the two test runs: g++ 16 with reflection and clang++ 23, each with ASan and UBSan.
+#   full: gcc-asan, the one test run: g++ 16 with reflection, ASan and UBSan.
 #   gcc-o2 and clang-o2 build RelWithDebInfo (-O2), the level a consumer builds with.
 #   gcc15-release builds with g++ 15, the floor of the library, in the image of containers/tumbleweed-gcc15.Containerfile.
 #   tsan, gcc-groups, gcc-describe, gcc-describe-bundled and wasm are run by name and not in fast or full.
@@ -58,7 +58,7 @@ iter) shift; iter_targets="${*:?iter takes targets}"; pattern=${CBOR_TEST_PATTER
 check) set -- check ;;
 one) pattern=${2:?one takes a pattern}; set -- check ;;
 fast) set -- gcc-release clang-asan ;;
-full) set -- gcc-asan clang-asan ;;
+full) set -- gcc-asan ;;
 esac
 
 asan="-Og -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer"
