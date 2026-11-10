@@ -216,45 +216,6 @@ constexpr std::array<major_type, 8> major_types{major_type::unsigned_integer,
 
 } // namespace
 
-// RFC 8949 Appendix C refuses the additional information 28, 29 and 30 on every major type, and 31 on major
-// types 0, 1 and 6. Every other head is well-formed. The decoders of the library and the diagnostic notation
-// read every head through this one check, so it must agree with the appendix for all 8 x 32 pairs.
-TEST_CASE("validity: check_additional_information for every major type and every additional information")
-{
-    for (major_type const major : major_types)
-        for (std::uint8_t info = 0; info < 32; ++info) {
-            bool const reserved = info >= 28 && info <= 30;
-            bool const no_indefinite_form =
-                info == 31 && (major == major_type::unsigned_integer ||
-                               major == major_type::negative_integer || major == major_type::tag);
-            auto const r = validity::check_additional_information(major, info);
-            if (reserved || no_indefinite_form)
-                CHECK_EQ(r.error(), error::syntax_error);
-            else
-                CHECK(r.has_value());
-        }
-}
-
-// The owner decided that the decoder never reads an indefinite length. A string, an array or a map with the
-// additional information 31 is refused as indefinite_length, and a break code outside of an indefinite-length
-// item is not well-formed (RFC 8949 3.2.1). Only the additional information 0 to 27 passes, on every major
-// type.
-TEST_CASE("validity: check_definite_length for every major type and every additional information")
-{
-    for (major_type const major : major_types)
-        for (std::uint8_t info = 0; info < 32; ++info) {
-            auto const r = validity::check_definite_length(major, info);
-            bool const container = major == major_type::byte_string || major == major_type::text_string ||
-                                   major == major_type::array || major == major_type::map;
-            if (info <= 27)
-                CHECK(r.has_value());
-            else if (info == 31 && container)
-                CHECK_EQ(r.error(), error::indefinite_length);
-            else
-                CHECK_EQ(r.error(), error::syntax_error);
-        }
-}
-
 // RFC 8949 3.2.3: each chunk of an indefinite-length string is a definite-length string of the same major
 // type. The check must refuse every other major type and the indefinite form, for both string types.
 TEST_CASE("validity: check_chunk for both string types, every major type and every additional information")

@@ -1550,27 +1550,30 @@ inline std::expected<cbor::type, error> lazy::type() const
         if (!found) [[unlikely]]
             return std::unexpected(found.error());
         return heads::type_of(found->h.major, found->h.info, found->h.argument);
-                            }
-                            auto const h = heads::read_raw_head<true>(top_level.encoded, detail::validity::offset{offset});
-                            if (!h) [[unlikely]]
-                                return std::unexpected(h.error());
-                            if (!heads::is_bignum(h->major, h->argument)) [[likely]]
-                                return heads::type_of(h->major, h->info, h->argument);
-                            auto const c = heads::read_raw_head<true>(top_level.encoded, h->at);
-                            if (!c) [[unlikely]]
-                                return std::unexpected(c.error());
-                            if (c->major != major_type::byte_string ||
-                                !detail::validity::check_definite_length(c->major, c->info).has_value())
-                                return heads::type_of(h->major, h->info, h->argument);
-                            heads::decoder<true> d{detail::validity::subspan(top_level.encoded, h->at)};
-                            auto const read = d.decode_bignum(h->argument);
-                            if (!read) [[unlikely]]
-                                return std::unexpected(read.error());
-                            if (!*read)
-                                return heads::type_of(h->major, h->info, h->argument);
-                            return h->argument == std::to_underlying(rfc8949::tag_number::negative_bignum)
-                                       ? cbor::type::negative_integer
-                                       : cbor::type::unsigned_integer;
+    }
+    auto const h = heads::read_raw_head<true>(top_level.encoded, detail::validity::offset{offset});
+    if (!h) [[unlikely]]
+        return std::unexpected(h.error());
+    if (auto const definite = detail::validity::check_definite_length(h->major, h->info); !definite)
+        [[unlikely]]
+        return std::unexpected(definite.error());
+    if (!heads::is_bignum(h->major, h->argument)) [[likely]]
+        return heads::type_of(h->major, h->info, h->argument);
+    auto const c = heads::read_raw_head<true>(top_level.encoded, h->at);
+    if (!c) [[unlikely]]
+        return std::unexpected(c.error());
+    if (c->major != major_type::byte_string ||
+        !detail::validity::check_definite_length(c->major, c->info).has_value())
+        return heads::type_of(h->major, h->info, h->argument);
+    heads::decoder<true> d{detail::validity::subspan(top_level.encoded, h->at)};
+    auto const read = d.decode_bignum(h->argument);
+    if (!read) [[unlikely]]
+        return std::unexpected(read.error());
+    if (!*read)
+        return heads::type_of(h->major, h->info, h->argument);
+    return h->argument == std::to_underlying(rfc8949::tag_number::negative_bignum)
+               ? cbor::type::negative_integer
+               : cbor::type::unsigned_integer;
 }
 
 template <class Iterator>

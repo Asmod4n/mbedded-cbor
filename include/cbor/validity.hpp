@@ -544,11 +544,11 @@ public:
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
     check_definite_length(major_type const major, std::uint8_t const info)
     {
-        if (info == std::to_underlying(rfc8949::additional_information::indefinite_length) &&
-            major >= major_type::byte_string && major <= major_type::map) [[unlikely]]
-            return std::unexpected(error::indefinite_length);
-        if (info > std::to_underlying(rfc8949::additional_information::eight_byte_argument)) [[unlikely]]
-            return std::unexpected(error::syntax_error);
+        if (auto r = check_additional_information(major, info); !r) [[unlikely]]
+            return r;
+        if (info == std::to_underlying(rfc8949::additional_information::indefinite_length)) [[unlikely]]
+            return std::unexpected(major == major_type::simple_float ? error::syntax_error
+                                                                     : error::indefinite_length);
         return {};
     }
 
