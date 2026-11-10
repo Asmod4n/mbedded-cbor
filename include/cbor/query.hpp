@@ -664,6 +664,17 @@ class path
     static std::expected<std::pair<std::uint64_t, detail::validity::offset>, error>
     intern_value(detail::canonical_ids &ids, lazy::top_level_item const &source, detail::validity::offset at);
 
+    struct comparables {
+        lazy::resolved x;
+        lazy::resolved y;
+        heads::head h;
+        heads::head k;
+    };
+
+    static std::expected<comparables, error> comparables_of(lazy const &a, lazy const &b);
+
+    static constexpr bool is_number(heads::head const &h);
+
     static std::expected<bool, error> value_equal(lazy const &a, lazy const &b);
 
     static std::expected<bool, error> value_less(lazy const &a, lazy const &b);
@@ -1480,10 +1491,8 @@ path::intern_value(detail::canonical_ids &ids, lazy::top_level_item const &sourc
     }
 }
 
-inline std::expected<bool, error> path::value_equal(lazy const &a, lazy const &b)
+inline std::expected<path::comparables, error> path::comparables_of(lazy const &a, lazy const &b)
 {
-    if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
-        return std::unexpected(r.error());
     auto const x = resolved_of(a);
     if (!x) [[unlikely]]
         return std::unexpected(x.error());
@@ -1496,23 +1505,34 @@ inline std::expected<bool, error> path::value_equal(lazy const &a, lazy const &b
     auto const y_number = integer_of(y->h, y->d);
     if (!y_number) [[unlikely]]
         return std::unexpected(y_number.error());
-    heads::head const &h = x_number->first;
-    heads::head const &k = y_number->first;
-    auto const integral = [](heads::head const &n) {
-        return n.major == major_type::unsigned_integer || n.major == major_type::negative_integer;
-    };
-    auto const floating = [](heads::head const &n) { return heads::is_floating_point(n.major, n.info); };
-    if ((integral(h) || floating(h)) && (integral(k) || floating(k)))
+    return comparables{*x, *y, x_number->first, y_number->first};
+}
+
+constexpr bool path::is_number(heads::head const &h)
+{
+    return h.major == major_type::unsigned_integer || h.major == major_type::negative_integer ||
+           heads::is_floating_point(h.major, h.info);
+}
+
+inline std::expected<bool, error> path::value_equal(lazy const &a, lazy const &b)
+{
+    if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    auto const comparison = comparables_of(a, b);
+    if (!comparison) [[unlikely]]
+        return std::unexpected(comparison.error());
+    auto const &[x, y, h, k] = *comparison;
+    if (is_number(h) && is_number(k))
         return compare_numbers(number_of(h), number_of(k)) == 0;
-    if (h.major != k.major || floating(h) || floating(k))
+    if (h.major != k.major || heads::is_floating_point(h.major, h.info) || heads::is_floating_point(k.major, k.info))
         return false;
-    detail::validity::offset const x_content = detail::validity::distance(x->source.encoded, x->d.encoded);
-    detail::validity::offset const y_content = detail::validity::distance(y->source.encoded, y->d.encoded);
+    detail::validity::offset const x_content = detail::validity::distance(x.source.encoded, x.d.encoded);
+    detail::validity::offset const y_content = detail::validity::distance(y.source.encoded, y.d.encoded);
     switch (h.major) {
     case major_type::byte_string:
     case major_type::text_string: {
-        heads::decoder d = x->d;
-        heads::decoder e = y->d;
+        heads::decoder d = x.d;
+        heads::decoder e = y.d;
         auto const s = d.decode_string(h.argument);
         if (!s) [[unlikely]]
             return std::unexpected(s.error());
@@ -1559,8 +1579,8 @@ inline std::expected<bool, error> path::value_equal(lazy const &a, lazy const &b
             case major_type::tag:
                 if (h.argument != k.argument)
                     return false;
-                return value_equal(lazy{x->source, std::to_underlying(x_content), {}},
-                                   lazy{y->source, std::to_underlying(y_content), {}});
+                return value_equal(lazy{x.source, std::to_underlying(x_content), {}},
+                                   lazy{y.source, std::to_underlying(y_content), {}});
             default:
                 return h.info == k.info && h.argument == k.argument;
             }
@@ -1568,30 +1588,16 @@ inline std::expected<bool, error> path::value_equal(lazy const &a, lazy const &b
 
 inline std::expected<bool, error> path::value_less(lazy const &a, lazy const &b)
 {
-    auto const x = resolved_of(a);
-    if (!x) [[unlikely]]
-        return std::unexpected(x.error());
-    auto const y = resolved_of(b);
-    if (!y) [[unlikely]]
-        return std::unexpected(y.error());
-    auto const x_number = integer_of(x->h, x->d);
-    if (!x_number) [[unlikely]]
-        return std::unexpected(x_number.error());
-    auto const y_number = integer_of(y->h, y->d);
-    if (!y_number) [[unlikely]]
-        return std::unexpected(y_number.error());
-    heads::head const &h = x_number->first;
-    heads::head const &k = y_number->first;
-    auto const integral = [](heads::head const &n) {
-        return n.major == major_type::unsigned_integer || n.major == major_type::negative_integer;
-    };
-    auto const floating = [](heads::head const &n) { return heads::is_floating_point(n.major, n.info); };
-            if ((integral(h) || floating(h)) && (integral(k) || floating(k)))
+    auto const comparison = comparables_of(a, b);
+    if (!comparison) [[unlikely]]
+        return std::unexpected(comparison.error());
+    auto const &[x, y, h, k] = *comparison;
+            if (is_number(h) && is_number(k))
                 return compare_numbers(number_of(h), number_of(k)) < 0;
             if (h.major != major_type::text_string || k.major != major_type::text_string)
                 return false;
-            heads::decoder d = x->d;
-            heads::decoder e = y->d;
+            heads::decoder d = x.d;
+            heads::decoder e = y.d;
             auto const s = d.decode_string(h.argument);
             if (!s) [[unlikely]]
                 return std::unexpected(s.error());
