@@ -1,3 +1,4 @@
+#include "rfc8949.hpp"
 #include "small_stack.hpp"
 #include <cbor/cbor.hpp>
 #include "pieces.hpp"
@@ -914,8 +915,8 @@ TEST_CASE("encode: a float of each width comes back byte for byte")
 // at its width, which also checks the major type that encode takes from the type.
 TEST_CASE("decode: every major type and additional information gives the type of RFC 8949")
 {
-    for (unsigned major = 0; major < 8; ++major) {
-        for (unsigned info = 0; info < 28; ++info) {
+    for (unsigned major = 0; major < test::rfc8949::major_types; ++major) {
+        for (unsigned info = 0; info < test::rfc8949::first_reserved_information; ++info) {
             CAPTURE(major);
             CAPTURE(info);
             std::string wire(1, static_cast<char>(major << 5 | info));

@@ -1,3 +1,4 @@
+#include "rfc8746.hpp"
 #include "small_stack.hpp"
 #include "reference.hpp"
 #include "threads.hpp"
@@ -1349,7 +1350,7 @@ TEST_CASE("lazy: a count larger than the bytes left is too_little_data before th
 namespace typed_array_index
 {
 
-std::string typed_array_of(int const tag, std::string_view const bytes)
+std::string typed_array_of(std::uint64_t const tag, std::string_view const bytes)
 {
     std::string wire = "\xd8"s + static_cast<char>(tag);
     if (bytes.size() < 24)
@@ -1368,7 +1369,7 @@ TEST_CASE("lazy: an index reads an element of each typed array")
 {
     using typed_array_index::typed_array_of;
     struct integer_row {
-        int tag;
+        std::uint64_t tag;
         std::string_view bytes;
         std::int64_t second;
     };
@@ -1400,7 +1401,7 @@ TEST_CASE("lazy: an index reads an element of each typed array")
         CHECK_EQ(*(*std::ranges::next(l.elements()->begin()))->get<std::int64_t>(), second);
     }
     struct float_row {
-        int tag;
+        std::uint64_t tag;
         std::string_view bytes;
     };
     float_row const floats[] = {
@@ -1420,7 +1421,7 @@ TEST_CASE("lazy: an index reads an element of each typed array")
     }
     // A float of 128 bits has no C++ type that the library reads. The index selects the element, and the read
     // of its value is incorrect_type.
-    for (int const tag : {83, 87}) {
+    for (std::uint64_t const tag : {83u, 87u}) {
         CAPTURE(tag);
         auto const l = lazy_of(typed_array_of(tag, std::string(32, '\0')));
         CHECK_EQ(*l.size(), 2u);
@@ -1448,8 +1449,8 @@ TEST_CASE("lazy: an index reads an element of each typed array")
 TEST_CASE("lazy: an element of each typed array gives its raw bytes")
 {
     using typed_array_index::typed_array_of;
-    for (int tag = 64; tag <= 87; ++tag) {
-        if (tag == 76)
+    for (std::uint64_t tag = test::rfc8746::first_typed_array_tag; tag <= test::rfc8746::last_typed_array_tag; ++tag) {
+        if (tag == test::rfc8746::reserved_typed_array_tag)
             continue;
         CAPTURE(tag);
         std::size_t const size = std::size_t{1} << ((tag >> 4 & 1) + (tag & 3));
@@ -1486,7 +1487,7 @@ TEST_CASE("lazy: an element of a float128 typed array")
     std::string little_endian;
     for (std::string const &v : {one, minus_two, infinity, nan})
         little_endian += std::string(v.rbegin(), v.rend());
-    for (auto const &[tag, bytes] : {std::pair{83, big_endian}, std::pair{87, little_endian}}) {
+    for (auto const &[tag, bytes] : {std::pair{std::uint64_t{83}, big_endian}, std::pair{std::uint64_t{87}, little_endian}}) {
         CAPTURE(tag);
         auto const l = lazy_of(typed_array_of(tag, bytes));
         CHECK_EQ(*l.size(), 4u);
@@ -1526,7 +1527,7 @@ TEST_CASE("path: at_path reads an element of a float128 typed array")
     std::string const one = "\x3f\xff\x00\x00"s + zeros;
     std::string const minus_two = "\xc0\x00\x00\x00"s + zeros;
     std::string const little_endian = std::string(one.rbegin(), one.rend()) + std::string(minus_two.rbegin(), minus_two.rend());
-    for (auto const &[tag, bytes] : {std::pair{83, one + minus_two}, std::pair{87, little_endian}}) {
+    for (auto const &[tag, bytes] : {std::pair{std::uint64_t{83}, one + minus_two}, std::pair{std::uint64_t{87}, little_endian}}) {
         CAPTURE(tag);
         std::string const encoded = typed_array_of(tag, bytes);
         CHECK_EQ(*cbor::at_path<"$[0]", std::float128_t>(std::string_view(encoded)), std::float128_t{1});

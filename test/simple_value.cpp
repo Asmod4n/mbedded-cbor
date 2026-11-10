@@ -1,6 +1,7 @@
 #include "reference.hpp"
 #include "owned_copy.hpp"
 #include "item_head.hpp"
+#include "rfc8949.hpp"
 #include <cbor/structs.hpp>
 
 #include <cstdint>
@@ -54,7 +55,7 @@ std::string edn_of(std::uint8_t const v)
 // cbor::simple_value, also one that has no name in Table 4.
 TEST_CASE("simple value: lazy::get gives every simple value 0 to 255")
 {
-    for (unsigned i = 0; i < 256; ++i) {
+    for (unsigned i = 0; i < test::rfc8949::one_byte_values; ++i) {
         auto const v = static_cast<std::uint8_t>(i);
         CAPTURE(i);
         auto const top_level = test::lazy_of_copy(wire_of(v));
@@ -87,7 +88,7 @@ TEST_CASE("simple value: lazy::get refuses a float and an integer")
 // at_path reads the same set from the bytes with no lazy.
 TEST_CASE("simple value: at_path gives every simple value 0 to 255")
 {
-    for (unsigned i = 0; i < 256; ++i) {
+    for (unsigned i = 0; i < test::rfc8949::one_byte_values; ++i) {
         auto const v = static_cast<std::uint8_t>(i);
         CAPTURE(i);
         auto const r = cbor::at_path<"$[0]", cbor::simple_value>("\x81"s + wire_of(v));
@@ -106,7 +107,7 @@ TEST_CASE("simple value: at_path gives every simple value 0 to 255")
 // lazy::clone gives an item whose content is the simple value, beside the head fields of the wire.
 TEST_CASE("simple value: lazy::clone gives every simple value 0 to 255 as its content")
 {
-    for (unsigned i = 0; i < 256; ++i) {
+    for (unsigned i = 0; i < test::rfc8949::one_byte_values; ++i) {
         auto const v = static_cast<std::uint8_t>(i);
         CAPTURE(i);
         auto const top_level = test::lazy_of_copy(wire_of(v));
@@ -130,7 +131,7 @@ TEST_CASE("simple value: lazy::clone gives every simple value 0 to 255 as its co
 // decode gives every simple value to the reference model, and the encoder writes it back in the same bytes.
 TEST_CASE("simple value: decode and encode for every simple value 0 to 255")
 {
-    for (unsigned i = 0; i < 256; ++i) {
+    for (unsigned i = 0; i < test::rfc8949::one_byte_values; ++i) {
         auto const v = static_cast<std::uint8_t>(i);
         CAPTURE(i);
         if (reserved(v)) {
@@ -148,7 +149,7 @@ TEST_CASE("simple value: decode and encode for every simple value 0 to 255")
 // diagnostic_notation writes the four names of Table 4 and simple(n) for every other simple value (RFC 8949 8).
 TEST_CASE("simple value: diagnostic_notation gives every simple value 0 to 255")
 {
-    for (unsigned i = 0; i < 256; ++i) {
+    for (unsigned i = 0; i < test::rfc8949::one_byte_values; ++i) {
         auto const v = static_cast<std::uint8_t>(i);
         CAPTURE(i);
         auto const r = cbor::diagnostic_notation(wire_of(v));
@@ -165,7 +166,7 @@ TEST_CASE("simple value: diagnostic_notation gives every simple value 0 to 255")
 // well-formed encoding.
 TEST_CASE("simple value: cbor::encoder::simple_value writes every simple value 0 to 255")
 {
-    for (unsigned i = 0; i < 256; ++i) {
+    for (unsigned i = 0; i < test::rfc8949::one_byte_values; ++i) {
         auto const v = static_cast<std::uint8_t>(i);
         CAPTURE(i);
         std::string out;
@@ -184,7 +185,7 @@ TEST_CASE("simple value: cbor::encoder::simple_value writes every simple value 0
 // structs reads and writes cbor::simple_value with the same bytes.
 TEST_CASE("simple value: structs reads and writes every simple value 0 to 255")
 {
-    for (unsigned i = 0; i < 256; ++i) {
+    for (unsigned i = 0; i < test::rfc8949::one_byte_values; ++i) {
         auto const v = static_cast<std::uint8_t>(i);
         CAPTURE(i);
         auto const r = cbor::structs<cbor::simple_value>::decode(wire_of(v));

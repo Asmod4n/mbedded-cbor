@@ -1,4 +1,5 @@
 #include "types.hpp"
+#include "../rfc8949.hpp"
 
 namespace schema_types
 {
@@ -224,13 +225,13 @@ TEST_CASE("attack: a shifted root is incorrect_type")
 TEST_CASE("attack: every forged head of a fixed field is incorrect_type")
 {
     std::string const bytes = *form<probe>::encode(sample_probe);
-    auto const forged = [&bytes](std::size_t const member, int const head) {
+    auto const forged = [&bytes](std::size_t const member, unsigned const head) {
         std::string f = bytes;
         f.at(probe_offset(f.size(), member)) = static_cast<char>(head);
         return f;
     };
     using S = form<probe>;
-    for (int head = 0; head < 256; ++head) {
+    for (unsigned head = 0; head < test::rfc8949::initial_byte_values; ++head) {
         CAPTURE(head);
         CHECK_EQ(at_path<probe, "$.flag">(forged(S::member_offset<&probe::flag>(), head)).has_value(), head == 0xf4 || head == 0xf5);
         CHECK_EQ(at_path<probe, "$.i16">(forged(S::member_offset<&probe::i16>(), head)).has_value(), head == 0x19 || head == 0x39);

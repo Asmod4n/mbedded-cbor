@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include "rfc8949.hpp"
 
 #include <cbor/sequence_reader.hpp>
 #include <cbor/structs.hpp>
@@ -6,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -181,7 +183,7 @@ TEST_CASE("major 0 and 1: the encoder writes an integer at its native width")
 // because the argument is 64 bits wide here.
 TEST_CASE("head: every power of 2 survives encode and decode")
 {
-    for (int i = 0; i < 64; ++i) {
+    for (int i = 0; i < std::numeric_limits<std::uint64_t>::digits; ++i) {
         check_value(encoded(U(1ull << i)), U(1ull << i));
         check_value(encoded(N(1ull << i)), N(1ull << i));
     }
@@ -216,16 +218,21 @@ struct one_simple_value {
 // the two errors; a rule of a tag content or a repeated key may still give another error.
 TEST_CASE("head: every initial byte gives the result that RFC 8949 gives it")
 {
-    std::string const after(64, '\0');
+    // An argument of eight bytes is the widest (RFC 8949 3), and a head with no content to read needs no more; the
+    // other initial bytes get room for a short content.
+    constexpr std::size_t widest_argument_bytes = 8;
+    constexpr std::size_t room_after_head = 64;
+    std::string const after(room_after_head, '\0');
     std::vector<std::string> not_well_formed;
-    for (int argument = 0; argument < 32; ++argument)
+    for (unsigned argument = 0; argument < test::rfc8949::additional_information_values; ++argument)
         not_well_formed.push_back(std::string("\xf8") + static_cast<char>(argument));
-    for (int major = 0; major < 8; ++major)
-        for (int info = 28; info <= 30; ++info)
-            not_well_formed.push_back(std::string(1, static_cast<char>(major << 5 | info)) +
-                                      std::string(8, '\0'));
-    for (int const major : {0, 1, 6, 7})
-        not_well_formed.push_back(std::string(1, static_cast<char>(major << 5 | 31)) + std::string(8, '\0'));
+    for (unsigned major = 0; major < test::rfc8949::major_types; ++major)
+        for (unsigned info = test::rfc8949::first_reserved_information; info <= test::rfc8949::last_reserved_information; ++info)
+            not_well_formed.push_back(std::string(1, static_cast<char>(major << test::rfc8949::additional_information_bits | info)) +
+                                      std::string(widest_argument_bytes, '\0'));
+    for (unsigned const major : {0u, 1u, 6u, 7u})
+        not_well_formed.push_back(std::string(1, static_cast<char>(major << test::rfc8949::additional_information_bits | test::rfc8949::indefinite_length)) +
+                                  std::string(widest_argument_bytes, '\0'));
     REQUIRE_EQ(not_well_formed.size(), 60u);
     for (std::string const &bytes : not_well_formed) {
         CAPTURE(bytes);
@@ -254,15 +261,16 @@ TEST_CASE("head: every initial byte gives the result that RFC 8949 gives it")
         auto const c = l->clone();
         return c ? cbor::error{} : c.error();
     };
-    for (int const major : {2, 3, 4, 5}) {
-        std::string const bytes = std::string(1, static_cast<char>(major << 5 | 31)) + after;
+    for (unsigned const major : {2u, 3u, 4u, 5u}) {
+        std::string const bytes =
+            std::string(1, static_cast<char>(major << test::rfc8949::additional_information_bits | test::rfc8949::indefinite_length)) + after;
         CAPTURE(bytes);
         CHECK_EQ(cbor::decode(bytes).error(), cbor::error::indefinite_length);
         CHECK_EQ(lazy_error(bytes), cbor::error::indefinite_length);
     }
     int others = 0;
-    for (int initial = 0; initial < 256; ++initial) {
-        if ((initial & 31) >= 28 || initial == 0xf8)
+    for (unsigned initial = 0; initial < test::rfc8949::initial_byte_values; ++initial) {
+        if ((initial & (test::rfc8949::additional_information_values - 1)) >= test::rfc8949::first_reserved_information || initial == 0xf8)
             continue;
         ++others;
         std::string const bytes = std::string(1, static_cast<char>(initial)) + after;

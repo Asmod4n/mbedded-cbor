@@ -37,6 +37,7 @@
 //   the width of each head (encode.hpp).
 // No call of the library writes indefinite length; the rows of upstream with indefinite length are not ported.
 
+#include "../rfc8949.hpp"
 #include "tinycbor.hpp"
 
 #include <doctest/doctest.h>
@@ -662,7 +663,7 @@ TEST_CASE("tinycbor encoder: a wrong count of items")
 // reserved_simple_value. Upstream refuses 25 to 31.
 TEST_CASE("tinycbor encoder: reserved simple values")
 {
-    for (std::uint8_t n = 25; n <= 31; ++n) {
+    for (std::uint8_t n = test::rfc8949::first_reserved_simple_value + 1; n <= test::rfc8949::last_reserved_simple_value; ++n) {
         CAPTURE(int{n});
         std::string out;
         cbor::encoder e(out);

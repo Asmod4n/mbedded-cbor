@@ -1,3 +1,4 @@
+#include "rfc8949.hpp"
 #include "small_stack.hpp"
 #include "reference.hpp"
 #include "owned_copy.hpp"
@@ -121,7 +122,7 @@ TEST_CASE("depth: encode of a deep tree")
 // not well-formed, so no encoder may write one.
 TEST_CASE("encode: a reserved simple value is an error")
 {
-    for (std::uint8_t v = 24; v < 32; ++v) {
+    for (std::uint8_t v = test::rfc8949::first_reserved_simple_value; v <= test::rfc8949::last_reserved_simple_value; ++v) {
         string_writer w;
         auto const r = test::encode(w, V(simple{v}));
         REQUIRE_FALSE(r.has_value());

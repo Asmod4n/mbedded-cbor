@@ -5,6 +5,7 @@
 // stands for a case with no expected bytes; the decoders must then only accept the written bytes. A writer
 // that refuses a value gives "!" and the error in place of written, so the driver reports it.
 #include <cbor/cbor.hpp>
+#include "../rfc8746.hpp"
 #include "../hex.hpp"
 #include "../owned_copy.hpp"
 
@@ -401,8 +402,8 @@ void shared_values()
 void typed_arrays()
 {
     std::string const payload = test::unhexlify("000102030405060708090a0b0c0d0e0f");
-    for (std::uint64_t tag = 64; tag <= 87; ++tag) {
-        if (tag == 76)
+    for (std::uint64_t tag = test::rfc8746::first_typed_array_tag; tag <= test::rfc8746::last_typed_array_tag; ++tag) {
+        if (tag == test::rfc8746::reserved_typed_array_tag)
             continue;
         std::string out;
         cbor::encoder e(out);

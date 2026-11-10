@@ -15,6 +15,7 @@
 #include <stdfloat>
 #endif
 
+#include "rfc8949.hpp"
 #include "pieces.hpp"
 #include "reference.hpp"
 
@@ -91,7 +92,7 @@ TEST_CASE("encoder: simple values")
     CHECK_EQ(written([](auto &e) { return e.simple_value(cbor::simple_value::null); }), "\xf6"sv);
     CHECK_EQ(written([](auto &e) { return e.simple_value(static_cast<cbor::simple_value>(16)); }), "\xf0"sv);
     CHECK_EQ(written([](auto &e) { return e.simple_value(static_cast<cbor::simple_value>(255)); }), "\xf8\xff"sv);
-    for (int v = 24; v < 32; ++v) {
+    for (unsigned v = test::rfc8949::first_reserved_simple_value; v <= test::rfc8949::last_reserved_simple_value; ++v) {
         std::string out;
         cbor::encoder e(out);
         auto const r = e.simple_value(static_cast<cbor::simple_value>(v));

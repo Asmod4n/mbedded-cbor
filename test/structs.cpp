@@ -1,3 +1,4 @@
+#include "rfc8746.hpp"
 #include "small_stack.hpp"
 #include "reference.hpp"
 #include <cbor/schema.hpp>
@@ -923,7 +924,7 @@ template <class T>
 void tags_accepted(std::vector<std::uint64_t> const &accepted)
 {
     std::vector<std::uint64_t> tags{0, 1, 24, 100, 258, 1004};
-    for (std::uint64_t t = 64; t <= 87; ++t)
+    for (std::uint64_t t = test::rfc8746::first_typed_array_tag; t <= test::rfc8746::last_typed_array_tag; ++t)
         tags.push_back(t);
     REQUIRE_EQ(tags.size(), 30u);
     for (std::uint64_t const t : tags) {
