@@ -49,7 +49,7 @@ class extended_diagnostic_notation
         std::size_t at;
     };
 
-    struct canonical_pair {
+    struct encoded_pair {
         std::size_t key;
         std::size_t value;
         std::size_t end;
@@ -936,7 +936,8 @@ class extended_diagnostic_notation
     }
 
     static constexpr std::expected<detail::validity::offset, error>
-    append_canonical(std::string &out, std::string_view const encoded, detail::validity::offset const at)
+    append_deterministically_encoded(std::string &out, std::string_view const encoded,
+                                     detail::validity::offset const at)
     {
         if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
             return std::unexpected(r.error());
@@ -981,17 +982,17 @@ class extended_diagnostic_notation
             if (auto const r = append_head(out, h->major, h->argument, no_indicator); !r) [[unlikely]]
                 return std::unexpected(r.error());
             std::size_t const start = out.size();
-            std::vector<canonical_pair> pairs;
+            std::vector<encoded_pair> pairs;
             std::uint64_t count = 0;
             for (; count < h->argument; ++count) {
                 std::size_t const key_at = out.size();
-                auto const first = append_canonical(out, encoded, next);
+                auto const first = append_deterministically_encoded(out, encoded, next);
                 if (!first) [[unlikely]]
                     return first;
                 next = *first;
                 if (map) {
                     std::size_t const value_at = out.size();
-                    auto const second = append_canonical(out, encoded, next);
+                    auto const second = append_deterministically_encoded(out, encoded, next);
                     if (!second) [[unlikely]]
                         return second;
                     next = *second;
@@ -1000,7 +1001,7 @@ class extended_diagnostic_notation
             }
             if (map) {
                 std::string const region{std::string_view{std::span(out).subspan(start)}};
-                auto const key = [&region](canonical_pair const &p) {
+                auto const key = [&region](encoded_pair const &p) {
                     return std::string_view(std::span(region).subspan(p.key, p.value - p.key));
                 };
                 std::ranges::sort(pairs, {}, key);
@@ -1010,7 +1011,7 @@ class extended_diagnostic_notation
                     c != error{}) [[unlikely]]
                     return std::unexpected(c);
                 out.resize(start);
-                for (canonical_pair const &p : pairs)
+                for (encoded_pair const &p : pairs)
                     out += std::string_view(std::span(region).subspan(p.key, p.end - p.key));
             }
             return next;

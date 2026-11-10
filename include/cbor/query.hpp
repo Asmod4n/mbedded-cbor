@@ -266,7 +266,7 @@ class path
             if (!next) [[unlikely]]
                 return next;
             patches.apply(literal);
-            if (auto const r = extended_diagnostic_notation::append_canonical(
+            if (auto const r = extended_diagnostic_notation::append_deterministically_encoded(
                     keys, literal, detail::validity::offset{});
                 !r) [[unlikely]]
                 return std::unexpected(r.error());

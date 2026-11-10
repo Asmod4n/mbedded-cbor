@@ -1263,7 +1263,8 @@ TEST_CASE("at_path: a path from a held lazy")
 }
 
 // A tag literal in a filter is parsed at run time as at compile time. g++-16 -O3 made the recursion over a tag in
-// append_canonical loop until memory ran out, so this test runs a tag, two tags and a tag inside an array.
+// append_deterministically_encoded loop until memory ran out, so this test runs a tag, two tags and a tag inside an
+// array.
 TEST_CASE("path: a tag literal in a run-time filter")
 {
     auto const doc = *test::lazy_of_copy(encoded(A(1, tagged{1000, V(1)}, tagged{1001, V(tagged{1000, V(3)})}, A(tagged{1, V(2)}))));
