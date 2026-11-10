@@ -4,10 +4,13 @@
 # on twitter, floats and records for two commits, with g++ and clang++. See README.md.
 set -eu
 [ $# -eq 2 ] || { echo "usage: $0 <commit-a> <commit-b>" >&2; exit 2; }
-[ "$(id -u)" != 0 ] || { echo "never run as root" >&2; exit 2; }
+here=$(cd "$(dirname "$0")" && pwd)
+. "$here/round.sh"
+. "$here/host.sh"
+. "$here/gate.sh"
+refuse_root
 commit_a=$1
 commit_b=$2
-here=$(cd "$(dirname "$0")" && pwd)
 repo=${REPO:-$(dirname "$here")}
 bench=$repo/bench
 GXX=${GXX:-$(command -v g++-16 || command -v g++)}
@@ -17,8 +20,6 @@ MIN_TIME=${MIN_TIME:-0.2s}
 docs=${DOCS:-"twitter floats records"}
 arms=${ARMS:-"READ MB_PATH MB_AT_PATH MB_STRUCT"}
 RESULTS_DIR=${RESULTS_DIR:-$bench/results}
-cpus=$(nproc)
-jobs=${JOBS:-$((cpus > 1 ? cpus - 1 : 1))}
 flags=${FLAGS:--O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG}
 export GLIBC_TUNABLES=glibc.malloc.trim_threshold=1073741824:glibc.malloc.mmap_threshold=33554432:glibc.malloc.top_pad=268435456
 
@@ -26,19 +27,16 @@ for tool in vmstat ps nice readelf ldd python3 tar; do
 	command -v "$tool" > /dev/null || { echo "missing tool: $tool" >&2; exit 2; }
 done
 
-. "$(dirname "$0")/gate.sh"
-gate_out=$(mktemp)
-if ! gate > "$gate_out" 2>&1; then
-	cat "$gate_out"
-	rm -f "${gate_out:?}"
+build=$(mktemp -d "${TMPDIR:-/tmp}/mbedded-cbor-desktop.XXXXXX")
+trap 'rm -rf "${build:?}"' EXIT
+mkdir -p "$build/bin" "$build/out" "$build/log" "$build/src" "$build/docs"
+if ! gate > "$build/gate-before-build" 2>&1; then
+	cat "$build/gate-before-build"
 	echo "the machine is busy; no run was made and no file was written" >&2
 	exit 3
 fi
-cat "$gate_out"
-
-build=$(mktemp -d "${TMPDIR:-/tmp}/mbedded-cbor-desktop.XXXXXX")
-trap 'rm -rf "${build:?}"; rm -f "${gate_out:?}"' EXIT
-mkdir -p "$build/bin" "$build/out" "$build/log" "$build/src" "$build/docs"
+cat "$build/gate-before-build"
+write_host_context "$build/host"
 echo "building into $build"
 
 # The tree of a commit: include/ and the bench code of that commit, so each arm builds its own API. COMMIT_TREES=<dir>
@@ -80,15 +78,6 @@ compile() {
 		rm -f "${build:?}/bin/${name:?}"
 	fi
 }
-running=0
-spawn() {
-	if [ "$running" -ge "$jobs" ]; then
-		wait -n
-		running=$((running - 1))
-	fi
-	"$@" &
-	running=$((running + 1))
-}
 for cc_tag in gxx:"$GXX" clang:"$CLANGXX"; do
 	tag=${cc_tag%%:*}
 	cc=${cc_tag#*:}
@@ -104,80 +93,60 @@ for cc_tag in gxx:"$GXX" clang:"$CLANGXX"; do
 		done
 	done
 done
-while [ "$running" -gt 0 ]; do
-	wait -n
-	running=$((running - 1))
-done
+finish
 built=$(ls "$build/bin" | wc -l)
 echo "built $built binaries; $(ls "$build/log" | wc -l) did not compile"
 
 # Priority: nice -10 where the system allows it.
-if [ "$(nice -n -10 nice 2>> "$build/out/err.txt")" = -10 ]; then
-	runner="nice -n -10"
-	priority="nice -10 granted"
-else
-	runner=""
-	priority="nice 0 (nice -10 refused)"
-fi
-echo "priority: $priority"
+runner=$(ask_priority "$build/out")
+echo "priority: $(cat "$build/out/priority")"
 
 for b in "$build"/bin/*; do
 	[ -e "$b" ] || continue
 	echo "$(basename "$b") $(readelf -h "$b" | grep -o 'Type: *[A-Z]*' | tr -s ' ')"
 done > "$build/out/elf_type"
 
-steal() {
-	local user nice system idle iowait irq softirq stolen rest
-	read -r _ user nice system idle iowait irq softirq stolen rest < /proc/stat
-	echo "$stolen $((user + nice + system + idle + iowait + irq + softirq + stolen))"
-}
-
 # Cells: tag.doc.arm. Per round, the variants run one after the other in a rotating order.
 cells=$(cd "$build/bin" && ls | sed -e 's/^[^.]*\.//' | sort -u)
 variants=(a b aa)
-start=$(date +%s)
-i=1
-while [ "$i" -le "$ROUNDS" ]; do
-	s0=$(steal)
-	t0=$(date +%s.%N)
+one_round() {
+	local try=$1 attempt=$2 cell k v b
 	for cell in $cells; do
 		k=0
 		while [ "$k" -lt 3 ]; do
-			v=${variants[$(((k + i) % 3))]}
+			v=${variants[$(((k + attempt) % 3))]}
 			b=$build/bin/$v.$cell
 			if [ -e "$b" ]; then
 				$runner "$b" --benchmark_min_time="$MIN_TIME" --benchmark_out_format=json \
-					--benchmark_out="$build/out/$i.$v.$cell.json" < /dev/null > /dev/null 2>> "$build/out/err.txt" ||
+					--benchmark_out="$try/$v.$cell.json" < /dev/null > /dev/null 2>> "$build/out/err.txt" ||
 					echo "$v.$cell" >> "$build/out/failed.txt"
 			fi
 			k=$((k + 1))
 		done
 	done
-	s1=$(steal)
-	t1=$(date +%s.%N)
-	echo "$i $t0 $t1 $s0 $s1" >> "$build/out/rounds"
-	echo "round $i/$ROUNDS done, $(($(date +%s) - start)) s elapsed, steal ticks $(( ${s1% *} - ${s0% *} ))"
-	i=$((i + 1))
-done
+}
+if ! gate > "$build/gate-before-runs" 2>&1; then
+	cat "$build/gate-before-runs"
+	echo "the machine is busy after the build; no run was made and no file was written" >&2
+	exit 3
+fi
+run_rounds "$ROUNDS" "$build/out" one_round
 
 mkdir -p "$RESULTS_DIR"
 stamp=$(date -u +%Y-%m-%d-%H%M%SZ)
-dirty=$(git -C "$repo" status --porcelain -- bench 2>> "$build/out/err.txt" | head -n 1 || true)
-bench_commit=$(git -C "$repo" rev-parse HEAD 2>> "$build/out/err.txt" || echo "${BENCH_COMMIT:-unknown}")
-[ -z "$dirty" ] || bench_commit="$bench_commit-dirty"
-python3 -I - "$build" "$stamp" "$commit_a" "$commit_b" "$bench_commit" "$flags" "$ROUNDS" "$MIN_TIME" "$GXX" "$CLANGXX" \
-	"$priority" "$cpus" "$jobs" "$gate_out" "$bench" > "$RESULTS_DIR/$stamp.json.part" <<'PY'
-import collections, glob, hashlib, json, os, platform, statistics, subprocess, sys
+if git -C "$repo" rev-parse --is-inside-work-tree > "$build/out/git.log" 2>&1; then
+	bench_commit=$(name_bench_commit "$repo" bench cmake)
+else
+	bench_commit=${BENCH_COMMIT:-unknown}
+fi
+python3 -I "$here/context.py" "$build" "$steal_limit_percent" "$GXX" "$CLANGXX" -- \
+	$(ls "$build"/bin/a.gxx.* 2>> "$build/out/err.txt" | head -n 1) \
+	$(ls "$build"/bin/a.clang.* 2>> "$build/out/err.txt" | head -n 1) > "$build/out/context.json"
+python3 -I - "$build" "$stamp" "$commit_a" "$commit_b" "$bench_commit" "$flags" "$ROUNDS" "$MIN_TIME" \
+	> "$RESULTS_DIR/$stamp.json.part" <<'PY'
+import collections, glob, json, os, statistics, sys
 
-build, stamp, commit_a, commit_b, bench_commit, flags, rounds, min_time, gxx, clangxx, priority, cpus, jobs, gate_file, bench = sys.argv[1:16]
-
-
-def run(*cmd):
-    try:
-        r = subprocess.run(cmd, capture_output=True, text=True)
-    except FileNotFoundError:
-        return ""
-    return (r.stdout + r.stderr).strip()
+build, stamp, commit_a, commit_b, bench_commit, flags, rounds, min_time = sys.argv[1:9]
 
 
 def read(path):
@@ -190,8 +159,8 @@ def ids(v):
 
 times = collections.defaultdict(list)
 context = {}
-for path in sorted(glob.glob(os.path.join(build, "out", "*.json"))):
-    _, v, cell = os.path.basename(path)[:-5].split(".", 2)
+for path in sorted(glob.glob(os.path.join(build, "out", "round*", "*.json"))):
+    v, cell = os.path.basename(path)[:-5].split(".", 1)
     data = json.load(open(path))
     context.setdefault((v, cell), data["context"])
     times[(v, cell)] += [b["real_time"] for b in data["benchmarks"]]
@@ -216,40 +185,8 @@ for cell in cells:
         row["difference_over_noise"] = abs(row["b_over_a_ratio"] - 1) > floor
     result[cell] = row
 aa_dev = [abs(r["a_over_a_ratio"] - 1) for r in result.values() if "a_over_a_ratio" in r]
-
-steal = []
-for line in read(os.path.join(build, "out", "rounds")).splitlines():
-    i, t0, t1, st0, tot0, st1, tot1 = line.split()
-    steal.append({"round": int(i), "wall_s": float(t1) - float(t0), "steal_ticks": int(st1) - int(st0),
-                  "steal_percent_of_cpu_time": 100.0 * (int(st1) - int(st0)) / max(1, int(tot1) - int(tot0))})
-
-
-def cpu():
-    model, fl = "", ""
-    for line in open("/proc/cpuinfo"):
-        if line.startswith("model name") and not model:
-            model = line.split(":", 1)[1].strip()
-        if line.startswith("flags") and not fl:
-            fl = line.split(":", 1)[1].strip()
-    return {"model": model, "flags_sha256": hashlib.sha256(fl.encode()).hexdigest(), "cpus": os.cpu_count(),
-            "l3": read("/sys/devices/system/cpu/cpu0/cache/index3/size")}
-
-
-def binary_info(tag):
-    b = sorted(glob.glob(os.path.join(build, "bin", f"a.{tag}.*")))
-    if not b:
-        return {}
-    ldd = run("ldd", b[0])
-    libs = {}
-    for line in ldd.splitlines():
-        parts = line.split()
-        if parts and (parts[0].startswith(("libstdc++", "libc.so", "libc++", "libm"))) and "=>" in parts:
-            libs[parts[0]] = os.path.realpath(parts[2])
-    return {"binary": os.path.basename(b[0]), "comment": run("readelf", "-p", ".comment", b[0]), "libraries": libs}
-
-
-failed = sorted(set(read(os.path.join(build, "out", "failed.txt")).split()))
-dirs = read("/proc/1/cgroup")
+context = json.load(open(os.path.join(build, "out", "context.json")))
+binaries = context.pop("binaries")
 print(json.dumps({
     "time": stamp,
     "commit_a": {"given": commit_a, "id": ids("a")},
@@ -262,27 +199,11 @@ print(json.dumps({
     "elf_type_count": dict(collections.Counter(l.split(" ", 1)[1] for l in read(os.path.join(build, "out", "elf_type")).splitlines())),
     "rounds": int(rounds),
     "min_time": min_time,
-    "resolved_march": run(gxx, "-march=native", "-Q", "--help=target").split("-march=", 1)[1].split()[0],
-    "compilers": [run(gxx, "--version").splitlines()[0], run(clangxx, "--version").splitlines()[0]],
-    "gxx_binary": binary_info("gxx"),
-    "clang_binary": binary_info("clang"),
-    "libc": run("ldd", "--version").splitlines()[0],
-    "kernel": platform.release(),
-    "scheduler": read("/sys/kernel/sched_ext/state") or "no sched_ext state (kernel default)",
-    "virtualization": run("systemd-detect-virt") or "unknown",
-    "container": "yes" if os.path.exists("/run/.containerenv") or os.path.exists("/.dockerenv") else "no",
-    "cpu": cpu(),
-    "uid": os.getuid(),
-    "priority": priority,
-    "threads": 1,
-    "pinned": False,
-    "cpus_in_machine": int(cpus),
-    "cpu_left_to_the_machine": "each bench process is single-threaded; builds used %s of %s cpus" % (jobs, cpus),
-    "gate": read(gate_file).splitlines(),
+    "gxx_binary": next((b for n, b in binaries.items() if n.startswith("a.gxx.")), {}),
+    "clang_binary": next((b for n, b in binaries.items() if n.startswith("a.clang.")), {}),
+    **context,
     "noise_floor": {"a_over_a_max_deviation_percent": 100 * max(aa_dev, default=0)},
-    "rounds_detail": steal,
-    "steal_percent_of_cpu_time_max": max((r["steal_percent_of_cpu_time"] for r in steal), default=None),
-    "failed": failed,
+    "steal_percent_of_cpu_time_max": max((r["steal_percent_of_cpu_time"] for r in context["rounds_detail"]), default=None),
     "cells": result,
 }, indent=1))
 PY

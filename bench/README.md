@@ -28,9 +28,10 @@ Close other programs first. The process runs on the cpu that the scheduler gives
 2. The script exports include/ of each commit with `git archive`.
    Commit a is built twice: a and aa. Commit b is built once.
    bench/runtime.cpp, bench/value.hpp and bench/docs come from the working tree.
-3. Each arm of each variant is its own binary. Builds use all cpus but one.
-4. Each round runs every cell once per variant. The order of the variants rotates in each round.
-   One cpu stays free. nice -10 is used when the system allows it.
+3. Each arm of each variant is its own binary. Builds run as many jobs as there are cpus.
+4. The gate runs again before the first round. Each round runs every cell once per variant. The order of the
+   variants rotates in each round. Each bench process is single-threaded. nice -10 is used when the system allows
+   it. A round whose steal is not under 3 percent of its cpu time is discarded and run again.
 5. The script prints one line per round.
 6. The result is the median of the rounds for each binary, and the spread (maximum over minimum, minus one).
    B/A is b over a. A/A is aa over a, and it is the noise of the cell.
@@ -55,7 +56,7 @@ The binaries are deleted at the end of the run.
 
 ## Variables
 
-ROUNDS (10), MIN_TIME (0.2s), DOCS, ARMS, JOBS, GXX, CLANGXX, REPO,
+ROUNDS (10), MIN_TIME (0.2s), DOCS, ARMS, GXX, CLANGXX, REPO,
 RESULTS_DIR, GATE_MAX_BUSY_PERCENT (10), GATE_MAX_STEAL_PERCENT (0).
 COMMIT_TREES names a directory with `<commit>/include` and `<commit>.id`; it replaces git.
 
@@ -78,10 +79,10 @@ a as commit b. The image is built with
 1. The script holds the lock of test/run.sh from the first build to the result file.
 2. The gate of gate.sh runs on the host before the build and before the first round.
 3. The script exports include/ of each commit with `git archive`. The bench file comes from the working tree.
-4. One container builds g++-16 and clang++-23 binaries for a, aa (commit a again) and b, all at once. It uses a
-   precompiled header of the standard headers and of Google Benchmark, ccache and mold.
+4. One container builds g++-16 and clang++-23 binaries for a, aa (commit a again) and b, as many at once as there are
+   cpus. It uses a precompiled header of the standard headers and of Google Benchmark, ccache and mold.
 5. A second container runs the rounds as user 65534 with no network. Each round runs every binary once, in an order
-   that rotates. A round with more than 3 percent steal is discarded and run again.
+   that rotates. A round whose steal is not under 3 percent of its cpu time is discarded and run again.
 6. B differs from A when the two-tailed Mann-Whitney U test of compare.py (Google Benchmark) finds a difference at
    alpha 0.05, and B/A is further from 1 than A/A and than NOISE_FLOOR_PERCENT.
 

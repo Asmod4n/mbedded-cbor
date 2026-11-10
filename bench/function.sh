@@ -26,10 +26,10 @@ for tool in podman git flock vmstat ps python3 tar; do
 	command -v "$tool" > /dev/null || { echo "missing tool: $tool" >&2; exit 2; }
 done
 . "$here/gate.sh"
+. "$here/host.sh"
 
 mkdir -p "$root" "$cache" "$root/function/pch" "$RESULTS_DIR"
-exec 9> "$root/run.lock"
-flock -n 9 || { echo "another build or bench holds $root/run.lock" >&2; exit 2; }
+take_run_lock "$root"
 
 stamp=$(date -u +%Y-%m-%d-%H%M%SZ)
 run=$root/function/$stamp
@@ -41,37 +41,25 @@ for v in a b; do
 	git -C "$repo" rev-parse --verify "${!c}^{commit}" > "$run/src/$v/id"
 done
 cp "$repo/$source_file" "$run/bench.cpp"
-bench_commit=$(git -C "$repo" log -n 1 --format=%H -- "$source_file")
-[ -n "$bench_commit" ] || bench_commit=uncommitted
-[ -z "$(git -C "$repo" status --porcelain -- "$source_file" bench/function.sh bench/function-run.sh bench/gate.sh)" ] ||
-	bench_commit="$bench_commit-dirty"
+bench_commit=$(name_bench_commit "$repo" "$source_file" bench/function.sh bench/function-run.sh bench/gate.sh bench/host.sh \
+	bench/round.sh bench/context.py cmake)
 
 gate > "$run/gate-before-build" 2>&1 || { cat "$run/gate-before-build"; echo "the machine is busy; no run was made" >&2; exit 3; }
 cat "$run/gate-before-build"
 
-{
-	echo "kernel=$(uname -r)"
-	echo "virtualization=$(systemd-detect-virt 2>&1 | tr '\n' ' ' || true)"
-	echo "host_container=$([ -e /run/.containerenv ] || [ -e /.dockerenv ] && echo yes || echo no)"
-	echo "scheduler=$(cat /sys/kernel/sched_ext/state 2>&1 || echo 'no sched_ext state (kernel default)')"
-	echo "host_user=$(id -un) $(id -u)"
-	echo "cpus=$(nproc)"
-	echo "level_two=$level_two"
-} > "$run/host"
+write_host_context "$run/host"
 
-podman run --rm --network none --user 65534:65534 --cap-add SYS_NICE --timeout="$TIME_LIMIT" --init \
-	-v "$run":/run-dir:U -v "$cache":/ccache:U -v "$root/function/pch":/pch:U -v "$here/function-run.sh":/function-run.sh:ro \
+run_in_bench_container "$image" "$run" function-run.sh build --timeout="$TIME_LIMIT" \
+	-v "$cache":/ccache:U -v "$root/function/pch":/pch:U \
 	-e CCACHE_DIR=/ccache -e CCACHE_SLOPPINESS=pch_defines,time_macros,include_file_mtime,include_file_ctime \
-	-e ROUNDS="$ROUNDS" -e MIN_TIME="$MIN_TIME" -e COLD_BYTES="$COLD_BYTES" -e FLAGS="${FLAGS:-}" \
-	"$image" bash /function-run.sh build
+	-e ROUNDS="$ROUNDS" -e MIN_TIME="$MIN_TIME" -e COLD_BYTES="$COLD_BYTES" -e FLAGS="${FLAGS:-}"
 
 gate > "$run/gate-before-runs" 2>&1 || { cat "$run/gate-before-runs"; echo "the machine is busy after the build; no run was made" >&2; exit 3; }
 
-podman run --rm --network none --user 65534:65534 --cap-add SYS_NICE --timeout="$TIME_LIMIT" --init \
-	-v "$run":/run-dir:U -v "$here/function-run.sh":/function-run.sh:ro \
+run_in_bench_container "$image" "$run" function-run.sh measure --timeout="$TIME_LIMIT" \
 	-e ROUNDS="$ROUNDS" -e MIN_TIME="$MIN_TIME" -e COLD_BYTES="$COLD_BYTES" -e FLAGS="${FLAGS:-}" \
 	-e NOISE_FLOOR_PERCENT="$NOISE_FLOOR_PERCENT" -e BLOCK="$block" -e STAMP="$stamp" -e COMMIT_A="$commit_a" -e COMMIT_B="$commit_b" -e BENCH_COMMIT="$bench_commit" \
-	-e IMAGE="$image" "$image" bash /function-run.sh measure
+	-e IMAGE="$image"
 
 cp "$run/out/result.json" "$RESULTS_DIR/function-$block-$stamp.json"
 echo "wrote $RESULTS_DIR/function-$block-$stamp.json"

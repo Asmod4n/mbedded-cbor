@@ -23,8 +23,8 @@ ok = busy <= float(sys.argv[2]) and steal <= float(sys.argv[4])
 print("gate: busy %.1f%% of all cpus (limit %s%%), steal %.1f%%, iowait %.1f%%: %s" % (busy, sys.argv[2], steal, col("wa"), "idle enough" if ok else "NOT idle enough"))
 for line in sys.argv[3].splitlines()[1:]:
     f = line.split()
-    if float(f[2]) >= 5.0 and f[4] not in ("ps", "head", "vmstat", "run-desktop.sh", "function.sh"):
+    if float(f[2]) >= 5.0 and f[4] not in ("ps", "head", "vmstat", sys.argv[5]):
         print("gate: busy process %s user %s pcpu %s ni %s %s" % (f[0], f[1], f[2], f[3], " ".join(f[4:])))
 sys.exit(0 if ok else 3)
-' "$vm" "$GATE_MAX_BUSY_PERCENT" "$ps_out" "$GATE_MAX_STEAL_PERCENT"
+' "$vm" "$GATE_MAX_BUSY_PERCENT" "$ps_out" "$GATE_MAX_STEAL_PERCENT" "$(basename "$0")"
 }
