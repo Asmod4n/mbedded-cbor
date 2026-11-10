@@ -1217,8 +1217,7 @@ class extended_diagnostic_notation
             for (bool first = true; !break_consumed(d); first = false) {
                 if (!first)
                     out += ", ";
-                if (auto const r =
-                        detail::validity::check_pending_items(heads::initial_byte_size, d.encoded.size());
+                if (auto const r = detail::validity::check_bytes_left(heads::initial_byte_size, d.encoded.size());
                     !r) [[unlikely]]
                     return std::unexpected(r.error());
                 auto const initial = static_cast<std::uint8_t>(d.encoded.front());
