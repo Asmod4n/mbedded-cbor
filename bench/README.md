@@ -93,5 +93,5 @@ compare.py. The script prints one table with a row per function and a column per
 
 ## Variables
 
-ROUNDS (9), MIN_TIME (0.05s), COLD_BYTES (twice the level 2 cache), FLAGS, TIME_LIMIT (300 s), GATE_SECONDS (2),
+ROUNDS (9), MIN_TIME (0.05s), COLD_BYTES (twice the level 2 cache), FLAGS, GATE_SECONDS (2),
 CBOR_BUILD_ROOT, CCACHE_HOST_DIR, BENCH_IMAGE, RESULTS_DIR.

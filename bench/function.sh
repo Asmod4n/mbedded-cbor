@@ -18,7 +18,6 @@ ROUNDS=${ROUNDS:-9}
 MIN_TIME=${MIN_TIME:-0.05s}
 level_two=$(cat /sys/devices/system/cpu/cpu0/cache/index2/size)
 COLD_BYTES=${COLD_BYTES:-$((2 * ${level_two%K} * 1024))}
-TIME_LIMIT=${TIME_LIMIT:-300}
 [ -n "${NOISE_FLOOR_PERCENT:-}" ] || { echo "NOISE_FLOOR_PERCENT: the largest deviation of B/A from 1 with commit a as commit b on this machine" >&2; exit 2; }
 GATE_SECONDS=${GATE_SECONDS:-2}
 
@@ -49,14 +48,14 @@ cat "$run/gate-before-build"
 
 write_host_context "$run/host"
 
-run_in_bench_container "$image" "$run" function-run.sh build --timeout="$TIME_LIMIT" \
+run_in_bench_container "$image" "$run" function-run.sh build \
 	-v "$cache":/ccache:U -v "$root/function/pch":/pch:U \
 	-e CCACHE_DIR=/ccache -e CCACHE_SLOPPINESS=pch_defines,time_macros,include_file_mtime,include_file_ctime \
 	-e ROUNDS="$ROUNDS" -e MIN_TIME="$MIN_TIME" -e COLD_BYTES="$COLD_BYTES" -e FLAGS="${FLAGS:-}"
 
 gate > "$run/gate-before-runs" 2>&1 || { cat "$run/gate-before-runs"; echo "the machine is busy after the build; no run was made" >&2; exit 3; }
 
-run_in_bench_container "$image" "$run" function-run.sh measure --timeout="$TIME_LIMIT" \
+run_in_bench_container "$image" "$run" function-run.sh measure \
 	-e ROUNDS="$ROUNDS" -e MIN_TIME="$MIN_TIME" -e COLD_BYTES="$COLD_BYTES" -e FLAGS="${FLAGS:-}" \
 	-e NOISE_FLOOR_PERCENT="$NOISE_FLOOR_PERCENT" -e BLOCK="$block" -e STAMP="$stamp" -e COMMIT_A="$commit_a" -e COMMIT_B="$commit_b" -e BENCH_COMMIT="$bench_commit" \
 	-e IMAGE="$image"
