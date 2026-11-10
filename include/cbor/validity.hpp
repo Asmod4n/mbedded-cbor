@@ -501,8 +501,8 @@ public:
                                                       offset second_at);
 
     template <bool Checked, class Message>
-    static std::expected<std::pair<std::uint64_t, offset>, error> intern_key(canonical_ids &ids, Message &message,
-                                                                         offset at);
+    static std::expected<std::pair<std::uint64_t, offset>, error>
+    intern_key(canonical_ids &ids, Message const &message, offset at);
 
     template <class Encoded>
         requires(!std::is_reference_v<Encoded>)

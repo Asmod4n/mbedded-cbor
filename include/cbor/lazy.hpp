@@ -935,13 +935,13 @@ private:
 
 template <bool Checked, class Message>
 std::expected<std::pair<std::uint64_t, detail::validity::offset>, error>
-detail::validity::intern_key(canonical_ids &ids, Message &message, offset const at)
+detail::validity::intern_key(canonical_ids &ids, Message const &message, offset const at)
 {
     if (auto const r = check_recursion_limit(); !r) [[unlikely]]
         return std::unexpected(r.error());
     std::string_view encoded;
     offset item_at = at;
-    if constexpr (std::same_as<Message, std::string_view const>) {
+    if constexpr (std::same_as<Message, std::string_view>) {
         encoded = message;
     } else {
         encoded = message.encoded;
@@ -1040,8 +1040,8 @@ detail::validity::keys_equivalent(First const &first, offset const first_at, Sec
 {
     if (auto const r = check_recursion_limit(); !r) [[unlikely]]
         return std::unexpected(r.error());
-    auto const encoded_of = []<class Message>(Message &message) -> std::string_view {
-        if constexpr (std::same_as<Message, std::string_view const>)
+    auto const encoded_of = []<class Message>(Message const &message) -> std::string_view {
+        if constexpr (std::same_as<Message, std::string_view>)
             return message;
         else
             return message.encoded;
@@ -1050,8 +1050,8 @@ detail::validity::keys_equivalent(First const &first, offset const first_at, Sec
         well_formedness::no_marks none;
         return well_formedness::skip_item(d, none);
     };
-    auto const resolve = []<class Message>(Message &message, offset const at) -> offset {
-        if constexpr (std::same_as<Message, std::string_view const>)
+    auto const resolve = []<class Message>(Message const &message, offset const at) -> offset {
+        if constexpr (std::same_as<Message, std::string_view>)
             return at;
         else
             return heads::self_described_cbor_content_at(message.encoded, at);
