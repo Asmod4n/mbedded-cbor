@@ -72,7 +72,7 @@ std::uint32_t handle_new(std::uint32_t const doc, std::uint32_t const offset)
     return id;
 }
 
-} // namespace
+}
 
 extern "C" {
 

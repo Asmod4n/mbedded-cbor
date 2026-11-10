@@ -260,4 +260,4 @@ struct kind<cbor::typed_array_view<double>::iterator> {
     }
 };
 
-} // namespace site
+}

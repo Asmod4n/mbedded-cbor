@@ -17,7 +17,7 @@ cbor::lazy root()
     return *cbor::lazy::view(loaded);
 }
 
-} // namespace
+}
 
 extern "C" {
 

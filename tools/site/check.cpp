@@ -64,7 +64,7 @@ bool file_checked(std::filesystem::path const &tree, std::filesystem::path const
     return good;
 }
 
-} // namespace
+}
 
 int main(int const argc, char const *const *const argv)
 {

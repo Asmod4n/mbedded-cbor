@@ -2,6 +2,8 @@
 # usage: run-desktop.sh <commit-a> <commit-b>
 # Measures READ, the lazy path (MB_PATH), at_path (MB_AT_PATH) and the struct decode (MB_STRUCT, twitter only)
 # on twitter, floats and records for two commits, with g++ and clang++. See README.md.
+# Each arm builds from include/ and the bench code of its commit. COMMIT_TREES=<dir> holds <commit>/ (include,
+# bench and test/owned_copy.hpp) and <commit>.id where git is absent.
 set -eu
 [ $# -eq 2 ] || { echo "usage: $0 <commit-a> <commit-b>" >&2; exit 2; }
 here=$(cd "$(dirname "$0")" && pwd)
@@ -41,8 +43,6 @@ cat "$build/gate-before-build"
 write_host_context "$build/host"
 echo "building into $build"
 
-# The tree of a commit: include/ and the bench code of that commit, so each arm builds its own API. COMMIT_TREES=<dir>
-# holds <commit>/ (include, bench and test/owned_copy.hpp) and <commit>.id where git is absent.
 tree_of() {
 	local c=$1 dest=$2
 	mkdir -p "$dest"
@@ -58,7 +58,6 @@ tree_of "$commit_a" "$build/src/a"
 tree_of "$commit_b" "$build/src/b"
 cp -r "$build/src/a" "$build/src/aa"
 
-# Documents: the repo ones.
 for d in $docs; do
 	cp "$bench/docs/$d.cbor" "$build/docs/$d.cbor"
 done
@@ -99,7 +98,6 @@ finish
 built=$(ls "$build/bin" | wc -l)
 echo "built $built binaries; $(ls "$build/log" | wc -l) did not compile"
 
-# Priority: nice -10 where the system allows it.
 runner=$(ask_priority "$build/out")
 echo "priority: $(cat "$build/out/priority")"
 
@@ -108,7 +106,6 @@ for b in "$build"/bin/*; do
 	echo "$(basename "$b") $(readelf -h "$b" | grep -o 'Type: *[A-Z]*' | tr -s ' ')"
 done > "$build/out/elf_type"
 
-# Cells: tag.doc.arm. Per round, the variants run one after the other in a rotating order.
 cells=$(cd "$build/bin" && ls | sed -e 's/^[^.]*\.//' | sort -u)
 variants=(a b aa)
 one_round() {

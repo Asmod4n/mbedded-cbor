@@ -28,7 +28,7 @@ struct line_range {
     std::uint32_t last;
 };
 
-} // namespace site
+}
 
 CBOR_DEFINE_TYPE_MEMBERS(site::token, cbor::tag{1970}, kind, offset, length);
 CBOR_DEFINE_TYPE_MEMBERS(site::token_file, cbor::tag{1971}, path, text, tokens);

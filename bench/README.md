@@ -102,6 +102,8 @@ CBOR_BUILD_ROOT, CCACHE_HOST_DIR, BENCH_IMAGE, RESULTS_DIR.
 # sid.sh
 
 The script measures the arms of bench/runtime.cpp against the CBOR libraries of Debian sid, in podman.
+The arm LAZY_READ walks over lazy views, reads every item and every string byte, copies nothing and builds no
+tree; it sums as the arm of the decoded item tree does, so it compares with the readers of the other libraries.
 
 ## Usage
 

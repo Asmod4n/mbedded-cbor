@@ -226,7 +226,6 @@ T const *get_if(value const &v)
     return p ? *p : nullptr;
 }
 
-// The questions that the writers of the other libraries ask of a value.
 struct reader {
     cbor::type kind_of(value const &v)
     {
@@ -354,8 +353,6 @@ value tag_value(cbor::item const &it)
     return {tagged{number, value_of(*content)}};
 }
 
-// The value of a decoded item tree. A bignum of at most 8 bytes is an integer, as a dynamic language reads it. A
-// float is a double. Tags 28 and 29 are plain tags.
 inline value value_of(cbor::item const &it)
 {
     switch (it.type) {
@@ -424,8 +421,6 @@ inline std::expected<value, error> value_of(cbor::lazy const &l)
     return value_of(**tree);
 }
 
-// A value written through the public encoder: an integer at 64 bits, a float as a double, a bignum as tag 2 or 3
-// over the magnitude that it holds.
 template <class Target>
 std::expected<void, error> encode_value(cbor::encoder<Target> &e, value const &x)
 {
@@ -484,4 +479,4 @@ auto encode(Target &&target, value const &x)
     return e.finish();
 }
 
-} // namespace bench
+}

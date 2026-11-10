@@ -277,7 +277,7 @@ std::vector<line_range> ranges_of(std::vector<declaration> const &all, std::stri
     return out;
 }
 
-} // namespace site
+}
 
 int main(int const argc, char const *const *const argv)
 {

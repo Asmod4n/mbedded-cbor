@@ -215,4 +215,4 @@ inline constexpr entry structs_functions[] = {
     {"person const *.age", field_read<reference_structs::person, &reference_structs::person::age>},
 };
 
-} // namespace site
+}

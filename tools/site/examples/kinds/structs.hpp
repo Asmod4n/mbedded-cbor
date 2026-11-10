@@ -150,4 +150,4 @@ struct kind<std::set<std::uint8_t>> {
     }
 };
 
-} // namespace site
+}

@@ -26,8 +26,6 @@
 }
 
 #if defined(ARM_READ) || defined(ARM_MB_TREE) || defined(ARM_MB_DECODE) || defined(ARM_MB_PATH_ALL)
-// The sum of a decoded item tree: the argument of each head and the bytes of each string. A reference of tag 29
-// adds its index and is not followed.
 static std::uint64_t item_tree_sum(cbor::item const &it);
 
 template <cbor::type K>
@@ -113,8 +111,6 @@ static std::uint64_t item_tree_sum(cbor::item const &it)
 
 
 #if defined(ARM_LAZY_READ)
-// The fair arm: a walk over lazy views that reads every item and every string byte, copies nothing and builds no
-// tree; it sums as item_tree_sum does.
 static std::uint64_t lazy_tree_sum(cbor::lazy const &l)
 {
     auto const t = l.type();
@@ -1004,8 +1000,6 @@ static vg_out vo;
 #endif
 
 #if defined(ARM_S_BYTES_STRING) || defined(ARM_S_BYTES_SPAN) || defined(ARM_S_IOV_BYTES_REF)
-// The byte string arms encode the document as one byte string, given to the encoder as std::span<std::byte const>:
-// into a new std::string, into a span of the right size, and by ref<> into an iov_writer.
 static std::vector<char> bytes_out;
 #endif
 #if defined(ARM_S_IOV_BYTES_REF)

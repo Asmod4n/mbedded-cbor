@@ -174,7 +174,7 @@ std::uint64_t packed(std::string_view const s)
     return (static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(s.data())) << 32) | s.size();
 }
 
-} // namespace
+}
 
 extern "C" {
 

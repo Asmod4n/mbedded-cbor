@@ -585,4 +585,4 @@ inline constexpr entry schema_functions[] = {
     {"cbor::typed_array_view<double>.last()", track_part<true>},
 };
 
-} // namespace site
+}

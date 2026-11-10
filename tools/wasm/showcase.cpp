@@ -172,7 +172,7 @@ std::uint64_t error_kept(cbor::error const e)
     return 0;
 }
 
-} // namespace
+}
 
 extern "C" {
 

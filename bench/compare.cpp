@@ -399,8 +399,6 @@ static double cp_field()
 }
 #endif
 
-// The kinds table: every kind of access of mbedded-cbor, and beside it a library that does the same work. The
-// arms read the CBOR of structs<T>::encode (plain), the schema arms read Packed CBOR (msg).
 static std::shared_ptr<std::string const> plain;
 static std::size_t written_bytes;
 
