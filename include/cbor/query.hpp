@@ -403,14 +403,14 @@ class path
                 singular = singular && !s.descendant && chosen.size() == 1 &&
                            (chosen.front().kind == selector::kind::key || chosen.front().kind == selector::kind::index);
                 s.selector_count = chosen.size();
-                found_selectors.append_range(chosen);
+                found_selectors.insert(found_selectors.end(), chosen.begin(), chosen.end());
                 found.push_back(s);
             }
             for (segment &s : found)
                 s.selector_at += selectors.size();
-            selectors.append_range(found_selectors);
+            selectors.insert(selectors.end(), found_selectors.begin(), found_selectors.end());
             parsed_query const p{at, segments.size(), found.size(), singular};
-            segments.append_range(found);
+            segments.insert(segments.end(), found.begin(), found.end());
             return p;
         }
 

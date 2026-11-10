@@ -573,7 +573,8 @@ class reflection
                     n = heads::head_size(std::to_underlying(rfc8949::tag_number::unsigned_bignum)) + heads::head_size(sizeof(U));
                 else if constexpr (std::is_floating_point_v<U>)
                     n = fixed_size<U, void>() - sizeof(decltype(float_bits(U{})));
-                first = std::vector<char>(std::from_range, zero.first(n));
+                auto const zeros = zero.first(n);
+                first = std::vector<char>(zeros.begin(), zeros.end());
                 if constexpr (std::same_as<U, bool>
 #ifdef CBOR_HAS_INT128
                               || std::same_as<U, int128>
