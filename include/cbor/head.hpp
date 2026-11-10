@@ -221,29 +221,6 @@ class heads
         return n;
     }
 
-    static std::string magnitude_plus_one(std::string_view const magnitude)
-    {
-        std::string sum(1, '\0');
-        sum.append(magnitude);
-        for (auto digit = sum.rbegin(); digit != sum.rend(); ++digit) {
-            *digit = static_cast<char>(static_cast<std::uint8_t>(*digit) + 1);
-            if (*digit != '\0')
-                break;
-        }
-        return std::string(std::string_view(magnitude_without_leading_zeros(std::span<char const>(sum))));
-    }
-
-    static std::string magnitude_minus_one(std::string_view const magnitude)
-    {
-        std::string difference(magnitude);
-        for (auto digit = difference.rbegin(); digit != difference.rend(); ++digit) {
-            *digit = static_cast<char>(static_cast<std::uint8_t>(*digit) - 1);
-            if (*digit != static_cast<char>(std::numeric_limits<unsigned char>::max()))
-                break;
-        }
-        return std::string(std::string_view(magnitude_without_leading_zeros(std::span<char const>(difference))));
-    }
-
     struct head {
         major_type major;
         std::uint8_t info;

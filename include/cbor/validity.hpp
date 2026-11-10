@@ -29,7 +29,6 @@
 #include <cstdint>
 #include <cstdlib>
 #include <expected>
-#include <functional>
 #include <limits>
 #include <memory>
 #include <ranges>

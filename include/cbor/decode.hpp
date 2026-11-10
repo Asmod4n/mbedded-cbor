@@ -369,7 +369,6 @@ std::expected<void, error> tree_decoder<Checked, Resolve>::decode_sharedref(std:
 template <bool Checked>
 struct decoded_tree {
     owning<item> tree;
-    std::string_view rest;
 };
 
 template <bool Checked, bool Resolve>
@@ -387,7 +386,7 @@ std::expected<decoded_tree<Checked>, error> decode_tree(std::string_view const e
         return std::unexpected(built.error());
     std::ranges::sort(decoded->encoded_cbor_data_items, std::less<>{}, &zone::link::first);
     item const &top = root.front();
-    return decoded_tree<Checked>{zone_owner::tree_owned(&top, std::move(decoded)), tree.d.encoded};
+    return decoded_tree<Checked>{zone_owner::tree_owned(&top, std::move(decoded))};
 }
 
 }

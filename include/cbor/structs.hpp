@@ -61,7 +61,6 @@
 #include "error.hpp"
 #include "validity.hpp"
 #include "head.hpp"
-#include "lazy.hpp"
 #include "ref.hpp"
 #include "schema.hpp"
 #include "shared.hpp"

@@ -725,9 +725,6 @@ class path
     template <class F>
     static std::expected<bool, error> for_each_sliced(lazy const &node, selector const &s, F const &f);
 
-    template <fixed_string Path>
-    static consteval bool generated_form();
-
     static constexpr std::uint64_t nodes_that_decide_existence = 1;
     static constexpr std::uint64_t nodes_that_decide_value = 2;
 
@@ -1853,11 +1850,15 @@ inline std::expected<std::vector<lazy>, error> path::walk_query(query_view const
 template <fixed_string Path>
 constexpr auto const &path::compiled_of()
 {
-    constexpr auto q = [] { return *parse_query(Path.view()); };
-    constexpr std::size_t segments = q().segments.size();
-    constexpr std::size_t selectors = q().selectors.size();
-    constexpr std::size_t expressions = q().expressions.size();
-    constexpr std::size_t keys = q().keys.size();
+    constexpr auto sizes = [] {
+        auto const parsed = *parse_query(Path.view());
+        return std::array{parsed.segments.size(), parsed.selectors.size(), parsed.expressions.size(),
+                          parsed.keys.size()};
+    }();
+    constexpr std::size_t segments = std::get<0>(sizes);
+    constexpr std::size_t selectors = std::get<1>(sizes);
+    constexpr std::size_t expressions = std::get<2>(sizes);
+    constexpr std::size_t keys = std::get<3>(sizes);
     static constexpr auto compiled = [] {
         auto const parsed = *parse_query(Path.view());
         std::tuple<std::array<segment, segments>, std::array<selector, selectors>,
@@ -2060,29 +2061,6 @@ std::expected<bool, error> path::for_each_sliced(lazy const &node, selector cons
     for (std::int64_t i = upper; lower < i; i += s.step)
         if (auto const r = f(children[static_cast<std::size_t>(i)]); !r || !*r)
             return r;
-    return true;
-}
-
-template <fixed_string Path>
-consteval bool path::generated_form()
-{
-    constexpr auto const &q = compiled_of<Path>();
-    for (logical_expr const &e : std::get<2>(q)) {
-        switch (e.kind) {
-        case logical_expr::kind::logical_or:
-        case logical_expr::kind::logical_and:
-        case logical_expr::kind::logical_not:
-        case logical_expr::kind::comparison:
-        case logical_expr::kind::literal:
-        case logical_expr::kind::filter_query:
-        case logical_expr::kind::length:
-        case logical_expr::kind::count:
-        case logical_expr::kind::value:
-            break;
-        default:
-            return false;
-        }
-    }
     return true;
 }
 
@@ -2434,13 +2412,7 @@ template <fixed_string Path, std::same_as<nodelist> T>
     requires is_valid_path_v<Path>
 std::expected<nodelist, error> lazy::at_path() const
 {
-    if constexpr (path::generated_form<Path>())
-        return path::generated_walk<Path>(*this);
-    else
-        return path::apply_compiled<Path>(
-            [this](path::query_view const v, path::parsed_query const &top) {
-                return path::walk_query(v, top, *this);
-            });
+    return path::generated_walk<Path>(*this);
 }
 
 template <fixed_string Path, class T>
