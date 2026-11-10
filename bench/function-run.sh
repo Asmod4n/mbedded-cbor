@@ -36,9 +36,9 @@ compile() {
 	mkdir -p "$dir/bin" "$dir/log"
 	if ccache "$cc" $flags $pch -I"$dir/src/$src/include" -c "$dir/bench.cpp" -o "$dir/bin/$v.$tag.o" > "$dir/log/$v.$tag" 2>&1 &&
 		"$cc" $flags $link_flags "$dir/bin/$v.$tag.o" -lbenchmark -lpthread -o "$dir/bin/$v.$tag" >> "$dir/log/$v.$tag" 2>&1; then
-		rm -f "$dir/log/$v.$tag" "$dir/bin/$v.$tag.o"
+		rm -f "${dir:?}/log/${v:?}.${tag:?}" "${dir:?}/bin/${v:?}.${tag:?}.o"
 	else
-		rm -f "$dir/bin/$v.$tag" "$dir/bin/$v.$tag.o"
+		rm -f "${dir:?}/bin/${v:?}.${tag:?}" "${dir:?}/bin/${v:?}.${tag:?}.o"
 	fi
 }
 

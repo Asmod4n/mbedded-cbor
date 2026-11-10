@@ -30,14 +30,14 @@ done
 gate_out=$(mktemp)
 if ! gate > "$gate_out" 2>&1; then
 	cat "$gate_out"
-	rm -f "$gate_out"
+	rm -f "${gate_out:?}"
 	echo "the machine is busy; no run was made and no file was written" >&2
 	exit 3
 fi
 cat "$gate_out"
 
 build=$(mktemp -d "${TMPDIR:-/tmp}/mbedded-cbor-desktop.XXXXXX")
-trap 'rm -rf "$build"; rm -f "$gate_out"' EXIT
+trap 'rm -rf "${build:?}"; rm -f "${gate_out:?}"' EXIT
 mkdir -p "$build/bin" "$build/out" "$build/log" "$build/src" "$build/docs"
 echo "building into $build"
 
@@ -75,9 +75,9 @@ compile() {
 	if "$cc" $std $flags -DDOCTEST_CONFIG_DISABLE $defs -DARM_NAME="\"$arm\"" -DDOC_"$doc" \
 		-DDOC_PATH="\"$build/docs/$doc.cbor\"" -I"$build/src/$variant/include" -I"$build/src/$variant/bench" \
 		"$build/src/$variant/bench/runtime.cpp" -lbenchmark -lpthread -o "$build/bin/$name" > "$build/log/$name" 2>&1; then
-		rm -f "$build/log/$name"
+		rm -f "${build:?}/log/${name:?}"
 	else
-		rm -f "$build/bin/$name"
+		rm -f "${build:?}/bin/${name:?}"
 	fi
 }
 running=0

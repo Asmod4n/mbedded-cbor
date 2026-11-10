@@ -15,7 +15,7 @@ flags=${FLAGS:--O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pi
 results=${RESULTS_DIR:-$src/bench/results}
 jobs=$(( $(nproc) > 1 ? $(nproc) - 1 : 1 ))
 work=$(mktemp -d)
-trap 'rm -rf "$work"' EXIT
+trap 'rm -rf "${work:?}"' EXIT
 mkdir -p "$work/gen" "$work/bin" "$work/out"
 flatc --cpp --gen-object-api -o "$work/gen" "$src/bench/carsales.fbs"
 capnp compile -oc++:"$work/gen" --src-prefix="$src/bench" "$src/bench/carsales.capnp"

@@ -19,7 +19,7 @@ if [ -n "${WORK:-}" ]; then
 	work=$WORK
 else
 	work=$(mktemp -d)
-	trap 'rm -rf "$work"' EXIT
+	trap 'rm -rf "${work:?}"' EXIT
 fi
 mkdir -p "$work/gen" "$work/bin" "$work/out" "$work/log"
 flatc --cpp --gen-object-api -o "$work/gen" "$src/bench/carsales.fbs"

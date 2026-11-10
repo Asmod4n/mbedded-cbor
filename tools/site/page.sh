@@ -8,7 +8,7 @@ if [ -n "$(git -C "$tree" status --porcelain)" ] && [ "${SITE_DIRTY:-}" != 1 ]; 
 fi
 mkdir -p "$out"
 generated=$(mktemp -d)
-trap 'rm -rf "$generated"' EXIT
+trap 'rm -rf "${generated:?}"' EXIT
 sh "$tree/tools/doc/reference.sh" "$generated"
 commit=$(git -C "$tree" rev-parse HEAD)
 podman run --rm --network none -e COMMIT="$commit" -e SITE_GROUPS="${SITE_GROUPS:-}" -v "$tree":/src:ro -v "$generated":/generated:ro -v "$out":/out mbedded-cbor-docs sh -ec '

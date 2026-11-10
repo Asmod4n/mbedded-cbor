@@ -34,7 +34,7 @@ flock -n 9 || { echo "another build or bench holds $root/run.lock" >&2; exit 2; 
 stamp=$(date -u +%Y-%m-%d-%H%M%SZ)
 run=$root/function/$stamp
 mkdir -p "$run/src/a" "$run/src/b" "$run/out"
-trap 'rm -rf "$run"' EXIT
+trap 'rm -rf "${run:?}"' EXIT
 for v in a b; do
 	c=commit_$v
 	git -C "$repo" archive "${!c}" include | tar -x -C "$run/src/$v"
