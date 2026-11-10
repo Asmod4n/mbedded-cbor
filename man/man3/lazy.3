@@ -1,5 +1,5 @@
 '\" t
-.TH "cbor::lazy" "3" "2026-11-09" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.TH "cbor::lazy" "3" "2026-11-10" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
 .SH NAME
 cbor::lazy, cbor::lazy::adopt, cbor::lazy::view, cbor::lazy::at, cbor::lazy::operator[], cbor::lazy::at_path, cbor::lazy::get, cbor::lazy::type, cbor::lazy::size, cbor::lazy::empty, cbor::lazy::elements, cbor::lazy::entries, cbor::lazy::clone, cbor::lazy_elements, cbor::lazy_entries \- read a message in place, step by step
 .SH SYNOPSIS
@@ -14,6 +14,13 @@ cbor::lazy, cbor::lazy::adopt, cbor::lazy::view, cbor::lazy::at, cbor::lazy::ope
     top_level_item top_level;
     std::size_t offset;
     std::uint64_t typed_array_tag {};
+
+    \f[B]struct\f[R] resolved {
+        lazy::top_level_item source;
+        heads::head h;
+        heads::decoder<\f[B]true\f[R]> d;
+        detail::validity::offset item_at;
+    };
 
     \f[B]template\f[R] <borrowed_range_of_chars Encoded>
     static std::expected<lazy, error> view(std::shared_ptr<void const> owner, Encoded const &encoded);
@@ -34,10 +41,10 @@ cbor::lazy, cbor::lazy::adopt, cbor::lazy::view, cbor::lazy::at, cbor::lazy::ope
         \f[B]requires\f[R] is_valid_path_v<Path>;
     \f[B]template\f[R] <fixed_string Path, \f[B]class\f[R] T>
     std::expected<T, error> at_path() const
-        \f[B]requires\f[R] (is_singular_query_v<Path> && ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value> ));
+        \f[B]requires\f[R] (is_singular_query_v<Path> && scalar_result<T>);
     \f[B]template\f[R] <fixed_string Path, \f[B]class\f[R] T>
     std::expected<ref<T>, error> at_path() const
-        \f[B]requires\f[R] (is_singular_query_v<Path> && (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>));
+        \f[B]requires\f[R] (is_singular_query_v<Path> && view_result<T>);
     \f[B]template\f[R] <fixed_string Path, std::same_as< nodelist > T>
     std::expected<nodelist, error> at_path() const
         \f[B]requires\f[R] is_valid_path_v<Path>;
@@ -50,8 +57,8 @@ cbor::lazy, cbor::lazy::adopt, cbor::lazy::view, cbor::lazy::at, cbor::lazy::ope
     std::expected<cbor::type, error> type() const;
 
     \f[B]template\f[R] <\f[B]class\f[R] T>
-    std::expected<std::conditional_t<std::is_same_v<T, std::string_view>||std::is_same_v<T, std::span<std::byte const>>||std::is_same_v<T, typed_array>, ref<T>, T>, error> get() const
-        \f[B]requires\f[R] (std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value> || std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>;
+    std::expected<std::conditional_t<view_result<T>, ref<T>, T>, error> get() const
+        \f[B]requires\f[R] scalar_result<T> || view_result<T>;
 
     std::expected<lazy_elements, error> elements() const;
     std::expected<lazy_entries, error> entries() const;
@@ -91,11 +98,11 @@ std::expected<lazy, error> at_path() const
 
 \f[B]template\f[R] <fixed_string Path, \f[B]class\f[R] T>
 std::expected<T, error> at_path() const
-    \f[B]requires\f[R] (is_singular_query_v<Path> && ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value> ));
+    \f[B]requires\f[R] (is_singular_query_v<Path> && scalar_result<T>);
 
 \f[B]template\f[R] <fixed_string Path, \f[B]class\f[R] T>
 std::expected<ref<T>, error> at_path() const
-    \f[B]requires\f[R] (is_singular_query_v<Path> && (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>));
+    \f[B]requires\f[R] (is_singular_query_v<Path> && view_result<T>);
 
 \f[B]template\f[R] <fixed_string Path, std::same_as< nodelist > T>
 std::expected<nodelist, error> at_path() const
@@ -108,8 +115,8 @@ std::expected<\f[B]typename\f[R] E::result_type, error> at_path(E const &e) cons
 .IP
 .EX
 \f[B]template\f[R] <\f[B]class\f[R] T>
-std::expected<std::conditional_t<std::is_same_v<T, std::string_view>||std::is_same_v<T, std::span<std::byte const>>||std::is_same_v<T, typed_array>, ref<T>, T>, error> get() const
-    \f[B]requires\f[R] (std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value> || std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>;
+std::expected<std::conditional_t<view_result<T>, ref<T>, T>, error> get() const
+    \f[B]requires\f[R] scalar_result<T> || view_result<T>;
 .EE
 .IP
 .EX

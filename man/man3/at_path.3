@@ -1,4 +1,4 @@
-.TH "cbor::at_path" "3" "2026-11-09" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.TH "cbor::at_path" "3" "2026-11-10" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
 .SH NAME
 cbor::at_path, cbor::path::compile, cbor::path::query<T>, cbor::nodelist, cbor::fixed_string<N>, cbor::is_valid_path_v, cbor::is_singular_query_v \- read a value by its JSONPath (RFC 9535), with CBOR keys that are not text, tags and typed arrays
 .SH SYNOPSIS
@@ -10,19 +10,19 @@ cbor::at_path, cbor::path::compile, cbor::path::query<T>, cbor::nodelist, cbor::
 .EX
 \f[B]template\f[R] <fixed_string Path, \f[B]class\f[R] T>
 std::expected<T, error> at_path(std::string_view encoded)
-    \f[B]requires\f[R] (is_singular_query_v<Path> && ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value> ));
+    \f[B]requires\f[R] (is_singular_query_v<Path> && scalar_result<T>);
 
 \f[B]template\f[R] <fixed_string Path, \f[B]class\f[R] T, borrowed_range_of_chars Encoded>
 std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded)
-    \f[B]requires\f[R] (is_singular_query_v<Path> && (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>));
+    \f[B]requires\f[R] (is_singular_query_v<Path> && view_result<T>);
 
 \f[B]template\f[R] <fixed_string Path, \f[B]class\f[R] T, owning_range_of_chars Encoded>
 std::expected<ref<T>, error> at_path(std::shared_ptr<Encoded const> owner)
-    \f[B]requires\f[R] (is_singular_query_v<Path> && (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>));
+    \f[B]requires\f[R] (is_singular_query_v<Path> && view_result<T>);
 
 \f[B]template\f[R] <fixed_string Path, \f[B]class\f[R] T, owning_range_of_chars Encoded>
 std::expected<ref<T>, error> at_path(Encoded &&encoded)
-    \f[B]requires\f[R] (is_singular_query_v<Path> && (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>));
+    \f[B]requires\f[R] (is_singular_query_v<Path> && view_result<T>);
 
 \f[B]template\f[R] <fixed_string Path, copied_value T>
 std::expected<T, error> at_path(std::string_view encoded)
