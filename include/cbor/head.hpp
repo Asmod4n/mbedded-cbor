@@ -903,15 +903,6 @@ class heads
         }
     }
 
-    static constexpr bool break_at(std::string_view const encoded, detail::validity::offset const at)
-    {
-        std::string_view const rest = detail::validity::subspan(encoded, at);
-        return detail::validity::bytes_fit(initial_byte_size, rest.size()) &&
-               rest.front() ==
-                   initial_byte(major_type::simple_float,
-                                std::to_underlying(rfc8949::simple_float_information::break_stop_code));
-    }
-
     friend class detail::validity;
 
     friend class sequence_reader;

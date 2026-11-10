@@ -285,7 +285,7 @@ TEST_CASE("path: the diagnostic notation of a key finds the entry")
     CHECK(found(compiled_at<"$[1.5_3]">(doc)) == V(5));
     CHECK(found(compiled_at<"$[h'0102'_1]">(doc)) == V(2));
     CHECK(found(compiled_at<"$[1000_3(\"x\"_0)]">(doc)) == V(3));
-    CHECK(found(compiled_at<"$[[_ 1, 2]]">(doc)) == V(4));
+    CHECK_FALSE(cbor::is_valid_path_v<"$[[_ 1, 2]]">);
     CHECK_EQ(compiled_at<"$[1.0]">(doc).error(), error::key_not_found);
     std::string runtime_text = "$[16]";
     CHECK(*test::at_path(runtime_text, *test::lazy_of_copy(doc)) == V(14));
