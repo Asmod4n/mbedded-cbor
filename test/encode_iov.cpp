@@ -100,7 +100,7 @@ TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form"
             pieces const p = finished(e);
             CHECK_EQ(joined(p), expected);
             CHECK_EQ(sum_of(p), expected.size());
-            if (size >= cbor::encoding::ref_size)
+            if (size > cbor::encoding::copybreak)
                 CHECK(std::ranges::any_of(*p, [&](iovec const &piece) { return piece.iov_len == text.size(); }));
         }
         {
@@ -111,7 +111,7 @@ TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form"
             pieces const p = finished(e);
             CHECK_EQ(joined(p), expected);
             CHECK_EQ(sum_of(p), expected.size());
-            CHECK_EQ(points_into(p, owner->data()), size >= cbor::encoding::ref_size && size > 0);
+            CHECK_EQ(points_into(p, owner->data()), size > cbor::encoding::copybreak && size > 0);
         }
         {
             auto const read = test::lazy_of_copy(expected)->get<std::string_view>();
@@ -122,7 +122,7 @@ TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form"
             pieces const p = finished(e);
             CHECK_EQ(joined(p), expected);
             CHECK_EQ(sum_of(p), expected.size());
-            CHECK_EQ(points_into(p, (**read).data()), size >= cbor::encoding::ref_size && size > 0);
+            CHECK_EQ(points_into(p, (**read).data()), size > cbor::encoding::copybreak && size > 0);
         }
     }
 }
@@ -150,7 +150,7 @@ TEST_CASE("encode_iov: every form of a byte string gives the bytes of the copyin
             REQUIRE(e.byte_string(owner).has_value());
             pieces const p = finished(e);
             CHECK_EQ(joined(p), expected);
-            CHECK_EQ(points_into(p, owner->data()), size >= cbor::encoding::ref_size && size > 0);
+            CHECK_EQ(points_into(p, owner->data()), size > cbor::encoding::copybreak && size > 0);
         }
         {
             auto const read = test::lazy_of_copy(expected)->get<std::span<std::byte const>>();
@@ -160,7 +160,7 @@ TEST_CASE("encode_iov: every form of a byte string gives the bytes of the copyin
             REQUIRE(e.byte_string(*read).has_value());
             pieces const p = finished(e);
             CHECK_EQ(joined(p), expected);
-            CHECK_EQ(points_into(p, (**read).data()), size >= cbor::encoding::ref_size && size > 0);
+            CHECK_EQ(points_into(p, (**read).data()), size > cbor::encoding::copybreak && size > 0);
         }
     }
 }
@@ -361,7 +361,7 @@ TEST_CASE("encode: a float is a double unless preferred serialization is on")
 TEST_CASE("encode_iov: more pieces than IOV_MAX are written in turns")
 {
     constexpr std::size_t strings = 1100;
-    auto const text = std::make_shared<std::string const>(std::string(cbor::encoding::ref_size, 'x'));
+    auto const text = std::make_shared<std::string const>(std::string(cbor::encoding::copybreak + 1, 'x'));
     cbor::iov_writer w;
     iov_encoder e{w};
     std::string expected;

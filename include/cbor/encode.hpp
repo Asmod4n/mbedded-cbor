@@ -207,7 +207,7 @@ class encoding
 public:
     static constexpr std::size_t block_size = CBOR_ENCODER_BLOCK_SIZE;
     static constexpr std::size_t item_size_max = heads::initial_byte_size + sizeof(std::uint64_t);
-    static constexpr std::size_t ref_size = 32;
+    static constexpr std::size_t copybreak = 31;
     static_assert(block_size >= item_size_max, "A block must hold one whole head or float.");
     static constexpr std::size_t inline_buffer_size = CBOR_ENCODER_INLINE_BUFFER_SIZE;
     static_assert(inline_buffer_size >= item_size_max, "The inline buffer must hold one whole head or float.");
@@ -573,7 +573,7 @@ struct encoding::binary_writer {
     std::expected<void, std::errc> encode_text_string(S &&text)
     {
         if constexpr (blocks)
-            if (text.size() >= ref_size) {
+            if (text.size() > copybreak) {
                 auto const owner = std::make_shared<std::string const>(std::move(text));
                 return encode_piece(major_type::text_string, std::as_bytes(std::span(*owner)), owner);
             }
@@ -585,7 +585,7 @@ struct encoding::binary_writer {
         detail::validity::throw_logic_error_if_null(text,
                                                     "cbor::encoder::encode_text_string: the string is null");
         if constexpr (blocks)
-            if (text->size() >= ref_size)
+            if (text->size() > copybreak)
                 return encode_piece(major_type::text_string, std::as_bytes(std::span(*text)), text);
         return encode_text_string(std::string_view(*text));
     }
@@ -593,7 +593,7 @@ struct encoding::binary_writer {
     std::expected<void, std::errc> encode_text_string(ref<std::string_view> const text)
     {
         if constexpr (blocks)
-            if ((*text).size() >= ref_size)
+            if ((*text).size() > copybreak)
                 return encode_piece(major_type::text_string, std::as_bytes(std::span(*text)), text.owner);
         return encode_text_string(*text);
     }
@@ -603,7 +603,7 @@ struct encoding::binary_writer {
     std::expected<void, std::errc> encode_byte_string(V &&bytes)
     {
         if constexpr (blocks)
-            if (bytes.size() >= ref_size) {
+            if (bytes.size() > copybreak) {
                 auto const owner = std::make_shared<std::vector<std::byte> const>(std::move(bytes));
                 return encode_piece(major_type::byte_string, std::span(*owner), owner);
             }
@@ -615,7 +615,7 @@ struct encoding::binary_writer {
         detail::validity::throw_logic_error_if_null(bytes,
                                                     "cbor::encoder::encode_byte_string: the bytes are null");
         if constexpr (blocks)
-            if (bytes->size() >= ref_size)
+            if (bytes->size() > copybreak)
                 return encode_piece(major_type::byte_string, std::span(*bytes), bytes);
         return encode_byte_string(std::span<std::byte const>(*bytes));
     }
@@ -623,7 +623,7 @@ struct encoding::binary_writer {
     std::expected<void, std::errc> encode_byte_string(ref<std::span<std::byte const>> const bytes)
     {
         if constexpr (blocks)
-            if ((*bytes).size() >= ref_size)
+            if ((*bytes).size() > copybreak)
                 return encode_piece(major_type::byte_string, *bytes, bytes.owner);
         return encode_byte_string(*bytes);
     }

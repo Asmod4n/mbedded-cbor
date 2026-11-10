@@ -1024,11 +1024,11 @@ class extended_diagnostic_notation
         default:
             break;
         }
-        constexpr std::uint8_t half =
+        constexpr std::uint8_t half_precision_float =
             std::to_underlying(rfc8949::simple_float_information::half_precision_float);
-        constexpr std::uint8_t twice =
+        constexpr std::uint8_t double_precision_float =
             std::to_underlying(rfc8949::simple_float_information::double_precision_float);
-        if (h->info < half) {
+        if (h->info < half_precision_float) {
             if (error const r = detail::validity::check_simple_value(h->info, h->argument).error_or(error{});
                 r != error{}) [[unlikely]]
                 return std::unexpected(r);
@@ -1036,14 +1036,14 @@ class extended_diagnostic_notation
                 return std::unexpected(r.error());
             return next;
         }
-        if (h->info > twice) [[unlikely]]
+        if (h->info > double_precision_float) [[unlikely]]
             return std::unexpected(error::syntax_error);
         heads::float_key const key = heads::float_key_of(h->info, h->argument);
         if (key.nan) {
             if (auto const r = append_head(out, major_type::simple_float,
                                            key.widened | std::uint64_t{heads::double_precision.exponent_max}
                                                              << heads::double_precision.significand_bits,
-                                           twice);
+                                           double_precision_float);
                 !r) [[unlikely]]
                 return std::unexpected(r.error());
             return next;
