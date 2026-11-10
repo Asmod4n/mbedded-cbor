@@ -96,13 +96,7 @@ struct lazy;
  * @ingroup path
  */
 template <fixed_string Path, class T>
-    requires(is_singular_query_v<Path> &&
-             ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
-              std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>
-#ifdef __STDCPP_FLOAT128_T__
-              || std::is_same_v<T, std::float128_t>
-#endif
-              ))
+    requires(is_singular_query_v<Path> && scalar_result<T>)
 std::expected<T, error> at_path(std::string_view encoded);
 
 /**
@@ -110,9 +104,7 @@ std::expected<T, error> at_path(std::string_view encoded);
  * @ingroup path
  */
 template <fixed_string Path, class T, borrowed_range_of_chars Encoded>
-    requires(is_singular_query_v<Path> &&
-             (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
-              std::is_same_v<T, typed_array>))
+    requires(is_singular_query_v<Path> && view_result<T>)
 std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded);
 
 /**
@@ -120,9 +112,7 @@ std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded 
  * @ingroup path
  */
 template <fixed_string Path, class T, owning_range_of_chars Encoded>
-    requires(is_singular_query_v<Path> &&
-             (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
-              std::is_same_v<T, typed_array>))
+    requires(is_singular_query_v<Path> && view_result<T>)
 std::expected<ref<T>, error> at_path(std::shared_ptr<Encoded const> owner);
 
 /**
@@ -131,9 +121,7 @@ std::expected<ref<T>, error> at_path(std::shared_ptr<Encoded const> owner);
  * @retval not_enough_memory an allocation of the owner fails
  */
 template <fixed_string Path, class T, owning_range_of_chars Encoded>
-    requires(is_singular_query_v<Path> &&
-             (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
-              std::is_same_v<T, typed_array>))
+    requires(is_singular_query_v<Path> && view_result<T>)
 std::expected<ref<T>, error> at_path(Encoded &&encoded);
 
 /**
@@ -927,8 +915,7 @@ class path
         auto const value = node->template get<T>();
         if (!value) [[unlikely]]
             return std::unexpected(value.error());
-        if constexpr (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
-                      std::is_same_v<T, typed_array>)
+        if constexpr (view_result<T>)
             return **value;
         else
             return *value;
@@ -1002,19 +989,11 @@ class path
     friend class is_singular_query;
 
     template <fixed_string Path, class T>
-        requires(is_singular_query_v<Path> &&
-                 ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
-                  std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>
-#ifdef __STDCPP_FLOAT128_T__
-              || std::is_same_v<T, std::float128_t>
-#endif
-              ))
+        requires(is_singular_query_v<Path> && scalar_result<T>)
     friend std::expected<T, error> at_path(std::string_view encoded);
 
     template <fixed_string Path, class T, borrowed_range_of_chars Encoded>
-        requires(is_singular_query_v<Path> &&
-                 (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
-                  std::is_same_v<T, typed_array>))
+        requires(is_singular_query_v<Path> && view_result<T>)
     friend std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded);
 
     template <fixed_string>
@@ -2325,22 +2304,14 @@ class is_singular_query
 };
 
 template <fixed_string Path, class T>
-    requires(is_singular_query_v<Path> &&
-             ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> || std::is_same_v<T, bool> ||
-              std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>
-#ifdef __STDCPP_FLOAT128_T__
-              || std::is_same_v<T, std::float128_t>
-#endif
-              ))
+    requires(is_singular_query_v<Path> && scalar_result<T>)
 std::expected<T, error> at_path(std::string_view const encoded)
 {
     return path::walk_query<Path, T>(encoded);
 }
 
 template <fixed_string Path, class T, borrowed_range_of_chars Encoded>
-    requires(is_singular_query_v<Path> &&
-             (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
-              std::is_same_v<T, typed_array>))
+    requires(is_singular_query_v<Path> && view_result<T>)
 std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded)
 {
     detail::validity::throw_logic_error_if_empty(
@@ -2350,9 +2321,7 @@ std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded 
 }
 
 template <fixed_string Path, class T, owning_range_of_chars Encoded>
-    requires(is_singular_query_v<Path> &&
-             (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
-              std::is_same_v<T, typed_array>))
+    requires(is_singular_query_v<Path> && view_result<T>)
 std::expected<ref<T>, error> at_path(std::shared_ptr<Encoded const> owner)
 {
     detail::validity::throw_logic_error_if_null(owner, "cbor::at_path: the encoded data item is null");
@@ -2361,9 +2330,7 @@ std::expected<ref<T>, error> at_path(std::shared_ptr<Encoded const> owner)
 }
 
 template <fixed_string Path, class T, owning_range_of_chars Encoded>
-    requires(is_singular_query_v<Path> &&
-             (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
-              std::is_same_v<T, typed_array>))
+    requires(is_singular_query_v<Path> && view_result<T>)
 std::expected<ref<T>, error> at_path(Encoded &&encoded)
 {
     auto owner = detail::validity::make_shared_owner(std::move(encoded));
@@ -2416,22 +2383,14 @@ std::expected<nodelist, error> lazy::at_path() const
 }
 
 template <fixed_string Path, class T>
-    requires(is_singular_query_v<Path> &&
-             ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
-              std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>
-#ifdef __STDCPP_FLOAT128_T__
-              || std::is_same_v<T, std::float128_t>
-#endif
-              ))
+    requires(is_singular_query_v<Path> && scalar_result<T>)
 std::expected<T, error> lazy::at_path() const
 {
     return path::walk_query<Path, T>(*this);
 }
 
 template <fixed_string Path, class T>
-    requires(is_singular_query_v<Path> &&
-             (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
-              std::is_same_v<T, typed_array>))
+    requires(is_singular_query_v<Path> && view_result<T>)
 std::expected<ref<T>, error> lazy::at_path() const
 {
     return path::walk_owned_query<Path, T>(*this);

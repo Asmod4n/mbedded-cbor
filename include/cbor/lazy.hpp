@@ -340,19 +340,11 @@ public:
     std::expected<lazy, error> at_path() const;
 
     template <fixed_string Path, class T>
-        requires(is_singular_query_v<Path> &&
-                 ((std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
-                  std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>
-#ifdef __STDCPP_FLOAT128_T__
-                  || std::is_same_v<T, std::float128_t>
-#endif
-                  ))
+        requires(is_singular_query_v<Path> && scalar_result<T>)
     std::expected<T, error> at_path() const;
 
     template <fixed_string Path, class T>
-        requires(is_singular_query_v<Path> &&
-                 (std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
-                  std::is_same_v<T, typed_array>))
+        requires(is_singular_query_v<Path> && view_result<T>)
     std::expected<ref<T>, error> at_path() const;
 
     template <fixed_string Path, std::same_as<nodelist> T>
@@ -486,16 +478,8 @@ public:
      * @see cbor::lazy::clone()
      */
     template <class T>
-        requires(std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
-                 std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value> ||
-                 std::is_same_v<T, std::string_view> ||
-                 std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>
-#ifdef __STDCPP_FLOAT128_T__
-                 || std::is_same_v<T, std::float128_t>
-#endif
-    std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
-                                   std::is_same_v<T, typed_array>,
-                               ref<T>, T>, error> get() const;
+        requires scalar_result<T> || view_result<T>
+    std::expected<std::conditional_t<view_result<T>, ref<T>, T>, error> get() const;
 
     /**
      * @brief Gives the elements of an array, or of a typed array, as a view.
@@ -1627,16 +1611,8 @@ inline std::expected<lazy, error> lazy::at(std::size_t const index) const
 }
 
 template <class T>
-    requires(std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
-             std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value> ||
-                 std::is_same_v<T, std::string_view> ||
-             std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>
-#ifdef __STDCPP_FLOAT128_T__
-             || std::is_same_v<T, std::float128_t>
-#endif
-std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> ||
-                               std::is_same_v<T, typed_array>,
-                           ref<T>, T>, error> lazy::get() const
+    requires scalar_result<T> || view_result<T>
+std::expected<std::conditional_t<view_result<T>, ref<T>, T>, error> lazy::get() const
 {
     throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
     if constexpr (std::is_same_v<T, std::span<std::byte const>>) {
