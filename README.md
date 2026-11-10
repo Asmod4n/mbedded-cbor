@@ -155,7 +155,7 @@ The code of every library, task by task:
 | Compiler | System | What builds |
 |---|---|---|
 | g++ 16, `-std=c++26 -freflection` | Linux | every part, and the check of each description against the members |
-| g++ 15, clang 23, `-std=c++23` | Linux | every part in C++23 |
+| g++ 15, clang 21 (Debian stable with trixie-backports), `-std=c++23` | Linux | every part in C++23 |
 | AppleClang of Xcode 26 | macOS 26 | every part in C++23 |
 
 On Windows the library builds with clang-cl, the clang frontend. The
@@ -165,7 +165,7 @@ The library reads the bounds of the stack of each thread. It compiles
 for Linux (glibc and musl), macOS, Windows on x64, WebAssembly without
 threads and picolibc. On another target the build stops with an error.
 
-On g++ 15, clang 23 and AppleClang, `cbor::structs` reads the members
+On g++ 15, clang 21 and later and AppleClang, `cbor::structs` reads the members
 through Boost.PFR 1.84 or later, and `cbor::schema` uses it to check that
 a description lists every member of an aggregate. It is the only
 dependency.
@@ -247,9 +247,9 @@ auto const age = doc.at_path<"$.user.age", int>();                 // cbor::erro
 
 The tests run the examples of RFC 8949 Appendix A, the test vectors of
 the IETF CBOR working group and the JSONPath Compliance Test Suite.
-`test/run.sh full` builds and runs them with g++ 16, g++ 15 and clang 23
-(libstdc++ and libc++), with AddressSanitizer and
-UndefinedBehaviorSanitizer, and runs other decoders on the output. Fuzz
+`test/run.sh full` builds and runs them with g++ 16 and clang 23, each
+with AddressSanitizer and UndefinedBehaviorSanitizer at -O0, and runs
+other decoders on the output. Fuzz
 targets cover decode, diagnostic notation, encode, the encoder,
 item_size, lazy, path, sequence_reader, structs and schema.
 

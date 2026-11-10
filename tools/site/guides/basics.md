@@ -11,7 +11,7 @@ This page states them, and where Boost.PFR comes from.
 | Write a struct and read it back | `cbor::structs` | [structs.md](structs.md) |
 | Read one field of a large message | `cbor::schema` | [schema.md](schema.md) |
 
-The library needs C++23: g++ 15 or later, clang 23, or the AppleClang
+The library needs C++23: g++ 15 or later, clang 21 or later, or the AppleClang
 of Xcode 16 or 26. Every part builds on each of them, and `cbor::schema`
 is one class for all of them. With g++ 16 and
 `-std=c++26 -freflection`, `structs` reads the members by reflection and
