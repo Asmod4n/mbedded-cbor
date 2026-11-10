@@ -1493,10 +1493,10 @@ path::intern_value(detail::canonical_ids &ids, lazy::top_level_item const &sourc
 
 inline std::expected<path::comparables, error> path::comparables_of(lazy const &a, lazy const &b)
 {
-    auto const x = resolved_of(a);
+    auto x = resolved_of(a);
     if (!x) [[unlikely]]
         return std::unexpected(x.error());
-    auto const y = resolved_of(b);
+    auto y = resolved_of(b);
     if (!y) [[unlikely]]
         return std::unexpected(y.error());
     auto const x_number = integer_of(x->h, x->d);
@@ -1505,7 +1505,7 @@ inline std::expected<path::comparables, error> path::comparables_of(lazy const &
     auto const y_number = integer_of(y->h, y->d);
     if (!y_number) [[unlikely]]
         return std::unexpected(y_number.error());
-    return comparables{*x, *y, x_number->first, y_number->first};
+    return comparables{std::move(*x), std::move(*y), x_number->first, y_number->first};
 }
 
 constexpr bool path::is_number(heads::head const &h)
