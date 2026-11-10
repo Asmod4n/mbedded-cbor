@@ -90,6 +90,16 @@ TEST_CASE("path edn literals: the sequence literals of 2.3.4 of the EDN draft")
     refused("<<1,, 2>>");
 }
 
+// RFC 8949 3.4: a tag number is an unsigned integer of at most 64 bits. A tag number that needs more bits is
+// no tag of CBOR, so the literal is no key. The first refused literal passes 2^64 - 1 at its last addition,
+// the second at its last multiplication.
+TEST_CASE("path edn literals: a tag number above 2^64 - 1")
+{
+    selects("18446744073709551615(1)", "dbffffffffffffffff01");
+    refused("18446744073709551616(1)");
+    refused("18446744073709551620(1)");
+}
+
 // 2.6: simple(n) is major type 7 with value n, so simple(20) is false; the grammar has no value from 24 to 31,
 // none above 255 and no leading zero.
 TEST_CASE("path edn literals: the simple values of 2.6 of the EDN draft")

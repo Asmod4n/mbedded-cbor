@@ -257,41 +257,10 @@ TEST_CASE("bignum: tag 28 around a bignum that fits is a tag over the integer")
 }
 
 // RFC 8949 5.6.1 compares keys in the data model, and RFC 8949 3.4.3 makes 2(h'01') the integer 1. So a key
-// written as a bignum that fits is the same key as the integer: keys_equivalent says so, a lookup by an integer
-// finds it, and a map with both holds the key twice.
+// written as a bignum that fits is the same key as the integer, and a lookup by an integer finds it. A lookup
+// refuses a tag 2 whose content is not a byte string.
 TEST_CASE("bignum: a key that fits 64 bits is the same key as the integer")
 {
-    struct pair {
-        std::string first;
-        std::string second;
-        bool equal;
-    };
-    pair const pairs[] = {
-        {"\x01"s, "\xc2\x41\x01"s, true},
-        {"\xc2\x41\x01"s, "\x01"s, true},
-        {"\x20"s, "\xc3\x40"s, true},
-        {"\x20"s, "\xc3\x41\x00"s, true},
-        {"\x01"s, "\xc2\x43\x00\x00\x01"s, true},
-        {"\xc2\x41\x01"s, "\xc2\x42\x00\x01"s, true},
-        {"\x01"s, "\xc3\x41\x01"s, false},
-        {"\x01"s, "\xc2\x41\x02"s, false},
-        {"\xc2\x41\x01"s, "\xc3\x41\x01"s, false},
-        {"\x01"s, "\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s, false},
-        {"\xc1\x01"s, "\xc2\x41\x01"s, false},
-        {"\x41\x01"s, "\xc2\x41\x01"s, false},
-        {"\xa2\x01\x00\xc2\x41\x01\x00"s, "\xa2\x01\x00\x01\x00"s, true},
-        {"\xa2\x01\x00\xc2\x41\x01\x00"s, "\xa2\x01\x00\x02\x00"s, false},
-    };
-    for (pair const &p : pairs) {
-        CAPTURE(p.first);
-        CAPTURE(p.second);
-        std::string_view const first = p.first;
-        std::string_view const second = p.second;
-        auto const equal = cbor::detail::validity::keys_equivalent<false>(
-            first, cbor::detail::validity::offset{}, second, cbor::detail::validity::offset{});
-        REQUIRE(equal.has_value());
-        CHECK_EQ(*equal, p.equal);
-    }
     CHECK_EQ(test::lazy_of_copy("\xa2\xc2\x41\x01\x00\x01\x01"s)->at(cbor::key{1})->get<int>(), 0);
     CHECK_EQ(test::lazy_of_copy("\xa2\xc3\x41\x00\x00\x20\x01"s)->at(cbor::key{-1})->get<int>(), 0);
     CHECK_EQ(test::lazy_of_copy("\xa1\xc2\x41\x01\x61\x61"s)->at(cbor::key{1})->get<std::string_view>().has_value(), true);

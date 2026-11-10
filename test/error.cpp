@@ -84,7 +84,7 @@ TEST_CASE("error: every error has its own message")
     }
 }
 
-// The writer errors are copies of std::errc values (detail::validity::writer_error), but an error_code of
+// The writer errors are copies of std::errc values, but an error_code of
 // them compared unequal to the std::errc they came from. Code that tests for std::errc::no_buffer_space
 // missed a full buffer of this library. Each such error now has the std::errc as its default error condition;
 // every other error keeps its own condition in the cbor category.

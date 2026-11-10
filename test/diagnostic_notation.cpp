@@ -229,14 +229,48 @@ TEST_CASE("diagnostic_notation: an item that is not well-formed is an error")
     CHECK_EQ(cbor::diagnostic_notation("\x1c"sv).error(), error::syntax_error);
     CHECK_EQ(cbor::diagnostic_notation("\x1f"sv).error(), error::syntax_error);
     CHECK_EQ(cbor::diagnostic_notation("\x62\x61"sv).error(), error::too_little_data);
-    CHECK_EQ(cbor::diagnostic_notation("\x5f\x61\x61\xff"sv).error(), error::syntax_error);
-    CHECK_EQ(cbor::diagnostic_notation("\x5f\x5f\xff\xff"sv).error(), error::syntax_error);
     CHECK_EQ(cbor::diagnostic_notation("\x9f\x01"sv).error(), error::too_little_data);
     CHECK_EQ(cbor::diagnostic_notation("\x00\x00"sv).error(), error::syntax_error);
     CHECK(cbor::diagnostic_notation(test::repeat("\x81"sv, test::levels_every_stack_holds) + '\x00').has_value());
     std::string const deep = test::repeat("\x81"sv, test::levels_beyond_small_stack) + '\x00';
     CHECK_EQ(test::error_on_small_stack([&deep] { return cbor::diagnostic_notation(deep); }),
              error::nesting_depth_exceeded);
+}
+
+// RFC 8949 3.2.3: each chunk of an indefinite-length string is a definite-length string of the same major
+// type. A chunk of another major type, a chunk of indefinite length and a head with the reserved additional
+// information 28 to 30 (RFC 8949 3) are not well-formed. Every initial byte except the break 0xff stands once
+// as the chunk of each string type. Its argument and its content follow in full, so that only the initial
+// byte decides.
+TEST_CASE("diagnostic_notation: the chunk of an indefinite-length string for every initial byte")
+{
+    constexpr unsigned additional_information_bits = 5;
+    constexpr unsigned additional_information_mask = (1u << additional_information_bits) - 1;
+    constexpr unsigned one_byte_argument = 24;
+    constexpr unsigned reserved_first = 28;
+    constexpr unsigned indefinite_length = 31;
+    constexpr unsigned break_byte = 0xff;
+    for (cbor::major_type const string : {cbor::major_type::byte_string, cbor::major_type::text_string})
+        for (unsigned initial = 0; initial < break_byte; ++initial) {
+            CAPTURE(string);
+            CAPTURE(initial);
+            unsigned const major = initial >> additional_information_bits;
+            unsigned const info = initial & additional_information_mask;
+            std::string argument;
+            if (info >= one_byte_argument && info < reserved_first)
+                argument = std::string(std::size_t{1} << (info - one_byte_argument), '\0');
+            std::string const content(info < one_byte_argument ? info : 0, 'a');
+            std::string const input = std::string(1, static_cast<char>(unsigned{std::to_underlying(string)}
+                                                                           << additional_information_bits |
+                                                                       indefinite_length)) +
+                                      static_cast<char>(initial) + argument + content +
+                                      static_cast<char>(break_byte);
+            auto const r = cbor::diagnostic_notation(input);
+            if (major == unsigned{std::to_underlying(string)} && info < reserved_first)
+                CHECK(r.has_value());
+            else
+                CHECK_EQ(r.error(), error::syntax_error);
+        }
 }
 
 // RFC 8949 Section 3.2.3: an indefinite-length string is a sequence of chunks that ends with the break 0xff. 5f and

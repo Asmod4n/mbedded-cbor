@@ -157,6 +157,44 @@ TEST_CASE("lazy: negative indices and misses")
     CHECK_EQ(cbor::at_path<"$[-99]", std::uint64_t>(a).error(), error::index_out_of_bounds);
 }
 
+// RFC 9535 2.3.3.2: an index i selects the element Normalize(i, len), and only an index in 0 to len - 1 after
+// the normalization selects an element. lazy::at counts from 0 as std::vector::at does, and a path also takes
+// a negative index. Both are checked for each index around each small length, and at the ends of the index
+// range of I-JSON (RFC 9535 2.1), so that no index selects an element outside the array.
+TEST_CASE("lazy: at and a path index select the element that Normalize of RFC 9535 gives")
+{
+    constexpr std::int64_t largest_index = (std::int64_t{1} << 53) - 1;
+    std::vector<std::int64_t> indexes{-largest_index, largest_index};
+    for (std::int64_t i = -6; i <= 6; ++i)
+        indexes.push_back(i);
+    for (std::uint8_t length = 0; length <= 4; ++length) {
+        std::string document(1, static_cast<char>(0x80 | length));
+        for (std::uint8_t element = 0; element < length; ++element)
+            document += static_cast<char>(element);
+        cbor::lazy const l = lazy_of(document);
+        for (std::int64_t const index : indexes) {
+            CAPTURE(length);
+            CAPTURE(index);
+            std::int64_t const normalized = index >= 0 ? index : length + index;
+            bool const selects = normalized >= 0 && normalized < length;
+            auto const q = cbor::path::compile<cbor::lazy>("$[" + std::to_string(index) + "]");
+            REQUIRE(q.has_value());
+            auto const by_path = l.at_path(*q);
+            if (selects)
+                CHECK(by_path->get<std::int64_t>() == normalized);
+            else
+                CHECK_EQ(by_path.error(), error::index_out_of_bounds);
+            if (!std::in_range<std::size_t>(index))
+                continue;
+            auto const by_at = l.at(static_cast<std::size_t>(index));
+            if (selects)
+                CHECK(by_at->get<std::int64_t>() == normalized);
+            else
+                CHECK_EQ(by_at.error(), error::index_out_of_bounds);
+        }
+    }
+}
+
 // Ported from test.rb: 'lazy: can still navigate child lazies after calling .value on parent'.
 TEST_CASE("lazy: a value of the parent does not change the children")
 {
@@ -507,9 +545,6 @@ TEST_CASE("lazy: get reads an integer")
 // A number that the type cannot hold is out of range; anything that is not a number has the wrong type.
 TEST_CASE("lazy: get refuses an integer it cannot hold")
 {
-    CHECK_EQ(get<std::uint64_t>("\x20"s).error(), error::number_out_of_range);
-    CHECK_EQ(get<std::int64_t>("\x1b\x80\x00\x00\x00\x00\x00\x00\x00"s).error(), error::number_out_of_range);
-    CHECK_EQ(get<std::int64_t>("\x3b\x80\x00\x00\x00\x00\x00\x00\x00"s).error(), error::number_out_of_range);
     CHECK_EQ(get<std::uint64_t>("\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s).error(),
              error::number_out_of_range);
     CHECK_EQ(get<std::uint64_t>("\x61\x61"s).error(), error::incorrect_type);
@@ -661,28 +696,110 @@ TEST_CASE("tag 24: a tag 29 inside an embedded data item is a plain tag")
     CHECK_EQ(*second->get<std::uint64_t>(), 0u);
 }
 
-// Every integer width reads its own edges. A CBOR integer has a 64-bit magnitude and a sign in the major type
-// (RFC 8949 3.1), so a narrower type refuses the first value past its edge as out of range.
+#ifdef CBOR_HAS_INT128
+namespace
+{
+
+// RFC 8949 3.1: an unsigned integer has the value of its argument, and a negative integer has the value -1
+// minus its argument. get<T> gives that value exactly when it lies in the range of T, and number_out_of_range
+// otherwise.
+template <class T>
+void get_is_exact_at_the_edges_of()
+{
+    constexpr std::uint64_t top = std::numeric_limits<std::uint64_t>::max();
+    constexpr std::uint64_t edge = static_cast<std::uint64_t>(std::numeric_limits<T>::max());
+    for (bool const negative_value : {false, true})
+        for (std::uint64_t const argument :
+             {std::uint64_t{0}, std::uint64_t{1}, std::uint64_t{2}, top - 1, top, edge - 1, edge, edge + 1}) {
+            CAPTURE(negative_value);
+            CAPTURE(argument);
+            cbor::int128 const expected =
+                negative_value ? -1 - cbor::int128{argument} : cbor::int128{argument};
+            bool const fits = expected >= cbor::int128{std::numeric_limits<T>::min()} &&
+                              expected <= cbor::int128{std::numeric_limits<T>::max()};
+            auto const r =
+                get<T>(negative_value ? encoded(value{negative{argument}}) : encoded(value{argument}));
+            if (fits)
+                CHECK(r == T(expected));
+            else
+                CHECK_EQ(r.error(), error::number_out_of_range);
+        }
+}
+
+} // namespace
+
+// The standard integer widths and signednesses are a finite set, so each member is checked at both ends of
+// its range and at both ends of the 64-bit argument: a range check that one width misses would change a value
+// without an error.
 TEST_CASE("lazy: get reads every integer width up to its edge")
 {
-    CHECK_EQ(*get<std::uint8_t>("\x18\xff"s), 255u);
-    CHECK_EQ(get<std::uint8_t>("\x19\x01\x00"s).error(), error::number_out_of_range);
-    CHECK_EQ(*get<std::uint16_t>("\x19\xff\xff"s), 65535u);
-    CHECK_EQ(get<std::uint16_t>("\x1a\x00\x01\x00\x00"s).error(), error::number_out_of_range);
-    CHECK_EQ(*get<std::uint32_t>("\x1a\xff\xff\xff\xff"s), 4294967295u);
-    CHECK_EQ(get<std::uint32_t>("\x1b\x00\x00\x00\x01\x00\x00\x00\x00"s).error(), error::number_out_of_range);
-    CHECK_EQ(get<std::uint8_t>("\x20"s).error(), error::number_out_of_range);
+    get_is_exact_at_the_edges_of<std::int8_t>();
+    get_is_exact_at_the_edges_of<std::uint8_t>();
+    get_is_exact_at_the_edges_of<std::int16_t>();
+    get_is_exact_at_the_edges_of<std::uint16_t>();
+    get_is_exact_at_the_edges_of<std::int32_t>();
+    get_is_exact_at_the_edges_of<std::uint32_t>();
+    get_is_exact_at_the_edges_of<std::int64_t>();
+    get_is_exact_at_the_edges_of<std::uint64_t>();
+}
+#endif
 
-    CHECK_EQ(*get<std::int8_t>("\x18\x7f"s), 127);
-    CHECK_EQ(get<std::int8_t>("\x18\x80"s).error(), error::number_out_of_range);
-    CHECK_EQ(*get<std::int8_t>("\x38\x7f"s), -128);
-    CHECK_EQ(get<std::int8_t>("\x38\x80"s).error(), error::number_out_of_range);
-    CHECK_EQ(*get<std::int16_t>("\x19\x7f\xff"s), 32767);
-    CHECK_EQ(*get<std::int16_t>("\x39\x7f\xff"s), -32768);
-    CHECK_EQ(get<std::int16_t>("\x39\x80\x00"s).error(), error::number_out_of_range);
-    CHECK_EQ(*get<std::int32_t>("\x1a\x7f\xff\xff\xff"s), 2147483647);
-    CHECK_EQ(*get<std::int32_t>("\x3a\x7f\xff\xff\xff"s), std::numeric_limits<std::int32_t>::min());
-    CHECK_EQ(get<std::int32_t>("\x1a\x80\x00\x00\x00"s).error(), error::number_out_of_range);
+// RFC 8949 3.4.3: the content of tags 2 and 3 is a byte string. RFC 8949 3.4.5.1: the content of tag 24 is a
+// byte string. RFC 8746 2: the content of tags 64 to 87 is a byte string; tag 76 is reserved, and the library
+// reads it as a tag that it does not interpret. The registration of tag 29 (value-sharing) makes its content
+// an unsigned integer. The rule table holds a row only for a tag that the library interprets (owner,
+// 2026-10-13), so every other tag takes every major type. A lazy reads the content of tags 2, 3 and 24 when
+// it reads the value; cbor::decode reads the content of the other tags. This test exists so that no content
+// that these sections forbid passes a reader that interprets the tag, and so that no reader refuses a tag
+// that the library does not interpret.
+TEST_CASE("lazy: the content of each tag for every major type")
+{
+    std::vector<std::uint64_t> tags;
+    for (std::uint64_t tag = 0; tag <= 100; ++tag)
+        tags.push_back(tag);
+    tags.push_back(1113);
+    tags.push_back(std::numeric_limits<std::uint64_t>::max());
+    // RFC 8949 3: the head of a tag is the head of an unsigned integer with major type 6 in the three high
+    // bits, above the five bits of the additional information.
+    constexpr unsigned additional_information_bits = 5;
+    constexpr auto tag_major_bits =
+        static_cast<std::uint8_t>(std::to_underlying(cbor::major_type::tag) << additional_information_bits);
+    for (std::uint64_t const tag : tags) {
+        bool const byte_string_only =
+            tag == 2 || tag == 3 || tag == 24 || (tag >= 64 && tag <= 87 && tag != 76);
+        // 16 bytes are a whole number of elements of every typed array, and tag 24 embeds the one item 0.
+        std::string const byte_string = tag == 24 ? "\x41\x00"s : "\x50"s + std::string(16, '\0');
+        std::array<std::pair<cbor::major_type, std::string>, 8> const contents{{
+            {cbor::major_type::unsigned_integer, "\x00"s},
+            {cbor::major_type::negative_integer, "\x20"s},
+            {cbor::major_type::byte_string, byte_string},
+            {cbor::major_type::text_string, "\x60"s},
+            {cbor::major_type::array, "\x80"s},
+            {cbor::major_type::map, "\xa0"s},
+            {cbor::major_type::tag, "\xc0\x00"s},
+            {cbor::major_type::simple_float, "\xf6"s},
+        }};
+        for (auto const &[major, content] : contents) {
+            CAPTURE(tag);
+            CAPTURE(major);
+            std::string tagged = encoded(value{tag}) + content;
+            tagged[0] = static_cast<char>(static_cast<std::uint8_t>(tagged[0]) | tag_major_bits);
+            bool admitted = true;
+            if (byte_string_only)
+                admitted = major == cbor::major_type::byte_string;
+            else if (tag == 29)
+                admitted = major == cbor::major_type::unsigned_integer;
+            std::expected<void, error> read;
+            if (tag == 2 || tag == 3 || tag == 24)
+                read = get<std::int64_t>(tagged).transform([](std::int64_t) {});
+            else
+                read = cbor::decode("\x82\xd8\x1c\x00"s + tagged).transform([](auto const &) {});
+            if (admitted)
+                CHECK(read.has_value());
+            else
+                CHECK_EQ(read.error(), error::inadmissible_type_for_tag_content);
+        }
+    }
 }
 
 // RFC 8949 5.6: a byte string key and a text string key with the same bytes are two different keys. A lookup
@@ -814,13 +931,15 @@ TEST_CASE("lazy: a view holds the top-level item")
     view.reset();
     CHECK(released);
     CHECK_FALSE(read_from_temporary<std::expected<cbor::ref<std::string_view>, cbor::error>>);
-    CHECK_THROWS_AS((void)cbor::lazy::view(std::shared_ptr<void const>{}, "\x00"sv), std::logic_error);
 }
 
-// An owner is empty when it holds no object, whatever pointer it stores. A view takes an owner and the bytes it
-// keeps alive; a string alone, owned or not, does not compile with view. Owner decision: no form takes bytes that
-// nothing keeps alive. The test exists because each of these let a view outlive its bytes, and a check of the stored
-// pointer refused an owner that holds the bytes.
+// [util.smartptr.shared] gives a std::shared_ptr four states: it owns an object or not (empty means it owns
+// none), and it stores a pointer or not (null). Each state is built with a constructor of the standard. An
+// owner that owns no object keeps nothing alive, so view with an owner and its bytes refuses exactly the two
+// empty owners. view with an owner alone reads through the stored pointer, so it also refuses the owner that
+// stores null. A string alone, owned or not, does not compile with view. Owner decision: no form takes bytes
+// that nothing keeps alive. The test exists because each of these let a view outlive its bytes, and a check
+// of the stored pointer refused an owner that holds the bytes.
 TEST_CASE("lazy: view checks that the owner holds an object")
 {
     auto const bytes = std::make_shared<std::string const>("\xa1\x61\x61\x63xyz"s);
@@ -828,15 +947,44 @@ TEST_CASE("lazy: view checks that the owner holds an object")
     CHECK_FALSE(viewable(std::string(*bytes)));
     CHECK_FALSE(viewable(*bytes));
     CHECK(viewable(bytes));
-    CHECK_THROWS_AS((void)cbor::lazy::view(std::shared_ptr<std::string const>{}), std::logic_error);
-    std::shared_ptr<void const> const holds_nothing(std::shared_ptr<void const>{}, bytes.get());
-    CHECK_THROWS_AS((void)cbor::lazy::view(holds_nothing, std::string_view(*bytes)), std::logic_error);
+    struct owner_state {
+        std::shared_ptr<std::string const> owner;
+        bool empty;
+        bool null;
+    };
+    std::string const elsewhere = "\x00"s;
+    owner_state const states[] = {
+        {std::shared_ptr<std::string const>{}, true, true},
+        {std::shared_ptr<std::string const>(std::shared_ptr<std::string const>{}, &elsewhere), true, false},
+        {std::shared_ptr<std::string const>(bytes, nullptr), false, true},
+        {bytes, false, false},
+    };
+    for (owner_state const &s : states) {
+        CAPTURE(s.empty);
+        CAPTURE(s.null);
+        std::shared_ptr<void const> const keeper = s.owner;
+        if (s.empty)
+            CHECK_THROWS_AS((void)cbor::lazy::view(keeper, std::string_view(*bytes)), std::logic_error);
+        else
+            CHECK(cbor::lazy::view(keeper, std::string_view(*bytes)).has_value());
+        if (s.empty || s.null)
+            CHECK_THROWS_AS((void)cbor::lazy::view(s.owner), std::logic_error);
+        else
+            CHECK(cbor::lazy::view(s.owner).has_value());
+    }
     CHECK_THROWS_AS((void)cbor::lazy::view(nullptr, std::string_view(*bytes)), std::logic_error);
     auto const name = cbor::lazy::view(bytes)
                           .and_then([](cbor::lazy const &d) { return d.at("a"); })
                           .and_then([](cbor::lazy const &n) { return n.get<std::string_view>(); });
     REQUIRE(name.has_value());
     CHECK_EQ(**name, "xyz"sv);
+}
+
+// The public member lazy::offset is the position type of std::string_view, so no type of cbor::detail stands
+// in a public signature.
+TEST_CASE("lazy: lazy::offset is the position type of std::string_view")
+{
+    CHECK(std::same_as<decltype(cbor::lazy::offset), std::string_view::size_type>);
 }
 
 // take moves a range that owns its bytes into the lazy, so nothing is copied. A range that the caller still names, a
@@ -926,79 +1074,6 @@ TEST_CASE("lazy: copy moves an rvalue string and copies everything else")
     char const *const pointer = "\x62" "ab";
     CHECK_EQ(text_of(*test::lazy_of_copy(pointer)), "ab");
     CHECK_EQ(text_of(*test::lazy_of_copy("\x61" "a"sv)), "a");
-}
-
-// RFC 8949 5.6.1 says when two keys are equal. Each pair is written from the text of 5.6.1. keys_equivalent
-// finds two keys equal exactly when 5.6.1 makes them equal.
-TEST_CASE("validity: keys_equivalent follows RFC 8949 5.6.1")
-{
-    struct pair {
-        std::string first;
-        std::string second;
-        bool equal;
-    };
-    std::vector<pair> const pairs{
-        // Numeric values are distinct unless they are numerically equal.
-        {"\x01"s, "\x18\x01"s, true},
-        {"\x20"s, "\x38\x00"s, true},
-        {"\x01"s, "\x20"s, false},
-        {"\x01"s, "\x02"s, false},
-        // An integer and a floating-point value are distinct, also when they are numerically equal.
-        {"\x01"s, "\xf9\x3c\x00"s, false},
-        // -0.0 is equal to 0.0, and a value is equal in every width.
-        {"\xf9\x00\x00"s, "\xfb\x80\x00\x00\x00\x00\x00\x00\x00"s, true},
-        {"\xf9\x3c\x00"s, "\xfa\x3f\x80\x00\x00"s, true},
-        {"\xf9\x3c\x00"s, "\xf9\x40\x00"s, false},
-        // Two NaN are equal when their significands are equal after zero-extension at the right to 64 bits.
-        // The
-        // sign is no part of the significand.
-        {"\xf9\x7e\x00"s, "\xfb\x7f\xf8\x00\x00\x00\x00\x00\x00"s, true},
-        {"\xf9\x7e\x00"s, "\xf9\xfe\x00"s, true},
-        {"\xf9\x7e\x00"s, "\xf9\x7e\x01"s, false},
-        {"\xf9\x7c\x00"s, "\xf9\x7e\x00"s, false},
-        // Strings are compared byte by byte. A text string is distinct from a byte string of the same bytes.
-        {"\x62\x61\x62"s, "\x62\x61\x62"s, true},
-        {"\x62\x61\x62"s, "\x62\x61\x63"s, false},
-        {"\x61\x61"s, "\x62\x61\x62"s, false},
-        {"\x61\x61"s, "\x41\x61"s, false},
-        // RFC 8949 3.4.3: a big number that fits 64 bits is the integer of the same value, and leading zeros do
-        // not change the value. A tagged value is distinct from an untagged one. Tagged values are equal when
-        // the tag numbers and the contents are equal.
-        {"\x01"s, "\xc2\x41\x01"s, true},
-        {"\xc2\x41\x01"s, "\xc2\x42\x00\x01"s, true},
-        {"\xc2\x41\x01"s, "\xc3\x41\x01"s, false},
-        {"\xc1\x00"s, "\x00"s, false},
-        {"\xc1\x00"s, "\xc1\x18\x00"s, true},
-        // Simple values are equal when they have the same value. A simple value is never an integer.
-        {"\xf4"s, "\xf4"s, true},
-        {"\xf4"s, "\xf5"s, false},
-        {"\xf8\x20"s, "\xf8\x20"s, true},
-        {"\xf8\x20"s, "\xf8\x21"s, false},
-        {"\xf0"s, "\x10"s, false},
-        // Arrays are compared element by element.
-        {"\x82\x01\x02"s, "\x82\x01\x18\x02"s, true},
-        {"\x82\x01\x02"s, "\x82\x02\x01"s, false},
-        {"\x81\x01"s, "\x82\x01\x02"s, false},
-        // Maps are equal when they have the same set of pairs, in any order. An array is never a map.
-        {"\xa2\x01\x02\x03\x04"s, "\xa2\x03\x04\x01\x02"s, true},
-        {"\xa1\x01\x02"s, "\xa1\x01\x03"s, false},
-        {"\xa1\x01\x02"s, "\xa1\x03\x02"s, false},
-        {"\x80"s, "\xa0"s, false},
-        // A map with a repeated pair holds fewer pairs than its count says, so it is no map of other pairs.
-        {"\xa2\x61k\x01\x61k\x01"s, "\xa2\x61k\x01\x61j\x01"s, false},
-        {"\xa2\x61k\x01\x61j\x01"s, "\xa2\x61k\x01\x61k\x01"s, false},
-        {"\xa2\x61k\x01\x61k\x02"s, "\xa2\x61k\x02\x61k\x01"s, true},
-    };
-    for (pair const &p : pairs) {
-        std::string_view const first = p.first;
-        std::string_view const second = p.second;
-        CAPTURE(p.first);
-        CAPTURE(p.second);
-        auto const equal = cbor::detail::validity::keys_equivalent<false>(
-            first, cbor::detail::validity::offset{}, second, cbor::detail::validity::offset{});
-        REQUIRE(equal.has_value());
-        CHECK_EQ(*equal, p.equal);
-    }
 }
 
 // RFC 8949 5.6 lets a decoder that is not in a deterministic profile keep one entry of a repeated key. Every
