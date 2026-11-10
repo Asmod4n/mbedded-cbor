@@ -6,8 +6,7 @@
  * content of a tag 24 as one more data item.
  * https://www.rfc-editor.org/rfc/rfc8949
  */
-#ifndef CBOR_DECODE_HPP
-#define CBOR_DECODE_HPP
+#pragma once
 
 #include <algorithm>
 #include <cstddef>
@@ -452,5 +451,3 @@ inline std::expected<owning<item>, error> decode(std::string_view const encoded)
 }
 
 }
-
-#endif

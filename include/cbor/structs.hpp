@@ -353,15 +353,12 @@ class generic
         else if constexpr (std::same_as<U, std::nullptr_t>)
             return heads::is_null(h);
         else if constexpr (std::same_as<U, simple_value>)
-            return h.major == major_type::simple_float &&
-                   h.info <= std::to_underlying(rfc8949::simple_float_information::simple_value_follows);
+            return heads::is_simple_value(h);
         else if constexpr (std::is_floating_point_v<U>)
             return heads::is_floating_point(h.major, h.info);
         else if constexpr (reflection::is_wide_integer<U>)
             return h.major == major_type::unsigned_integer || h.major == major_type::negative_integer ||
-                   (h.major == major_type::tag &&
-                    (h.argument == std::to_underlying(rfc8949::tag_number::unsigned_bignum) ||
-                     h.argument == std::to_underlying(rfc8949::tag_number::negative_bignum)));
+                   heads::is_bignum(h.major, h.argument);
         else if constexpr (std::is_enum_v<U>)
             return head_accepted<std::underlying_type_t<U>>(h);
         else if constexpr (std::is_unsigned_v<U>)

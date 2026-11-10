@@ -4,8 +4,7 @@
  * gives the value of the node as a C++ type, or incorrect_type when
  * the node is not of type K.
  */
-#ifndef CBOR_ITEM_HPP
-#define CBOR_ITEM_HPP
+#pragma once
 
 #include <cstddef>
 #include <concepts>
@@ -214,5 +213,3 @@ private:
 };
 
 }
-
-#endif

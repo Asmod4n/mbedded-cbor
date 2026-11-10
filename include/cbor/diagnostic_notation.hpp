@@ -161,8 +161,7 @@ class extended_diagnostic_notation
         if (info < static_cast<int>(rfc8949::additional_information::one_byte_argument) ||
             info > static_cast<int>(rfc8949::additional_information::eight_byte_argument)) [[unlikely]]
             return std::unexpected(error::invalid_path);
-        std::size_t const size =
-            std::size_t{1} << (info - static_cast<int>(rfc8949::additional_information::one_byte_argument));
+        std::size_t const size = heads::argument_size(static_cast<std::uint8_t>(info));
         if (size < sizeof(std::uint64_t) &&
             argument >> (std::numeric_limits<std::uint8_t>::digits * size) != 0) [[unlikely]]
             return std::unexpected(error::invalid_path);
