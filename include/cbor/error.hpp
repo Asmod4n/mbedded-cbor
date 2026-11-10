@@ -14,7 +14,6 @@
 #error "mbedded-cbor needs the clang frontend: on Windows build with clang-cl"
 #endif
 
-#include <expected>
 #include <string>
 #include <system_error>
 #include <type_traits>

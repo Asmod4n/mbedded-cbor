@@ -10,13 +10,11 @@
 
 #include <algorithm>
 #include <array>
-#include <bit>
 #include <charconv>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
-#include <functional>
 #include <limits>
 #include <memory>
 #include <ranges>
