@@ -1064,21 +1064,23 @@ class extended_diagnostic_notation
                                   std::to_underlying(rfc8949::additional_information::one_byte_argument))};
     }
 
+    static void encode_base16(std::string &out, std::uint8_t const byte)
+    {
+        out.push_back(rfc4648::base16_lowercase_alphabet[byte >> rfc4648::base16_group_bits]);
+        out.push_back(rfc4648::base16_lowercase_alphabet[byte & ((1 << rfc4648::base16_group_bits) - 1)]);
+    }
+
     static std::string hex_of(std::string_view const bytes)
     {
-        constexpr std::string_view digits = "0123456789abcdef";
         std::string out;
         out.reserve(std::numeric_limits<std::uint8_t>::digits / rfc4648::base16_group_bits * bytes.size());
-        for (char const c : bytes) {
-            out.push_back(digits[static_cast<std::uint8_t>(c) >> rfc4648::base16_group_bits]);
-            out.push_back(digits[static_cast<std::uint8_t>(c) & ((1 << rfc4648::base16_group_bits) - 1)]);
-        }
+        for (char const c : bytes)
+            encode_base16(out, static_cast<std::uint8_t>(c));
         return out;
     }
 
     static std::string quoted_of(std::string_view const text)
     {
-        constexpr std::string_view digits = "0123456789abcdef";
         std::string out = "\"";
         for (char const c : text) {
             switch (c) {
@@ -1106,8 +1108,7 @@ class extended_diagnostic_notation
             default:
                 if (static_cast<std::uint8_t>(c) < unescaped_first) {
                     out += "\\u00";
-                    out.push_back(digits[static_cast<std::uint8_t>(c) >> rfc4648::base16_group_bits]);
-                    out.push_back(digits[static_cast<std::uint8_t>(c) & ((1 << rfc4648::base16_group_bits) - 1)]);
+                    encode_base16(out, static_cast<std::uint8_t>(c));
                 } else {
                     out.push_back(c);
                 }

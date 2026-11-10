@@ -18,6 +18,8 @@ class rfc4648
 
     static constexpr std::string_view base16_alphabet = "0123456789ABCDEF";
 
+    static constexpr std::string_view base16_lowercase_alphabet = "0123456789abcdef";
+
     static constexpr std::string_view base64_alphabet =
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 

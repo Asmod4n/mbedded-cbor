@@ -5,11 +5,12 @@
 #include <charconv>
 #include <cstddef>
 #include <fstream>
-#include <memory>
 #include <iterator>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
@@ -183,14 +184,21 @@ TEST_CASE("diagnostic_notation: encoding indicators of the EDN draft")
     CHECK_EQ(inspected("6a0a0d09085c2f0c011f7f"), "\"\\n\\r\\t\\b\\\\/\\f\\u0001\\u001f\x7f\"");
 }
 
-// RFC 8259 7, which diagnostic notation takes for text strings (RFC 8949 8): U+0000 to U+001F are escaped, U+0020
-// is not. b, t, n, f and r have their short escapes; the others take \u and four hex digits. The bound of the escape
-// is the named constant unescaped_first, so every member of the set from U+0000 to U+0020 is checked.
-TEST_CASE("diagnostic_notation: every character from U+0000 to U+0020 is escaped as RFC 8259 says")
+// draft-ietf-cbor-edn-literals-28 2.3.1 takes the escapes of JSON for text strings: U+0000 to U+001F are
+// escaped, U+0020 is not, and its grammar lists %x5D-7F as unescaped, so U+007F stands as it is. b, t, n, f
+// and r have their short escapes; the others take \u and four hex digits, in lower case as the library writes
+// base 16. The bound of the escape is the named constant unescaped_first, so every member of the set from
+// U+0000 to U+0020 is checked, and U+007F beside it.
+TEST_CASE("diagnostic_notation: U+0000 to U+0020 and U+007F are written as the EDN draft says")
 {
     constexpr unsigned space = 0x20;
+    constexpr unsigned rubout = 0x7f;
     std::string const text_of_one_byte = "\x61"s;
-    for (unsigned c = 0; c <= space; ++c) {
+    std::vector<unsigned> characters;
+    for (unsigned c = 0; c <= space; ++c)
+        characters.push_back(c);
+    characters.push_back(rubout);
+    for (unsigned const c : characters) {
         CAPTURE(c);
         std::string const item = text_of_one_byte + static_cast<char>(c);
         std::string expected;
@@ -201,6 +209,9 @@ TEST_CASE("diagnostic_notation: every character from U+0000 to U+0020 is escaped
         case 0x0c: expected = "\\f"; break;
         case 0x0d: expected = "\\r"; break;
         case space: expected = " "; break;
+        case rubout:
+            expected = "\x7f";
+            break;
         default:
             expected = "\\u00" + test::hexlify(std::string(1, static_cast<char>(c)));
         }
