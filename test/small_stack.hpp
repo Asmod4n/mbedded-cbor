@@ -46,9 +46,16 @@ inline constexpr std::size_t levels_every_stack_holds = 32;
 
 // The main thread of a program on Linux, macOS and Windows in a release build holds levels_main_thread_holds for every
 // reader. A Windows debug build (_DEBUG, from /MDd) has larger frames, and WebAssembly and picolibc have a stack of 64
-// KiB or less. A test reads the deep input on the main thread where it holds it, so that a reader that stops too early
-// fails there.
-#if defined(__wasm__) || defined(__PICOLIBC__) || (defined(_WIN64) && defined(_DEBUG))
+// KiB or less. A clang build with ASan and no optimization has frames so large that keys_equivalent and the readers
+// of limits/stack.cpp need more than the 8 MiB main stack of Linux for 1024 levels: they pass with 16 MiB. A test reads
+// the deep input on the main thread where it holds it, so that a reader that stops too early fails there.
+#if defined(__clang__) && !defined(__OPTIMIZE__) && defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define CBOR_TEST_FRAMES_EXCEED_MAIN_STACK 1
+#endif
+#endif
+#if defined(__wasm__) || defined(__PICOLIBC__) || (defined(_WIN64) && defined(_DEBUG)) ||                             \
+    defined(CBOR_TEST_FRAMES_EXCEED_MAIN_STACK)
 inline constexpr bool main_thread_holds_deep_input = false;
 #else
 inline constexpr bool main_thread_holds_deep_input = true;
