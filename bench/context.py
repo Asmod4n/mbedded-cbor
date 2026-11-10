@@ -76,6 +76,7 @@ print(json.dumps({
     "virtualization": host.get("virtualization"),
     "host_in_container": host.get("host_container"),
     "host_user": host.get("host_user"),
+    "container": "podman %s, user 65534, network none" % os.environ["IMAGE"] if "IMAGE" in os.environ else "none",
     "cpu": cpu(),
     "uid": os.getuid(),
     "priority": read(os.path.join(out, "priority")),

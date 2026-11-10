@@ -48,7 +48,7 @@ build_and_measure_in_container "$image" "$run" function-run.sh \
 	-e CCACHE_DIR=/ccache -e CCACHE_SLOPPINESS=pch_defines,time_macros,include_file_mtime,include_file_ctime \
 	-e ROUNDS="$ROUNDS" -e MIN_TIME="$MIN_TIME" -e COLD_BYTES="$COLD_BYTES" -e FLAGS="${FLAGS:-}" \
 	-e NOISE_FLOOR_PERCENT="$NOISE_FLOOR_PERCENT" -e BLOCK="$block" -e STAMP="$stamp" -e COMMIT_A="$commit_a" \
-	-e COMMIT_B="$commit_b" -e BENCH_COMMIT="$bench_commit" -e IMAGE="$image"
+	-e COMMIT_B="$commit_b" -e BENCH_COMMIT="$bench_commit"
 
 cp "$run/out/result.json" "$RESULTS_DIR/function-$block-$stamp.json"
 echo "wrote $RESULTS_DIR/function-$block-$stamp.json"

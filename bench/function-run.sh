@@ -183,7 +183,6 @@ print(json.dumps({
     "min_time": env["MIN_TIME"],
     "cold_bytes": int(env["COLD_BYTES"]),
     "build": read(os.path.join(d, "out", "build")),
-    "container": "podman %s, user 65534, network none" % env["IMAGE"],
     **context,
     "noise_floor": {"a_over_a_max_deviation_percent": 100 * max(aa_dev, default=0)},
     "difference_test": "two-tailed Mann-Whitney U test of compare.py of Google Benchmark over the rounds, alpha %s, and B/A further from 1 than A/A and than the noise floor of the machine (%s %%)" % (utest_alpha, env["NOISE_FLOOR_PERCENT"]),

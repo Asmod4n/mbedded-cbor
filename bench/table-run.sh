@@ -60,12 +60,7 @@ measure() {
 	echo "priority: $(cat "$dir/out/priority")"
 	record_packages "$dir/out" libstdc++6 libc6 libbenchmark-dev libtinycbor-dev libjsoncons-dev libflatbuffers-dev \
 		libcapnp-dev
-	local settings=("$flags" "$ROUNDS" "$MIN_TIME")
-	for cxx in $compilers; do
-		settings+=("$cxx" "$(warnings_for "$cxx" | tr '\n' ' ')")
-	done
-	python3 -I -c 'import json, sys; print(json.dumps({"flags": sys.argv[1], "rounds": int(sys.argv[2]), "min_time": sys.argv[3],
-		"warnings": dict(zip(sys.argv[4::2], sys.argv[5::2]))}))' "${settings[@]}" > "$dir/out/settings.json"
+	record_settings "$dir/out" "$flags" "$ROUNDS" "$MIN_TIME" $compilers
 	run_rounds "$ROUNDS" "$dir/out" one_round
 	for cxx in $compilers; do
 		first="$first $(ls "$dir"/bin/"$cxx".* | head -n 1)"

@@ -63,6 +63,7 @@ measure() {
 		echo "$(basename "$b") $(readelf -h "$b" | grep -o 'Type: *[A-Z]*' | tr -s ' ')"
 	done > "$dir/out/elf_type"
 	cat /proc/loadavg > "$dir/out/loadavg_start"
+	record_settings "$dir/out" "$flags" "$PROCESSES" "$MIN_TIME" $compilers
 	run_rounds "$PROCESSES" "$dir/out" one_round
 	cat /proc/loadavg > "$dir/out/loadavg_end"
 	python3 -I /bench/context.py "$dir" "$steal_limit_percent" $compilers -- $(ls "$dir"/bin/* | head -n 1) \

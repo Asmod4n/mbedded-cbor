@@ -1,20 +1,12 @@
 import collections
 import glob
-import hashlib
 import json
 import os
-import platform
 import re
 import statistics
-import subprocess
 import sys
 
 build, stamp, flags, processes, min_time = sys.argv[1:6]
-
-
-def run(*cmd):
-    r = subprocess.run(cmd, capture_output=True, text=True)
-    return (r.stdout + r.stderr).strip()
 
 
 def read(path):
@@ -31,18 +23,6 @@ def elf_type_count(path):
 
 def pie(flags):
     return "-fPIE -pie" if {"-fPIE", "-pie"} <= set(flags.split()) else "default of the compiler"
-
-
-def cpu():
-    model, flags_line = "", ""
-    with open("/proc/cpuinfo") as f:
-        for line in f:
-            if line.startswith("model name") and not model:
-                model = line.split(":", 1)[1].strip()
-            if line.startswith("flags") and not flags_line:
-                flags_line = line.split(":", 1)[1].strip()
-    return {"model": model, "flags_sha256": hashlib.sha256(flags_line.encode()).hexdigest(), "cpus": os.cpu_count(),
-            "l3": read("/sys/devices/system/cpu/cpu0/cache/index3/size")}
 
 
 times = collections.defaultdict(list)
@@ -65,16 +45,12 @@ for name, t in sorted(times.items()):
     }
 
 context_of_run = json.load(open(os.path.join(build, "out", "context.json")))
+context_of_run.update(json.load(open(os.path.join(build, "out", "settings.json"))))
 steal = context_of_run["rounds_detail"]
 
 commit = read(os.path.join(build, "commit"))
 if not re.fullmatch(r"[0-9a-f]{40}(-dirty)?", commit):
     sys.exit(f"{build}/commit holds {commit!r}, not a commit with its dirty mark")
-failed = sorted(set(read(os.path.join(build, "out", "failed.txt")).split()))
-sample = sorted(glob.glob(os.path.join(build, "bin", "*")))
-packages = run("dpkg-query", "-W", "-f", "${Package} ${Version}\n", "g++-16", "clang-23", "libstdc++6", "libc6",
-               "libbenchmark-dev", "libtinycbor0", "libjsoncons-dev", "libcbor0.10", "libflatbuffers-dev",
-               "libmsgpack-cxx-dev")
 print(json.dumps({
     "time": stamp,
     "commit": commit,
@@ -83,26 +59,9 @@ print(json.dumps({
     "pie": pie(flags),
     "elf_type_count": elf_type_count(os.path.join(build, "out", "elf_type")),
     "processes": int(processes),
-    "min_time": min_time,
-    "resolved_march": run("g++-16", "-march=native", "-Q", "--help=target").split("-march=", 1)[1].split()[0],
-    "compilers": [run("g++-16", "--version").splitlines()[0], run("clang++-23", "--version").splitlines()[0]],
-    "packages": packages.splitlines(),
-    "ldd_sample": {os.path.basename(p): run("ldd", p) for p in sample if "g++" in p and ".twitter." in p},
-    "libc": run("ldd", "--version").splitlines()[0],
-    "kernel": platform.release(),
-    "scheduler": read("/sys/kernel/sched_ext/state") or "CFS/EEVDF (no sched_ext state)",
-    "virtualization": "firecracker VM, podman container localhost/mbedded-cbor-sid-gb (debian:sid)",
-    "cpu": cpu(),
-    "uid": os.getuid(),
-    "priority": context_of_run["priority"],
-    "threads": 1,
-    "pinned": False,
-    "cpu_left_to_the_machine": "each bench process is single-threaded; 3 of 4 cpus stay to the rest of the machine",
-    "cold": "each process rotates over copies of the input that hold twice the L3 size",
+    **context_of_run,
     "loadavg_start": read(os.path.join(build, "out", "loadavg_start")),
     "loadavg_end": read(os.path.join(build, "out", "loadavg_end")),
-    "run": {"rounds": steal,
-            "steal_percent_of_cpu_time_max": max((r["steal_percent_of_cpu_time"] for r in steal), default=None)},
-    "failed": failed,
+    "steal_percent_of_cpu_time_max": max((r["steal_percent_of_cpu_time"] for r in steal), default=None),
     "arms": arms,
 }, indent=1))

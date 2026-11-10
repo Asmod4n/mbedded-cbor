@@ -80,3 +80,13 @@ record_packages() {
 	shift
 	dpkg-query -W -f '${Package} ${Version}\n' "$@" > "$out/packages" 2>&1 || true
 }
+
+record_settings() {
+	local out=$1 cxx settings=("$2" "$3" "$4")
+	shift 4
+	for cxx in "$@"; do
+		settings+=("$cxx" "$(warnings_for "$cxx" | tr '\n' ' ')")
+	done
+	python3 -I -c 'import json, sys; print(json.dumps({"flags": sys.argv[1], "rounds": int(sys.argv[2]), "min_time": sys.argv[3],
+		"warnings": dict(zip(sys.argv[4::2], sys.argv[5::2]))}))' "${settings[@]}" > "$out/settings.json"
+}
