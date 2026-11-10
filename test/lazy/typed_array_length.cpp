@@ -1,8 +1,8 @@
 #include "../owned_copy.hpp"
 #include "../reference/value.hpp"
+#include <cbor/decode.hpp>
 #include <cbor/error.hpp>
 #include <cbor/lazy.hpp>
-#include <cbor/decode.hpp>
 #include <cbor/query.hpp>
 
 #include <array>
@@ -36,9 +36,10 @@ void refuses(char const tag, error const expected)
     CHECK_EQ(l->at_path(*q).error(), expected);
 }
 
-// RFC 8746 2.1, Tables 1 and 2: the number of bytes of one element of each typed array tag from 64 to 87. Tag 76 is
-// reserved and has no element size; 0 stands for it.
-constexpr std::array<std::size_t, 24> element_bytes{1, 2, 4, 8, 1, 2, 4, 8, 1, 2, 4, 8, 0, 2, 4, 8, 2, 4, 8, 16, 2, 4, 8, 16};
+// RFC 8746 2.1, Tables 1 and 2: the number of bytes of one element of each typed array tag from 64 to 87. Tag
+// 76 is reserved and has no element size; 0 stands for it.
+constexpr std::array<std::size_t, 24> element_bytes{1, 2, 4, 8, 1, 2, 4, 8,  1, 2, 4, 8,
+                                                    0, 2, 4, 8, 2, 4, 8, 16, 2, 4, 8, 16};
 
 constexpr std::uint64_t typed_array_first = 64;
 constexpr std::uint64_t typed_array_last = 87;
@@ -53,7 +54,8 @@ std::string tagged_byte_string(std::uint64_t const tag, std::size_t const length
     if (length < one_byte_argument_min)
         bytes += static_cast<char>(byte_string_initial_byte | length);
     else
-        bytes += static_cast<char>(byte_string_initial_byte | one_byte_argument_min) + std::string(1, static_cast<char>(length));
+        bytes += static_cast<char>(byte_string_initial_byte | one_byte_argument_min) +
+                 std::string(1, static_cast<char>(length));
     return bytes + std::string(length, '\x01');
 }
 
@@ -73,11 +75,11 @@ TEST_CASE("lazy typed array length: a length past the input that a 32-bit size_t
     refuses('\x56', error::inadmissible_type_for_tag_content);
 }
 
-// RFC 8746 2: the byte string of a typed array holds a whole number of elements, and the element size comes from the
-// tag. For each typed array tag and every length up to two elements of the widest type, so that every remainder of
-// every element size is met, lazy gives the elements and cbor::decode reads the item, or both refuse the length. A
-// tag around the range and the reserved tag 76 are tags that the library does not interpret: a lazy has no elements
-// in them, and cbor::decode reads them as tags.
+// RFC 8746 2: the byte string of a typed array holds a whole number of elements, and the element size comes
+// from the tag. For each typed array tag and every length up to two elements of the widest type, so that
+// every remainder of every element size is met, lazy gives the elements and cbor::decode reads the item, or
+// both refuse the length. A tag around the range and the reserved tag 76 are tags that the library does not
+// interpret: a lazy has no elements in them, and cbor::decode reads them as tags.
 TEST_CASE("lazy typed array length: the element size of each tag and every length up to 32 bytes")
 {
     constexpr std::uint64_t tags_before = 4;

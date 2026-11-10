@@ -257,8 +257,8 @@ TEST_CASE("bignum: tag 28 around a bignum that fits is a tag over the integer")
 }
 
 // RFC 8949 5.6.1 compares keys in the data model, and RFC 8949 3.4.3 makes 2(h'01') the integer 1. So a key
-// written as a bignum that fits is the same key as the integer, and a lookup by an integer finds it. A lookup refuses a
-// tag 2 whose content is not a byte string.
+// written as a bignum that fits is the same key as the integer, and a lookup by an integer finds it. A lookup
+// refuses a tag 2 whose content is not a byte string.
 TEST_CASE("bignum: a key that fits 64 bits is the same key as the integer")
 {
     CHECK_EQ(test::lazy_of_copy("\xa2\xc2\x41\x01\x00\x01\x01"s)->at(cbor::key{1})->get<int>(), 0);

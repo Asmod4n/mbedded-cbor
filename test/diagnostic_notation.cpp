@@ -237,10 +237,11 @@ TEST_CASE("diagnostic_notation: an item that is not well-formed is an error")
              error::nesting_depth_exceeded);
 }
 
-// RFC 8949 3.2.3: each chunk of an indefinite-length string is a definite-length string of the same major type. A
-// chunk of another major type, a chunk of indefinite length and a head with the reserved additional information 28 to
-// 30 (RFC 8949 3) are not well-formed. Every initial byte except the break 0xff stands once as the chunk of each
-// string type. Its argument and its content follow in full, so that only the initial byte decides.
+// RFC 8949 3.2.3: each chunk of an indefinite-length string is a definite-length string of the same major
+// type. A chunk of another major type, a chunk of indefinite length and a head with the reserved additional
+// information 28 to 30 (RFC 8949 3) are not well-formed. Every initial byte except the break 0xff stands once
+// as the chunk of each string type. Its argument and its content follow in full, so that only the initial
+// byte decides.
 TEST_CASE("diagnostic_notation: the chunk of an indefinite-length string for every initial byte")
 {
     constexpr unsigned additional_information_bits = 5;
@@ -259,10 +260,11 @@ TEST_CASE("diagnostic_notation: the chunk of an indefinite-length string for eve
             if (info >= one_byte_argument && info < reserved_first)
                 argument = std::string(std::size_t{1} << (info - one_byte_argument), '\0');
             std::string const content(info < one_byte_argument ? info : 0, 'a');
-            std::string const input =
-                std::string(1, static_cast<char>(unsigned{std::to_underlying(string)} << additional_information_bits |
-                                                 indefinite_length)) +
-                static_cast<char>(initial) + argument + content + static_cast<char>(break_byte);
+            std::string const input = std::string(1, static_cast<char>(unsigned{std::to_underlying(string)}
+                                                                           << additional_information_bits |
+                                                                       indefinite_length)) +
+                                      static_cast<char>(initial) + argument + content +
+                                      static_cast<char>(break_byte);
             auto const r = cbor::diagnostic_notation(input);
             if (major == unsigned{std::to_underlying(string)} && info < reserved_first)
                 CHECK(r.has_value());

@@ -1029,9 +1029,8 @@ detail::validity::intern_key(canonical_ids &ids, Message const &message, offset 
 }
 
 template <class First, class Second>
-std::expected<bool, error>
-detail::validity::keys_equivalent(First const &first, offset const first_at, Second const &second,
-                                  offset const second_at)
+std::expected<bool, error> detail::validity::keys_equivalent(First const &first, offset const first_at,
+                                                             Second const &second, offset const second_at)
 {
     if (auto const r = check_recursion_limit(); !r) [[unlikely]]
         return std::unexpected(r.error());
@@ -1119,8 +1118,7 @@ detail::validity::keys_equivalent(First const &first, offset const first_at, Sec
             !r) [[unlikely]]
             return std::unexpected(r.error());
         for (std::uint64_t i = 0; i < h->argument; ++i) {
-            auto const equal = keys_equivalent(first, distance(a, d.encoded), second,
-                                                        distance(b, e.encoded));
+            auto const equal = keys_equivalent(first, distance(a, d.encoded), second, distance(b, e.encoded));
             if (!equal || !*equal)
                 return equal;
             if (auto const r = skip(d); !r) [[unlikely]]

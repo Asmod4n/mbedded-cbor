@@ -1155,9 +1155,9 @@ TEST_CASE("value sharing: a path through references deeper than the stack gives 
              error::nesting_depth_exceeded);
 }
 
-// A shared reference names one of the values that were marked before it. The decoder and the lazy reader read the
-// index through this one check, so an index that no mark has reached gives the same error on both paths, and the
-// index is converted to std::size_t only after it is known to fit.
+// A shared reference names one of the values that were marked before it. The decoder and the lazy reader read
+// the index through this one check, so an index that no mark has reached gives the same error on both paths,
+// and the index is converted to std::size_t only after it is known to fit.
 TEST_CASE("value_sharing: check_sharedref_index for up to three marks")
 {
     std::array<std::uint64_t, 6> const arguments{0, 1, 2, 3, 4, std::numeric_limits<std::uint64_t>::max()};
@@ -1175,8 +1175,8 @@ template <class Argument>
 constexpr bool sharedref_index_accepts =
     requires(Argument const argument, void (*const take)(cbor::value_sharing::index)) { take(argument); };
 
-// An index into the marks of tags 28 and 29 is a type of its own. A plain integer that stands where a shared reference
-// index is expected does not compile, so a count or a position cannot take its place silently.
+// An index into the marks of tags 28 and 29 is a type of its own. A plain integer that stands where a shared
+// reference index is expected does not compile, so a count or a position cannot take its place silently.
 TEST_CASE("value_sharing: index takes no plain integer")
 {
     CHECK(sharedref_index_accepts<cbor::value_sharing::index>);

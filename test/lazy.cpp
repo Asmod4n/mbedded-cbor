@@ -154,10 +154,10 @@ TEST_CASE("lazy: negative indices and misses")
     CHECK_EQ(cbor::at_path<"$[-99]", std::uint64_t>(a).error(), error::index_out_of_bounds);
 }
 
-// RFC 9535 2.3.3.2: an index i selects the element Normalize(i, len), and only an index in 0 to len - 1 after the
-// normalization selects an element. lazy::at counts from 0 as std::vector::at does, and a path also takes a negative
-// index. Both are checked for each index around each small length, and at the ends of the index range of I-JSON
-// (RFC 9535 2.1), so that no index selects an element outside the array.
+// RFC 9535 2.3.3.2: an index i selects the element Normalize(i, len), and only an index in 0 to len - 1 after
+// the normalization selects an element. lazy::at counts from 0 as std::vector::at does, and a path also takes
+// a negative index. Both are checked for each index around each small length, and at the ends of the index
+// range of I-JSON (RFC 9535 2.1), so that no index selects an element outside the array.
 TEST_CASE("lazy: at and a path index select the element that Normalize of RFC 9535 gives")
 {
     constexpr std::int64_t largest_index = (std::int64_t{1} << 53) - 1;
@@ -695,22 +695,25 @@ TEST_CASE("tag 24: a tag 29 inside an embedded data item is a plain tag")
 namespace
 {
 
-// RFC 8949 3.1: an unsigned integer has the value of its argument, and a negative integer has the value -1 minus its
-// argument. get<T> gives that value exactly when it lies in the range of T, and number_out_of_range otherwise.
+// RFC 8949 3.1: an unsigned integer has the value of its argument, and a negative integer has the value -1
+// minus its argument. get<T> gives that value exactly when it lies in the range of T, and number_out_of_range
+// otherwise.
 template <class T>
 void get_is_exact_at_the_edges_of()
 {
     constexpr std::uint64_t top = std::numeric_limits<std::uint64_t>::max();
     constexpr std::uint64_t edge = static_cast<std::uint64_t>(std::numeric_limits<T>::max());
     for (bool const negative_value : {false, true})
-        for (std::uint64_t const argument : {std::uint64_t{0}, std::uint64_t{1}, std::uint64_t{2}, top - 1, top,
-                                             edge - 1, edge, edge + 1}) {
+        for (std::uint64_t const argument :
+             {std::uint64_t{0}, std::uint64_t{1}, std::uint64_t{2}, top - 1, top, edge - 1, edge, edge + 1}) {
             CAPTURE(negative_value);
             CAPTURE(argument);
-            cbor::int128 const expected = negative_value ? -1 - cbor::int128{argument} : cbor::int128{argument};
+            cbor::int128 const expected =
+                negative_value ? -1 - cbor::int128{argument} : cbor::int128{argument};
             bool const fits = expected >= cbor::int128{std::numeric_limits<T>::min()} &&
                               expected <= cbor::int128{std::numeric_limits<T>::max()};
-            auto const r = get<T>(negative_value ? encoded(value{negative{argument}}) : encoded(value{argument}));
+            auto const r =
+                get<T>(negative_value ? encoded(value{negative{argument}}) : encoded(value{argument}));
             if (fits)
                 CHECK(r == T(expected));
             else
@@ -720,8 +723,9 @@ void get_is_exact_at_the_edges_of()
 
 } // namespace
 
-// The standard integer widths and signednesses are a finite set, so each member is checked at both ends of its range
-// and at both ends of the 64-bit argument: a range check that one width misses would change a value without an error.
+// The standard integer widths and signednesses are a finite set, so each member is checked at both ends of
+// its range and at both ends of the 64-bit argument: a range check that one width misses would change a value
+// without an error.
 TEST_CASE("lazy: get reads every integer width up to its edge")
 {
     get_is_exact_at_the_edges_of<std::int8_t>();
@@ -735,13 +739,14 @@ TEST_CASE("lazy: get reads every integer width up to its edge")
 }
 #endif
 
-// RFC 8949 3.4.3: the content of tags 2 and 3 is a byte string. RFC 8949 3.4.5.1: the content of tag 24 is a byte
-// string. RFC 8746 2: the content of tags 64 to 87 is a byte string; tag 76 is reserved, and the library reads it as a
-// tag that it does not interpret. The registration of tag 29 (value-sharing) makes its content an unsigned integer.
-// The rule table holds a row only for a tag that the library interprets (owner, 2026-10-13), so every other tag takes
-// every major type. A lazy reads the content of tags 2, 3 and 24 when it reads the value; cbor::decode reads the content
-// of the other tags. This test exists so that no content that these sections forbid passes a reader that interprets
-// the tag, and so that no reader refuses a tag that the library does not interpret.
+// RFC 8949 3.4.3: the content of tags 2 and 3 is a byte string. RFC 8949 3.4.5.1: the content of tag 24 is a
+// byte string. RFC 8746 2: the content of tags 64 to 87 is a byte string; tag 76 is reserved, and the library
+// reads it as a tag that it does not interpret. The registration of tag 29 (value-sharing) makes its content
+// an unsigned integer. The rule table holds a row only for a tag that the library interprets (owner,
+// 2026-10-13), so every other tag takes every major type. A lazy reads the content of tags 2, 3 and 24 when
+// it reads the value; cbor::decode reads the content of the other tags. This test exists so that no content
+// that these sections forbid passes a reader that interprets the tag, and so that no reader refuses a tag
+// that the library does not interpret.
 TEST_CASE("lazy: the content of each tag for every major type")
 {
     std::vector<std::uint64_t> tags;
@@ -749,8 +754,8 @@ TEST_CASE("lazy: the content of each tag for every major type")
         tags.push_back(tag);
     tags.push_back(1113);
     tags.push_back(std::numeric_limits<std::uint64_t>::max());
-    // RFC 8949 3: the head of a tag is the head of an unsigned integer with major type 6 in the three high bits, above
-    // the five bits of the additional information.
+    // RFC 8949 3: the head of a tag is the head of an unsigned integer with major type 6 in the three high
+    // bits, above the five bits of the additional information.
     constexpr unsigned additional_information_bits = 5;
     constexpr auto tag_major_bits =
         static_cast<std::uint8_t>(std::to_underlying(cbor::major_type::tag) << additional_information_bits);
@@ -923,13 +928,13 @@ TEST_CASE("lazy: a view holds the top-level item")
     CHECK_FALSE(read_from_temporary<std::expected<cbor::ref<std::string_view>, cbor::error>>);
 }
 
-// [util.smartptr.shared] gives a std::shared_ptr four states: it owns an object or not (empty means it owns none),
-// and it stores a pointer or not (null). Each state is built with a constructor of the standard. An owner that owns
-// no object keeps nothing alive, so view with an owner and its bytes refuses exactly the two empty owners. view with
-// an owner alone reads through the stored pointer, so it also refuses the owner that stores null. A string alone,
-// owned or not, does not compile with view. Owner decision: no form takes bytes that nothing keeps alive. The test
-// exists because each of these let a view outlive its bytes, and a check of the stored pointer refused an owner that
-// holds the bytes.
+// [util.smartptr.shared] gives a std::shared_ptr four states: it owns an object or not (empty means it owns
+// none), and it stores a pointer or not (null). Each state is built with a constructor of the standard. An
+// owner that owns no object keeps nothing alive, so view with an owner and its bytes refuses exactly the two
+// empty owners. view with an owner alone reads through the stored pointer, so it also refuses the owner that
+// stores null. A string alone, owned or not, does not compile with view. Owner decision: no form takes bytes
+// that nothing keeps alive. The test exists because each of these let a view outlive its bytes, and a check
+// of the stored pointer refused an owner that holds the bytes.
 TEST_CASE("lazy: view checks that the owner holds an object")
 {
     auto const bytes = std::make_shared<std::string const>("\xa1\x61\x61\x63xyz"s);
@@ -970,8 +975,8 @@ TEST_CASE("lazy: view checks that the owner holds an object")
     CHECK_EQ(**name, "xyz"sv);
 }
 
-// The public member lazy::offset is the position type of std::string_view, so no type of cbor::detail stands in a
-// public signature.
+// The public member lazy::offset is the position type of std::string_view, so no type of cbor::detail stands
+// in a public signature.
 TEST_CASE("lazy: lazy::offset is the position type of std::string_view")
 {
     CHECK(std::same_as<decltype(cbor::lazy::offset), std::string_view::size_type>);

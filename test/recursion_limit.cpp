@@ -1,7 +1,7 @@
-#include "small_stack.hpp"
-#include "reference.hpp"
 #include "owned_copy.hpp"
+#include "reference.hpp"
 #include "sequence_reader.hpp"
+#include "small_stack.hpp"
 #include <cbor/query.hpp>
 #include <cbor/structs.hpp>
 
@@ -79,10 +79,11 @@ TEST_CASE("recursion limit: lazy::clone")
     refused_on_small_stack([&deep] { return deep->clone(); });
 }
 
-// A key literal of a path is compared with a key of the map through every level (RFC 8949 5.6.1). The two keys differ
-// only in the innermost item, so the comparison enters every level of both. The path is compiled on the main thread,
-// so that the error on the small stack comes from the comparison and not from the parser of the path. The main thread
-// compiles levels_main_thread_holds levels where it holds them; a small stack does not hold them for the comparison.
+// A key literal of a path is compared with a key of the map through every level (RFC 8949 5.6.1). The two
+// keys differ only in the innermost item, so the comparison enters every level of both. The path is compiled
+// on the main thread, so that the error on the small stack comes from the comparison and not from the parser
+// of the path. The main thread compiles levels_main_thread_holds levels where it holds them; a small stack
+// does not hold them for the comparison.
 TEST_CASE("recursion limit: a key literal of a path")
 {
     auto const compiled = [](std::size_t const n) {

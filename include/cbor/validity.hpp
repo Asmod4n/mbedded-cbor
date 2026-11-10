@@ -496,8 +496,8 @@ public:
     }
 
     template <class First, class Second>
-    static std::expected<bool, error> keys_equivalent(First const &first, offset first_at, Second const &second,
-                                                      offset second_at);
+    static std::expected<bool, error> keys_equivalent(First const &first, offset first_at,
+                                                      Second const &second, offset second_at);
 
     template <class Message>
     static std::expected<std::pair<std::uint64_t, offset>, error>

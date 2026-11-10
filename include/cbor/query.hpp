@@ -1306,8 +1306,7 @@ inline std::expected<lazy, error> path::find_key(lazy const &node, std::string_v
         detail::validity::offset const start = detail::validity::distance(source.encoded, d.encoded);
         if (auto const r = well_formedness::skip_items(d, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
-        auto const match = detail::validity::keys_equivalent(
-            source, start, key, detail::validity::offset{});
+        auto const match = detail::validity::keys_equivalent(source, start, key, detail::validity::offset{});
         if (!match) [[unlikely]]
             return std::unexpected(match.error());
         if (*match)
