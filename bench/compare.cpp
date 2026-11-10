@@ -3,7 +3,14 @@
 #include <cbor/cbor.hpp>
 #include <capnp/message.h>
 #include <capnp/serialize.h>
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wnull-dereference"
+#if !defined(__clang__)
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
+#pragma GCC diagnostic ignored "-Warray-bounds"
 #include <flatbuffers/flatbuffers.h>
+#pragma GCC diagnostic pop
 #include <bit>
 #include <cstdio>
 #include <cstdint>
@@ -74,7 +81,14 @@ static std::uint8_t const *fb_bytes()
 
 #if defined(DS_CARS)
 #include <nlohmann/json.hpp>
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wnull-dereference"
+#if !defined(__clang__)
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
+#pragma GCC diagnostic ignored "-Warray-bounds"
 #include "carsales_generated.h"
+#pragma GCC diagnostic pop
 #include "carsales.capnp.h"
 struct Wheel { std::uint16_t diameter; float airPressure; bool snowTires; };
 
@@ -390,7 +404,7 @@ static double cp_field()
 static std::shared_ptr<std::string const> plain;
 static std::size_t written_bytes;
 
-#if defined(OP_LAZY_READ) || defined(OP_PATH_READ)
+#if defined(OP_LAZY_READ)
 static double lazy_sum(cbor::lazy const &l)
 {
     auto const t = l.type();
@@ -498,6 +512,7 @@ static double path_read()
 #endif
 
 #if defined(OP_ITEM_FIELD) || defined(OP_ITEM_READ) || defined(OP_ITEM_ENCODE)
+#if defined(OP_ITEM_FIELD) || defined(OP_ITEM_READ)
 static cbor::item const &untagged(cbor::item const &i)
 {
     cbor::item const *at = &i;
@@ -509,6 +524,9 @@ static cbor::item const &untagged(cbor::item const &i)
     return *at;
 }
 
+#endif
+
+#if defined(OP_ITEM_FIELD)
 static cbor::item const &member(cbor::item const &m, std::string_view const key)
 {
     auto const entries = untagged(m).get<cbor::type::map>();
@@ -518,7 +536,9 @@ static cbor::item const &member(cbor::item const &m, std::string_view const key)
             return untagged((*entries)[i + 1]);
     std::abort();
 }
+#endif
 
+#if defined(OP_ITEM_READ)
 static double item_sum(cbor::item const &tagged)
 {
     cbor::item const &i = untagged(tagged);
@@ -545,6 +565,7 @@ static double item_sum(cbor::item const &tagged)
     default: std::abort();
     }
 }
+#endif
 #endif
 
 #if defined(OP_ITEM_FIELD)
@@ -579,6 +600,7 @@ static void tc_untag(CborValue *v)
         if (cbor_value_skip_tag(v) != CborNoError) [[unlikely]] std::abort();
 }
 
+#if defined(OP_TC_FIELD)
 static CborValue tc_member(CborValue map, char const *key)
 {
     tc_untag(&map);
@@ -587,6 +609,7 @@ static CborValue tc_member(CborValue map, char const *key)
     tc_untag(&v);
     return v;
 }
+#endif
 
 static CborValue tc_root(CborParser *p)
 {
@@ -689,14 +712,25 @@ static double tc_read()
 
 #if defined(OP_JC_ITEM_FIELD) || defined(OP_JC_ITEM_READ) || defined(OP_JC_ITEM_ENCODE) || defined(OP_JC_PATH_FIELD) || defined(OP_JC_PATH_READ) || \
     defined(OP_JC_STRUCT_FIELD) || defined(OP_JC_STRUCT_READ) || defined(OP_JC_STRUCT_ENCODE)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wnull-dereference"
+#if !defined(__clang__)
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
+#pragma GCC diagnostic ignored "-Warray-bounds"
 #include <jsoncons/json.hpp>
 #include <jsoncons_ext/cbor/cbor.hpp>
 #include <jsoncons_ext/jsonpath/jsonpath.hpp>
+#pragma GCC diagnostic pop
+#if defined(OP_JC_ITEM_FIELD) || defined(OP_JC_ITEM_READ) || defined(OP_JC_ITEM_ENCODE) || defined(OP_JC_PATH_FIELD) || \
+	defined(OP_JC_PATH_READ)
 static jsoncons::json jc_decode()
 {
     return jsoncons::cbor::decode_cbor<jsoncons::json>(*plain);
 }
+#endif
 
+#if defined(OP_JC_ITEM_READ) || defined(OP_JC_PATH_READ)
 static double jc_sum(jsoncons::json const &j)
 {
     if (j.is_string()) return bytes_sum(j.as_string_view());
@@ -715,6 +749,7 @@ static double jc_sum(jsoncons::json const &j)
     }
     std::abort();
 }
+#endif
 
 struct JcWheel { std::uint16_t diameter; float airPressure; bool snowTires; };
 struct JcEngine { std::uint16_t horsepower; std::uint8_t cylinders; std::uint32_t cc; bool usesGas; bool usesElectric; };
@@ -731,6 +766,7 @@ JSONCONS_ALL_MEMBER_TRAITS(JcCar, make, model, color, seats, doors, wheels, leng
                            hasPowerWindows, hasPowerSteering, hasCruiseControl, cupHolders, hasNavSystem)
 JSONCONS_ALL_MEMBER_TRAITS(JcLot, cars)
 
+#if defined(OP_JC_STRUCT_READ) || defined(OP_JC_ITEM_ENCODE) || defined(OP_JC_STRUCT_ENCODE)
 static double sum(JcLot const &l)
 {
     double s = 0;
@@ -741,7 +777,9 @@ static double sum(JcLot const &l)
     }
     return s;
 }
+#endif
 
+#if defined(OP_JC_STRUCT_ENCODE)
 static JcLot jc_lot(T const &lot)
 {
     JcLot l;
@@ -754,6 +792,7 @@ static JcLot jc_lot(T const &lot)
     }
     return l;
 }
+#endif
 #endif
 
 #if defined(OP_JC_PATH_FIELD)

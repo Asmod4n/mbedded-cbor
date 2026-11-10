@@ -9,6 +9,8 @@
 set -eu
 [ "$(id -u)" = 0 ] && { echo "run it as a normal user" >&2; exit 2; }
 src=$(cd "$(dirname "$0")/.." && pwd)
+WARNINGS_DIR=$src/cmake
+. "$WARNINGS_DIR/warnings.sh"
 rounds=${ROUNDS:-5}
 min_time=${MIN_TIME:-3s}
 compilers=${COMPILERS:-"g++-16 clang++-23"}
@@ -31,11 +33,12 @@ arms="$field $whole $write"
 for cxx in $compilers; do
 	std=-std=c++23
 	case $cxx in g++*) std="-std=c++26 -freflection" ;; esac
+	"$cxx" $std $flags -isystem "$work/gen" -c "$work/gen/carsales.capnp.c++" -o "$work/gen/carsales.capnp.$cxx.o"
 	for arm in $arms; do
 		op=${arm%_AA}
 		(
-			"$cxx" $std $flags -DDS_CARS -DOP_$op -DCARS_JSON="\"$src/bench/cars.json\"" -I"$src/include" -isystem "$work/gen" \
-				"$src/bench/compare.cpp" "$work/gen/carsales.capnp.c++" -lcapnp -lkj -lflatbuffers -ltinycbor -lbenchmark -lpthread \
+			"$cxx" $std $flags $(warnings_for "$cxx") -DDS_CARS -DOP_$op -DCARS_JSON="\"$src/bench/cars.json\"" -I"$src/include" -isystem "$work/gen" \
+				"$src/bench/compare.cpp" "$work/gen/carsales.capnp.$cxx.o" -lcapnp -lkj -lflatbuffers -ltinycbor -lbenchmark -lpthread \
 				-o "$work/bin/$cxx.$arm" >"$work/log/$cxx.$arm.log" 2>&1 || { echo "build failed: $cxx $arm"; head -5 "$work/log/$cxx.$arm.log"; }
 		) &
 		while [ "$(jobs -rp | wc -l)" -ge "$jobs" ]; do wait -n || true; done

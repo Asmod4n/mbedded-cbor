@@ -8,6 +8,8 @@
 set -eu
 [ "$(id -u)" = 0 ] && { echo "run it as a normal user" >&2; exit 2; }
 src=$(cd "$(dirname "$0")/.." && pwd)
+WARNINGS_DIR=$src/cmake
+. "$WARNINGS_DIR/warnings.sh"
 rounds=${ROUNDS:-7}
 min_time=${MIN_TIME:-1s}
 gxx=${GXX:-g++-16}
@@ -21,11 +23,12 @@ flatc --cpp --gen-object-api -o "$work/gen" "$src/bench/carsales.fbs"
 capnp compile -oc++:"$work/gen" --src-prefix="$src/bench" "$src/bench/carsales.capnp"
 arms="MB_FIELD MB_FIELD_AA FB_FIELD_V CP_FIELD MB_READ FB_READ_V CP_READ MB_ENCODE FB_ENCODE CP_ENCODE"
 echo "building $(echo $arms | wc -w) binaries with $jobs jobs"
+"$gxx" -std=c++26 -freflection $flags -isystem "$work/gen" -c "$work/gen/carsales.capnp.c++" -o "$work/gen/carsales.capnp.o"
 for arm in $arms; do
 	op=${arm%_AA}
-	"$gxx" -std=c++26 -freflection $flags -DDS_CARS -DOP_$op -DCARS_JSON="\"$src/bench/cars.json\"" \
-		-DDOC_PATH="\"$src/bench/docs/cars.cbor\"" -I"$src/include" -I"$work/gen" "$src/bench/compare.cpp" \
-		"$work/gen/carsales.capnp.c++" -lcapnp -lkj -lflatbuffers -lbenchmark -lpthread -o "$work/bin/$arm" &
+	"$gxx" -std=c++26 -freflection $flags $(warnings_for "$gxx") -DDS_CARS -DOP_$op -DCARS_JSON="\"$src/bench/cars.json\"" \
+		-DDOC_PATH="\"$src/bench/docs/cars.cbor\"" -I"$src/include" -isystem "$work/gen" "$src/bench/compare.cpp" \
+		"$work/gen/carsales.capnp.o" -lcapnp -lkj -lflatbuffers -lbenchmark -lpthread -o "$work/bin/$arm" &
 	while [ "$(jobs -rp | wc -l)" -ge "$jobs" ]; do wait -n; done
 done
 wait
