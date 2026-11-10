@@ -83,15 +83,35 @@ std::string const double_nan_payload = "\xfb\x7f\xf8\x00\x00\x00\x00\x00\x01"s;
 
 using namespace path_equality;
 
+// RFC 9535 2.3.3: an integer alone in brackets is an index. With an encoding indicator of the EDN draft (4.1) it is a
+// key literal, and RFC 8949 5.6.1 decides: numeric values are distinct unless they are numerically equal, whatever the
+// length of the argument of the key.
+TEST_CASE("path equality: a map key that is an integer with a longer argument")
+{
+    CHECK(key_found("\x18\x01"s, "$[1_0]") == true);
+    CHECK(key_found("\x38\x00"s, "$[-1_0]") == true);
+    CHECK(key_found("\x20"s, "$[1_0]") == false);
+    CHECK(key_found("\x02"s, "$[1_0]") == false);
+}
+
 // RFC 8949 5.6.1: map keys are compared in the data model. The library folds a big number that fits 64 bits into its
-// integer (its own data model; the generic one keeps them apart). A wider big number keeps its bytes, leading zeros
-// included.
+// integer (its own data model; the generic one keeps them apart), also inside a key that is an array or a map. RFC 8949
+// 3.4.3: the value of tag 3 is -1 - n, and the empty byte string is n = 0. A byte string and a tag other than 2 and 3
+// stay distinct from a big number. A wider big number keeps its bytes, leading zeros included.
 TEST_CASE("path equality: a map key that is a big number")
 {
     CHECK(key_found("\xc2\x41\x01"s, "$[1]") == true);
     CHECK(key_found("\xc2\x42\x00\x01"s, "$[1]") == true);
     CHECK(key_found("\x01"s, "$[2(h'01')]") == true);
     CHECK(key_found("\xc3\x41\x00"s, "$[-1]") == true);
+    CHECK(key_found("\xc3\x40"s, "$[-1_0]") == true);
+    CHECK(key_found("\xc2\x41\x02"s, "$[1_0]") == false);
+    CHECK(key_found("\xc3\x41\x01"s, "$[2(h'01')]") == false);
+    CHECK(key_found("\xc1\x01"s, "$[2(h'01')]") == false);
+    CHECK(key_found("\x41\x01"s, "$[2(h'01')]") == false);
+    CHECK(key_found("\x81\xc2\x41\x01"s, "$[[1]]") == true);
+    CHECK(key_found("\xa2\x01\x00\x01\x00"s, "$[{1: 0, 2(h'01'): 0}]") == true);
+    CHECK(key_found("\xa2\x01\x00\xc2\x41\x01\x00"s, "$[{1: 0, 2: 0}]") == false);
     std::string const wide = "\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s;
     CHECK(key_found(wide, "$[2(h'010000000000000000')]") == true);
     CHECK(key_found("\xc2\x4a\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00"s, "$[2(h'010000000000000000')]") == false);
@@ -108,17 +128,38 @@ TEST_CASE("path equality: a map key that is a float")
     CHECK(key_found(double_nan, "$[NaN]") == true);
     CHECK(key_found(half_negative_nan, "$[NaN]") == true);
     CHECK(key_found(double_nan_payload, "$[NaN]") == false);
+    CHECK(key_found("\xf9\x40\x00"s, "$[1.0]") == false);
+    CHECK(key_found("\xf9\x7c\x00"s, "$[NaN]") == false);
+}
+
+// RFC 8949 5.6.1: text strings are distinct from byte strings, even if composed of the same bytes. Simple values are
+// equal if they have the same value, and a simple value is not an integer.
+TEST_CASE("path equality: a map key that is a string or a simple value")
+{
+    CHECK(key_found("\x61\x61"s, "$[h'61']") == false);
+    CHECK(key_found("\xf5"s, "$[false]") == false);
+    CHECK(key_found("\xf8\x21"s, "$[simple(32)]") == false);
+    CHECK(key_found("\x10"s, "$[simple(16)]") == false);
 }
 
 // RFC 8949 5.6.1: a map key that is a map is equivalent when it holds the same pairs, in any order. A key with a
-// duplicate pair has more pairs than the key of the path, which has none.
+// duplicate pair holds fewer distinct pairs than its count, and the key of the path holds no duplicate pair, so the
+// two are never equal. Arrays are compared element by element, and an array is never a map. Tagged values are equal
+// when the tag numbers and the contents are equal, and a tagged value is distinct from an untagged one.
 TEST_CASE("path equality: a map key that is a map or an array")
 {
     CHECK(key_found("\xa2\x61" "a\x01\x61" "b\x02"s, "$[{\"b\": 2, \"a\": 1}]") == true);
     CHECK(key_found("\xa2\x61" "a\x01\x61" "b\x03"s, "$[{\"b\": 2, \"a\": 1}]") == false);
+    CHECK(key_found("\xa1\x03\x02"s, "$[{1: 2}]") == false);
     CHECK(key_found("\xa2\x61" "a\x01\x61" "a\x01"s, "$[{\"a\": 1}]") == false);
+    CHECK(key_found("\xa2\x61" "k\x01\x61" "k\x01"s, "$[{\"k\": 1, \"j\": 1}]") == false);
     CHECK(key_found("\x82\x01\x02"s, "$[[1, 2]]") == true);
+    CHECK(key_found("\x82\x01\x18\x02"s, "$[[1, 2]]") == true);
     CHECK(key_found("\x82\x02\x01"s, "$[[1, 2]]") == false);
+    CHECK(key_found("\x81\x01"s, "$[[1, 2]]") == false);
+    CHECK(key_found("\xa0"s, "$[[]]") == false);
+    CHECK(key_found("\xc1\x18\x00"s, "$[1(0)]") == true);
+    CHECK(key_found("\x00"s, "$[1(0)]") == false);
     CHECK(key_found("\x81\xa2\x61" "a\x01\x61" "b\x02"s, "$[[{\"b\": 2, \"a\": 1}]]") == true);
     CHECK(key_found("\xc6\xa2\x61" "a\x01\x61" "b\x02"s, "$[6({\"b\": 2, \"a\": 1})]") == true);
     CHECK(key_found("\xc7\xa2\x61" "a\x01\x61" "b\x02"s, "$[6({\"b\": 2, \"a\": 1})]") == false);

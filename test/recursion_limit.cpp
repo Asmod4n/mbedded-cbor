@@ -2,6 +2,7 @@
 #include "reference.hpp"
 #include "owned_copy.hpp"
 #include "sequence_reader.hpp"
+#include <cbor/query.hpp>
 #include <cbor/structs.hpp>
 
 #include <cstddef>
@@ -67,7 +68,7 @@ TEST_CASE("recursion limit: decode of the item tree")
     refused_on_small_stack([&deep] { return test::value_of(*test::lazy_of_copy(deep)); });
 }
 
-// lazy::clone decodes through cbor::detail::tree_decoder::decode_item. It recurses once for each tag.
+// lazy::clone decodes the item tree. It recurses once for each tag.
 TEST_CASE("recursion limit: lazy::clone")
 {
     auto const read = test::lazy_of_copy(repeat("\xd8\x64"sv, held) + '\x00');
@@ -78,22 +79,34 @@ TEST_CASE("recursion limit: lazy::clone")
     refused_on_small_stack([&deep] { return deep->clone(); });
 }
 
-// detail::validity::keys_equivalent compares two keys that differ only in the innermost item, so it recurses
-// through every level of both keys.
-TEST_CASE("recursion limit: keys_equivalent")
+// A key literal of a path is compared with a key of the map through every level (RFC 8949 5.6.1). The two keys differ
+// only in the innermost item, so the comparison enters every level of both. The path is compiled on the main thread,
+// so that the error on the small stack comes from the comparison and not from the parser of the path. The main thread
+// compiles levels_main_thread_holds levels where it holds them; a small stack does not hold them for the comparison.
+TEST_CASE("recursion limit: a key literal of a path")
 {
-    auto const checked = [](std::size_t const n) {
-        std::string const a = arrays_around(n, "\x00"sv);
-        std::string const b = arrays_around(n, "\x01"sv);
-        std::string_view const first = a;
-        std::string_view const second = b;
-        return cbor::detail::validity::keys_equivalent<false>(first, cbor::detail::validity::offset{}, second,
-                                                              cbor::detail::validity::offset{});
+    auto const compiled = [](std::size_t const n) {
+        return cbor::path::compile<cbor::lazy>("$[" + std::string(n, '[') + "1" + std::string(n, ']') + "]");
     };
-    auto const read = checked(held);
-    REQUIRE(read.has_value());
-    CHECK_FALSE(*read);
-    refused_on_small_stack([&checked] { return checked(beyond); });
+    auto const document = [](std::size_t const n) {
+        return test::lazy_of_copy("\xa1"s + arrays_around(n, "\x00"sv) + "\x01"s);
+    };
+    auto const q = compiled(held);
+    REQUIRE(q.has_value());
+    auto const l = document(held);
+    REQUIRE(l.has_value());
+    CHECK_EQ(l->at_path(*q).error(), error::key_not_found);
+    auto const deep_query = compiled(test::levels_main_thread_holds);
+    if constexpr (!test::main_thread_holds_deep_input) {
+        if (!deep_query) {
+            CHECK_EQ(deep_query.error(), error::nesting_depth_exceeded);
+            return;
+        }
+    }
+    REQUIRE(deep_query.has_value());
+    auto const deep = document(test::levels_main_thread_holds);
+    REQUIRE(deep.has_value());
+    refused_on_small_stack([&deep, &deep_query] { return deep->at_path(*deep_query); });
 }
 
 // path::value_equal compares two equal values of RFC 9535 2.3.5.2.2 through every level.

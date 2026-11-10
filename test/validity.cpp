@@ -141,24 +141,6 @@ TEST_CASE("validity: check_magnitude_size for every size up to one past the widt
         }
 }
 
-// RFC 8949 5.6 lets a map repeat a key outside a deterministic profile. Two maps are equal only when each pair
-// occurs the same number of times in both. A check that each pair has a partner in the other map finds the
-// first two maps equal, because every pair of each occurs in the other.
-TEST_CASE("validity: keys_equivalent compares the pairs of two maps as multisets")
-{
-    std::string_view const kkj = "\xa3\x61k\x01\x61k\x01\x61j\x01"sv;
-    std::string_view const kjj = "\xa3\x61k\x01\x61j\x01\x61j\x01"sv;
-    std::string_view const jkk = "\xa3\x61j\x01\x61k\x01\x61k\x01"sv;
-    std::string_view const kk = "\xa2\x61k\x01\x61k\x01"sv;
-    std::string_view const kj = "\xa2\x61k\x01\x61j\x01"sv;
-    CHECK_FALSE(*validity::keys_equivalent<false>(kkj, validity::offset{}, kjj, validity::offset{}));
-    CHECK_FALSE(*validity::keys_equivalent<false>(kjj, validity::offset{}, kkj, validity::offset{}));
-    CHECK(*validity::keys_equivalent<false>(kkj, validity::offset{}, jkk, validity::offset{}));
-    CHECK(*validity::keys_equivalent<false>(jkk, validity::offset{}, kkj, validity::offset{}));
-    CHECK_FALSE(*validity::keys_equivalent<false>(kk, validity::offset{}, kj, validity::offset{}));
-    CHECK(*validity::keys_equivalent<false>(kk, validity::offset{}, kk, validity::offset{}));
-}
-
 // An offset, an element size and an element index are three kinds of number. Each has its own type, so a call that
 // swaps two of them does not compile. The checks ask the compiler whether each swapped call is well-formed.
 TEST_CASE("validity: element_offset refuses a swapped offset, size or index")
