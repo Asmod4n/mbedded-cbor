@@ -300,10 +300,10 @@ TEST_CASE("limits sizes 2: sequence_reader gives an item above a size limit, and
     for (test::feed_form const form : test::feed_forms) {
         CAPTURE(static_cast<int>(form));
         cbor::sequence_reader r;
-        test::piece_feed(r, "\x63"
+        r = test::piece_fed(std::move(r), "\x63"
                             "ab"sv, form, 0);
-        test::piece_feed(r, "c\x83\x01\x02"sv, form, 1);
-        test::piece_feed(r, "\x03"sv, form, 2);
+        r = test::piece_fed(std::move(r), "c\x83\x01\x02"sv, form, 1);
+        r = test::piece_fed(std::move(r), "\x03"sv, form, 2);
         auto const text = r.next();
         auto const array = r.next();
         REQUIRE(text.has_value());

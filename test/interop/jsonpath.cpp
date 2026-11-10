@@ -126,8 +126,9 @@ struct tally {
 };
 
 template <cbor::fixed_string Path>
-void compare(std::vector<ojson> const &documents, tally &t)
+tally compare(std::vector<ojson> const &documents)
 {
+    tally t;
     constexpr std::size_t shown_max = 5;
     std::size_t shown = 0;
     auto const run_time = cbor::path::compile<cbor::nodelist>(Path.view());
@@ -153,13 +154,19 @@ void compare(std::vector<ojson> const &documents, tally &t)
             std::cout << "FINDING " << Path.view() << " over " << document << "\n  compile mode  " << compiled
                       << "\n  run-time mode " << interpreted << "\n  jsoncons      " << reference << "\n";
     }
+    return t;
 }
 
 template <cbor::fixed_string... Paths>
 tally compare_all(std::vector<ojson> const &documents)
 {
     tally t;
-    (compare<Paths>(documents, t), ...);
+    auto const add = [&t](tally const part) {
+        t.compared += part.compared;
+        t.order_only += part.order_only;
+        t.findings += part.findings;
+    };
+    (add(compare<Paths>(documents)), ...);
     return t;
 }
 

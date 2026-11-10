@@ -61,8 +61,8 @@ enum class feed_form { view, rvalue, shared, lvalue, each_in_turn };
 inline constexpr std::array<feed_form, 5> feed_forms{feed_form::view, feed_form::rvalue, feed_form::shared,
                                                      feed_form::lvalue, feed_form::each_in_turn};
 
-inline void piece_feed(cbor::sequence_reader &r, std::string_view const piece, feed_form const form,
-                       std::size_t const index)
+inline cbor::sequence_reader piece_fed(cbor::sequence_reader r, std::string_view const piece, feed_form const form,
+                                       std::size_t const index)
 {
     feed_form const used =
         form == feed_form::each_in_turn ? feed_forms[index % (feed_forms.size() - 1)] : form;
@@ -82,6 +82,7 @@ inline void piece_feed(cbor::sequence_reader &r, std::string_view const piece, f
         r.feed(std::make_shared<std::vector<char> const>(piece.begin(), piece.end()));
         break;
     }
+    return r;
 }
 
 // Feeds the bytes to one reader in the pieces that the cuts give, and calls next() after each piece until it
@@ -99,7 +100,7 @@ inline sequence_outcome reader_outcome_of(std::string_view const bytes, std::spa
             r = std::move(middle);
         }
         std::size_t const to = i < cuts.size() ? cuts[i] : bytes.size();
-        piece_feed(r, bytes.substr(from, to - from), form, i);
+        r = piece_fed(std::move(r), bytes.substr(from, to - from), form, i);
         from = to;
         for (;;) {
             auto const item = r.next();

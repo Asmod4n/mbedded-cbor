@@ -138,16 +138,17 @@ void reads(R const &r, outcome const expected)
     }
 }
 
-// The chain and every value that decode makes of it stay alive outside the reader: the destructor of a chain recurses
-// through its links, and the test shrinks the stack of the reader, not of whoever ends the value.
-struct kept_values {
-    holder chain;
+// Every value that decode makes stays alive outside the reader: the destructor of a chain recurses through its links,
+// and the test shrinks the stack of the reader, not of whoever ends the value. The caller moves the values out.
+struct read_values {
     std::optional<std::expected<cbor::ref<holder>, error>> decoded;
     std::optional<std::expected<cbor::ref<node>, error>> nodes;
 };
 
-void every_reader(std::size_t const levels, kept_values &kept, outcome const expected, outcome const chain_expected)
+read_values every_reader(std::size_t const levels, holder const &chain, outcome const expected,
+                         outcome const chain_expected)
 {
+    read_values kept;
     std::string const deep = arrays_around_one(levels);
     reads(cbor::decode(std::string(deep)), expected);
     auto const l = test::lazy_of_copy(deep);
@@ -166,12 +167,13 @@ void every_reader(std::size_t const levels, kept_values &kept, outcome const exp
     reads(*kept.nodes, expected);
     if (*kept.nodes)
         reads(cbor::structs<node>::encode(***kept.nodes), expected);
-    auto const written = cbor::schema<holder>::encode(kept.chain);
+    auto const written = cbor::schema<holder>::encode(chain);
     reads(written, chain_expected);
     if (written) {
         kept.decoded = cbor::schema<holder>::decode(std::string(*written));
         reads(*kept.decoded, chain_expected);
     }
+    return kept;
 }
 
 } // namespace
@@ -183,9 +185,9 @@ using namespace limits_stack;
 // thread holds where it holds it, so that a reader that stops too early fails there.
 TEST_CASE("stack: every recursive reader reads a depth that the main thread holds")
 {
-    kept_values kept{holder_chain((test::levels_main_thread_reads - 1) / links_per_level), std::nullopt, std::nullopt};
-    every_reader(test::levels_main_thread_reads, kept, outcome::value, outcome::value);
-    end_chain(std::move(kept.chain));
+    holder chain = holder_chain((test::levels_main_thread_reads - 1) / links_per_level);
+    read_values const kept = every_reader(test::levels_main_thread_reads, chain, outcome::value, outcome::value);
+    end_chain(std::move(chain));
 }
 
 // An input deeper than a small stack holds: every recursive reader stops with nesting_depth_exceeded where the stack
@@ -200,11 +202,12 @@ TEST_CASE("stack: every recursive reader on a small stack refuses an input deepe
         std::size_t const links = test::threads_available ? bytes / test::smallest_frame_bytes / links_per_level
                                                           : (test::levels_every_stack_holds - 1) / links_per_level;
         constexpr outcome chain_expected = test::threads_available ? outcome::refused : outcome::value;
-        kept_values kept{holder_chain(links), std::nullopt, std::nullopt};
-        test::on_stack_of(bytes, [&kept] {
-            every_reader(test::levels_beyond_small_stack, kept, outcome::refused, chain_expected);
+        holder chain = holder_chain(links);
+        read_values kept;
+        test::on_stack_of(bytes, [&kept, &chain] {
+            kept = every_reader(test::levels_beyond_small_stack, chain, outcome::refused, chain_expected);
         });
-        end_chain(std::move(kept.chain));
+        end_chain(std::move(chain));
     }
 }
 

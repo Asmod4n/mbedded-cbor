@@ -54,13 +54,6 @@ std::string copied(F const &f)
     return out;
 }
 
-pieces finished(iov_encoder &e)
-{
-    auto r = e.finish();
-    REQUIRE(r.has_value());
-    return std::move(*r);
-}
-
 std::vector<std::byte> bytes_of(std::string_view const s)
 {
     std::vector<std::byte> b(s.size());
@@ -89,7 +82,9 @@ TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form"
             cbor::iov_writer w;
             iov_encoder e{w};
             REQUIRE(e.text_string(std::string_view(text)).has_value());
-            pieces const p = finished(e);
+            auto finished = e.finish();
+            REQUIRE(finished.has_value());
+            pieces const p = std::move(*finished);
             CHECK_EQ(joined(p), expected);
             CHECK_EQ(sum_of(p), expected.size());
         }
@@ -97,7 +92,9 @@ TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form"
             cbor::iov_writer w;
             iov_encoder e{w};
             REQUIRE(e.text_string(std::string(text)).has_value());
-            pieces const p = finished(e);
+            auto finished = e.finish();
+            REQUIRE(finished.has_value());
+            pieces const p = std::move(*finished);
             CHECK_EQ(joined(p), expected);
             CHECK_EQ(sum_of(p), expected.size());
             if (size > cbor::encoding::copybreak)
@@ -108,7 +105,9 @@ TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form"
             cbor::iov_writer w;
             iov_encoder e{w};
             REQUIRE(e.text_string(owner).has_value());
-            pieces const p = finished(e);
+            auto finished = e.finish();
+            REQUIRE(finished.has_value());
+            pieces const p = std::move(*finished);
             CHECK_EQ(joined(p), expected);
             CHECK_EQ(sum_of(p), expected.size());
             CHECK_EQ(points_into(p, owner->data()), size > cbor::encoding::copybreak && size > 0);
@@ -119,7 +118,9 @@ TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form"
             cbor::iov_writer w;
             iov_encoder e{w};
             REQUIRE(e.text_string(*read).has_value());
-            pieces const p = finished(e);
+            auto finished = e.finish();
+            REQUIRE(finished.has_value());
+            pieces const p = std::move(*finished);
             CHECK_EQ(joined(p), expected);
             CHECK_EQ(sum_of(p), expected.size());
             CHECK_EQ(points_into(p, (**read).data()), size > cbor::encoding::copybreak && size > 0);
@@ -139,7 +140,9 @@ TEST_CASE("encode_iov: every form of a byte string gives the bytes of the copyin
             cbor::iov_writer w;
             iov_encoder e{w};
             REQUIRE(e.byte_string(std::vector<std::byte>(bytes)).has_value());
-            pieces const p = finished(e);
+            auto finished = e.finish();
+            REQUIRE(finished.has_value());
+            pieces const p = std::move(*finished);
             CHECK_EQ(joined(p), expected);
             CHECK_EQ(sum_of(p), expected.size());
         }
@@ -148,7 +151,9 @@ TEST_CASE("encode_iov: every form of a byte string gives the bytes of the copyin
             cbor::iov_writer w;
             iov_encoder e{w};
             REQUIRE(e.byte_string(owner).has_value());
-            pieces const p = finished(e);
+            auto finished = e.finish();
+            REQUIRE(finished.has_value());
+            pieces const p = std::move(*finished);
             CHECK_EQ(joined(p), expected);
             CHECK_EQ(points_into(p, owner->data()), size > cbor::encoding::copybreak && size > 0);
         }
@@ -158,7 +163,9 @@ TEST_CASE("encode_iov: every form of a byte string gives the bytes of the copyin
             cbor::iov_writer w;
             iov_encoder e{w};
             REQUIRE(e.byte_string(*read).has_value());
-            pieces const p = finished(e);
+            auto finished = e.finish();
+            REQUIRE(finished.has_value());
+            pieces const p = std::move(*finished);
             CHECK_EQ(joined(p), expected);
             CHECK_EQ(points_into(p, (**read).data()), size > cbor::encoding::copybreak && size > 0);
         }
@@ -180,7 +187,9 @@ TEST_CASE("encode_iov: the pieces outlive the caller's owner")
     std::string moved = text;
     REQUIRE(e.text_string(std::move(moved)).has_value());
     moved.assign(200, 'x');
-    pieces const p = finished(e);
+    auto finished = e.finish();
+    REQUIRE(finished.has_value());
+    pieces const p = std::move(*finished);
     CHECK_EQ(joined(p), expected + expected);
 }
 
@@ -193,7 +202,9 @@ TEST_CASE("encode_iov: the second encoder on a writer that has finished is a wro
     iov_encoder second{w};
     REQUIRE(first.unsigned_integer(std::uint8_t{1}).has_value());
     REQUIRE(second.unsigned_integer(std::uint8_t{2}).has_value());
-    pieces const p = finished(first);
+    auto finished = first.finish();
+    REQUIRE(finished.has_value());
+    pieces const p = std::move(*finished);
     CHECK_THROWS_AS(std::ignore = second.finish(), std::logic_error);
     CHECK_EQ(joined(p), "\x18\x01"sv);
 }
@@ -224,7 +235,9 @@ TEST_CASE("encode_iov: a head and a float at each offset before the end of a blo
             cbor::iov_writer w;
             iov_encoder e{w};
             REQUIRE(write(e).has_value());
-            pieces const p = finished(e);
+            auto finished = e.finish();
+            REQUIRE(finished.has_value());
+            pieces const p = std::move(*finished);
             CHECK_EQ(joined(p), expected);
             CHECK_EQ(sum_of(p), expected.size());
         }
@@ -248,7 +261,9 @@ TEST_CASE("encode_iov: texts at the free space of a block")
         cbor::iov_writer w;
         iov_encoder e{w};
         REQUIRE(write(e).has_value());
-        pieces const p = finished(e);
+        auto finished = e.finish();
+        REQUIRE(finished.has_value());
+        pieces const p = std::move(*finished);
         CHECK_EQ(joined(p), expected);
         CHECK_EQ(sum_of(p), expected.size());
     }
@@ -275,7 +290,9 @@ TEST_CASE("encode_iov: the order of blocks and references")
     cbor::iov_writer w;
     iov_encoder e{w};
     REQUIRE(write(e).has_value());
-    pieces const p = finished(e);
+    auto finished = e.finish();
+    REQUIRE(finished.has_value());
+    pieces const p = std::move(*finished);
     CHECK_EQ(joined(p), expected);
     CHECK_EQ(sum_of(p), expected.size());
 }
@@ -288,12 +305,16 @@ TEST_CASE("encode_iov: finish after one item, and after none")
         cbor::iov_writer w;
         iov_encoder e{w};
         REQUIRE(e.unsigned_integer(std::uint8_t{5}).has_value());
-        CHECK_EQ(joined(finished(e)), "\x18\x05"sv);
+        auto finished = e.finish();
+        REQUIRE(finished.has_value());
+        CHECK_EQ(joined(*finished), "\x18\x05"sv);
     }
     {
         cbor::iov_writer w;
         iov_encoder e{w};
-        pieces const p = finished(e);
+        auto finished = e.finish();
+        REQUIRE(finished.has_value());
+        pieces const p = std::move(*finished);
         CHECK(p->empty());
     }
 }
@@ -305,7 +326,9 @@ TEST_CASE("encode_iov: a write after finish and a second finish are a wrong use"
     cbor::iov_writer w;
     iov_encoder e{w};
     REQUIRE(e.unsigned_integer(std::uint8_t{5}).has_value());
-    pieces const p = finished(e);
+    auto finished = e.finish();
+    REQUIRE(finished.has_value());
+    pieces const p = std::move(*finished);
     CHECK_THROWS_AS(std::ignore = e.unsigned_integer(std::uint8_t{6}), std::logic_error);
     CHECK_THROWS_AS(std::ignore = e.finish(), std::logic_error);
     CHECK_EQ(joined(p), "\x18\x05"sv);
@@ -373,7 +396,9 @@ TEST_CASE("encode_iov: more pieces than IOV_MAX are written in turns")
         REQUIRE(copy.text_string(*text).has_value());
     }
     REQUIRE(copy.finish().has_value());
-    pieces const p = finished(e);
+    auto finished = e.finish();
+    REQUIRE(finished.has_value());
+    pieces const p = std::move(*finished);
     CHECK_GT(p->size(), strings);
     CHECK_EQ(joined(p), expected);
 }
@@ -389,7 +414,9 @@ TEST_CASE("encode_iov: sendmsg sends the bytes of encode")
     REQUIRE(e.array(2).has_value());
     REQUIRE(e.text_string(text).has_value());
     REQUIRE(e.unsigned_integer(std::uint8_t{7}).has_value());
-    pieces const p = finished(e);
+    auto finished = e.finish();
+    REQUIRE(finished.has_value());
+    pieces const p = std::move(*finished);
     std::string const expected = joined(p);
     REQUIRE_LT(expected.size(), socket_buffer_least);
     std::array<int, 2> ends{};

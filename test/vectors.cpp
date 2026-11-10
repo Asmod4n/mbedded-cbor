@@ -486,7 +486,7 @@ struct wg_count {
 };
 
 // The steps of the README of the vectors, through decode, lazy and diagnostic_notation, for a test that does not fail.
-void wg_good_check(wg_vector const &v, wg_count &count)
+wg_count wg_good_check(wg_vector const &v)
 {
     CAPTURE(v.description);
     CAPTURE(v.encoded);
@@ -495,9 +495,7 @@ void wg_good_check(wg_vector const &v, wg_count &count)
     // the test case counts it and checks the count.
     if (auto const shallow = decoded(v.encoded);
         !shallow && shallow.error() == error::nesting_depth_exceeded) {
-        ++count.nesting_depth_exceeded;
-        ++count.vectors;
-        return;
+        return {1, 1};
     }
     auto const expected = decoded(v.decoded);
     REQUIRE(expected.has_value());
@@ -543,7 +541,7 @@ void wg_good_check(wg_vector const &v, wg_count &count)
     bool const bignum_tag = text->starts_with("2(") || text->starts_with("3(");
     if (!bignum_tag && !text->starts_with("float'"))
         CHECK_EQ(without_encoding_indicators(*text), without_encoding_indicators(*expected_text));
-    ++count.vectors;
+    return {1, 0};
 }
 
 } // namespace
@@ -562,7 +560,9 @@ TEST_CASE("cbor-wg test vectors: every good vector decodes to its decoded item")
         CAPTURE(file);
         for (wg_vector const &v : wg_vectors_of(std::string(CBOR_TEST_VECTORS "/tests") + file)) {
             REQUIRE_FALSE(v.fail);
-            wg_good_check(v, count);
+            wg_count const one = wg_good_check(v);
+            count.vectors += one.vectors;
+            count.nesting_depth_exceeded += one.nesting_depth_exceeded;
         }
     }
     CHECK_EQ(count.vectors, 88u + 11u + 5u + 2u + 7u + 4u + 5u + 8u + 22u + 6u + 1165u);

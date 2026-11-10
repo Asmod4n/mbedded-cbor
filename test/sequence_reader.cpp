@@ -110,14 +110,14 @@ TEST_CASE("sequence_reader: an empty sequence and empty pieces")
         cbor::sequence_reader r;
         CHECK(r.empty());
         CHECK_EQ(r.next().error(), error::too_little_data);
-        test::piece_feed(r, ""sv, form, 0);
-        test::piece_feed(r, ""sv, form, 1);
-        test::piece_feed(r, ""sv, form, 2);
+        r = test::piece_fed(std::move(r), ""sv, form, 0);
+        r = test::piece_fed(std::move(r), ""sv, form, 1);
+        r = test::piece_fed(std::move(r), ""sv, form, 2);
         CHECK(r.empty());
         CHECK_EQ(r.next().error(), error::too_little_data);
-        test::piece_feed(r, "\x82"sv, form, 0);
-        test::piece_feed(r, ""sv, form, 1);
-        test::piece_feed(r, "\x01\x02"sv, form, 2);
+        r = test::piece_fed(std::move(r), "\x82"sv, form, 0);
+        r = test::piece_fed(std::move(r), ""sv, form, 1);
+        r = test::piece_fed(std::move(r), "\x01\x02"sv, form, 2);
         auto const item = r.next();
         REQUIRE(item.has_value());
         CHECK_EQ(item->top_level.encoded, "\x82\x01\x02"sv);
@@ -151,10 +151,10 @@ TEST_CASE("sequence_reader: several pieces before one next()")
     for (test::feed_form const form : test::feed_forms) {
         CAPTURE(static_cast<int>(form));
         cbor::sequence_reader r;
-        test::piece_feed(r, "\x01\x02"sv, form, 0);
-        test::piece_feed(r, "\x83\x01"sv, form, 1);
-        test::piece_feed(r, "\x02\x03\x04"sv, form, 2);
-        test::piece_feed(r, "\x05"sv, form, 3);
+        r = test::piece_fed(std::move(r), "\x01\x02"sv, form, 0);
+        r = test::piece_fed(std::move(r), "\x83\x01"sv, form, 1);
+        r = test::piece_fed(std::move(r), "\x02\x03\x04"sv, form, 2);
+        r = test::piece_fed(std::move(r), "\x05"sv, form, 3);
         std::vector<std::string> got;
         while (auto item = r.next())
             got.emplace_back(item->top_level.encoded);
@@ -267,9 +267,9 @@ TEST_CASE("sequence_reader: an item stays valid after later feeds and after the 
         {
             cbor::sequence_reader r;
             for (std::size_t i = 0; i < 2000; ++i) {
-                test::piece_feed(r, "\x63"sv, form, 3 * i);
-                test::piece_feed(r, "ab"sv, form, 3 * i + 1);
-                test::piece_feed(r, "c"sv, form, 3 * i + 2);
+                r = test::piece_fed(std::move(r), "\x63"sv, form, 3 * i);
+                r = test::piece_fed(std::move(r), "ab"sv, form, 3 * i + 1);
+                r = test::piece_fed(std::move(r), "c"sv, form, 3 * i + 2);
                 auto item = r.next();
                 REQUIRE(item.has_value());
                 held.push_back(std::move(*item));
@@ -343,12 +343,12 @@ TEST_CASE("sequence_reader: after an error every call gives the error and feed k
     for (test::feed_form const form : test::feed_forms) {
         CAPTURE(static_cast<int>(form));
         cbor::sequence_reader r;
-        test::piece_feed(r, "\x01\x1c\x01"sv, form, 0);
+        r = test::piece_fed(std::move(r), "\x01\x1c\x01"sv, form, 0);
         CHECK(r.next().has_value());
         CHECK_EQ(r.next().error(), error::syntax_error);
         CHECK(r.empty());
-        test::piece_feed(r, "\x02"sv, form, 1);
-        test::piece_feed(r, "\x03"sv, form, 2);
+        r = test::piece_fed(std::move(r), "\x02"sv, form, 1);
+        r = test::piece_fed(std::move(r), "\x03"sv, form, 2);
         CHECK(r.empty());
         CHECK_EQ(r.next().error(), error::syntax_error);
         CHECK_EQ(r.next().error(), error::syntax_error);
@@ -416,12 +416,12 @@ TEST_CASE("sequence_reader: empty() is true when no unread byte is held")
         CAPTURE(static_cast<int>(form));
         cbor::sequence_reader r;
         CHECK(r.empty());
-        test::piece_feed(r, "\x01\x82"sv, form, 0);
+        r = test::piece_fed(std::move(r), "\x01\x82"sv, form, 0);
         CHECK_FALSE(r.empty());
         CHECK(r.next().has_value());
         CHECK_EQ(r.next().error(), error::too_little_data);
         CHECK_FALSE(r.empty());
-        test::piece_feed(r, "\x01\x02"sv, form, 1);
+        r = test::piece_fed(std::move(r), "\x01\x02"sv, form, 1);
         CHECK(r.next().has_value());
         CHECK(r.empty());
     }

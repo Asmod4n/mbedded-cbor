@@ -308,28 +308,31 @@ std::vector<row> map_mixed_rows()
     };
 }
 
-void append_elements(std::vector<element> &to, std::vector<row> const &rows)
+std::vector<element> elements_of(std::vector<row> const &rows)
 {
+    std::vector<element> elements;
     for (row const &r : rows)
-        to.push_back({std::string(r.name), r.data, r.expected, r.indefinite});
+        elements.push_back({std::string(r.name), r.data, r.expected, r.indefinite});
+    return elements;
 }
 
 // A float takes the text that the library gives for it. The test case "parser fixed: floats" checks that text by
 // value and by indicator, so a composition checks only the arrays and maps around it.
-void append_elements(std::vector<element> &to, std::vector<float_row> const &rows)
+std::vector<element> elements_of(std::vector<float_row> const &rows)
 {
+    std::vector<element> elements;
     for (float_row const &r : rows)
-        to.push_back({std::string(r.name), r.data, printed(r.data), false});
+        elements.push_back({std::string(r.name), r.data, printed(r.data), false});
+    return elements;
 }
 
 // arrays_data() of upstream: addFixedData(), addStringsData() and addTagsData().
 std::vector<element> arrays_data()
 {
     std::vector<element> all;
-    append_elements(all, fixed_rows());
-    append_elements(all, float_rows());
-    append_elements(all, string_rows());
-    append_elements(all, tag_rows());
+    for (std::vector<element> const &part :
+         {elements_of(fixed_rows()), elements_of(float_rows()), elements_of(string_rows()), elements_of(tag_rows())})
+        all.insert(all.end(), part.begin(), part.end());
     return all;
 }
 
@@ -687,8 +690,7 @@ TEST_CASE("tinycbor parser: nested maps")
 // mapMixed: arrays() of upstream over the rows of addMapMixedData().
 TEST_CASE("tinycbor parser: maps with overlong keys and values in arrays")
 {
-    std::vector<element> mixed;
-    append_elements(mixed, map_mixed_rows());
+    std::vector<element> const mixed = elements_of(map_mixed_rows());
     for (element const &e : mixed) {
         CAPTURE(e.name);
         check_one(e.data, e.text, e.indefinite);
@@ -751,9 +753,9 @@ TEST_CASE("tinycbor parser: an item through cbor::sequence_reader")
 // no byte is taken.
 TEST_CASE("tinycbor parser: an item that arrives one byte at a time")
 {
-    std::vector<element> fixed;
-    append_elements(fixed, fixed_rows());
-    append_elements(fixed, float_rows());
+    std::vector<element> fixed = elements_of(fixed_rows());
+    std::vector<element> const floats = elements_of(float_rows());
+    fixed.insert(fixed.end(), floats.begin(), floats.end());
     for (element const &e : fixed) {
         CAPTURE(e.name);
         cbor::sequence_reader reader;
@@ -1547,12 +1549,9 @@ TEST_CASE("tinycbor parser: strict validation of keys that are not unique")
 // two calls are checked on the definite rows only.
 TEST_CASE("tinycbor parser: incomplete data")
 {
-    std::vector<element> all;
-    append_elements(all, fixed_rows());
-    append_elements(all, float_rows());
-    append_elements(all, string_rows());
-    append_elements(all, tag_rows());
-    append_elements(all, map_mixed_rows());
+    std::vector<element> all = arrays_data();
+    std::vector<element> const mixed = elements_of(map_mixed_rows());
+    all.insert(all.end(), mixed.begin(), mixed.end());
     for (element const &e : all) {
         CAPTURE(e.name);
         for (std::size_t length = 0; length + 1 < e.data.size(); ++length) {
