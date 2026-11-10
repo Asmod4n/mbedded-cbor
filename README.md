@@ -91,6 +91,37 @@ comes from the compiler, so the read is one jump.
 A vector of fixed-size structs is checked once. After that, element `i`
 is at `i × sizeof(element)`, and a loop runs over raw bytes.
 
+## Validity checks
+
+RFC 8949 section 10 asks a generic decoder to state the checks that it
+makes. These are the checks of mbedded-cbor.
+
+- **Well-formed.** Each reader accepts only well-formed CBOR (RFC 8949
+  section 3 and Appendix F). `cbor::decode` and `cbor::structs` stop at
+  the first fault and give the error and no part of the item. A
+  `cbor::lazy` reads only the parts that a call reaches; a fault in
+  another part comes when a call reaches it.
+- **Indefinite length.** `cbor::decode`, `cbor::structs`,
+  `cbor::schema` and `cbor::lazy` refuse it with `indefinite_length`
+  (RFC 8949 section 5.1 allows a decoder to do so).
+  `cbor::diagnostic_notation` writes it as it stands.
+- **Tag content.** Tags 2 and 3 take a byte string, tag 24 a byte
+  string that holds one item, tag 29 an unsigned integer, and tags 64
+  to 87 (RFC 8746) a byte string. Other content gives
+  `inadmissible_type_for_tag_content`. The content of every other tag
+  is not checked.
+- **Shared references.** A reference of tag 29 names an item that tag
+  28 marked before it; else the read gives `sharedref_not_defined` or
+  `sharedref_index_not_marked`.
+- **Duplicate keys.** `cbor::decode` and `cbor::structs` refuse a map
+  that holds a key twice with `duplicate_key`. A `cbor::lazy` does not
+  check; its reads give the first match.
+- **UTF-8.** No reader checks that a text string is UTF-8. C++ has many
+  ways to check UTF-8, and the application uses its own.
+- **Limits.** See Features: the depth follows the stack, the string
+  length and the element count are constants of the build, and memory
+  grows with the items that were read, never with a count of the input.
+
 ## Performance
 
 The carsales message of 1000 cars, read and written by each kind of
