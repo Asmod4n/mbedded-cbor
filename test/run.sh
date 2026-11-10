@@ -61,7 +61,7 @@ fast) set -- gcc-release clang-asan ;;
 full) set -- gcc-asan ;;
 esac
 
-asan="-Og -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer"
+asan="-O0 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer"
 tsan="-Og -fsanitize=thread -fno-omit-frame-pointer"
 pch_clang="-Xclang -fno-pch-timestamp -Wlifetime-safety -Wno-lifetime-safety-invalidation"
 
