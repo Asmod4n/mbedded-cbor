@@ -234,6 +234,10 @@ inline bool value::operator==(value const &o) const
         return **m == *std::get<map *>(o.kind);
     if (auto const *g = std::get_if<tagged *>(&kind))
         return **g == *std::get<tagged *>(o.kind);
+    // A float is compared by its bits: RFC 8949 4.1 keeps the sign of a zero and the payload of a NaN, and a
+    // comparison by value would take -0.0 for 0.0 and no NaN for itself.
+    if (auto const *d = std::get_if<double>(&kind))
+        return std::bit_cast<std::uint64_t>(*d) == std::bit_cast<std::uint64_t>(std::get<double>(o.kind));
     return kind == o.kind;
 }
 
