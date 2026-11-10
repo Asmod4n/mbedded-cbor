@@ -410,26 +410,6 @@ struct encoding::binary_writer {
         }
     }
 
-    std::expected<void, std::errc>
-    write_item(std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> const &item,
-               std::size_t const size)
-    {
-        if (!detail::validity::bytes_fit(item.size(), block.size() - used)) [[unlikely]] {
-            if constexpr (direct) {
-                if (!detail::validity::bytes_fit(size, block.size() - used)) [[unlikely]]
-                    return std::unexpected(std::errc::no_buffer_space);
-                std::ranges::copy(std::span(item).first(size), block.subspan(used).begin());
-                used += size;
-                return {};
-            } else if (auto const r = refill(item.size()); !r) [[unlikely]] {
-                return r;
-            }
-        }
-        std::ranges::copy(item, std::span(block).subspan(used).begin());
-        used += size;
-        return {};
-    }
-
     std::expected<void, std::errc> encode_head(major_type const major, std::uint8_t const info, std::uint64_t const argument)
     {
         if constexpr (!direct) {
@@ -444,14 +424,10 @@ struct encoding::binary_writer {
         } else {
             std::span<char> const out = block;
             std::size_t const at = used;
-            std::array<char, heads::head_size_max> tail;
-            bool const near_end = !detail::validity::bytes_fit(tail.size(), out.size() - at);
-            std::span<char, heads::head_size_max> const item =
-                near_end ? std::span(tail) : out.subspan(at).template first<heads::head_size_max>();
-            std::size_t const size = heads::head_encode(item, major, info, argument);
-            if (near_end) [[unlikely]]
-                return write_item(tail, size);
-            used = at + size;
+            std::size_t const size = heads::initial_byte_size + heads::argument_size(info);
+            if (!detail::validity::bytes_fit(size, out.size() - at)) [[unlikely]]
+                return std::unexpected(std::errc::no_buffer_space);
+            used = at + heads::write_head(out.first(at + size), at, major, info, argument);
             return {};
         }
     }
@@ -468,7 +444,7 @@ struct encoding::binary_writer {
 
     CBOR_ALWAYS_INLINE std::expected<void, std::errc> encode_head(major_type const major, std::uint64_t const argument)
     {
-        if (detail::validity::bytes_fit(heads::head_size_max, block.size() - used)) [[likely]] {
+        if (!direct && detail::validity::bytes_fit(heads::head_size_max, block.size() - used)) [[likely]] {
             std::span<char> const out = block;
             used += heads::head_encode(out.subspan(used).template first<heads::head_size_max>(), major,
                                        heads::preferred_argument_info(argument), argument);

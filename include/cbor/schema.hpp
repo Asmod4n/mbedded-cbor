@@ -4755,8 +4755,8 @@ public:
             return *size;
         } else if constexpr (!encoding::byte_container<U> && requires { std::span<char>(target); }) {
             std::span<char> const out(target);
-            if (detail::validity::bytes_fit(padded, out.size())) {
-                auto const written = reflection::write_encoded<false, D>(out.first(padded), value, second);
+            if (detail::validity::bytes_fit(*size, out.size())) {
+                auto const written = reflection::write_encoded<true, D>(out.first(*size), value, second);
                 if (!written) [[unlikely]]
                     return std::unexpected(written.error());
                 return *size;

@@ -1237,3 +1237,20 @@ TEST_CASE("structs: a count longer than the bytes is too_little_data before the 
     // A vector of numbers is an RFC 8746 typed array, so a list of texts shows the array.
     CHECK_EQ(cbor::structs<std::vector<std::string>>::decode("\x83\x61\x61"s).error(), error::too_little_data);
 }
+
+// RFC 8742: a program writes a CBOR sequence into one buffer of its own and keeps the bytes behind each item.
+// structs::encode into a span changes no byte behind the item, also where the item ends in a head of one byte
+// (the empty typed array), and it writes the bytes of the std::string form.
+TEST_CASE("encode: a span keeps every byte behind the struct")
+{
+    constexpr char sentinel = 'Z';
+    pair_ab const value{1, {}};
+    auto const expected = cbor::structs<pair_ab>::encode(value);
+    REQUIRE(expected.has_value());
+    std::array<char, 64> buffer;
+    buffer.fill(sentinel);
+    auto const n = cbor::structs<pair_ab>::encode(value, std::span<char>(buffer));
+    REQUIRE(n.has_value());
+    CHECK_EQ(std::string_view(buffer.data(), *n), *expected);
+    CHECK(std::ranges::all_of(std::span(buffer).subspan(*n), [](char const c) { return c == sentinel; }));
+}

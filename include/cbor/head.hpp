@@ -141,7 +141,14 @@ class heads
     {
         static_assert(head_padding >= sizeof(std::uint64_t),
                       "The padding after the last head must hold the bytes that a head writes past its own size.");
-        return head_encode(out.subspan(at).template first<head_size_max>(), major, info, argument);
+        if (detail::validity::bytes_fit(head_size_max, out.size() - at)) [[likely]]
+            return head_encode(out.subspan(at).template first<head_size_max>(), major, info, argument);
+        std::size_t const width = argument_size(info);
+        std::span<char> const field = out.subspan(at, initial_byte_size + width);
+        field.front() = initial_byte(major, info);
+        auto const bytes = big_endian(argument);
+        std::ranges::copy(std::span(bytes).last(width), field.subspan(initial_byte_size).begin());
+        return initial_byte_size + width;
     }
 
     CBOR_ALWAYS_INLINE static std::size_t write_head(std::span<char> const out, std::size_t const at, major_type const major,

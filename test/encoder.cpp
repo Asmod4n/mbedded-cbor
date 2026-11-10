@@ -1,6 +1,7 @@
 #include <cbor/cbor.hpp>
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -241,4 +242,34 @@ TEST_CASE("encoder: the iov target gives the bytes of the string target in piece
     CHECK_EQ(*joined, "\x82\x78\x28"s + *text + "\x18\x07"s);
 }
 
+// RFC 8742: a program writes a CBOR sequence item after item into one buffer of its own and keeps the bytes
+// behind each item. The encoder over a span and cbor::encode into a span change no byte behind the item, also
+// where the item ends in a head of one byte, and they write the bytes of the std::string form.
+TEST_CASE("encoder: a span keeps every byte behind the item")
+{
+    constexpr char sentinel = 'Z';
+    auto const write = [](auto &e) {
+        return e.text_string("abc"sv)
+            .and_then([&] { return e.array(2); })
+            .and_then([&] { return e.unsigned_integer(std::uint8_t{1}); })
+            .and_then([&] { return e.map(0); });
+    };
+    std::string const expected = written(write);
+    std::array<char, 32> buffer;
+    buffer.fill(sentinel);
+    cbor::encoder e{std::span<char>(buffer)};
+    REQUIRE(write(e).has_value());
+    auto const count = e.finish();
+    REQUIRE(count.has_value());
+    CHECK_EQ(std::string_view(buffer.data(), *count), expected);
+    CHECK(std::ranges::all_of(std::span(buffer).subspan(*count), [](char const c) { return c == sentinel; }));
+
+    auto const tree = cbor::decode("\x82\x61\x61\x01"sv);
+    REQUIRE(tree.has_value());
+    buffer.fill(sentinel);
+    auto const n = cbor::encode(**tree, std::span<char>(buffer));
+    REQUIRE(n.has_value());
+    CHECK_EQ(std::string_view(buffer.data(), *n), "\x82\x61\x61\x01"sv);
+    CHECK(std::ranges::all_of(std::span(buffer).subspan(*n), [](char const c) { return c == sentinel; }));
+}
 }
