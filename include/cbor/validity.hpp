@@ -2,15 +2,23 @@
 // that is left for a recursion, overflow of sums
 // and products, number ranges, heads, tag
 // content and typed arrays. Throws std::logic_error on a wrong use, or
-// ends the process when the build has no exceptions. Gives the tag
-// numbers of Packed CBOR.
+// ends the process when the build has no exceptions. Gives the
+// provisional tag number of the fixed array of cbor::schema, and the
+// sizes of the blocks of the encoder and of the string saver.
 // https://www.rfc-editor.org/rfc/rfc8949
 // https://www.rfc-editor.org/rfc/rfc8746#section-2
-// https://datatracker.ietf.org/doc/html/draft-ietf-cbor-packed-19
 #pragma once
 
 #ifndef CBOR_STRING_SAVER_CHUNK_SIZE
 #define CBOR_STRING_SAVER_CHUNK_SIZE (std::size_t{1} << 13)
+#endif
+
+#ifndef CBOR_ENCODER_BLOCK_SIZE
+#define CBOR_ENCODER_BLOCK_SIZE 16384
+#endif
+
+#ifndef CBOR_ENCODER_INLINE_BUFFER_SIZE
+#define CBOR_ENCODER_INLINE_BUFFER_SIZE 1024
 #endif
 
 #include <algorithm>

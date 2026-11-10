@@ -158,7 +158,7 @@ public:
         return iterator{encoded, item_size(encoded)};
     }
 
-    /** @brief Gives the end of the range. */
+    /** @brief Gives the sentinel that an iterator reaches after the last item of the sequence. */
     std::default_sentinel_t end() const
     {
         return {};

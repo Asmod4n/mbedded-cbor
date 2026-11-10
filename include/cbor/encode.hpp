@@ -8,14 +8,6 @@
  */
 #pragma once
 
-#ifndef CBOR_ENCODER_BLOCK_SIZE
-#define CBOR_ENCODER_BLOCK_SIZE 16384
-#endif
-
-#ifndef CBOR_ENCODER_INLINE_BUFFER_SIZE
-#define CBOR_ENCODER_INLINE_BUFFER_SIZE 1024
-#endif
-
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -687,7 +679,7 @@ struct encoding::binary_writer {
 /**
  * @brief A target of cbor::encoder that collects pieces, not one buffer.
  *
- * The encoder writes heads and short strings into blocks of 16 KiB.
+ * The encoder writes heads and short strings into blocks of CBOR_ENCODER_BLOCK_SIZE bytes.
  * A text or a byte string of 32 bytes or more that the program hands over with its owner becomes a piece of its own,
  * with no copy.
  * cbor::encoder::finish() gives the pieces as `struct iovec`, in a `ref` that holds the blocks and the owners.

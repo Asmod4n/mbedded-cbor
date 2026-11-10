@@ -297,10 +297,10 @@ class generic
         is_sys_time<U> || std::same_as<U, std::chrono::year_month_day> || is_set<U> || is_typed_array<U>;
 
 #if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
-    static constexpr std::array<char const *, 6> date_time_formats{"%FT%TZ", "%FT%Tz", "%FT%T%Ez",
-                                                                   "%Ft%TZ", "%Ft%Tz", "%Ft%T%Ez"};
+    static constexpr auto date_time_formats =
+        std::to_array<char const *>({"%FT%TZ", "%FT%Tz", "%FT%T%Ez", "%Ft%TZ", "%Ft%Tz", "%Ft%T%Ez"});
 
-    static constexpr std::array<char const *, 1> full_date_formats{"%F"};
+    static constexpr auto full_date_formats = std::to_array<char const *>({"%F"});
 #endif
 
     template <class U>
