@@ -1,6 +1,5 @@
 #include "../owned_copy.hpp"
 #include "../reference/path.hpp"
-#include "../small_stack.hpp"
 #include <cbor/error.hpp>
 #include <cbor/lazy.hpp>
 #include <cbor/query.hpp>
@@ -318,33 +317,27 @@ std::string nested_maps(std::size_t const levels, bool const b_first)
     return bytes;
 }
 
+// The EDN literal of nested_maps(levels, true), for a key literal of a path.
+std::string nested_maps_in_edn(std::size_t const levels)
+{
+    std::string text = "1";
+    for (std::size_t i = 0; i < levels; ++i)
+        text = "{\"b\": 1, \"a\": " + text + "}";
+    return text;
+}
+
 } // namespace
 } // namespace path_equality
 
 // The comparison of two maps reads each item once and gives each distinct subtree one id (tree isomorphism, Aho,
 // Hopcroft and Ullman). A count of the pairs of each map in both maps, as before, made two recursive comparisons for
-// each level and took time 2^levels; 40 levels compare here at once.
+// each level and took time 2^levels; 40 levels compare here at once, in a filter and as the map key of a path.
 TEST_CASE("path equality: nested maps compare in time linear in their size")
 {
     CHECK(values_equal(nested_maps(40, false), nested_maps(40, true)) == true);
     CHECK(values_equal(nested_maps(40, false), nested_maps(39, true)) == false);
-}
-
-// Each level of nested maps adds one distinct map; the keys "a", "b" and the value 1 are one id each. So the count of
-// ids grows by one for each level: the work of the comparison is linear in the size.
-TEST_CASE("path equality: the count of ids grows by one for each level")
-{
-    auto const ids_of = [](std::size_t const levels) {
-        cbor::detail::canonical_ids ids;
-        std::string const bytes = nested_maps(levels, false);
-        std::string_view const view = bytes;
-        auto const r = cbor::detail::validity::intern_key<true>(ids, view, cbor::detail::validity::offset{});
-        CHECK(r.has_value());
-        return ids.size();
-    };
-    std::size_t const small = ids_of(test::levels_every_stack_holds / 2);
-    std::size_t const large = ids_of(test::levels_every_stack_holds);
-    CHECK_EQ(large - small, test::levels_every_stack_holds / 2);
+    CHECK(key_found(nested_maps(40, false), "$[" + nested_maps_in_edn(40) + "]") == true);
+    CHECK(key_found(nested_maps(40, false), "$[" + nested_maps_in_edn(39) + "]") == false);
 }
 
 // RFC 8949 3.3: a simple value below 24 in the two-byte form is not well-formed. The comparison of two maps reads

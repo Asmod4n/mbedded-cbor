@@ -897,11 +897,6 @@ public:
         return id_of({kind::map, 0, {}, first, children.size() - first});
     }
 
-    std::size_t size() const
-    {
-        return ids.size();
-    }
-
     void mark_unequal()
     {
         unequal_seen = true;
