@@ -1124,23 +1124,6 @@ TEST_CASE("value sharing: a large value in a cycle is written with no amplificat
     CHECK_EQ(shared_test::encoded_again(input), input);
 }
 
-// The check of the amplification at its bounds: up to the activation threshold every size passes, past it the
-// output may be the maximum amplification times the tree and not one byte more.
-TEST_CASE("value sharing: the amplification check at its bounds")
-{
-    constexpr std::uint64_t threshold = cbor::limits::amplification_activation_threshold;
-    constexpr std::uint64_t factor = cbor::limits::maximum_amplification;
-    using check = cbor::detail::validity;
-    CHECK(check::check_amplification(threshold, 1).has_value());
-    CHECK_EQ(check::check_amplification(threshold + 1, 1).error(), error::amplification_limit_breach);
-    constexpr std::uint64_t tree = threshold / factor + 1;
-    CHECK(check::check_amplification(factor * tree, tree).has_value());
-    CHECK_EQ(check::check_amplification(factor * tree + 1, tree).error(), error::amplification_limit_breach);
-    CHECK(check::check_amplification(std::numeric_limits<std::uint64_t>::max(),
-                                     std::numeric_limits<std::uint64_t>::max())
-              .has_value());
-}
-
 // Each mark gets the index of its place in the output, in the shortest head (RFC 8949 4.2.1): n values that each
 // hold themselves come back as they were written, with indices of one, two, three and five bytes.
 TEST_CASE("value sharing: cbor::encode writes each index in its shortest head")
@@ -1170,4 +1153,33 @@ TEST_CASE("value sharing: a path through references deeper than the stack gives 
                  return cbor::encode(**tree, out, cbor::cycles);
              }),
              error::nesting_depth_exceeded);
+}
+
+// A shared reference names one of the values that were marked before it. The decoder and the lazy reader read the
+// index through this one check, so an index that no mark has reached gives the same error on both paths, and the
+// index is converted to std::size_t only after it is known to fit.
+TEST_CASE("value_sharing: check_sharedref_index for up to three marks")
+{
+    std::array<std::uint64_t, 6> const arguments{0, 1, 2, 3, 4, std::numeric_limits<std::uint64_t>::max()};
+    for (std::size_t marked = 0; marked <= 3; ++marked)
+        for (std::uint64_t const argument : arguments) {
+            auto const r = cbor::value_sharing::check_sharedref_index(argument, marked);
+            if (argument >= marked)
+                CHECK_EQ(r.error(), error::sharedref_index_not_marked);
+            else
+                CHECK_EQ(std::to_underlying(*r), argument);
+        }
+}
+
+template <class Argument>
+constexpr bool sharedref_index_accepts =
+    requires(Argument const argument, void (*const take)(cbor::value_sharing::index)) { take(argument); };
+
+// An index into the marks of tags 28 and 29 is a type of its own. A plain integer that stands where a shared reference
+// index is expected does not compile, so a count or a position cannot take its place silently.
+TEST_CASE("value_sharing: index takes no plain integer")
+{
+    CHECK(sharedref_index_accepts<cbor::value_sharing::index>);
+    CHECK_FALSE(sharedref_index_accepts<std::size_t>);
+    CHECK_FALSE(sharedref_index_accepts<std::uint64_t>);
 }

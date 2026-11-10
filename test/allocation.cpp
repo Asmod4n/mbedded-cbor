@@ -410,7 +410,7 @@ TEST_CASE("encoder: the span target allocates nothing")
 }
 
 // Each tag 24 is decoded by an inner decoder. If each inner decoder took its own block for strings, N small
-// tag 24 items would take N blocks of detail::validity::string_saver_chunk_size from an input of a few bytes each.
+// tag 24 items would take N blocks of CBOR_STRING_SAVER_CHUNK_SIZE bytes from an input of a few bytes each.
 // The bytes taken must stay in proportion to the input, so the inner decoders share the one block of the
 // zone.
 TEST_CASE("decode: many tag 24 items with a string share one block for their strings")
@@ -423,7 +423,7 @@ TEST_CASE("decode: many tag 24 items with a string share one block for their str
     auto const tree = cbor::decode(bytes);
     std::size_t const after = allocated_bytes;
     REQUIRE(tree.has_value());
-    CHECK_LT(after - before, count * cbor::detail::validity::string_saver_chunk_size / 8);
+    CHECK_LT(after - before, count * CBOR_STRING_SAVER_CHUNK_SIZE / 8);
 }
 
 // A small message must not take a whole block for its strings: the block is bounded by the bytes left of the input,
@@ -435,7 +435,7 @@ TEST_CASE("decode: the block for the strings of a small message stays in proport
     auto const tree = cbor::decode(bytes);
     std::size_t const after = allocated_bytes;
     REQUIRE(tree.has_value());
-    CHECK_LT(after - before, cbor::detail::validity::string_saver_chunk_size);
+    CHECK_LT(after - before, CBOR_STRING_SAVER_CHUNK_SIZE);
 }
 
 // A sequence_reader reads a stream without end, so a feed and a next() on the path that succeeds allocate
