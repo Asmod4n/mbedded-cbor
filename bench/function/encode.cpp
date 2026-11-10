@@ -65,8 +65,8 @@ void encode(benchmark::State &state)
     state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(count));
 }
 
-// A text one byte shorter than the size from which the iov writer passes a text by reference, and a text of that
-// size. The first is copied into a block, the second becomes a piece of its own.
+// A text one byte shorter than the size from which the iov writer passes a text by reference, and a text of
+// that size. The first is copied into a block, the second becomes a piece of its own.
 void encode_iov_owned(benchmark::State &state)
 {
     auto const copied = std::make_shared<std::string const>(31, 'a');
@@ -88,7 +88,8 @@ void encode_iov_owned(benchmark::State &state)
         });
     };
     if (points_into(*copied) || !points_into(*referenced)) {
-        state.SkipWithError("the iov writer does not copy the 31-byte text and pass the 32-byte text by reference");
+        state.SkipWithError(
+            "the iov writer does not copy the 31-byte text and pass the 32-byte text by reference");
         return;
     }
     std::size_t const count = cold_bytes() / (copied->size() + referenced->size()) + 1;
@@ -100,7 +101,6 @@ void encode_iov_owned(benchmark::State &state)
     }
     state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(count));
 }
-
 }
 
 BENCHMARK(encode<false>)->Name("encode_string")->Unit(benchmark::kMillisecond);
