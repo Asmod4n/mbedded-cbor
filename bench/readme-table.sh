@@ -1,81 +1,29 @@
 #!/bin/bash
 # Measures the table "Performance" of README.md on this machine: carsales, one field, the whole message and an
 # encode, for mbedded-cbor, FlatBuffers with its Verifier and Cap'n Proto.
-# usage: bench/readme-table.sh
-# Needs: g++-16 with -freflection, flatc, capnp, the headers and libraries of flatbuffers, capnproto, nlohmann_json
-# and google benchmark. Variables: ROUNDS (7), MIN_TIME (1s), GXX (g++-16), FLAGS, RESULTS_DIR (bench/results),
-# BENCH_COMMIT (the commit of the tree when the tree is no git checkout).
+# usage: bench/readme-table.sh, on the host. It builds and measures in podman, in the image of
+# containers/debian-sid-bench.Containerfile.
+# Variables: ROUNDS (7), MIN_TIME (1s), GXX (g++-16), RESULTS_DIR (bench/results), CBOR_BUILD_ROOT, BENCH_IMAGE.
 set -eu
-[ "$(id -u)" = 0 ] && { echo "run it as a normal user" >&2; exit 2; }
-src=$(cd "$(dirname "$0")/.." && pwd)
-WARNINGS_DIR=$src/cmake
-. "$WARNINGS_DIR/warnings.sh"
-rounds=${ROUNDS:-7}
-min_time=${MIN_TIME:-1s}
-gxx=${GXX:-g++-16}
-flags=${FLAGS:--O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG}
-results=${RESULTS_DIR:-$src/bench/results}
-jobs=$(( $(nproc) > 1 ? $(nproc) - 1 : 1 ))
-work=$(mktemp -d)
-trap 'rm -rf "${work:?}"' EXIT
-mkdir -p "$work/gen" "$work/bin" "$work/out"
-flatc --cpp --gen-object-api -o "$work/gen" "$src/bench/carsales.fbs"
-capnp compile -oc++:"$work/gen" --src-prefix="$src/bench" "$src/bench/carsales.capnp"
+here=$(cd "$(dirname "$0")" && pwd)
+repo=$(dirname "$here")
+root=${CBOR_BUILD_ROOT:-/home/user/mbedded-cbor-build}
+image=${BENCH_IMAGE:-mbedded-cbor-sid-bench}
+RESULTS_DIR=${RESULTS_DIR:-$here/results}
+for tool in podman git flock vmstat ps python3; do
+	command -v "$tool" > /dev/null || { echo "missing tool: $tool" >&2; exit 2; }
+done
+. "$here/gate.sh"
+. "$here/host.sh"
 arms="MB_FIELD MB_FIELD_AA FB_FIELD_V CP_FIELD MB_READ FB_READ_V CP_READ MB_ENCODE FB_ENCODE CP_ENCODE"
-echo "building $(echo $arms | wc -w) binaries with $jobs jobs"
-"$gxx" -std=c++26 -freflection $flags -isystem "$work/gen" -c "$work/gen/carsales.capnp.c++" -o "$work/gen/carsales.capnp.o"
-for arm in $arms; do
-	op=${arm%_AA}
-	"$gxx" -std=c++26 -freflection $flags $(warnings_for "$gxx") -DDS_CARS -DOP_$op -DCARS_JSON="\"$src/bench/cars.json\"" \
-		-DDOC_PATH="\"$src/bench/docs/cars.cbor\"" -I"$src/include" -isystem "$work/gen" "$src/bench/compare.cpp" \
-		"$work/gen/carsales.capnp.o" -lcapnp -lkj -lflatbuffers -lbenchmark -lpthread -o "$work/bin/$arm" &
-	while [ "$(jobs -rp | wc -l)" -ge "$jobs" ]; do wait -n; done
-done
-wait
-nice_level=0
-[ "$(nice -n -10 nice)" = -10 ] && nice_level=-10
-for r in $(seq 1 "$rounds"); do
-	for arm in $(printf '%s\n' $arms | shuf); do
-		nice -n "$nice_level" "$work/bin/$arm" --benchmark_min_time="$min_time" --benchmark_format=json \
-			> "$work/out/$r.$arm.json"
-	done
-	echo "round $r of $rounds"
-done
-mkdir -p "$results"
-file="$results/readme-$(date -u +%Y-%m-%d-%H%M%SZ).json"
-if commit=$(git -C "$src" rev-parse HEAD); then
-	git -C "$src" diff --quiet || commit="$commit-dirty"
-else
-	commit=${BENCH_COMMIT:-unknown}
-fi
-python3 - "$work/out" "$file" "$commit" \
-	"$flags" "$("$gxx" --version | head -1)" "$(uname -srm)" "$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2)" \
-	"$nice_level" "$rounds" "$min_time" <<'PY'
-import glob, json, os, re, statistics, sys
-out, file, commit, flags, compiler, kernel, cpu, nice, rounds, min_time = sys.argv[1:]
-runs = {}
-for f in glob.glob(os.path.join(out, '*.json')):
-    r, arm = re.match(r'(\d+)\.(.+)\.json$', os.path.basename(f)).groups()
-    b = [x for x in json.load(open(f))['benchmarks'] if x.get('run_type', 'iteration') == 'iteration'][0]
-    runs.setdefault(arm, {})[int(r)] = (b['real_time'], b['time_unit'])
-res = {}
-for arm, v in sorted(runs.items()):
-    t = [v[i][0] for i in sorted(v)]
-    m = statistics.median(t)
-    res[arm] = {'unit': v[1][1], 'repetitions': t, 'median': m, 'spread': max(t) / min(t) - 1}
-json.dump({'what': 'README table: carsales, compare.cpp', 'commit': commit, 'flags': flags, 'compiler': compiler,
-           'kernel': kernel, 'cpu': cpu.strip(), 'nice': nice, 'rounds': rounds, 'min_time': min_time,
-           'results': res}, open(file, 'w'), indent=1)
-scale = {'ns': 1, 'us': 1e3, 'ms': 1e6, 's': 1e9}
-def show(arm):
-    r = res[arm]
-    t = r['median'] * scale[r['unit']]
-    value = next(f"{t / f:.1f} {u}" for f, u in [(1e9, 's'), (1e6, 'ms'), (1e3, 'µs'), (1, 'ns')] if t >= f or u == 'ns')
-    return f"{value} (±{r['spread'] * 100:.0f} %)"
-print(f"\n{'task':<14} {'mbedded-cbor':<20} {'FlatBuffers+Verifier':<22} Cap'n Proto")
-for task, a, b, c in [('one field', 'MB_FIELD', 'FB_FIELD_V', 'CP_FIELD'), ('whole message', 'MB_READ', 'FB_READ_V', 'CP_READ'),
-                      ('write', 'MB_ENCODE', 'FB_ENCODE', 'CP_ENCODE')]:
-    print(f"{task:<14} {show(a):<20} {show(b):<22} {show(c)}")
-print(f"noise (A/A of one field): {res['MB_FIELD_AA']['median'] / res['MB_FIELD']['median'] - 1:+.1%}")
-print(f"\nwritten: {file}")
-PY
+mkdir -p "$root/readme" "$RESULTS_DIR"
+take_run_lock "$root"
+stamp=$(date -u +%Y-%m-%d-%H%M%SZ)
+run=$root/readme/$stamp
+mkdir -p "$run/out"
+trap 'rm -rf "${run:?}"' EXIT
+commit=$(name_bench_commit "$repo" include bench cmake test/owned_copy.hpp)
+build_and_measure_in_container "$image" "$run" table-run.sh -v "$repo/include":/include:ro \
+	-v "$repo/test/owned_copy.hpp":/test/owned_copy.hpp:ro -e ARMS="$arms" \
+	-e COMPILERS="${GXX:-g++-16}" -e ROUNDS="${ROUNDS:-7}" -e MIN_TIME="${MIN_TIME:-1s}"
+python3 -I "$here/readme-table.py" "$run" "$RESULTS_DIR/readme-$stamp.json" "$commit"

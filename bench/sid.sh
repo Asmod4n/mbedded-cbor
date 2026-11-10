@@ -23,19 +23,9 @@ mkdir -p "$run/out"
 trap 'rm -rf "${run:?}"' EXIT
 name_bench_commit "$repo" include bench cmake test/owned_copy.hpp > "$run/commit"
 
-gate > "$run/gate-before-build" 2>&1 || { cat "$run/gate-before-build"; echo "the machine is busy; no run was made" >&2; exit 3; }
-cat "$run/gate-before-build"
-write_host_context "$run/host"
-mounts=(-v "$repo/include":/include:ro -v "$repo/test/owned_copy.hpp":/test/owned_copy.hpp:ro)
-
-run_in_bench_container "$image" "$run" run-sid.sh build "${mounts[@]}" \
-	-e ARMS="${ARMS:-}" -e DOCS="${DOCS:-}" -e COMPILERS="${COMPILERS:-}" -e AA="${AA:-}"
-
-gate > "$run/gate-before-runs" 2>&1 || { cat "$run/gate-before-runs"; echo "the machine is busy after the build; no run was made" >&2; exit 3; }
-
-run_in_bench_container "$image" "$run" run-sid.sh measure "${mounts[@]}" \
-	-e ARMS="${ARMS:-}" -e DOCS="${DOCS:-}" -e COMPILERS="${COMPILERS:-}" -e PROCESSES="${PROCESSES:-}" \
-	-e MIN_TIME="${MIN_TIME:-}" -e STAMP="$stamp"
+build_and_measure_in_container "$image" "$run" run-sid.sh -v "$repo/include":/include:ro \
+	-v "$repo/test/owned_copy.hpp":/test/owned_copy.hpp:ro -e ARMS="${ARMS:-}" -e DOCS="${DOCS:-}" \
+	-e COMPILERS="${COMPILERS:-}" -e AA="${AA:-}" -e PROCESSES="${PROCESSES:-}" -e MIN_TIME="${MIN_TIME:-}" -e STAMP="$stamp"
 
 cp "$run/out/result.json" "$RESULTS_DIR/sid-$stamp.json"
 echo "wrote $RESULTS_DIR/sid-$stamp.json"

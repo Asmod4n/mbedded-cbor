@@ -37,3 +37,14 @@ run_in_bench_container() {
 		-v "$run":/run-dir:U -v "$repo/bench":/bench:ro -v "$repo/cmake":/cmake:ro "$@" \
 		"$image" bash "/bench/$script" "$step"
 }
+
+build_and_measure_in_container() {
+	local image=$1 run=$2 script=$3
+	shift 3
+	gate > "$run/gate-before-build" 2>&1 || { cat "$run/gate-before-build"; echo "the machine is busy; no run was made" >&2; exit 3; }
+	cat "$run/gate-before-build"
+	write_host_context "$run/host"
+	run_in_bench_container "$image" "$run" "$script" build "$@"
+	gate > "$run/gate-before-runs" 2>&1 || { cat "$run/gate-before-runs"; echo "the machine is busy after the build; no run was made" >&2; exit 3; }
+	run_in_bench_container "$image" "$run" "$script" measure "$@"
+}
