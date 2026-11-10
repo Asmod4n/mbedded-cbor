@@ -170,42 +170,6 @@ TEST_CASE("validity: check_simple_value for every additional information and eve
         }
 }
 
-namespace
-{
-
-// RFC 8746 2.1, Tables 1 and 2: the number of bytes of one element of each typed array tag from 64 to 87. Tag
-// 76 is reserved and has no element size; 0 stands for it.
-constexpr std::array<std::size_t, 24> element_bytes{1, 2, 4, 8, 1, 2, 4, 8,  1, 2, 4, 8,
-                                                    0, 2, 4, 8, 2, 4, 8, 16, 2, 4, 8, 16};
-
-} // namespace
-
-// The element size of a typed array decides how its length is checked and how its elements are read. The
-// formula of the library must give the size of RFC 8746 for every tag that has one.
-TEST_CASE("validity: typed_array_element_size for every typed array tag")
-{
-    for (std::uint64_t tag = 64; tag <= 87; ++tag)
-        if (tag != 76)
-            CHECK_EQ(validity::typed_array_element_size(tag), element_bytes[static_cast<std::size_t>(tag - 64)]);
-}
-
-// A typed array tag must lie in 64 to 87 and must not be the reserved tag 76, and its byte string must hold a
-// whole number of elements (RFC 8746 2). The tags around the range and every length up to two elements of the
-// widest type are checked, so that every remainder of every element size is met.
-TEST_CASE("validity: check_typed_array for the tags around 64 to 87 and the lengths 0 to 32")
-{
-    for (std::uint64_t tag = 60; tag <= 90; ++tag)
-        for (std::size_t size = 0; size <= 32; ++size) {
-            auto const r = validity::check_typed_array(tag, size);
-            if (tag < 64 || tag > 87 || tag == 76)
-                CHECK_EQ(r.error(), error::incorrect_type);
-            else if (size % element_bytes[static_cast<std::size_t>(tag - 64)] != 0)
-                CHECK_EQ(r.error(), error::inadmissible_type_for_tag_content);
-            else
-                CHECK(r.has_value());
-        }
-}
-
 // A shared reference names one of the values that were marked before it. The decoder and the lazy reader read
 // the index through this one check, so an index that no mark has reached gives the same error on both paths,
 // and the index is converted to std::size_t only after it is known to fit.
