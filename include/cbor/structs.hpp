@@ -1571,9 +1571,9 @@ public:
         auto const counted = generic::generic_size(value);
         if (!counted) [[unlikely]]
             return std::unexpected(counted.error());
-        auto const sum = detail::validity::checked_add(*counted, heads::head_padding);
+        auto const sum = heads::padded_size(*counted);
         if (!sum) [[unlikely]]
-            return std::unexpected(detail::validity::writer_error(sum.error()));
+            return std::unexpected(sum.error());
         std::size_t const padded = *sum;
         std::string out(padded, '\0');
         auto const written = generic::write_generic(std::span<char>(out), 0, value);
@@ -1599,9 +1599,9 @@ public:
         auto const counted = generic::generic_size(value);
         if (!counted) [[unlikely]]
             return std::unexpected(counted.error());
-        auto const sum = detail::validity::checked_add(*counted, heads::head_padding);
+        auto const sum = heads::padded_size(*counted);
         if (!sum) [[unlikely]]
-            return std::unexpected(detail::validity::writer_error(sum.error()));
+            return std::unexpected(sum.error());
         std::size_t const padded = *sum;
         std::size_t const size = *counted;
         if constexpr (encoding::byte_container<U> &&

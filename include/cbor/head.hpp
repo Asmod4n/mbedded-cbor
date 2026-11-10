@@ -117,6 +117,14 @@ class heads
 
     static constexpr std::size_t head_padding = sizeof(std::uint64_t);
 
+    static constexpr std::expected<std::size_t, error> padded_size(std::size_t const size)
+    {
+        auto const sum = detail::validity::checked_add(size, head_padding);
+        if (!sum) [[unlikely]]
+            return std::unexpected(detail::validity::writer_error(sum.error()));
+        return *sum;
+    }
+
     static constexpr std::size_t head_size_max = initial_byte_size + sizeof(std::uint64_t);
 
     CBOR_ALWAYS_INLINE static constexpr std::size_t head_encode(std::span<char, head_size_max> const field,

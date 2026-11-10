@@ -4711,9 +4711,9 @@ public:
         auto const size = reflection::encoded_size<T, D>(second);
         if (!size) [[unlikely]]
             return std::unexpected(detail::validity::writer_error(size.error()));
-        auto const sum = detail::validity::checked_add(*size, heads::head_padding);
+        auto const sum = heads::padded_size(*size);
         if (!sum) [[unlikely]]
-            return std::unexpected(detail::validity::writer_error(sum.error()));
+            return std::unexpected(sum.error());
         std::size_t const padded = *sum;
         std::string out(padded, '\0');
         auto const written = reflection::write_encoded<false, D>(std::span<char>(out), value, second);
@@ -4738,9 +4738,9 @@ public:
         auto const size = reflection::encoded_size<T, D>(second);
         if (!size) [[unlikely]]
             return std::unexpected(detail::validity::writer_error(size.error()));
-        auto const sum = detail::validity::checked_add(*size, heads::head_padding);
+        auto const sum = heads::padded_size(*size);
         if (!sum) [[unlikely]]
-            return std::unexpected(detail::validity::writer_error(sum.error()));
+            return std::unexpected(sum.error());
         std::size_t const padded = *sum;
         if constexpr (encoding::byte_container<U> && requires { requires std::same_as<std::ranges::range_value_t<U>, char>; }) {
             std::size_t const at = std::ranges::size(target);
