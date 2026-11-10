@@ -61,6 +61,70 @@ class extended_diagnostic_notation
         std::string content;
     };
 
+    struct backpatch {
+        std::size_t at;
+        std::size_t unused;
+    };
+
+    class backpatches
+    {
+        backpatch outermost{};
+        bool opened = false;
+        std::vector<backpatch> inner;
+        std::size_t unused_total = 0;
+
+    public:
+        constexpr std::size_t open(std::string &out)
+        {
+            std::size_t const at = out.size();
+            out.append(heads::head_size_max, '\0');
+            if (!opened) {
+                outermost = {at, 0};
+                opened = true;
+                return 0;
+            }
+            inner.push_back({at, 0});
+            return inner.size();
+        }
+
+        constexpr std::size_t unused_so_far() const
+        {
+            return unused_total;
+        }
+
+        constexpr std::size_t content_start(std::size_t const index) const
+        {
+            return (index == 0 ? outermost.at : inner[index - 1].at) + heads::head_size_max;
+        }
+
+        constexpr void close(std::string &out, std::size_t const index, std::string_view const head)
+        {
+            backpatch &b = index == 0 ? outermost : inner[index - 1];
+            b.unused = heads::head_size_max - head.size();
+            std::ranges::copy(head, std::span(out).subspan(b.at + b.unused, head.size()).begin());
+            unused_total += b.unused;
+        }
+
+        constexpr void apply(std::string &out) const
+        {
+            if (!opened)
+                return;
+            std::size_t write = outermost.at;
+            std::size_t read = outermost.at + outermost.unused;
+            auto const move_to = [&out, &write, &read](std::size_t const end) {
+                std::span<char> const bytes(out);
+                std::ranges::copy(bytes.subspan(read, end - read), bytes.subspan(write).begin());
+                write += end - read;
+            };
+            for (backpatch const &b : inner) {
+                move_to(b.at);
+                read = b.at + b.unused;
+            }
+            move_to(out.size());
+            out.resize(write);
+        }
+    };
+
     static constexpr int no_indicator = -1;
     static constexpr int immediate_indicator = -2;
 
@@ -638,7 +702,8 @@ class extended_diagnostic_notation
         return parsed{*next, separated};
     }
 
-    static constexpr std::expected<std::size_t, error> parse_container(literal_cursor const cursor, std::string &out)
+    static constexpr std::expected<std::size_t, error> parse_container(literal_cursor const cursor, std::string &out,
+                                                                       backpatches &patches)
     {
         std::string_view const text = cursor.text;
         std::size_t at = cursor.at;
@@ -655,13 +720,13 @@ class extended_diagnostic_notation
         major_type const major = map ? major_type::map : major_type::array;
         if (indicator == std::to_underlying(rfc8949::additional_information::indefinite_length)) [[unlikely]]
             return std::unexpected(error::invalid_path);
-        std::size_t const start = out.size();
+        std::size_t const patch = patches.open(out);
         std::uint64_t count = 0;
         bool separated = true;
         while (at < text.size() && text[at] != close) {
             if (!separated) [[unlikely]]
                 return std::unexpected(error::invalid_path);
-            auto next = parse_literal({text, at}, out);
+            auto next = parse_literal({text, at}, out, patches);
             if (!next) [[unlikely]]
                 return next;
             if (map) {
@@ -673,7 +738,7 @@ class extended_diagnostic_notation
                 auto const value = optional_space_end(text, *colon + 1);
                 if (!value) [[unlikely]]
                     return value;
-                next = parse_literal({text, *value}, out);
+                next = parse_literal({text, *value}, out, patches);
                 if (!next) [[unlikely]]
                     return next;
             }
@@ -689,7 +754,7 @@ class extended_diagnostic_notation
         std::string head;
         if (auto const r = append_head(head, major, count, indicator); !r) [[unlikely]]
             return std::unexpected(r.error());
-        out.insert(start, head);
+        patches.close(out, patch, head);
         return at + 1;
     }
 
@@ -728,41 +793,57 @@ class extended_diagnostic_notation
             string.at = *next;
             return string;
         }
-        if (rest.starts_with("h'") || rest.starts_with("b64'")) {
-            bool const hex = rest.front() == 'h';
-            std::string quoted;
-            auto const next = parse_quoted(text, at + (hex ? std::string_view("h").size() : std::string_view("b64").size()), quoted);
-            if (!next) [[unlikely]]
-                return std::unexpected(next.error());
-            string_literal string{*next, major_type::byte_string, {}};
-            auto const r = hex ? parse_hex_string(quoted, string.content) : parse_base64_string(quoted, string.content);
-            if (!r) [[unlikely]]
-                return std::unexpected(r.error());
-            return string;
-        }
-        string_literal string{0, major_type::byte_string, {}};
-        auto first = optional_space_end(text, at + std::string_view("<<").size());
+        bool const hex = rest.front() == 'h';
+        std::string quoted;
+        auto const next = parse_quoted(text, at + (hex ? std::string_view("h").size() : std::string_view("b64").size()), quoted);
+        if (!next) [[unlikely]]
+            return std::unexpected(next.error());
+        string_literal string{*next, major_type::byte_string, {}};
+        auto const r = hex ? parse_hex_string(quoted, string.content) : parse_base64_string(quoted, string.content);
+        if (!r) [[unlikely]]
+            return std::unexpected(r.error());
+        return string;
+    }
+
+    static constexpr std::expected<std::size_t, error> parse_embedded(literal_cursor const cursor, std::string &out,
+                                                                      backpatches &patches)
+    {
+        std::string_view const text = cursor.text;
+        auto const first = optional_space_end(text, cursor.at + std::string_view("<<").size());
         if (!first) [[unlikely]]
-            return std::unexpected(first.error());
+            return first;
+        std::size_t const patch = patches.open(out);
+        std::size_t const unused_before = patches.unused_so_far();
         std::size_t next = *first;
         bool separated = true;
         while (!std::string_view{std::span(text).subspan(next)}.starts_with(std::string_view(">>"))) {
             if (!separated || !detail::validity::check_text_left(text, next, 1)) [[unlikely]]
                 return std::unexpected(error::invalid_path);
-            auto const item = parse_literal({text, next}, string.content);
+            auto const item = parse_literal({text, next}, out, patches);
             if (!item) [[unlikely]]
-                return std::unexpected(item.error());
+                return item;
             auto const s = parse_separator(text, *item);
             if (!s) [[unlikely]]
                 return std::unexpected(s.error());
             next = s->at;
             separated = s->separated;
         }
-        string.at = next + std::string_view(">>").size();
-        return string;
+        auto const after = parse_indicator(text, next + std::string_view(">>").size());
+        if (!after) [[unlikely]]
+            return std::unexpected(after.error());
+        if (after->indicator == std::to_underlying(rfc8949::additional_information::indefinite_length)) [[unlikely]]
+            return std::unexpected(error::invalid_path);
+        std::size_t const length =
+            out.size() - patches.content_start(patch) - (patches.unused_so_far() - unused_before);
+        std::string head;
+        if (auto const r = append_head(head, major_type::byte_string, length, after->indicator); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        patches.close(out, patch, head);
+        return after->at;
     }
 
-    static constexpr std::expected<std::size_t, error> parse_literal(literal_cursor const cursor, std::string &out)
+    static constexpr std::expected<std::size_t, error> parse_literal(literal_cursor const cursor, std::string &out,
+                                                                     backpatches &patches)
     {
         if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
             return std::unexpected(r.error());
@@ -773,7 +854,9 @@ class extended_diagnostic_notation
         std::string_view const rest{std::span(text).subspan(at)};
         char const c = rest.front();
         if (c == '[' || c == '{')
-            return parse_container(cursor, out);
+            return parse_container(cursor, out, patches);
+        if (rest.starts_with("<<"))
+            return parse_embedded(cursor, out, patches);
         if (string_literal_starts(rest)) {
             auto const string = parse_string_literal(cursor);
             if (!string) [[unlikely]]
@@ -839,7 +922,7 @@ class extended_diagnostic_notation
             auto const opened = optional_space_end(text, tag_open->at + 1);
             if (!opened) [[unlikely]]
                 return opened;
-            auto const content = parse_literal({text, *opened}, out);
+            auto const content = parse_literal({text, *opened}, out, patches);
             if (!content) [[unlikely]]
                 return content;
             auto const close = optional_space_end(text, *content);
@@ -895,6 +978,8 @@ class extended_diagnostic_notation
                     h->major, h->info, h->argument, detail::validity::subspan(encoded, next).size());
                 !r) [[unlikely]]
                 return std::unexpected(r.error());
+            if (auto const r = append_head(out, h->major, h->argument, no_indicator); !r) [[unlikely]]
+                return std::unexpected(r.error());
             std::size_t const start = out.size();
             std::vector<canonical_pair> pairs;
             std::uint64_t count = 0;
@@ -928,10 +1013,6 @@ class extended_diagnostic_notation
                 for (canonical_pair const &p : pairs)
                     out += std::string_view(std::span(region).subspan(p.key, p.end - p.key));
             }
-            std::string head;
-            if (auto const r = append_head(head, h->major, count, no_indicator); !r) [[unlikely]]
-                return std::unexpected(r.error());
-            out.insert(start, head);
             return next;
         }
         default:

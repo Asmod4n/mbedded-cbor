@@ -1,4 +1,5 @@
 #include "edn.hpp"
+#include "../small_stack.hpp"
 
 // draft-ietf-cbor-edn-literals-28 2.2, Table 1: all the literals on a row are the same number, shown in CBOR. A
 // key literal in a path is that number, in each of its forms.
@@ -240,4 +241,33 @@ TEST_CASE("path edn literals: the diagnostic notation of each example of RFC 894
             REQUIRE(text.has_value());
             selects(*text, hex);
         }
+}
+
+// The parser writes each container and each embedded item with a placeholder for its head and fills it at the
+// close, then closes the gaps in one pass, so a literal is parsed in linear time. These literals check a head at
+// every level, a tag before a container, empty containers, an embedded item that holds containers, the
+// encoding indicators of a head (a key selects by value, so in preferred serialization), and a map as the key of
+// a map. The bytes are written from RFC 8949 3, 3.4.5.1
+// and 4.2.1 (key order) and from draft-ietf-cbor-edn-literals-28 2.4 to 4.1.
+TEST_CASE("path edn literals: nested and embedded literals give the bytes of their heads")
+{
+    for (std::size_t const levels : {std::size_t{64}, test::levels_main_thread_reads}) {
+        CAPTURE(levels);
+        std::string arrays_hex;
+        std::string maps_hex;
+        for (std::size_t i = 0; i < levels; ++i) {
+            arrays_hex += "81";
+            maps_hex += "a101";
+        }
+        selects(std::string(levels, '[') + "1" + std::string(levels, ']'), arrays_hex + "01");
+        std::string maps;
+        for (std::size_t i = 0; i < levels; ++i)
+            maps += "{1: ";
+        selects(maps + "2" + std::string(levels, '}'), maps_hex + "02");
+    }
+    selects("[0(\"a\"), {}, [], <<[1, [2]]>>]", "84c06161a0804482018102");
+    selects("<<<<[1]>>>>", "43428101");
+    selects("[_1 1]", "8101");
+    selects("<<1>>_0", "4101");
+    selects("{{2: 0, 1: 0}: 1}", "a1a20100020001");
 }
