@@ -379,3 +379,17 @@ TEST_CASE("encode: a text, a byte string and a class as alternatives of one vari
     REQUIRE(with_dog.has_value());
     CHECK_NE(with_dog->find("\xd9\x06\xcc"sv), std::string::npos);
 }
+
+// RFC 8742: a program writes a CBOR sequence into one buffer of its own and keeps the bytes behind each item.
+// schema::encode into a span changes no byte behind the message, and it writes the bytes of the std::string
+// form.
+TEST_CASE("encode: a span keeps every byte behind the message")
+{
+    constexpr char sentinel = 'Z';
+    std::string const expected = *form<garage>::encode(sample_garage);
+    std::vector<char> buffer(expected.size() + 64, sentinel);
+    auto const n = form<garage>::encode(sample_garage, std::span<char>(buffer));
+    REQUIRE(n.has_value());
+    CHECK_EQ(std::string_view(buffer.data(), *n), expected);
+    CHECK(std::ranges::all_of(std::span(buffer).subspan(*n), [](char const c) { return c == sentinel; }));
+}

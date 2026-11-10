@@ -105,7 +105,7 @@ class sequence_reader
     std::size_t piece_offset = 0;
     std::size_t scanned = 0;
     std::uint64_t phase_end = 0;
-    phase at = phase::head;
+    phase state = phase::head;
     std::uint64_t pending = 1;
     error failure{};
 
@@ -120,22 +120,22 @@ class sequence_reader
     std::expected<void, error> scan_item(std::string_view const item)
     {
         for (;;) {
-            if (at == phase::string_content) {
+            if (state == phase::string_content) {
                 if (auto const fits = detail::validity::check_bytes_left(phase_end, item.size()); !fits)
                     [[unlikely]]
                     return std::unexpected(fits.error());
                 scanned = static_cast<std::size_t>(phase_end);
-                at = phase::head;
+                state = phase::head;
                 if (pending == 0)
                     return {};
             }
-            if (at == phase::elements) {
+            if (state == phase::elements) {
                 if (auto const r = detail::validity::check_pending_items(pending, item.size() - scanned); !r)
                     [[unlikely]]
                     return r;
-                at = phase::head;
+                state = phase::head;
             }
-            if (at == phase::argument)
+            if (state == phase::argument)
                 if (auto const fits = detail::validity::check_bytes_left(phase_end, item.size()); !fits)
                     [[unlikely]]
                     return std::unexpected(fits.error());
@@ -146,12 +146,12 @@ class sequence_reader
                     detail::validity::bytes_fit(heads::initial_byte_size, d.encoded.size())) {
                     auto const initial = static_cast<std::uint8_t>(d.encoded.front());
                     std::uint8_t const info = heads::additional_information_of(initial);
-                    at = phase::argument;
+                    state = phase::argument;
                     phase_end = scanned + heads::initial_byte_size + heads::argument_size(info);
                 }
                 return std::unexpected(h.error());
             }
-            at = phase::head;
+            state = phase::head;
             scanned =
                 std::to_underlying(detail::validity::distance(std::string_view(std::span(item)), d.encoded));
             --pending;
@@ -161,7 +161,7 @@ class sequence_reader
             case major_type::text_string:
                 phase_end = detail::validity::checked_add(std::uint64_t{scanned}, h->argument)
                                 .value_or(std::numeric_limits<std::uint64_t>::max());
-                at = phase::string_content;
+                state = phase::string_content;
                 continue;
             case major_type::array:
                 children = h->argument;
@@ -179,19 +179,19 @@ class sequence_reader
             if (children != 0) {
                 pending = detail::validity::checked_add(pending, children)
                               .value_or(std::numeric_limits<std::uint64_t>::max());
-                at = phase::elements;
+                state = phase::elements;
                 continue;
             }
             if (pending == 0)
                 return {};
             if (h->major == major_type::array || h->major == major_type::map)
-                at = phase::elements;
+                state = phase::elements;
         }
     }
 
     std::uint64_t bytes_missing(std::size_t const available) const
     {
-        switch (at) {
+        switch (state) {
         case phase::string_content:
         case phase::argument:
             return phase_end - available;
@@ -268,7 +268,7 @@ class sequence_reader
     {
         scanned = 0;
         pending = 1;
-        at = phase::head;
+        state = phase::head;
     }
 
 public:

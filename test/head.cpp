@@ -119,20 +119,6 @@ TEST_CASE("head: a truncated argument is too_little_data")
         CHECK_EQ(decode_error(w), error::too_little_data);
 }
 
-// RFC 8949 Appendix F: reserved info 28 to 30, and info 31 with major 0, 1, 6 or 7.
-TEST_CASE("head: reserved and misplaced info is syntax_error")
-{
-    for (auto const w : {"\x1c"sv, "\x1d"sv, "\x1e"sv, "\x1f"sv, "\x3f"sv, "\xdf"sv, "\xff"sv})
-        CHECK_EQ(decode_error(w), error::syntax_error);
-}
-
-// RFC 8949 3.2: mruby-cbor rejects an indefinite length with NotImplementedError.
-TEST_CASE("head: an indefinite length is indefinite_length")
-{
-    for (auto const w : {"\x5f"sv, "\x7f"sv, "\x9f"sv, "\xbf"sv})
-        CHECK_EQ(decode_error(w), error::indefinite_length);
-}
-
 namespace
 {
 
@@ -220,22 +206,28 @@ struct one_simple_value {
     cbor::simple_value v;
 };
 
-// RFC 8949 3 and Appendix C: a simple value below 32 in the two-byte form (f8 00 to f8 1f), the additional
-// information 28 to 30 of every major type, and the additional information 31 on major types 0, 1 and 6 are not
-// well-formed. This is the whole finite set of heads that are not well-formed for a reason of their own byte, and
-// every reader of the library gives syntax_error for each of them, with no other error and no value.
-TEST_CASE("head: every head that Appendix C makes not well-formed is syntax_error in every reader")
+// The initial byte is a finite set of 256 members, and RFC 8949 decides each one. Not well-formed (section 3
+// and Appendix C): a simple value below 32 in the two-byte form (f8 00 to f8 1f), the additional information
+// 28 to 30 of every major type, the additional information 31 on major types 0, 1 and 6, and a break code
+// outside of an indefinite-length item (ff, 3.2.1). Every reader of the library gives syntax_error for each
+// of them, with no other error and no value. The additional information 31 on major types 2 to 5 is an
+// indefinite length, which the library does not read (5.1 allows that): decode and lazy give
+// indefinite_length. Every other initial byte starts a well-formed head, so decode and lazy give neither of
+// the two errors; a rule of a tag content or a repeated key may still give another error.
+TEST_CASE("head: every initial byte gives the result that RFC 8949 gives it")
 {
-    std::vector<std::string> heads;
+    std::string const after(64, '\0');
+    std::vector<std::string> not_well_formed;
     for (int argument = 0; argument < 32; ++argument)
-        heads.push_back(std::string("\xf8") + static_cast<char>(argument));
+        not_well_formed.push_back(std::string("\xf8") + static_cast<char>(argument));
     for (int major = 0; major < 8; ++major)
         for (int info = 28; info <= 30; ++info)
-            heads.push_back(std::string(1, static_cast<char>(major << 5 | info)) + std::string(8, '\0'));
-    for (int const major : {0, 1, 6})
-        heads.push_back(std::string(1, static_cast<char>(major << 5 | 31)) + std::string(8, '\0'));
-    REQUIRE_EQ(heads.size(), 59u);
-    for (std::string const &bytes : heads) {
+            not_well_formed.push_back(std::string(1, static_cast<char>(major << 5 | info)) +
+                                      std::string(8, '\0'));
+    for (int const major : {0, 1, 6, 7})
+        not_well_formed.push_back(std::string(1, static_cast<char>(major << 5 | 31)) + std::string(8, '\0'));
+    REQUIRE_EQ(not_well_formed.size(), 60u);
+    for (std::string const &bytes : not_well_formed) {
         CAPTURE(bytes);
         CHECK_EQ(cbor::item_size(bytes).error(), cbor::error::syntax_error);
         CHECK_EQ(cbor::decode(bytes).error(), cbor::error::syntax_error);
@@ -255,4 +247,32 @@ TEST_CASE("head: every head that Appendix C makes not well-formed is syntax_erro
         CHECK_EQ(cbor::structs<one_simple_value>::decode("\xa1\x61v" + bytes).error(), cbor::error::syntax_error);
         CHECK_EQ(cbor::structs<one_simple_value>::decode("\xa1" + bytes + '\0').error(), cbor::error::syntax_error);
     }
+    auto const lazy_error = [](std::string const &bytes) {
+        auto const l = cbor::lazy::adopt(std::string(bytes));
+        if (!l)
+            return l.error();
+        auto const c = l->clone();
+        return c ? cbor::error{} : c.error();
+    };
+    for (int const major : {2, 3, 4, 5}) {
+        std::string const bytes = std::string(1, static_cast<char>(major << 5 | 31)) + after;
+        CAPTURE(bytes);
+        CHECK_EQ(cbor::decode(bytes).error(), cbor::error::indefinite_length);
+        CHECK_EQ(lazy_error(bytes), cbor::error::indefinite_length);
+    }
+    int others = 0;
+    for (int initial = 0; initial < 256; ++initial) {
+        if ((initial & 31) >= 28 || initial == 0xf8)
+            continue;
+        ++others;
+        std::string const bytes = std::string(1, static_cast<char>(initial)) + after;
+        CAPTURE(initial);
+        auto const d = cbor::decode(bytes);
+        cbor::error const decoded_error = d ? cbor::error{} : d.error();
+        CHECK_NE(decoded_error, cbor::error::syntax_error);
+        CHECK_NE(decoded_error, cbor::error::indefinite_length);
+        CHECK_NE(lazy_error(bytes), cbor::error::syntax_error);
+        CHECK_NE(lazy_error(bytes), cbor::error::indefinite_length);
+    }
+    CHECK_EQ(others, 223);
 }

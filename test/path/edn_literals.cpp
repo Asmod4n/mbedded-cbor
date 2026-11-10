@@ -155,14 +155,89 @@ TEST_CASE("path edn literals: forms h of the EDN draft does not have")
         refused(l);
 }
 
-// 4.2 and 2.4: [_ and {_ give indefinite-length encoding of the same array or map, and a key selects by value.
-// 2.4.2: a map with a repeated key is well-formed but not valid CBOR, and the error names the repeated key.
-TEST_CASE("path edn literals: indefinite-length containers of the EDN draft and a repeated key")
+// 2.4.2: a map with a repeated key is well-formed but not valid CBOR, and the error names the repeated key. A
+// container that does not end is no literal.
+TEST_CASE("path edn literals: a container that does not end and a repeated key")
 {
-    selects("[_ 1, 2]", "820102");
-    selects("{_ 1: 2}", "a10102");
     refused("[1, 2");
     auto const q = cbor::path::compile<cbor::lazy>("$[{1: 2, 1: 3}]");
     REQUIRE_FALSE(q.has_value());
     CHECK_EQ(q.error(), error::duplicate_key);
+}
+
+// The owner decided on 2026-11-08 that the EDN literals of a path write no indefinite length, because the
+// library reads none. Each form of the EDN draft that writes one (4.2 [_ and {_, 4.3 (_ and the empty ''_ and
+// ""_) is refused at run time and at compile time.
+TEST_CASE("path edn literals: an indefinite-length literal is invalid_path")
+{
+    for (std::string_view const l :
+         {"[_ 1, 2]"sv, "{_ 1: 2}"sv, "[_ ]"sv, "(_ h'01')"sv, "(_ \"a\")"sv, "''_"sv, "\"\"_"sv})
+        refused(l);
+    CHECK_FALSE(cbor::is_valid_path_v<"$[[_ 1, 2]]">);
+    CHECK_FALSE(cbor::is_valid_path_v<"$[(_ \"a\")]">);
+    CHECK_FALSE(cbor::is_valid_path_v<"$[''_]">);
+}
+
+// RFC 8949 Appendix A: the diagnostic notation that cbor::diagnostic_notation writes for an example is a
+// literal of the same value. Every example that a selector reads as a key literal (not an integer, which is
+// an index, and not a text, which is a name of RFC 9535) selects the key of its own bytes. Not here: the
+// examples whose key is of indefinite length, as at_path does not read indefinite-length input
+// (tools/site/guides/basics.md). Three floats whose decimal form has more digits than an exact conversion
+// takes read back only where std::from_chars converts them.
+TEST_CASE("path edn literals: the diagnostic notation of each example of RFC 8949 Appendix A is a key")
+{
+    for (std::string_view const hex : {"c249010000000000000000"sv,
+                                       "c349010000000000000000"sv,
+                                       "f90000"sv,
+                                       "f98000"sv,
+                                       "f93c00"sv,
+                                       "fb3ff199999999999a"sv,
+                                       "f93e00"sv,
+                                       "f97bff"sv,
+                                       "fa47c35000"sv,
+                                       "f90400"sv,
+                                       "f9c400"sv,
+                                       "fbc010666666666666"sv,
+                                       "f97c00"sv,
+                                       "f97e00"sv,
+                                       "f9fc00"sv,
+                                       "fa7f800000"sv,
+                                       "fa7fc00000"sv,
+                                       "faff800000"sv,
+                                       "fb7ff0000000000000"sv,
+                                       "fb7ff8000000000000"sv,
+                                       "fbfff0000000000000"sv,
+                                       "f4"sv,
+                                       "f5"sv,
+                                       "f6"sv,
+                                       "f7"sv,
+                                       "f0"sv,
+                                       "f8ff"sv,
+                                       "c074323031332d30332d32315432303a30343a30305a"sv,
+                                       "c11a514b67b0"sv,
+                                       "c1fb41d452d9ec200000"sv,
+                                       "d74401020304"sv,
+                                       "d818456449455446"sv,
+                                       "d82076687474703a2f2f7777772e6578616d706c652e636f6d"sv,
+                                       "40"sv,
+                                       "4401020304"sv,
+                                       "80"sv,
+                                       "83010203"sv,
+                                       "8301820203820405"sv,
+                                       "98190102030405060708090a0b0c0d0e0f101112131415161718181819"sv,
+                                       "a0"sv,
+                                       "a201020304"sv,
+                                       "a26161016162820203"sv,
+                                       "826161a161626163"sv,
+                                       "a56161614161626142616361436164614461656145"sv}) {
+        auto const text = cbor::diagnostic_notation(test::unhexlify(hex));
+        REQUIRE(text.has_value());
+        selects(*text, hex);
+    }
+    if (from_chars_reads_double)
+        for (std::string_view const hex : {"fa7f7fffff"sv, "fb7e37e43c8800759c"sv, "f90001"sv}) {
+            auto const text = cbor::diagnostic_notation(test::unhexlify(hex));
+            REQUIRE(text.has_value());
+            selects(*text, hex);
+        }
 }

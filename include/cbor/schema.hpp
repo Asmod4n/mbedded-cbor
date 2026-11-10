@@ -53,7 +53,7 @@
 #include "ref.hpp"
 #include "rfc8746.hpp"
 #include "rfc8943.hpp"
-#include "rfc9535.hpp"
+#include "path.hpp"
 #include "validity.hpp"
 
 namespace cbor
@@ -573,7 +573,8 @@ class reflection
                     n = heads::head_size(std::to_underlying(rfc8949::tag_number::unsigned_bignum)) + heads::head_size(sizeof(U));
                 else if constexpr (std::is_floating_point_v<U>)
                     n = fixed_size<U, void>() - sizeof(decltype(float_bits(U{})));
-                first = std::vector<char>(std::from_range, zero.first(n));
+                auto const zeros = zero.first(n);
+                first = std::vector<char>(zeros.begin(), zeros.end());
                 if constexpr (std::same_as<U, bool>
 #ifdef CBOR_HAS_INT128
                               || std::same_as<U, int128>
@@ -4755,8 +4756,8 @@ public:
             return *size;
         } else if constexpr (!encoding::byte_container<U> && requires { std::span<char>(target); }) {
             std::span<char> const out(target);
-            if (detail::validity::bytes_fit(padded, out.size())) {
-                auto const written = reflection::write_encoded<false, D>(out.first(padded), value, second);
+            if (detail::validity::bytes_fit(*size, out.size())) {
+                auto const written = reflection::write_encoded<true, D>(out.first(*size), value, second);
                 if (!written) [[unlikely]]
                     return std::unexpected(written.error());
                 return *size;

@@ -1,0 +1,1264 @@
+{
+ "time": "2026-11-10-134717Z",
+ "block": "path_filter_compiled",
+ "what": "each function of bench/function/path_filter_compiled.cpp over a buffer of COLD_BYTES bytes of items; a = commit a, aa = commit a built again, b = commit b",
+ "commit_a": {
+  "given": "01b31ae",
+  "id": "01b31ae02a1a8cd5749985f519672a4376809257"
+ },
+ "commit_b": {
+  "given": "HEAD",
+  "id": "cda7ab756b67a82a24067b140647dfe3b655906f"
+ },
+ "bench_sources_commit": "9b0ca78bcce42d7f9ab4524edd624ff06d6f9f99",
+ "image": "mbedded-cbor-sid-bench",
+ "flags": "-std=c++26 -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -DNDEBUG -pipe",
+ "link_flags": "-pie -fuse-ld=mold",
+ "resolved_march": "graniterapids",
+ "compilers": [
+  "g++-16 (Debian 16.2.0-4) 16.2.0",
+  "Debian clang version 23.1.5 (2)"
+ ],
+ "gxx_binary": {
+  "comment": "String dump of section '.comment':\n  [     0]  GCC: (Debian 16.2.0-4) 16.2.0\n  [    1f]  mold 3.0.0 (compatible with GNU ld)",
+  "libraries": {
+   "libbenchmark.so.1.9.1": "/usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1",
+   "libstdc++.so.6": "/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.36",
+   "libc.so.6": "/usr/lib/x86_64-linux-gnu/libc.so.6",
+   "libm.so.6": "/usr/lib/x86_64-linux-gnu/libm.so.6"
+  }
+ },
+ "clang_binary": {
+  "comment": "String dump of section '.comment':\n  [     0]  GCC: (Debian 16.2.0-4) 16.2.0\n  [    1e]  Debian clang version 23.1.5 (2)\n  [    3f]  mold 3.0.0 (compatible with GNU ld)",
+  "libraries": {
+   "libbenchmark.so.1.9.1": "/usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1",
+   "libstdc++.so.6": "/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.36",
+   "libm.so.6": "/usr/lib/x86_64-linux-gnu/libm.so.6",
+   "libc.so.6": "/usr/lib/x86_64-linux-gnu/libc.so.6"
+  }
+ },
+ "libc": "ldd (Debian GLIBC 2.43-7) 2.43",
+ "rounds": 9,
+ "min_time": "0.05s",
+ "cold_bytes": 4194304,
+ "level_two_cache": "2048K",
+ "build": "build: 12.30 s for 6 binaries",
+ "kernel": "6.18.44-fc-v338",
+ "scheduler": "cat: /sys/kernel/sched_ext/state: No such file or directory",
+ "virtualization": "docker ",
+ "container": "podman mbedded-cbor-sid-bench, user 65534, network none",
+ "host_in_container": "no",
+ "host_user": "root 0",
+ "cpu": {
+  "model": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+  "flags_sha256": "15c549c6abba3b2839f5ae941760c3918e8f639fb0814cefc6050e97d8593430",
+  "cpus": 4
+ },
+ "uid": 65534,
+ "priority": "nice -10 granted",
+ "threads": 1,
+ "pinned": false,
+ "cpu_left_to_the_machine": "each bench process is single-threaded on 4 cpus",
+ "gate_before_build": [
+  "gate: vmstat 1 2",
+  "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+  " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+  " 0  0      0 10647252 138124 4636088    0    0   678  5906 1050    3 25  2 71  1  0  0",
+  " 0  0      0 10680732 138124 4636172    0    0     0     0  236  199  0  0 100  0  0  0",
+  "gate: ps --sort=-pcpu (top 7)",
+  "  PID USER     %CPU  NI COMMAND",
+  "   94 root      2.9   0 claude",
+  "11602 root      0.0   0 kworker/u16:3-ext4-rsv-conversion",
+  "   42 root      0.0   0 kworker/u16:1-kvfree_rcu_reclaim",
+  "   86 root      0.0   0 environment-man",
+  "22864 root      0.0   0 kworker/u16:0-writeback",
+  "    1 root      0.0   0 process_api",
+  "   64 root      0.0 -20 kworker/3:1H-kblockd",
+  "gate: busy 0.0% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough"
+ ],
+ "gate_before_runs": [
+  "gate: vmstat 1 2",
+  "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+  " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+  " 1  0      0 10667560 138124 4638116    0    0   676  5886 1051    3 25  2 71  1  0  0",
+  " 0  0      0 10706420 138124 4637992    0    0     0     0  200  225  0  0 100  0  0  0",
+  "gate: ps --sort=-pcpu (top 7)",
+  "  PID USER     %CPU  NI COMMAND",
+  "   94 root      2.9   0 claude",
+  "11602 root      0.0   0 kworker/u16:3-events_unbound",
+  "   42 root      0.0   0 kworker/u16:1-kvfree_rcu_reclaim",
+  "   86 root      0.0   0 environment-man",
+  "22864 root      0.0   0 kworker/u16:0-ext4-rsv-conversion",
+  "    1 root      0.0   0 process_api",
+  "   64 root      0.0 -20 kworker/3:1H-kblockd",
+  "gate: busy 0.0% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough"
+ ],
+ "steal_limit_percent": 3,
+ "rounds_detail": [
+  {
+   "round": 1,
+   "attempt": 1,
+   "wall_s": 9.987697124481201,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.1001001001001001
+  },
+  {
+   "round": 2,
+   "attempt": 2,
+   "wall_s": 9.924458980560303,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.15124779430299976
+  },
+  {
+   "round": 3,
+   "attempt": 3,
+   "wall_s": 10.198811769485474,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.19612650159352782
+  },
+  {
+   "round": 4,
+   "attempt": 4,
+   "wall_s": 10.023439168930054,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.09975062344139651
+  },
+  {
+   "round": 5,
+   "attempt": 5,
+   "wall_s": 10.102413892745972,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.12373174956693887
+  },
+  {
+   "round": 6,
+   "attempt": 6,
+   "wall_s": 11.337796926498413,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.06615214994487321
+  },
+  {
+   "round": 7,
+   "attempt": 7,
+   "wall_s": 10.478360891342163,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.16702457647339536
+  },
+  {
+   "round": 8,
+   "attempt": 8,
+   "wall_s": 10.49876594543457,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.3094501309212092
+  },
+  {
+   "round": 9,
+   "attempt": 9,
+   "wall_s": 10.429643154144287,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.2636625119846596
+  }
+ ],
+ "failed": [],
+ "stderr_of_runs": "2026-11-10T13:47:31+00:00\nRunning /run-dir/bin/a.gxx\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 3.44, 3.24, 2.52\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-10T13:47:33+00:00\nRunning /run-dir/bin/aa.clang\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 3.44, 3.24, 2.52\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-10T13:47:35+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 3.44, 3.24, 2.52\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-10T13:47:36+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 3.25, 3.20, 2.51\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-10T13:47:38+00:00\nRunning /run-dir/bin/b.gxx\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 3.25, 3.20, 2.51\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-10T13:47:40+00:00\nRunning /run-dir/bin/a.clang\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 3.25, 3.20, 2.51\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-10T13:47:41+00:00\nRunning /run-dir/bin/aa.clang\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 3.07, 3.16, 2.50\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-10T13:47:43+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 3.07, 3.16, 2.50\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-10T13:47:45+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 3.07, 3.16, 2.50\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-10T13:47:46+00:00\nRunning /run-dir/bin/b.gxx\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 2.90, 3.13, 2.50\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-10T13:47:48+00:00\nRunning /run-dir/bin/a.clang\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 2.90, 3.13, 2.50\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-10T13:47:49+00:00\nRunning /run-dir/bin/a.gxx\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 2.90, 3.13, 2.50\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-10T13:47:51+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 2.75, 3.09, 2.49\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-10T13:47:53+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 K",
+ "noise_floor": {
+  "a_over_a_max_deviation_percent": 8.972406821735024
+ },
+ "difference_test": "two-tailed Mann-Whitney U test of compare.py of Google Benchmark over the rounds, alpha 0.05, and B/A further from 1 than A/A and than the noise floor of the machine (8 %)",
+ "compare_text": {
+  "gxx": {
+   "a_aa": "Comparing /run-dir/out/merged.a.gxx.json to /run-dir/out/merged.aa.gxx.json\nBenchmark                                     Time             CPU      Time Old      Time New       CPU Old       CPU New\n--------------------------------------------------------------------------------------------------------------------------\npath_filter_compiled                       +0.4380         +0.4363            94           135            94           135\npath_filter_compiled                       -0.0536         -0.0700            99            94            99            92\npath_filter_compiled                       +0.0452         +0.0119            93            97            92            93\npath_filter_compiled                       +0.0545         +0.0434            91            96            91            95\npath_filter_compiled                       +0.0163         +0.0167           115           117           115           117\npath_filter_compiled                       +0.7073         +0.7105            94           160            94           160\npath_filter_compiled                       -0.0297         +0.0067           101            98            94            94\npath_filter_compiled                       -0.3325         -0.3359           143            95           143            95\npath_filter_compiled                       +0.0014         -0.0179           101           101           101            99\npath_filter_compiled_pvalue                 0.4799          0.4799      U Test, Repetitions: 9 vs 9\npath_descendant_compiled                   -0.0179         -0.0179            93            91            93            91\npath_descendant_compiled                   -0.0355         -0.0450            98            94            98            93\npath_descendant_compiled                   -0.2313         -0.2396           125            96           124            94\npath_descendant_compiled                   +0.0108         +0.0087            91            92            91            92\npath_descendant_compiled                   +0.0160         +0.0152            92            94            92            94\npath_descendant_compiled                   +0.4719         +0.4765            92           136            92           136\npath_descendant_compiled                   +0.1370         +0.0284            92           104            92            94\npath_descendant_compiled                   -0.2320         -0.2387           122            94           122            93\npath_descendant_compiled                   +0.0293         +0.0235            98           100            98           100\npath_descendant_compiled_pvalue             0.6588          0.7911      U Test, Repetitions: 9 vs 9\npath_existence_compiled                    +0.0022         +0.0063           116           116           115           116\npath_existence_compiled                    +0.0097         -0.0037           117           119           117           117\npath_existence_compiled                    +0.0238         +0.0201           115           118           115           118\npath_existence_compiled                    +0.0101         +0.0088           116           118           116           117\npath_existence_compiled                    +0.1088         +0.0365           115           127           115           119\npath_existence_compiled                    +0.3911         +0.3909           118           164           118           164\npath_existence_compiled                    +0.1211         +0.1210           121           136           121           136\npath_existence_compiled                    -0.0621         -0.0633           127           119           127           119\npath_existence_compiled                    -0.0466         -0.0521           125           119           124           118\npath_existence_compiled_pvalue              0.1333          0.3314      U Test, Repetitions: 9 vs 9\npath_nested_filter_compiled                +0.0012         +0.0010           194           194           193           194\npath_nested_filter_compiled                -0.0020         -0.0096           197           197           197           195\npath_nested_filter_compiled                +0.0193         +0.0164           193           196           193           196\npath_nested_filter_compiled                +0.0094         +0.0086           193           195           193           195\npath_nested_filter_compiled                +0.1377         +0.1312           192           219           192           218\npath_nested_filter_compiled                -0.0733         -0.0733           208           193           208           193\npath_nested_filter_compiled                +0.1954         +0.1956           205           245           205           245\npath_nested_filter_compiled                +0.1755         +0.1319           214           251           214           242\npath_nested_filter_compiled                -0.0215         +0.0168           248           242           238           242\npath_nested_filter_compiled_pvalue          0.3314          0.2510      U Test, Repetitions: 9 vs 9\npath_count_compiled                        -0.0032         -0.0032           168           167           168           167\npath_count_compiled                        -0.0345         -0.0356           175           169           175           169\npath_count_compiled                        +0.0060         +0.0070           168           169           168           169\npath_count_compiled                        +0.0532         -0.0120           172           181           172           170\npath_count_compiled                        +0.0732         +0.0609           170           182           170           180\npath_count_compiled                        -0.1420         -0.1411           197           169           197           169\npath_count_compiled                        +0.0362         +0.0347           169           175           169           175\npath_count_compiled                        -0.0633         -0.0496           176           165           173           164\npath_count_compiled                        +0.0975         +0.0982           179           196           178           196\npath_count_compiled_pvalue                  0.7911          0.5962      U Test, Repetitions: 9 vs 9\npath_value_compiled                        -0.0140         -0.0092           260           256           258           256\npath_value_compiled                        +0.0085         +0.0247           273           275           268           275\npath_value_compiled                        +0.0475         +0.0532           285           298           280           295\npath_value_compiled                        -0.1508         -0.1502           301           255           300           255\npath_value_compiled                        +0.1082         +0.1074           255           282           255           282\npath_value_compiled                        -0.2957         -0.2967           365           257           365           257\npath_value_compiled                        +0.1021         +0.0940           254           280           254           277\npath_value_compiled                        -0.1433         -0.1349           303           260           297           257\npath_value_compiled                        +0.2750         +0.2651           261           333           260           330\npath_value_compiled_pvalue                  0.8598          0.8598      U Test, Repetitions: 9 vs 9\npath_absolute_compiled                     -0.0249         -0.0264           103           101           103           100\npath_absolute_compiled                     -0.1501         -0.1510           128           109           128           109\npath_absolute_compiled                     -0.0504         -0.0375           118           112           116           112\npath_absolute_compiled                     -0.0218         -0.0353           108           106           108           104\npath_absolute_compiled                     +0.0858         +0.0549           103           112           103           108\npath_absolute_compiled                     -0.3588         -0.3586           161           103           161           103\npath_absolute_compiled                     -0.0036         -0.0064           104           104           104           103\npath_absolute_compiled                     -0.0566         -0.0500           111           105           110           105\npath_absolute_compiled                     -0.0286         -0.0247           106           103           105           102\npath_absolute_compiled_pvalue               0.2893          0.1853      U Test, Repetitions: 9 vs 9\npath_map_equal_compiled                    -0.1191         -0.1193           295           260           295           260\npath_map_equal_compiled                    -0.0560         -0.0588           291           275           291           274\npath_map_equal_compiled                    -0.1167         -0.1204           308           272           308           271\npath_map_equal_compiled                    -0.1054         -0.1029           290           259           289           259\npath_map_equal_compiled                    +0.0274         +0.0220           258           265           258           263\npath_map_equal_compiled                    -0.3424         -0.3425           395           260           395           260\npath_map_equal_compiled                    +0.1668         +0.1648           260           303           260           303\npath_map_equal_compiled                    -0.1440         -0.1404           308           264           307           264\npath_map_equal_compiled                    +0.0753         +0.0276           265           284           264           271\npath_map_equal_compiled_pvalue              0.1577          0.1333      U Test, Repetitions: 9 vs 9\npath_map_key_compiled                      -0.0792         -0.0789           169           156           169           156\npath_map_key_compiled                      +0.1586         +0.1544           156           180           156           180\npath_map_key_compiled                      -0.0217         -0.0187           165           162           164           161\npath_map_key_compiled                      -0.1067         -0.1047           175           156           175           156\npath_map_key_compiled                      +0.1323         +0.1289           155           175           155           175\npath_map_key_compiled                      -0.3484         -0.3483           240           156           240           156\npath_map_key_compiled                      +0.0141         +0.0082           159           161           159           160\npath_map_key_compiled                      -0.0705         -0.0094           176           164           165           164\npath_map_key_compiled                      -0.0350         -0.0419           166           160           165           159\npath_map_key_compiled_pvalue                0.4799          0.5365      U Test, Repetitions: 9 vs 9\nOVERALL_GEOMEAN                            -0.0088         -0.0131             0             0             0             0",
+   "a_b": "Comparing /run-dir/out/merged.a.gxx.json to /run-dir/out/merged.b.gxx.json\nBenchmark                                     Time             CPU      Time Old      Time New       CPU Old       CPU New\n--------------------------------------------------------------------------------------------------------------------------\npath_filter_compiled                       +0.1088         +0.1084            94           104            94           104\npath_filter_compiled                       -0.0668         -0.0652            99            92            99            92\npath_filter_compiled                       +0.0036         -0.0014            93            93            92            92\npath_filter_compiled                       +0.2428         +0.2430            91           113            91           113\npath_filter_compiled                       -0.1142         -0.1144           115           102           115           102\npath_filter_compiled                       -0.0059         -0.0043            94            93            94            93\npath_filter_compiled                       -0.0961         -0.0277           101            91            94            91\npath_filter_compiled                       +0.0158         +0.0158           143           145           143           145\npath_filter_compiled                       +0.2288         +0.1863           101           124           101           119\npath_filter_compiled_pvalue                 0.7911          0.7911      U Test, Repetitions: 9 vs 9\npath_descendant_compiled                   +0.0214         +0.0215            93            95            93            95\npath_descendant_compiled                   -0.0077         -0.0069            98            97            98            97\npath_descendant_compiled                   -0.2598         -0.2564           125            92           124            92\npath_descendant_compiled                   -0.0033         -0.0039            91            91            91            91\npath_descendant_compiled                   +0.0103         +0.0031            92            93            92            92\npath_descendant_compiled                   +0.0042         +0.0078            92            93            92            93\npath_descendant_compiled                   +0.0078         +0.0049            92            93            92            92\npath_descendant_compiled                   -0.1880         -0.1965           122            99           122            98\npath_descendant_compiled                   -0.0091         -0.0225            98            97            98            95\npath_descendant_compiled_pvalue             1.0000          0.9296      U Test, Repetitions: 9 vs 9\npath_existence_compiled                    +0.0012         +0.0054           116           116           115           116\npath_existence_compiled                    -0.0146         -0.0152           117           116           117           116\npath_existence_compiled                    +0.0052         +0.0052           115           116           115           116\npath_existence_compiled                    -0.0063         -0.0010           116           116           116           116\npath_existence_compiled                    +0.0254         +0.0239           115           118           115           118\npath_existence_compiled                    -0.0044         -0.0044           118           118           118           118\npath_existence_compiled                    +0.0444         +0.0389           121           126           121           126\npath_existence_compiled                    -0.0337         -0.0474           127           123           127           121\npath_existence_compiled                    -0.0573         -0.0539           125           118           124           118\npath_existence_compiled_pvalue              0.9296          0.7911      U Test, Repetitions: 9 vs 9\npath_nested_filter_compiled                +0.0138         +0.0122           194           196           193           196\npath_nested_filter_compiled                -0.0058         -0.0178           197           196           197           194\npath_nested_filter_compiled                +0.0145         +0.0126           193           195           193           195\npath_nested_filter_compiled                +0.1511         +0.1511           193           222           193           222\npath_nested_filter_compiled                +0.0333         +0.0265           192           199           192           197\npath_nested_filter_compiled                +0.1933         +0.1899           208           249           208           248\npath_nested_filter_compiled                -0.0362         -0.0409           205           197           205           196\npath_nested_filter_compiled                +0.0673         +0.0597           214           228           214           226\npath_nested_filter_compiled                -0.1711         -0.1547           248           205           238           201\npath_nested_filter_compiled_pvalue          0.2893          0.3772      U Test, Repetitions: 9 vs 9\npath_count_compiled                        +0.1827         +0.1665           168           198           168           196\npath_count_compiled                        -0.0362         -0.0409           175           169           175           168\npath_count_compiled                        +0.0494         +0.0283           168           176           168           173\npath_count_compiled                        +0.0125         +0.0128           172           174           172           174\npath_count_compiled                        +0.0067         +0.0029           170           171           170           170\npath_count_compiled                        +0.0001         +0.0009           197           197           197           197\npath_count_compiled                        +0.3407         +0.3401           169           226           169           226\npath_count_compiled                        +0.2379         +0.2490           176           218           173           216\npath_count_compiled                        +0.0425         +0.0437           179           186           178           186\npath_count_compiled_pvalue                  0.0521          0.0934      U Test, Repetitions: 9 vs 9\npath_value_compiled                        +0.0335         +0.0380           260           268           258           268\npath_value_compiled                        -0.0681         -0.0589           273           254           268           253\npath_value_compiled                        -0.0729         -0.0585           285           264           280           264\npath_value_compiled                        +0.0007         +0.0024           301           301           300           301\npath_value_compiled                        +0.0030         +0.0008           255           255           255           255\npath_value_compiled                        -0.2296         -0.2295           365           281           365           281\npath_value_compiled                        +0.3806         +0.3813           254           350           254           350\npath_value_compiled                        -0.1211         -0.1292           303           267           297           259\npath_value_compiled                        +0.0340         +0.0359           261           270           260           270\npath_value_compiled_pvalue                  0.9296          1.0000      U Test, Repetitions: 9 vs 9\npath_absolute_compiled                     +0.1246         +0.1158           103           116           103           115\npath_absolute_compiled                     -0.2053         -0.2078           128           102           128           101\npath_absolute_compiled                     +0.0013         +0.0038           118           118           116           116\npath_absolute_compiled                     -0.0462         -0.0484           108           103           108           103\npath_absolute_compiled                     +0.0382         +0.0385           103           107           103           107\npath_absolute_compiled                     -0.2781         -0.2778           161           116           161           116\npath_absolute_compiled                     -0.0060         -0.0060           104           103           104           103\npath_absolute_compiled                     -0.0351         -0.0274           111           107           110           107\npath_absolute_compiled                     -0.0030         +0.0025           106           105           105           105\npath_absolute_compiled_pvalue               0.5365          0.5962      U Test, Repetitions: 9 vs 9\npath_map_equal_compiled                    -0.0629         -0.0725           295           277           295           274\npath_map_equal_compiled                    -0.0435         -0.0469           291           278           291           277\npath_map_equal_compiled                    +0.0447         +0.0470           308           322           308           322\npath_map_equal_compiled                    -0.1063         -0.1042           290           259           289           259\npath_map_equal_compiled                    +0.0706         +0.0709           258           276           258           276\npath_map_equal_compiled                    -0.1500         -0.1499           395           336           395           336\npath_map_equal_compiled                    +0.0729         +0.0730           260           279           260           279\npath_map_equal_compiled                    -0.1475         -0.1471           308           263           307           261\npath_map_equal_compiled                    +0.0244         +0.0263           265           271           264           271\npath_map_equal_compiled_pvalue              0.5962          0.5962      U Test, Repetitions: 9 vs 9\npath_map_key_compiled                      -0.0471         -0.0521           169           161           169           160\npath_map_key_compiled                      +0.0037         +0.0011           156           156           156           156\npath_map_key_compiled                      +0.0843         +0.0670           165           179           164           175\npath_map_key_compiled                      -0.1123         -0.1097           175           155           175           155\npath_map_key_compiled                      +0.2574         +0.2575           155           195           155           194\npath_map_key_compiled                      -0.2654         -0.2655           240           176           240           176\npath_map_key_compiled                      +0.0131         +0.0133           159           161           159           161\npath_map_key_compiled                      -0.0946         -0.0346           176           160           165           159\npath_map_key_compiled                      -0.0428         -0.0426           166           158           165           158\npath_map_key_compiled_pvalue                0.8598          0.8598      U Test, Repetitions: 9 vs 9\nOVERALL_GEOMEAN                            -0.0072         -0.0070             0             0             0             0"
+  },
+  "clang": {
+   "a_aa": "Comparing /run-dir/out/merged.a.clang.json to /run-dir/out/merged.aa.clang.json\nBenchmark                                     Time             CPU      Time Old      Time New       CPU Old       CPU New\n--------------------------------------------------------------------------------------------------------------------------\npath_filter_compiled                       -0.2098         -0.1396            98            78            90            78\npath_filter_compiled                       -0.1622         -0.1616            88            74            88            74\npath_filter_compiled                       +0.0092         +0.0125            75            75            74            75\npath_filter_compiled                       -0.3497         -0.3523           117            76           117            76\npath_filter_compiled                       +0.2095         +0.2086            76            91            76            91\npath_filter_compiled                       +0.0989         +0.0985            76            83            76            83\npath_filter_compiled                       +0.5150         +0.4045            81           123            81           114\npath_filter_compiled                       -0.0476         -0.0488            80            76            80            76\npath_filter_compiled                       +0.3569         +0.3624            83           113            83           113\npath_filter_compiled_pvalue                 0.9296          1.0000      U Test, Repetitions: 9 vs 9\npath_descendant_compiled                   +0.0209         +0.0345            98           100            97           100\npath_descendant_compiled                   -0.0511         -0.0504            96            91            96            91\npath_descendant_compiled                   -0.0530         -0.0160           102            97            98            96\npath_descendant_compiled                   +0.0151         +0.0113            95            96            95            96\npath_descendant_compiled                   +0.1326         +0.1328            96           109            96           109\npath_descendant_compiled                   +0.1843         +0.1842            96           113            96           113\npath_descendant_compiled                   +0.2872         +0.2867            99           128            99           128\npath_descendant_compiled                   -0.0528         -0.0521           103            98           103            97\npath_descendant_compiled                   -0.1314         -0.1238           110            96           109            96\npath_descendant_compiled_pvalue             0.5962          0.5962      U Test, Repetitions: 9 vs 9\npath_existence_compiled                    +0.0203         +0.0214           130           133           130           133\npath_existence_compiled                    -0.0471         -0.0480           130           124           130           124\npath_existence_compiled                    +0.1379         +0.1488           133           151           131           151\npath_existence_compiled                    +0.0112         +0.0044           130           131           130           130\npath_existence_compiled                    +0.1086         +0.1113           134           148           133           148\npath_existence_compiled                    +0.0869         +0.0867           130           142           130           142\npath_existence_compiled                    +0.1006         +0.1001           143           157           143           157\npath_existence_compiled                    +0.0414         +0.0345           130           136           130           135\npath_existence_compiled                    -0.0070         -0.0037           132           131           131           131\npath_existence_compiled_pvalue              0.0934          0.1333      U Test, Repetitions: 9 vs 9\npath_nested_filter_compiled                -0.0034         -0.0022           173           173           173           173\npath_nested_filter_compiled                -0.0062         -0.0057           173           172           173           172\npath_nested_filter_compiled                -0.0370         -0.0372           179           172           179           172\npath_nested_filter_compiled                +0.0006         -0.0009           173           173           173           173\npath_nested_filter_compiled                +0.0049         -0.0033           174           175           174           173\npath_nested_filter_compiled                +0.2948         +0.2948           177           229           177           229\npath_nested_filter_compiled                +0.3122         +0.3116           173           227           173           227\npath_nested_filter_compiled                +0.1208         +0.1159           170           190           170           189\npath_nested_filter_compiled                -0.0989         -0.0878           194           175           191           174\npath_nested_filter_compiled_pvalue          0.8598          1.0000      U Test, Repetitions: 9 vs 9\npath_count_compiled                        -0.0024         -0.0011           148           147           147           147\npath_count_compiled                        -0.0093         -0.0085           148           147           148           147\npath_count_compiled                        +0.1355         +0.1254           151           171           150           169\npath_count_compiled                        +0.0031         +0.0005           147           148           147           147\npath_count_compiled                        -0.0040         -0.0054           148           147           148           147\npath_count_compiled                        -0.0214         -0.0216           152           149           152           149\npath_count_compiled                        +0.0049         +0.0044           148           149           148           149\npath_count_compiled                        +0.0816         +0.0736           150           163           149           160\npath_count_compiled                        -0.0528         -0.0414           157           149           155           149\npath_count_compiled_pvalue                  0.7911          0.5962      U Test, Repetitions: 9 vs 9\npath_value_compiled                        -0.0014         +0.0014           264           263           263           263\npath_value_compiled                        -0.0583         -0.0579           269           253           269           253\npath_value_compiled                        -0.0037         -0.0146           274           273           273           269\npath_value_compiled                        +0.1305         +0.1234           264           298           263           296\npath_value_compiled                        +0.0006         +0.0006           264           264           264           264\npath_value_compiled                        -0.0062         -0.0069           267           265           267           265\npath_value_compiled                        +0.0020         +0.0021           265           266           265           266\npath_value_compiled                        -0.0323         +0.0374           287           277           266           276\npath_value_compiled                        -0.0634         -0.0571           283           265           281           265\npath_value_compiled_pvalue                  0.6588          0.8598      U Test, Repetitions: 9 vs 9\npath_absolute_compiled                     -0.0081         -0.0070            91            90            90            90\npath_absolute_compiled                     -0.0318         -0.0311            93            90            93            90\npath_absolute_compiled                     -0.1176         -0.1272           105            93           105            92\npath_absolute_compiled                     +0.0684         +0.0379            91            97            91            95\npath_absolute_compiled                     -0.0238         -0.0240            93            91            93            91\npath_absolute_compiled                     -0.2790         -0.2629           130            94           124            91\npath_absolute_compiled                     +0.0050         +0.0057            91            92            91            92\npath_absolute_compiled                     +0.2124         +0.2111            91           110            91           110\npath_absolute_compiled                     -0.3110         -0.3114           132            91           132            91\npath_absolute_compiled_pvalue               0.4799          0.3314      U Test, Repetitions: 9 vs 9\npath_map_equal_compiled                    +0.0427         +0.0415           228           238           228           237\npath_map_equal_compiled                    -0.0115         -0.0130           238           236           238           235\npath_map_equal_compiled                    -0.0525         -0.0676           262           249           262           244\npath_map_equal_compiled                    +0.0473         +0.0443           237           249           237           248\npath_map_equal_compiled                    -0.0958         -0.1138           283           256           282           250\npath_map_equal_compiled                    -0.2875         -0.2873           378           269           378           269\npath_map_equal_compiled                    +0.1740         +0.1715           237           278           237           278\npath_map_equal_compiled                    +0.0114         +0.0124           237           240           237           240\npath_map_equal_compiled                    -0.0103         -0.0071           248           245           246           244\npath_map_equal_compiled_pvalue              0.5962          0.7239      U Test, Repetitions: 9 vs 9\npath_map_key_compiled                      +0.0344         +0.0324           150           155           150           155\npath_map_key_compiled                      -0.0157         -0.0167           155           153           155           153\npath_map_key_compiled                      -0.0433         -0.0606           168           161           168           158\npath_map_key_compiled                      +0.0571         +0.0564           155           164           155           163\npath_map_key_compiled                      +0.0568         +0.0543           155           164           155           164\npath_map_key_compiled                      +0.0435         +0.0448           189           198           189           198\npath_map_key_compiled                      +0.2755         +0.2756           155           198           155           198\npath_map_key_compiled                      +0.0336         +0.0348           154           159           154           159\npath_map_key_compiled                      -0.0989         -0.0363           173           156           162           156\npath_map_key_compiled_pvalue                0.2510          0.2510      U Test, Repetitions: 9 vs 9\nOVERALL_GEOMEAN                            +0.0102         +0.0116             0             0             0             0",
+   "a_b": "Comparing /run-dir/out/merged.a.clang.json to /run-dir/out/merged.b.clang.json\nBenchmark                                     Time             CPU      Time Old      Time New       CPU Old       CPU New\n--------------------------------------------------------------------------------------------------------------------------\npath_filter_compiled                       -0.2397         -0.1722            98            75            90            75\npath_filter_compiled                       -0.0728         -0.0766            88            82            88            81\npath_filter_compiled                       +0.0077         +0.0108            75            75            74            75\npath_filter_compiled                       -0.3021         -0.3028           117            82           117            82\npath_filter_compiled                       +0.0004         -0.0004            76            76            76            75\npath_filter_compiled                       +0.4942         +0.4945            76           113            76           113\npath_filter_compiled                       +0.0424         +0.0374            81            85            81            84\npath_filter_compiled                       -0.0187         -0.0256            80            78            80            78\npath_filter_compiled                       -0.0431         -0.0399            83            80            83            80\npath_filter_compiled_pvalue                 0.5962          0.4799      U Test, Repetitions: 9 vs 9\npath_descendant_compiled                   -0.0283         -0.0154            98            95            97            95\npath_descendant_compiled                   +0.0098         +0.0078            96            97            96            96\npath_descendant_compiled                   -0.0608         -0.0216           102            96            98            96\npath_descendant_compiled                   +0.0227         +0.0220            95            97            95            97\npath_descendant_compiled                   -0.0082         -0.0074            96            95            96            95\npath_descendant_compiled                   +0.2045         +0.2038            96           115            96           115\npath_descendant_compiled                   +0.0137         +0.0043            99           101            99           100\npath_descendant_compiled                   +0.0111         +0.0083           103           104           103           104\npath_descendant_compiled                   -0.1230         -0.1205           110            97           109            96\npath_descendant_compiled_pvalue             1.0000          0.8598      U Test, Repetitions: 9 vs 9\npath_existence_compiled                    +0.0449         +0.0369           130           136           130           135\npath_existence_compiled                    +0.0417         +0.0228           130           135           130           133\npath_existence_compiled                    -0.0159         -0.0055           133           130           131           130\npath_existence_compiled                    +0.0093         +0.0086           130           131           130           131\npath_existence_compiled                    -0.0138         -0.0173           134           132           133           131\npath_existence_compiled                    +0.1207         +0.1203           130           146           130           146\npath_existence_compiled                    -0.0317         -0.0406           143           138           143           137\npath_existence_compiled                    +0.0153         +0.0067           130           132           130           131\npath_existence_compiled                    +0.0785         +0.0676           132           142           131           140\npath_existence_compiled_pvalue              0.0774          0.0774      U Test, Repetitions: 9 vs 9\npath_nested_filter_compiled                +0.1384         +0.0973           173           197           173           190\npath_nested_filter_compiled                -0.0012         -0.0016           173           173           173           173\npath_nested_filter_compiled                -0.0241         -0.0234           179           174           179           174\npath_nested_filter_compiled                +0.0327         +0.0308           173           178           173           178\npath_nested_filter_compiled                +0.0173         +0.0084           174           177           174           175\npath_nested_filter_compiled                +0.1258         +0.1154           177           199           177           197\npath_nested_filter_compiled                +0.0777         +0.0761           173           187           173           186\npath_nested_filter_compiled                +0.1724         +0.1474           170           199           170           195\npath_nested_filter_compiled                -0.1005         -0.0909           194           175           191           173\npath_nested_filter_compiled_pvalue          0.0637          0.1120      U Test, Repetitions: 9 vs 9\npath_count_compiled                        +0.1161         +0.1183           148           165           147           165\npath_count_compiled                        +0.0630         +0.0150           148           158           148           150\npath_count_compiled                        +0.0232         +0.0291           151           154           150           154\npath_count_compiled                        +0.0101         +0.0092           147           149           147           149\npath_count_compiled                        +0.0067         +0.0067           148           149           148           149\npath_count_compiled                        +0.3298         +0.3298           152           202           152           202\npath_count_compiled                        +0.0064         +0.0048           148           149           148           149\npath_count_compiled                        +0.0372         +0.0446           150           156           149           156\npath_count_compiled                        -0.0481         -0.0381           157           150           155           149\npath_count_compiled_pvalue                  0.0521          0.0521      U Test, Repetitions: 9 vs 9\npath_value_compiled                        +0.0176         +0.0206           264           268           263           268\npath_value_compiled                        +0.0566         +0.0504           269           284           269           283\npath_value_compiled                        -0.0323         -0.0291           274           266           273           266\npath_value_compiled                        +0.0014         +0.0023           264           264           263           264\npath_value_compiled                        +0.0047         +0.0051           264           265           264           265\npath_value_compiled                        +0.2662         +0.2423           267           338           267           331\npath_value_compiled                        +0.0122         +0.0043           265           269           265           267\npath_value_compiled                        -0.0394         +0.0336           287           275           266           275\npath_value_compiled                        -0.0574         -0.0538           283           267           281           266\npath_value_compiled_pvalue                  0.5962          0.4268      U Test, Repetitions: 9 vs 9\npath_absolute_compiled                     +0.0060         +0.0073            91            91            90            91\npath_absolute_compiled                     +0.0414         +0.0364            93            97            93            96\npath_absolute_compiled                     -0.1188         -0.1197           105            93           105            93\npath_absolute_compiled                     +0.0004         +0.0004            91            91            91            91\npath_absolute_compiled                     -0.0190         -0.0196            93            91            93            91\npath_absolute_compiled                     -0.0655         -0.0409           130           121           124           119\npath_absolute_compiled                     +0.0014         +0.0011            91            91            91            91\npath_absolute_compiled                     +0.1013         +0.0391            91           100            91            94\npath_absolute_compiled                     -0.3118         -0.3118           132            91           132            91\npath_absolute_compiled_pvalue               0.7911          0.8598      U Test, Repetitions: 9 vs 9\npath_map_equal_compiled                    +0.1648         +0.1650           228           265           228           265\npath_map_equal_compiled                    +0.0109         +0.0055           238           241           238           240\npath_map_equal_compiled                    -0.0994         -0.0967           262           236           262           236\npath_map_equal_compiled                    +0.0122         +0.0120           237           240           237           240\npath_map_equal_compiled                    -0.1607         -0.1569           283           238           282           238\npath_map_equal_compiled                    -0.2864         -0.2904           378           270           378           268\npath_map_equal_compiled                    +0.0107         +0.0101           237           240           237           239\npath_map_equal_compiled                    +0.0617         +0.0553           237           251           237           250\npath_map_equal_compiled                    -0.0404         -0.0349           248           238           246           237\npath_map_equal_compiled_pvalue              0.7911          0.7911      U Test, Repetitions: 9 vs 9\npath_map_key_compiled                      +0.0854         +0.0476           150           163           150           157\npath_map_key_compiled                      +0.0413         +0.0235           155           162           155           159\npath_map_key_compiled                      -0.0696         -0.0708           168           156           168           156\npath_map_key_compiled                      -0.0039         -0.0034           155           154           155           154\npath_map_key_compiled                      +0.0058         +0.0061           155           156           155           156\npath_map_key_compiled                      -0.1266         -0.1252           189           165           189           165\npath_map_key_compiled                      +0.0094         +0.0089           155           157           155           156\npath_map_key_compiled                      +0.1659         +0.1640           154           179           154           179\npath_map_key_compiled                      -0.0958         -0.0331           173           157           162           156\npath_map_key_compiled_pvalue                0.3314          0.2893      U Test, Repetitions: 9 vs 9\nOVERALL_GEOMEAN                            +0.0017         +0.0017             0             0             0             0"
+  }
+ },
+ "cells": {
+  "gxx": {
+   "path_absolute_compiled": {
+    "a": {
+     "repetitions_ns": [
+      103167390.0001806,
+      127891504.99975221,
+      117659126.00003503,
+      108057556.99993825,
+      102888319.99969262,
+      161314168.9999793,
+      104081569.99983476,
+      111221539.99986039,
+      105539583.99987096
+     ],
+     "median_ns": 108057556.99993825,
+     "spread": 0.5678569637492499
+    },
+    "aa": {
+     "repetitions_ns": [
+      100597912.000012,
+      108689818.0001299,
+      111733269.99960409,
+      105698326.00003792,
+      111717869.9996657,
+      103439366.9997371,
+      103702837.99966273,
+      104922241.00016756,
+      102516426.999955
+     ],
+     "median_ns": 104922241.00016756,
+     "spread": 0.11069174079468724
+    },
+    "b": {
+     "repetitions_ns": [
+      116020383.99996673,
+      101636111.00006165,
+      117813111.00003222,
+      103069639.00029586,
+      106822894.00028822,
+      116456317.00002924,
+      103455801.00010921,
+      107317698.99985011,
+      105224571.99976997
+     ],
+     "median_ns": 106822894.00028822,
+     "spread": 0.15916586969724533
+    },
+    "a_over_a_ratio": 0.9709847595409502,
+    "b_over_a_ratio": 0.988574024492792,
+    "utest_a_aa": {
+     "time_pvalue": 0.28931483238198774,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.5364994693194564,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "path_count_compiled": {
+    "a": {
+     "repetitions_ns": [
+      167670742.99968955,
+      175417036.99998835,
+      167968061.0000105,
+      172294873.99981734,
+      169790963.9997306,
+      196758804.99971753,
+      168864798.9999481,
+      175876632.0003815,
+      178639761.00034052
+     ],
+     "median_ns": 172294873.99981734,
+     "spread": 0.17348322957024087
+    },
+    "aa": {
+     "repetitions_ns": [
+      167129837.9997097,
+      169363358.99981713,
+      168981101.00009945,
+      181468638.99983147,
+      182215067.00001556,
+      168819302.99996385,
+      174985187.9999369,
+      164746577.00018725,
+      196056492.00002518
+     ],
+     "median_ns": 169363358.99981713,
+     "spread": 0.1900489562208163
+    },
+    "b": {
+     "repetitions_ns": [
+      198304511.0000603,
+      169066387.99991924,
+      176262829.99981412,
+      174444277.00002053,
+      170927450.9998977,
+      196782017.99979433,
+      226398819.99975842,
+      217723250.99982482,
+      186239705.99992388
+     ],
+     "median_ns": 186239705.99992388,
+     "spread": 0.3391119469581769
+    },
+    "a_over_a_ratio": 0.9829854775598065,
+    "b_over_a_ratio": 1.0809358495489618,
+    "utest_a_aa": {
+     "time_pvalue": 0.7910815129207817,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.052058768750600205,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "path_descendant_compiled": {
+    "a": {
+     "repetitions_ns": [
+      92633238.99995157,
+      97667034.99963114,
+      124817014.99973497,
+      91267220.00019072,
+      92229111.00005148,
+      92366099.99970824,
+      91823480.00013007,
+      122094791.00010867,
+      97632570.00031444
+     ],
+     "median_ns": 92633238.99995157,
+     "spread": 0.36759961571607125
+    },
+    "aa": {
+     "repetitions_ns": [
+      90978793.999966,
+      94196472.00002146,
+      95940701.00001773,
+      92256402.99973747,
+      93706820.00007945,
+      135949706.0002468,
+      104401172.99958728,
+      93764617.00003347,
+      100492214.00004171
+     ],
+     "median_ns": 94196472.00002146,
+     "spread": 0.49430103459381547
+    },
+    "b": {
+     "repetitions_ns": [
+      94619984.00001903,
+      96910266.99965732,
+      92391803.99981706,
+      90964164.00007002,
+      93181431.0001755,
+      92754707.00004007,
+      92542359.00016284,
+      99143076.00001848,
+      96741210.00034575
+     ],
+     "median_ns": 93181431.0001755,
+     "spread": 0.08991356200384759
+    },
+    "a_over_a_ratio": 1.0168755083698489,
+    "b_over_a_ratio": 1.0059178757662164,
+    "utest_a_aa": {
+     "time_pvalue": 0.6588432549492806,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 1.0,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "path_existence_compiled": {
+    "a": {
+     "repetitions_ns": [
+      115835762.00018796,
+      117453624.00006343,
+      115234583.00007406,
+      116368035.00005044,
+      114901470.99993919,
+      118080780.00012755,
+      121115540.00011893,
+      127118820.99983996,
+      125019518.00004463
+     ],
+     "median_ns": 117453624.00006343,
+     "spread": 0.10632892593609378
+    },
+    "aa": {
+     "repetitions_ns": [
+      116087497.99961515,
+      118595294.99997734,
+      117973758.00006193,
+      117541641.9996509,
+      127401564.9996727,
+      164265285.00005588,
+      135779410.9999304,
+      119219004.99964976,
+      119197656.99985874
+     ],
+     "median_ns": 119197656.99985874,
+     "spread": 0.4150127087810993
+    },
+    "b": {
+     "repetitions_ns": [
+      115973733.99990828,
+      115744373.99985982,
+      115829034.99993336,
+      115638932.99990013,
+      117819287.00020216,
+      117561847.00016092,
+      126494315.99993476,
+      122836755.99974231,
+      117855504.00009015
+     ],
+     "median_ns": 117561847.00016092,
+     "spread": 0.09387308165532793
+    },
+    "a_over_a_ratio": 1.0148486946626216,
+    "b_over_a_ratio": 1.0009214104802542,
+    "utest_a_aa": {
+     "time_pvalue": 0.1333202155896274,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.9296365245070707,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "path_filter_compiled": {
+    "a": {
+     "repetitions_ns": [
+      94053714.00043805,
+      98893733.99983014,
+      92684494.99995768,
+      90980871.00028351,
+      115285558.00032336,
+      93935170.99988458,
+      100835858.99974424,
+      142718626.00025997,
+      100665138.99982965
+     ],
+     "median_ns": 98893733.99983014,
+     "spread": 0.5686662968945992
+    },
+    "aa": {
+     "repetitions_ns": [
+      135248079.9996556,
+      93597937.9996752,
+      96871899.99976909,
+      95934865.99987955,
+      117168128.99976504,
+      160371924.9997084,
+      97843294.00008574,
+      95265789.00022286,
+      100804807.00025873
+     ],
+     "median_ns": 97843294.00008574,
+     "spread": 0.7134130134390881
+    },
+    "b": {
+     "repetitions_ns": [
+      104282353.00014421,
+      92292330.99995327,
+      93016056.00012408,
+      113067207.00031292,
+      102119620.99992888,
+      93382256.0000408,
+      91150558.00020854,
+      144979513.0001803,
+      123696950.00006686
+     ],
+     "median_ns": 102119620.99992888,
+     "spread": 0.5905499229072038
+    },
+    "a_over_a_ratio": 0.9893780934619558,
+    "b_over_a_ratio": 1.0326197309943244,
+    "utest_a_aa": {
+     "time_pvalue": 0.47992869214595724,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.7910815129207817,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "path_map_equal_compiled": {
+    "a": {
+     "repetitions_ns": [
+      295178891.99996716,
+      291109270.00010633,
+      308470679.0000382,
+      289533493.9998975,
+      257927265.0000348,
+      395288417.9998364,
+      259943746.999852,
+      308278159.00011045,
+      264502079.00006717
+     ],
+     "median_ns": 291109270.00010633,
+     "spread": 0.5325577076924497
+    },
+    "aa": {
+     "repetitions_ns": [
+      260013912.9999661,
+      274811202.0003646,
+      272459906.99975663,
+      259004843.99971902,
+      264989761.99991375,
+      259921940.99990228,
+      303289894.000045,
+      263871850.0002142,
+      284425166.9998812
+     ],
+     "median_ns": 264989761.99991375,
+     "spread": 0.1709815512190731
+    },
+    "b": {
+     "repetitions_ns": [
+      276600615.99999607,
+      278444089.0000042,
+      322253177.99975526,
+      258750398.99983677,
+      276137958.0001631,
+      335990466.00011206,
+      278905914.0000063,
+      262802161.9998435,
+      270951258.9999576
+     ],
+     "median_ns": 276600615.99999607,
+     "spread": 0.29851187591917117
+    },
+    "a_over_a_ratio": 0.9102759317826498,
+    "b_over_a_ratio": 0.9501607970089548,
+    "utest_a_aa": {
+     "time_pvalue": 0.1577043874630777,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.5962416305866567,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "path_map_key_compiled": {
+    "a": {
+     "repetitions_ns": [
+      169063336.99989772,
+      155721981.00016975,
+      165341235.00014174,
+      175049502.9996273,
+      154693279.0001847,
+      240084692.9999716,
+      158662666.00005475,
+      176229022.0003706,
+      165508325.99978092
+     ],
+     "median_ns": 165508325.99978092,
+     "spread": 0.5520046801754388
+    },
+    "aa": {
+     "repetitions_ns": [
+      155671838.99975133,
+      180418530.99975923,
+      161749048.99980903,
+      156372513.99994057,
+      175158304.99996808,
+      156429828.00000027,
+      160896653.99977094,
+      163809201.9998112,
+      159710569.0002536
+     ],
+     "median_ns": 160896653.99977094,
+     "spread": 0.15896704348721302
+    },
+    "b": {
+     "repetitions_ns": [
+      161101343.00015488,
+      156298134.0002807,
+      179279671.0001312,
+      155398678.9999726,
+      194508107.00027433,
+      176361372.00042868,
+      160743398.9997844,
+      159552577.99987522,
+      158429430.00006926
+     ],
+     "median_ns": 160743398.9997844,
+     "spread": 0.2516715602216195
+    },
+    "a_over_a_ratio": 0.9721363141572945,
+    "b_over_a_ratio": 0.9712103486564004,
+    "utest_a_aa": {
+     "time_pvalue": 0.47992869214595724,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.859819205054158,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "path_nested_filter_compiled": {
+    "a": {
+     "repetitions_ns": [
+      193509659.0000285,
+      197350331.0000524,
+      192559009.9999681,
+      193023645.0002667,
+      192433735.0001224,
+      208400611.0003429,
+      204864505.99992168,
+      213721088.00005662,
+      247576760.99989113
+     ],
+     "median_ns": 197350331.0000524,
+     "spread": 0.2865559201443222
+    },
+    "aa": {
+     "repetitions_ns": [
+      193741619.99985516,
+      196956212.99979395,
+      196267713.9999869,
+      194828819.00012216,
+      218924049.00017938,
+      193118425.0001934,
+      244898306.9998576,
+      251222336.9999447,
+      242260810.9995963
+     ],
+     "median_ns": 196956212.99979395,
+     "spread": 0.30087192353444836
+    },
+    "b": {
+     "repetitions_ns": [
+      196173006.99974293,
+      196205001.99971503,
+      195351206.0003959,
+      222191720.99994466,
+      198837549.00001803,
+      248688117.00025618,
+      197458140.99997005,
+      228097184.00003475,
+      205219620.00020722
+     ],
+     "median_ns": 198837549.00001803,
+     "spread": 0.27303087650122926
+    },
+    "a_over_a_ratio": 0.9980029524234325,
+    "b_over_a_ratio": 1.0075359285815702,
+    "utest_a_aa": {
+     "time_pvalue": 0.331387096247615,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.28931483238198774,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "path_value_compiled": {
+    "a": {
+     "repetitions_ns": [
+      259693118.00008655,
+      273013972.00017166,
+      284592764.9996156,
+      300686733.00002044,
+      254716629.00008595,
+      364923222.0000158,
+      253718831.99977675,
+      303485515.9999097,
+      261127719.00034204
+     ],
+     "median_ns": 273013972.00017166,
+     "spread": 0.43829773739592537
+    },
+    "aa": {
+     "repetitions_ns": [
+      256047158.00000122,
+      275336188.99997234,
+      298116341.9999575,
+      255328530.00004253,
+      282268430.99992037,
+      257005476.99989328,
+      279634444.9998287,
+      259984669.99999437,
+      332931680.0000015
+     ],
+     "median_ns": 275336188.99997234,
+     "spread": 0.30393450351962636
+    },
+    "b": {
+     "repetitions_ns": [
+      268395908.99999166,
+      254424731.99973392,
+      263837368.99970245,
+      300907113.99998325,
+      255470219.0000171,
+      281130264.9997742,
+      350275418.99989957,
+      266721191.00021517,
+      269997266.00024587
+     ],
+     "median_ns": 268395908.99999166,
+     "spread": 0.37673494336339086
+    },
+    "a_over_a_ratio": 1.0085058540513057,
+    "b_over_a_ratio": 0.983084884021331,
+    "utest_a_aa": {
+     "time_pvalue": 0.859819205054158,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.9296365245070707,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   }
+  },
+  "clang": {
+   "path_absolute_compiled": {
+    "a": {
+     "repetitions_ns": [
+      90570797.99958956,
+      92802555.0001621,
+      105210941.99975778,
+      91133194.00012188,
+      93037720.99974595,
+      129909937.0003205,
+      91272091.00006439,
+      90778469.99980466,
+      132084930.00001909
+     ],
+     "median_ns": 92802555.0001621,
+     "spread": 0.45836111547363934
+    },
+    "aa": {
+     "repetitions_ns": [
+      89835176.00017877,
+      89853823.9998743,
+      92840022.0000185,
+      97366156.99966933,
+      90827700.99985282,
+      93662957.99964064,
+      91723910.99991728,
+      110058704.00003915,
+      91004516.99987389
+     ],
+     "median_ns": 91723910.99991728,
+     "spread": 0.22511814302918642
+    },
+    "b": {
+     "repetitions_ns": [
+      91116589.00019392,
+      96640746.00004824,
+      92711337.99984455,
+      91165997.00018923,
+      91269008.99991597,
+      121398404.00004686,
+      91401038.0001855,
+      99973420.99995877,
+      90896678.99979758
+     ],
+     "median_ns": 91401038.0001855,
+     "spread": 0.33556478999983264
+    },
+    "a_over_a_ratio": 0.9883770010400799,
+    "b_over_a_ratio": 0.9848978619179812,
+    "utest_a_aa": {
+     "time_pvalue": 0.47992869214595724,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.7910815129207817,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "path_count_compiled": {
+    "a": {
+     "repetitions_ns": [
+      147731451.999789,
+      148252343.9999568,
+      150979668.0002182,
+      147372794.00014815,
+      147665260.99992916,
+      152198188.99959138,
+      148046220.9997313,
+      150460512.99987084,
+      157094653.00005832
+     ],
+     "median_ns": 148252343.9999568,
+     "spread": 0.06596779999909885
+    },
+    "aa": {
+     "repetitions_ns": [
+      147373549.00034916,
+      146873323.0003636,
+      171439983.99978954,
+      147833224.9998857,
+      147081864.00002888,
+      148948069.0001983,
+      148775991.9996279,
+      162732053.00012705,
+      148798919.00000075
+     ],
+     "median_ns": 148775991.9996279,
+     "spread": 0.1672642825638604
+    },
+    "b": {
+     "repetitions_ns": [
+      164888201.99992916,
+      157587456.9998632,
+      154489820.9999701,
+      148862882.99976513,
+      148654594.999698,
+      202387938.99989104,
+      148993971.99997112,
+      156050816.0000609,
+      149532042.00037363
+     ],
+     "median_ns": 154489820.9999701,
+     "spread": 0.3614644000765814
+    },
+    "a_over_a_ratio": 1.0035321397661763,
+    "b_over_a_ratio": 1.0420733786173064,
+    "utest_a_aa": {
+     "time_pvalue": 0.7910815129207817,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.052058768750600205,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "path_descendant_compiled": {
+    "a": {
+     "repetitions_ns": [
+      97854740.00000249,
+      95617850.0000533,
+      102081621.0002522,
+      94680891.99981478,
+      95970424.99990493,
+      95792354.99995776,
+      99381613.00033243,
+      103138409.00016658,
+      110336559.00018857
+     ],
+     "median_ns": 97854740.00000249,
+     "spread": 0.16535191705211671
+    },
+    "aa": {
+     "repetitions_ns": [
+      99897950.00001323,
+      90729384.00004205,
+      96669597.00007282,
+      96108942.9997628,
+      108691866.00029933,
+      113443203.99985008,
+      127928276.0001479,
+      97692354.00017351,
+      95834899.00023778
+     ],
+     "median_ns": 97692354.00017351,
+     "spread": 0.40999828677431127
+    },
+    "b": {
+     "repetitions_ns": [
+      95086134.99974672,
+      96550972.99992122,
+      95873545.9998934,
+      96832306.99965861,
+      95187540.00009722,
+      115380742.99960499,
+      100742702.9999235,
+      104288128.99999684,
+      96769408.99998954
+     ],
+     "median_ns": 96769408.99998954,
+     "spread": 0.21343393545139167
+    },
+    "a_over_a_ratio": 0.9983405402760359,
+    "b_over_a_ratio": 0.9889087539345266,
+    "utest_a_aa": {
+     "time_pvalue": 0.5962416305866567,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 1.0,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "path_existence_compiled": {
+    "a": {
+     "repetitions_ns": [
+      130235038.99967182,
+      130013851.0000579,
+      132550107.00004277,
+      129780724.99981864,
+      133677352.99971172,
+      130498108.99974546,
+      142546157.9997318,
+      130467511.0000062,
+      131580320.00001185
+     ],
+     "median_ns": 130498108.99974546,
+     "spread": 0.09836154791037743
+    },
+    "aa": {
+     "repetitions_ns": [
+      132882011.99975447,
+      123889189.9997725,
+      150826515.9995972,
+      131239555.00032026,
+      148194380.99993932,
+      141844081.00027213,
+      156880500.99970496,
+      135862517.00007778,
+      130658125.00008178
+     ],
+     "median_ns": 135862517.00007778,
+     "spread": 0.26629693034552115
+    },
+    "b": {
+     "repetitions_ns": [
+      136086232.0002525,
+      135436389.00000587,
+      130436131.00035146,
+      130986909.00005749,
+      131838322.00002143,
+      146253222.99980325,
+      138030157.00023025,
+      132465508.99975774,
+      141915444.00000566
+     ],
+     "median_ns": 135436389.00000587,
+     "spread": 0.12126311841777304
+    },
+    "a_over_a_ratio": 1.041107170375494,
+    "b_over_a_ratio": 1.0378417743989687,
+    "utest_a_aa": {
+     "time_pvalue": 0.0933976745287926,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.07738861114200664,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "path_filter_compiled": {
+    "a": {
+     "repetitions_ns": [
+      98299089.00019291,
+      88058649.9997662,
+      74652947.99976619,
+      116965797.00037546,
+      75522642.00012359,
+      75579310.0001938,
+      81339574.0001397,
+      79723543.00000006,
+      83188927.99979949
+     ],
+     "median_ns": 81339574.0001397,
+     "spread": 0.5667940802651463
+    },
+    "aa": {
+     "repetitions_ns": [
+      77678263.00005254,
+      73773447.00034882,
+      75341578.99999627,
+      76066268.0004316,
+      91346201.00030588,
+      83051157.00022724,
+      123226795.99992625,
+      75932567.99964365,
+      112875418.99991994
+     ],
+     "median_ns": 77678263.00005254,
+     "spread": 0.6703407663646732
+    },
+    "b": {
+     "repetitions_ns": [
+      74740595.00009389,
+      81643934.00011249,
+      75230576.00019456,
+      81635784.99988943,
+      75554996.99992652,
+      112930165.00030717,
+      84788750.00037079,
+      78233650.00012927,
+      79607382.00017658
+     ],
+     "median_ns": 79607382.00017658,
+     "spread": 0.510961546401461
+    },
+    "a_over_a_ratio": 0.9549873349461989,
+    "b_over_a_ratio": 0.9787041913944602,
+    "utest_a_aa": {
+     "time_pvalue": 0.9296365245070707,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.5962416305866567,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "path_map_equal_compiled": {
+    "a": {
+     "repetitions_ns": [
+      227825249.0000341,
+      238310771.9997497,
+      262415014.99998775,
+      237398578.00001118,
+      283090010.9997856,
+      377949491.9999706,
+      237107174.99989188,
+      236890860.00013047,
+      247703370.99971583
+     ],
+     "median_ns": 238310771.9997497,
+     "spread": 0.658944711610582
+    },
+    "aa": {
+     "repetitions_ns": [
+      237559811.99974486,
+      235576453.99978355,
+      248645694.00006077,
+      248632524.99972078,
+      255971460.00018257,
+      269298763.9998137,
+      278363170.0003753,
+      239580748.00020766,
+      245157557.9998462
+     ],
+     "median_ns": 248632524.99972078,
+     "spread": 0.18162560508118974
+    },
+    "b": {
+     "repetitions_ns": [
+      265371527.99983233,
+      240916602.0001976,
+      236333012.0001592,
+      240300572.0002511,
+      237609728.00027958,
+      269696880.0000832,
+      239644827.00012013,
+      251496583.00006196,
+      237704991.00010055
+     ],
+     "median_ns": 240300572.0002511,
+     "spread": 0.14117311719406134
+    },
+    "a_over_a_ratio": 1.043312154601144,
+    "b_over_a_ratio": 1.0083496015887334,
+    "utest_a_aa": {
+     "time_pvalue": 0.5962416305866567,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.7910815129207817,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "path_map_key_compiled": {
+    "a": {
+     "repetitions_ns": [
+      150123445.00019026,
+      155210171.99989727,
+      168049508.99995676,
+      154736155.9996716,
+      155409251.999572,
+      189345329.9999237,
+      155089298.0003482,
+      153910500.99970016,
+      173310057.99997002
+     ],
+     "median_ns": 155210171.99989727,
+     "spread": 0.2612642215856673
+    },
+    "aa": {
+     "repetitions_ns": [
+      155288315.99976912,
+      152774399.99999842,
+      160767977.99996713,
+      163572286.00008968,
+      164239153.9999153,
+      197581647.99986842,
+      197811509.0000756,
+      159075615.99988183,
+      156170248.00030777
+     ],
+     "median_ns": 160767977.99996713,
+     "spread": 0.2947948674652143
+    },
+    "b": {
+     "repetitions_ns": [
+      162946986.99994114,
+      161617908.00015298,
+      156346149.00000086,
+      154132729.0001391,
+      156316025.99978578,
+      165383576.99982953,
+      156552597.99996203,
+      179442476.00007656,
+      156710363.00000197
+     ],
+     "median_ns": 156710363.00000197,
+     "spread": 0.1642074799046387
+    },
+    "a_over_a_ratio": 1.0358082587529993,
+    "b_over_a_ratio": 1.0096655456325743,
+    "utest_a_aa": {
+     "time_pvalue": 0.25099827044292256,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.331387096247615,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "path_nested_filter_compiled": {
+    "a": {
+     "repetitions_ns": [
+      173201647.0000417,
+      172939580.99980956,
+      178769497.99983776,
+      172800709.0000574,
+      173890770.9996056,
+      176545188.99962568,
+      173089959.99974287,
+      169928832.9996307,
+      194084959.0000653
+     ],
+     "median_ns": 173201647.0000417,
+     "spread": 0.14215436882619614
+    },
+    "aa": {
+     "repetitions_ns": [
+      172612157.00000322,
+      171859520.99998757,
+      172153508.0000649,
+      172898261.99976233,
+      174745064.0000352,
+      228590938.99978688,
+      227122901.9997918,
+      190461592.99978173,
+      174886357.0001049
+     ],
+     "median_ns": 174745064.0000352,
+     "spread": 0.3301034337213322
+    },
+    "b": {
+     "repetitions_ns": [
+      197178558.00035977,
+      172728824.99992192,
+      174468111.9998859,
+      178449633.0001275,
+      176897929.0000061,
+      198756831.00008246,
+      186533256.0000752,
+      199220796.99972528,
+      174577123.99982482
+     ],
+     "median_ns": 178449633.0001275,
+     "spread": 0.15337319639507374
+    },
+    "a_over_a_ratio": 1.0089110988649728,
+    "b_over_a_ratio": 1.0302998619873662,
+    "utest_a_aa": {
+     "time_pvalue": 0.859819205054158,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.06368977513662868,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "path_value_compiled": {
+    "a": {
+     "repetitions_ns": [
+      263676776.00001115,
+      269129969.00000507,
+      274399968.9996599,
+      263536765.0000262,
+      264131139.9997903,
+      266740257.00003767,
+      265443776.00021106,
+      286733073.00005037,
+      282819793.9998063
+     ],
+     "median_ns": 266740257.00003767,
+     "spread": 0.08801924847192333
+    },
+    "aa": {
+     "repetitions_ns": [
+      263310743.00014734,
+      253439495.0002934,
+      273396553.00011146,
+      297939586.0002114,
+      264282463.00019965,
+      265089374.00012654,
+      265985502.0001487,
+      277475358.999709,
+      264884274.99998578
+     ],
+     "median_ns": 265089374.00012654,
+     "spread": 0.1755846735721538
+    },
+    "b": {
+     "repetitions_ns": [
+      268325547.00013134,
+      284356311.0000105,
+      265529556.99980885,
+      263901407.0000485,
+      265379402.00023514,
+      337737938.9999078,
+      268681239.000216,
+      275431456.0002058,
+      266594212.00020006
+     ],
+     "median_ns": 268325547.00013134,
+     "spread": 0.27978832261339837
+    },
+    "a_over_a_ratio": 0.9938108967184849,
+    "b_over_a_ratio": 1.0059431973933108,
+    "utest_a_aa": {
+     "time_pvalue": 0.6588432549492806,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.5962416305866567,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   }
+  }
+ }
+}

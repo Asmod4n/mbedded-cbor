@@ -15,7 +15,7 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 
 // Each test in this file is one example of a reference page of the path group; the comments of query.hpp,
-// rfc9535.hpp and lazy.hpp take the examples through the snippet markers. The tests exist so that every example
+// path.hpp and lazy.hpp take the examples through the snippet markers. The tests exist so that every example
 // compiles and gives the result that its page states.
 
 // query.hpp, snippet at_path: a number reads from a std::string in place, a text needs an owner, and a run-time
@@ -124,7 +124,7 @@ std::int64_t read_or_zero(std::string_view const bytes)
 
 } // namespace
 
-// rfc9535.hpp, snippet fixed_string: a template of the program passes a path on as a fixed_string.
+// path.hpp, snippet fixed_string: a template of the program passes a path on as a fixed_string.
 TEST_CASE("doc reference path: fixed_string")
 {
     std::string const bytes = test::preferred(test::M("id"s, 42));
@@ -137,7 +137,7 @@ TEST_CASE("doc reference path: fixed_string")
     CHECK_EQ(age, 0);
 }
 
-// rfc9535.hpp, snippet is_valid_path_v: the grammar check of a path at compile time.
+// path.hpp, snippet is_valid_path_v: the grammar check of a path at compile time.
 TEST_CASE("doc reference path: is_valid_path_v")
 {
     // [is_valid_path_v]
@@ -150,7 +150,7 @@ TEST_CASE("doc reference path: is_valid_path_v")
     CHECK_FALSE(match);
 }
 
-// rfc9535.hpp, snippet is_singular_query_v: a singular query has names and indexes only.
+// path.hpp, snippet is_singular_query_v: a singular query has names and indexes only.
 TEST_CASE("doc reference path: is_singular_query_v")
 {
     // [is_singular_query_v]

@@ -27,7 +27,6 @@
 #endif
 
 #include "rfc8746.hpp"
-#include "rfc9535.hpp"
 #include "error.hpp"
 #include "rfc8949.hpp"
 #include "validity.hpp"
@@ -141,7 +140,14 @@ class heads
     {
         static_assert(head_padding >= sizeof(std::uint64_t),
                       "The padding after the last head must hold the bytes that a head writes past its own size.");
-        return head_encode(out.subspan(at).template first<head_size_max>(), major, info, argument);
+        if (detail::validity::bytes_fit(head_size_max, out.size() - at)) [[likely]]
+            return head_encode(out.subspan(at).template first<head_size_max>(), major, info, argument);
+        std::size_t const width = argument_size(info);
+        std::span<char> const field = out.subspan(at, initial_byte_size + width);
+        field.front() = initial_byte(major, info);
+        auto const bytes = big_endian(argument);
+        std::ranges::copy(std::span(bytes).last(width), field.subspan(initial_byte_size).begin());
+        return initial_byte_size + width;
     }
 
     CBOR_ALWAYS_INLINE static std::size_t write_head(std::span<char> const out, std::size_t const at, major_type const major,
@@ -895,15 +901,6 @@ class heads
                 return at;
             at = h->at;
         }
-    }
-
-    static constexpr bool break_at(std::string_view const encoded, detail::validity::offset const at)
-    {
-        std::string_view const rest = detail::validity::subspan(encoded, at);
-        return detail::validity::bytes_fit(initial_byte_size, rest.size()) &&
-               rest.front() ==
-                   initial_byte(major_type::simple_float,
-                                std::to_underlying(rfc8949::simple_float_information::break_stop_code));
     }
 
     friend class detail::validity;

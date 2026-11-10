@@ -23,6 +23,7 @@
 #include "cbor_sets.hpp"
 #include "notable_tags.hpp"
 #include "packed_cbor.hpp"
+#include "path.hpp"
 #include "rfc9535.hpp"
 #include "validity.hpp"
 #include "head.hpp"

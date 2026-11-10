@@ -46,7 +46,6 @@
 #endif
 
 #include "rfc8746.hpp"
-#include "rfc9535.hpp"
 #include "error.hpp"
 #include "rfc8949.hpp"
 
@@ -501,8 +500,8 @@ public:
                                                       offset second_at);
 
     template <bool Checked, class Message>
-    static std::expected<std::pair<std::uint64_t, offset>, error> intern_key(canonical_ids &ids, Message &message,
-                                                                         offset at);
+    static std::expected<std::pair<std::uint64_t, offset>, error>
+    intern_key(canonical_ids &ids, Message const &message, offset at);
 
     template <class Encoded>
         requires(!std::is_reference_v<Encoded>)
@@ -545,11 +544,11 @@ public:
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
     check_definite_length(major_type const major, std::uint8_t const info)
     {
-        if (info == std::to_underlying(rfc8949::additional_information::indefinite_length) &&
-            major >= major_type::byte_string && major <= major_type::map) [[unlikely]]
-            return std::unexpected(error::indefinite_length);
-        if (info > std::to_underlying(rfc8949::additional_information::eight_byte_argument)) [[unlikely]]
-            return std::unexpected(error::syntax_error);
+        if (auto r = check_additional_information(major, info); !r) [[unlikely]]
+            return r;
+        if (info == std::to_underlying(rfc8949::additional_information::indefinite_length)) [[unlikely]]
+            return std::unexpected(major == major_type::simple_float ? error::syntax_error
+                                                                     : error::indefinite_length);
         return {};
     }
 

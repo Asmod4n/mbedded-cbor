@@ -7,6 +7,7 @@
 #pragma once
 
 #include <algorithm>
+#include <concepts>
 #include <cstddef>
 #include <forward_list>
 #include <memory_resource>
@@ -40,7 +41,10 @@ class string_saver {
             chunk_added<Chunks>(std::max(part.size(), chunk_size));
         auto &chunk = chunks.front();
         std::size_t const at = chunk.size();
-        chunk.append_range(part);
+        if constexpr (std::same_as<E, char>)
+            chunk.append(std::string_view(part.begin(), part.end()));
+        else
+            chunk.insert(chunk.end(), part.begin(), part.end());
         return std::span<E const>(chunk).subspan(at);
     }
 

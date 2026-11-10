@@ -207,7 +207,7 @@ class encoding
 public:
     static constexpr std::size_t block_size = CBOR_ENCODER_BLOCK_SIZE;
     static constexpr std::size_t item_size_max = heads::initial_byte_size + sizeof(std::uint64_t);
-    static constexpr std::size_t ref_size = 32;
+    static constexpr std::size_t copybreak = 31;
     static_assert(block_size >= item_size_max, "A block must hold one whole head or float.");
     static constexpr std::size_t inline_buffer_size = CBOR_ENCODER_INLINE_BUFFER_SIZE;
     static_assert(inline_buffer_size >= item_size_max, "The inline buffer must hold one whole head or float.");
@@ -410,26 +410,6 @@ struct encoding::binary_writer {
         }
     }
 
-    std::expected<void, std::errc>
-    write_item(std::array<char, heads::initial_byte_size + sizeof(std::uint64_t)> const &item,
-               std::size_t const size)
-    {
-        if (!detail::validity::bytes_fit(item.size(), block.size() - used)) [[unlikely]] {
-            if constexpr (direct) {
-                if (!detail::validity::bytes_fit(size, block.size() - used)) [[unlikely]]
-                    return std::unexpected(std::errc::no_buffer_space);
-                std::ranges::copy(std::span(item).first(size), block.subspan(used).begin());
-                used += size;
-                return {};
-            } else if (auto const r = refill(item.size()); !r) [[unlikely]] {
-                return r;
-            }
-        }
-        std::ranges::copy(item, std::span(block).subspan(used).begin());
-        used += size;
-        return {};
-    }
-
     std::expected<void, std::errc> encode_head(major_type const major, std::uint8_t const info, std::uint64_t const argument)
     {
         if constexpr (!direct) {
@@ -444,14 +424,10 @@ struct encoding::binary_writer {
         } else {
             std::span<char> const out = block;
             std::size_t const at = used;
-            std::array<char, heads::head_size_max> tail;
-            bool const near_end = !detail::validity::bytes_fit(tail.size(), out.size() - at);
-            std::span<char, heads::head_size_max> const item =
-                near_end ? std::span(tail) : out.subspan(at).template first<heads::head_size_max>();
-            std::size_t const size = heads::head_encode(item, major, info, argument);
-            if (near_end) [[unlikely]]
-                return write_item(tail, size);
-            used = at + size;
+            std::size_t const size = heads::initial_byte_size + heads::argument_size(info);
+            if (!detail::validity::bytes_fit(size, out.size() - at)) [[unlikely]]
+                return std::unexpected(std::errc::no_buffer_space);
+            used = at + heads::write_head(out.first(at + size), at, major, info, argument);
             return {};
         }
     }
@@ -468,7 +444,7 @@ struct encoding::binary_writer {
 
     CBOR_ALWAYS_INLINE std::expected<void, std::errc> encode_head(major_type const major, std::uint64_t const argument)
     {
-        if (detail::validity::bytes_fit(heads::head_size_max, block.size() - used)) [[likely]] {
+        if (!direct && detail::validity::bytes_fit(heads::head_size_max, block.size() - used)) [[likely]] {
             std::span<char> const out = block;
             used += heads::head_encode(out.subspan(used).template first<heads::head_size_max>(), major,
                                        heads::preferred_argument_info(argument), argument);
@@ -573,7 +549,7 @@ struct encoding::binary_writer {
     std::expected<void, std::errc> encode_text_string(S &&text)
     {
         if constexpr (blocks)
-            if (text.size() >= ref_size) {
+            if (text.size() > copybreak) {
                 auto const owner = std::make_shared<std::string const>(std::move(text));
                 return encode_piece(major_type::text_string, std::as_bytes(std::span(*owner)), owner);
             }
@@ -585,7 +561,7 @@ struct encoding::binary_writer {
         detail::validity::throw_logic_error_if_null(text,
                                                     "cbor::encoder::encode_text_string: the string is null");
         if constexpr (blocks)
-            if (text->size() >= ref_size)
+            if (text->size() > copybreak)
                 return encode_piece(major_type::text_string, std::as_bytes(std::span(*text)), text);
         return encode_text_string(std::string_view(*text));
     }
@@ -593,7 +569,7 @@ struct encoding::binary_writer {
     std::expected<void, std::errc> encode_text_string(ref<std::string_view> const text)
     {
         if constexpr (blocks)
-            if ((*text).size() >= ref_size)
+            if ((*text).size() > copybreak)
                 return encode_piece(major_type::text_string, std::as_bytes(std::span(*text)), text.owner);
         return encode_text_string(*text);
     }
@@ -603,7 +579,7 @@ struct encoding::binary_writer {
     std::expected<void, std::errc> encode_byte_string(V &&bytes)
     {
         if constexpr (blocks)
-            if (bytes.size() >= ref_size) {
+            if (bytes.size() > copybreak) {
                 auto const owner = std::make_shared<std::vector<std::byte> const>(std::move(bytes));
                 return encode_piece(major_type::byte_string, std::span(*owner), owner);
             }
@@ -615,7 +591,7 @@ struct encoding::binary_writer {
         detail::validity::throw_logic_error_if_null(bytes,
                                                     "cbor::encoder::encode_byte_string: the bytes are null");
         if constexpr (blocks)
-            if (bytes->size() >= ref_size)
+            if (bytes->size() > copybreak)
                 return encode_piece(major_type::byte_string, std::span(*bytes), bytes);
         return encode_byte_string(std::span<std::byte const>(*bytes));
     }
@@ -623,7 +599,7 @@ struct encoding::binary_writer {
     std::expected<void, std::errc> encode_byte_string(ref<std::span<std::byte const>> const bytes)
     {
         if constexpr (blocks)
-            if ((*bytes).size() >= ref_size)
+            if ((*bytes).size() > copybreak)
                 return encode_piece(major_type::byte_string, *bytes, bytes.owner);
         return encode_byte_string(*bytes);
     }
