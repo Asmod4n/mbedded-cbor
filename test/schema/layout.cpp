@@ -113,8 +113,8 @@ TEST_CASE("member_offset: the record head has one width for any count and any na
     CHECK_EQ(form<long_name>::member_offset<&long_name::b>(), 10u);
     CHECK_EQ(form<long_name>::member_offset<&long_name::a_member_name_of_twenty_nine_b>(), 12u);
     CHECK_EQ(form<empty>::fixed_size(), 10u);
-    CHECK_EQ(form<größe>::member_offset<&größe::b>(), 10u);
-    CHECK_EQ(form<größe>::member_offset<&größe::höhe>(), 12u);
+    CHECK_EQ(form<utf8_key>::member_offset<&utf8_key::b>(), 10u);
+    CHECK_EQ(form<utf8_key>::member_offset<&utf8_key::height>(), 12u);
 }
 
 // A variant member is a reference field like any part of variable size: tag 6 and an argument of 4 bytes.

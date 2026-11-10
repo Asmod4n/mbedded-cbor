@@ -112,8 +112,8 @@ struct long_name {
     std::uint8_t b;
 };
 
-struct größe {
-    std::uint8_t höhe;
+struct utf8_key {
+    std::uint8_t height;
     std::uint8_t b;
 };
 } // namespace schema_types
@@ -192,11 +192,11 @@ struct cbor::describe_members<long_name> {
 };
 
 template <>
-struct cbor::describe_members<größe> {
+struct cbor::describe_members<utf8_key> {
     static constexpr std::optional<cbor::tag> tag = cbor::tag{1506};
     static constexpr std::tuple members{
-        CBOR_MEMBER(größe, höhe),
-        CBOR_MEMBER(größe, b),
+        cbor::member{"höhe", &utf8_key::height},
+        CBOR_MEMBER(utf8_key, b),
     };
 };
 namespace schema_types

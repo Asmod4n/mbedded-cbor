@@ -29,7 +29,7 @@ std::string golden_report()
     report += golden_line<empty>("empty");
     report += golden_line<thirty>("thirty");
     report += golden_line<long_name>("long_name");
-    report += golden_line<größe>("größe");
+    report += golden_line<utf8_key>("utf8_key");
     report += golden_line<login>("login");
     report += golden_line<measures>("measures");
     report += golden_line<named>("named");
@@ -157,10 +157,10 @@ TEST_CASE("golden bytes: long_name encodes as before")
     CHECK_EQ(golden_line<long_name>("long_name"), golden_expected_line("long_name"));
 }
 
-TEST_CASE("golden bytes: größe encodes as before")
+TEST_CASE("golden bytes: utf8_key encodes as before")
 {
-    CHECK_FALSE(golden_expected_line("größe").empty());
-    CHECK_EQ(golden_line<größe>("größe"), golden_expected_line("größe"));
+    CHECK_FALSE(golden_expected_line("utf8_key").empty());
+    CHECK_EQ(golden_line<utf8_key>("utf8_key"), golden_expected_line("utf8_key"));
 }
 
 TEST_CASE("golden bytes: login encodes as before")
