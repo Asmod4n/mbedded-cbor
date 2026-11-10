@@ -1,16 +1,15 @@
 #!/bin/bash
+# The part of bench/sid.sh that runs in the container: "build" makes one binary per compiler, document and arm of
+# bench/runtime.cpp, "measure" runs them in rounds and writes /run-dir/out/result.json.
 set -eu
-here=$(cd "$(dirname "$0")" && pwd)
-root=$(dirname "$here")
-WARNINGS_DIR=$root/cmake
-. "$WARNINGS_DIR/warnings.sh"
-build=${BUILD:?the build directory}
+dir=/run-dir
+. /bench/round.sh
+. /cmake/warnings.sh
 PROCESSES=${PROCESSES:-10}
 MIN_TIME=${MIN_TIME:-0.2s}
 docs=${DOCS:-"twitter floats records"}
 arms=${ARMS:-"MB_DECODE LC_DECODE JC_DECODE READ TC_READ JC_READ LC_READ FB_READ FB_READ_V MP_READ MB_PATH MB_AT_PATH TC_PATH JC_PATH FB_PATH FB_PATH_V"}
 compilers=${COMPILERS:-"g++-16 clang++-23"}
-JOBS=4
 flags="-O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG"
 
 arm_libraries() {
@@ -24,63 +23,51 @@ arm_libraries() {
 compile() {
 	local cc=$1 a=$2 d=$3 out=$4
 	"$cc" -std=c++23 $flags $(warnings_for "$cc") -DDOCTEST_CONFIG_DISABLE -DARM_$a -DARM_NAME="\"$a\"" -DDOC_$d \
-		-DDOC_PATH="\"$here/docs/$d.cbor\"" -I"$root/include" \
-		"$here/runtime.cpp" $(arm_libraries "$a") -lbenchmark -lpthread -o "$out"
+		-DDOC_PATH="\"/bench/docs/$d.cbor\"" -I/include \
+		/bench/runtime.cpp $(arm_libraries "$a") -lbenchmark -lpthread -o "$out"
 }
 
-mkdir -p "$build/bin" "$build/out"
-if [ -z "${RUN_ONLY:-}" ]; then
-	echo "${COMMIT:?the commit of the tree with its dirty mark: \$(git rev-parse HEAD), and -dirty when git status --porcelain is not empty}" > "$build/commit"
-fi
-[ -n "${RUN_ONLY:-}" ] && compilers=""
-running=0
-spawn() {
-	if [ "$running" -ge "$JOBS" ]; then
-		wait -n
-		running=$((running - 1))
-	fi
-	"$@" &
-	running=$((running + 1))
-}
-for cc in $compilers; do
-	for d in $docs; do
-		for a in $arms; do
-			spawn compile "$cc" "$a" "$d" "$build/bin/$cc.$d.$a"
-		done
-		for a in ${AA:-}; do
-			spawn compile "$cc" "$a" "$d" "$build/bin/$cc.$d.${a}_AA"
+build() {
+	local cc d a
+	mkdir -p "$dir/bin" "$dir/out"
+	for cc in $compilers; do
+		for d in $docs; do
+			for a in $arms; do
+				spawn compile "$cc" "$a" "$d" "$dir/bin/$cc.$d.$a"
+			done
+			for a in ${AA:-}; do
+				spawn compile "$cc" "$a" "$d" "$dir/bin/$cc.$d.${a}_AA"
+			done
 		done
 	done
-done
-while [ "$running" -gt 0 ]; do
-	wait -n
-	running=$((running - 1))
-done
-[ -n "${BUILD_ONLY:-}" ] && exit 0
-
-steal() {
-	local user nice system idle iowait irq softirq stolen rest
-	read -r _ user nice system idle iowait irq softirq stolen rest < /proc/stat
-	echo "$stolen $((user + nice + system + idle + iowait + irq + softirq + stolen))"
+	finish
 }
-for b in "$build"/bin/*; do
-	echo "$(basename "$b") $(readelf -h "$b" | grep -o 'Type: *[A-Z]*' | tr -s ' ')"
-done > "$build/out/elf_type"
-cat /proc/loadavg > "$build/out/loadavg_start"
-i=1
-while [ "$i" -le "$PROCESSES" ]; do
-	s0=$(steal)
-	t0=$(date +%s.%N)
-	ls "$build"/bin | shuf > "$build/out/order.$i"
-	while read -r n; do
-		b=$build/bin/$n
-		"$b" --benchmark_min_time="$MIN_TIME" --benchmark_out_format=json \
-			--benchmark_out="$build/out/$i.$n.json" < /dev/null > /dev/null 2>> "$build/out/err.txt" ||
-			echo "$n" >> "$build/out/failed.txt"
-	done < "$build/out/order.$i"
-	s1=$(steal)
-	t1=$(date +%s.%N)
-	echo "$i $t0 $t1 $s0 $s1" >> "$build/out/rounds"
-	i=$((i + 1))
-done
-cat /proc/loadavg > "$build/out/loadavg_end"
+
+one_round() {
+	local try=$1 n
+	for n in $(ls "$dir/bin" | shuf); do
+		$runner "$dir/bin/$n" --benchmark_min_time="$MIN_TIME" --benchmark_out_format=json \
+			--benchmark_out="$try/$n.json" < /dev/null > /dev/null 2>> "$dir/out/err.txt" ||
+			echo "$n" >> "$dir/out/failed.txt"
+	done
+}
+
+measure() {
+	local b
+	refuse_root
+	runner=$(ask_priority "$dir/out")
+	echo "priority: $(cat "$dir/out/priority")"
+	record_packages "$dir/out" g++-16 clang-23 libstdc++6 libc6 libbenchmark-dev libtinycbor0 libjsoncons-dev libcbor0.10 \
+		libflatbuffers-dev libmsgpack-cxx-dev
+	for b in "$dir"/bin/*; do
+		echo "$(basename "$b") $(readelf -h "$b" | grep -o 'Type: *[A-Z]*' | tr -s ' ')"
+	done > "$dir/out/elf_type"
+	cat /proc/loadavg > "$dir/out/loadavg_start"
+	run_rounds "$PROCESSES" "$dir/out" one_round
+	cat /proc/loadavg > "$dir/out/loadavg_end"
+	python3 -I /bench/context.py "$dir" "$steal_limit_percent" $compilers -- $(ls "$dir"/bin/* | head -n 1) \
+		> "$dir/out/context.json"
+	python3 -I /bench/summarize-sid.py "$dir" "$STAMP" "$flags" "$PROCESSES" "$MIN_TIME" > "$dir/out/result.json"
+}
+
+"$1"

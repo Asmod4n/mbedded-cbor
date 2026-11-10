@@ -98,3 +98,32 @@ compare.py. The script prints one table with a row per function and a column per
 
 ROUNDS (9), MIN_TIME (0.05s), COLD_BYTES (twice the level 2 cache), FLAGS, GATE_SECONDS (2),
 CBOR_BUILD_ROOT, CCACHE_HOST_DIR, BENCH_IMAGE, RESULTS_DIR.
+
+# sid.sh
+
+The script measures the arms of bench/runtime.cpp against the CBOR libraries of Debian sid, in podman.
+
+## Usage
+
+    bench/sid.sh
+
+The image is the one of function.sh. The bench runs as user 65534 in the container.
+
+## Method
+
+1. The script holds the lock of test/run.sh from the first build to the result file.
+2. The gate of gate.sh runs on the host before the build and before the first round.
+3. One container builds one binary per compiler, document and arm, from include/ and bench/ of the working tree,
+   as many at once as there are cpus. The warnings of cmake/warnings-*.txt and -Werror always apply.
+4. A second container runs the rounds as user 65534 with no network. Each round runs every binary once, in a
+   random order. A round whose steal is not under 3 percent of its cpu time is discarded and run again.
+
+## Result
+
+One file: `bench/results/sid-<UTC time>.json`. It names HEAD with a dirty mark when include/, bench/, cmake/ or
+test/owned_copy.hpp has changes.
+
+## Variables
+
+PROCESSES (10, the rounds), MIN_TIME (0.2s), DOCS, ARMS, AA (arms built twice), COMPILERS, CBOR_BUILD_ROOT,
+BENCH_IMAGE, RESULTS_DIR.

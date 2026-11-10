@@ -9,7 +9,7 @@ import statistics
 import subprocess
 import sys
 
-build, root, stamp, flags, processes, min_time = sys.argv[1:7]
+build, stamp, flags, processes, min_time = sys.argv[1:6]
 
 
 def run(*cmd):
@@ -47,8 +47,8 @@ def cpu():
 
 times = collections.defaultdict(list)
 context = {}
-for path in glob.glob(os.path.join(build, "out", "*.json")):
-    name = os.path.basename(path)[:-5].split(".", 1)[1]
+for path in glob.glob(os.path.join(build, "out", "round*", "*.json")):
+    name = os.path.basename(path)[:-5]
     data = json.load(open(path))
     context.setdefault(name, data["context"])
     for b in data["benchmarks"]:
@@ -64,12 +64,8 @@ for name, t in sorted(times.items()):
         "copies": context[name].get("copies"),
     }
 
-steal = []
-for line in read(os.path.join(build, "out", "rounds")).splitlines():
-    f = line.split()
-    i, t0, t1, st0, tot0, st1, tot1 = f[0], float(f[1]), float(f[2]), int(f[3]), int(f[4]), int(f[5]), int(f[6])
-    steal.append({"round": int(i), "wall_s": t1 - t0, "steal_ticks": st1 - st0,
-                  "steal_percent_of_cpu_time": 100.0 * (st1 - st0) / max(1, tot1 - tot0)})
+context_of_run = json.load(open(os.path.join(build, "out", "context.json")))
+steal = context_of_run["rounds_detail"]
 
 commit = read(os.path.join(build, "commit"))
 if not re.fullmatch(r"[0-9a-f]{40}(-dirty)?", commit):
@@ -98,7 +94,7 @@ print(json.dumps({
     "virtualization": "firecracker VM, podman container localhost/mbedded-cbor-sid-gb (debian:sid)",
     "cpu": cpu(),
     "uid": os.getuid(),
-    "priority": read(os.path.join(build, "renice")),
+    "priority": context_of_run["priority"],
     "threads": 1,
     "pinned": False,
     "cpu_left_to_the_machine": "each bench process is single-threaded; 3 of 4 cpus stay to the rest of the machine",
