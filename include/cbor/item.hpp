@@ -24,7 +24,7 @@ namespace cbor
 namespace detail
 {
 
-template <bool, bool>
+template <bool>
 struct tree_decoder;
 
 }
@@ -207,7 +207,7 @@ private:
     {
     }
 
-    template <bool, bool>
+    template <bool>
     friend struct detail::tree_decoder;
 
     friend class encoding;

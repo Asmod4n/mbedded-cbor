@@ -1167,8 +1167,7 @@ class extended_diagnostic_notation
         return number_of(value) + (width == preferred ? std::string{} : indicator);
     }
 
-    template <bool Checked>
-    static bool break_consumed(heads::decoder<Checked> &d)
+    static bool break_consumed(heads::decoder<true> &d)
     {
         if (!detail::validity::bytes_fit(heads::initial_byte_size, d.encoded.size()) ||
             d.encoded.front() !=
@@ -1179,13 +1178,12 @@ class extended_diagnostic_notation
         return true;
     }
 
-    template <bool Checked>
     static std::expected<void, error>
-    write_diagnostic(std::string &out, heads::decoder<Checked> &d)
+    write_diagnostic(std::string &out, heads::decoder<true> &d)
     {
         if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
             return std::unexpected(r.error());
-        auto const h = heads::read_raw_head<Checked>(d.encoded, detail::validity::offset{});
+        auto const h = heads::read_raw_head<true>(d.encoded, detail::validity::offset{});
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
         d.encoded = detail::validity::subspan(d.encoded, h->at);

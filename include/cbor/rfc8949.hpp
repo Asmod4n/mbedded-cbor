@@ -18,7 +18,7 @@ namespace detail
 
 class validity;
 
-template <bool, bool>
+template <bool>
 struct tree_decoder;
 
 }
@@ -153,7 +153,7 @@ class rfc8949
 
     friend struct lazy;
 
-    template <bool, bool>
+    template <bool>
     friend struct detail::tree_decoder;
 
     template <class Target>

@@ -328,8 +328,8 @@ class generic
         requires std::same_as<U, std::basic_string<char, std::char_traits<char>, typename U::allocator_type>>;
     };
 
-    template <class U, class V, bool Checked>
-    static std::expected<void, error> read_integer(heads::decoder<Checked> &d, V &out)
+    template <class U, class V>
+    static std::expected<void, error> read_integer(heads::decoder<true> &d, V &out)
     {
         auto const h = d.decode_head();
         if (!h) [[unlikely]]
@@ -394,8 +394,8 @@ class generic
     }
 
 #ifdef CBOR_HAS_INT128
-    template <class U, bool Checked>
-    static std::expected<void, error> read_wide_integer(heads::decoder<Checked> &d, U &out)
+    template <class U>
+    static std::expected<void, error> read_wide_integer(heads::decoder<true> &d, U &out)
     {
         auto const h = d.decode_head();
         if (!h) [[unlikely]]
@@ -437,8 +437,8 @@ class generic
     }
 #endif
 
-    template <class U, std::size_t I = 0, bool Checked>
-    static std::expected<void, error> read_variant(value_sharing::sharing_decoder<Checked> &d, U &out,
+    template <class U, std::size_t I = 0>
+    static std::expected<void, error> read_variant(value_sharing::sharing_decoder &d, U &out,
                                                    heads::head const &h)
     {
         if constexpr (I == std::variant_size_v<U>) {
@@ -451,13 +451,13 @@ class generic
         }
     }
 
-    template <class U, bool Checked>
-    static std::expected<void, error> read_generic(value_sharing::sharing_decoder<Checked> &d, U &out)
+    template <class U>
+    static std::expected<void, error> read_generic(value_sharing::sharing_decoder &d, U &out)
     {
-        using marked_value = typename value_sharing::sharing_decoder<Checked>::marked_value;
+        using marked_value = value_sharing::sharing_decoder::marked_value;
         std::size_t const first_mark = d.marked_values.size();
         for (;;) {
-            heads::decoder<Checked> look = d;
+            heads::decoder<true> look = d;
             auto const h = look.decode_head();
             if (!h) [[unlikely]]
                 return std::unexpected(h.error());
@@ -490,8 +490,8 @@ class generic
         return {};
     }
 
-    template <class U, bool Checked>
-    static std::expected<void, error> read_generic_value(value_sharing::sharing_decoder<Checked> &d, U &out)
+    template <class U>
+    static std::expected<void, error> read_generic_value(value_sharing::sharing_decoder &d, U &out)
     {
         if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
             return std::unexpected(r.error());
@@ -514,7 +514,7 @@ class generic
         } else if constexpr (reflection::is_wide_integer<U>) {
             return read_wide_integer(d, out);
         } else if constexpr (detail::is_std_variant<U>) {
-            heads::decoder<Checked> probe = d;
+            heads::decoder<true> probe = d;
             auto const h = probe.decode_head();
             if (!h) [[unlikely]]
                 return std::unexpected(h.error());
@@ -721,11 +721,11 @@ class generic
         }
     }
 
-    template <class U, bool Checked>
-    static std::expected<void, error> read_epoch(value_sharing::sharing_decoder<Checked> &d, U &out)
+    template <class U>
+    static std::expected<void, error> read_epoch(value_sharing::sharing_decoder &d, U &out)
     {
         using rep = std::chrono::seconds::rep;
-        heads::decoder<Checked> look = d;
+        heads::decoder<true> look = d;
         auto const h = look.decode_head();
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
@@ -749,8 +749,8 @@ class generic
     }
 
 #if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
-    template <class U, bool Checked, std::size_t N>
-    static std::expected<void, error> parse_text(value_sharing::sharing_decoder<Checked> &d, U &out,
+    template <class U, std::size_t N>
+    static std::expected<void, error> parse_text(value_sharing::sharing_decoder &d, U &out,
                                                  std::array<char const *, N> const &formats)
     {
         auto const h = d.decode_head();
@@ -777,8 +777,8 @@ class generic
     }
 #endif
 
-    template <class U, bool Checked>
-    static std::expected<void, error> read_tag_content(value_sharing::sharing_decoder<Checked> &d, U &out,
+    template <class U>
+    static std::expected<void, error> read_tag_content(value_sharing::sharing_decoder &d, U &out,
                                                        heads::head const &tag)
     {
         if constexpr (is_sys_time<U>) {
@@ -859,8 +859,8 @@ class generic
                (key.major != major_type::text_string || text == key.text);
     }
 
-    template <class U, bool Checked>
-    static std::expected<void, error> read_struct(value_sharing::sharing_decoder<Checked> &d, U &out)
+    template <class U>
+    static std::expected<void, error> read_struct(value_sharing::sharing_decoder &d, U &out)
     {
         static_assert(pfr::struct_readable<U>());
         constexpr std::size_t count = pfr::tuple_size_v<U>;
@@ -1653,7 +1653,7 @@ private:
 #if defined(__cpp_exceptions)
         try {
 #endif
-            auto value = read<true>(encoded, std::move(target));
+            auto value = read(encoded, std::move(target));
             if (!value) [[unlikely]]
                 return std::unexpected(value.error());
             return ref<T>(std::move(owner), std::move(*value));
@@ -1664,10 +1664,9 @@ private:
 #endif
     }
 
-    template <bool Checked>
     static std::expected<T, error> read(std::string_view const encoded, T out)
     {
-        value_sharing::sharing_decoder<Checked> d{{encoded}, {}};
+        value_sharing::sharing_decoder d{{encoded}, {}};
         if (auto const r = generic::read_generic(d, out); !r) [[unlikely]]
             return std::unexpected(r.error());
         return out;

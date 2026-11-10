@@ -588,44 +588,36 @@ private:
 
     void throw_logic_error_if_no_top_level(char const *message) const;
 
-    template <bool Checked>
     struct resolved;
 
-    template <bool Checked>
-    static std::expected<resolved<Checked>, error> resolve_container(top_level_item source,
-                                                                     detail::validity::offset offset);
+    static std::expected<resolved, error> resolve_container(top_level_item source, detail::validity::offset offset);
 
-    template <bool Checked>
-    static std::expected<resolved<Checked>, error> resolve_tag_content(top_level_item source,
-                                                                       detail::validity::offset offset);
+    static std::expected<resolved, error> resolve_tag_content(top_level_item source, detail::validity::offset offset);
 
     struct tag_content {
         detail::validity::offset offset;
         std::string_view bytes;
     };
 
-    template <bool Checked>
-    static std::expected<tag_content, error> read_typed_array_bytes(resolved<Checked> const &found);
+    static std::expected<tag_content, error> read_typed_array_bytes(resolved const &found);
 
     static std::expected<std::string_view, error> read_typed_array_element(lazy const &node);
 
-    template <bool Checked>
-    static std::expected<resolved<Checked>, error> resolve(lazy const &node);
+    static std::expected<resolved, error> resolve(lazy const &node);
 
-    template <bool Checked, std::integral Index>
-    static std::expected<lazy, error> select_index(resolved<Checked> const &found, Index i);
+    template <std::integral Index>
+    static std::expected<lazy, error> select_index(resolved const &found, Index i);
 
-    template <class Key, class Entries = lazy_entries, bool Checked>
+    template <class Key, class Entries = lazy_entries>
         requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
-    static std::expected<typename Entries::iterator, error> find_key(resolved<Checked> found, Key key);
+    static std::expected<typename Entries::iterator, error> find_key(resolved found, Key key);
 
-    template <class Iterator, class Last, class Key, bool Checked>
+    template <class Iterator, class Last, class Key>
         requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
     static std::expected<std::pair<Iterator, bool>, error> find_key(Iterator first, Last last, Key key);
 
-    template <bool Checked>
-    static std::expected<bool, error> integer_key_equivalent(heads::decoder<Checked> const &probe,
-                                                             heads::head const &k, std::int64_t key);
+    static std::expected<bool, error> integer_key_equivalent(heads::decoder<true> const &probe, heads::head const &k,
+                                                             std::int64_t key);
 
     template <class Iterator>
     static std::expected<lazy, error> value_of(std::expected<Iterator, error> found);
@@ -1200,29 +1192,27 @@ detail::validity::keys_equivalent(First const &first, offset const first_at, Sec
     return p.value == q.value;
 }
 
-template <bool Checked>
 struct lazy::resolved {
     lazy::top_level_item source;
     heads::head h;
-    heads::decoder<Checked> d;
+    heads::decoder<true> d;
     detail::validity::offset item_at;
 };
 
-template <bool Checked>
-std::expected<lazy::resolved<Checked>, error> lazy::resolve_container(lazy::top_level_item source,
-                                                                      detail::validity::offset offset)
+inline std::expected<lazy::resolved, error> lazy::resolve_container(lazy::top_level_item source,
+                                                                    detail::validity::offset offset)
 {
     detail::validity::throw_logic_error_if(source.encoded.data() == nullptr,
                                            "cbor::lazy: the lazy holds no top-level item");
     for (;;) {
         detail::validity::offset const at = heads::self_described_cbor_content_at(source.encoded, offset);
-        heads::decoder<Checked> d{detail::validity::subspan(source.encoded, at)};
+        heads::decoder<true> d{detail::validity::subspan(source.encoded, at)};
         auto const h = d.decode_head();
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
         if (h->major != major_type::tag ||
             h->argument != std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item))
-            return resolved<Checked>{std::move(source), *h, d, at};
+            return resolved{std::move(source), *h, d, at};
         auto const r = d.decode_head();
         if (!r) [[unlikely]]
             return std::unexpected(r.error());
@@ -1237,12 +1227,11 @@ std::expected<lazy::resolved<Checked>, error> lazy::resolve_container(lazy::top_
     }
 }
 
-template <bool Checked>
-std::expected<lazy::resolved<Checked>, error> lazy::resolve_tag_content(lazy::top_level_item source,
-                                                                        detail::validity::offset offset)
+inline std::expected<lazy::resolved, error> lazy::resolve_tag_content(lazy::top_level_item source,
+                                                                      detail::validity::offset offset)
 {
     for (;;) {
-        auto found = resolve_container<Checked>(std::move(source), offset);
+        auto found = resolve_container(std::move(source), offset);
         if (!found) [[unlikely]]
             return found;
         if (found->h.major != major_type::tag || !heads::is_tag_passed(found->h.argument)) [[likely]] {
@@ -1257,15 +1246,14 @@ std::expected<lazy::resolved<Checked>, error> lazy::resolve_tag_content(lazy::to
     }
 }
 
-template <bool Checked>
-std::expected<lazy::tag_content, error> lazy::read_typed_array_bytes(resolved<Checked> const &found)
+inline std::expected<lazy::tag_content, error> lazy::read_typed_array_bytes(resolved const &found)
 {
     if (found.h.major != major_type::tag) [[unlikely]]
         return std::unexpected(error::incorrect_type);
     if (error const r = detail::validity::check_typed_array(found.h.argument, 0).error_or(error{});
         r != error{}) [[unlikely]]
         return std::unexpected(r);
-    heads::decoder<Checked> d = found.d;
+    heads::decoder<true> d = found.d;
     auto const r = d.decode_head();
     if (!r) [[unlikely]]
         return std::unexpected(r.error());
@@ -1399,9 +1387,9 @@ std::expected<lazy, error> lazy::adopt(Encoded &&encoded)
     return view(std::move(*owner));
 }
 
-template <class Key, class Entries, bool Checked>
+template <class Key, class Entries>
     requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
-std::expected<typename Entries::iterator, error> lazy::find_key(resolved<Checked> found, Key const key)
+std::expected<typename Entries::iterator, error> lazy::find_key(resolved found, Key const key)
 {
     if (heads::is_typed_array(found.h)) [[unlikely]]
         if (auto const bytes = read_typed_array_bytes(found); !bytes) [[unlikely]]
@@ -1414,7 +1402,7 @@ std::expected<typename Entries::iterator, error> lazy::find_key(resolved<Checked
         !r) [[unlikely]]
         return std::unexpected(r.error());
     typename Entries::iterator it(std::move(found.source), first, found.h.argument);
-    auto found_at = find_key<typename Entries::iterator, std::default_sentinel_t, Key, Checked>(
+    auto found_at = find_key<typename Entries::iterator, std::default_sentinel_t, Key>(
         std::move(it), std::default_sentinel, key);
     if (!found_at) [[unlikely]]
         return std::unexpected(found_at.error());
@@ -1423,7 +1411,7 @@ std::expected<typename Entries::iterator, error> lazy::find_key(resolved<Checked
     return std::move(found_at->first);
 }
 
-template <class Iterator, class Last, class Key, bool Checked>
+template <class Iterator, class Last, class Key>
     requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
 std::expected<std::pair<Iterator, bool>, error> lazy::find_key(Iterator it, Last const last, Key const key)
 {
@@ -1438,7 +1426,7 @@ std::expected<std::pair<Iterator, bool>, error> lazy::find_key(Iterator it, Last
             return std::unexpected(it.failure);
         detail::validity::offset const key_at =
             heads::self_described_cbor_content_at(it.top_level.encoded, it.key);
-        heads::decoder<Checked> probe{detail::validity::subspan(it.top_level.encoded, key_at)};
+        heads::decoder<true> probe{detail::validity::subspan(it.top_level.encoded, key_at)};
         auto const k = probe.decode_head();
         if (!k) [[unlikely]]
             return std::unexpected(k.error());
@@ -1462,14 +1450,13 @@ std::expected<std::pair<Iterator, bool>, error> lazy::find_key(Iterator it, Last
     return std::pair{std::move(it), false};
 }
 
-template <bool Checked>
-std::expected<bool, error> lazy::integer_key_equivalent(heads::decoder<Checked> const &probe, heads::head const &k,
-                                                        std::int64_t const key)
+inline std::expected<bool, error> lazy::integer_key_equivalent(heads::decoder<true> const &probe,
+                                                               heads::head const &k, std::int64_t const key)
 {
     std::uint64_t const magnitude =
         key < 0 ? ~static_cast<std::uint64_t>(key) : static_cast<std::uint64_t>(key);
     if (heads::is_bignum(k.major, k.argument)) [[unlikely]] {
-        heads::decoder<Checked> d = probe;
+        heads::decoder<true> d = probe;
         auto const read = d.decode_bignum(k.argument);
         if (!read) [[unlikely]]
             return std::unexpected(read.error());
@@ -1484,7 +1471,7 @@ template <class Entries>
 std::expected<typename Entries::iterator, error> lazy::find(std::string_view const key) const
 {
     throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
-    auto found = resolve<true>(*this);
+    auto found = resolve(*this);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     return find_key(std::move(*found), key);
@@ -1494,7 +1481,7 @@ template <class Entries>
 std::expected<typename Entries::iterator, error> lazy::find(std::int64_t const key) const
 {
     throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
-    auto found = resolve<true>(*this);
+    auto found = resolve(*this);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     return find_key(std::move(*found), key);
@@ -1507,11 +1494,10 @@ inline std::expected<std::string_view, error> lazy::read_typed_array_element(laz
                                     detail::validity::typed_array_element_size(node.typed_array_tag));
 }
 
-template <bool Checked>
-std::expected<lazy::resolved<Checked>, error> lazy::resolve(lazy const &node)
+inline std::expected<lazy::resolved, error> lazy::resolve(lazy const &node)
 {
     if (node.typed_array_tag == 0) [[likely]]
-        return resolve_tag_content<Checked>(node.top_level, detail::validity::offset{node.offset});
+        return resolve_tag_content(node.top_level, detail::validity::offset{node.offset});
     auto const element = read_typed_array_element(node);
     if (!element) [[unlikely]]
         return std::unexpected(element.error());
@@ -1519,12 +1505,12 @@ std::expected<lazy::resolved<Checked>, error> lazy::resolve(lazy const &node)
         heads::decode_typed_array_element(node.typed_array_tag, *element, detail::validity::index{});
     if (!h) [[unlikely]]
         return std::unexpected(h.error());
-    return resolved<Checked>{node.top_level, *h, heads::decoder<Checked>{std::string_view{}},
-                             detail::validity::offset{node.offset}};
+    return resolved{node.top_level, *h, heads::decoder<true>{std::string_view{}},
+                    detail::validity::offset{node.offset}};
 }
 
-template <bool Checked, std::integral Index>
-std::expected<lazy, error> lazy::select_index(resolved<Checked> const &found, Index const i)
+template <std::integral Index>
+std::expected<lazy, error> lazy::select_index(resolved const &found, Index const i)
 {
     if (heads::is_typed_array(found.h)) {
         auto const bytes = read_typed_array_bytes(found);
@@ -1542,11 +1528,11 @@ std::expected<lazy, error> lazy::select_index(resolved<Checked> const &found, In
     auto const position = detail::validity::check_index(i, found.h.argument);
     if (!position) [[unlikely]]
         return std::unexpected(position.error());
-    heads::decoder<Checked> d = found.d;
+    heads::decoder<true> d = found.d;
     if (auto const r = well_formedness::skip_items(d, std::to_underlying(*position)); !r) [[unlikely]]
         return std::unexpected(r.error());
     detail::validity::offset const element = detail::validity::distance(found.source.encoded, d.encoded);
-    if (auto const target = heads::decoder<Checked>(d).decode_head(); !target) [[unlikely]]
+    if (auto const target = heads::decoder<true>(d).decode_head(); !target) [[unlikely]]
         return std::unexpected(target.error());
     return lazy{found.source, std::to_underlying(element), {}};
 }
@@ -1554,7 +1540,7 @@ std::expected<lazy, error> lazy::select_index(resolved<Checked> const &found, In
 inline std::expected<std::uint64_t, error> lazy::size() const
 {
     throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
-    auto const found = resolve<true>(*this);
+    auto const found = resolve(*this);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     if (heads::is_typed_array(found->h))
@@ -1582,7 +1568,7 @@ inline std::expected<cbor::type, error> lazy::type() const
 {
     throw_logic_error_if_no_top_level("cbor::lazy::type: the lazy holds no top-level item");
     if (typed_array_tag != 0) [[unlikely]] {
-        auto const found = resolve<true>(*this);
+        auto const found = resolve(*this);
         if (!found) [[unlikely]]
             return std::unexpected(found.error());
         return heads::type_of(found->h.major, found->h.info, found->h.argument);
@@ -1634,7 +1620,7 @@ inline std::expected<lazy, error> lazy::at(key const k) const
 inline std::expected<lazy, error> lazy::at(std::size_t const index) const
 {
     throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
-    auto const found = resolve<true>(*this);
+    auto const found = resolve(*this);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     return select_index(*found, index);
@@ -1678,7 +1664,7 @@ std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_
                 return std::bit_cast<std::float128_t>(bits);
             } else {
 #endif
-                auto found = resolve<true>(*this);
+                auto found = resolve(*this);
                 if (!found) [[unlikely]]
                     return std::unexpected(found.error());
                 auto &[source, h, d, item_at] = *found;
@@ -1703,7 +1689,7 @@ std::expected<std::conditional_t<std::is_same_v<T, std::string_view> || std::is_
 inline std::expected<lazy_elements, error> lazy::elements() const
 {
     throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
-    auto const found = resolve<true>(*this);
+    auto const found = resolve(*this);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     if (heads::is_typed_array(found->h)) {
@@ -1730,7 +1716,7 @@ inline std::expected<lazy_elements, error> lazy::elements() const
 inline std::expected<lazy_entries, error> lazy::entries() const
 {
     throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
-    auto const found = resolve<true>(*this);
+    auto const found = resolve(*this);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     auto const &[source, h, d, item_at] = *found;
@@ -1750,7 +1736,7 @@ inline std::expected<owning<item>, error> lazy::clone() const
 {
     throw_logic_error_if_no_top_level("cbor::lazy::clone: the lazy holds no top-level item");
     if (typed_array_tag != 0) [[unlikely]] {
-        auto const h = resolve<true>(*this).transform([](resolved<true> const &found) { return found.h; });
+        auto const h = resolve(*this).transform([](resolved const &found) { return found.h; });
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
         std::string encoded;
@@ -1758,8 +1744,8 @@ inline std::expected<owning<item>, error> lazy::clone() const
         return cbor::decode(encoded);
     }
     if (offset == 0)
-        return detail::decode_tree<true, false>(top_level.encoded)
-            .transform([](detail::decoded_tree<true> const &d) { return d.tree; });
+        return detail::decode_tree<false>(top_level.encoded)
+            .transform([](detail::decoded_tree const &d) { return d.tree; });
     std::string_view const rest = detail::validity::subspan(top_level.encoded, detail::validity::offset{offset});
     auto const size = item_size(rest);
     if (!size) [[unlikely]]
@@ -1767,8 +1753,8 @@ inline std::expected<owning<item>, error> lazy::clone() const
     auto const item = detail::validity::substr(rest, detail::validity::offset{0}, *size);
     if (!item) [[unlikely]]
         return std::unexpected(item.error());
-    return detail::decode_tree<true, false>(*item).transform(
-        [](detail::decoded_tree<true> const &d) { return d.tree; });
+    return detail::decode_tree<false>(*item).transform(
+        [](detail::decoded_tree const &d) { return d.tree; });
 }
 
 }

@@ -56,7 +56,7 @@ class owning;
 namespace detail
 {
 
-template <bool, bool>
+template <bool>
 struct tree_decoder;
 
 }
@@ -925,7 +925,7 @@ class heads
 
     friend struct lazy;
 
-    template <bool, bool>
+    template <bool>
     friend struct detail::tree_decoder;
 
     friend std::expected<owning<item>, error> decode(std::string_view encoded);

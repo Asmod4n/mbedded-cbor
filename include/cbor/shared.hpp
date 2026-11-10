@@ -31,7 +31,6 @@ public:
     }
 
 private:
-    template <bool Checked>
     struct sharing_decoder;
 
     friend class generic;
@@ -40,8 +39,7 @@ private:
     friend class structs;
 };
 
-template <bool Checked>
-struct value_sharing::sharing_decoder : heads::decoder<Checked> {
+struct value_sharing::sharing_decoder : heads::decoder<true> {
     enum class marked_value : std::uint8_t { in_skipped_member, open, value_member };
 
     std::vector<marked_value> marked_values;

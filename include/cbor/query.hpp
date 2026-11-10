@@ -679,7 +679,7 @@ class path
 
     using comparable = std::variant<std::monostate, lazy, std::uint64_t>;
 
-    static std::expected<lazy::resolved<true>, error> resolved_of(lazy const &node);
+    static std::expected<lazy::resolved, error> resolved_of(lazy const &node);
 
     static std::expected<std::optional<exact_number>, error> number_in(lazy const &node);
 
@@ -759,11 +759,11 @@ class path
     template <fixed_string Path>
     static std::expected<std::vector<lazy>, error> generated_walk(lazy const &root);
 
-    template <class T, bool Checked>
+    template <class T>
     static std::optional<std::expected<T, error>> try_walk_bytes(query_view const v, parsed_query const &top,
                                                                  std::string_view const encoded)
     {
-        heads::decoder<Checked> d{encoded};
+        heads::decoder<true> d{encoded};
         heads::head h{};
         std::size_t step = 0;
         auto const typed_array_elements =
@@ -807,7 +807,7 @@ class path
                 auto const embedded = d.decode_string(r->argument);
                 if (!embedded) [[unlikely]]
                     return std::unexpected(embedded.error());
-                d = heads::decoder<Checked>{*embedded};
+                d = heads::decoder<true>{*embedded};
             }
             if (auto const r =
                     detail::validity::check_pending_items(h.major, h.info, h.argument, d.encoded.size());
@@ -938,7 +938,7 @@ class path
     static std::expected<T, error> walk_bytes(query_view const v, parsed_query const &top, std::string_view const encoded)
     {
         std::string_view const content = heads::self_described_cbor_content(encoded);
-        auto const walked = try_walk_bytes<T, true>(v, top, content);
+        auto const walked = try_walk_bytes<T>(v, top, content);
         if (walked) [[likely]]
             return *walked;
         return walk_query<T>(v, top,
@@ -953,8 +953,8 @@ class path
         root.throw_logic_error_if_no_top_level("cbor::lazy::at_path: the lazy holds no top-level item");
         if (root.typed_array_tag != 0) [[unlikely]]
             return walk_query<T>(v, top, root);
-        auto const walked =
-            try_walk_bytes<T, true>(v, top, detail::validity::subspan(root.top_level.encoded, detail::validity::offset{root.offset}));
+        auto const walked = try_walk_bytes<T>(
+            v, top, detail::validity::subspan(root.top_level.encoded, detail::validity::offset{root.offset}));
         if (walked) [[likely]]
             return *walked;
         return walk_query<T>(v, top, root);
@@ -1288,7 +1288,7 @@ class is_valid_path
 inline std::expected<lazy, error> path::select_index(lazy const &node, std::int64_t const index)
 {
     node.throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
-    auto found = lazy::resolve<true>(node);
+    auto found = lazy::resolve(node);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     if (found->h.major != major_type::array && !heads::is_typed_array(found->h))
@@ -1301,7 +1301,7 @@ inline std::expected<lazy, error> path::find_key(lazy const &node, std::string_v
     heads::decoder<false> text_key{key};
     auto const literal = text_key.decode_head();
     node.throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
-    auto found = lazy::resolve<true>(node);
+    auto found = lazy::resolve(node);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     if (literal && literal->major == major_type::text_string)
@@ -1403,7 +1403,7 @@ path::intern_value(detail::canonical_ids &ids, lazy::top_level_item const &sourc
 {
     if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
         return std::unexpected(r.error());
-    auto const resolved = lazy::resolve_container<true>(source, at);
+    auto const resolved = lazy::resolve_container(source, at);
     if (!resolved) [[unlikely]]
         return std::unexpected(resolved.error());
     lazy::top_level_item const &inner = resolved->source;
@@ -1900,12 +1900,12 @@ constexpr bool path::selects_nothing(error const e)
     return e == error::not_indexable || e == error::index_out_of_bounds || e == error::key_not_found;
 }
 
-inline std::expected<lazy::resolved<true>, error> path::resolved_of(lazy const &node)
+inline std::expected<lazy::resolved, error> path::resolved_of(lazy const &node)
 {
     node.throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
     if (node.typed_array_tag != 0)
-        return lazy::resolve<true>(node);
-    return lazy::resolve_container<true>(node.top_level, detail::validity::offset{node.offset});
+        return lazy::resolve(node);
+    return lazy::resolve_container(node.top_level, detail::validity::offset{node.offset});
 }
 
 inline std::expected<std::optional<path::exact_number>, error> path::number_in(lazy const &node)
@@ -1991,7 +1991,7 @@ template <class F>
 std::expected<bool, error> path::for_each_child(lazy const &node, F const &f)
 {
     node.throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
-    auto const found = lazy::resolve<true>(node);
+    auto const found = lazy::resolve(node);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     lazy const content{found->source, std::to_underlying(found->item_at), {}};
@@ -2023,7 +2023,7 @@ template <class F>
 std::expected<bool, error> path::for_each_sliced(lazy const &node, selector const &s, F const &f)
 {
     node.throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
-    auto const found = lazy::resolve<true>(node);
+    auto const found = lazy::resolve(node);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     if (s.step == 0 || (found->h.major != major_type::array && !heads::is_typed_array(found->h)))
