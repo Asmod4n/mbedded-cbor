@@ -2,7 +2,7 @@
 set -eu
 tree=$(cd "$(dirname "$0")/../.." && pwd)
 out=${1:?output directory}
-podman run --rm -v "$tree":/src:ro,Z -v "$out":/out:Z localhost/mbedded-cbor-wasm sh -eu -c '
+podman run --rm --network none -v "$tree":/src:ro,Z -v "$out":/out:Z localhost/mbedded-cbor-wasm sh -eu -c '
 base="clang++-23 --target=wasm32-wasip1 -mexec-model=reactor -std=c++26 -fno-exceptions -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -I/src/include /src/tools/wasm/showcase.cpp"
 strip="-Wl,--strip-all,--gc-sections"
 symbols_shown=25
