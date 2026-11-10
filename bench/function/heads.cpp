@@ -4,7 +4,8 @@
 // floats of two widths into a std::string.
 // heads_encode_iov: cbor::encode_iov of a decoded tree with arguments of each width.
 // heads_structs_encode and heads_schema_encode: a struct with a string, small integers, a list of structs and a list
-// of doubles, written by cbor::structs and by cbor::schema.
+// of doubles, written by cbor::structs and by cbor::schema into a std::string; the rows with _span write the same
+// struct one after the other into one span.
 // heads_decode_wide: cbor::decode of a message with arguments of 2, 4 and 8 bytes and a text with a 2-byte length.
 // heads_item_size_long: cbor::item_size of an array of 256 maps, so the fast read of a head has 9 bytes after it.
 // heads_encode_large: cbor::encode of a tree of 100000 texts into one std::string, a message far larger than the
@@ -16,6 +17,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -137,7 +139,7 @@ void heads_encode_iov(benchmark::State &state)
 
 car const sample_car{"Volvo", 5, {{69, 2.5f}, {69, 2.5f}, {70, 2.25f}, {70, 2.25f}}, {1.5, 1.25, 0.1}};
 
-template <template <class> class Codec>
+template <template <class> class Codec, bool Span = false>
 void encode_car(benchmark::State &state)
 {
     auto const sample = Codec<car>::encode(sample_car);
@@ -147,13 +149,24 @@ void encode_car(benchmark::State &state)
     }
     std::size_t const count = cold_bytes() / sample->size() + 1;
     std::string out;
+    std::string spans(count * sample->size(), '\0');
     for (auto _ : state) {
-        for (std::size_t i = 0; i < count; ++i) {
-            out.clear();
-            auto n = Codec<car>::encode(sample_car, out);
-            benchmark::DoNotOptimize(n);
+        if constexpr (Span) {
+            std::span<char> rest(spans);
+            for (std::size_t i = 0; i < count; ++i) {
+                auto n = Codec<car>::encode(sample_car, rest);
+                benchmark::DoNotOptimize(n);
+                rest = rest.subspan(*n);
+            }
+            benchmark::DoNotOptimize(spans.data());
+        } else {
+            for (std::size_t i = 0; i < count; ++i) {
+                out.clear();
+                auto n = Codec<car>::encode(sample_car, out);
+                benchmark::DoNotOptimize(n);
+            }
+            benchmark::DoNotOptimize(out.data());
         }
-        benchmark::DoNotOptimize(out.data());
     }
     state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(count));
 }
@@ -166,6 +179,16 @@ void heads_structs_encode(benchmark::State &state)
 void heads_schema_encode(benchmark::State &state)
 {
     encode_car<cbor::schema>(state);
+}
+
+void heads_structs_encode_span(benchmark::State &state)
+{
+    encode_car<cbor::structs, true>(state);
+}
+
+void heads_schema_encode_span(benchmark::State &state)
+{
+    encode_car<cbor::schema, true>(state);
 }
 
 void heads_decode_wide(benchmark::State &state)
@@ -242,6 +265,8 @@ BENCHMARK(heads_encoder)->Unit(benchmark::kMillisecond);
 BENCHMARK(heads_encode_iov)->Unit(benchmark::kMillisecond);
 BENCHMARK(heads_structs_encode)->Unit(benchmark::kMillisecond);
 BENCHMARK(heads_schema_encode)->Unit(benchmark::kMillisecond);
+BENCHMARK(heads_structs_encode_span)->Unit(benchmark::kMillisecond);
+BENCHMARK(heads_schema_encode_span)->Unit(benchmark::kMillisecond);
 BENCHMARK(heads_decode_wide)->Unit(benchmark::kMillisecond);
 BENCHMARK(heads_item_size_long)->Unit(benchmark::kMillisecond);
 BENCHMARK(heads_encode_large)->Unit(benchmark::kMillisecond);
