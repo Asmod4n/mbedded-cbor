@@ -41,7 +41,10 @@ image=${CBOR_IMAGE:-mbedded-cbor-tw}
 branch=$(git -C "$src" rev-parse --abbrev-ref HEAD | tr / -)
 concurrent_builds=${CBOR_CONCURRENT_BUILDS:-1}
 reserved_option=${CBOR_RESERVED_PROCESSORS:+-DCBOR_RESERVED_PROCESSORS=$CBOR_RESERVED_PROCESSORS}
-ccache_limit=${CCACHE_MAXSIZE:-9G}
+ccache_limit=${CCACHE_MAXSIZE:-1G}
+microseconds_per_second=1000000
+error_lines=30
+usage_error=2
 mkdir -p "$root"
 exec 9>"$root/run.lock"
 if ! flock -n 9 && [ -z "${CBOR_CONCURRENT_BUILDS:-}" ]; then
@@ -94,10 +97,10 @@ one() {
 			-DDOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS -DDOCTEST_COUNTER=__COUNTER__ \
 			-c /src/test/describe.cpp -o /b/describe.o >/b/build.log 2>&1
 		r=$?; b=${EPOCHREALTIME/./}
-		printf "%-14s rc=%s build=%ds compiled, not run\n" wasm $r $(((b - s) / 1000000))
+		printf "%-14s rc=%s build=%ds compiled, not run\n" wasm $r $(((b - s) / '"$microseconds_per_second"'))
 		exit $r' >"$root/$branch/$n.result" 2>&1
 		return ;;
-	*) echo "unknown build $n" >&2; return 2 ;;
+	*) echo "unknown build $n" >&2; return "$usage_error" ;;
 	esac
 	mkdir -p "$root/$branch/$n" "$cache"
 	if [ -n "$file" ] && ! podman image exists "$img"; then
@@ -120,7 +123,7 @@ one() {
 		[ $r = 0 ] && { ctest --test-dir /b -j"$jobs" -R "^(cmake|clang_query|compile_fail|limits)_.*$CBOR_TEST_PATTERN" --output-on-failure >/b/ctest.log 2>&1; r=$?; }
 		t=${EPOCHREALTIME/./}
 		printf "%-14s rc=%s build=%ds test=%ds %s\n" '"$n"' $r \
-			$(((b - s) / 1000000)) $(((t - b) / 1000000)) "$(tail -2 /b/test.log | head -1)"
+			$(((b - s) / '"$microseconds_per_second"')) $(((t - b) / '"$microseconds_per_second"')) "$(tail -2 /b/test.log | head -1)"
 		exit $r' >"$root/$branch/$n.result" 2>&1
 }
 
@@ -147,7 +150,7 @@ iter() {
 	[ "$iter_targets" = base ] && targets=check-changed
 	if [ "$iter_targets" = base ] && ! git -C "$src" diff --quiet HEAD -- include test CMakeLists.txt cmake; then
 		echo "iter base: include/, test/ or the build files differ from HEAD; commit them first" >&2
-		return 2
+		return "$usage_error"
 	fi
 	if [ "$iter_targets" = check-changed ] && [ -z "$pattern" ]; then
 		base=
@@ -179,23 +182,23 @@ iter() {
 			cmake -S /src -B /b -G Ninja -DCMAKE_BUILD_TYPE=Debug \
 				-DCMAKE_CXX_COMPILER=g++-16 -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
 				-DCMAKE_LINKER_TYPE=MOLD "-DCMAKE_CXX_FLAGS='"$asan"'" -DCBOR_COMPILE_FAIL=OFF -DCBOR_TEST_GROUPS=ON -DCBOR_CONCURRENT_BUILDS='"$concurrent_builds"' '"$reserved_option"' "-DCBOR_TEST_PATTERN=$CBOR_TEST_PATTERN" >/b/configure.log 2>&1 ||
-				{ tail -n 30 /b/configure.log; exit 1; }
+				{ tail -n '"$error_lines"' /b/configure.log; exit 1; }
 		fi
 		export CMAKE_BUILD_PARALLEL_LEVEL=$(sed -n "s/^CBOR_PARALLEL_JOBS:INTERNAL=//p" /b/CMakeCache.txt)
 		ccache -z >/dev/null
 		cmake --build /b --target '"$targets"' -j"$CMAKE_BUILD_PARALLEL_LEVEL" >/b/build.log 2>&1
 		r=$?; b=${EPOCHREALTIME/./}
 		ccache -s
-		printf "iter build rc=%s build=%ds\n" $r $(((b - s) / 1000000))
+		printf "iter build rc=%s build=%ds\n" $r $(((b - s) / '"$microseconds_per_second"'))
 		grep -o "Running [^ ]*$" /b/build.log | sort | uniq -c
-		[ $r = 0 ] || { tail -n 30 /b/build.log; exit $r; }
+		[ $r = 0 ] || { tail -n '"$error_lines"' /b/build.log; exit $r; }
 		for t in '"$targets"'; do
 			[ -f /b/$t ] && [ -x /b/$t ] || continue
 			p=${EPOCHREALTIME/./}
 			/b/$t ${CBOR_TEST_PATTERN:+"-tc=*$CBOR_TEST_PATTERN*"} >/b/$t.log 2>&1
 			q=$?; e=${EPOCHREALTIME/./}
-			printf "%s rc=%s test=%ds %s\n" $t $q $(((e - p) / 1000000)) "$(tail -2 /b/$t.log | head -1)"
-			[ $q = 0 ] || { tail -n 30 /b/$t.log; r=$q; }
+			printf "%s rc=%s test=%ds %s\n" $t $q $(((e - p) / '"$microseconds_per_second"')) "$(tail -2 /b/$t.log | head -1)"
+			[ $q = 0 ] || { tail -n '"$error_lines"' /b/$t.log; r=$q; }
 		done
 		exit $r' >"$root/$branch/iter.result" 2>&1 || return 1
 	if [ "$iter_targets" = base ]; then
@@ -223,12 +226,12 @@ for n in "$@"; do
 	cat "$root/$branch/$n.result"
 	[ "$n" = iter ] && continue
 	[ -s "$root/$branch/$n.result" ] && grep -q "rc=0" "$root/$branch/$n.result" ||
-		{ first_error "$root/$branch/$n/build.log"; tail -n 30 "$root/$branch/$n/build.log" "$root/$branch/$n/test.log" "$root/$branch/$n/ctest.log"; }
+		{ first_error "$root/$branch/$n/build.log"; tail -n "$error_lines" "$root/$branch/$n/build.log" "$root/$branch/$n/test.log" "$root/$branch/$n/ctest.log"; }
 done
 if [ $interop = 1 ]; then
 	"$src/test/interop/run.sh" | tail -40
 	[ "${PIPESTATUS[0]}" = 0 ] || rc=1
 fi
 end=${EPOCHREALTIME/./}
-printf "total %ds\n" $(((end - start) / 1000000))
+printf "total %ds\n" $(((end - start) / microseconds_per_second))
 exit $rc

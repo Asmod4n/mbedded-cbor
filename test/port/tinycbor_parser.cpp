@@ -581,7 +581,8 @@ TEST_CASE("tinycbor parser: arrays")
         check_one("\x9b\0\0\0\0\0\0\0\1"s + e.data, "[_3 " + e.text + "]", e.indefinite);
         std::string data = e.data;
         std::string text = e.text + ", ";
-        for (int i = 0; i < 5; ++i) {
+        constexpr int doublings = 5;
+        for (int i = 0; i < doublings; ++i) {
             data += data;
             text += text;
         }

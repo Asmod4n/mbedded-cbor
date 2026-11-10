@@ -15,7 +15,8 @@ TEST_CASE("doc readme: set limits")
     CHECK_EQ(cbor::limits::container_elements, 100u);
 
     test::array a;
-    for (int i = 0; i < 101; ++i)
+    constexpr int one_above_the_limit = 101;
+    for (int i = 0; i < one_above_the_limit; ++i)
         a.push_back(test::V(i));
     std::string const bytes = test::preferred(test::value{std::move(a)});
     auto const n = test::lazy_of_copy(bytes).value().size();

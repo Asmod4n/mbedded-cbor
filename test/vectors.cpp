@@ -93,7 +93,9 @@ TEST_CASE("test vectors: RFC 8949 Appendix A")
 TEST_CASE("test vectors: not well-formed items fail")
 {
     auto const cases = cases_of(TEST_VECTORS "/fail.json");
-    REQUIRE_GT(cases.size(), 600);
+    // fail.json holds more than 600 cases; fewer means that the file was not read whole.
+    constexpr std::size_t fewest_cases = 600;
+    REQUIRE_GT(cases.size(), fewest_cases);
     for (vector_case const &c : cases) {
         CAPTURE(c.hex);
         std::string const wire = test::unhexlify(c.hex);

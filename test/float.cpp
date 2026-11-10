@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <bit>
 #include <cmath>
+#include <limits>
 #include <cstdint>
 #include <initializer_list>
 #include <span>
@@ -156,8 +157,11 @@ TEST_CASE("§4.1 float width: subnormal 2^-24 encodes as f16 0xF90001")
 // Ported from test.rb: '§4.1 float width: subnormal powers of 2 round-trip correctly'.
 TEST_CASE("§4.1 float width: subnormal powers of 2 round-trip correctly")
 {
-    double v = 1.0 / 16777216.0;
-    for (int i = 0; i < 10; ++i) {
+    // 2^-24 is the smallest subnormal of binary16 (IEEE 754); the next ten powers of two are binary16 values too.
+    constexpr int smallest_binary16_exponent = -24;
+    constexpr int doublings = 10;
+    double v = std::ldexp(1.0, smallest_binary16_exponent);
+    for (int i = 0; i < doublings; ++i) {
         std::string const wire = preferred_float(v);
         CHECK_EQ(wire.size(), 3);
         CHECK_EQ(bits_of(float_of(wire)), bits_of(v));
@@ -222,15 +226,20 @@ bool fits_binary(double v, int precision, int least_exponent, int max_exponent)
 // exponent of a double, so that no row of that table goes unchecked.
 TEST_CASE("major 7: every finite exponent takes the shortest width that keeps the value")
 {
-    for (std::uint64_t exponent = 0; exponent < 0x7ff; ++exponent)
-        for (std::uint64_t low = 0; low <= 52; ++low)
+    // IEEE 754 binary64: an exponent field of all ones (0x7ff) is infinity or NaN; the significand has 52 bits.
+    constexpr std::uint64_t exponent_all_ones = 0x7ff;
+    constexpr std::uint64_t significand_bits = std::numeric_limits<double>::digits - 1;
+    constexpr std::uint64_t sign_bit = std::numeric_limits<std::uint64_t>::digits - 1;
+    for (std::uint64_t exponent = 0; exponent < exponent_all_ones; ++exponent)
+        for (std::uint64_t low = 0; low <= significand_bits; ++low)
             for (std::uint64_t sign : {0u, 1u}) {
                 std::uint64_t const significand =
-                    low == 52 ? 0
+                    low == significand_bits ? 0
                               : (std::uint64_t{1} << low) |
-                                    (std::uint64_t{0xa5} << 44 & ((std::uint64_t{1} << 52) - 1) &
+                                    (std::uint64_t{0xa5} << 44 & ((std::uint64_t{1} << significand_bits) - 1) &
                                      ~((std::uint64_t{1} << low) - 1));
-                double const v = std::bit_cast<double>(sign << 63 | exponent << 52 | significand);
+                double const v =
+                    std::bit_cast<double>(sign << sign_bit | exponent << significand_bits | significand);
                 std::string const wire = preferred_float(v);
                 CHECK_EQ(bits_of(float_of(wire)), bits_of(v));
                 std::size_t const expected = fits_binary(v, 11, -24, 16)     ? 3

@@ -1158,7 +1158,8 @@ TEST_CASE("qcbor IndefiniteLengthStringTest: indefinite-length strings and their
 
     std::string big = as_string({0x81, 0x5f});
     std::uint8_t next = 0;
-    for (int chunk = 1; chunk <= 128; chunk *= 2) {
+    constexpr int largest_chunk = 128;
+    for (int chunk = 1; chunk <= largest_chunk; chunk *= 2) {
         big.push_back(static_cast<char>(0x58));
         big.push_back(static_cast<char>(chunk));
         for (int j = 0; j != chunk; ++j)

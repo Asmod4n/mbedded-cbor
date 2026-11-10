@@ -1,5 +1,9 @@
 #pragma once
 
+#include "../ieee754.hpp"
+
+#include "../rfc8949.hpp"
+
 #include <cbor/error.hpp>
 #include <cbor/rfc8949.hpp>
 #include <doctest/doctest.h>
@@ -295,74 +299,83 @@ value M(T... t)
 // because it is what most senders write and what diagnostic notation prints without encoding indicators.
 inline void preferred_head(std::string &out, unsigned const major, std::uint64_t const argument)
 {
+    constexpr int bits_per_byte = std::numeric_limits<unsigned char>::digits;
     auto const put = [&](unsigned const info, int const bytes) {
-        out.push_back(static_cast<char>(major << 5 | info));
-        for (int shift = 8 * (bytes - 1); shift >= 0; shift -= 8)
+        out.push_back(static_cast<char>(major << test::rfc8949::additional_information_bits | info));
+        for (int shift = bits_per_byte * (bytes - 1); shift >= 0; shift -= bits_per_byte)
             out.push_back(static_cast<char>(argument >> shift));
     };
-    if (argument < 24)
-        out.push_back(static_cast<char>(major << 5 | argument));
-    else if (argument <= 0xff)
-        put(24, 1);
-    else if (argument <= 0xffff)
-        put(25, 2);
-    else if (argument <= 0xffffffff)
-        put(26, 4);
+    if (argument < test::rfc8949::one_byte_argument)
+        out.push_back(static_cast<char>(major << test::rfc8949::additional_information_bits | argument));
+    else if (argument <= std::numeric_limits<std::uint8_t>::max())
+        put(test::rfc8949::one_byte_argument, sizeof(std::uint8_t));
+    else if (argument <= std::numeric_limits<std::uint16_t>::max())
+        put(test::rfc8949::two_byte_argument, sizeof(std::uint16_t));
+    else if (argument <= std::numeric_limits<std::uint32_t>::max())
+        put(test::rfc8949::four_byte_argument, sizeof(std::uint32_t));
     else
-        put(27, 8);
+        put(test::rfc8949::eight_byte_argument, sizeof(std::uint64_t));
 }
 
-inline bool float_fits(double const v, int const precision, int const least_exponent, int const max_exponent)
+inline bool float_fits(double const v, test::ieee754::binary_format const f)
 {
     if (v == 0)
         return true;
     int e = 0;
     std::frexp(v, &e);
-    if (e > max_exponent)
+    if (e > f.emax + 1)
         return false;
-    int const q = std::max(e - precision, least_exponent);
+    int const q = std::max(e - f.precision, f.emin - f.precision + 1);
     double const n = std::ldexp(v, -q);
-    return n == std::trunc(n) && std::fabs(n) < std::ldexp(1.0, precision);
+    return n == std::trunc(n) && std::fabs(n) < std::ldexp(1.0, f.precision);
 }
 
 inline void preferred_float(std::string &out, double const v)
 {
+    constexpr int bits_per_byte = std::numeric_limits<unsigned char>::digits;
     auto const put = [&](unsigned const info, std::uint64_t const bits, int const bytes) {
-        out.push_back(static_cast<char>(7u << 5 | info));
-        for (int shift = 8 * (bytes - 1); shift >= 0; shift -= 8)
+        out.push_back(static_cast<char>(test::rfc8949::float_and_simple_major_type << test::rfc8949::additional_information_bits | info));
+        for (int shift = bits_per_byte * (bytes - 1); shift >= 0; shift -= bits_per_byte)
             out.push_back(static_cast<char>(bits >> shift));
     };
+    int const to_binary16 = test::ieee754::binary64.trailing_significand_bits - test::ieee754::binary16.trailing_significand_bits;
+    int const to_binary32 = test::ieee754::binary64.trailing_significand_bits - test::ieee754::binary32.trailing_significand_bits;
     if (std::isnan(v)) {
         // RFC 8949 4.1: a NaN takes a shorter width only where zeros on the right of its significand give the
-        // same NaN back. Of the 52 bits of the significand, binary16 keeps the top 10 and binary32 the top 23.
+        // same NaN back. Of the 52 bits of the significand, test::ieee754::binary16 keeps the top 10 and test::ieee754::binary32 the top 23.
         std::uint64_t const bits = std::bit_cast<std::uint64_t>(v);
-        std::uint64_t const nan_sign = bits >> 63;
-        std::uint64_t const significand = bits & ((std::uint64_t{1} << 52) - 1);
-        if ((significand & ((std::uint64_t{1} << 42) - 1)) == 0)
-            return put(25, nan_sign << 15 | 0x7c00 | significand >> 42, 2);
-        if ((significand & ((std::uint64_t{1} << 29) - 1)) == 0)
-            return put(26, nan_sign << 31 | 0x7f800000 | significand >> 29, 4);
-        return put(27, bits, 8);
+        std::uint64_t const nan_sign = bits >> test::ieee754::binary64_sign_bit;
+        std::uint64_t const significand = bits & ((std::uint64_t{1} << test::ieee754::binary64.trailing_significand_bits) - 1);
+        if ((significand & ((std::uint64_t{1} << to_binary16) - 1)) == 0)
+            return put(test::rfc8949::two_byte_argument,
+                       nan_sign << test::ieee754::binary16_sign_bit | test::ieee754::binary16_exponent_all_ones | significand >> to_binary16,
+                       sizeof(std::uint16_t));
+        if ((significand & ((std::uint64_t{1} << to_binary32) - 1)) == 0)
+            return put(test::rfc8949::four_byte_argument,
+                       nan_sign << test::ieee754::binary32_sign_bit | test::ieee754::binary32_exponent_all_ones | significand >> to_binary32,
+                       sizeof(std::uint32_t));
+        return put(test::rfc8949::eight_byte_argument, bits, sizeof(std::uint64_t));
     }
     std::uint64_t const sign = std::signbit(v) ? 1 : 0;
     if (std::isinf(v))
-        return put(25, sign << 15 | 0x7c00, 2);
+        return put(test::rfc8949::two_byte_argument, sign << test::ieee754::binary16_sign_bit | test::ieee754::binary16_exponent_all_ones, sizeof(std::uint16_t));
     double const a = std::fabs(v);
-    if (float_fits(a, 11, -24, 16)) {
+    if (float_fits(a, test::ieee754::binary16)) {
         std::uint64_t half = 0;
         if (a != 0) {
             int e = 0;
             double const m = std::frexp(a, &e);
-            if (e - 1 >= -14)
-                half = static_cast<std::uint64_t>(e - 1 + 15) << 10 | static_cast<std::uint64_t>((m * 2 - 1) * 1024);
+            if (e - 1 >= test::ieee754::binary16.emin)
+                half = static_cast<std::uint64_t>(e - 1 + test::ieee754::binary16.exponent_bias) << test::ieee754::binary16.trailing_significand_bits |
+                       static_cast<std::uint64_t>(std::ldexp(m * 2 - 1, test::ieee754::binary16.trailing_significand_bits));
             else
-                half = static_cast<std::uint64_t>(std::ldexp(a, 24));
+                half = static_cast<std::uint64_t>(std::ldexp(a, test::ieee754::binary16.precision - 1 - test::ieee754::binary16.emin));
         }
-        return put(25, sign << 15 | half, 2);
+        return put(test::rfc8949::two_byte_argument, sign << test::ieee754::binary16_sign_bit | half, sizeof(std::uint16_t));
     }
-    if (float_fits(a, 24, -149, 128))
-        return put(26, std::bit_cast<std::uint32_t>(static_cast<float>(v)), 4);
-    put(27, std::bit_cast<std::uint64_t>(v), 8);
+    if (float_fits(a, test::ieee754::binary32))
+        return put(test::rfc8949::four_byte_argument, std::bit_cast<std::uint32_t>(static_cast<float>(v)), sizeof(std::uint32_t));
+    put(test::rfc8949::eight_byte_argument, std::bit_cast<std::uint64_t>(v), sizeof(std::uint64_t));
 }
 
 inline void preferred_write(std::string &out, value const &v)
@@ -419,8 +432,10 @@ inline std::string preferred(value const &v)
 // The encoder writes a run-time integer at its native width: the initial byte with eight argument bytes.
 inline std::string native_integer(cbor::major_type const major, std::uint64_t const argument)
 {
-    std::string s(1, static_cast<char>(std::to_underlying(major) << 5 | 27));
-    for (int shift = 56; shift >= 0; shift -= 8)
+    constexpr int bits_per_byte = std::numeric_limits<unsigned char>::digits;
+    std::string s(1, static_cast<char>(std::to_underlying(major) << test::rfc8949::additional_information_bits |
+                                       int{test::rfc8949::eight_byte_argument}));
+    for (int shift = bits_per_byte * (int{sizeof(std::uint64_t)} - 1); shift >= 0; shift -= bits_per_byte)
         s.push_back(static_cast<char>(argument >> shift));
     return s;
 }

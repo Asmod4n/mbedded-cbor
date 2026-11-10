@@ -518,8 +518,9 @@ TEST_CASE("tinycbor encoder: tags, arrays and maps")
 
         CHECK_EQ(reencoded("\x81"s + o), "\x81"s + o);
         CHECK_EQ(reencoded("\x82"s + o + o), "\x82"s + o + o);
+        constexpr int doublings = 5;
         std::string longoutput = o;
-        for (int i = 0; i < 5; ++i)
+        for (int i = 0; i < doublings; ++i)
             longoutput += longoutput;
         CHECK_EQ(reencoded("\x98\x20"s + longoutput), "\x98\x20"s + longoutput);
         for (int i = 0; i < 3; ++i)
@@ -534,7 +535,7 @@ TEST_CASE("tinycbor encoder: tags, arrays and maps")
         CHECK_EQ(reencoded("\xa2\1"s + o + o + "\x18\x18"), "\xa2\1"s + o + o + "\x18\x18");
         CHECK_EQ(reencoded("\xa1"s + o + o), "\xa1"s + o + o);
         std::string longmap = "\1"s + o;
-        for (int i = 0; i < 5; ++i)
+        for (int i = 0; i < doublings; ++i)
             longmap += longmap;
         CHECK_EQ(reencoded("\xb8\x20"s + longmap), "\xb8\x20"s + longmap);
         for (int i = 0; i < 3; ++i)

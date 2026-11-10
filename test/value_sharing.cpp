@@ -80,7 +80,8 @@ std::vector<cbor::item const *> marks_of(tree const &t)
 // The item that a mark of tag 28 or a reference of tag 29 stands for, read from the tree by the index of the mark.
 place target(place n)
 {
-    for (int steps = 0; steps < 1000; ++steps) {
+    constexpr int most_steps = 1000;
+    for (int steps = 0; steps < most_steps; ++steps) {
         auto const t = n.i->get<cbor::type::tag>();
         if (t && t->first == 29) {
             auto const marks = marks_of(n.t);
@@ -672,7 +673,8 @@ TEST_CASE("application tag: a content made at the time of the write")
 {
     std::string out;
     cbor::encoder e(out);
-    for (int i = 0; i < 2; ++i) {
+    constexpr int tagged_items = 2;
+    for (int i = 0; i < tagged_items; ++i) {
         REQUIRE(e.tag(5000).has_value());
         shared_writer w;
         handle const fresh = arr({u(1), arr({u(2), u(3)})});

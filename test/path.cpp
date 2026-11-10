@@ -170,7 +170,8 @@ TEST_CASE("path: a wildcard over records with large fields")
 {
     std::string const big(10000, 'x');
     array users;
-    for (int i = 1; i <= 5; ++i)
+    constexpr int user_count = 5;
+    for (int i = 1; i <= user_count; ++i)
         users.push_back(M("name"s, "u" + std::to_string(i), "blob"s, big));
     CHECK(at("$.users[*].name", M("users"s, value{users})) == A("u1"s, "u2"s, "u3"s, "u4"s, "u5"s));
 }
@@ -1078,7 +1079,8 @@ TEST_CASE("path: a long chain of || or && in one filter is tested without recurs
     auto const l = *test::lazy_of_copy(doc);
     for (std::string_view const op : {"||"sv, "&&"sv}) {
         std::string path = "$[?@==1";
-        for (int i = 0; i < 10000; ++i)
+        constexpr int operators = 10000;
+        for (int i = 0; i < operators; ++i)
             path.append(op).append("@==1");
         path += "]";
         CAPTURE(op);

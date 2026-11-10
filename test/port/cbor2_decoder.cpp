@@ -420,7 +420,8 @@ TEST_CASE("cbor2 decoder: test_indefinite_string_many_chunks")
 TEST_CASE("cbor2 decoder: test_array, test_map, test_mixed_array_map")
 {
     test::array one_to_25;
-    for (int i = 1; i <= 25; ++i)
+    constexpr int last = 25;
+    for (int i = 1; i <= last; ++i)
         one_to_25.push_back(V(i));
     check_decoded({
         {"80", A()},

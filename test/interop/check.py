@@ -7,6 +7,8 @@ import collections
 import re
 import sys
 
+shown_characters = 160
+
 # The library refuses these inputs on purpose: indefinite length is never written, and the nesting depth has a
 # limit. A re-encode of such an input has nothing to write.
 REFUSED = ("!indefinite length", "!nesting depth exceeded")
@@ -115,7 +117,7 @@ for k, n in notes.items():
     print("note: %d cases: %s" % (n, k))
 for d, items in limits.items():
     for name, why in items:
-        print("limit %s %s: %s" % (d, name, why[:160]))
+        print("limit %s %s: %s" % (d, name, why[:shown_characters]))
 for d, name, section, written, expected, got, want in findings:
     print("FINDING %s (%s) %s [%s]\n  written  %s\n  expected %s\n  decoded  %s\n  from exp %s"
           % (d, versions.get(d, "library"), name, section, written, expected, got[:300], want[:300]))

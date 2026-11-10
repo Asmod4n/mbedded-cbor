@@ -130,7 +130,8 @@ TEST_CASE("lazy: deep nesting and a wide map")
     std::string const deep = encoded(A(A(A(A(A(42))))));
     CHECK(value_at(at(at(at(at(at(lazy_of(deep), 0), 0), 0), 0), 0)) == V(42));
     map wide;
-    for (int i = 0; i < 100; ++i)
+    constexpr int wide_entries = 100;
+    for (int i = 0; i < wide_entries; ++i)
         wide.push_back(entry{V("key_" + std::to_string(i)), V(i)});
     std::string const w = encoded(value{wide});
     CHECK(value_at(at(lazy_of(w), "key_0")) == V(0));
@@ -168,12 +169,14 @@ TEST_CASE("lazy: a value of the parent does not change the children")
 TEST_CASE("lazy: random access")
 {
     array statuses;
-    for (int i = 1; i <= 50; ++i)
+    constexpr int status_count = 50;
+    constexpr int random_reads = 200;
+    for (int i = 1; i <= status_count; ++i)
         statuses.push_back(M("id"s, i, "txt"s, "msg" + std::to_string(i)));
     std::string const doc = encoded(M("statuses"s, value{statuses}));
     std::mt19937 rng(1);
-    for (int n = 0; n < 200; ++n) {
-        std::size_t const i = rng() % 50;
+    for (int n = 0; n < random_reads; ++n) {
+        std::size_t const i = rng() % status_count;
         CHECK(value_at(at(at(at(lazy_of(doc), "statuses"), i), "txt")) == V("msg" + std::to_string(i + 1)));
     }
 }
@@ -1036,8 +1039,10 @@ TEST_CASE("lazy: a repeated key at depth 3 is read with no error")
 // map. Every reader takes the array.
 TEST_CASE("lazy: an array of the same map many times is read with no error")
 {
+    // The head 98 40 is an array of 64 items (RFC 8949 3.1, a one-byte argument).
+    constexpr int maps = 64;
     std::string doc = "\x98\x40"s;
-    for (int i = 0; i < 64; ++i)
+    for (int i = 0; i < maps; ++i)
         doc += "\xa2\x61\x61\x01\x61\x62\x02"s;
     cbor::lazy const top = lazy_of(doc);
     CHECK(top.clone().has_value());
@@ -1181,7 +1186,7 @@ TEST_CASE("lazy: a tag 28 that holds a tag 29 reads the index")
     std::string const small("\x83\xd8\x1c\x01\xd8\x1c\xd8\x1d\x00\xd8\x1d\x01", 12);
     auto const l = *test::lazy_of_copy(small);
     std::array<std::int64_t, 3> const expected{1, 0, 1};
-    for (std::size_t i = 0; i < 3; ++i)
+    for (std::size_t i = 0; i < expected.size(); ++i)
         CHECK_EQ(*l.at(i).and_then([](cbor::lazy const &e) { return e.get<std::int64_t>(); }), expected[i]);
     CHECK_EQ(test::lazy_of_copy(std::string("\xd8\x1c\xd8\x1d\x00", 5))->get<std::int64_t>(), 0);
 
@@ -1490,8 +1495,9 @@ TEST_CASE("lazy: an element of a float128 typed array")
     for (auto const &[tag, bytes] : {std::pair{std::uint64_t{83}, big_endian}, std::pair{std::uint64_t{87}, little_endian}}) {
         CAPTURE(tag);
         auto const l = lazy_of(typed_array_of(tag, bytes));
-        CHECK_EQ(*l.size(), 4u);
-        for (std::size_t i = 0; i < 4; ++i) {
+        constexpr std::size_t elements = 4;
+        CHECK_EQ(*l.size(), elements);
+        for (std::size_t i = 0; i < elements; ++i) {
             auto const element = l.at(i);
             REQUIRE(element.has_value());
             CHECK_EQ(element->clone().error(), error::incorrect_type);

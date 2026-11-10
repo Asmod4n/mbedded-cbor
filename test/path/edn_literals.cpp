@@ -132,7 +132,9 @@ TEST_CASE("path edn literals: the padding of b64 of the EDN draft")
 TEST_CASE("path edn literals: every character of both base64 alphabets")
 {
     std::string bits;
-    for (unsigned value = 0; value < 64; value += 4) {
+    // RFC 4648 4: the alphabet of base64 has 64 characters; four of them make three bytes.
+    constexpr unsigned base64_alphabet_size = 64;
+    for (unsigned value = 0; value < base64_alphabet_size; value += 4) {
         unsigned const group = value << 18 | (value + 1) << 12 | (value + 2) << 6 | (value + 3);
         bits.push_back(static_cast<char>(group >> 16));
         bits.push_back(static_cast<char>(group >> 8 & 0xff));

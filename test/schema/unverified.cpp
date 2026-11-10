@@ -164,13 +164,13 @@ TEST_CASE("unverified: every changed byte and every cut stays inside the input")
     for (std::uint32_t const entry : {0u, 1u, 0x7fffffffu, 0xffffffffu, static_cast<std::uint32_t>(bytes.size())})
         for (std::size_t at = directory + 5; at + 4 <= bytes.size() && at < directory + 5 + 4 * 8; at += 4) {
             std::string changed = bytes;
-            for (std::size_t k = 0; k < 4; ++k)
+            for (std::size_t k = 0; k < sizeof(std::uint32_t); ++k)
                 changed[at + k] = static_cast<char>(entry >> (24 - 8 * k));
             unverified_reads(changed);
         }
     for (std::uint32_t const length : {0u, 3u, 4u, 0xffffffffu}) {
         std::string changed = bytes;
-        for (std::size_t k = 0; k < 4; ++k)
+        for (std::size_t k = 0; k < sizeof(std::uint32_t); ++k)
             changed[directory + 1 + k] = static_cast<char>(length >> (24 - 8 * k));
         unverified_reads(changed);
     }

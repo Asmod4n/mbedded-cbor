@@ -3,6 +3,9 @@
 
 namespace schema_types
 {
+// The sample message has two tires; the third read of a tire is out of range and checks that reads stay inside
+// the message.
+constexpr std::size_t tire_reads = 3;
 
 
 template <class = void>
@@ -39,7 +42,7 @@ std::size_t probe_paths_read(std::string_view const message)
     owned(at_path<probe, "$.code">(block));
     count(at_path<probe, "$.text">(bytes));
     owned(at_path<probe, "$.text">(block));
-    for (std::size_t i = 0; i < 3; ++i) {
+    for (std::size_t i = 0; i < tire_reads; ++i) {
         count(at_path<probe, "$.tires[].diameter">(bytes, i));
         count(at_path<probe, "$.tires[].airPressure">(bytes, i));
         count(at_path<probe, "$.pair[]">(bytes, i));
@@ -93,7 +96,7 @@ std::size_t probe_lot_read(std::string_view const message)
         v.push_back(number(lot.at_path<"$.i128">()));
         v.push_back(text(lot.at_path<"$.code">()));
         v.push_back(text(lot.at_path<"$.text">()));
-        for (std::size_t i = 0; i < 3; ++i) {
+        for (std::size_t i = 0; i < tire_reads; ++i) {
             v.push_back(number(lot.at_path<"$.tires[].diameter">(i)));
             v.push_back(number(lot.at_path<"$.tires[].airPressure">(i)));
             v.push_back(number(lot.at_path<"$.pair[]">(i)));
@@ -113,7 +116,7 @@ std::size_t probe_lot_read(std::string_view const message)
     CHECK_EQ(backward[1], forward[8 + 3 * 2]);
     CHECK_EQ(backward[4], forward[8 + 1]);
     CHECK_EQ(backward[5], forward[8]);
-    for (std::size_t i = 0; i < 3; ++i) {
+    for (std::size_t i = 0; i < tire_reads; ++i) {
         auto const tire = lot.at_path<"$.tires[]">(i);
         std::optional<double> const diameter = tire ? number(tire->at_path<"@.diameter">()) : std::nullopt;
         std::optional<double> const pressure = tire ? number(tire->at_path<"@.airPressure">()) : std::nullopt;
@@ -382,7 +385,8 @@ TEST_CASE("attack: a forged reference of a fixed-size vector is incorrect_type")
     CHECK_EQ(at_path<probe, "$.tires[1].diameter">(forged).error(), error::incorrect_type);
     CHECK_EQ(at_path<probe, "$.text">(forged), at_path<probe, "$.text">(bytes));
     auto lot = *form<probe>::path(std::string(forged));
-    for (int pass = 0; pass < 2; ++pass) {
+    constexpr int passes = 2;
+    for (int pass = 0; pass < passes; ++pass) {
         CHECK_EQ(lot.at_path<"$.tires[].diameter">(0uz).error(), error::incorrect_type);
         CHECK_EQ(lot.at_path<"$.tires[].airPressure">(1uz).error(), error::incorrect_type);
     }

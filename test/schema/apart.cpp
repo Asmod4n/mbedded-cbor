@@ -124,7 +124,7 @@ TEST_CASE("description apart: the checks of the message hold for the data form")
     std::size_t const directory = data.find('\x5a');
     REQUIRE_EQ(directory, 8u);
     std::string entry = data;
-    for (std::size_t k = 0; k < 4; ++k)
+    for (std::size_t k = 0; k < sizeof(std::uint32_t); ++k)
         entry[directory + 5 + k] = '\xff';
     CHECK_FALSE(form<everything>::decode<apart>(std::string(entry)).has_value());
     std::uint32_t const length = (std::uint32_t{static_cast<unsigned char>(data[directory + 3])} << 8) |

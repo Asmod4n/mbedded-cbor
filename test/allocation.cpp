@@ -310,7 +310,8 @@ TEST_CASE("decode: the count of allocations does not grow with the count of item
 TEST_CASE("decode: nested arrays that each claim a large count do not multiply the reserved memory")
 {
     std::string bytes;
-    for (int i = 0; i < 100; ++i)
+    constexpr int heads = 100;
+    for (int i = 0; i < heads; ++i)
         bytes += "\x99\x10\x00"s;
     bytes.append(4200, '\x01');
     auto const root = *test::lazy_of_copy(std::string(bytes));

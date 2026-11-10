@@ -14,7 +14,12 @@ inline constexpr unsigned initial_byte_values = 256;
 // 3: the additional information 24 to 27 gives the width of the argument, 28 to 30 are reserved, 31 is the
 // indefinite length.
 inline constexpr unsigned one_byte_argument = 24;
+inline constexpr unsigned two_byte_argument = 25;
+inline constexpr unsigned four_byte_argument = 26;
 inline constexpr unsigned eight_byte_argument = 27;
+
+// 3.1: major type 7 holds the floats and the simple values.
+inline constexpr unsigned float_and_simple_major_type = 7;
 inline constexpr unsigned first_reserved_information = 28;
 inline constexpr unsigned last_reserved_information = 30;
 inline constexpr unsigned indefinite_length = 31;

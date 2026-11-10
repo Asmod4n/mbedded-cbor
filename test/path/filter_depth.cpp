@@ -15,10 +15,11 @@ using namespace std::string_literals;
 // bounds the filter or the data; the stack of the main thread holds both, and they do not add up.
 TEST_CASE("path filter depth: 100 nested negations over 100 nested arrays")
 {
+    constexpr std::size_t depth = 100;
     std::string filter = "@ == 1";
-    for (std::size_t i = 0; i < 100; ++i)
+    for (std::size_t i = 0; i < depth; ++i)
         filter = "!(" + filter + ")";
-    std::string const document = std::string(99, '\x81') + "\x82\x01\x02"s;
+    std::string const document = std::string(depth - 1, '\x81') + "\x82\x01\x02"s;
     auto const l = test::lazy_of_copy(document);
     REQUIRE(l.has_value());
     auto const nodes = test::query("$..[?" + filter + "]", *l);

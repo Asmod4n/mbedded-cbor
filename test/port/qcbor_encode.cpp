@@ -244,11 +244,12 @@ TEST_CASE("qcbor SimpleValuesTest1: true, false, null and undefined encode in on
 // 8949 3, 3.2).
 TEST_CASE("qcbor EncodeLengthThirtyoneTest: a count of 31 takes a one-byte argument")
 {
-    std::string out = map_head(5) + text("arr") + array_head(31);
-    for (std::int64_t ix = 0; ix < 31; ++ix)
+    constexpr std::int64_t elements = 31;
+    std::string out = map_head(5) + text("arr") + array_head(elements);
+    for (std::int64_t ix = 0; ix < elements; ++ix)
         out += preferred(ix);
-    out += text("map") + map_head(31);
-    for (std::int64_t ix = 0; ix < 31; ++ix) {
+    out += text("map") + map_head(elements);
+    for (std::int64_t ix = 0; ix < elements; ++ix) {
         char const c = ix < 26 ? static_cast<char>('a' + ix) : static_cast<char>('A' + (ix - 26));
         out += text(std::string(1, c)) + preferred(ix);
     }

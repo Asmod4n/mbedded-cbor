@@ -266,7 +266,8 @@ TEST_CASE("sequence_reader: an item stays valid after later feeds and after the 
         std::vector<cbor::lazy> held;
         {
             cbor::sequence_reader r;
-            for (std::size_t i = 0; i < 2000; ++i) {
+            constexpr std::size_t items = 2000;
+            for (std::size_t i = 0; i < items; ++i) {
                 r = test::piece_fed(std::move(r), "\x63"sv, form, 3 * i);
                 r = test::piece_fed(std::move(r), "ab"sv, form, 3 * i + 1);
                 r = test::piece_fed(std::move(r), "c"sv, form, 3 * i + 2);
@@ -392,12 +393,12 @@ TEST_CASE("sequence_reader: a nested item of any depth")
 // is read and gives its own error.
 TEST_CASE("sequence_reader: a count larger than the bytes left waits before its elements")
 {
-    for (std::size_t at = 0; at <= 2; ++at) {
+    for (std::size_t at = 0; at <= "\x82\xff"sv.size(); ++at) {
         CAPTURE(at);
         CHECK_EQ(test::reader_outcome_split_at("\x82\xff"s, at).last, error::too_little_data);
         CHECK_EQ(test::reader_outcome_split_at("\x82\xff"s, at), test::sequence_outcome_of("\x82\xff"sv));
     }
-    for (std::size_t at = 0; at <= 3; ++at) {
+    for (std::size_t at = 0; at <= "\x82\xff\x00"sv.size(); ++at) {
         CAPTURE(at);
         CHECK_EQ(test::reader_outcome_split_at("\x82\xff\x00"s, at).last, error::syntax_error);
     }

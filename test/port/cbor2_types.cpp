@@ -86,7 +86,7 @@ TEST_CASE("cbor2 types: TestCBORSimpleValue.test_ordering")
     for (int const v : {9, 7, 3, 8, 4, 0, 2, 5, 6, 1})
         disordered.push_back(cbor::simple_value{static_cast<std::uint8_t>(v)});
     std::vector<cbor::simple_value> expected;
-    for (std::uint8_t v = 0; v < 10; ++v)
+    for (std::uint8_t v = 0; v < disordered.size(); ++v)
         expected.push_back(cbor::simple_value{v});
     std::ranges::sort(disordered);
     CHECK(disordered == expected);
