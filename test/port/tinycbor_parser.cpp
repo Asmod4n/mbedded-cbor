@@ -461,7 +461,7 @@ TEST_CASE("tinycbor parser: half floats")
     double const nan = std::numeric_limits<double>::quiet_NaN();
     half_row const rows[] = {
         {"+0", "\x00\x00"s, 0U, 0.0},
-        {"-0", "\x80\x00"s, 0x8000U, 0.0},
+        {"-0", "\x80\x00"s, 0x8000U, -0.0},
         {"min.denorm", "\x00\x01"s, 1U, std::ldexp(1.0, -14) * std::ldexp(1.0, -10)},
         {"-min.denorm", "\x80\x01"s, 0x8001U, std::ldexp(-1.0, -14) * std::ldexp(1.0, -10)},
         {"max.denorm", "\x03\xff"s, 0x03ffU, std::ldexp(1.0, -14) * (1.0 - std::ldexp(1.0, -10))},
@@ -481,7 +481,6 @@ TEST_CASE("tinycbor parser: half floats")
         {"nan3", "\x7e\x00"s, 0x7e00U, nan},
         {"nan4", "\xfe\x00"s, 0xfe00U, nan},
     };
-    double const epsilon = std::ldexp(1.0, -25);
     for (half_row const &r : rows) {
         CAPTURE(r.name);
         std::string const data = "\xf9"s + r.data;
@@ -491,10 +490,8 @@ TEST_CASE("tinycbor parser: half floats")
         double const value = (*tree)->get<cbor::type::half_float>().value_or(0);
         if (std::isnan(r.value))
             CHECK(std::isnan(value));
-        else if (std::isinf(r.value))
-            CHECK_EQ(value, r.value);
         else
-            CHECK_LT(std::fabs(value - r.value), epsilon);
+            CHECK_EQ(std::bit_cast<std::uint64_t>(value), std::bit_cast<std::uint64_t>(r.value));
         std::string out;
         CHECK_EQ(outcome(cbor::encode(**tree, out)), error_text(no_error));
         CHECK_EQ(out, data);
@@ -518,7 +515,7 @@ TEST_CASE("tinycbor parser: floats")
             value = (*tree)->get<cbor::type::double_float>().value_or(0);
         CHECK_EQ(std::isnan(value), std::isnan(r.value));
         if (!std::isnan(r.value))
-            CHECK_EQ(value, r.value);
+            CHECK_EQ(std::bit_cast<std::uint64_t>(value), std::bit_cast<std::uint64_t>(r.value));
     }
 }
 

@@ -65,9 +65,9 @@ TEST_CASE("major 7: ±Inf and NaN")
 {
     CHECK_EQ(bits_of(float_of(encoded_float(INFINITY))), bits_of(INFINITY));
     CHECK_EQ(bits_of(float_of(encoded_float(-INFINITY))), bits_of(-INFINITY));
-    CHECK(std::isnan(float_of(encoded_float(NAN))));
+    CHECK_EQ(bits_of(float_of(encoded_float(NAN))), 0x7ff8000000000000u);
     CHECK_EQ(bits_of(float_of("\xf9\x7c\x00"sv)), bits_of(INFINITY));
-    CHECK(std::isnan(float_of("\xf9\x7e\x00"sv)));
+    CHECK_EQ(bits_of(float_of("\xf9\x7e\x00"sv)), 0x7ff8000000000000u);
 }
 
 // RFC 8949 4.1: zero-padding the significand of a shorter NaN at the right gives the same NaN in a longer

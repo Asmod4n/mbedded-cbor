@@ -5,6 +5,7 @@
 #include "reference.hpp"
 
 
+#include <bit>
 #include <array>
 #include <concepts>
 #include <cstddef>
@@ -88,7 +89,7 @@ TEST_CASE("doc reference schema: decode")
     REQUIRE(back.has_value());
     CHECK_EQ(make, "Volvo");
     CHECK_EQ((*back)->tires.size(), 2u);
-    CHECK_EQ((*back)->track[2], 3.0);
+    CHECK_EQ(std::bit_cast<std::uint64_t>((*back)->track[2]), 0x4008000000000000u);
 
     CHECK_EQ(cbor::schema<tire>::decode(sample_bytes()).error(), error::incorrect_type);
     CHECK_EQ(cbor::schema<car>::decode(sample_bytes().substr(0, 3)).error(), error::too_little_data);
@@ -347,20 +348,20 @@ TEST_CASE("doc reference schema: typed_array_view")
     // [typed_array_view]
     REQUIRE(root.has_value());
     REQUIRE(track.has_value());
-    CHECK_EQ(sum, 6.0);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(sum), 0x4018000000000000u);
     CHECK_EQ(past.error(), error::index_out_of_bounds);
     CHECK(std::ranges::random_access_range<cbor::typed_array_view<double> const &>);
     CHECK(std::ranges::sized_range<cbor::typed_array_view<double> const &>);
     CHECK_EQ(track->size(), 3u);
     CHECK_FALSE(track->empty());
-    CHECK_EQ(std::accumulate(track->begin(), track->end(), 0.0), 6.0);
-    CHECK_EQ((*track)[1], 2.0);
-    CHECK_EQ(track->front(), 1.0);
-    CHECK_EQ(track->back(), 3.0);
-    CHECK_EQ(*track->rbegin(), 3.0);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(std::accumulate(track->begin(), track->end(), 0.0)), 0x4018000000000000u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>((*track)[1]), 0x4000000000000000u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(track->front()), 0x3ff0000000000000u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(track->back()), 0x4008000000000000u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*track->rbegin()), 0x4008000000000000u);
     CHECK_EQ(track->at(3).error(), error::index_out_of_bounds);
     CHECK_THROWS_AS(std::ignore = (*track)[3], std::logic_error);
-    CHECK_EQ(track->last(2)->front(), 2.0);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(track->last(2)->front()), 0x4000000000000000u);
     CHECK_EQ(track->first(4).error(), error::index_out_of_bounds);
 }
 

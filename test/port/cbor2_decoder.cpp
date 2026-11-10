@@ -281,7 +281,7 @@ TEST_CASE("cbor2 decoder: test_float_nan")
         auto const decoded = loads(unhexlify(payload));
         REQUIRE(decoded.has_value());
         REQUIRE(std::holds_alternative<double>(decoded->kind));
-        CHECK(std::isnan(std::get<double>(decoded->kind)));
+        CHECK_EQ(std::bit_cast<std::uint64_t>(std::get<double>(decoded->kind)), 0x7ff8000000000000u);
     }
 }
 
@@ -757,9 +757,9 @@ TEST_CASE("cbor2 decoder: test_complex")
         CHECK_EQ(std::isnan(real), r.real_nan);
         CHECK_EQ(std::isnan(imag), r.imag_nan);
         if (!r.real_nan)
-            CHECK_EQ(real, 0.0);
+            CHECK_EQ(std::bit_cast<std::uint64_t>(real), 0x0000000000000000u);
         if (!r.imag_nan)
-            CHECK_EQ(imag, 0.0);
+            CHECK_EQ(std::bit_cast<std::uint64_t>(imag), 0x0000000000000000u);
     }
 }
 

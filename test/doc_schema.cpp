@@ -3,6 +3,7 @@
 #include <cbor/schema.hpp>
 
 
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -63,7 +64,10 @@ std::expected<std::pair<std::uint16_t, double>, cbor::error> first_message()
 // The test runs the first program of the guide, so the guide shows code that works.
 TEST_CASE("doc schema: write a message and read one field")
 {
-    CHECK(first_message() == std::pair<std::uint16_t, double>{7, 2.5});
+    auto const first = first_message();
+    REQUIRE(first.has_value());
+    CHECK_EQ(first->first, 7u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(first->second), 0x4004000000000000u);
 }
 
 // The section "Tags and keys" states that a struct with no description does not compile in schema.
@@ -100,9 +104,12 @@ TEST_CASE("doc schema: read a text, a list or a struct")
     if (readings)
         for (double const r : *readings)
             use(r);
-    CHECK(used == std::vector{1.5, 2.5});
+    REQUIRE_EQ(used.size(), 2u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(used[0]), 0x3ff8000000000000u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(used[1]), 0x4004000000000000u);
     CHECK_EQ(readings->size(), 2u);
-    CHECK_EQ(readings->at(1), 2.5);
+    REQUIRE(readings->at(1).has_value());
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*readings->at(1)), 0x4004000000000000u);
     CHECK_EQ(readings->at(2).error(), error::index_out_of_bounds);
     using accessor = cbor::schema<sensor>::accessor<>;
     CHECK(reads_name<accessor const &>);

@@ -1,4 +1,5 @@
 #include "types.hpp"
+#include <bit>
 
 // The view holds the owner of the bytes. The test reads it after the accessor and the string it came from are gone,
 // so that the sanitizer sees a read of freed memory if the view did not keep the bytes alive.
@@ -44,7 +45,7 @@ TEST_CASE("view: a view and a sub-view keep the bytes alive after the parent is 
     }
     REQUIRE_EQ(copied->size(), 2u);
     CHECK_EQ(std::bit_cast<std::uint64_t>(copied->back()), 0x4010000000000000u);
-    CHECK_EQ(std::ranges::fold_left(*copied, 0.0, std::plus<>{}), 6.0);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(std::ranges::fold_left(*copied, 0.0, std::plus<>{})), 0x4018000000000000u);
     REQUIRE_EQ(moved->size(), 1u);
     CHECK_EQ(std::bit_cast<std::uint64_t>(moved->front()), 0x3ff0000000000000u);
     REQUIRE_EQ(taken->size(), 1u);

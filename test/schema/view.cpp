@@ -1,4 +1,5 @@
 #include "types.hpp"
+#include <bit>
 
 namespace schema_types
 {
@@ -273,7 +274,7 @@ TEST_CASE("view: an empty view has no front, no back and no element")
     CHECK_THROWS_AS((void)v->back(), std::logic_error);
     CHECK(v->rbegin() == v->rend());
     CHECK(v->begin() == v->end());
-    CHECK_EQ(std::ranges::fold_left(*v, 0.0, std::plus<>{}), 0.0);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(std::ranges::fold_left(*v, 0.0, std::plus<>{})), 0x0000000000000000u);
     CHECK(v->first(0)->empty());
     CHECK(v->last(0)->empty());
     CHECK_EQ(v->first(1).error(), error::index_out_of_bounds);

@@ -4,6 +4,7 @@
 #include "owned_copy.hpp"
 #include "item_head.hpp"
 
+#include <bit>
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -1414,7 +1415,7 @@ TEST_CASE("lazy: an index reads an element of each typed array")
         CAPTURE(tag);
         auto const l = lazy_of(typed_array_of(tag, bytes));
         CHECK_EQ(*l.size(), 2u);
-        CHECK_EQ(*l.at(1)->get<double>(), 1.5);
+        CHECK_EQ(std::bit_cast<std::uint64_t>(*l.at(1)->get<double>()), 0x3ff8000000000000u);
         CHECK_EQ(l.at(1)->get<std::int64_t>().error(), error::incorrect_type);
     }
     // A float of 128 bits has no C++ type that the library reads. The index selects the element, and the read

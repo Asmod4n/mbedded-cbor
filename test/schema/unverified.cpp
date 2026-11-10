@@ -1,4 +1,5 @@
 #include "types.hpp"
+#include <bit>
 
 namespace schema_types
 {
@@ -64,7 +65,8 @@ TEST_CASE("unverified: the same results as the verified forms on a message that 
     CHECK_EQ((*inner)->at_path<"@.y">(), 2);
     auto const track = root->view<"$.track">();
     REQUIRE(track.has_value());
-    CHECK_EQ(track->at(1), 2.0);
+    REQUIRE(track->at(1).has_value());
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*track->at(1)), 0x4000000000000000u);
     auto const gauges = root->at_path<"$.gauges">();
     REQUIRE(gauges.has_value());
     std::vector<int> xs;

@@ -1,4 +1,5 @@
 #include "types.hpp"
+#include <bit>
 
 // The order holds at every depth: the outer keys are "B" (61 42), "a" (61 61) and "z"
 // (61 7a), keys of one length ordered by their bytes; the inner record holds x before y. A decode gives every value
@@ -35,7 +36,7 @@ TEST_CASE("encode and decode: a struct goes in and comes back whole")
     garage const &back = *decoded_back;
     REQUIRE_EQ(back.tires.size(), 3u);
     CHECK_EQ(back.tires.at(2).diameter, 19u);
-    CHECK_EQ(back.tires.at(1).airPressure, 3.0f);
+    CHECK_EQ(std::bit_cast<std::uint32_t>(back.tires.at(1).airPressure), 0x40400000u);
     CHECK_EQ(back.names, sample_garage.names);
     CHECK_EQ(back.rows, sample_garage.rows);
     CHECK_EQ(back.owners, sample_garage.owners);
@@ -86,7 +87,7 @@ TEST_CASE("encode and decode: the reference to a description at every table inde
     auto const a_back = form<fifteen_entries>::decode(std::string(a));
     REQUIRE(a_back.has_value());
     REQUIRE_EQ((*a_back)->p.size(), 1u);
-    CHECK_EQ((*a_back)->p[0].y, 2.0f);
+    CHECK_EQ(std::bit_cast<std::uint32_t>((*a_back)->p[0].y), 0x40000000u);
     CHECK_EQ((*a_back)->e1.v, 9);
     CHECK_EQ(at_path<fifteen_entries, "$.p[0].x">(a), 1.0f);
     eighteen_entries eighteen{};
@@ -97,7 +98,7 @@ TEST_CASE("encode and decode: the reference to a description at every table inde
     CHECK_NE(b.find("\xd9\x80\x69\x82\xc6\x20\x5a"s), std::string::npos);
     auto const b_back = form<eighteen_entries>::decode(std::string(b));
     REQUIRE(b_back.has_value());
-    CHECK_EQ((*b_back)->p[0].y, 4.0f);
+    CHECK_EQ(std::bit_cast<std::uint32_t>((*b_back)->p[0].y), 0x40800000u);
     CHECK_EQ((*b_back)->e4.v, -3);
     CHECK_EQ(at_path<eighteen_entries, "$.p[0].y">(b), 4.0f);
 }

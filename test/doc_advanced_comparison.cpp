@@ -4,6 +4,7 @@
 #include <cbor/schema.hpp>
 #include <cbor/structs.hpp>
 
+#include <bit>
 #include <cstdint>
 #include <expected>
 #include <memory>
@@ -89,7 +90,7 @@ TEST_CASE("doc advanced comparison: a number array")
     auto const values = root->view<"$.values">();
     double const sum = std::accumulate(values->begin(), values->end(), 0.0);
     // end numbers
-    CHECK_EQ(sum, 7.5);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(sum), 0x401e000000000000u);
 }
 
 } // namespace doc_advanced_comparison

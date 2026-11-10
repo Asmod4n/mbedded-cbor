@@ -180,7 +180,7 @@ TEST_CASE("doc advanced schema: the description apart")
     auto const back = cbor::schema<car>::decode<apart>(std::string(*data));
     REQUIRE(back.has_value());
     CHECK_EQ((*back)->make, "Volvo");
-    CHECK_EQ((*back)->tires[1].pressure, 2.25f);
+    CHECK_EQ(std::bit_cast<std::uint32_t>((*back)->tires[1].pressure), 0x40100000u);
     CHECK_EQ(data->size() + cbor::schema<car>::description().size(), bytes.size());
 }
 
@@ -240,7 +240,8 @@ TEST_CASE("doc advanced schema: the accessor")
     std::vector<float> seen;
     for (auto const t : *tires | std::views::drop(1))
         seen.push_back(*t.at_path<"@.pressure">());
-    CHECK_EQ(seen, std::vector<float>{2.25f});
+    REQUIRE_EQ(seen.size(), 1u);
+    CHECK_EQ(std::bit_cast<std::uint32_t>(seen[0]), 0x40100000u);
 }
 
 // The section "The accessor" says that the accessor holds the owner, so it stays valid after the caller releases the
@@ -294,15 +295,15 @@ TEST_CASE("doc advanced schema: a typed array view")
     auto const track = root->view<"$.track">();
     REQUIRE(track.has_value());
     CHECK_EQ(track->size(), 3u);
-    CHECK_EQ(std::accumulate(track->begin(), track->end(), 0.0), 6.0);
-    CHECK_EQ((*track)[1], 2.0);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(std::accumulate(track->begin(), track->end(), 0.0)), 0x4018000000000000u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>((*track)[1]), 0x4000000000000000u);
     CHECK_EQ(track->at(3).error(), error::index_out_of_bounds);
     CHECK_THROWS_AS((*track)[3], std::logic_error);
     auto const tail = track->last(2);
     REQUIRE(tail.has_value());
-    CHECK_EQ(tail->front(), 2.0);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(tail->front()), 0x4000000000000000u);
     CHECK_EQ(track->first(4).error(), error::index_out_of_bounds);
-    CHECK_EQ(std::ranges::fold_left(*track, 0.0, std::plus<>{}), 6.0);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(std::ranges::fold_left(*track, 0.0, std::plus<>{})), 0x4018000000000000u);
 }
 
 // The section "Errors" gives the error of a cut message, of a message of another struct and of a forged head. The

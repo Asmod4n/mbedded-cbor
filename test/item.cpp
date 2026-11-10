@@ -74,11 +74,11 @@ TEST_CASE("a float keeps its width in the additional information and its value a
     cbor::item const &f32 = floats[1];
     cbor::item const &f64 = floats[2];
     CHECK(f16.additional_information == 25);
-    CHECK(f16.get<cbor::type::half_float>().value() == 1.5);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(f16.get<cbor::type::half_float>().value()), 0x3ff8000000000000u);
     CHECK(f32.additional_information == 26);
-    CHECK(f32.get<cbor::type::single_float>().value() == 100000.0);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(f32.get<cbor::type::single_float>().value()), 0x40f86a0000000000u);
     CHECK(f64.additional_information == 27);
-    CHECK(f64.get<cbor::type::double_float>().value() == 1.1);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(f64.get<cbor::type::double_float>().value()), 0x3ff199999999999au);
 }
 
 // undefined is a value of its own, apart from null, so that a message
@@ -556,7 +556,7 @@ TEST_CASE("decode: a float16 keeps additional information 25")
     auto const f = item_of(top_level->clone());
     CHECK_EQ(f->type, cbor::type::half_float);
     CHECK_EQ(f->additional_information, 25);
-    CHECK_EQ(f->get<cbor::type::half_float>().value(), 1.5);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(f->get<cbor::type::half_float>().value()), 0x3ff8000000000000u);
     std::string again;
     REQUIRE(cbor::encode(*f, again).has_value());
     CHECK_EQ(again, "\xf9\x3e\x00"sv);

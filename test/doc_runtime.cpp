@@ -2,6 +2,7 @@
 #include "owned_copy.hpp"
 #include <cbor/sequence_reader.hpp>
 
+#include <bit>
 #include <cstdint>
 #include <expected>
 #include <span>
@@ -101,8 +102,12 @@ TEST_CASE("doc runtime: read a value as a type")
     CHECK_FALSE(doc_runtime::dereferences<cbor::ref<std::string_view>>);
     CHECK(doc_runtime::arrows<cbor::ref<std::string_view> const &>);
     CHECK_FALSE(doc_runtime::arrows<cbor::ref<std::string_view>>);
-    CHECK_EQ(test::lazy_of_copy(preferred(V(1.5)))->get<double>(), 1.5);
-    CHECK_EQ(test::lazy_of_copy(preferred(V(42)))->get<double>(), 42.0);
+    auto const one_and_a_half = test::lazy_of_copy(preferred(V(1.5)))->get<double>();
+    REQUIRE(one_and_a_half.has_value());
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*one_and_a_half), 0x3ff8000000000000u);
+    auto const forty_two = test::lazy_of_copy(preferred(V(42)))->get<double>();
+    REQUIRE(forty_two.has_value());
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*forty_two), 0x4045000000000000u);
     CHECK_EQ(test::lazy_of_copy(preferred(V(simple{21})))->get<bool>(), true);
     auto const two = test::lazy_of_copy(preferred(V(test::bytes{"\x01\x02"})))->get<std::span<std::byte const>>();
     CHECK_EQ((*two)->size(), 2u);

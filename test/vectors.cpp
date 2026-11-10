@@ -82,11 +82,7 @@ TEST_CASE("test vectors: RFC 8949 Appendix A")
         if (c.roundtrip) {
             auto const back = decoded(encoded(*v));
             REQUIRE(back.has_value());
-            auto const *f = std::get_if<double>(&v->kind);
-            if (f != nullptr && std::isnan(*f))
-                CHECK(std::isnan(std::get<double>(back->kind)));
-            else
-                CHECK(*back == *v);
+            CHECK(*back == *v);
         }
     }
 }
