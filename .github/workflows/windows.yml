@@ -50,11 +50,14 @@ jobs:
             ${{ env.VCPKG_INSTALLATION_ROOT }}\downloads
           key: vcpkg-doctest-x64-windows-${{ steps.vcpkg.outputs.commit }}
       - name: Install doctest from the vcpkg of the image
+        env:
+          VCPKG_INSTALL_ATTEMPTS: 3
+          VCPKG_RETRY_SECONDS: 30
         run: |
-          foreach ($attempt in 1..3) {
+          foreach ($attempt in 1..[int]$env:VCPKG_INSTALL_ATTEMPTS) {
             & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install doctest:x64-windows
             if ($LASTEXITCODE -eq 0) { exit 0 }
-            Start-Sleep -Seconds (30 * $attempt)
+            Start-Sleep -Seconds ([int]$env:VCPKG_RETRY_SECONDS * $attempt)
           }
           exit 1
       - name: Configure

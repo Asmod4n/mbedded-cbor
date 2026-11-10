@@ -59,6 +59,7 @@ def rounds_detail(path):
     return rounds
 
 
+stderr_text_bytes = 4000
 d, steal_limit = sys.argv[1:3]
 rest = sys.argv[3:]
 compilers = rest[:rest.index("--")] if "--" in rest else rest
@@ -88,6 +89,6 @@ print(json.dumps({
     "steal_limit_percent": int(steal_limit),
     "rounds_detail": rounds_detail(os.path.join(out, "rounds")),
     "failed": sorted(set(read(os.path.join(out, "failed.txt")).split())),
-    "stderr_of_runs": read(os.path.join(out, "err.txt"))[:4000],
+    "stderr_of_runs": read(os.path.join(out, "err.txt"))[:stderr_text_bytes],
     "packages": read(os.path.join(out, "packages")).splitlines(),
 }, indent=1))

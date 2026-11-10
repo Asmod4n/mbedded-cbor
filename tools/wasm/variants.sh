@@ -5,6 +5,7 @@ out=${1:?output directory}
 podman run --rm -v "$tree":/src:ro,Z -v "$out":/out:Z localhost/mbedded-cbor-wasm sh -eu -c '
 base="clang++-23 --target=wasm32-wasip1 -mexec-model=reactor -std=c++26 -fno-exceptions -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -I/src/include /src/tools/wasm/showcase.cpp"
 strip="-Wl,--strip-all,--gc-sections"
+symbols_shown=25
 one() { name=$1; shift; $base "$@" -o /out/showcase-$name.wasm 2>/out/showcase-$name.log || echo "$name failed"; }
 one O2 -O2
 one O2s -O2 $strip
@@ -25,5 +26,5 @@ for f in /out/showcase-*.wasm; do
 done > /out/sizes.txt
 wasm-objdump -h /out/showcase-O2.wasm > /out/sections-O2.txt
 wasm-objdump -h /out/showcase-O2s.wasm > /out/sections-O2s.txt
-llvm-nm-23 --size-sort -S /out/showcase-O2.wasm 2>&1 | tail -25 > /out/symbols-O2.txt || true
+llvm-nm-23 --size-sort -S /out/showcase-O2.wasm 2>&1 | tail -n "$symbols_shown" > /out/symbols-O2.txt || true
 '

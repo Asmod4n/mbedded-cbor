@@ -4,6 +4,7 @@
 # usage: source round.sh
 steal_limit_percent=3
 attempts_per_round=2
+error_lines_shown=20
 
 refuse_root() {
 	[ "$(id -u)" != 0 ] || { echo "never run as root" >&2; exit 2; }

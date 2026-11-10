@@ -115,8 +115,8 @@ one_round() {
 	local try=$1 attempt=$2 cell k v b
 	for cell in $cells; do
 		k=0
-		while [ "$k" -lt 3 ]; do
-			v=${variants[$(((k + attempt) % 3))]}
+		while [ "$k" -lt "${#variants[@]}" ]; do
+			v=${variants[$(((k + attempt) % ${#variants[@]}))]}
 			b=$build/bin/$v.$cell
 			if [ -e "$b" ]; then
 				$runner "$b" --benchmark_min_time="$MIN_TIME" --benchmark_out_format=json \
@@ -169,7 +169,8 @@ for path in sorted(glob.glob(os.path.join(build, "out", "round*", "*.json"))):
     times[(v, cell)] += [b["real_time"] for b in data["benchmarks"]]
 
 cells = sorted({cell for _, cell in times} | {f[len("a."):] for f in os.listdir(os.path.join(build, "log")) if f.startswith("a.")})
-errors = {f: read(os.path.join(build, "log", f))[:2000] for f in os.listdir(os.path.join(build, "log"))}
+error_text_bytes = 2000
+errors = {f: read(os.path.join(build, "log", f))[:error_text_bytes] for f in os.listdir(os.path.join(build, "log"))}
 result = {}
 for cell in cells:
     row = {}

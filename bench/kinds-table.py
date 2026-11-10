@@ -7,6 +7,7 @@ import re
 import statistics
 import sys
 
+check_relative_tolerance = 1e-9
 run, file, commit, field, whole, write = sys.argv[1:7]
 out = os.path.join(run, "out")
 context = json.load(open(os.path.join(out, "context.json")))
@@ -27,7 +28,7 @@ for b, v in sorted(runs.items()):
     arm = b.split(".", 1)[1]
     want = float(c["check_field"]) if arm in field.split() else float(c["check_source"])
     got = float(c["check"])
-    if abs(got - want) > 1e-9 * abs(want):
+    if abs(got - want) > check_relative_tolerance * abs(want):
         bad.append(f"{b}: check {got!r}, expected {want!r}")
     t = [v[i][0] for i in sorted(v)]
     res[b] = {"unit": v[min(v)][1], "repetitions": t, "median": statistics.median(t), "spread": max(t) / min(t) - 1,

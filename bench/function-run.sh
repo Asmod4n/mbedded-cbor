@@ -64,7 +64,7 @@ build() {
 	for f in "$dir"/log/*; do
 		[ -e "$f" ] || continue
 		echo "did not compile: $(basename "$f")"
-		head -n 20 "$f"
+		head -n "$error_lines_shown" "$f"
 	done
 }
 
@@ -138,7 +138,8 @@ def utest(tag, first, second):
 
 utests = {tag: {"a_aa": utest(tag, "a", "aa"), "a_b": utest(tag, "a", "b")} for tag in ("gxx", "clang")}
 
-errors = {f: read(os.path.join(d, "log", f))[:2000] for f in os.listdir(os.path.join(d, "log"))} if os.path.isdir(os.path.join(d, "log")) else {}
+error_text_bytes = 2000
+errors = {f: read(os.path.join(d, "log", f))[:error_text_bytes] for f in os.listdir(os.path.join(d, "log"))} if os.path.isdir(os.path.join(d, "log")) else {}
 functions = sorted({name for _, name, _ in times} | {name for _, _, name in skipped})
 cells = {}
 for tag in ("gxx", "clang"):

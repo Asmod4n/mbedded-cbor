@@ -27,7 +27,7 @@ compile() {
 		rm -f "${log:?}"
 	else
 		echo "build failed: $cxx $arm"
-		head -n 5 "$log"
+		head -n "$error_lines_shown" "$log"
 	fi
 }
 
