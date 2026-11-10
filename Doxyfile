@@ -41,4 +41,4 @@ GENERATE_XML           = YES
 XML_PROGRAMLISTING     = NO
 HAVE_DOT               = NO
 CLANG_ASSISTED_PARSING = YES
-CLANG_OPTIONS          = -std=c++26 -Iinclude -Ithird_party/boost_pfr/include
+CLANG_OPTIONS          = -std=c++26 -Iinclude

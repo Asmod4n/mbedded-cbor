@@ -18,7 +18,7 @@ podman run --rm --network none -e COMMIT="$commit" -e SITE_GROUPS="${SITE_GROUPS
   mkdir -p $work
   cp -r /src/tools/site/reference $markdown
   cp -r /generated/. $markdown
-  flags="-std=c++23 -O1 -Wall -Wextra -Werror -I/src/include -I/src/third_party/boost_pfr/include -I/usr/lib/llvm-23/include"
+  flags="-std=c++23 -O1 -Wall -Wextra -Werror -I/src/include -I/usr/lib/llvm-23/include"
   g++-16 $flags $site/tokens.cpp -L/usr/lib/llvm-23/lib -lclang -Wl,-rpath,/usr/lib/llvm-23/lib -o /tmp/tokens
   g++-16 $flags $site/check.cpp -o /tmp/check
   groups=$(sed -n "s/^| \[\([a-z]*\)\](\1\/index.md) |.*/\1/p" $markdown/index.md)
@@ -47,7 +47,7 @@ podman run --rm --network none -e COMMIT="$commit" -e SITE_GROUPS="${SITE_GROUPS
   fi
   /tmp/check /src $work
   clang++-23 --target=wasm32-wasip1 -mexec-model=reactor -std=c++26 -O2 -fno-exceptions -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Wnull-dereference -Werror \
-    -I/src/include -I/src/third_party/boost_pfr/include -Wl,--strip-all,--gc-sections -o /out/examples.wasm $site/examples.cpp
+    -idirafter /usr/include -I/src/include -Wl,--strip-all,--gc-sections -o /out/examples.wasm $site/examples.cpp
   cp $site/style.css $site/site.js $site/examples.mjs /out/
   reference() {
     pandoc -f gfm -t html5 --template $site/reference.html --lua-filter $site/reference.lua \

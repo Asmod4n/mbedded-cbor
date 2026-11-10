@@ -292,8 +292,7 @@ int main(int const argc, char const *const *const argv)
     std::filesystem::path const types = argv[5];
     std::string const types_url = argv[6];
     std::string const include = "-I" + (tree / "include").string();
-    std::string const pfr = "-I" + (tree / "third_party/boost_pfr/include").string();
-    char const *const arguments[] = {"-x", "c++", "-std=c++23", include.c_str(), pfr.c_str()};
+    char const *const arguments[] = {"-x", "c++", "-std=c++23", include.c_str()};
     std::string const root = (tree / "include/cbor/cbor.hpp").string();
     CXIndex const index = clang_createIndex(0, 1);
     CXTranslationUnit unit = nullptr;
