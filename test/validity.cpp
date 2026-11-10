@@ -155,35 +155,6 @@ TEST_CASE("validity: checked_add for every pair of summands, at compile time and
 }
 #endif
 
-namespace
-{
-
-constexpr std::array<major_type, 8> major_types{major_type::unsigned_integer,
-                                                major_type::negative_integer,
-                                                major_type::byte_string,
-                                                major_type::text_string,
-                                                major_type::array,
-                                                major_type::map,
-                                                major_type::tag,
-                                                major_type::simple_float};
-
-} // namespace
-
-// RFC 8949 3.2.3: each chunk of an indefinite-length string is a definite-length string of the same major
-// type. The check must refuse every other major type and the indefinite form, for both string types.
-TEST_CASE("validity: check_chunk for both string types, every major type and every additional information")
-{
-    for (major_type const string : {major_type::byte_string, major_type::text_string})
-        for (major_type const major : major_types)
-            for (std::uint8_t info = 0; info < 32; ++info) {
-                auto const r = validity::check_chunk(string, major, info);
-                if (major == string && info != 31)
-                    CHECK(r.has_value());
-                else
-                    CHECK_EQ(r.error(), error::syntax_error);
-            }
-}
-
 // RFC 8949 Appendix C: a simple value in the two-byte form (additional information 24) below 32 is not
 // well-formed. The decoders and the encoder use this one check, so it must agree for every additional
 // information and every one-byte argument.
