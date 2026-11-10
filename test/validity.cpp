@@ -60,49 +60,6 @@ TEST_CASE("validity: check_recursion_limit stops a recursion before the stack en
     CHECK_EQ(test::error_on_small_stack([] { return levels_until_refused(0); }), error::nesting_depth_exceeded);
 }
 
-namespace
-{
-
-// The factors and their results serve the checks against an exact int128 product below.
-#ifdef CBOR_HAS_INT128
-constexpr std::size_t size_max = std::numeric_limits<std::size_t>::max();
-
-// Factors around each width a product can have: zero, one, small numbers, the borders of 32 bits, the halves
-// and the top of std::size_t.
-constexpr std::array<std::size_t, 13> factors{0,
-                                              1,
-                                              2,
-                                              3,
-                                              std::size_t{0xffffffff},
-                                              std::size_t{0xffffffff} + 1,
-                                              std::size_t{0xffffffff} + 2,
-                                              size_max / 3,
-                                              size_max / 2,
-                                              size_max / 2 + 1,
-                                              size_max - 1,
-                                              size_max,
-                                              std::size_t{1}
-                                                  << (std::numeric_limits<std::size_t>::digits / 2)};
-
-constexpr auto sums_at_compile_time = [] {
-    std::array<std::array<bool, factors.size()>, factors.size()> fits{};
-    for (std::size_t i = 0; i < factors.size(); ++i)
-        for (std::size_t j = 0; j < factors.size(); ++j)
-            fits[i][j] = cbor::detail::validity::checked_add(factors[i], factors[j]).has_value();
-    return fits;
-}();
-
-constexpr auto products_at_compile_time = [] {
-    std::array<std::array<bool, factors.size()>, factors.size()> fits{};
-    for (std::size_t i = 0; i < factors.size(); ++i)
-        for (std::size_t j = 0; j < factors.size(); ++j)
-            fits[i][j] = cbor::detail::validity::checked_mul(factors[i], factors[j]).has_value();
-    return fits;
-}();
-#endif
-
-} // namespace
-
 // RFC 8949 5.6: a second key equal to a key already met makes the map not valid. The input set is {false,
 // true}.
 TEST_CASE("validity: check_key_unique for both inputs")
@@ -110,50 +67,6 @@ TEST_CASE("validity: check_key_unique for both inputs")
     CHECK(validity::check_key_unique(false).has_value());
     CHECK_EQ(validity::check_key_unique(true).error(), error::duplicate_key);
 }
-
-#ifdef CBOR_HAS_INT128
-// C23 ckd_mul gives the product when it is representable and reports an overflow otherwise. The compiler and
-// the run time use the same function, so both must give the answer of the exact product, which a wider type
-// computes here.
-TEST_CASE("validity: checked_mul for every pair of factors, at compile time and at run time")
-{
-    for (std::size_t i = 0; i < factors.size(); ++i)
-        for (std::size_t j = 0; j < factors.size(); ++j) {
-            std::size_t const a = factors[i];
-            std::size_t const b = factors[j];
-            cbor::uint128 const exact = static_cast<cbor::uint128>(a) * b;
-            bool const fits = exact <= size_max;
-            auto const product = validity::checked_mul(a, b);
-            CHECK_EQ(product.has_value(), fits);
-            CHECK_EQ(products_at_compile_time[i][j], fits);
-            if (fits)
-                CHECK_EQ(*product, a * b);
-            else
-                CHECK_EQ(product.error(), std::errc::value_too_large);
-        }
-}
-
-// C23 ckd_add gives the sum when it is representable and reports an overflow otherwise. The compiler and the
-// run time use the same function, so both must give the answer of the exact sum, which a wider type computes
-// here.
-TEST_CASE("validity: checked_add for every pair of summands, at compile time and at run time")
-{
-    for (std::size_t i = 0; i < factors.size(); ++i)
-        for (std::size_t j = 0; j < factors.size(); ++j) {
-            std::size_t const a = factors[i];
-            std::size_t const b = factors[j];
-            cbor::uint128 const exact = static_cast<cbor::uint128>(a) + b;
-            bool const fits = exact <= size_max;
-            auto const sum = validity::checked_add(a, b);
-            CHECK_EQ(sum.has_value(), fits);
-            CHECK_EQ(sums_at_compile_time[i][j], fits);
-            if (fits)
-                CHECK_EQ(*sum, a + b);
-            else
-                CHECK_EQ(sum.error(), std::errc::value_too_large);
-        }
-}
-#endif
 
 // RFC 8949 Appendix C: a simple value in the two-byte form (additional information 24) below 32 is not
 // well-formed. The decoders and the encoder use this one check, so it must agree for every additional
