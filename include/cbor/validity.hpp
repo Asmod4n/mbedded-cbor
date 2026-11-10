@@ -495,11 +495,11 @@ public:
         return {};
     }
 
-    template <bool Checked, class First, class Second>
+    template <class First, class Second>
     static std::expected<bool, error> keys_equivalent(First const &first, offset first_at, Second const &second,
                                                       offset second_at);
 
-    template <bool Checked, class Message>
+    template <class Message>
     static std::expected<std::pair<std::uint64_t, offset>, error>
     intern_key(canonical_ids &ids, Message const &message, offset at);
 

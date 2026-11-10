@@ -928,7 +928,7 @@ private:
 
 }
 
-template <bool Checked, class Message>
+template <class Message>
 std::expected<std::pair<std::uint64_t, detail::validity::offset>, error>
 detail::validity::intern_key(canonical_ids &ids, Message const &message, offset const at)
 {
@@ -942,7 +942,7 @@ detail::validity::intern_key(canonical_ids &ids, Message const &message, offset 
         encoded = message.encoded;
         item_at = heads::self_described_cbor_content_at(message.encoded, at);
     }
-    auto const h = heads::read_raw_head<Checked>(encoded, item_at);
+    auto const h = heads::read_raw_head<true>(encoded, item_at);
     if (!h) [[unlikely]]
         return std::unexpected(h.error());
     if (error const c = check_definite_length(h->major, h->info).error_or(error{}); c != error{}) [[unlikely]]
@@ -953,7 +953,7 @@ detail::validity::intern_key(canonical_ids &ids, Message const &message, offset 
         return {ids.id_of({of, number, bytes, ids.children_end(), 0}), end};
     };
     if (heads::is_bignum(h->major, h->argument)) {
-        heads::decoder<Checked> d{subspan(encoded, h->at)};
+        heads::decoder<true> d{subspan(encoded, h->at)};
         auto const read = d.decode_bignum(h->argument);
         if (!read) [[unlikely]]
             return std::unexpected(read.error());
@@ -970,7 +970,7 @@ detail::validity::intern_key(canonical_ids &ids, Message const &message, offset 
         return scalar(kind::negative_integer, h->argument, {}, h->at);
     case major_type::byte_string:
     case major_type::text_string: {
-        heads::decoder<Checked> d{subspan(encoded, h->at)};
+        heads::decoder<true> d{subspan(encoded, h->at)};
         auto const s = d.decode_string(h->argument);
         if (!s) [[unlikely]]
             return std::unexpected(s.error());
@@ -987,7 +987,7 @@ detail::validity::intern_key(canonical_ids &ids, Message const &message, offset 
         std::vector<std::pair<std::uint64_t, std::uint64_t>> pairs;
         offset next = h->at;
         for (std::uint64_t i = 0; i < h->argument; ++i) {
-            auto const key = intern_key<Checked>(ids, message, next);
+            auto const key = intern_key(ids, message, next);
             if (!key) [[unlikely]]
                 return std::unexpected(key.error());
             next = key->second;
@@ -995,7 +995,7 @@ detail::validity::intern_key(canonical_ids &ids, Message const &message, offset 
                 items.push_back(key->first);
                 continue;
             }
-            auto const value = intern_key<Checked>(ids, message, next);
+            auto const value = intern_key(ids, message, next);
             if (!value) [[unlikely]]
                 return std::unexpected(value.error());
             next = value->second;
@@ -1006,7 +1006,7 @@ detail::validity::intern_key(canonical_ids &ids, Message const &message, offset 
         return std::pair{ids.id_of(kind::array, 0, items), next};
     }
     case major_type::tag: {
-        auto const content = intern_key<Checked>(ids, message, h->at);
+        auto const content = intern_key(ids, message, h->at);
         if (!content) [[unlikely]]
             return std::unexpected(content.error());
         std::array<std::uint64_t, 1> const item{content->first};
@@ -1028,7 +1028,7 @@ detail::validity::intern_key(canonical_ids &ids, Message const &message, offset 
     return scalar(kind::floating, std::bit_cast<std::uint64_t>(p.value == 0.0 ? 0.0 : p.value), {}, h->at);
 }
 
-template <bool Checked, class First, class Second>
+template <class First, class Second>
 std::expected<bool, error>
 detail::validity::keys_equivalent(First const &first, offset const first_at, Second const &second,
                                   offset const second_at)
@@ -1041,7 +1041,7 @@ detail::validity::keys_equivalent(First const &first, offset const first_at, Sec
         else
             return message.encoded;
     };
-    auto const skip = [](heads::decoder<Checked> &d) {
+    auto const skip = [](heads::decoder<true> &d) {
         well_formedness::no_marks none;
         return well_formedness::skip_item(d, none);
     };
@@ -1053,10 +1053,10 @@ detail::validity::keys_equivalent(First const &first, offset const first_at, Sec
     };
     std::string_view const a = encoded_of(first);
     std::string_view const b = encoded_of(second);
-    auto const h = heads::read_raw_head<Checked>(a, resolve(first, first_at));
+    auto const h = heads::read_raw_head<true>(a, resolve(first, first_at));
     if (!h) [[unlikely]]
         return std::unexpected(h.error());
-    auto const k = heads::read_raw_head<Checked>(b, resolve(second, second_at));
+    auto const k = heads::read_raw_head<true>(b, resolve(second, second_at));
     if (!k) [[unlikely]]
         return std::unexpected(k.error());
     if (error const c = check_definite_length(h->major, h->info).error_or(error{}); c != error{}) [[unlikely]]
@@ -1070,7 +1070,7 @@ detail::validity::keys_equivalent(First const &first, offset const first_at, Sec
                 return std::pair{n.major == major_type::negative_integer, n.argument};
             if (!heads::is_bignum(n.major, n.argument))
                 return std::nullopt;
-            heads::decoder<Checked> d{subspan(encoded, n.at)};
+            heads::decoder<true> d{subspan(encoded, n.at)};
             auto const read = d.decode_bignum(n.argument);
             if (!read) [[unlikely]]
                 return std::unexpected(read.error());
@@ -1095,11 +1095,11 @@ detail::validity::keys_equivalent(First const &first, offset const first_at, Sec
         return h->argument == k->argument;
     case major_type::byte_string:
     case major_type::text_string: {
-        heads::decoder<Checked> d{subspan(a, h->at)};
+        heads::decoder<true> d{subspan(a, h->at)};
         auto const s = d.decode_string(h->argument);
         if (!s) [[unlikely]]
             return std::unexpected(s.error());
-        heads::decoder<Checked> e{subspan(b, k->at)};
+        heads::decoder<true> e{subspan(b, k->at)};
         auto const t = e.decode_string(k->argument);
         if (!t) [[unlikely]]
             return std::unexpected(t.error());
@@ -1108,8 +1108,8 @@ detail::validity::keys_equivalent(First const &first, offset const first_at, Sec
     case major_type::array: {
         if (h->argument != k->argument)
             return false;
-        heads::decoder<Checked> d{subspan(a, h->at)};
-        heads::decoder<Checked> e{subspan(b, k->at)};
+        heads::decoder<true> d{subspan(a, h->at)};
+        heads::decoder<true> e{subspan(b, k->at)};
         if (auto const r =
                 detail::validity::check_pending_items(h->major, h->info, h->argument, d.encoded.size());
             !r) [[unlikely]]
@@ -1119,7 +1119,7 @@ detail::validity::keys_equivalent(First const &first, offset const first_at, Sec
             !r) [[unlikely]]
             return std::unexpected(r.error());
         for (std::uint64_t i = 0; i < h->argument; ++i) {
-            auto const equal = keys_equivalent<Checked>(first, distance(a, d.encoded), second,
+            auto const equal = keys_equivalent(first, distance(a, d.encoded), second,
                                                         distance(b, e.encoded));
             if (!equal || !*equal)
                 return equal;
@@ -1134,10 +1134,10 @@ detail::validity::keys_equivalent(First const &first, offset const first_at, Sec
         if (h->argument != k->argument)
             return false;
         canonical_ids ids;
-        auto const x = intern_key<Checked>(ids, first, first_at);
+        auto const x = intern_key(ids, first, first_at);
         if (!x) [[unlikely]]
             return std::unexpected(x.error());
-        auto const y = intern_key<Checked>(ids, second, second_at);
+        auto const y = intern_key(ids, second, second_at);
         if (!y) [[unlikely]]
             return std::unexpected(y.error());
         return x->first == y->first;
@@ -1145,7 +1145,7 @@ detail::validity::keys_equivalent(First const &first, offset const first_at, Sec
     case major_type::tag:
         if (h->argument != k->argument)
             return false;
-        return keys_equivalent<Checked>(first, h->at, second, k->at);
+        return keys_equivalent(first, h->at, second, k->at);
     case major_type::simple_float:
         break;
     }
