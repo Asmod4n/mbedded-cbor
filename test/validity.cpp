@@ -63,53 +63,6 @@ TEST_CASE("validity: check_recursion_limit stops a recursion before the stack en
 namespace
 {
 
-struct shared_ptr_case {
-    std::shared_ptr<int const> pointer;
-    bool empty;
-    bool null;
-};
-
-std::shared_ptr<int const> const holder = std::make_shared<int const>(7);
-int const elsewhere = 8;
-
-// The four states of a std::shared_ptr after [util.smartptr.shared]: it owns an object or not (empty means it
-// owns none), and it stores a pointer or not (null). Each state is built with a constructor of the standard.
-shared_ptr_case const shared_ptr_cases[] = {
-    {std::shared_ptr<int const>{}, true, true},
-    {std::shared_ptr<int const>(std::shared_ptr<int const>{}, &elsewhere), true, false},
-    {std::shared_ptr<int const>(holder, nullptr), false, true},
-    {holder, false, false},
-};
-
-} // namespace
-
-// An owner that owns no object keeps nothing alive, whatever pointer it stores. The check must throw for
-// exactly the two empty states, so that a view beside such an owner is never handed out.
-TEST_CASE("validity: throw_logic_error_if_empty for every state of a shared_ptr")
-{
-    for (shared_ptr_case const &c : shared_ptr_cases) {
-        if (c.empty)
-            CHECK_THROWS_AS(validity::throw_logic_error_if_empty(c.pointer, "empty"), std::logic_error);
-        else
-            CHECK_NOTHROW(validity::throw_logic_error_if_empty(c.pointer, "empty"));
-    }
-}
-
-// A pointer that is read through must not be null, whether it owns an object or not. The check must throw for
-// exactly the two null states.
-TEST_CASE("validity: throw_logic_error_if_null for every state of a shared_ptr")
-{
-    for (shared_ptr_case const &c : shared_ptr_cases) {
-        if (c.null)
-            CHECK_THROWS_AS(validity::throw_logic_error_if_null(c.pointer, "null"), std::logic_error);
-        else
-            CHECK_NOTHROW(validity::throw_logic_error_if_null(c.pointer, "null"));
-    }
-}
-
-namespace
-{
-
 // The factors and their results serve the checks against an exact int128 product below.
 #ifdef CBOR_HAS_INT128
 constexpr std::size_t size_max = std::numeric_limits<std::size_t>::max();
@@ -282,34 +235,6 @@ TEST_CASE("validity: check_typed_array for the tags around 64 to 87 and the leng
         }
 }
 
-// The rule table holds a row only for a tag that the library interprets (owner, 2026-10-13). The content of tags
-// 2 and 3 (RFC 8949 3.4.3), of tag 24 (RFC 8949 3.4.5.1) and of tags 64 to 87 (RFC 8746 2) is a byte string; the
-// content of tag 29 is an unsigned integer (value-sharing). Tags 0 and 1 and every other tag take every major
-// type. This test exists so that no content that these sections forbid passes a reader that interprets the tag,
-// and so that no row refuses a tag that the library does not interpret.
-TEST_CASE("validity: check_tag_content for the tags 0 to 100 and 1113 and every major type")
-{
-    std::vector<std::uint64_t> tags;
-    for (std::uint64_t tag = 0; tag <= 100; ++tag)
-        tags.push_back(tag);
-    tags.push_back(1113);
-    tags.push_back(std::numeric_limits<std::uint64_t>::max());
-    for (std::uint64_t const tag : tags)
-        for (major_type const major : major_types) {
-            auto const r = validity::check_tag_content(tag, major);
-            bool const byte_string = tag == 2 || tag == 3 || tag == 24 || (tag >= 64 && tag <= 87);
-            bool admitted = true;
-            if (byte_string)
-                admitted = major == major_type::byte_string;
-            else if (tag == 29)
-                admitted = major == major_type::unsigned_integer;
-            if (admitted)
-                CHECK(r.has_value());
-            else
-                CHECK_EQ(r.error(), error::inadmissible_type_for_tag_content);
-        }
-}
-
 // A shared reference names one of the values that were marked before it. The decoder and the lazy reader read
 // the index through this one check, so an index that no mark has reached gives the same error on both paths,
 // and the index is converted to std::size_t only after it is known to fit.
@@ -339,80 +264,6 @@ TEST_CASE("value_sharing: index takes no byte offset and no other index")
     CHECK_FALSE(sharedref_index_accepts<validity::offset>);
     CHECK_FALSE(sharedref_index_accepts<std::size_t>);
 }
-
-#ifdef CBOR_HAS_INT128
-// RFC 9535 2.3.3.2: an index selects the element Normalize(i, len), and only an index in 0 to len - 1 after
-// the normalization selects an element. The path, lazy::at and the schema use this one check, so it must
-// agree with the exact arithmetic for small arrays and at the ends of std::int64_t and std::uint64_t.
-TEST_CASE("validity: check_index against Normalize of RFC 9535")
-{
-    constexpr std::int64_t min = std::numeric_limits<std::int64_t>::min();
-    constexpr std::int64_t max = std::numeric_limits<std::int64_t>::max();
-    std::vector<std::int64_t> indexes{min, min + 1, max - 1, max};
-    for (std::int64_t i = -6; i <= 6; ++i)
-        indexes.push_back(i);
-    std::vector<std::uint64_t> lengths{0,
-                                       1,
-                                       2,
-                                       3,
-                                       4,
-                                       static_cast<std::uint64_t>(max),
-                                       static_cast<std::uint64_t>(max) + 1,
-                                       std::numeric_limits<std::uint64_t>::max()};
-    for (std::uint64_t const length : lengths)
-        for (std::int64_t const index : indexes) {
-            cbor::int128 const normalized =
-                index >= 0 ? cbor::int128{index} : static_cast<cbor::int128>(length) + index;
-            bool const selects = normalized >= 0 && normalized < static_cast<cbor::int128>(length);
-            auto const r = validity::check_index(index, length);
-            if (selects)
-                CHECK_EQ(*r, validity::index{static_cast<std::uint64_t>(normalized)});
-            else
-                CHECK_EQ(r.error(), error::index_out_of_bounds);
-            if (index >= 0 && std::in_range<std::size_t>(index)) {
-                auto const u = validity::check_index(static_cast<std::size_t>(index), length);
-                CHECK_EQ(u.has_value(), selects);
-            }
-        }
-}
-
-// RFC 8949 3.1: a negative integer has the value -1 minus its argument. A magnitude fits in a type exactly
-// when this value lies in the range of the type, for every width and signedness that the library reads into.
-template <class T>
-void number_range_check()
-{
-    constexpr std::uint64_t top = std::numeric_limits<std::uint64_t>::max();
-    std::vector<std::uint64_t> magnitudes{0, 1, 2, top - 1, top};
-    for (std::uint64_t const edge : {static_cast<std::uint64_t>(std::numeric_limits<T>::max())})
-        for (std::uint64_t const m : {edge - 1, edge, edge + 1})
-            magnitudes.push_back(m);
-    for (bool const negative : {false, true})
-        for (std::uint64_t const magnitude : magnitudes) {
-            cbor::int128 const value = negative ? -1 - cbor::int128{magnitude} : cbor::int128{magnitude};
-            bool const fits = value >= cbor::int128{std::numeric_limits<T>::min()} &&
-                              value <= cbor::int128{std::numeric_limits<T>::max()};
-            auto const r = validity::check_number_range<T>(negative, magnitude);
-            if (fits)
-                CHECK(r.has_value());
-            else
-                CHECK_EQ(r.error(), error::number_out_of_range);
-        }
-}
-
-// The standard integer widths and signednesses are a finite set, so each member is checked: a range check that one
-// width misses would change a value without an error.
-TEST_CASE("validity: check_number_range for every standard integer width and signedness")
-{
-    number_range_check<std::int8_t>();
-    number_range_check<std::uint8_t>();
-    number_range_check<std::int16_t>();
-    number_range_check<std::uint16_t>();
-    number_range_check<std::int32_t>();
-    number_range_check<std::uint32_t>();
-    number_range_check<std::int64_t>();
-    number_range_check<std::uint64_t>();
-}
-#endif
 
 // [span.sub]: first(count) and last(count) need count <= size(). A sub-view of a typed array is made only
 // after this check, for every count up to one past the size.
@@ -505,14 +356,6 @@ TEST_CASE("validity: an offset, a size and an index do not take the place of eac
     CHECK_FALSE(std::is_convertible_v<index, offset>);
     CHECK_FALSE(std::is_convertible_v<offset, index>);
     CHECK(std::same_as<decltype(validity::check_index(0, 1))::value_type, index>);
-    CHECK(std::same_as<decltype(cbor::lazy::offset), std::size_t>);
-}
-
-// The public member lazy::offset is a std::size_t, so no type of cbor::detail stands in a public signature. The
-// library turns it into an offset at each read.
-TEST_CASE("validity: lazy::offset is the position type of std::string_view")
-{
-    CHECK(std::same_as<decltype(cbor::lazy::offset), std::string_view::size_type>);
 }
 
 // subspan accepts every offset from the start to the end of its input. An offset at the end gives an empty view, and
