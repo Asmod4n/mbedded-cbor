@@ -130,9 +130,9 @@ std::expected<std::size_t, error> encode(item const &root, Target &&target);
  * cbor::encode(**tree, out, cbor::cycles) → std::expected<std::size_t, error>
  * @endcode
  * @code{.example}
- * message: 28([29(0)])
+ * bytes: d8 1c 81 d8 1d 00
  * call: auto const tree = cbor::decode(bytes)
- * result: owning item of an array that holds itself
+ * result: owning item of 28([29(0)])
  * call: std::string out;
  * result: ""
  * call: cbor::encode(**tree, out, cbor::cycles)

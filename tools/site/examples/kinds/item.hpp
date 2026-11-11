@@ -69,6 +69,15 @@ struct kind<std::pair<std::uint64_t, cbor::item const *>> {
 };
 
 template <>
+struct kind<cbor::cycles_t> {
+    static constexpr std::string_view name = "cbor::cycles_t";
+    static std::string text(cbor::cycles_t)
+    {
+        return "cbor::cycles";
+    }
+};
+
+template <>
 struct kind<cbor::simple_value> {
     static constexpr std::string_view name = "cbor::simple_value";
     static std::string text(cbor::simple_value const v)
