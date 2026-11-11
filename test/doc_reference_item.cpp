@@ -100,6 +100,32 @@ TEST_CASE("doc reference item: item::get")
     CHECK_EQ(other.error(), cbor::error::incorrect_type);
 }
 
+// tools/doc/groups/decode.dox, snippet decode group: the EXAMPLES section of the man page of the group decode uses
+// the encoder, decode and encode together, so a reader sees one round trip. The test checks each value that the
+// comments of the example state.
+TEST_CASE("doc reference item: the example of the group decode")
+{
+    // [decode group]
+    std::string bytes;
+    cbor::encoder e(bytes);
+    auto const written = e.array(2)
+                             .and_then([&] { return e.unsigned_integer(std::uint8_t{1}); })
+                             .and_then([&] { return e.text_string("a"); })
+                             .and_then([&] { return e.finish(); });  // 5: bytes holds 82 18 01 61 61
+    auto const tree = cbor::decode(bytes);
+    auto const second = (*tree)->get<cbor::type::array>()->at(1).get<cbor::type::text_string>();  // "a"
+    std::string out;
+    auto const size = cbor::encode(**tree, out);  // 5; out == bytes
+    // [decode group]
+    REQUIRE(written);
+    CHECK_EQ(*written, 5u);
+    CHECK_EQ(bytes, "\x82\x18\x01\x61\x61"s);
+    REQUIRE(tree);
+    CHECK_EQ(second.value(), "a"sv);
+    CHECK_EQ(size.value(), 5u);
+    CHECK_EQ(out, bytes);
+}
+
 // decode.hpp, snippet decode: one item, a byte after it, a leading tag 55799, an indefinite length, and a tree that
 // outlives its input.
 TEST_CASE("doc reference item: decode")

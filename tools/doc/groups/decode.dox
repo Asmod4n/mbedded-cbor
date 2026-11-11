@@ -1,3 +1,108 @@
 /**
 @defgroup decode a decoded tree of CBOR and the encoder
+
+`cbor::decode` reads one top-level item into a tree of `cbor::item`.
+`cbor::encoder` writes CBOR one data item per call, and `cbor::encode`
+writes a tree. Include `<cbor/cbor.hpp>`.
+
+The tree copies each text and byte string into one memory zone that the
+result owns. It does not view the input, and it stays valid after the
+input ends. `cbor::decode` reads no byte after the item, so a CBOR
+sequence (RFC 8742) is read item by item. It reads every head of the
+item, so every limit counts each head. A count in a head reserves
+nothing: an array that claims more elements than bytes are left gives
+`too_little_data` before it reads an element.
+
+@section decode_tree THE TREE
+
+An item has two data members: `type`, a `cbor::type`, and
+`additional_information` (RFC 8949, section 3). `get<K>()` gives the
+value as `std::expected<cbor::item_alternative_t<K>, error>`, where `K`
+is a `cbor::type`. A `K` that is not the `type` of the item gives
+`incorrect_type`.
+
+- `unsigned_integer`, `negative_integer`: `std::uint64_t`, the argument.
+- `byte_string`, `text_string`: `std::span<std::byte const>`,
+  `std::string_view`.
+- `array`: `std::span<cbor::item const>`, the elements.
+- `map`: `std::span<cbor::item const>`, each key and its value one after
+  the other.
+- `tag`, `unsigned_bignum`, `negative_bignum`, `typed_array`:
+  `std::pair<std::uint64_t, cbor::item const *>`, the tag number and the
+  item of the content.
+- `shared_reference`: `std::pair<std::uint64_t, cbor::item const *>`, the
+  index of the tag 29 and the item that the tag 28 of that index marks.
+- `half_float`, `single_float`, `double_float`: `double`.
+- `false_value`, `true_value`, `null`, `undefined`, `simple_value`:
+  `cbor::simple_value`.
+
+A bignum (tag 2 or 3) whose magnitude fits in 64 bits is the same value
+as a basic integer (RFC 8949, section 3.4.3). `cbor::decode` makes it an
+`unsigned_integer` or a `negative_integer` item. A larger bignum stays an
+`unsigned_bignum` or a `negative_bignum`. Its content is a byte string
+item that holds a copy of the magnitude.
+
+@section decode_tags TAGS 24, 28, 29 AND 55799
+
+A tag 24 is a tag item over its byte string.
+`cbor::encoded_cbor_data_item(tree, item)` gives the root of the
+embedded item, decoded as a top-level item of its own. For a tag 24
+whose content is no byte string it gives `incorrect_type`.
+
+Tag 28 marks a value as shared. Tag 29 with the index n stands for the
+value of the n-th tag 28. `cbor::decode` resolves both tags, with a
+table for one call. A tag 28 makes no node and marks the node of its
+content. A tag 29 is a `shared_reference` item. That item can be the
+item itself or an item above it, so the tree can hold a cycle. An index
+with no tag 28 before it gives `sharedref_index_not_marked`, and
+`28(29(0))` gives `sharedref_not_defined`.
+
+Tag 55799 (RFC 8949, section 3.4.6) marks bytes as CBOR.
+`cbor::decode` reads one leading tag 55799 as its content, so the root of
+its tree is the content. A second tag 55799, and a tag 55799 inside an
+item, stay tags.
+
+@section decode_encoder THE ENCODER
+
+`cbor::encoder` writes one data item per call, in the order of the
+bytes. An integer and a float take the width of their type, and a NaN
+keeps its bits. A count, a length and a tag number take the shortest
+head. The encoder counts nothing: the counts of `array` and `map` are
+the caller's. `finish()` gives the size in bytes, or the pieces for an
+`iov_writer`.
+
+The target of the encoder is one of these:
+
+- a container of bytes, for example `std::string` or
+  `std::vector<std::byte>`: the encoder appends to it;
+- a fixed span of bytes: the encoder writes into it, allocates nothing,
+  and gives `no_buffer_space` when an item does not fit;
+- a `cbor::iov_writer`: the encoder gives a list of pieces;
+- a writer of the program with `allocate`, `append` and `done`. An error
+  of the writer comes back as a `cbor::error`.
+
+`cbor::encode(item, target)` writes a tree with the additional
+information that each item keeps. Each integer, length and tag number
+keeps the width of its head on the wire. A float keeps the width of its
+type, and a NaN keeps its bits. A bignum that fits in 64 bits is written
+in its shortest head. A `shared_reference` gives `unsupported_value`.
+`encode(tree, out, cbor::cycles)` writes tags 28 and 29 only for a cycle.
+
+`cbor::encode_iov(item)` writes a tree into a list of pieces as
+`struct iovec`, with their storage, which lives as long as the result.
+The pieces are for `writev`, `sendmsg`, `IORING_OP_WRITEV` and
+`IORING_OP_SENDMSG`. A text or a byte string of 32 bytes or more that
+the caller hands over with its owner is not copied.
+
+@section decode_errors ERRORS
+
+Each function gives `std::expected` with a `cbor::error`. After an error
+of the encoder, and after `finish()`, each call of the encoder throws
+`std::logic_error`. `cbor::encoded_cbor_data_item` throws
+`std::logic_error` for an item that is not a tag 24 of that tree.
+
+@manonly
+.SH "EXAMPLES"
+@endmanonly
+@snippet doc_reference_item.cpp decode group
 */
