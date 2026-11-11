@@ -1,0 +1,12 @@
+@INCLUDE               = Doxyfile
+INPUT                 += tools/site/mainpage.dox
+OUTPUT_DIRECTORY       = /out
+HTML_OUTPUT            = .
+GENERATE_HTML          = YES
+GENERATE_XML           = NO
+GENERATE_MAN           = NO
+GENERATE_TREEVIEW      = NO
+DISABLE_INDEX          = YES
+SEARCHENGINE           = NO
+HTML_COLORSTYLE        = LIGHT
+HTML_EXTRA_STYLESHEET  = /usr/share/doxygen-awesome-css/doxygen-awesome.css

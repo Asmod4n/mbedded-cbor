@@ -1,0 +1,14 @@
+/**
+@mainpage mbedded-cbor
+
+A header-only C++ library for CBOR (RFC 8949). Include `<cbor/cbor.hpp>`.
+
+- @ref lazy
+- @ref path
+- @ref decode
+- @ref structs
+- @ref schema
+- @ref ref
+- @ref tools
+- @ref errors
+*/
