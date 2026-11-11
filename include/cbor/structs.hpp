@@ -1398,7 +1398,8 @@ class generic
  * | a struct | a map |
  *
  * `decode` gives `incorrect_type` for another item: a `std::vector<int>` takes a typed array, not an array.
- * An enum with no fixed underlying type, a `long double` and a struct under `tagged_item` do not compile.
+ * An enum with no fixed underlying type does not compile in `decode`.
+ * A `long double` and a struct under `tagged_item` do not compile.
  *
  * @code{.callseq}
  * cbor::structs<T>::encode(value)              → std::expected<std::string, cbor::error>

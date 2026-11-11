@@ -3656,7 +3656,7 @@ public:
      * A struct takes its class tag, its table reference, a record head of 5 bytes and its fields.
      * A text, a list, a map, an optional of variable size or a `std::variant` takes a reference `6(N)` of 6 bytes.
      * It gives no error at run time.
-     * A type that has no fixed size, for example a struct with a base class, does not compile.
+     * A type that has no fixed size does not compile.
      *
      * @code{.callseq}
      * cbor::schema<T>::fixed_size()    → std::size_t
