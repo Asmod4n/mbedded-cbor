@@ -18,6 +18,49 @@ using namespace std::string_view_literals;
 // path.hpp and lazy.hpp take the examples through the snippet markers. The tests exist so that every example
 // compiles and gives the result that its page states.
 
+// tools/doc/groups/path.dox, snippet path group: the EXAMPLES section of the man page of the group path uses a path
+// at compile time, a nodelist, a descendant segment and a filter together, on a store with books. The
+// test checks each value that the comments of the example state.
+TEST_CASE("doc reference path: the example of the group path")
+{
+    std::string bytes = test::preferred(test::M(
+        "store"s, test::M("book"s,
+                          test::A(test::M("title"s, "A"s, "price"s, 8), test::M("title"s, "B"s, "price"s, 12),
+                                  test::M("title"s, "C"s, "price"s, 9)),
+                          "bicycle"s, test::M("price"s, 20))));
+    // [path group]
+    // bytes: a std::string with {"store": {"book": [{"title": "A", "price": 8}, {"title": "B", "price": 12},
+    //                                               {"title": "C", "price": 9}], "bicycle": {"price": 20}}}
+    auto const bicycle = cbor::at_path<"$.store.bicycle.price", int>(bytes);  // 20
+    auto const missing = cbor::at_path<"$.store.bicycle.color", int>(bytes);  // key_not_found
+    auto const doc = cbor::lazy::adopt(std::move(bytes)).value();
+    auto const prices = doc.at_path<"$.store.book[*].price", cbor::nodelist>();  // 3 nodes: 8, 12, 9
+    auto const every = doc.at_path<"$..price", cbor::nodelist>();                // 4 nodes: every price
+    auto const cheap = doc.at_path<"$.store.book[?@.price < 10].title", cbor::nodelist>();  // 2 nodes: "A", "C"
+    auto const last = (*cheap)[1].get<std::string_view>();                                  // "C"
+    auto const none = doc.at_path<"$.store.book[?@.price > 20].title", cbor::nodelist>();   // an empty nodelist
+    // [path group]
+    REQUIRE(bicycle);
+    CHECK_EQ(*bicycle, 20);
+    CHECK_EQ(missing.error(), cbor::error::key_not_found);
+    REQUIRE(prices);
+    REQUIRE_EQ(prices->size(), 3u);
+    CHECK_EQ((*prices)[0].get<int>().value(), 8);
+    CHECK_EQ((*prices)[1].get<int>().value(), 12);
+    CHECK_EQ((*prices)[2].get<int>().value(), 9);
+    REQUIRE(every);
+    CHECK_EQ(every->size(), 4u);
+    REQUIRE(cheap);
+    REQUIRE_EQ(cheap->size(), 2u);
+    REQUIRE(last);
+    CHECK_EQ(**last, "C"sv);
+    auto const first = (*cheap)[0].get<std::string_view>();
+    REQUIRE(first);
+    CHECK_EQ(**first, "A"sv);
+    REQUIRE(none);
+    CHECK(none->empty());
+}
+
 // query.hpp, snippet at_path: a number reads from a std::string in place, a text needs an owner, and a run-time
 // query reads the same value as the compile-time path.
 TEST_CASE("doc reference path: at_path")

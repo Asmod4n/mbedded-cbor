@@ -1,3 +1,332 @@
 /**
 @defgroup path read a CBOR value by its JSONPath (RFC 9535)
+
+`cbor::at_path` reads one value from CBOR bytes by its JSONPath (RFC
+9535), with no decode of the rest. A path also reads CBOR that JSON does
+not have: keys that are not text, tags and typed arrays. A path that
+selects many nodes gives a `cbor::nodelist`. Include `<cbor/cbor.hpp>`.
+
+A path is a string literal that the compiler checks, or a string that
+`cbor::path::compile` parses once at run time. Both read the same
+grammar. The call reads the bytes in place. It does not copy the bytes
+and keeps nothing. It reads the heads from the start of the item to the
+target and no byte after the target.
+
+@section path_forms THE FORMS
+
+A path at compile time is a string literal. A path that is not valid, or
+that selects many nodes where one node is expected, does not compile. The
+type of the literal is `cbor::fixed_string`. A template of the program
+names it to pass a path on.
+
+- `cbor::at_path<Path, T>(encoded)`: `encoded` is a `std::string_view`,
+  so a `std::string` or one element of a `cbor::sequence` goes in
+  directly. For a number, a truth value, `std::nullptr_t` or
+  `cbor::simple_value`, it gives `std::expected<T, cbor::error>`. For
+  `std::string` or `std::vector<std::byte>`, it copies the text or the
+  bytes of the value.
+- `cbor::at_path<Path, T>(owner)`: `T` is a view type, and `owner` is a
+  `std::shared_ptr<std::string const>`. It gives
+  `std::expected<cbor::ref<T>, cbor::error>`.
+- `cbor::at_path<Path, T>(owner, view)`: `owner` is a
+  `std::shared_ptr<void const>`, and `view` is a borrowed range of `char`
+  that `owner` keeps alive. The call does not check that the owner holds
+  the bytes.
+- `cbor::at_path<Path, T>(std::move(encoded))`: the rvalue
+  `std::string` moves into a new owner.
+- `lazy.at_path<Path, T>()` reads from a `cbor::lazy`, where `$` is the
+  value of the lazy. `lazy.at_path<Path>()` gives the node as a
+  `cbor::lazy`. `lazy.at_path<Path, cbor::nodelist>()` gives the
+  nodelist.
+- `cbor::path::compile<T>` parses the text of a path at run time and
+  gives a `cbor::path::query<T>`. The query owns its data, and one query applies
+  to any number of items. An apply does not parse again.
+- `cbor::at_path(encoded, q)`, `cbor::at_path(owner, q)`,
+  `cbor::at_path(owner, view, q)`, `cbor::at_path(std::move(encoded), q)`
+  and `lazy.at_path(q)` apply a query. The result type is that of the
+  forms above, with the `T` of the query.
+
+No free form takes a lazy. A lazy reads a path with its member
+`at_path`. `cbor::schema<T>::at_path` reads a member of a message that
+`cbor::schema<T>` wrote. Its path names members and indexes only.
+
+`T` of a view is `std::string_view`, `std::span<std::byte const>` or
+`cbor::typed_array`. A view needs an owner of the bytes. A view type with
+a `std::string_view` alone does not compile. A `cbor::ref` compares and
+reaches its value as `std::optional` does. `cbor::ref<cbor::typed_array>`
+has no `==`.
+
+@section path_types THE TYPES OF A READ
+
+- An integer type, also `char`: an integer, or a tag 2 or 3 whose
+  magnitude fits in 64 bits. A value out of range gives
+  `number_out_of_range`.
+- `double`: a half, single or double float. It also reads an integer or a
+  bignum that a `double` holds exactly: an integer from -2^53 to 2^53,
+  and a larger one such as 2^60 or -2^64 whose bits from the highest 1 to
+  the lowest 1 fit in 53 bits. Another integer gives `number_out_of_range`.
+  A float is not read as an integer.
+- `bool`: `true` or `false`.
+- `std::nullptr_t`: `null`.
+- `cbor::simple_value`: any simple value, also `false`, `true` and
+  `null`.
+- `std::string_view`: a text string.
+- `std::span<std::byte const>`: a byte string.
+- `cbor::typed_array`: a tag of RFC 8746 over a byte string.
+
+Another kind of item gives `incorrect_type`. No other conversion exists.
+`float` and any other `T` do not compile. For any other result, read the
+node with `lazy.at_path<Path>()`.
+
+@section path_syntax THE SYNTAX
+
+The grammar is RFC 9535, with EDN literals (draft-ietf-cbor-edn-literals)
+in brackets and in filters.
+
+- `$` is the whole value. `$.a` and `$['a']` select a name. A name in dot
+  form starts with a letter, `_` or a byte of 0x80 or more, and goes on
+  with these or digits. A name in brackets is in single or double quotes,
+  with the escapes of RFC 9535 section 2.3.1 and of EDN.
+- `$[0]` is the first element and `$[-1]` the last. An index is an
+  integer of at most 16 digits without leading zeros, from -(2^53 - 1) to
+  2^53 - 1. An integer of 16 digits or less outside this range, and `$[01]`,
+  give `invalid_path`.
+- `$[*]` and `$.*` select every element of an array and every value of a
+  map. `$..a`, `$..*` and `$..[0]` select at any depth.
+- `$[0, 2]` has several selectors. `$[start:end:step]` is a slice. Each
+  part of a slice can be absent. Step 0 selects nothing. A slice of a
+  node that is not an array selects nothing.
+- `$[?test]` is a filter, and `@` is the current value. A test is a
+  comparison, an existence test such as `@.isbn`, or a function. `&&`
+  binds more tightly than `||`. `!` negates an existence test or a group
+  in parentheses. A filter can use an absolute query that starts at `$`.
+- A literal in a filter is an EDN literal. A JSON number, a string,
+  `true`, `false` and `null` are EDN literals too.
+- A blank is allowed before a segment and inside brackets. A blank before
+  `$` or after the last segment gives `invalid_path`.
+
+A name selects only from a map. An index selects from an array, and from
+a map with an integer key.
+
+@section path_filters COMPARISONS AND FUNCTIONS
+
+A comparison is `==`, `!=`, `<`, `<=`, `>` or `>=`. Each side is a
+singular query, a literal or a function. A side that is a query that is
+not singular gives `invalid_path`, for example `$[?@.* == 1]`.
+
+- Two numbers compare by value, so 1 equals 1.0. Two texts compare by
+  their bytes.
+- Two byte strings, two arrays, two maps and two tags can be equal and
+  are never less. Arrays are equal element by element, in order. Maps are
+  equal when they have the same keys with equal values. Tags are equal
+  when they have the same number and equal content.
+- A bignum (tag 2 or 3) with a magnitude up to 64 bits is an integer in a
+  comparison (RFC 8949, section 3.4.3). A bignum with a larger magnitude
+  is a tag.
+- Values of two different kinds are not equal.
+- A side that selects nothing is equal only to another side that selects
+  nothing, and is never less. `<=` is true when `<` or `==` is true.
+
+The functions are `length`, `count` and `value` (RFC 9535, sections
+2.4.4, 2.4.5 and 2.4.8).
+
+- `length(x)` gives, for a text, the count of its bytes that are not
+  UTF-8 continuation bytes (0x80 to 0xBF), for an array its elements, and
+  for a map its pairs. For a text in valid UTF-8, this is the count of
+  characters. It gives Nothing for any other value, a byte string
+  included.
+- `count(q)` gives the number of nodes in the nodelist of `q`.
+- `value(q)` gives the value of the node when `q` has one node, and
+  Nothing otherwise.
+
+Nothing is the result of a function that has no value (RFC 9535, section
+2.4.1). Nothing equals Nothing and no other value. A function that is not
+well-typed (RFC 9535, section 2.4.3) gives `invalid_path`.
+
+`match`, `search` and I-Regexp are not supported. A path with `match` or
+`search` gives `invalid_path` at run time and does not compile at
+compile time. Function extensions beyond the three above are not
+supported. Normalized paths (RFC 9535, section 2.7) are not given: a
+nodelist holds values, not their places.
+
+@section path_nodelist SINGULAR QUERIES AND NODELISTS
+
+A singular query (RFC 9535, section 2.3.5.1) has a name or an index in
+each segment, and no descendant segment. It selects one node at most. An
+EDN key in brackets is a name with one key, so a path with it is
+singular.
+
+`cbor::is_valid_path_v<Path>` is true when the grammar accepts the path.
+`cbor::is_singular_query_v<Path>` is true when the path is valid and
+singular.
+
+`at_path` with a typed result or a node reads a singular query only.
+`lazy.at_path<Path>()` with another path stops at a `static_assert` that
+names `cbor::nodelist`. `cbor::path::compile<T>` with such a path and a
+`T` that is not `cbor::nodelist` gives `not_singular_query`.
+
+A path that selects many nodes reads only into a `cbor::nodelist`: a
+wildcard, a descendant segment, a slice, a filter or several selectors.
+A `cbor::nodelist` is a `std::vector<cbor::lazy>`. It gives every match
+as a `cbor::lazy` that holds the owner of the bytes. It also reads a
+singular path. A path that selects nothing gives an empty nodelist and
+no error. A node can be any CBOR item: a map, an array or a tag. Read it
+on with a step, `get`, `type()` or `clone()`.
+
+The compiler parses a compile-time path once. At run time it is a set of
+constant arrays. A run-time path is checked once, in `compile`: the
+grammar, the singular path for a `T` that is not `cbor::nodelist`, and
+the segments against the nesting depth. The type `T` of a typed read is
+checked at compile time in both. Everything about the data is checked at
+each call.
+
+@section path_cbor CBOR BEYOND JSON
+
+An index on a map selects the value under the equal integer key, as COSE
+(RFC 9052) uses it. `$[1]` finds the key 1 and `$[-2]` finds the key -2.
+This is not an index from the end: a map has no order in a path.
+
+An EDN literal in brackets is a key. `$[h'01']` is a byte string,
+`$[[1, 2]]` an array, `$[1.5]` a number with a fraction, `$[true]`, and
+`$[1000("x")]` a tag. This holds at compile time and at run time. On an
+array, such a key gives `not_indexable`.
+
+Keys compare by value (RFC 8949, section 5.6.1). So `h'01'` and
+`b64'AQ'` name the same key, and a key with a head that is not in
+preferred form is the same key. An integer and a float are different
+keys: `$[1.0]` does not find the key 1. `$[-0]` is the key 0, and an
+integer of 17 digits or more is a key.
+
+When a map has the same key twice, every singular form takes the first
+pair. A wildcard, a descendant segment and a filter take all pairs.
+
+A path passes a tag that it does not read, as a generic decoder does (RFC
+8949, section 6.1). A step and a typed read go to the content. A path
+that ends at the tag gives the node of the whole tagged item, so the
+caller reads the tag number.
+
+- Tag 24 (encoded CBOR data item): the path goes into the byte string and
+  reads the embedded item.
+- Tag 28 (shareable): the path passes it. The value is the content.
+- Tag 29 (shared reference): the path passes it as any other tag. The
+  value is the content, the index. A path does not resolve the
+  reference. `cbor::decode` does.
+- Tag 55799 (self-described CBOR): the path passes it at the top, inside
+  the item and inside a tag 24. It does not pass it as the content of a
+  tag 2, a tag 3 or a typed array. A map key behind a tag 55799 is
+  matched as the key without the tag. A key behind any other tag, a tag
+  28 included, is a different key.
+- Tags 2 and 3 (bignum): the path does not pass them. A typed read into an
+  integer type reads the magnitude, and an index on a bignum gives
+  `not_indexable`.
+- A tag of RFC 8746 (typed array): an index reads one element. A wildcard,
+  a slice or a filter gives every element. A typed read into
+  `cbor::typed_array` reads the whole array.
+- Any other tag: the path passes it. The value is the content.
+
+An element of an integer array is an integer. An element of a float array
+is a float of the same width. An element of a clamped uint8 array (tag
+68) is an unsigned integer. An element of a 128-bit float array (tags 83
+and 87) gives `incorrect_type`. An index on an element of a typed array
+gives `not_indexable`.
+
+@section path_limits LIMITS, COST AND THREADS
+
+The limits are the constants of `cbor::limits`.
+
+- `string_length`: every string that the walk reads is checked, that is a
+  key that it compares and the target. A string that it only skips does
+  not count.
+- `container_elements`: every array and map that the walk reads is
+  checked, that is the containers on the way and the target. A container
+  that it only skips does not count.
+- `nesting_depth_exceeded` comes where the stack of the thread ends, in
+  the steps that recurse: a filter, a group in parentheses, a function
+  call or a literal that is nested deeper than the stack holds, a
+  descendant segment that goes deeper than the stack holds, and `clone()`
+  of a node that is deeper than the stack holds. A path of child segments
+  does not recurse. An item that a typed read only skips can be of any
+  depth.
+
+The limits count only what a path or a lazy reads or decodes. A skip
+jumps over the content of a string, and it stops with `too_little_data`
+when the item claims more than the bytes that are left.
+
+A path does not decode what it passes. In a map, it reads each key until
+the key matches and skips each value before it. In an array, `[i]` skips
+the i elements before the target, so an index is linear in the bytes of
+the elements before it. `[-1]` skips all elements except the last. A key
+that is a map or an array compares by its items and its pairs.
+
+A typed read of a scalar allocates nothing, also through a tag 24 and
+with a key that is not text. A view result from an owner allocates
+nothing: the owner in the result is a copy of a `std::shared_ptr`. The
+form with an rvalue `std::string` allocates the `std::shared_ptr` that
+holds the string, once. `cbor::path::compile` allocates. A nodelist read
+allocates the nodelist. A filter with a literal allocates for each child
+that it tests. An element of a typed array is read as a small CBOR item
+that the library writes, and this allocates once for each step.
+
+A held `cbor::lazy` is a start point. A path from a lazy at `$.cars` does
+not read the bytes before `cars` again, so many reads below one node are
+cheaper from a lazy at that node. Several threads read one `cbor::lazy`
+at the same time. `cbor::at_path<Path, T>(encoded)` has no shared state.
+
+A path reads the bytes up to its value and no further, so it does not
+find a fault after the value. An array or a map that claims more items
+than the bytes left gives `too_little_data` before any element is read.
+`cbor::lazy::adopt` and `cbor::lazy::view` do not read the whole item
+either. `cbor::item_size` and `cbor::decode` check a whole item.
+
+A run-time `cbor::nodelist` query gives the result of the JSONPath
+Compliance Test Suite in 694 of 706 cases. 50 of these are valid paths
+with `match` or `search`, and the library refuses them. The other 12 are
+invalid in RFC 9535 and valid EDN, so a path accepts them: a number such
+as `+1`, `.1`, `-.1`, `1.` or `1.e1` in a filter, a key such as `$[1.0]`,
+`$[+1]` or `$[-0]`, a name with a quote such as `$["\'"]`, and a name
+with the escape `\u{1234}` or `\u{10ffff}`. This library adds to RFC
+9535 an index selector that finds an integer key, and EDN literals as
+keys and in filters.
+
+@section path_errors ERRORS
+
+Each function gives `std::expected` with a `cbor::error`. A missing field
+and broken input have different errors, so a program tells them apart.
+
+- `invalid_path`: the path text is not valid, or it calls `match` or
+  `search`, or a comparison has a side that is not singular, or an index
+  of 16 digits or less is outside the range of an index.
+- `not_singular_query`: `cbor::path::compile<T>` with a path that is not
+  singular and a `T` that is not `cbor::nodelist`.
+- `key_not_found`: a name or a key is not in the map.
+- `index_out_of_bounds`: the index is outside the array.
+- `not_indexable`: a name, an index or a key meets a value that is not a
+  map or an array, for example a text, a number, a bignum or an element of
+  a typed array. A name or a key meets an array or a typed array.
+- `incorrect_type`: a typed read finds another kind of item than `T`
+  takes.
+- `number_out_of_range`: the integer does not fit `T`.
+- `nesting_depth_exceeded`: the path or the item is nested deeper than the
+  stack of the thread holds.
+- `string_length_exceeded`, `container_elements_exceeded`: a limit is set
+  and the input goes past it.
+- `too_little_data`: the bytes end before the target or before an item
+  that the walk reads.
+- `syntax_error`, `indefinite_length`: a head that the walk reads is not
+  well-formed, or uses indefinite length.
+- `inadmissible_type_for_tag_content`: a tag on the way has content that
+  its definition does not allow, for example tag 24 over a number.
+- `nodelist_too_long`: one step of a nodelist read selects more nodes
+  than the top-level item has bytes.
+- `not_enough_memory`: the allocation of the owner fails, in the form
+  with an rvalue.
+
+A wrong use that the compiler cannot see throws `std::logic_error`: a
+null or empty owner in a form that takes an owner, a moved-from query, and
+a `cbor::lazy{}` that holds no item in every form that takes a lazy.
+
+@manonly
+.SH "EXAMPLES"
+@endmanonly
+@snippet doc_reference_path.cpp path group
 */
