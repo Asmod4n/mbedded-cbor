@@ -44,8 +44,9 @@ The reference with examples that run in the browser:
 
 It implements CBOR (RFC 8949), CBOR sequences (RFC 8742), typed arrays
 (RFC 8746), the paths of RFC 9535 and Packed CBOR
-(draft-ietf-cbor-packed-19). Every message it writes is standard CBOR,
-and every other CBOR decoder can read it.
+(draft-ietf-cbor-packed-19). Every message it writes is standard CBOR.
+The tests read it with six other decoders: tinycbor, libcbor, jsoncons,
+nlohmann::json, cbor2 and CBOR::XS.
 
 ## Features
 

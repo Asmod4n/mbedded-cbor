@@ -10,10 +10,12 @@ mbedded-cbor is a header-only C++ library for CBOR (RFC 8949).
   g++ 16.2 `-O2 -march=native`, median of 7 runs:
   [the run and its context](https://github.com/Asmod4n/mbedded-cbor/blob/main/bench/results/readme-2026-10-19-183938Z.json).
 - **Standard CBOR.** Every message that the library writes is standard
-  CBOR, and every other CBOR decoder reads it.
+  CBOR. The tests read it with six other decoders: tinycbor, libcbor,
+  jsoncons, nlohmann::json, cbor2 and CBOR::XS.
 - **Safe on foreign input.** Bad input comes back as a `cbor::error`
-  value. No read goes outside the message. Nesting depth, string length
-  and element count are constants of the build.
+  value. No read goes outside the message. String length and element
+  count are constants of the build. Nesting stops at the end of the
+  stack of the thread.
 - **JSONPath at compile time.** The compiler checks the path in
   `at_path<"$.user.id">`. A path also takes CBOR keys that are not text,
   goes through tags and reads typed arrays: [path](path/index.md).

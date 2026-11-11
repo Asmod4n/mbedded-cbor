@@ -41,9 +41,6 @@ local function link_target(target)
   if guide then
     return "https://github.com/Asmod4n/mbedded-cbor/blob/" .. commit .. "/tools/site/" .. guide .. anchor
   end
-  if path == ".." or path == "../" then
-    return "https://github.com/Asmod4n/mbedded-cbor/tree/" .. commit .. "/tools/site/guides"
-  end
   error("reference.lua: a link with no target on the site: " .. target)
 end
 
