@@ -13,7 +13,7 @@ podman run --rm --network none -e VERSION="$version" -v "$tree":/src:ro -v "$out
   for page in /tmp/doxygen/man/man3/*.3; do
     case ${page##*/} in
       *.hpp.3 | *" "* | std_*) ;;
-      *) perl /src/tools/man/split_requires_clause.pl < "$page" > "/out/man3/${page##*/}" ;;
+      *) perl /src/tools/man/split_requires_clause.pl < "$page" | perl /src/tools/man/strip_template_arguments.pl > "/out/man3/${page##*/}" ;;
     esac
   done
   mandoc -T lint -W error /out/man3/*.3
