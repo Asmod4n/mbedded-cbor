@@ -53,10 +53,14 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
-nav.side { font-size: 0.92rem; }
+nav.side {
+  font-size: 0.92rem;
+  position: sticky; top: 3.2rem; align-self: start;
+  max-height: calc(100dvh - 3.2rem); overflow-y: auto; overscroll-behavior: contain;
+}
 nav.side h3 { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 1rem 0 0.3rem; }
 nav.side ul { list-style: none; margin: 0; padding: 0; }
-nav.side li a { display: block; padding: 0.1rem 0.4rem; border-radius: 4px; color: var(--fg); text-decoration: none; font-family: var(--mono); font-size: 0.84rem; }
+nav.side li a { display: block; overflow-wrap: anywhere; padding: 0.1rem 0.4rem; border-radius: 4px; color: var(--fg); text-decoration: none; font-family: var(--mono); font-size: 0.84rem; }
 nav.side li a:hover, nav.side li a.here { background: var(--accent-soft); color: var(--accent); }
 main { min-width: 0; }
 h1 { font-size: 2rem; line-height: 1.2; margin: 0.6rem 0 0.4rem; font-family: var(--mono); font-weight: 700; text-wrap: balance; }
@@ -139,9 +143,13 @@ main > table td, main > table th, .method table td, .method table th { border-bo
 .play .completions button { font-family: var(--mono); font-size: 0.8rem; background: var(--panel); color: var(--fg); border: 1px solid var(--rule); border-radius: 4px; padding: 0.2rem 0.45rem; cursor: pointer; }
 .play .completions button[aria-selected="true"] { border-color: var(--link); color: var(--link); }
 button.complete { font: 600 0.9rem var(--sans); background: var(--panel); color: var(--fg); border: 1px solid var(--rule); border-radius: 4px; padding: 0.25rem 0.6rem; cursor: pointer; }
-@media (max-width: 760px), (max-height: 500px) and (pointer: coarse) {
+@media (max-height: 500px) and (pointer: coarse) and (min-width: 761px) {
+  .wrap { grid-template-columns: 12rem minmax(0, 1fr); gap: 1rem; }
+  .play .log { max-height: 35vh; }
+}
+@media (max-width: 760px) {
   .wrap { grid-template-columns: minmax(0, 1fr); }
-  nav.side { border-bottom: 1px solid var(--rule); padding-bottom: 0.8rem; }
+  nav.side { position: static; max-height: none; overflow-y: visible; border-bottom: 1px solid var(--rule); padding-bottom: 0.8rem; }
   nav.side ul { display: flex; flex-wrap: wrap; gap: 0.2rem 0.4rem; }
   nav.side .examples { display: none; }
   .play .log { max-height: 35vh; }
