@@ -1,3 +1,124 @@
 /**
 @defgroup tools check, split and print CBOR bytes
+
+The functions of this group check, split and print CBOR bytes. Each
+function reads the bytes that the caller passes. Include `<cbor/cbor.hpp>`.
+
+`cbor::item_size` gives the size of the first item in the bytes. `cbor::sequence`
+gives the items of a CBOR sequence (RFC 8742) one by one.
+`cbor::sequence_reader` does the same for a sequence whose bytes arrive in
+pieces. `cbor::diagnostic_notation` prints an item as text.
+
+@section tools_size ITEM SIZE
+
+`cbor::item_size(encoded)` gives the size in bytes of the first item in
+`encoded`, as a `std::expected<std::size_t, cbor::error>`. It checks that
+the item is well-formed. It copies nothing and allocates nothing. Bytes
+after the item do not change the result.
+
+The call does not recurse. The nesting depth of the item does not limit
+it. An item whose head uses indefinite length gives `indefinite_length`.
+
+@section tools_sequence A CBOR SEQUENCE
+
+`cbor::sequence` reads a CBOR sequence (RFC 8742). A CBOR sequence holds
+top-level items one after the other, with nothing between them. Each
+element of the range is a `std::expected<std::string_view, cbor::error>`:
+the bytes of one item, as a view into the bytes of the owner. The sequence
+keeps the owner alive.
+
+The owner is a `std::shared_ptr<std::string const>`. It is also a
+`std::shared_ptr<void const>` together with a view of the bytes that it
+keeps alive. A null pointer throws `std::logic_error`.
+
+An item that is not well-formed gives its error. The range ends after that
+element. A last item that is not complete gives `too_little_data`. The
+iterator gives the bytes from the current item to the end of the sequence
+through `encoded()`.
+
+The sequence is an input range. It has no size. `begin()` reads the first
+item again.
+
+Each item is a top-level item of its own. A tag 29 in one item does not
+reach a tag 28 in another item. `cbor::lazy::view(owner, item)` reads one
+item in place, where `owner` is the shared pointer of the sequence.
+
+@section tools_reader READ A SEQUENCE IN PIECES
+
+`cbor::sequence_reader` reads a CBOR sequence whose bytes arrive in
+pieces, for example from a socket. A piece can end in the middle of an
+item.
+
+- `feed(piece)` gives the reader the next bytes.
+- `next()` gives the next item as a `std::expected<cbor::lazy, cbor::error>`,
+  when all of its bytes are there. While it waits for more bytes, it gives
+  `too_little_data`. The reader continues where it stopped.
+- `empty()` gives `true` when every byte that was fed is in an item that
+  `next` gave.
+
+`feed` takes the pieces in these forms:
+
+- a `std::string` that you move: the reader takes it without a copy;
+- a `std::shared_ptr` to a container of bytes: the reader keeps it without
+  a copy. A null pointer throws `std::logic_error`;
+- a `std::string_view`, or a `std::string` that you do not move: the reader
+  copies the bytes.
+
+A literal does not compile, because it ends with a NUL byte. A
+`std::shared_ptr` to bytes that are not const does not compile.
+
+Each item is a `cbor::lazy` that keeps its bytes alive. The item stays valid
+after later calls of `feed` and after the reader ends. An item that is
+whole in a piece that the reader holds is a view into that piece. The reader
+copies only the bytes of an item that the end of a piece cuts. It holds the
+bytes of an item until all of them arrive.
+
+The reader does not recurse. No nesting depth limits it.
+
+After an error other than `too_little_data`, every call of `next` gives that
+error, and `feed` keeps no byte. The reader cannot be copied. A call on a
+reader that was moved from throws `std::logic_error`.
+
+@section tools_print PRINT AS DIAGNOSTIC NOTATION
+
+`cbor::diagnostic_notation(encoded)` gives the item in `encoded` as text, in
+the diagnostic notation of RFC 8949 section 8. The text looks like JSON. The
+result is a `std::expected<std::string, cbor::error>`. The bytes `encoded`
+hold exactly one item. A byte after the item gives `syntax_error`.
+
+- A head that is not in preferred form carries its encoding indicator. The
+  bytes `19 00 01` give `1_1`.
+- An item of indefinite length is printed with `_`. The bytes `9f 01 ff`
+  give `[_ 1]`.
+- A tag is printed as its number and its content. The bytes `c1 00` give
+  `1(0)`. Tag 29 is not resolved.
+- The call does not check tag content, UTF-8 or duplicate keys.
+
+The bytes `a1 61 61 83 01 f9 41 00 41 01` give the text
+`{"a": [1, 2.5, h'01']}`.
+
+@section tools_errors ERRORS
+
+Each function gives a `std::expected` with a `cbor::error`. A wrong use
+throws `std::logic_error`: a null pointer for `cbor::sequence` or for `feed`,
+and a call on a `cbor::sequence_reader` that was moved from.
+
+- `too_little_data`: the bytes end before the item ends, or a count is
+  larger than the bytes that are left.
+- `syntax_error`: a head is not well-formed, or bytes follow the item in
+  `diagnostic_notation`.
+- `indefinite_length`: a head uses indefinite length, in `item_size` and in
+  `sequence_reader`.
+- `string_length_exceeded`: a string is longer than `limits::string_length`,
+  in `item_size` and in `diagnostic_notation`.
+- `container_elements_exceeded`: the count of an array or a map is greater
+  than `limits::container_elements`, in `item_size` and in
+  `diagnostic_notation`.
+- `nesting_depth_exceeded`: `diagnostic_notation` of an item that is deeper
+  than the stack of the thread holds.
+
+@manonly
+.SH "EXAMPLES"
+@endmanonly
+@snippet doc_reference_tools.cpp tools group
 */

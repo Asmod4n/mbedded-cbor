@@ -10,12 +10,38 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 
 // Each test in this file is one example of a reference page of the tools group, from the API comment of a header.
 // The tests exist so that every example compiles and gives the result that its page states.
+
+// tools group: the example of the group tools. A CBOR sequence holds [1, 2] and then 7. The test exists so that the
+// example of the group page compiles and gives the values that its comments state. The expected values come from
+// RFC 8949 and RFC 8742.
+TEST_CASE("doc reference tools: the example of the group tools")
+{
+    auto const owner =
+        std::make_shared<std::string const>(test::preferred(test::A(1, 2)) + test::preferred(test::V(7)));
+    // [tools group]
+    // owner: the bytes 82 01 02 07, the sequence [1, 2] then 7
+    auto const first = cbor::item_size(*owner);   // 3, the bytes of [1, 2]
+    std::vector<std::string> text;
+    std::size_t covered = 0;
+    for (auto const item : cbor::sequence(owner))
+        if (item) {
+            text.push_back(cbor::diagnostic_notation(*item).value());   // "[1, 2]", then "7"
+            covered += item->size();                                    // 3, then 1
+        }
+    // [tools group]
+    CHECK_EQ(first, 3u);
+    REQUIRE_EQ(text.size(), 2u);
+    CHECK_EQ(text[0], "[1, 2]"s);
+    CHECK_EQ(text[1], "7"s);
+    CHECK_EQ(covered, 4u);
+}
 
 // item_size.hpp, snippet item_size: item_size gives the bytes of the first item, and a cut item gives
 // too_little_data.
