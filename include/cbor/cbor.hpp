@@ -4,15 +4,6 @@
  */
 #pragma once
 
-/** @defgroup item item */
-/** @defgroup lazy lazy */
-/** @defgroup path path */
-/** @defgroup ref ref */
-/** @defgroup schema schema */
-/** @defgroup structs structs */
-/** @defgroup tools tools */
-/** @defgroup errors errors */
-
 #include "error.hpp"
 #include "rfc8949.hpp"
 #include "rfc2781.hpp"

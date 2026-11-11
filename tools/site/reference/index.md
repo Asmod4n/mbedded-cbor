@@ -63,7 +63,7 @@ refused.
 |---|---|---|
 | [lazy](lazy/index.md) | `cbor::lazy`: read a message in place, step by step | a message whose shape you learn while you read it |
 | [path](path/index.md) | `cbor::at_path`: read a value by its JSONPath (RFC 9535), with CBOR keys that are not text, tags and typed arrays | one value whose path you know |
-| [item](item/index.md) | `cbor::item`, `decode`, `encode`: a decoded tree and the encoder | a tree that lives on after the bytes are gone, and CBOR written item by item |
+| [decode](decode/index.md) | `cbor::item`, `decode`, `encode`: a decoded tree and the encoder | a tree that lives on after the bytes are gone, and CBOR written item by item |
 | [structs](structs/index.md) | `cbor::structs<T>`: any CBOR into a C++ struct and back | CBOR that any program wrote, read into the members of a struct |
 | [schema](schema/index.md) | `cbor::schema<T>`: structs as Packed CBOR, fields at fixed offsets | messages that your own programs write and read |
 | [ref](ref/index.md) | `cbor::ref<T>`, `cbor::owning<T>`: results that hold the bytes | a result that points into the message and stays valid |

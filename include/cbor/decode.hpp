@@ -116,7 +116,7 @@ struct zone_owner {
  * @see cbor::decode()
  * @see cbor::item
  *
- * @ingroup item
+ * @ingroup decode
  */
 inline std::expected<std::reference_wrapper<item const>, error>
 encoded_cbor_data_item(owning<item> const &tree, item const &tagged)
@@ -439,7 +439,7 @@ std::expected<decoded_tree, error> decode_tree(std::string_view const encoded)
  * @see cbor::item
  * @see cbor::encode()
  *
- * @ingroup item
+ * @ingroup decode
  */
 inline std::expected<owning<item>, error> decode(std::string_view const encoded)
 {

@@ -1,0 +1,3 @@
+/**
+@defgroup structs any CBOR into a C++ struct and back
+*/

@@ -114,7 +114,7 @@ using item_alternative_t = typename item_alternative<K>::type;
  * @see cbor::decode()
  * @see cbor::encode()
  *
- * @ingroup item
+ * @ingroup decode
  */
 struct item {
     cbor::type const type;

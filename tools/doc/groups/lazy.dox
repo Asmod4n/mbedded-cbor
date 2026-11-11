@@ -1,0 +1,3 @@
+/**
+@defgroup lazy read a CBOR message in place, step by step
+*/

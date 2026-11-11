@@ -1,0 +1,3 @@
+/**
+@defgroup path read a CBOR value by its JSONPath (RFC 9535)
+*/

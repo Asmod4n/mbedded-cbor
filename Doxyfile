@@ -17,7 +17,8 @@ INPUT                  = include/cbor/cbor.hpp \
                          include/cbor/schema.hpp \
                          include/cbor/item.hpp \
                          include/cbor/decode.hpp \
-                         include/cbor/encode.hpp
+                         include/cbor/encode.hpp \
+                         tools/doc/groups
 STRIP_FROM_PATH        = include
 STRIP_FROM_INC_PATH    = include
 EXCLUDE_SYMBOLS        = cbor::detail cbor::detail::* cbor::well_formedness

@@ -1,0 +1,3 @@
+/**
+@defgroup ref results that hold the bytes they point into
+*/

@@ -1,0 +1,3 @@
+/**
+@defgroup schema structs as Packed CBOR, with fields at fixed offsets
+*/

@@ -465,7 +465,7 @@ result encoder_finish(call const &c)
 using string_encoder = cbor::encoder<std::string>;
 using chars_encoder = cbor::encoder<std::span<char>>;
 
-inline constexpr entry item_functions[] = {
+inline constexpr entry decode_functions[] = {
     {"cbor::decode()", decode_made},
     {"cbor::encoded_cbor_data_item()", encoded_cbor_data_item_found},
     {"cbor::encode()", encode_made},

@@ -5,7 +5,7 @@ ask for, and a text comes back as a view into the bytes, with no copy.
 [basics.md](basics.md) states how errors come back and how long a result
 stays valid. The reference with examples that run in the browser:
 <https://asmod4n.github.io/mbedded-cbor/lazy.html> and
-<https://asmod4n.github.io/mbedded-cbor/item.html>.
+<https://asmod4n.github.io/mbedded-cbor/decode.html>.
 
 ## 1. Read step by step
 

@@ -62,7 +62,7 @@ class iov_writer;
  *
  * @see cbor::encode()
  *
- * @ingroup item
+ * @ingroup decode
  */
 struct cycles_t {
     explicit cycles_t() = default;
@@ -111,7 +111,7 @@ inline constexpr cycles_t cycles{};
  * @see cbor::decode()
  * @see cbor::encoder
  *
- * @ingroup item
+ * @ingroup decode
  */
 template <class Target>
 std::expected<std::size_t, error> encode(item const &root, Target &&target);
@@ -148,7 +148,7 @@ std::expected<std::size_t, error> encode(item const &root, Target &&target);
  * @retval value_too_large, not_enough_memory, io_error the error of a writer, from its `std::errc`
  * @see cbor::cycles_t
  *
- * @ingroup item
+ * @ingroup decode
  */
 template <class Target>
 std::expected<std::size_t, error> encode(item const &root, Target &&target, cycles_t);
@@ -183,7 +183,7 @@ std::expected<std::size_t, error> encode(item const &root, Target &&target, cycl
  * @see cbor::encode()
  * @see cbor::iov_writer
  *
- * @ingroup item
+ * @ingroup decode
  */
 std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &root);
 
@@ -197,7 +197,7 @@ std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &root);
  * @endcode
  * @see cbor::cycles_t
  *
- * @ingroup item
+ * @ingroup decode
  */
 std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &root, cycles_t);
 #endif
@@ -679,7 +679,7 @@ struct encoding::binary_writer {
  * @see cbor::encode_iov()
  * @see cbor::encoder
  *
- * @ingroup item
+ * @ingroup decode
  */
 class iov_writer
 {
@@ -774,7 +774,7 @@ class iov_writer
  * @see cbor::encoder::finish()
  * @see cbor::encode()
  *
- * @ingroup item
+ * @ingroup decode
  */
 template <class Target>
 class encoder

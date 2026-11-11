@@ -1,5 +1,5 @@
 #include "examples/errors.hpp"
-#include "examples/item.hpp"
+#include "examples/decode.hpp"
 #include "examples/lazy.hpp"
 #include "examples/parser.hpp"
 #include "examples/path.hpp"
@@ -15,11 +15,11 @@
 namespace
 {
 
-constexpr std::span<site::entry const> tables[] = {site::lazy_functions,   site::path_functions,  site::item_functions,
+constexpr std::span<site::entry const> tables[] = {site::lazy_functions,   site::path_functions,  site::decode_functions,
                                                    site::schema_functions, site::structs_functions, site::ref_functions,
                                                    site::tools_functions,  site::errors_functions};
 
-constexpr std::string_view groups[] = {"lazy", "path", "item", "schema", "structs", "ref", "tools", "errors"};
+constexpr std::string_view groups[] = {"lazy", "path", "decode", "schema", "structs", "ref", "tools", "errors"};
 
 static_assert(std::size(groups) == std::size(tables));
 
