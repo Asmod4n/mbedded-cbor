@@ -12,7 +12,14 @@ def stderr_to_null(cmd):
     return bool(re.search(r'(^|[^0-9&])>\s*/dev/null\s+2>&1', cmd))
 
 
+def tool_trailer_in_commit(cmd):
+    if not re.search(r'\bgit\b[^;&|\n]*\b(commit|commit-tree|tag)\b', cmd):
+        return False
+    return bool(re.search(r'Co-Authored-By:\s*Claude|Claude-Session:|claude\.ai/code|Generated with \[Claude Code\]', cmd, re.I))
+
+
 RULES = [
+    (tool_trailer_in_commit, 'Refused: the commit message points at a tool. Nothing points at a tool; remove the Co-Authored-By, Claude-Session and claude.ai lines.'),
     (stderr_to_null, 'Refused by .claude/hooks/guard_bash.py: stderr goes to /dev/null. Nothing sends stderr to '
                      '/dev/null; write it to a log file.'),
 ]
