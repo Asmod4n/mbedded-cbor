@@ -147,4 +147,4 @@ button.complete { font: 600 0.9rem var(--sans); background: var(--panel); color:
 }
 .group-text h2 { font-family: var(--mono); font-size: 1.15rem; font-variant-caps: all-small-caps; margin: 1.6rem 0 0.4rem; color: var(--accent); }
 .group-text p, .group-text ul { max-width: 65ch; }
-.group-text code, .method p code { white-space: normal; overflow-wrap: anywhere; }
+.group-text code, .method p code, .method li code { white-space: normal; overflow-wrap: anywhere; }
