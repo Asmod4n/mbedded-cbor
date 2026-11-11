@@ -17,7 +17,7 @@ clang 23 and AppleClang. With C++26 reflection (g++ 16 with
 `-std=c++26 -freflection`), it also checks each description against the
 public members.
 
-Use `schema` for messages that your own programs write and read. Use
+Use `cbor::schema` for messages that your own programs write and read. Use
 `cbor::structs` for CBOR that any program writes, mapped into the members
 of a struct or a class.
 

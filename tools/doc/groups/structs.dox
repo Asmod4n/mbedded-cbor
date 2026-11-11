@@ -148,7 +148,7 @@ The rules for a description are these:
   of a character type, a tag of a standard type (for example 1, 258 or a tag
   of RFC 8746), and an invalid tag do not compile.
 - An annotation `[[=cbor::key("x")]]` or `[[=cbor::tag(n)]]` on a type that
-  `structs` reads does not compile.
+  `cbor::structs` reads does not compile.
 - A class with a base class uses `CBOR_DEFINE_DERIVED_TYPE` or
   `CBOR_DEFINE_DERIVED_TYPE_MEMBERS`. These take the base class after the
   type.
