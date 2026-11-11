@@ -368,7 +368,7 @@
 
 <xsl:template name="type">
   <xsl:param name="t"/>
-  <xsl:value-of select="str:replace(str:replace(str:replace(normalize-space($t), '&lt; ', '&lt;'), ' &gt;', '&gt;'), 'std::basic_string_view&lt;char&gt;', 'std::string_view')"/>
+  <xsl:value-of select="str:replace(str:replace(str:replace(str:replace(normalize-space($t), '&lt; ', '&lt;'), ' &gt;', '&gt;'), 'std::basic_string_view&lt;char&gt;', 'std::string_view'), 'typename path::query&lt;', 'path::query&lt;')"/>
 </xsl:template>
 
 <xsl:template name="joined">

@@ -10,6 +10,11 @@ podman run --rm --network none -v "$tree":/src:ro -v "$out":/out mbedded-cbor-do
   xml=/tmp/doxygen/xml
   cd /src
   { cat Doxyfile; echo "OUTPUT_DIRECTORY = /tmp/doxygen"; } | doxygen -
+  if grep -rlE "refid=\"(group__[a-z]+|mbedded-cbor)\" kindref=\"compound\"" $xml > /tmp/bare.txt; then
+    echo "reference: a comment names a group or the overview page by a bare word; write cbor::<name> or %<word>:" >&2
+    cat /tmp/bare.txt >&2
+    exit 1
+  fi
   xsltproc tools/doc/pages.xsl $xml/index.xml > /tmp/names.txt
   tab=$(printf "\t")
   while IFS="$tab" read -r group name; do

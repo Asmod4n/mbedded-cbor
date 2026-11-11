@@ -1087,7 +1087,7 @@ public:
     /**
      * @brief Parses a JSONPath (RFC 9535) at run time and gives a cbor::path::query.
      *
-     * The query owns its data, so `path` can end after the call.
+     * The query owns its data, so `%path` can end after the call.
      * An apply of the query does not parse again.
      * `T` is the result type: a scalar, a view type, `cbor::lazy` or cbor::nodelist.
      * The call reads no CBOR.
@@ -1224,7 +1224,7 @@ std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded 
 template <class T, borrowed_range_of_chars Encoded>
     requires(std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
 std::expected<T, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded,
-                                path::query<T> const &e)
+                                typename path::query<T> const &e)
 {
     return lazy::view(std::move(owner), encoded).and_then([&e](lazy const &root) { return root.at_path(e); });
 }

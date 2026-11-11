@@ -103,9 +103,10 @@ inline constexpr cycles_t cycles{};
  * A `shared_reference` gives `unsupported_value`; the target then holds the bytes written before it.
  * The form with cbor::cycles writes it as the overload below says.
  * The target is one of these:
- * - a container of bytes, for example `std::string`: the call appends; - a `std::span` of bytes: the call writes
- * into it and allocates nothing; - an object with `allocate(std::size_t)`, which gives a writer with
- * `append(std::string_view)` and `done(std::size_t)`.
+ * - a container of bytes, for example `std::string`: the call appends;
+ * - a `std::span` of bytes: the call writes into it and allocates nothing;
+ * - an object with `allocate(std::size_t)`, which gives a writer with `append(std::string_view)` and
+ *   `done(std::size_t)`.
  *
  * @code{.example}
  * message: [1, "a"]
@@ -745,9 +746,12 @@ class iov_writer
  *
  * The encoder counts nothing: the counts of `array` and `map` come from the program.
  * The target is one of these:
- * - a container of bytes, for example `std::string`: the encoder appends; - a `std::span` of bytes: the encoder
- * writes into it and allocates nothing; - an cbor::iov_writer: the encoder gives pieces; - an object with
- * `allocate(std::size_t)`, which gives a writer with `append(std::string_view)` and `done(std::size_t)`.
+ * - a container of bytes, for example `std::string`: the encoder appends;
+ * - a `std::span` of bytes: the encoder writes into it and allocates nothing;
+ * - a cbor::iov_writer: the encoder gives pieces;
+ * - an object with `allocate(std::size_t)`, which gives a writer with `append(std::string_view)` and
+ *   `done(std::size_t)`.
+ *
  * The encoder does not write tags 28 and 29.
  * Each call gives `std::expected<void, error>`.
  * After an error, and after cbor::encoder::finish(), each call throws `std::logic_error`.

@@ -272,7 +272,7 @@ public:
      * With a scalar `T` it reads the value as cbor::lazy::get() does.
      * A text, a byte string and a typed array come back as a `ref` that holds the owner.
      * `nodelist` gives every selected node.
-     * The form with `e` gives the result type of the query; `e` comes from `cbor::path::compile<T>(path)`, which
+     * The form with `e` gives the result type of the query; `e` comes from `cbor::path::compile<T>(%path)`, which
      * parses the path at run time.
      * A path that is not valid does not compile.
      * A path that can select more than one node does not compile, except with `nodelist`.

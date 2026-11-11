@@ -150,7 +150,7 @@ class canonical_ids;
  * below the stack of the main thread, are outside the bound.
  * On picolibc, a stack smaller than the reserve refuses every nested item.
  * cbor::item_size(), cbor::sequence_reader and a path of child segments do not recurse and read any depth.
- * A deep value of a user type (`structs`, `schema`) is destroyed and copied by its own recursion: a thread with a
+ * A deep value of a user type (`structs`, `%schema`) is destroyed and copied by its own recursion: a thread with a
  * smaller stack than the one that decoded it can overflow there.
  *
  * @code{.example}

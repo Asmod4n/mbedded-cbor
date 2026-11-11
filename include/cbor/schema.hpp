@@ -231,7 +231,7 @@ public:
 /**
  * @brief Tells if a message holds the description of its structs (`inside`) or not (`apart`).
  *
- * Each of `encode`, `path`, `at_path`, `decode` and the unverified forms takes it as a template argument; the
+ * Each of `encode`, `%path`, `at_path`, `%decode` and the unverified forms takes it as a template argument; the
  * default is `inside`.
  * The data form of `apart` and cbor::schema::description() together have the size of the message.
  *
@@ -3677,7 +3677,7 @@ public:
      *
      * The bytes are a CBOR sequence (RFC 8742).
      * The compiler makes them.
-     * Each of `encode`, `path`, `at_path`, `decode` and the unverified forms takes `description_place` as a template
+     * Each of `encode`, `%path`, `at_path`, `%decode` and the unverified forms takes `description_place` as a template
      * argument.
      * The default is `inside`: the message holds the description.
      * With `apart`, `encode` writes the message without the description, and the read forms read such a message.
@@ -3718,7 +3718,7 @@ public:
      * @snippet doc_reference_schema.cpp description
      * @see cbor::description_place
      * @see cbor::schema::encode()
-     * @see cbor::schema::path()
+     * @see cbor::schema::%path()
      */
     template <class U = T>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
@@ -3848,7 +3848,7 @@ public:
      * @retval unpopulated_table_index, syntax_error a broken reference
      * @snippet doc_reference_schema.cpp accessor
      * @snippet doc_reference_schema.cpp accessor variant
-     * @see cbor::schema::path()
+     * @see cbor::schema::%path()
      * @see cbor::typed_array_view
      * @throws std::logic_error a call on a moved-from accessor
      *
@@ -4247,7 +4247,7 @@ public:
      * An owner is read in place.
      * Nothing is copied.
      * An lvalue `std::string` does not compile.
-     * `path` checks the length, the table, the directory and the tag of the root once.
+     * `%path` checks the length, the table, the directory and the tag of the root once.
      * It reads no field.
      *
      * @code{.example}
@@ -4266,7 +4266,7 @@ public:
      * @snippet doc_reference_schema.cpp path
      * @see cbor::schema::accessor
      * @see cbor::schema::at_path()
-     * @see cbor::schema::decode()
+     * @see cbor::schema::%decode()
      * @throws std::logic_error a null or empty owner
      */
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
@@ -4332,7 +4332,7 @@ public:
      * @retval unpopulated_table_index, syntax_error a broken reference
      * @snippet doc_reference_schema.cpp at_path
      * @see cbor::schema::accessor
-     * @see cbor::schema::path()
+     * @see cbor::schema::%path()
      */
     template <fixed_string Path, description_place D = description_place::inside, std::convertible_to<std::size_t>... Index>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && Path.view().starts_with('$') &&
@@ -4373,7 +4373,7 @@ public:
      * its parent
      * @snippet doc_reference_schema.cpp decode
      * @see cbor::schema::encode()
-     * @see cbor::schema::path()
+     * @see cbor::schema::%path()
      * @see cbor::ref
      * @retval not_enough_memory an allocation of the result fails
      * @throws std::logic_error a null or empty owner
@@ -4476,7 +4476,7 @@ public:
      * @snippet doc_reference_schema.cpp unverified
      * @see cbor::schema::unverified_at_path()
      * @see cbor::schema::unverified_decode()
-     * @see cbor::schema::path()
+     * @see cbor::schema::%path()
      */
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
@@ -4548,7 +4548,7 @@ public:
      *
      * @snippet doc_reference_schema.cpp unverified
      * @see cbor::schema::unverified_path()
-     * @see cbor::schema::decode()
+     * @see cbor::schema::%decode()
      */
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
@@ -4626,7 +4626,7 @@ public:
      * @retval nesting_depth_exceeded the value is deeper than the stack of the thread holds
      * @retval value_too_large the message is longer than 2^32 - 1 bytes
      * @snippet doc_reference_schema.cpp encode
-     * @see cbor::schema::decode()
+     * @see cbor::schema::%decode()
      * @see cbor::tag
      */
     template <description_place D = description_place::inside>

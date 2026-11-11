@@ -41,13 +41,13 @@ enum class simple_value : std::uint8_t { false_value = 20, true_value, null, und
 /**
  * @brief The tag number of a struct, in the member `tag` of its cbor::describe_members specialization.
  *
- * `schema` writes the number as the first item of each record of the struct.
+ * `%schema` writes the number as the first item of each record of the struct.
  * A read compares it, so a message of another struct gives `incorrect_type`.
  * The tag of a record of a `std::variant` member chooses a class alternative; a head of no alternative is
  * `incorrect_type`.
  * Each alternative has its own number, also when it derives from the class of another number.
  * `structs` takes the same description.
- * These do not compile in `schema<T>`: a struct in `T` with no description or with `cbor::untagged`; two structs in
+ * These do not compile in `%schema<T>`: a struct in `T` with no description or with `cbor::untagged`; two structs in
  * `T` with one number, the alternatives of a variant included; a number of a standard type (0, 1, 2, 3, 24, 64 to 87,
  * 100, 258, 1004 and 32873); a number that the IANA registry calls always invalid (21334, 65535, 4294967295 and
  * 18446744073709551615).

@@ -83,7 +83,7 @@ enum class error {
     number_out_of_range,
     /** The library does not return it. A writer of the program can return it for a cycle. */
     cyclic_data_structure,
-    /** A reference in a `schema<T>` message names an entry that its table does not have. */
+    /** A reference in a `%schema<T>` message names an entry that its table does not have. */
     unpopulated_table_index,
     /** One step of a path selects more nodes than the item has bytes. */
     nodelist_too_long,
@@ -94,7 +94,7 @@ enum class error {
     /** The writer of an encode gives this error. */
     value_too_large,
     /**
-     * The writer of an encode gives this error. It also comes from a refused allocation in `structs` and `schema`
+     * The writer of an encode gives this error. It also comes from a refused allocation in `structs` and `%schema`
      * decode.
      */
     not_enough_memory,
