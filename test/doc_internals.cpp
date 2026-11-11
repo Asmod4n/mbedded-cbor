@@ -17,8 +17,23 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 using cbor::error;
 
-// Each test in this file is one claim of tools/site/guides/advanced/internals.md that a caller can check. The tests
-// exist so that a change of the mechanism that breaks a claim fails here.
+// Each test in this file is one claim of the former advanced internals guide that a caller can check. The facts of
+// that guide stand in tools/doc/groups/lazy.dox, decode.dox, path.dox, schema.dox and structs.dox, or in the comment
+// of the test that checks them. The tests exist so that a change of the mechanism that breaks a claim fails here.
+//
+// How the documents are tested. Every example of a former guide is a doctest case. The cases of the guide <name> are in
+// test/doc_<name>.cpp, and their names start with "doc <name>:". The cases of the advanced guide <name> are in
+// test/doc_advanced_<name>.cpp, and their names start with "doc advanced <name>:". The cases of this file start with
+// "doc internals:". A test builds the input that a comment of the document shows as text with preferred() of
+// test/reference.hpp. The examples of the reference pages of a group come from test/doc_reference_<group>.cpp through
+// the snippet markers that the comments of the headers name, and the names of those cases start with
+// "doc reference <group>:". A claim about allocations has its test in test/allocation.cpp. test/cts.cpp runs the
+// JSONPath Compliance Test Suite.
+//
+// The reference site, https://asmod4n.github.io/mbedded-cbor/, is built from the comments of the headers through
+// Doxygen, and from the group pages in tools/site/reference. Each example block of a page runs in the browser, in the
+// library compiled to WebAssembly. The build of the site runs each example and compares its result with the page.
+// With CBOR_FUZZ, CMake builds one fuzz target for each public entry of the directory fuzz.
 
 // The section "How the documents are tested" states that preferred() builds the input that a comment shows as text.
 // The test exists because every document test depends on that.
@@ -46,7 +61,8 @@ TEST_CASE("doc internals: a lazy reads heads when a step needs them")
 }
 
 // The section "A skip keeps a count" states that the nesting depth does not bound a skip, and that a skip stops
-// where the bytes end.
+// where the bytes end. A skip reads heads only and jumps over the content of a string. It keeps one count of the items
+// that are still to skip, and no stack. item_size uses the same skip.
 TEST_CASE("doc internals: a skip keeps a count")
 {
     // {"a": [[...[1]...]], "b": 2}, written as bytes: the value model of the tests recurses, and the skip does not.
@@ -59,7 +75,8 @@ TEST_CASE("doc internals: a skip keeps a count")
     CHECK_EQ(cbor::at_path<"$[1]", int>("\x82\x82\x01"s).error(), error::too_little_data);
 }
 
-// The section "Tags 28 and 29" states that a lazy keeps no marks and reads a tag 29 as a tag over its index.
+// The section "Tags 28 and 29" states that a lazy keeps no marks of tag 28 and reads a tag 29 as a tag over its index,
+// so a read changes nothing in the lazy and needs no lock.
 TEST_CASE("doc internals: two references to one mark")
 {
     auto const l = *test::lazy_of_copy("\x83\xd8\x1c\x01\xd8\x1d\x00\xd8\x1d\x00"s);
@@ -68,7 +85,8 @@ TEST_CASE("doc internals: two references to one mark")
     CHECK_EQ(cbor::at_path<"$[2]", int>("\x83\xd8\x1c\x01\xd8\x1d\x00\xd8\x1d\x00"s), 0);
 }
 
-// The section "The item tree" states that a text of the tree is copied into the resource of the tree.
+// The section "The item tree" states that clone builds the items in a std::pmr::monotonic_buffer_resource that the
+// result owns, and that a text of the tree is copied into that resource.
 TEST_CASE("doc internals: a text of the item tree is a copy")
 {
     std::string const bytes = preferred(V(std::string(40, 'a')));
@@ -101,7 +119,8 @@ TEST_CASE("doc internals: an item keeps the bits of a NaN")
 }
 
 // The section "The width of a float" gives the width of a NaN from the zero bits at the right of its significand. The
-// test exists because a NaN that lost bits in a shorter width would read back as another NaN.
+// test exists because a NaN that lost bits in a shorter width would read back as another NaN. The decoder pads the
+// significand of a shorter NaN with zeros on the right, so a NaN reads back with the bits that were written.
 TEST_CASE("doc internals: a NaN takes the shortest width that keeps its bits")
 {
     auto const of_double = [](std::uint64_t const bits) { return cbor::structs<double>::encode(std::bit_cast<double>(bits))->size(); };

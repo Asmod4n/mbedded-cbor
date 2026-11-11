@@ -55,8 +55,6 @@ if(CBOR_INSTALL)
 			endif()
 			install(FILES ${page} DESTINATION ${CMAKE_INSTALL_MANDIR}/man3 RENAME ${CBOR_MAN_NAME}.3)
 		endforeach()
-		file(GLOB CBOR_MAN7_PAGES ${PROJECT_SOURCE_DIR}/man/man7/*.7)
-		install(FILES ${CBOR_MAN7_PAGES} DESTINATION ${CMAKE_INSTALL_MANDIR}/man7)
 	endif()
 endif()
 

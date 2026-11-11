@@ -29,8 +29,9 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 using cbor::error;
 
-// Each test in this file is one example of tools/site/guides/advanced/basics.md. The tests exist so that every
-// example in the document compiles and gives the result that the document states.
+// Each test in this file is one example of the former advanced basics guide, whose facts now stand in
+// tools/doc/groups/errors.dox, ref.dox and mbedded-cbor.dox. The tests exist so that every example compiles and gives
+// the result that the text states.
 
 // The section "Error codes" states that a cbor::error is a std::error_code with its own category, and that four
 // errors compare equal to a std::errc.

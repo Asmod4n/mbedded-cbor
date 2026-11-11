@@ -955,8 +955,9 @@ TEST_CASE("path: a typed read through tag 28")
     check_path<"$", std::uint64_t>("\xd8\x1c"s, {}, std::unexpected(error::too_little_data));
 }
 
-// tools/site/guides/advanced/path.md: a path does not resolve a tag 29. The test exists so that a typed read through
-// tag 29 gives the error of a plain tag and never reads the item that tag 28 marks.
+// The former advanced path guide, whose facts now stand in tools/doc/groups/path.dox: a path does not resolve a
+// tag 29. The test exists so that a typed read through tag 29 gives the error of a plain tag and never reads the item
+// that tag 28 marks.
 TEST_CASE("path: a typed read through tag 29")
 {
     check_path<"$[1][0]", std::uint64_t>("\x82\xd8\x1c\x82\x07\x08\xd8\x1d\x00"s, {std::int64_t{1}, std::int64_t{0}},

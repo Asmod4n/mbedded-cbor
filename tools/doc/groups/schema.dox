@@ -53,6 +53,11 @@ These do not compile:
   members of an aggregate where it is available, and a count that
   differs does not compile.
 
+`cbor::tags_registered<T>()` is true when the tag numbers of the structs
+in `T` differ.
+
+A class with a described base is not an aggregate that takes an allocator.
+
 A type whose name holds a comma, such as `pair<int, int>`, takes an alias
 in the macro. The preprocessor splits the arguments of a macro at each
 comma.
@@ -120,7 +125,8 @@ On a byte string, a `std::array` or a `std::vector` of `std::uint8_t` or
 `std::byte`, `[n]` reads one byte.
 
 These do not compile: a member that `T` does not have, a wrong count of
-arguments, a path to a text, and a path to a member that is not
+arguments, a path to a text, a constant index past the end of a
+`std::array`, and a path to a member that is not
 trivially copyable, such as a `std::vector` of structs.
 
 @section schema_path OPEN A MESSAGE
@@ -175,7 +181,9 @@ at the root.
 
 `typed_array_view<E>` is a random access, sized range over a list of
 numbers in the message. Each element is a value of `E`, read in little
-endian. The view holds the owner of the bytes.
+endian. An element is a value, not a reference. The view holds the owner
+of the bytes. It has `size`, `empty`, `begin`, `end`, `rbegin`, `rend`,
+`front`, `back`, `first`, `last`, `at` and `operator[]`.
 
 - `at`, `first` and `last` give an index error as a value.
 - `operator[]`, `front` and `back` throw `std::logic_error` outside the
@@ -303,6 +311,37 @@ index of its description in the table. From index 16 on, `6(N)` takes
 the place of `simple(j)`. The byte string holds the elements with no
 padding, in little endian. Tag 32873 is provisional. The IANA registry
 does not have it yet.
+
+@section schema_checks WHAT IS CHECKED ONCE AND WHAT AT EACH READ
+
+`%path` checks once:
+
+- that the message is at least as long as the table and the root;
+- that the start of the table holds the keys of `T` and of each struct
+  inside it, and the descriptions. A message of another layout gives
+  `incorrect_type`;
+- that the directory lies inside the message;
+- the tag of the struct of the root.
+
+With `cbor::description_place::apart`, the message holds no keys. `%path`
+then checks the start of the message, the count of the table and the tag
+of the root.
+
+Each `at_path` of an accessor checks at each read:
+
+- the index of each step against the count of the list;
+- that each offset that it reads from the directory lies inside the
+  message;
+- the tag of each struct on the path;
+- the head of the field that it reads;
+- that a part of variable size lies inside the message and does not
+  overlap another part;
+- for a list of fixed-size structs, the tag 32873 and its reference, and
+  that the length is a multiple of the size of the element.
+
+`view` checks the tag and the length of the typed array once. After that,
+each element read checks only its index. `cbor::schema<T>::at_path` makes
+the checks of `%path` and of `at_path` in one call.
 
 @section schema_cost COST
 

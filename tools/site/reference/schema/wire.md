@@ -55,4 +55,4 @@ the members.
 
 ## See also
 
-[encode](encode.md) · [fixed_size](fixed_size.md) · [member_offset](member_offset.md) · [../../guides/advanced/schema.md](../../guides/advanced/schema.md), section 1
+[encode](encode.md) · [fixed_size](fixed_size.md) · [member_offset](member_offset.md)

@@ -18,12 +18,12 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 using cbor::error;
 
-// Each test in this file is one mbedded-cbor example of tools/site/guides/advanced/comparison.md that
-// tools/site/guides/comparison.md does not show. The tests exist so that every example in the document compiles and
-// gives the result that the document states. The text between "begin" and "end" is the text of the document.
+// Each test in this file is one mbedded-cbor example of bench/comparison.md that the section "Compared with other
+// libraries" of README.md does not show. The tests exist so that every example in the document compiles and gives the
+// result that the document states. The text between "begin" and "end" is the text of the document.
 
-// The section "Read one field by path" names the type of the result, which the short form of
-// tools/site/guides/comparison.md leaves to auto.
+// The section "Read one field by path" names the type of the result, which the short form in
+// README.md leaves to auto.
 TEST_CASE("doc advanced comparison: read one field by path")
 {
     std::string const bytes = preferred(M("user"s, M("id"s, 42)));

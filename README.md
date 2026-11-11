@@ -178,8 +178,80 @@ measures these tables on your machine, in the image of
 `containers/debian-sid-bench.Containerfile`.
 The run and its context:
 [bench/results/kinds-2026-11-07-052855Z.json](bench/results/kinds-2026-11-07-052855Z.json).
-The code of every library, task by task:
-[tools/site/guides/comparison.md](tools/site/guides/comparison.md).
+The code of every library, task by task: see the section
+"Compared with other libraries" below.
+
+## Compared with other libraries
+
+This section compares mbedded-cbor with four C++ libraries that read and
+write CBOR or a binary format of their own: nlohmann/json, libcbor,
+FlatBuffers and Cap'n Proto. Each code example was compiled and run. The
+details stand in [bench/comparison.md](bench/comparison.md).
+
+| Task | mbedded-cbor | nlohmann/json | libcbor | FlatBuffers | Cap'n Proto |
+|---|---|---|---|---|---|
+| Format | CBOR | JSON; CBOR through `from_cbor` and `to_cbor` | CBOR | its own | its own |
+| Read one field | a path; the rest is not decoded | decodes the whole input first | decodes the whole input; no lookup of a key | direct | direct |
+| Write a struct | no extra code (C++26 reflection, or Boost.PFR in C++23) | a macro that names each member | no mapping of a struct | a schema file and a code generator | a schema file and a code generator |
+| Shared values, tags 28 and 29 | read and written | not read | not read | one offset in two places | not checked |
+| A list of numbers with no copy | `cbor::schema` | copies | reads each number | direct | direct |
+| Broken input | a `std::expected` error | an exception, or a discarded value | an error code | the Verifier; without it, no check | an exception |
+
+### Read one field
+
+```cpp
+// mbedded-cbor; bytes: {"user": {"id": 42}}
+auto const id = cbor::at_path<"$.user.id", std::int64_t>(bytes);   // *id == 42
+```
+
+```cpp
+// nlohmann/json
+nlohmann::json const doc = nlohmann::json::from_cbor(bytes);
+int const id = doc.at("user").at("id").get<int>();
+```
+
+### Write a struct and read it back
+
+```cpp
+// mbedded-cbor
+struct person {
+    std::string name;
+    int age;
+};
+
+auto bytes = cbor::structs<person>::encode(person{"ann", 30});
+auto const back = cbor::structs<person>::decode(std::move(*bytes));
+// (*back)->name is "ann", (*back)->age is 30
+```
+
+```cpp
+// nlohmann/json
+struct person {
+    std::string name;
+    int age;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(person, name, age)
+
+std::vector<std::uint8_t> const bytes = nlohmann::json::to_cbor(person{"ann", 30});
+person const back = nlohmann::json::from_cbor(bytes).get<person>();
+```
+
+`encode` and `decode` return a `std::expected`, and `*` takes the value
+(`mbedded-cbor-structs(3)`).
+
+### Broken input
+
+```cpp
+// mbedded-cbor; bytes: [1, 2] without its last byte
+auto const r = cbor::at_path<"$[1]", std::int64_t>(bytes);
+bool const broken = !r && r.error() == cbor::error::too_little_data;
+```
+
+```cpp
+// nlohmann/json
+auto const doc = nlohmann::json::from_cbor(bytes, true, false);
+bool const broken = doc.is_discarded();
+```
 
 ## Requirements
 
@@ -202,7 +274,7 @@ a description lists every member of an aggregate. It is the only
 dependency.
 
 CMake takes Boost 1.84 or later from the system, else its own copy in
-`third_party/boost_pfr`. Details: [tools/site/guides/basics.md](tools/site/guides/basics.md), section 5.
+`third_party/boost_pfr`. Details: `mbedded-cbor-structs(3)`.
 
 ## Installation
 
@@ -265,14 +337,14 @@ auto const age = doc.at_path<"$.user.age", int>();                 // cbor::erro
 
 - <https://asmod4n.github.io/mbedded-cbor/>: every function and type,
   with examples that run in the browser.
-- [tools/site/guides/basics.md](tools/site/guides/basics.md): errors, limits, memory, threads.
-- [tools/site/guides/path.md](tools/site/guides/path.md): the paths of RFC 9535 on CBOR.
-- [tools/site/guides/schema.md](tools/site/guides/schema.md): structs as Packed CBOR.
-- [tools/site/guides/structs.md](tools/site/guides/structs.md): any CBOR into a struct.
-- [tools/site/guides/comparison.md](tools/site/guides/comparison.md): other libraries, task by task.
 - The comments of the headers in `include/cbor/`: every function and type; Doxygen makes the site and the man
   pages from them.
-- [man/man3](man/man3): the reference as man pages, one page per group; [man/man7](man/man7): the guides as man pages.
+- [man/man3](man/man3): the reference as man pages, one page per group.
+  `mbedded-cbor(3)` is the overview, with the threads, the limits and
+  the memory. `mbedded-cbor-errors(3)` holds the errors. `mbedded-cbor-path(3)` holds the
+  paths of RFC 9535 on CBOR. `mbedded-cbor-schema(3)` holds structs as
+  Packed CBOR. `mbedded-cbor-structs(3)` reads any CBOR into a struct.
+- The section "Compared with other libraries" above: other libraries, task by task.
 
 ## Testing
 

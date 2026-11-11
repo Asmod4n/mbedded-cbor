@@ -18,9 +18,10 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 using cbor::error;
 
-// Each test in this file is one example of tools/site/guides/basics.md. The tests exist so that every example in the
-// document compiles and gives the result that the document states. Where the document writes a comment with the input
-// as text, the test builds the same input with preferred().
+// Each test in this file is one example of the former basics guide, whose facts now stand in
+// tools/doc/groups/errors.dox, ref.dox, mbedded-cbor.dox and structs.dox. The tests exist so that every example
+// compiles and gives the result that the text states. Where an example writes a comment with the input as text, the
+// test builds the same input with preferred().
 
 // The section "Errors" shows how a program reads a std::expected and the text of its error, because a new user
 // reaches for an exception first.

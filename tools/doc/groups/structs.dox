@@ -13,7 +13,12 @@ with `-std=c++26 -freflection`, the members come from reflection. On every
 other compiler, Boost.PFR 1.84 or later finds them. If the system has no
 Boost.PFR, the build uses the copy that the library ships. A class with a
 base class, and a class that is not an aggregate, needs a description.
-Every translation unit of a program must see the same Boost.PFR.
+Every translation unit of a program must see the same Boost.PFR. A
+program that also uses another Boost.PFR of its own breaks the one
+definition rule. An older Boost.PFR that comes first on the include path
+stops the build with an error that names version 1.84. An install places
+the shipped copy in `include/mbedded-cbor/boost_pfr`. The CMake package
+and the pkg-config file add it to the include path.
 
 @section structs_encode WRITE A VALUE
 
@@ -44,7 +49,8 @@ value exactly (RFC 8949 section 4.1). A NaN keeps its bits:
 after the item. It gives `std::expected<cbor::ref<T>, cbor::error>`. The
 ref holds the owner of the bytes. `*result` is the ref, and `**result` is
 the value of `T`. A `std::string_view` or a `std::span` in `T` points into
-the bytes. It stays valid while the ref lives. No form copies the bytes.
+the bytes. It stays valid while the ref lives. A result with no view
+member holds its own copy of every value. No form copies the bytes.
 
 The forms are:
 
@@ -57,6 +63,11 @@ The forms are:
   `target`, and it uses their allocator.
 - `%decode(owner, part)`: `part` is a `std::string_view` into memory that
   `owner`, a `std::shared_ptr<void const>`, keeps alive.
+- `%decode(owner, part, target)`: the same, and the read puts the values
+  into the containers of `target`.
+
+A `std::string` lvalue, a `std::string_view` alone and a `char const *`
+do not compile.
 
 The forms without `target` start from `T{}`, so `T` must be default
 constructible. A null or empty owner throws `std::logic_error`.
@@ -93,12 +104,19 @@ CBOR item is on the right:
   specification defines it. `%decode` takes the items in any order.
 - `std::chrono::sys_seconds`: tag 1 on an integer of seconds since
   1970-01-01. `%decode` also takes a float whose value is a whole number.
+  `%decode` gives a NaN back with the same bits.
 - `std::chrono::year_month_day`: tag 100 on an integer of days since
   1970-01-01 (RFC 8943). `encode` throws `std::logic_error` for a date that
   is not valid.
 - Where the standard library has `std::chrono::parse`, `%decode` also takes
   the date-time string of tag 0 for a `sys_time`, and the full-date string
-  of tag 1004 for a `year_month_day`.
+  of tag 1004 for a `year_month_day`. The letters `T` and `Z` may be lower
+  case. A fraction of a second needs a `sys_time` that holds it, for
+  example `std::chrono::sys_time<std::chrono::milliseconds>`. A
+  `sys_seconds` gives `incorrect_type` for a fraction, and every type gives
+  `incorrect_type` for second 60. Where the standard library has no
+  `std::chrono::parse` (libc++), tag 0 and tag 1004 give `incorrect_type`.
+  A program that needs them brings a type of its own.
 - `std::optional<E>`: the item of `E`, or `null` when the optional is empty.
   An empty optional member has no key in the map.
 - `std::variant<E...>`: the item of the alternative that the variant holds.
@@ -133,6 +151,11 @@ holds. A description that no call uses is not checked.
   or an integer from -2^63 to 2^64 - 1. No C++ literal holds -2^63. Use
   `std::numeric_limits<std::int64_t>::min()` for that key.
 
+Each macro writes a specialization of `cbor::describe_members<T>`. It has
+a `tag` member of type `std::optional<cbor::tag>` and a `members` member
+that is a `std::tuple` of `cbor::member` entries. `cbor::schema<T>` reads
+the same description.
+
 The tag is `cbor::tag{n}`, or `cbor::untagged` for a map with no tag. A
 struct whose description has a tag carries that tag. `%decode` gives
 `incorrect_type` when the tag is missing or is another tag. An untagged
@@ -160,7 +183,8 @@ The rules for a description are these:
 @section structs_input INPUT FROM OTHER PROGRAMS
 
 `%decode` reads the entries of a map in any order. It skips an entry whose
-key no member has, whatever the type of its value. So a program reads the
+key no member has, whatever the type of its key or of its value. An array, a
+map or a tag is such a key. So a program reads the
 bytes of a newer program that added members. A new member of type
 `std::optional` also reads the bytes of an older program.
 

@@ -195,8 +195,8 @@ TEST_CASE("path edn literals: an indefinite-length literal is invalid_path")
 // literal of the same value. Every example that a selector reads as a key literal (not an integer, which is
 // an index, and not a text, which is a name of RFC 9535) selects the key of its own bytes. Not here: the
 // examples whose key is of indefinite length, as at_path does not read indefinite-length input
-// (tools/site/guides/basics.md). Three floats whose decimal form has more digits than an exact conversion
-// takes read back only where std::from_chars converts them.
+// (the former basics guide, whose facts now stand in tools/doc/groups/errors.dox). Three floats whose decimal form has
+// more digits than an exact conversion takes read back only where std::from_chars converts them.
 TEST_CASE("path edn literals: the diagnostic notation of each example of RFC 8949 Appendix A is a key")
 {
     for (std::string_view const hex : {"c249010000000000000000"sv,

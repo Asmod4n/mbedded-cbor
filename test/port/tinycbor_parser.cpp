@@ -33,10 +33,10 @@
 //   RFC 8949 section 8, also allows the UTF-8 of the character, which cbor::diagnostic_notation() writes;
 // - an empty indefinite-length string: upstream writes "(_ )"; the EDN draft (4.3) writes ''_ and ""_.
 //
-// The library does not read indefinite length outside cbor::diagnostic_notation() (tools/site/guides/advanced/
-// basics.md, line 51: "The library does not read indefinite length. diagnostic_notation prints it."). Where upstream
-// reads an indefinite-length item with another function, the port expects indefinite_length. RFC 8949 section 5.1
-// lets a protocol leave out indefinite length.
+// The library does not read indefinite length outside cbor::diagnostic_notation() (the former advanced basics guide,
+// whose facts now stand in tools/doc/groups/errors.dox: "The library does not read indefinite length.
+// diagnostic_notation prints it."). Where upstream reads an indefinite-length item with another function, the port
+// expects indefinite_length. RFC 8949 section 5.1 lets a protocol leave out indefinite length.
 
 #include "../small_stack.hpp"
 #include "tinycbor.hpp"

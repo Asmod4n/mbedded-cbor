@@ -29,8 +29,9 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 using cbor::error;
 
-// Each test in this file is one example of tools/site/guides/advanced/structs.md. The tests exist so that every
-// example in the document compiles and gives the result that the document states.
+// Each test in this file is one example of the former advanced structs guide, whose facts now stand in
+// tools/doc/groups/structs.dox. The tests exist so that every example compiles and gives the result that the text
+// states.
 
 namespace doc_advanced_structs
 {

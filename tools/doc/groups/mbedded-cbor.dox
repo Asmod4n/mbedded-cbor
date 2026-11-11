@@ -45,6 +45,11 @@ The library does not bound the size of the input. The program bounds it before i
 
 A limit counts what a call reads or decodes. An item that a call only skips does not count. `cbor::item_size`, `cbor::decode` and `cbor::diagnostic_notation` read every item, so every item counts there.
 
+The nesting depth counts the arrays, maps and tags around an item. The
+top-level item has the depth 0. These calls recurse: `cbor::decode`, `clone`,
+`cbor::encode` of an item, `cbor::diagnostic_notation`, a filter and a
+descendant segment of a JSONPath, `cbor::structs` and `cbor::schema`.
+
 Nesting has no fixed limit. A reader that recurses gives `cbor::error::nesting_depth_exceeded` when a call comes within 16 KiB of the end of the stack of its thread. The bound is 32 KiB on Windows or with a sanitizer. `cbor::item_size`, `cbor::sequence_reader` and the child segments of a JSONPath do not recurse. So they read any depth. A deep value of a user type, read by `cbor::structs` or `cbor::schema`, is destroyed and copied by its own recursion. A thread with a smaller stack than the one that decoded the value can overflow there.
 
 @section overview_memory MEMORY
@@ -54,6 +59,13 @@ Nesting has no fixed limit. A reader that recurses gives `cbor::error::nesting_d
 A text string or byte string comes back as a view into the bytes, in a `cbor::ref`. The `cbor::ref` holds the owner, so the view stays valid while the `cbor::ref` lives.
 
 The %decode calls of `cbor::structs<T>` and `cbor::schema<T>` take a target as their last argument. The target holds `std::pmr` containers with a `std::pmr::memory_resource`. Each element uses the allocator of its container. When the resource refuses, the call gives `cbor::error::not_enough_memory`. A `std::bad_alloc` does not leave these calls.
+
+A plain struct inside a `std::pmr` container gets no allocator, so its
+members use the default resource. A step of a `cbor::lazy`, `get` and
+`cbor::lazy::view` allocate nothing. `cbor::lazy::adopt` allocates the
+`std::shared_ptr` that holds the bytes. `clone` allocates its items.
+`cbor::diagnostic_notation` and the encoder into a `std::string` allocate the
+string.
 
 The target of the encoder chooses where the bytes go. A container of bytes, a fixed span, a `cbor::iov_writer` and a writer of your own are targets. The encoder allocates nothing when it writes into a fixed span. `cbor::item_size` and the iterator of `cbor::sequence` allocate nothing. Other calls take no allocator. A refused allocation there throws `std::bad_alloc`.
 

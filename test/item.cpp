@@ -1206,7 +1206,7 @@ TEST_CASE("item get<K>: the values of the head")
 // RFC 8949 5.3.2 and 5.4: a tag passes its content as it is, unless the decoder turns it into a native form. The
 // owner decided that a tree decode turns a tag 2 or 3 into an integer only over a byte string, and decodes the content
 // of a tag 24 only when it is a byte string; any other content stays under the tag. The type of a tag 2 or 3 item is
-// the kind of that tag (runtime.md). So decode accepts each of these tags over an item of each major type (the
+// the kind of that tag (tools/doc/groups/lazy.dox). So decode accepts each of these tags over an item of each major type (the
 // finite set), and the documentation of decode says so.
 TEST_CASE("decode: tags 0 to 5, 21 to 24 and 32 to 36 over every major type stay tags or give their integer")
 {

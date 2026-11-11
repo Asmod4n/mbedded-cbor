@@ -76,9 +76,9 @@ TEST_CASE("self-described CBOR: lazy reads through a leading tag 55799")
     CHECK_EQ(owned->at("a"sv)->at(0)->get<std::uint64_t>().value(), 5u);
 }
 
-// runtime.md section 11: lazy::view and lazy::adopt read one leading tag 55799 as its content, and a
-// second tag 55799 or a tag 55799 inside an item stays a tag. type() gives the kind of the item there, so it gives tag,
-// as decode and clone do, in each width of the argument. get, a key and a path pass the tag (runtime.md, path.md), so
+// tools/doc/groups/lazy.dox, from the former runtime guide: lazy::view and lazy::adopt read one leading tag 55799 as
+// its content, and a second tag 55799 or a tag 55799 inside an item stays a tag. type() gives the kind of the item there, so it gives tag,
+// as decode and clone do, in each width of the argument. get, a key and a path pass the tag (lazy.dox, path.dox), so
 // they still give the content. A tag 55799 inside the item of a tag 24 is passed by a step and a path as well. The
 // content of a tag 2, tag 3 or typed array is the exception; the next test covers it.
 TEST_CASE("self-described CBOR: type() of a second tag 55799 and of a tag 55799 inside an item is tag")

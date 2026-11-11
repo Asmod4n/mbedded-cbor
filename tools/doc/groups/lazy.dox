@@ -30,6 +30,7 @@ item. Neither copies the bytes.
 also throws it for an empty `owner`.
 
 `adopt` and `view` read only the first head. They skip one leading tag 55799.
+They check no limit. They skip a tag 55799 in every width of its argument.
 They do not check that the bytes are one complete item. A step finds a
 missing part, and no step reads a byte after the item. The bytes `82 01`
 make a lazy, and a read of the second element gives `too_little_data`.
@@ -46,6 +47,10 @@ make a lazy, and a read of the second element gives `too_little_data`.
   0.
 
 A map with a key twice is no error. `at` gives the first pair.
+
+A key under tag 28 or tag 29 is a tag. It matches no text key and no
+integer key. A key under tag 55799 matches as the key without the tag
+(RFC 8949, section 3.4.6). A key `2(h'01')` is the same key as `1`.
 
 `operator[]` does not throw for a missing key or a wrong index. The
 result is a `std::expected`, so `l["a"]["b"]` does not compile. To read a
@@ -117,7 +122,16 @@ string. It does not view the bytes of the lazy, and it stays valid after
 the lazy and its owner end. The errors of `cbor::decode` apply.
 
 `clone` keeps tags 28 and 29 as tag items. A tag 55799 inside the
-top-level item stays a tag item.
+top-level item stays a tag item, and `type()` gives `tag` there. `get`,
+`at` and a path read through such a tag to its content. They do not read
+through it where it is the content of a tag 2, a tag 3 or a typed array.
+There the content is not a byte string, as `cbor::decode` reads it.
+`clone` of a lazy that starts with a tag 55799 gives the content.
+
+A bignum (tag 2 or 3) whose magnitude fits 64 bits is a number in
+`type()`, `get<int>`, `get<double>`, a path and a key lookup. No read
+gives it as a tag. A larger bignum stays a tag item. The library has no
+type for big numbers and depends on no library for them.
 
 `type()` gives a `std::expected<cbor::type, cbor::error>`, the kind of the
 value at the lazy.

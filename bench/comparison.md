@@ -1,6 +1,6 @@
 # Compared with other libraries, in detail
 
-This page adds the details to [../comparison.md](../comparison.md). It
+This page adds the details to the section "Compared with other libraries" of [README.md](../README.md#compared-with-other-libraries). It
 shows six tasks in three kinds of code:
 
 1. normal C++ on data that is already in memory;
@@ -276,7 +276,7 @@ bool const same = v[0] == v[1];
 
 ### mbedded-cbor
 
-Tags 28 and 29 are plain tags in a lazy, in a path and in `clone`. `cbor::decode` resolves them: the second element is a `shared_reference` to the first. `cbor::structs` decode reads a tag 29 into no plain member. No writer of the library adds them by itself. `encode` of an item writes a tag 28 or 29 that the item holds, and a program writes them with `encoder::tag` ([runtime.md](runtime.md)).
+Tags 28 and 29 are plain tags in a lazy, in a path and in `clone`. `cbor::decode` resolves them: the second element is a `shared_reference` to the first. `cbor::structs` decode reads a tag 29 into no plain member. No writer of the library adds them by itself. `encode` of an item writes a tag 28 or 29 that the item holds, and a program writes them with `encoder::tag` (`mbedded-cbor-decode(3)`).
 
 ```cpp
 // owner: a std::shared_ptr<std::string const> with [28("x"), 29(0)]
@@ -411,7 +411,7 @@ auto const r = parse("");
 
 ### mbedded-cbor
 
-Each read gives a std::expected<T, cbor::error>. A wrong use that the compiler cannot see throws std::logic_error ([basics.md](basics.md)).
+Each read gives a std::expected<T, cbor::error>. A wrong use that the compiler cannot see throws std::logic_error (`mbedded-cbor-errors(3)`).
 
 ```cpp
 // bytes: [1, 2] without its last byte
