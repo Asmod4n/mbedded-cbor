@@ -72,6 +72,7 @@
   <xsl:param name="owner"/>
   <xsl:variable name="d" select="detaileddescription"/>
   <xsl:variable name="ds" select="$all/detaileddescription"/>
+  <xsl:variable name="numbered" select="count($all[normalize-space(briefdescription)]) > 1"/>
   <xsl:text># </xsl:text>
   <xsl:choose>
     <xsl:when test="$owner">
@@ -95,7 +96,13 @@
   <xsl:value-of select="concat($nl, $nl, '```cpp', $nl)"/>
   <xsl:for-each select="$all">
     <xsl:if test="position() > 1 and (templateparamlist or preceding-sibling::memberdef[1]/templateparamlist)"><xsl:value-of select="$nl"/></xsl:if>
-    <xsl:apply-templates select="." mode="declaration"/>
+    <xsl:variable name="declaration"><xsl:apply-templates select="." mode="declaration"/></xsl:variable>
+    <xsl:choose>
+      <xsl:when test="$numbered">
+        <xsl:value-of select="concat('// (', position(), ')', $nl, $declaration)"/>
+      </xsl:when>
+      <xsl:otherwise><xsl:value-of select="$declaration"/></xsl:otherwise>
+    </xsl:choose>
   </xsl:for-each>
   <xsl:value-of select="concat('```', $nl)"/>
   <xsl:for-each select="$ds//programlisting[@filename='.callseq']">
@@ -107,43 +114,16 @@
   <xsl:for-each select="$ds//programlisting[@filename='.output']">
     <xsl:call-template name="fence"><xsl:with-param name="info" select="'output'"/></xsl:call-template>
   </xsl:for-each>
-  <xsl:variable name="paras" select="$d//para[not(ancestor::simplesect or ancestor::parameterlist or ancestor::sect1 or ancestor::sect2 or ancestor::sect3 or ancestor::table or ancestor::itemizedlist)][text()[normalize-space()] or computeroutput or ref or ulink or bold or emphasis or table or itemizedlist]"/>
-  <xsl:for-each select="$paras">
-    <xsl:value-of select="$nl"/>
-    <xsl:variable name="own"><xsl:call-template name="inline"><xsl:with-param name="node" select="."/></xsl:call-template></xsl:variable>
-    <xsl:variable name="brief">
-      <xsl:if test="position() = 1 and normalize-space(../../briefdescription)">
-        <xsl:call-template name="inline"><xsl:with-param name="node" select="../../briefdescription/para"/></xsl:call-template>
-      </xsl:if>
-    </xsl:variable>
-    <xsl:variable name="text" select="normalize-space(concat($brief, ' ', $own))"/>
-    <xsl:if test="$text != ''"><xsl:value-of select="concat($text, $nl)"/></xsl:if>
-    <xsl:for-each select="itemizedlist">
-      <xsl:if test="$text != '' or position() > 1"><xsl:value-of select="$nl"/></xsl:if>
-      <xsl:for-each select="listitem">
-        <xsl:text>- </xsl:text>
-        <xsl:call-template name="inline"><xsl:with-param name="node" select="para"/></xsl:call-template>
-        <xsl:value-of select="$nl"/>
-      </xsl:for-each>
-    </xsl:for-each>
-    <xsl:for-each select="table">
-      <xsl:if test="$text != '' or position() > 1"><xsl:value-of select="$nl"/></xsl:if>
-      <xsl:for-each select="row">
-        <xsl:text>|</xsl:text>
-        <xsl:for-each select="entry">
-          <xsl:text> </xsl:text>
-          <xsl:call-template name="inline"><xsl:with-param name="node" select="para"/></xsl:call-template>
-          <xsl:text> |</xsl:text>
-        </xsl:for-each>
-        <xsl:value-of select="$nl"/>
-        <xsl:if test="entry/@thead='yes'">
-          <xsl:text>|</xsl:text>
-          <xsl:for-each select="entry">---|</xsl:for-each>
-          <xsl:value-of select="$nl"/>
+  <xsl:choose>
+    <xsl:when test="$numbered">
+      <xsl:for-each select="$all">
+        <xsl:if test="normalize-space(briefdescription)">
+          <xsl:apply-templates select="." mode="prose"><xsl:with-param name="number" select="concat('(', position(), ') ')"/></xsl:apply-templates>
         </xsl:if>
       </xsl:for-each>
-    </xsl:for-each>
-  </xsl:for-each>
+    </xsl:when>
+    <xsl:otherwise><xsl:apply-templates select="." mode="prose"/></xsl:otherwise>
+  </xsl:choose>
   <xsl:if test="enumvalue[normalize-space(briefdescription) or normalize-space(detaileddescription)]">
     <xsl:value-of select="concat($nl, '| Value | Description |', $nl, '|---|---|', $nl)"/>
     <xsl:for-each select="enumvalue">
@@ -174,14 +154,39 @@
       <xsl:value-of select="$nl"/>
     </xsl:for-each>
   </xsl:if>
-  <xsl:for-each select="$d//simplesect[@kind='return']">
-    <xsl:value-of select="concat($nl, '## Return value', $nl, $nl)"/>
-    <xsl:call-template name="inline"><xsl:with-param name="node" select="para"/></xsl:call-template>
-    <xsl:value-of select="$nl"/>
-  </xsl:for-each>
+  <xsl:choose>
+    <xsl:when test="$numbered and $ds//simplesect[@kind='return']">
+      <xsl:value-of select="concat($nl, '## Return value', $nl, $nl)"/>
+      <xsl:for-each select="$all">
+        <xsl:variable name="r" select="normalize-space(detaileddescription//simplesect[@kind='return'])"/>
+        <xsl:variable name="p" select="position()"/>
+        <xsl:variable name="same">
+          <xsl:for-each select="$all">
+            <xsl:if test="normalize-space(detaileddescription//simplesect[@kind='return']) = $r">
+              <xsl:value-of select="concat(position(), ' ')"/>
+            </xsl:if>
+          </xsl:for-each>
+        </xsl:variable>
+        <xsl:if test="$r != '' and substring-before($same, ' ') = string($p)">
+          <xsl:if test="$p > 1"><xsl:value-of select="$nl"/></xsl:if>
+          <xsl:value-of select="concat('(', str:replace(normalize-space($same), ' ', ', '), ') ')"/>
+          <xsl:call-template name="inline"><xsl:with-param name="node" select="detaileddescription//simplesect[@kind='return']/para"/></xsl:call-template>
+          <xsl:value-of select="$nl"/>
+        </xsl:if>
+      </xsl:for-each>
+    </xsl:when>
+    <xsl:otherwise>
+      <xsl:for-each select="$d//simplesect[@kind='return']">
+        <xsl:value-of select="concat($nl, '## Return value', $nl, $nl)"/>
+        <xsl:call-template name="inline"><xsl:with-param name="node" select="para"/></xsl:call-template>
+        <xsl:value-of select="$nl"/>
+      </xsl:for-each>
+    </xsl:otherwise>
+  </xsl:choose>
   <xsl:variable name="retvals_all" select="$ds//parameterlist[@kind='retval']/parameteritem"/>
   <xsl:variable name="retvals" select="$retvals_all[not(normalize-space(parameternamelist/parametername) = preceding::parameteritem[count(. | $retvals_all) = count($retvals_all)]/parameternamelist/parametername)]"/>
-  <xsl:variable name="error_paras" select="$d//*[title='Errors']/para[not(ancestor::simplesect)][text()[normalize-space()] or computeroutput or ref or ulink or bold or emphasis]"/>
+  <xsl:variable name="error_paras_all" select="$ds//*[title='Errors']/para[not(ancestor::simplesect)][text()[normalize-space()] or computeroutput or ref or ulink or bold or emphasis]"/>
+  <xsl:variable name="error_paras" select="$error_paras_all[not(normalize-space(.) = preceding::para[count(. | $error_paras_all) = count($error_paras_all)])]"/>
   <xsl:variable name="paged" select="sectiondef[starts-with(@kind, 'public')]/memberdef[@kind='function'][.//programlisting[@filename='.callseq']]/name"/>
   <xsl:variable name="throws_all" select="$ds//parameterlist[@kind='exception']/parameteritem | sectiondef[starts-with(@kind, 'public')]/memberdef[not(name = $paged)]/detaileddescription//parameterlist[@kind='exception']/parameteritem"/>
   <xsl:variable name="throws" select="$throws_all[not(string(parameterdescription) = preceding::parameteritem[count(. | $throws_all) = count($throws_all)]/parameterdescription)]"/>
@@ -217,13 +222,61 @@
     <xsl:if test="position() = 1"><xsl:value-of select="concat($nl, '## Example', $nl)"/></xsl:if>
     <xsl:call-template name="fence"><xsl:with-param name="info" select="'cpp'"/></xsl:call-template>
   </xsl:for-each>
-  <xsl:variable name="see" select="$d//simplesect[@kind='see']"/>
+  <xsl:variable name="see_all" select="$ds//simplesect[@kind='see']"/>
+  <xsl:variable name="see" select="$see_all[not(normalize-space(.) = preceding::simplesect[count(. | $see_all) = count($see_all)])]"/>
   <xsl:if test="$see">
     <xsl:value-of select="concat($nl, '## See also', $nl, $nl)"/>
     <xsl:for-each select="$see">
       <xsl:if test="position() > 1"> · </xsl:if>
       <xsl:call-template name="inline"><xsl:with-param name="node" select="para"/></xsl:call-template>
     </xsl:for-each>
+    <xsl:value-of select="$nl"/>
+  </xsl:if>
+</xsl:template>
+
+<xsl:template match="compounddef|memberdef" mode="prose">
+  <xsl:param name="number" select="''"/>
+  <xsl:variable name="paras" select="detaileddescription//para[not(ancestor::simplesect or ancestor::parameterlist or ancestor::sect1 or ancestor::sect2 or ancestor::sect3 or ancestor::table or ancestor::itemizedlist)][text()[normalize-space()] or computeroutput or ref or ulink or bold or emphasis or table or itemizedlist]"/>
+  <xsl:for-each select="$paras">
+    <xsl:value-of select="$nl"/>
+    <xsl:variable name="own"><xsl:call-template name="inline"><xsl:with-param name="node" select="."/></xsl:call-template></xsl:variable>
+    <xsl:variable name="brief">
+      <xsl:if test="position() = 1 and normalize-space(../../briefdescription)">
+        <xsl:call-template name="inline"><xsl:with-param name="node" select="../../briefdescription/para"/></xsl:call-template>
+      </xsl:if>
+    </xsl:variable>
+    <xsl:variable name="text" select="normalize-space(concat(substring($number, 1, string-length($number) * (position() = 1)), $brief, ' ', $own))"/>
+    <xsl:if test="$text != ''"><xsl:value-of select="concat($text, $nl)"/></xsl:if>
+    <xsl:for-each select="itemizedlist">
+      <xsl:if test="$text != '' or position() > 1"><xsl:value-of select="$nl"/></xsl:if>
+      <xsl:for-each select="listitem">
+        <xsl:text>- </xsl:text>
+        <xsl:call-template name="inline"><xsl:with-param name="node" select="para"/></xsl:call-template>
+        <xsl:value-of select="$nl"/>
+      </xsl:for-each>
+    </xsl:for-each>
+    <xsl:for-each select="table">
+      <xsl:if test="$text != '' or position() > 1"><xsl:value-of select="$nl"/></xsl:if>
+      <xsl:for-each select="row">
+        <xsl:text>|</xsl:text>
+        <xsl:for-each select="entry">
+          <xsl:text> </xsl:text>
+          <xsl:call-template name="inline"><xsl:with-param name="node" select="para"/></xsl:call-template>
+          <xsl:text> |</xsl:text>
+        </xsl:for-each>
+        <xsl:value-of select="$nl"/>
+        <xsl:if test="entry/@thead='yes'">
+          <xsl:text>|</xsl:text>
+          <xsl:for-each select="entry">---|</xsl:for-each>
+          <xsl:value-of select="$nl"/>
+        </xsl:if>
+      </xsl:for-each>
+    </xsl:for-each>
+  </xsl:for-each>
+  <xsl:if test="$number != '' and not($paras)">
+    <xsl:value-of select="$nl"/>
+    <xsl:value-of select="$number"/>
+    <xsl:call-template name="inline"><xsl:with-param name="node" select="briefdescription/para"/></xsl:call-template>
     <xsl:value-of select="$nl"/>
   </xsl:if>
 </xsl:template>

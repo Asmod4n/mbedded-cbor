@@ -170,7 +170,7 @@ local function page_blocks(file, title, does)
   local doc = pandoc.read(text, "gfm"):walk(links)
   local out = { pandoc.RawBlock("html", '<section class="method" id="' .. page_id(file) .. '">'),
     pandoc.RawBlock("html", "<h2>" .. html_escaped(title) .. "</h2>") }
-  local callseq, example, skipping = false, false, false
+  local callseq, example, skipping, declared = false, false, false, false
   local plays = {}
   local function plays_put()
     for _, p in ipairs(plays) do out[#out + 1] = p end
@@ -186,6 +186,9 @@ local function page_blocks(file, title, does)
         b.level = 3
         out[#out + 1] = b
       end
+    elseif b.t == "CodeBlock" and b.classes[1] == "cpp" and not skipping and not declared then
+      declared = true
+      out[#out + 1] = pandoc.RawBlock("html", '<pre class="decl"><code>' .. html_escaped(b.text) .. "</code></pre>")
     elseif b.t == "CodeBlock" and b.classes[1] == "call-seq" then
       callseq = true
       out[#out + 1] = pandoc.RawBlock("html", callseq_html(b.text))
