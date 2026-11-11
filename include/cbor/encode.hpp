@@ -56,9 +56,6 @@ class iov_writer;
  * cbor::encode() and cbor::encode_iov() without it write no tag 28 or 29 of their own, and a `shared_reference` gives
  * `unsupported_value`.
  *
- * @code{.callseq}
- * cbor::encode(**tree, out, cbor::cycles) → std::expected<std::size_t, error>
- * @endcode
  * @code{.example}
  * bytes: d8 1c 82 d8 1d 00 d8 1d 00
  * call: auto const tree = cbor::decode(bytes)
@@ -82,9 +79,6 @@ struct cycles_t {
 /**
  * @brief The value of cbor::cycles_t.
  *
- * @code{.callseq}
- * cbor::encode(**tree, out, cbor::cycles) → std::expected<std::size_t, error>
- * @endcode
  * @code{.example}
  * bytes: d8 1c 81 d8 1d 00
  * call: auto const tree = cbor::decode(bytes)
@@ -113,9 +107,6 @@ inline constexpr cycles_t cycles{};
  * into it and allocates nothing; - an object with `allocate(std::size_t)`, which gives a writer with
  * `append(std::string_view)` and `done(std::size_t)`.
  *
- * @code{.callseq}
- * cbor::encode(**tree, out) → std::expected<std::size_t, error>
- * @endcode
  * @code{.example}
  * message: [1, "a"]
  * call: auto const tree = cbor::decode(bytes)
@@ -154,9 +145,6 @@ std::expected<std::size_t, error> encode(item const &root, Target &&target);
  * A value that two references reach without a cycle is written in full each time.
  * Every other item is written as cbor::encode() without cbor::cycles writes it.
  *
- * @code{.callseq}
- * cbor::encode(**tree, out, cbor::cycles) → std::expected<std::size_t, error>
- * @endcode
  * @code{.example}
  * bytes: d8 1c 81 d8 1d 00
  * call: auto const tree = cbor::decode(bytes)
@@ -196,10 +184,6 @@ std::expected<std::size_t, error> encode(item const &root, Target &&target, cycl
  * A piece that refers to the string of an owner points into memory that the owner holds as const; a call that writes
  * into the pieces, such as `readv`, is a wrong use.
  *
- * @code{.callseq}
- * cbor::encode_iov(**tree) → std::expected<ref<std::span<iovec const>>, error>
- * @endcode
- *
  * @code{.output}
  * bytes: 82 01 61 61
  * call: auto const pieces = cbor::encode_iov(**cbor::decode(bytes))
@@ -220,9 +204,6 @@ std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &root);
  *
  * The bytes are those of cbor::encode() with cbor::cycles, and its errors.
  *
- * @code{.callseq}
- * cbor::encode_iov(**tree, cbor::cycles) → std::expected<ref<std::span<iovec const>>, error>
- * @endcode
  * @see cbor::cycles_t
  *
  * @ingroup decode
@@ -692,9 +673,6 @@ struct encoding::binary_writer {
  * The class has no public member function.
  * A write after `finish` throws `std::logic_error`.
  *
- * @code{.callseq}
- * cbor::iov_writer w; → iov_writer
- * @endcode
  * @code{.output}
  * call: cbor::iov_writer w; cbor::encoder e(w);
  * call: e.text_string(text), with text a std::shared_ptr<std::string const> of 40 times "x"
@@ -775,11 +753,6 @@ class iov_writer
  * After an error, and after cbor::encoder::finish(), each call throws `std::logic_error`.
  * A copy does not compile.
  *
- * @code{.callseq}
- * cbor::encoder e(out)                     → encoder<std::string>
- * cbor::encoder e{std::span<char>(buffer)} → encoder<std::span<char>>
- * cbor::encoder e(w)                       → encoder<iov_writer>
- * @endcode
  * @code{.example}
  * bytes: a1 61 61 18 05
  * call: std::string out;
@@ -874,9 +847,6 @@ public:
      * The error of a writer.
      * A call after an error or after `finish` throws `std::logic_error`.
      *
-     * @code{.callseq}
-     * e.unsigned_integer(value) → std::expected<void, error>
-     * @endcode
      * @code{.example}
      * bytes: 19 00 05
      * call: std::string out;
@@ -914,9 +884,6 @@ public:
      * The error of a writer.
      * A call after an error or after `finish` throws `std::logic_error`.
      *
-     * @code{.callseq}
-     * e.negative_integer(argument) → std::expected<void, error>
-     * @endcode
      * @code{.example}
      * bytes: 39 01 f3
      * call: std::string out;
@@ -956,9 +923,6 @@ public:
      * A null `std::shared_ptr` throws `std::logic_error`.
      * A call after an error or after `finish` throws `std::logic_error`.
      *
-     * @code{.callseq}
-     * e.byte_string(bytes) → std::expected<void, error>
-     * @endcode
      * @code{.example}
      * bytes: 42 61 62
      * call: std::array<std::uint8_t, 2> ab{97, 98};
@@ -1028,9 +992,6 @@ public:
      * A null `std::shared_ptr` throws `std::logic_error`.
      * A call after an error or after `finish` throws `std::logic_error`.
      *
-     * @code{.callseq}
-     * e.text_string(text) → std::expected<void, error>
-     * @endcode
      * @code{.example}
      * bytes: 63 61 62 63
      * call: std::string out;
@@ -1095,9 +1056,6 @@ public:
      * The error of a writer.
      * A call after an error or after `finish` throws `std::logic_error`.
      *
-     * @code{.callseq}
-     * e.array(count) → std::expected<void, error>
-     * @endcode
      * @code{.example}
      * bytes: 82 18 01 18 02
      * call: std::string out;
@@ -1135,9 +1093,6 @@ public:
      * The error of a writer.
      * A call after an error or after `finish` throws `std::logic_error`.
      *
-     * @code{.callseq}
-     * e.map(count) → std::expected<void, error>
-     * @endcode
      * @code{.example}
      * bytes: a1 61 61 18 05
      * call: std::string out;
@@ -1175,9 +1130,6 @@ public:
      * The error of a writer.
      * A call after an error or after `finish` throws `std::logic_error`.
      *
-     * @code{.callseq}
-     * e.tag(number) → std::expected<void, error>
-     * @endcode
      * @code{.example}
      * bytes: d9 d9 f7 18 01
      * call: std::string out;
@@ -1226,9 +1178,6 @@ public:
      * `no_buffer_space` over a span that is too short.
      * The error of a writer.
      *
-     * @code{.callseq}
-     * e.simple_value(value) → std::expected<void, error>
-     * @endcode
      * @code{.example}
      * bytes: f6
      * call: std::string out;
@@ -1274,9 +1223,6 @@ public:
      * The error of a writer.
      * A call after an error or after `finish` throws `std::logic_error`.
      *
-     * @code{.callseq}
-     * e.floating_point(value) → std::expected<void, error>
-     * @endcode
      * @code{.example}
      * bytes: fa 3f c0 00 00
      * call: std::string out;
@@ -1316,9 +1262,6 @@ public:
      * `no_buffer_space` over a span that is too short.
      * The error of a writer.
      *
-     * @code{.callseq}
-     * e.typed_array(value) → std::expected<void, error>
-     * @endcode
      * @code{.example}
      * bytes: d8 40 42 01 02
      * call: std::array<std::uint8_t, 2> two{1, 2};
@@ -1368,10 +1311,6 @@ public:
      * `no_buffer_space`, `value_too_large`, `not_enough_memory`, `io_error`: the error of the target.
      * A second `finish` throws `std::logic_error`.
      *
-     * @code{.callseq}
-     * e.finish() → std::expected<std::size_t, error>
-     * e.finish() → std::expected<ref<std::span<iovec const>>, error>
-     * @endcode
      * @code{.example}
      * bytes: 63 61 62 63
      * call: std::array<char, 16> buffer{};

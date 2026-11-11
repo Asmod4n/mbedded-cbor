@@ -1401,10 +1401,6 @@ class generic
  * An enum with no fixed underlying type does not compile in `decode`.
  * A `long double` and a struct under `tagged_item` do not compile.
  *
- * @code{.callseq}
- * cbor::structs<T>::encode(value)              → std::expected<std::string, cbor::error>
- * cbor::structs<T>::decode(std::move(encoded)) → std::expected<cbor::ref<T>, cbor::error>
- * @endcode
  * @code{.example}
  * message: {"id": 4}
  * call: auto const r = cbor::structs<reading>::encode(reading{4, std::nullopt})
@@ -1442,13 +1438,6 @@ public:
      * The other forms start from `T{}`.
      * A byte after the item is not read.
      *
-     * @code{.callseq}
-     * cbor::structs<T>::decode(std::move(encoded))                → std::expected<cbor::ref<T>, cbor::error>
-     * cbor::structs<T>::decode(owner)                             → std::expected<cbor::ref<T>, cbor::error>
-     * cbor::structs<T>::decode(owner, std::move(target))          → std::expected<cbor::ref<T>, cbor::error>
-     * cbor::structs<T>::decode(owner, encoded)                    → std::expected<cbor::ref<T>, cbor::error>
-     * cbor::structs<T>::decode(owner, encoded, std::move(target)) → std::expected<cbor::ref<T>, cbor::error>
-     * @endcode
      * @code{.example}
      * message: {"name": "ann", "age": 30}
      * call: auto const p = cbor::structs<person>::decode(std::move(bytes))
@@ -1549,10 +1538,6 @@ public:
      * The function writes no shared value (tag 28, tag 29).
      * A type that `structs` does not take does not compile.
      *
-     * @code{.callseq}
-     * cbor::structs<T>::encode(value)         → std::expected<std::string, cbor::error>
-     * cbor::structs<T>::encode(value, target) → std::expected<std::size_t, cbor::error>
-     * @endcode
      * @code{.example}
      * message: {"name": "ann", "age": 30}
      * call: auto const encoded = cbor::structs<person>::encode(person{"ann", 30})

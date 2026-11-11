@@ -46,19 +46,6 @@ end
 
 local links = { Link = function(l) l.target = link_target(l.target); return l end }
 
-local function callseq_html(text)
-  local lines = {}
-  for line in text:gmatch("[^\n]+") do
-    local call, result = line:match("^(.-)%s*→%s*(.*)$")
-    if call then
-      lines[#lines + 1] = html_escaped(call) .. ' <span class="arrow">→</span> ' .. html_escaped(result)
-    else
-      lines[#lines + 1] = html_escaped(line)
-    end
-  end
-  return '<pre class="callseq">' .. table.concat(lines, "\n") .. "</pre>"
-end
-
 local function example_read(text, where)
   local spec = { calls = {} }
   for line in text:gmatch("[^\n]+") do
@@ -170,7 +157,7 @@ local function page_blocks(file, title, does)
   local doc = pandoc.read(text, "gfm"):walk(links)
   local out = { pandoc.RawBlock("html", '<section class="method" id="' .. page_id(file) .. '">'),
     pandoc.RawBlock("html", "<h2>" .. html_escaped(title) .. "</h2>") }
-  local callseq, example, skipping, declared = false, false, false, false
+  local example, skipping, declared = false, false, false
   local plays = {}
   local function plays_put()
     for _, p in ipairs(plays) do out[#out + 1] = p end
@@ -189,9 +176,6 @@ local function page_blocks(file, title, does)
     elseif b.t == "CodeBlock" and b.classes[1] == "cpp" and not skipping and not declared then
       declared = true
       out[#out + 1] = pandoc.RawBlock("html", '<pre class="decl"><code>' .. html_escaped(b.text) .. "</code></pre>")
-    elseif b.t == "CodeBlock" and b.classes[1] == "call-seq" then
-      callseq = true
-      out[#out + 1] = pandoc.RawBlock("html", callseq_html(b.text))
     elseif b.t == "CodeBlock" and b.classes[1] == "output" then
       example = true
       plays[#plays + 1] = pandoc.RawBlock("html", '<div class="play">\n<div class="bar"><span class="label">Example</span></div>\n'
@@ -208,7 +192,6 @@ local function page_blocks(file, title, does)
     end
   end
   plays_put()
-  if not callseq then error("reference.lua: " .. where .. " has no call-seq block") end
   if not example then error("reference.lua: " .. where .. " has no example block") end
   local source = implementation_html(file)
   if source then out[#out + 1] = pandoc.RawBlock("html", source) end

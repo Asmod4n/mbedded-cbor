@@ -64,12 +64,6 @@ struct lazy;
  * `nodelist_too_long`: one step selects more nodes than the top-level item has bytes, for example a step that
  * repeats one selector many times.
  *
- * @code{.callseq}
- * doc->at_path<"$.a[*]", cbor::nodelist>() → std::expected<nodelist, error>
- * nodes->size()                            → std::size_t
- * (*nodes)[i]                              → lazy const &
- * nodes->empty()                           → bool
- * @endcode
  * @code{.example}
  * message: {"a": [1, 2, 3]}
  * call: auto const nodes = doc->at_path<"$.a[*]", cbor::nodelist>()
@@ -119,10 +113,6 @@ inline constexpr bool is_path_query_v = false;
  * A `nodelist` is the result of a path that selects many nodes.
  * A lazy made with `cbor::lazy{}` holds no top-level item; each member function then throws `std::logic_error`.
  *
- * @code{.callseq}
- * cbor::lazy::adopt(bytes) → std::expected<lazy, error>
- * cbor::lazy const copy = *doc
- * @endcode
  * @code{.example}
  * message: [1, 2]
  * call: cbor::lazy const copy = *doc
@@ -162,9 +152,6 @@ public:
      * No step reads bytes after the item.
      * The call reads only the first head, to skip one tag 55799.
      *
-     * @code{.callseq}
-     * cbor::lazy::view(owner) → std::expected<lazy, error>
-     * @endcode
      * @code{.example}
      * message: {"id": 42}
      * call: auto const owner = std::make_shared<std::string const>(bytes)
@@ -197,9 +184,6 @@ public:
      * The call reads only the first head, to skip one tag 55799.
      * A step on the lazy reports broken input.
      *
-     * @code{.callseq}
-     * cbor::lazy::adopt(std::move(bytes)) → std::expected<lazy, error>
-     * @endcode
      * @code{.example}
      * message: {"id": 42}
      * call: auto const doc2 = cbor::lazy::adopt(std::move(bytes))
@@ -227,11 +211,6 @@ public:
      * The call passes a tag that it does not interpret, and reads into a tag 24.
      * It reads no value; cbor::lazy::get() does.
      *
-     * @code{.callseq}
-     * doc->at("key")       → std::expected<lazy, error>
-     * doc->at(cbor::key{7}) → std::expected<lazy, error>
-     * doc->at(1)            → std::expected<lazy, error>
-     * @endcode
      * @code{.example}
      * bytes: a2 64 63 61 72 73 82 a1 62 68 70 05 a1 62 68 70 07 07 65 73 65 76 65 6e
      * call: doc->at("cars")->at(1)->at("hp")->get<int>()
@@ -268,11 +247,6 @@ public:
      * A path reads a chain (cbor::lazy::at_path()).
      * The errors of cbor::lazy::at() apply.
      *
-     * @code{.callseq}
-     * (*doc)["key"]       → std::expected<lazy, error>
-     * (*doc)[cbor::key{7}] → std::expected<lazy, error>
-     * (*doc)[1]            → std::expected<lazy, error>
-     * @endcode
      * @code{.example}
      * message: {"cars": [5, 7]}
      * call: (*(*doc)["cars"])[1]->get<int>()
@@ -303,12 +277,6 @@ public:
      * A path that is not valid does not compile.
      * A path that can select more than one node does not compile, except with `nodelist`.
      *
-     * @code{.callseq}
-     * doc->at_path<"$.user.id", std::int64_t>()        → std::expected<std::int64_t, error>
-     * doc->at_path<"$.user.name", std::string_view>()  → std::expected<ref<std::string_view>, error>
-     * doc->at_path<"$.user.tags[*]", cbor::nodelist>() → std::expected<nodelist, error>
-     * doc->at_path<"$.user">()                        → std::expected<lazy, error>
-     * @endcode
      * @code{.example}
      * message: {"user": {"id": 42, "tags": ["a", "b"]}}
      * call: doc->at_path<"$.user.id", std::int64_t>()
@@ -356,9 +324,6 @@ public:
      * It reads only the head.
      * It does not read the children.
      *
-     * @code{.callseq}
-     * doc->size() → std::expected<std::uint64_t, error>
-     * @endcode
      * @code{.example}
      * message: {"a": 1, "b": 2}
      * call: doc->size()
@@ -381,9 +346,6 @@ public:
      *
      * The errors of cbor::lazy::size() apply.
      *
-     * @code{.callseq}
-     * doc->empty() → std::expected<bool, error>
-     * @endcode
      * @code{.example}
      * message: {"a": [], "b": [1]}
      * call: doc->at("a")->empty()
@@ -405,9 +367,6 @@ public:
      * A typed array (RFC 8746) gives `typed_array`.
      * Every other tag gives `tag`; the call does not pass it.
      *
-     * @code{.callseq}
-     * doc->type() → std::expected<cbor::type, error>
-     * @endcode
      * @code{.example}
      * bytes: 84 01 61 61 c2 41 05 c1 00
      * call: doc->at(0)->type()
@@ -444,11 +403,6 @@ public:
      * Nothing is copied.
      * The call passes a tag that it does not interpret.
      *
-     * @code{.callseq}
-     * doc->get<std::int64_t>()     → std::expected<std::int64_t, error>
-     * doc->get<double>()           → std::expected<double, error>
-     * doc->get<std::string_view>() → std::expected<ref<std::string_view>, error>
-     * @endcode
      * @code{.example}
      * message: {"name": "ann", "age": 300}
      * call: auto const name = doc->at("name")->get<std::string_view>()
@@ -482,9 +436,6 @@ public:
      * The call reads only the head.
      * The view reads one element at each step.
      *
-     * @code{.callseq}
-     * doc->elements() → std::expected<lazy_elements, error>
-     * @endcode
      * @code{.example}
      * message: [1, 2, 3]
      * call: doc->elements()
@@ -510,9 +461,6 @@ public:
      * `second`.
      * A key that occurs twice occurs twice in the view.
      *
-     * @code{.callseq}
-     * doc->entries() → std::expected<lazy_entries, error>
-     * @endcode
      * @code{.example}
      * message: {"a": 1, "b": 2}
      * call: doc->entries()
@@ -537,9 +485,6 @@ public:
      * It does not view the bytes of the lazy, and stays valid after the lazy and its owner end.
      * The errors of cbor::decode() apply.
      *
-     * @code{.callseq}
-     * doc->clone() → std::expected<owning<item>, error>
-     * @endcode
      * @code{.example}
      * message: {"a": [1, "x"]}
      * call: doc->at("a")->clone()
@@ -620,10 +565,6 @@ private:
  * each later position gives that error.
  * The view gives at most `size()` values.
  *
- * @code{.callseq}
- * auto const view = *doc->elements()
- * view.size() → std::uint64_t
- * @endcode
  * @code{.example}
  * message: [{"age": 31}, {"age": 20}, {"age": 40}]
  * call: auto const view = *doc->elements()
@@ -724,10 +665,6 @@ private:
  * and each later position gives that error.
  * The view gives at most `size()` values.
  *
- * @code{.callseq}
- * auto const view = *doc->entries()
- * view.size() → std::uint64_t
- * @endcode
  * @code{.example}
  * message: {"a": 1, "b": 2, "c": 3}
  * call: auto const view = *doc->entries()

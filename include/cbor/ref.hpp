@@ -89,12 +89,6 @@ void copy_views_into_zone(T &value, string_saver &zone);
  * Only the library makes a `ref`.
  * `*` and `->` on a temporary `ref` do not compile.
  *
- * @code{.callseq}
- * cbor::structs<std::string_view>::decode(std::move(bytes)) → std::expected<ref<std::string_view>, error>
- * *r                                                        → std::string_view
- * r->member                                                 → the member of T
- * r.clone()                                                 → std::string
- * @endcode
  * @code{.example}
  * message: "abc"
  * call: auto const r = cbor::structs<std::string_view>::decode(std::move(bytes))
@@ -239,11 +233,6 @@ struct zone_owner;
  * The value is `const`.
  * `*` and `->` on a temporary `owning` do not compile.
  *
- * @code{.callseq}
- * p.clone() → owning<person>
- * *own      → person const &
- * own->name → std::string_view
- * @endcode
  * @code{.example}
  * message: {"name": "ann", "age": 30}
  * call: auto const p = cbor::structs<person>::decode(std::move(bytes)).value()

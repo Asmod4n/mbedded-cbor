@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Writes one line for each reference page, from the Doxygen XML index: the group, a tab, and the qualified name.
      A page is a class, a struct, a function, an enum, a variable, a type alias or a macro of a group that has a brief description, or a member
-     function of such a class whose comment holds a call-seq block. The overloads of a function share one page. -->
+     function of such a class whose comment holds an example or an output block. The overloads of a function share one page. -->
 <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
 <xsl:output method="text" encoding="UTF-8"/>
 <xsl:variable name="index" select="/"/>
@@ -15,9 +15,9 @@
       <xsl:if test="normalize-space($c/briefdescription)">
         <xsl:value-of select="concat($group, '&#9;', $c/compoundname, '&#10;')"/>
       </xsl:if>
-      <xsl:for-each select="$c/sectiondef[starts-with(@kind, 'public')]/memberdef[@kind='function'][.//programlisting[@filename='.callseq']]">
+      <xsl:for-each select="$c/sectiondef[starts-with(@kind, 'public')]/memberdef[@kind='function'][.//programlisting[@filename='.example' or @filename='.output']]">
         <xsl:variable name="n" select="name"/>
-        <xsl:if test="not(preceding-sibling::memberdef[name=$n][.//programlisting[@filename='.callseq']]) and not(../preceding-sibling::sectiondef/memberdef[name=$n][.//programlisting[@filename='.callseq']])">
+        <xsl:if test="not(preceding-sibling::memberdef[name=$n][.//programlisting[@filename='.example' or @filename='.output']]) and not(../preceding-sibling::sectiondef/memberdef[name=$n][.//programlisting[@filename='.example' or @filename='.output']])">
           <xsl:value-of select="concat($group, '&#9;', $c/compoundname, '::', name, '&#10;')"/>
         </xsl:if>
       </xsl:for-each>

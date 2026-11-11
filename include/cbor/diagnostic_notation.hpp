@@ -1311,9 +1311,6 @@ class extended_diagnostic_notation
  * @p encoded holds exactly one item.
  * The call does not check tag content, UTF-8 or duplicate keys.
  *
- * @code{.callseq}
- * cbor::diagnostic_notation(bytes) → std::expected<std::string, error>
- * @endcode
  * @code{.example}
  * bytes: a1 61 61 83 01 f9 41 00 41 01
  * call: cbor::diagnostic_notation(bytes)

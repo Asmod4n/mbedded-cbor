@@ -153,10 +153,6 @@ class canonical_ids;
  * A deep value of a user type (`structs`, `schema`) is destroyed and copied by its own recursion: a thread with a
  * smaller stack than the one that decoded it can overflow there.
  *
- * @code{.callseq}
- * cbor::limits::string_length      → std::size_t
- * cbor::limits::container_elements → std::size_t
- * @endcode
  * @code{.example}
  * message: {}
  * call: cbor::limits::string_length

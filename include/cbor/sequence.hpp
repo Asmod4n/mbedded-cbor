@@ -28,12 +28,6 @@ namespace cbor
  * The sequence is an input range: it has no size, and `begin()` reads the first item again.
  * Each item gives the errors of cbor::item_size(). After an item with an error, the loop ends.
  *
- * @code{.callseq}
- * cbor::sequence(owner) → sequence
- * s.begin()             → sequence::iterator
- * *it                   → std::expected<std::string_view, error>
- * s.empty()             → bool
- * @endcode
  * @code{.example}
  * bytes: 01 02 03
  * call: auto const owner = std::make_shared<std::string const>(bytes)

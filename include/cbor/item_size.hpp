@@ -135,9 +135,6 @@ class well_formedness
  * Checks that the item is well-formed. Bytes after the item do not change the result.
  * The call does not recurse: an item of any depth gives its size.
  *
- * @code{.callseq}
- * cbor::item_size(bytes) → std::expected<std::size_t, error>
- * @endcode
  * @code{.example}
  * bytes: 82 01 02 07
  * call: cbor::item_size(bytes)

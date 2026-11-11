@@ -235,9 +235,6 @@ public:
  * default is `inside`.
  * The data form of `apart` and cbor::schema::description() together have the size of the message.
  *
- * @code{.callseq}
- * cbor::schema<T>::encode<cbor::description_place::apart>(value) → std::expected<std::string, cbor::error>
- * @endcode
  * @code{.example}
  * message: {}
  * call: cbor::description_place::apart
@@ -3314,16 +3311,6 @@ class reflection
  * Each element is a value of `E`, read from little endian, not a reference.
  * `begin` and `end` on a temporary do not compile.
  *
- * @code{.callseq}
- * view.size()     → std::size_t
- * view[i]         → E
- * view.at(i)      → std::expected<E, cbor::error>
- * view.first(n)   → std::expected<cbor::typed_array_view<E>, cbor::error>
- * view.last(n)    → std::expected<cbor::typed_array_view<E>, cbor::error>
- * view.front()    → E
- * view.back()     → E
- * view.begin()    → iterator
- * @endcode
  * @code{.example}
  * bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
  * call: auto const root = cbor::schema<car>::path(std::move(bytes))
@@ -3658,10 +3645,6 @@ public:
      * It gives no error at run time.
      * A type that has no fixed size does not compile.
      *
-     * @code{.callseq}
-     * cbor::schema<T>::fixed_size()    → std::size_t
-     * cbor::schema<T>::fixed_size<U>() → std::size_t
-     * @endcode
      * @code{.example}
      * bytes: d8 71 82 9a 00 00 00 10 d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 5a 00 00 00 00 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 08 d8 80 9a 00 00 00 02 19 00 11 fa 40 20 00 00
      * call: cbor::schema<tire>::fixed_size()
@@ -3708,12 +3691,6 @@ public:
      * The size of the data form plus the size of `description()` is the size of the message.
      * The other errors are the errors of cbor::schema::path(), cbor::schema::at_path() and cbor::schema::decode().
      *
-     * @code{.callseq}
-     * cbor::schema<T>::description()                                   → std::span<char const>
-     * cbor::schema<T>::encode<cbor::description_place::apart>(value)   → std::expected<std::string, cbor::error>
-     * cbor::schema<T>::path<cbor::description_place::apart>(std::move(data)) → std::expected<cbor::schema<T>::accessor<T>, cbor::error>
-     * cbor::schema<T>::at_path<"$.member", cbor::description_place::apart>(data) → std::expected<V, cbor::error>
-     * @endcode
      * @code{.example}
      * bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
      * call: auto const data = cbor::schema<car>::encode<cbor::description_place::apart>(car{"Volvo", 5, std::vector<tire>{tire{17, 2.5f}, tire{18, 2.25f}}, std::vector<double>{1.0, 2.0, 3.0}})
@@ -3762,9 +3739,6 @@ public:
      * It gives no error at run time.
      * A `Member` of another struct, or a member that the description does not list, does not compile.
      *
-     * @code{.callseq}
-     * cbor::schema<T>::member_offset<&U::m>() → std::size_t
-     * @endcode
      * @code{.example}
      * bytes: d8 71 82 9a 00 00 00 10 d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 5a 00 00 00 00 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 08 d8 80 9a 00 00 00 02 19 00 11 fa 40 20 00 00
      * call: cbor::schema<tire>::member_offset<&tire::diameter>()
@@ -3814,16 +3788,6 @@ public:
      * An accessor of a vector of fixed-size structs is a random access range of `fixed_element` accessors.
      * `at_path` on a temporary does not compile.
      *
-     * @code{.callseq}
-     * accessor.at_path<"@.member">(indexes...) → std::expected<V, cbor::error>
-     * accessor.at_path<"$.member">(indexes...) → std::expected<V, cbor::error>
-     * root.view<"$.list">(indexes...)          → std::expected<cbor::typed_array_view<E>, cbor::error>
-     * accessor.size()                          → std::size_t
-     * pet.index()                              → std::size_t
-     * pet.get<A>()                             → std::expected<accessor<A>, cbor::error>
-     * accessor.begin()                         → iterator
-     * accessor.end()                           → iterator
-     * @endcode
      * @code{.example}
      * bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
      * call: auto const root = cbor::schema<car>::path(std::move(bytes))
@@ -4127,10 +4091,6 @@ public:
      * A path with `$` gives the errors of cbor::schema::accessor.
      * `at_path` on a temporary does not compile.
      *
-     * @code{.callseq}
-     * element.at_path<"@.member">(indexes...) → std::expected<V, cbor::error>
-     * element.at_path<"$.member">(indexes...) → std::expected<V, cbor::error>
-     * @endcode
      * @code{.example}
      * bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
      * call: auto const root = cbor::schema<car>::path(std::move(bytes))
@@ -4290,11 +4250,6 @@ public:
      * `path` checks the length, the table, the directory and the tag of the root once.
      * It reads no field.
      *
-     * @code{.callseq}
-     * cbor::schema<T>::path(std::move(encoded)) → std::expected<cbor::schema<T>::accessor<T>, cbor::error>
-     * cbor::schema<T>::path(owner)              → std::expected<cbor::schema<T>::accessor<T>, cbor::error>
-     * cbor::schema<T>::path(owner, encoded)     → std::expected<cbor::schema<T>::accessor<T>, cbor::error>
-     * @endcode
      * @code{.example}
      * bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
      * call: cbor::schema<car>::path(std::string(bytes)).has_value()
@@ -4356,10 +4311,6 @@ public:
      * A text, a list or a struct needs a cbor::schema::accessor.
      * A member that `T` does not have, a wrong count of indexes, or a path to a text does not compile.
      *
-     * @code{.callseq}
-     * cbor::schema<T>::at_path<"$.member">(encoded)         → std::expected<V, cbor::error>
-     * cbor::schema<T>::at_path<"$.list[].member">(encoded, i) → std::expected<V, cbor::error>
-     * @endcode
      * @code{.example}
      * bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
      * call: cbor::schema<car>::at_path<"$.seats">(bytes)
@@ -4405,13 +4356,6 @@ public:
      * the description: decode reads them into a `std::tuple` and calls `std::make_from_tuple`.
      * An element of a container with an allocator makes that tuple with the allocator of the container.
      *
-     * @code{.callseq}
-     * cbor::schema<T>::decode(std::move(encoded))       → std::expected<cbor::ref<T>, cbor::error>
-     * cbor::schema<T>::decode(owner)                    → std::expected<cbor::ref<T>, cbor::error>
-     * cbor::schema<T>::decode(owner, target)            → std::expected<cbor::ref<T>, cbor::error>
-     * cbor::schema<T>::decode(owner, encoded)           → std::expected<cbor::ref<T>, cbor::error>
-     * cbor::schema<T>::decode(owner, encoded, target)   → std::expected<cbor::ref<T>, cbor::error>
-     * @endcode
      * @code{.example}
      * bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
      * call: auto const back = cbor::schema<car>::decode(std::move(bytes))
@@ -4509,11 +4453,6 @@ public:
      * - each index against the count of its list, its table or its directory;
      * - the limits of the build and, in `unverified_decode`, the nesting depth.
      *
-     * @code{.callseq}
-     * cbor::schema<T>::unverified_path(std::move(encoded))       → std::expected<cbor::schema<T>::accessor<T, false>, cbor::error>
-     * cbor::schema<T>::unverified_at_path<"$.member">(encoded)   → std::expected<V, cbor::error>
-     * cbor::schema<T>::unverified_decode(std::move(encoded))     → std::expected<cbor::ref<T>, cbor::error>
-     * @endcode
      * @code{.example}
      * bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
      * call: cbor::schema<car>::unverified_at_path<"$.seats">(bytes)
@@ -4574,9 +4513,6 @@ public:
      *
      * The checks and the errors of cbor::schema::unverified_path() apply.
      *
-     * @code{.callseq}
-     * cbor::schema<T>::unverified_at_path<Path>(bytes, indexes...) → std::expected<V, cbor::error>
-     * @endcode
      * @code{.example}
      * bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
      * call: cbor::schema<car>::unverified_at_path<"$.seats">(bytes)
@@ -4604,9 +4540,6 @@ public:
      * The checks and the errors of cbor::schema::unverified_path() apply; it also checks the nesting depth.
      * It does not check the order of the references and of the items.
      *
-     * @code{.callseq}
-     * cbor::schema<T>::unverified_decode(std::move(bytes)) → std::expected<cbor::ref<T>, cbor::error>
-     * @endcode
      * @code{.example}
      * bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
      * call: (*cbor::schema<car>::unverified_decode(std::string(bytes)))->make
@@ -4677,10 +4610,6 @@ public:
      * An error of the message writer comes back as its `cbor::error`.
      * A struct with no cbor::tag, two structs with one tag, or a tag of a standard type does not compile.
      *
-     * @code{.callseq}
-     * cbor::schema<T>::encode(value)         → std::expected<std::string, cbor::error>
-     * cbor::schema<T>::encode(value, target) → std::expected<std::size_t, cbor::error>
-     * @endcode
      * @code{.example}
      * bytes: d8 71 82 9a 00 00 00 10 d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 5a 00 00 00 00 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 08 d8 80 9a 00 00 00 02 19 00 11 fa 40 20 00 00
      * call: cbor::schema<tire>::encode(tire{17, 2.5f})

@@ -98,9 +98,6 @@ struct zone_owner {
  * `tagged` is the tag node in `tree`.
  * cbor::decode() decodes that content when it decodes the tree, so the call only looks it up.
  *
- * @code{.callseq}
- * cbor::encoded_cbor_data_item(*tree, **tree) → std::expected<std::reference_wrapper<item const>, error>
- * @endcode
  * @code{.example}
  * bytes: d8 18 42 61 61
  * call: auto const tree = cbor::decode(bytes)
@@ -403,9 +400,6 @@ std::expected<decoded_tree, error> decode_tree(std::string_view const encoded)
  * One leading tag 55799 is read as its content, so the root is that content.
  * A second tag 55799 and a tag 55799 inside an item stay tag nodes.
  *
- * @code{.callseq}
- * cbor::decode(bytes) → std::expected<owning<item>, error>
- * @endcode
  * @code{.example}
  * message: ["hi", 1]
  * call: auto const tree = cbor::decode(bytes)

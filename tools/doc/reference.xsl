@@ -30,7 +30,7 @@
       <xsl:variable name="holders" select="doxygenindex/compound[member/@refid=$id]"/>
       <xsl:variable name="holder" select="($holders[@kind='group'] | $holders[@kind='namespace'][not($holders[@kind='group'])])[1]"/>
       <xsl:variable name="all" select="document(concat($holder/@refid, '.xml'), /)//memberdef[qualifiedname=$name]"/>
-      <xsl:apply-templates select="($all[.//programlisting[@filename='.callseq']] | $all[normalize-space(briefdescription)])[1]" mode="page">
+      <xsl:apply-templates select="($all[.//programlisting[@filename='.example' or @filename='.output']] | $all[normalize-space(briefdescription)])[1]" mode="page">
         <xsl:with-param name="all" select="$all"/>
       </xsl:apply-templates>
     </xsl:when>
@@ -40,7 +40,7 @@
     <xsl:when test="$owner">
       <xsl:variable name="c" select="document(concat($owner/@refid, '.xml'), /)/doxygen/compounddef"/>
       <xsl:variable name="all" select="$c/sectiondef[starts-with(@kind, 'public')]/memberdef[@kind='function' and name=$member_name][not(contains(argsstring, '=delete'))]"/>
-      <xsl:apply-templates select="$all[.//programlisting[@filename='.callseq']][1]" mode="page">
+      <xsl:apply-templates select="$all[.//programlisting[@filename='.example' or @filename='.output']][1]" mode="page">
         <xsl:with-param name="all" select="$all"/>
         <xsl:with-param name="owner" select="$c"/>
       </xsl:apply-templates>
@@ -105,9 +105,6 @@
     </xsl:choose>
   </xsl:for-each>
   <xsl:value-of select="concat('```', $nl)"/>
-  <xsl:for-each select="$ds//programlisting[@filename='.callseq']">
-    <xsl:call-template name="fence"><xsl:with-param name="info" select="'call-seq'"/></xsl:call-template>
-  </xsl:for-each>
   <xsl:for-each select="$ds//programlisting[@filename='.example']">
     <xsl:call-template name="fence"><xsl:with-param name="info" select="'example'"/></xsl:call-template>
   </xsl:for-each>
@@ -187,7 +184,7 @@
   <xsl:variable name="retvals" select="$retvals_all[not(normalize-space(parameternamelist/parametername) = preceding::parameteritem[count(. | $retvals_all) = count($retvals_all)]/parameternamelist/parametername)]"/>
   <xsl:variable name="error_paras_all" select="$ds//*[title='Errors']/para[not(ancestor::simplesect)][text()[normalize-space()] or computeroutput or ref or ulink or bold or emphasis]"/>
   <xsl:variable name="error_paras" select="$error_paras_all[not(normalize-space(.) = preceding::para[count(. | $error_paras_all) = count($error_paras_all)])]"/>
-  <xsl:variable name="paged" select="sectiondef[starts-with(@kind, 'public')]/memberdef[@kind='function'][.//programlisting[@filename='.callseq']]/name"/>
+  <xsl:variable name="paged" select="sectiondef[starts-with(@kind, 'public')]/memberdef[@kind='function'][.//programlisting[@filename='.example' or @filename='.output']]/name"/>
   <xsl:variable name="throws_all" select="$ds//parameterlist[@kind='exception']/parameteritem | sectiondef[starts-with(@kind, 'public')]/memberdef[not(name = $paged)]/detaileddescription//parameterlist[@kind='exception']/parameteritem"/>
   <xsl:variable name="throws" select="$throws_all[not(string(parameterdescription) = preceding::parameteritem[count(. | $throws_all) = count($throws_all)]/parameterdescription)]"/>
   <xsl:if test="$retvals or $throws or $error_paras">
@@ -329,7 +326,7 @@
   <xsl:variable name="member" select="$index/doxygenindex/compound/member[@refid=$refid]"/>
   <xsl:choose>
     <xsl:when test="$compound"><xsl:call-template name="last"><xsl:with-param name="s" select="normalize-space(str:split(concat($compound/name, '&lt;'), '&lt;')[1])"/></xsl:call-template></xsl:when>
-    <xsl:when test="($member/../@kind='class' or $member/../@kind='struct') and document(concat($member/../@refid, '.xml'), $index)//memberdef[name=$member/name][.//programlisting[@filename='.callseq']]">
+    <xsl:when test="($member/../@kind='class' or $member/../@kind='struct') and document(concat($member/../@refid, '.xml'), $index)//memberdef[name=$member/name][.//programlisting[@filename='.example' or @filename='.output']]">
       <xsl:choose>
         <xsl:when test="$member/name = 'operator[]'">operator_subscript</xsl:when>
         <xsl:otherwise><xsl:value-of select="$member/name"/></xsl:otherwise>

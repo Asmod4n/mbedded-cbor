@@ -48,10 +48,6 @@ struct key {
  * It checks no grammar; cbor::is_valid_path_v does.
  * A text that is not a constant expression does not compile.
  *
- * @code{.callseq}
- * cbor::at_path<"$.id", std::int64_t>(bytes) → std::expected<std::int64_t, error>
- * Path.view()                                → std::string_view
- * @endcode
  * @code{.example}
  * message: {"id": 42}
  * call: cbor::at_path<"$.id", std::int64_t>(bytes).value_or(0)
@@ -94,10 +90,6 @@ class is_valid_path;
  * A path with `match` or `search` is not valid here.
  * `lazy.at_path<Path>()` and `lazy.at_path<Path, cbor::nodelist>()` require a valid path.
  *
- * @code{.callseq}
- * cbor::is_valid_path_v<"$..a">                               → bool
- * cbor::path::compile<cbor::nodelist>("$..a").has_value() → bool
- * @endcode
  * @code{.example}
  * message: {"a": 1}
  * call: cbor::path::compile<cbor::nodelist>("$..a").has_value()
@@ -130,10 +122,6 @@ class is_singular_query;
  * Every form of cbor::at_path() with a path at compile time requires it.
  * A path that is not singular reads only into a cbor::nodelist.
  *
- * @code{.callseq}
- * cbor::is_singular_query_v<"$.a[0]">                       → bool
- * cbor::path::compile<cbor::lazy>("$.a[0]").has_value() → bool
- * @endcode
  * @code{.example}
  * message: {"a": [{"b": 1}]}
  * call: cbor::path::compile<cbor::lazy>("$.a[0]['b']").has_value()

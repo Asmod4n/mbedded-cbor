@@ -92,11 +92,6 @@ using item_alternative_t = typename item_alternative<K>::type;
  * An item gives no error.
  * `type` and `additional_information` are data members.
  *
- * @code{.callseq}
- * (*tree)->type                     → cbor::type const
- * (*tree)->additional_information   → std::uint8_t const
- * (*tree)->get<cbor::type::array>() → std::expected<std::span<item const>, error>
- * @endcode
  * @code{.example}
  * message: [1, {"a": 2}]
  * call: auto const tree = cbor::decode(bytes)
@@ -138,13 +133,6 @@ struct item {
      * A view and a pointer in the result point into the tree.
      * `incorrect_type`: `type` is not `K`.
      *
-     * @code{.callseq}
-     * node.get<cbor::type::unsigned_integer>() → std::expected<std::uint64_t, error>
-     * node.get<cbor::type::text_string>()      → std::expected<std::string_view, error>
-     * node.get<cbor::type::map>()              → std::expected<std::span<item const>, error>
-     * node.get<cbor::type::tag>()              → std::expected<std::pair<std::uint64_t, item const *>, error>
-     * node.get<cbor::type::null>()             → std::expected<simple_value, error>
-     * @endcode
      * @code{.example}
      * message: {"a": -3}
      * call: auto const tree = cbor::decode(bytes)

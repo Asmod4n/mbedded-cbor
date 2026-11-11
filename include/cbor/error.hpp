@@ -28,10 +28,6 @@ namespace cbor
  * The first value is 1, so a `std::error_code` from a `cbor::error` is always true as a `bool`.
  * A wrong use of the library is not an error value: it does not compile, or it throws `std::logic_error`.
  *
- * @code{.callseq}
- * cbor::error::key_not_found   → cbor::error
- * std::error_code{e}.message() → std::string
- * @endcode
  * @code{.example}
  * message: {"user": {"id": 42}}
  * call: cbor::at_path<"$.user.id", std::int64_t>(bytes)
@@ -130,11 +126,6 @@ enum class error {
  * Every other error maps to a condition of this category.
  * So only these four compare equal to a `std::errc`.
  *
- * @code{.callseq}
- * cbor::category().name()                             → char const *
- * cbor::category().message(condition)                 → std::string
- * cbor::category().default_error_condition(condition) → std::error_condition
- * @endcode
  * @code{.example}
  * message: {}
  * call: std::error_code const e{cbor::error::no_buffer_space}
@@ -266,10 +257,6 @@ public:
  * Its name is `"cbor"`.
  * A `std::error_code` made from a `cbor::error` holds this category.
  *
- * @code{.callseq}
- * cbor::category()        → std::error_category const &
- * cbor::category().name() → char const *
- * @endcode
  * @code{.example}
  * message: {}
  * call: std::error_code const e{cbor::error::syntax_error}
@@ -299,9 +286,6 @@ inline std::error_category const &category() noexcept
  * The constructor of `std::error_code` from a `cbor::error` calls it by argument-dependent lookup.
  * So a program seldom calls it by name.
  *
- * @code{.callseq}
- * cbor::make_error_code(e) → std::error_code
- * @endcode
  * @code{.example}
  * message: {}
  * call: std::error_code const e = cbor::make_error_code(cbor::error::invalid_path)
@@ -334,10 +318,6 @@ inline std::error_code make_error_code(error const e) noexcept
  * A `cbor::error` and a `std::errc` do not compare directly: that does not compile.
  * Put a `std::error_code` on the left.
  *
- * @code{.callseq}
- * std::is_error_code_enum_v<cbor::error> → bool
- * std::error_code e{cbor::error::x}      → std::error_code
- * @endcode
  * @code{.example}
  * message: {}
  * call: std::is_error_code_enum_v<cbor::error>

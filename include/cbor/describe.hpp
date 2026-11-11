@@ -60,10 +60,6 @@ struct map_key {
  * A pointer to a static member or to a member function does not compile.
  * A `bool` or a character type as the key does not compile.
  *
- * @code{.callseq}
- * cbor::member{0, &senml::n}          → cbor::member<std::string senml::*>
- * cbor::member{"name", &person::name} → cbor::member<std::string person::*>
- * @endcode
  * @code{.example}
  * bytes: a2 00 61 74 02 f9 3e 00
  * call: auto const encoded = cbor::structs<senml>::encode(senml{"t", 1.5})
@@ -116,10 +112,6 @@ struct member {
  * With reflection, a list that differs from the public data members does not compile.
  * An annotation on `T` does not compile.
  *
- * @code{.callseq}
- * cbor::has_describe_members<T>   → bool
- * cbor::structs<T>::encode(value) → std::expected<std::string, cbor::error>
- * @endcode
  * @code{.example}
  * message: {"content-type": "text/plain"}
  * call: cbor::has_describe_members<header>
@@ -188,9 +180,6 @@ class describe
  * A type whose name holds a comma needs a type alias.
  * The errors of cbor::member apply.
  *
- * @code{.callseq}
- * CBOR_MEMBER(account, user) → cbor::member<std::string account::*>
- * @endcode
  * @code{.example}
  * message: {"user": "ann", "level": 2}
  * call: auto const encoded = cbor::structs<account>::encode(account{"ann", 2})
@@ -252,9 +241,6 @@ class describe
  * A list of more than 343 names does not compile.
  * The errors of cbor::describe_members apply.
  *
- * @code{.callseq}
- * CBOR_DEFINE_TYPE_MEMBERS(device, cbor::untagged, name, port)
- * @endcode
  * @code{.example}
  * message: {"name": "lamp", "port": 3}
  * call: cbor::has_describe_members<device>

@@ -48,12 +48,6 @@ namespace cbor
  * A `std::shared_ptr` to bytes that are not const does not compile.
  * The reader cannot be copied.
  *
- * @code{.callseq}
- * cbor::sequence_reader r  → sequence_reader
- * r.feed(std::move(piece)) → void
- * r.next()                 → std::expected<lazy, error>
- * r.empty()                → bool
- * @endcode
  * @code{.example}
  * bytes: 82 01 02 03
  * call: cbor::sequence_reader r

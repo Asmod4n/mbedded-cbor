@@ -61,12 +61,6 @@ struct lazy;
  * The `Encoded &&` forms move the bytes into a new owner.
  * A path that is not valid or not singular does not compile.
  *
- * @code{.callseq}
- * cbor::at_path<"$.user.id", std::int64_t>(bytes)       → std::expected<std::int64_t, error>
- * cbor::at_path<"$.user.name", std::string_view>(owner) → std::expected<ref<std::string_view>, error>
- * cbor::at_path(bytes, q)                               → std::expected<T, error>
- * cbor::at_path(owner, q)                               → std::expected<query<T>::result_type, error>
- * @endcode
  * @code{.example}
  * message: {"user": {"id": 42, "name": "ann"}}
  * call: cbor::at_path<"$.user.id", std::int64_t>(bytes)
@@ -1027,10 +1021,6 @@ public:
      * `result_type` is `ref<T>` for a view type `T`, and `T` otherwise.
      * A moved-from query throws `std::logic_error` when it is applied.
      *
-     * @code{.callseq}
-     * cbor::path::compile<std::int64_t>("$.id").value() → query<std::int64_t>
-     * cbor::at_path(bytes, q)                               → std::expected<std::int64_t, error>
-     * @endcode
      * @code{.example}
      * message: {"id": 1}
      * call: auto const q = cbor::path::compile<std::int64_t>("$.id").value()
@@ -1105,9 +1095,6 @@ public:
      * filters.
      * `T` outside `path_result` does not compile.
      *
-     * @code{.callseq}
-     * cbor::path::compile<T>(path) → std::expected<query<T>, error>
-     * @endcode
      * @code{.example}
      * message: {"a": [1, 2, 3]}
      * call: auto const owner = std::make_shared<std::string const>(bytes)
