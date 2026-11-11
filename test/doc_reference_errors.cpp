@@ -16,6 +16,24 @@ using namespace std::string_literals;
 // example through the snippet markers. The tests exist so that every example compiles and gives the result that its
 // page states.
 
+// tools/doc/groups/errors.dox, snippet errors group: the EXAMPLES section of the man page of the group errors reads a
+// missing key with cbor::lazy, and turns its error into a std::error_code. The test checks each value that the
+// comments of the example state.
+TEST_CASE("doc reference errors: the example of the group errors")
+{
+    std::string bytes = test::preferred(test::M("a"s, 1));
+    // [errors group]
+    // bytes: a std::string with {"a": 1}
+    auto const doc = cbor::lazy::adopt(std::move(bytes));
+    auto const e = doc->at("b").error();                     // key_not_found
+    std::error_code const code{e};
+    std::string const text = code.message();                 // "key not found"
+    // [errors group]
+    REQUIRE(doc);
+    CHECK_EQ(e, cbor::error::key_not_found);
+    CHECK_EQ(text, "key not found"s);
+}
+
 // error.hpp, snippet error: a missing key comes back as the value key_not_found, and its text comes from
 // std::error_code.
 TEST_CASE("doc reference errors: error")

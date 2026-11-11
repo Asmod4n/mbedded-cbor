@@ -1,3 +1,137 @@
 /**
 @defgroup errors the error values of the library and the limits of a build
+
+A call that reads CBOR gives a `std::expected` with a `cbor::error` when
+it fails. Bad input never throws. The `cbor::error` names the fault.
+Include `<cbor/cbor.hpp>`.
+
+A `cbor::error` converts to a `std::error_code` of the category
+`cbor::category()`. The message of that `std::error_code` is the text of
+the fault.
+
+A limit of the build stops input that holds a string or a container that
+is too large. A macro sets each limit. `cbor::limits` gives its value.
+
+@section errors_values THE ERROR VALUES
+
+Each value is one enumerator of `cbor::error`.
+
+- `too_little_data`: the bytes end before the item ends.
+- `syntax_error`: a head is not well-formed, or a simple value is reserved in the two-byte form.
+  A call that reads exactly one item finds bytes after it: `cbor::diagnostic_notation` and the
+  content of a tag 24.
+- `indefinite_length`: a head uses indefinite length, and the call does not read it.
+- `nesting_depth_exceeded`: a reader that recurses reaches the end of the stack of its thread (`cbor::limits`).
+- `inadmissible_type_for_tag_content`: a tag has content that its definition does not allow.
+- `sharedref_index_not_marked`: a tag 29 names no tag 28 before it.
+- `sharedref_not_complete`: `cbor::structs` %decode meets a tag 29 that names a tag 28 in a skipped member.
+- `sharedref_not_defined`: `cbor::decode` meets a tag 29 that names a tag 28 whose content is only tags 28 and this tag 29.
+- `reserved_simple_value`: an encode meets a simple value from 24 to 31.
+- `unsupported_value`: the encoder meets a typed array with a reserved tag, or a tag outside RFC 8746; `cbor::encode()` writes a tag 29 only with `cbor::cycles`.
+- `not_indexable`: a key or an index meets an item that is not a map or an array.
+- `index_out_of_bounds`: the index is outside the array.
+- `key_not_found`: the key is not in the map.
+- `invalid_path`: the text of a %path is not valid.
+- `incorrect_type`: a typed read finds another kind of item than the type `T` takes.
+- `number_out_of_range`: the number does not fit `T`.
+- `cyclic_data_structure`: the library does not return it. A writer of the program can return it for a cycle.
+- `unpopulated_table_index`: a reference in a `cbor::schema<T>` message names an entry that its table does not have.
+- `nodelist_too_long`: one step of a %path selects more nodes than the item has bytes.
+- `duplicate_key`: a deterministic check finds a key twice in one map.
+- `no_buffer_space`: the writer of an encode gives this error.
+- `value_too_large`: the writer of an encode gives this error.
+- `not_enough_memory`: the writer of an encode gives this error. A refused allocation in `cbor::structs` or `cbor::schema` %decode gives it too.
+- `io_error`: the writer of an encode gives this error.
+- `string_length_exceeded`: a string is longer than `cbor::limits::string_length`.
+- `container_elements_exceeded`: a container has more items than `cbor::limits::container_elements`.
+- `not_singular_query`: `cbor::path::compile<T>` gets a %path that is not singular, and `T` is not `nodelist`.
+- `amplification_limit_breach`: `cbor::encode()` with `cbor::cycles` would write more than `cbor::limits::maximum_amplification` times the size of the tree, past `cbor::limits::amplification_activation_threshold`.
+
+@section errors_conversion THE CONVERSION TO std::error_code
+
+`std::is_error_code_enum` is true for `cbor::error`. So a `cbor::error`
+converts to a `std::error_code` with no cast. `cbor::make_error_code()`
+makes the same value. A program seldom calls it by name.
+
+A `std::error_code` compares equal to a `cbor::error` with `==`.
+
+The category is `cbor::category()`. Its name is `cbor`. Each call gives
+the same object. Its `message()` gives the text of an error. A value that
+is no `cbor::error` gives `unknown cbor error`.
+
+Four values of `cbor::error` compare equal to a `std::errc`:`no_buffer_space`,
+`value_too_large`, `not_enough_memory` and `io_error`. Each one compares
+equal to the `std::errc` of the same name. No other error compares equal
+to a `std::errc`.
+
+A `cbor::error` and a `std::errc` do not compare directly. The direct
+comparison does not compile. Put the `std::error_code` on the left.
+
+@section errors_wrong_use WRONG USE
+
+A wrong use of the library does not compile where the compiler can see
+it. For example, a temporary `std::string` as the bytes of a view does
+not compile.
+
+Where the compiler cannot see a wrong use, the library throws
+`std::logic_error`. For example:
+
+- an empty owner, or a null `std::shared_ptr<std::string const>`;
+- a `cbor::lazy{}` that holds no item.
+
+`std::logic_error` is a fault of the program, not of the input.
+
+@section errors_limits THE LIMITS OF A BUILD
+
+Each limit is a `static constexpr` member of `cbor::limits`. No call
+reads a limit at run time.
+
+- `CBOR_STRING_LENGTH_DEFAULT` sets `cbor::limits::string_length`. It counts the bytes of one text or byte string. Its error is `string_length_exceeded`.
+- `CBOR_CONTAINER_ELEMENTS_DEFAULT` sets `cbor::limits::container_elements`. It counts the elements of one array, or the pairs of one map. Its error is `container_elements_exceeded`.
+- `CBOR_AMPLIFICATION_ACTIVATION_THRESHOLD_DEFAULT` sets `cbor::limits::amplification_activation_threshold`. Its default is 8388608 bytes (8 MiB). Its error is `amplification_limit_breach`.
+- `CBOR_MAXIMUM_AMPLIFICATION_DEFAULT` sets `cbor::limits::maximum_amplification`. Its default is 100. Its error is `amplification_limit_breach`.
+
+A macro that the build does not set takes its default. The default of the
+first two limits is `SIZE_MAX`. A limit at `SIZE_MAX` is not set, and its
+check is not in the program. Every translation unit of one program uses
+the same values. A value that does not fit `std::size_t` does not
+compile.
+
+`cbor::encode()` with `cbor::cycles` gives `amplification_limit_breach`,
+and writes nothing, when the output would be larger than
+`cbor::limits::amplification_activation_threshold` and than
+`cbor::limits::maximum_amplification` times the tree.
+
+A limit counts what a call reads or decodes. An item that a call only
+skips does not count. The error comes at the read that meets the value.
+A count in the input reserves no memory. The library does not bound the
+size of the input. The program bounds it before it calls the library.
+
+Nesting has no fixed limit. A reader that recurses stops where the stack
+of its thread ends. A call that comes within 16 KiB of the end of the
+stack gives `nesting_depth_exceeded`. On Windows, and with a sanitizer,
+the distance is 32 KiB.
+
+Each thread reads the bounds of its own stack once, at its first check.
+On Linux (glibc and musl), macOS and Windows, the bounds come from the
+system. On WebAssembly without threads, and on picolibc, they come from
+the linker. Another target does not compile.
+
+A frame outside these bounds, such as the stack of a fiber or of a
+signal handler, is not checked. The first check of a thread does not run
+in a signal handler. On Linux, a change of `RLIMIT_STACK` after the first
+check is outside the bound. So is a mapping that a program places with
+`MAP_FIXED` below the stack of the main thread. On picolibc, a stack
+smaller than the reserve refuses every nested item.
+
+`cbor::item_size()`, `cbor::sequence_reader` and a %path of child
+segments do not recurse, so they read any depth. A deep value of a user
+type that `cbor::structs` or `cbor::schema` reads is destroyed and copied
+by its own recursion. A thread with a smaller stack than the one that
+decoded the value can overflow there.
+
+@manonly
+.SH "EXAMPLES"
+@endmanonly
+@snippet doc_reference_errors.cpp errors group
 */
