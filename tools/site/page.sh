@@ -51,13 +51,13 @@ podman run --rm --network none -e COMMIT="$commit" -e SITE_GROUPS="${SITE_GROUPS
   cp $site/style.css $site/site.js $site/examples.mjs /out/
   reference() {
     pandoc -f gfm -t html5 --template $site/reference.html --lua-filter $site/reference.lua \
-      -M tree=/src -M reference=$markdown -M impl=$work/impl -M types=$work/types -M commit=$COMMIT -M group=$1 -M examples=$work/examples-$1.json "$2" -o /out/$1.html
+      -M tree=/src -M reference=$markdown -M impl=$work/impl -M types=$work/types -M commit=$COMMIT -M group=$1 -M examples=$work/examples-$1.json ${3:+-M grouptext=$3} "$2" -o /out/$1.html
   }
   reference index $markdown/index.md
   reference console $markdown/console.md
   lynx -dump -nolist /out/console.html > $work/console.txt
   for g in ${SITE_GROUPS:-$groups}; do
-    reference $g $markdown/$g/index.md
+    reference $g $markdown/$g/index.md $markdown/groups/$g.md
     lynx -dump -nolist /out/$g.html > $work/$g.txt
   done
   node $site/check_examples.mjs /out/examples.wasm $work /src/include/cbor/error.hpp'

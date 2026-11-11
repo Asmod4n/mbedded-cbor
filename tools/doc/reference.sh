@@ -34,4 +34,10 @@ podman run --rm --network none -v "$tree":/src:ro -v "$out":/out mbedded-cbor-do
     fi
     mkdir -p /out/$group
     xsltproc --stringparam name "$name" --stringparam group "$group" tools/doc/reference.xsl $xml/index.xml > /out/$group/$file.md
-  done < /tmp/names.txt'
+  done < /tmp/names.txt
+  mkdir -p /out/groups
+  for file in $xml/group__*.xml; do
+    group=$(basename $file .xml)
+    group=${group#group__}
+    xsltproc --stringparam group "$group" tools/doc/group.xsl $xml/index.xml > /out/groups/$group.md
+  done'

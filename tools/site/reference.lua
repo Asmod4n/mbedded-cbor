@@ -375,6 +375,15 @@ function Pandoc(doc)
   local at = typed and 2 or 1
   for i, b in ipairs(extra) do table.insert(blocks, at + i - 1, b) end
   for i, m in ipairs(extra_methods) do table.insert(methods, at + i - 1, m) end
+  if doc.meta.grouptext then
+    local path = pandoc.utils.stringify(doc.meta.grouptext)
+    local text = read_file(path)
+    if text == nil then error("reference.lua: cannot read " .. path) end
+    local text_blocks = { pandoc.RawBlock("html", '<div class="group-text">') }
+    for _, b in ipairs(pandoc.read(text, "gfm"):walk(links).blocks) do text_blocks[#text_blocks + 1] = b end
+    text_blocks[#text_blocks + 1] = pandoc.RawBlock("html", "</div>")
+    for i, b in ipairs(text_blocks) do table.insert(blocks, i, b) end
+  end
   doc.meta.methods = pandoc.MetaList(methods)
   examples_write()
   return pandoc.Pandoc(blocks, doc.meta)
