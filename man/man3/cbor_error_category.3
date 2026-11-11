@@ -1,0 +1,83 @@
+.TH "cbor::error_category" 3 "Version 0.9.0" "mbedded-cbor" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+cbor::error_category \- The \fRstd::error_category\fP of \fBcbor::error\fP\&.  
+
+.SH SYNOPSIS
+.br
+.PP
+.PP
+\fR#include <cbor/error\&.hpp>\fP
+.SS "Public Member Functions"
+
+.in +1c
+.ti -1c
+.RI "char const * \fBname\fP () const noexcept override"
+.br
+.RI "Gives the name of the category\&. "
+.ti -1c
+.RI "std::string \fBmessage\fP (int const condition) const override"
+.br
+.RI "Gives the text of an error\&. "
+.ti -1c
+.RI "std::error_condition \fBdefault_error_condition\fP (int const condition) const noexcept override"
+.br
+.RI "Gives the condition that an error compares equal to\&. "
+.in -1c
+.SH "DESCRIPTION"
+.PP 
+The \fRstd::error_category\fP of \fBcbor::error\fP\&. 
+
+A program reaches it through \fBcbor::category()\fP\&. \fR\fBname()\fP\fP gives \fR"cbor"\fP\&. \fR\fBmessage\fP\fP gives the text of the error, for example \fR"key not found"\fP, and \fR"unknown cbor \fBerror\fP"\fP for a value that is no \fR\fBcbor::error\fP\fP\&.
+
+.PP
+\fR\fBdefault_error_condition\fP\fP maps four errors to a \fRstd::errc\fP: \fRno_buffer_space\fP, \fRvalue_too_large\fP, \fRnot_enough_memory\fP and \fRio_error\fP, each to the \fRstd::errc\fP of the same name\&. Every other error maps to a condition of this category\&. So only these four compare equal to a \fRstd::errc\fP\&.
+
+.PP
+.PP
+.nf
+cbor::category()\&.name()                             → char const *
+cbor::category()\&.message(condition)                 → std::string
+cbor::category()\&.default_error_condition(condition) → std::error_condition
+.fi
+.PP
+ 
+.PP
+.nf
+message: {}
+call: std::error_code const e{cbor::error::no_buffer_space}
+result: std::error_code cbor:21
+call: e\&.default_error_condition()\&.category()\&.name()
+result: "generic"
+call: std::error_code const t{cbor::error::too_little_data}
+result: std::error_code cbor:1
+call: t\&.default_error_condition()\&.category()\&.name()
+result: "cbor"
+call: cbor::category()\&.message(13)
+result: "key not found"
+call: cbor::category()\&.message(0)
+result: "unknown cbor error"
+
+.fi
+.PP
+
+.PP
+.PP
+.nf
+    bool const space = std::error_code{cbor::error::no_buffer_space} == std::errc::no_buffer_space;  // true
+    bool const other = std::error_code{cbor::error::too_little_data} == std::errc::no_message;       // false
+    std::string const unknown = cbor::category()\&.message(0);                                         // "unknown cbor error"
+.fi
+.PP
+ 
+.PP
+\fBSee also\fP
+.RS 4
+\fBcbor::category()\fP 
+
+.PP
+\fBstd::is_error_code_enum<cbor::error>\fP 
+.RE
+.PP
+

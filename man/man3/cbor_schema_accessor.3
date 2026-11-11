@@ -1,0 +1,252 @@
+.TH "cbor::schema< T >::accessor< U, Verified >" 3 "Version 0.9.0" "mbedded-cbor" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+cbor::schema::accessor \- Reads the part \fRU\fP of a message of \fRT\fP\&.  
+
+.SH SYNOPSIS
+.br
+.PP
+.PP
+\fR#include <cbor/schema\&.hpp>\fP
+.SS "Public Types"
+
+.in +1c
+.ti -1c
+.RI "using \fBiterator\fP = typename decltype(reflection::list_iterator_result<T, U, Verified>())::type"
+.br
+.in -1c
+.SS "Public Member Functions"
+
+.in +1c
+.ti -1c
+.RI "\fBaccessor\fP (accessor const &)=default"
+.br
+.ti -1c
+.RI "\fBaccessor\fP (accessor &&other) noexcept"
+.br
+.ti -1c
+.RI "accessor & \fBoperator=\fP (accessor const &)=default"
+.br
+.ti -1c
+.RI "accessor & \fBoperator=\fP (accessor &&other) noexcept"
+.br
+.ti -1c
+.RI "template<\fBfixed_string\fP Path, class Self, std::convertible_to< std::size_t >\&.\&.\&. Index>"
+.br
+requires (((Path\&.view()\&.starts_with('@') && reflection::path_valid<U, Path, 1>()) || (Path\&.view()\&.starts_with('$') &&
+.br
+ reflection::path_valid<T, Path, 1>())) && sizeof\&.\&.\&.(Index) == reflection::index_arguments<Path>() &&
+.br
+ std::is_lvalue_reference_v<Self>)
+.br
+auto \fBat_path\fP (this Self &&self, Index const \&.\&.\&. indexes)
+.br
+.ti -1c
+.RI "template<\fBfixed_string\fP Path, class Self, std::convertible_to< std::size_t >\&.\&.\&. Index>"
+.br
+requires (std::same_as<U, T> && Path\&.view()\&.starts_with('$') && reflection::path_valid<T, Path, 1>() && sizeof\&.\&.\&.(Index) 
+.br
+== reflection::index_arguments<Path>())
+.br
+auto \fBview\fP (this Self &&self, Index const \&.\&.\&. indexes)
+.br
+.ti -1c
+.RI "std::size_t \fBsize\fP () const"
+.br
+.ti -1c
+.RI "template<class Self>"
+.br
+requires (std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
+.br
+iterator \fBbegin\fP (this Self &&self)
+.br
+.ti -1c
+.RI "template<class Self>"
+.br
+requires (std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
+.br
+iterator \fBend\fP (this Self &&self)
+.br
+.ti -1c
+.RI "template<class Self>"
+.br
+requires (std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
+.br
+iterator \fBcbegin\fP (this Self &&self)
+.br
+.ti -1c
+.RI "template<class Self>"
+.br
+requires (std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
+.br
+iterator \fBcend\fP (this Self &&self)
+.br
+.ti -1c
+.RI "template<class Self>"
+.br
+requires (std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
+.br
+std::reverse_iterator< iterator > \fBrbegin\fP (this Self &&self)
+.br
+.ti -1c
+.RI "template<class Self>"
+.br
+requires (std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
+.br
+std::reverse_iterator< iterator > \fBrend\fP (this Self &&self)
+.br
+.ti -1c
+.RI "template<class Self>"
+.br
+requires (std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
+.br
+std::reverse_iterator< iterator > \fBcrbegin\fP (this Self &&self)
+.br
+.ti -1c
+.RI "template<class Self>"
+.br
+requires (std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
+.br
+std::reverse_iterator< iterator > \fBcrend\fP (this Self &&self)
+.br
+.in -1c
+.SH "DESCRIPTION"
+.PP 
+
+.SS "template<class T>
+.br
+template<class U = T, bool Verified = true>
+.br
+class cbor::schema< T >::accessor< U, Verified >"Reads the part \fRU\fP of a message of \fRT\fP\&. 
+
+A path that starts with \fR@\fP starts at \fRU\fP\&. A path that starts with \fR$\fP starts at the root\&. The result is a \fRstd::expected\fP: the value of a number, \fRbool\fP or enum; a \fRstd::string_view\fP of a text; the accessor of a struct, a list or a map\&. Every result holds the owner of the bytes\&. The accessor of a \fRstd::variant<A\&.\&.\&.>\fP member has \fRindex()\fP and \fRget<A>()\fP\&. \fRindex()\fP gives the index of the alternative that the head of its item names\&. \fRget<A>()\fP gives a class alternative as its accessor, a number, \fRbool\fP or enum as its value, and a text or byte string as a \fRstd::string_view\fP into the message\&. Another alternative gives \fRincorrect_type\fP\&. A path ends at a variant member: \fR$\&.pet\&.name\fP does not compile\&. \fRview\fP gives a \fBcbor::typed_array_view\fP of a list of numbers\&. It exists on the root accessor only\&. \fRsize()\fP gives the count of a list or a map\&. An accessor of a vector of fixed-size structs is a random access range of \fRfixed_element\fP accessors\&. \fR\fBat_path\fP\fP on a temporary does not compile\&.
+
+.PP
+.PP
+.nf
+accessor\&.at_path<"@\&.member">(indexes\&.\&.\&.) → std::expected<V, cbor::error>
+accessor\&.at_path<"$\&.member">(indexes\&.\&.\&.) → std::expected<V, cbor::error>
+root\&.view<"$\&.list">(indexes\&.\&.\&.)          → std::expected<cbor::typed_array_view<E>, cbor::error>
+accessor\&.size()                          → std::size_t
+pet\&.index()                              → std::size_t
+pet\&.get<A>()                             → std::expected<accessor<A>, cbor::error>
+accessor\&.begin()                         → iterator
+accessor\&.end()                           → iterator
+.fi
+.PP
+ 
+.PP
+.nf
+bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
+call: auto const root = cbor::schema<car>::path(std::move(bytes))
+result: accessor of a car
+call: auto const tires = root\->at_path<"$\&.tires">()
+result: accessor of a std::vector<tire> of 2 elements
+call: tires\->size()
+result: 2
+call: tires\->at_path<"@[1]\&.diameter">()
+result: 18
+call: tires\->at_path<"$\&.seats">()
+result: 5
+call: auto const t = *tires\->begin()
+result: accessor of a tire in a std::vector<tire>
+call: t\&.at_path<"@\&.diameter">()
+result: 17
+call: auto const u = tires\->begin()[1]
+result: accessor of a tire in a std::vector<tire>
+call: u\&.at_path<"@\&.diameter">()
+result: 18
+call: root\->view<"$\&.track">()\->size()
+result: 3
+call: tires\->at_path<"@[]">(0u)
+result: accessor of a tire in a std::vector<tire>
+
+.fi
+.PP
+ 
+.PP
+.nf
+bytes: d8 71 82 9a 00 00 00 12 d8 72 81 63 70 65 74 d8 72 82 64 62 61 72 6b 64 6e 61 6d 65 d8 72 82 64 6e 61 6d 65 64 74 6f 79 73 5a 00 00 00 08 00 00 00 42 00 00 00 54 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 0b d8 81 9a 00 00 00 02 18 03 c6 3a 00 00 00 00 7a 00 00 00 03 72 65 78 d9 07 0d d8 80 9a 00 00 00 01 c6 1a 00 00 00 00
+call: auto const house = cbor::schema<home>::path(std::move(bytes))
+result: accessor of a home
+call: auto const pet = house\->at_path<"$\&.pet">()
+result: accessor of a std::variant<dog, cat> that holds a dog
+call: pet\->index()
+result: 0
+call: pet\->get<dog>()\->at_path<"@\&.name">()
+result: "rex"
+call: pet\->get<dog>()\->at_path<"@\&.bark">()
+result: 3
+call: pet\->get<cat>()
+result: unexpected cbor::error::incorrect_type
+
+.fi
+.PP
+ 
+.PP
+.nf
+bytes: d8 71 82 9a 00 00 00 12 d8 72 82 64 6e 61 6d 65 65 76 61 6c 75 65 5a 00 00 00 08 00 00 00 31 00 00 00 3b f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 77 69 64 74 68 1b 00 00 00 00 00 00 00 f0 d9 07 0e d8 80 9a 00 00 00 02 c6 1a 00 00 00 00 c6 3a 00 00 00 00
+call: auto const width = cbor::schema<property>::path(std::move(bytes))
+result: accessor of a property
+call: auto const value = width\->at_path<"$\&.value">()
+result: accessor of a std::variant<bool, std::int64_t, std::string> that holds a std::int64_t
+call: value\->index()
+result: 1
+call: value\->get<std::int64_t>()
+result: 240
+call: value\->get<std::string>()
+result: unexpected cbor::error::incorrect_type
+
+.fi
+.PP
+
+.PP
+\fBReturn values\fP
+.RS 4
+\fIindex_out_of_bounds\fP an index past the end of a list 
+.br
+\fIincorrect_type\fP a wrong head or tag on the path; a variant item whose head names no alternative; \fRget<A>()\fP of another alternative 
+.br
+\fIunpopulated_table_index,syntax_error\fP a broken reference 
+.PP
+.nf
+    // bytes: from schema<car>::encode(car{"Volvo", 5, {{17, 2\&.5f}, {18, 2\&.25f}}, {1\&.0, 2\&.0, 3\&.0}})
+    auto const root = cbor::schema<car>::path(std::move(bytes));
+    auto const tires = root\->at_path<"$\&.tires">();
+    auto const count = tires\->size();                       // 2
+    auto const second = tires\->at_path<"@[1]\&.diameter">();  // 18
+    auto const seats = tires\->at_path<"$\&.seats">();         // 5
+    for (auto const t : *tires)
+        seen\&.push_back(*t\&.at_path<"@\&.diameter">());         // 17, then 18
+    auto const track = root\->view<"$\&.track">();             // 3 numbers
+.fi
+.PP
+ 
+.PP
+.nf
+    // home: struct { std::variant<dog, cat> pet; }; bytes: from schema<home>::encode(home{dog{{"rex"}, 3}})
+    auto const doc = cbor::schema<home>::path(std::string(*bytes));
+    auto const pet = doc\->at_path<"$\&.pet">();
+    auto const held = pet\->index();                         // 0
+    auto const name = pet\->get<dog>()\->at_path<"@\&.name">();  // "rex"
+    auto const other = pet\->get<cat>();                     // error::incorrect_type
+.fi
+.PP
+ 
+.RE
+.PP
+\fBSee also\fP
+.RS 4
+cbor::schema::path() 
+
+.PP
+\fBcbor::typed_array_view\fP 
+.RE
+.PP
+\fBExceptions\fP
+.RS 4
+\fIstd::logic_error\fP a call on a moved-from accessor 
+.RE
+.PP
+

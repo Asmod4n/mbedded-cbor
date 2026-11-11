@@ -1,0 +1,356 @@
+.TH "path" 3 "Version 0.9.0" "mbedded-cbor" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+path \- read a CBOR value by its JSONPath (RFC 9535)
+.SH SYNOPSIS
+.br
+.PP
+.SS "Classes"
+
+.in +1c
+.ti -1c
+.RI "struct \fBcbor::fixed_string< N >\fP"
+.br
+.RI "The type of a path at compile time\&. "
+.ti -1c
+.RI "class \fBcbor::path::query< T >\fP"
+.br
+.RI "A parsed run-time path with the result type \fRT\fP\&. "
+.in -1c
+.SS "Typedefs"
+
+.in +1c
+.ti -1c
+.RI "using \fBcbor::nodelist\fP = std::vector<\fBlazy\fP>"
+.br
+.RI "The result of a path that can select many nodes: a wildcard, a descendant segment, a slice, a filter or several selectors\&. "
+.in -1c
+.SS "Functions"
+
+.in +1c
+.ti -1c
+.RI "template<\fBfixed_string\fP Path, class T>"
+.br
+requires (\fBis_singular_query_v\fP<Path> && scalar_result<T>)
+.br
+std::expected< T, \fBerror\fP > \fBcbor::at_path\fP (std::string_view encoded)
+.br
+.RI "Reads the value at a JSONPath (RFC 9535) in \fRencoded\fP, with no decode of the rest\&. "
+.ti -1c
+.RI "template<\fBfixed_string\fP Path, class T, borrowed_range_of_chars Encoded>"
+.br
+requires (\fBis_singular_query_v\fP<Path> && view_result<T>)
+.br
+std::expected< \fBref\fP< T >, \fBerror\fP > \fBcbor::at_path\fP (std::shared_ptr< void const > owner, Encoded const &encoded)
+.br
+.RI "Reads a view at a path in bytes that \fRowner\fP keeps alive\&. "
+.ti -1c
+.RI "template<\fBfixed_string\fP Path, class T, owning_range_of_chars Encoded>"
+.br
+requires (\fBis_singular_query_v\fP<Path> && view_result<T>)
+.br
+std::expected< \fBref\fP< T >, \fBerror\fP > \fBcbor::at_path\fP (std::shared_ptr< Encoded const > owner)
+.br
+.RI "Reads a view at a path in the bytes of \fR*owner\fP\&. "
+.ti -1c
+.RI "template<\fBfixed_string\fP Path, class T, owning_range_of_chars Encoded>"
+.br
+requires (\fBis_singular_query_v\fP<Path> && view_result<T>)
+.br
+std::expected< \fBref\fP< T >, \fBerror\fP > \fBcbor::at_path\fP (Encoded &&encoded)
+.br
+.RI "Reads a view at a path, and moves the bytes into a new owner\&. "
+.ti -1c
+.RI "template<\fBfixed_string\fP Path, copied_value T>"
+.br
+requires \fBis_singular_query_v\fP<Path>
+.br
+std::expected< T, \fBerror\fP > \fBcbor::at_path\fP (std::basic_string_view< char > encoded)
+.br
+.RI "Copies the text or the bytes at a path out of \fRencoded\fP\&. "
+.ti -1c
+.RI "template<scalar_result T> std::expected< T, \fBerror\fP > \fBcbor::at_path\fP (std::string_view const encoded, \fBpath::query\fP< T > const &e)"
+.br
+.RI "Reads a scalar at a query in \fRencoded\fP\&. "
+.ti -1c
+.RI "template<view_result T, borrowed_range_of_chars Encoded> std::expected< \fBref\fP< T >, \fBerror\fP > \fBcbor::at_path\fP (std::shared_ptr< void const > owner, Encoded const &encoded, \fBpath::query\fP< T > const &e)"
+.br
+.RI "Reads a view at a query in bytes that \fRowner\fP keeps alive\&. "
+.ti -1c
+.RI "template<class T, owning_range_of_chars Encoded>"
+.br
+requires (view_result<T> || std::is_same_v<T, \fBlazy\fP> || std::is_same_v<T, \fBnodelist\fP>)
+.br
+std::expected< typename \fBpath::query\fP< T >::result_type, \fBerror\fP > \fBcbor::at_path\fP (std::shared_ptr< Encoded const > owner, \fBpath::query\fP< T > const &e)
+.br
+.RI "Reads the result of a query in the bytes of \fR*owner\fP\&. "
+.ti -1c
+.RI "template<class T, owning_range_of_chars Encoded>"
+.br
+requires (view_result<T> || std::is_same_v<T, \fBlazy\fP> || std::is_same_v<T, \fBnodelist\fP>)
+.br
+std::expected< typename \fBpath::query\fP< T >::result_type, \fBerror\fP > \fBcbor::at_path\fP (Encoded &&encoded, \fBpath::query\fP< T > const &e)
+.br
+.RI "Reads the result of a query, and moves the bytes into a new owner\&. "
+.in -1c
+.SS "Variables"
+
+.in +1c
+.ti -1c
+.RI "template<\fBfixed_string\fP Path> constexpr bool \fBcbor::is_valid_path_v\fP = is_valid_path<Path>::value"
+.br
+.RI "True when the grammar of RFC 9535, with EDN literals, accepts \fRPath\fP\&. "
+.ti -1c
+.RI "template<\fBfixed_string\fP Path> constexpr bool \fBcbor::is_singular_query_v\fP = is_singular_query<Path>::value"
+.br
+.RI "True when \fRPath\fP is valid and is a singular query (RFC 9535 2\&.3\&.5\&.1)\&. "
+.in -1c
+.SH "DESCRIPTION"
+.PP 
+\fR\fBcbor::at_path\fP\fP reads one value from CBOR bytes by its JSONPath (RFC 9535), with no decode of the rest\&. A path also reads CBOR that JSON does not have: keys that are not text, tags and typed arrays\&. A path that selects many nodes gives a \fR\fBcbor::nodelist\fP\fP\&. Include \fR<\fBcbor/cbor\&.hpp\fP>\fP\&.
+
+.PP
+A path is a string literal that the compiler checks, or a string that \fRcbor::path::compile\fP parses once at run time\&. Both read the same grammar\&. The call reads the bytes in place\&. It does not copy the bytes and keeps nothing\&. It reads the heads from the start of the item to the target and no byte after the target\&.
+.SH "THE FORMS"
+.PP
+A path at compile time is a string literal\&. A path that is not valid, or that selects many nodes where one node is expected, does not compile\&. The type of the literal is \fR\fBcbor::fixed_string\fP\fP\&. A template of the program names it to pass a path on\&.
+
+.PP
+.IP "\(bu" 2
+\fR\fBcbor::at_path\fP<Path, T>(encoded)\fP: \fRencoded\fP is a \fRstd::string_view\fP, so a \fRstd::string\fP or one element of a \fR\fBcbor::sequence\fP\fP goes in directly\&. For a number, a truth value, \fRstd::nullptr_t\fP or \fRcbor::simple_value\fP, it gives \fRstd::expected<T, \fBcbor::error\fP>\fP\&. For \fRstd::string\fP or \fRstd::vector<std::byte>\fP, it copies the text or the bytes of the value\&.
+.IP "\(bu" 2
+\fR\fBcbor::at_path\fP<Path, T>(owner)\fP: \fRT\fP is a view type, and \fRowner\fP is a \fRstd::shared_ptr<std::string const>\fP\&. It gives \fRstd::expected<\fBcbor::ref\fP<T>, \fBcbor::error\fP>\fP\&.
+.IP "\(bu" 2
+\fR\fBcbor::at_path\fP<Path, T>(owner, view)\fP: \fRowner\fP is a \fRstd::shared_ptr<void const>\fP, and \fRview\fP is a borrowed range of \fRchar\fP that \fRowner\fP keeps alive\&. The call does not check that the owner holds the bytes\&.
+.IP "\(bu" 2
+\fR\fBcbor::at_path\fP<Path, T>(std::move(encoded))\fP: the rvalue \fRstd::string\fP moves into a new owner\&.
+.IP "\(bu" 2
+\fRlazy\&.at_path<Path, T>()\fP reads from a \fR\fBcbor::lazy\fP\fP, where \fR$\fP is the value of the lazy\&. \fRlazy\&.at_path<Path>()\fP gives the node as a \fR\fBcbor::lazy\fP\fP\&. \fRlazy\&.at_path<Path, \fBcbor::nodelist\fP>()\fP gives the nodelist\&.
+.IP "\(bu" 2
+\fRcbor::path::compile<T>\fP parses the text of a path at run time and gives a \fR\fBcbor::path::query\fP<T>\fP\&. The query owns its data, and one query applies to any number of items\&. An apply does not parse again\&.
+.IP "\(bu" 2
+\fRcbor::at_path(encoded, q)\fP, \fRcbor::at_path(owner, q)\fP, \fRcbor::at_path(owner, view, q)\fP, \fRcbor::at_path(std::move(encoded), q)\fP and \fRlazy\&.at_path(q)\fP apply a query\&. The result type is that of the forms above, with the \fRT\fP of the query\&.
+.PP
+
+.PP
+No free form takes a lazy\&. A lazy reads a path with its member \fRat_path\fP\&. \fRcbor::schema<T>::at_path\fP reads a member of a message that \fRcbor::schema<T>\fP wrote\&. Its path names members and indexes only\&.
+
+.PP
+\fRT\fP of a view is \fRstd::string_view\fP, \fRstd::span<std::byte const>\fP or \fRcbor::typed_array\fP\&. A view needs an owner of the bytes\&. A view type with a \fRstd::string_view\fP alone does not compile\&. A \fR\fBcbor::ref\fP\fP compares and reaches its value as \fRstd::optional\fP does\&. \fR\fBcbor::ref\fP<cbor::typed_array>\fP has no \fR==\fP\&.
+.SH "THE TYPES OF A READ"
+.PP
+.IP "\(bu" 2
+An integer type, also \fRchar\fP: an integer, or a tag 2 or 3 whose magnitude fits in 64 bits\&. A value out of range gives \fRnumber_out_of_range\fP\&.
+.IP "\(bu" 2
+\fRdouble\fP: a half, single or double float\&. It also reads an integer or a bignum that a \fRdouble\fP holds exactly: an integer from -2^53 to 2^53, and a larger one such as 2^60 or -2^64 whose bits from the highest 1 to the lowest 1 fit in 53 bits\&. Another integer gives \fRnumber_out_of_range\fP\&. A float is not read as an integer\&.
+.IP "\(bu" 2
+\fRbool\fP: \fRtrue\fP or \fRfalse\fP\&.
+.IP "\(bu" 2
+\fRstd::nullptr_t\fP: \fRnull\fP\&.
+.IP "\(bu" 2
+\fRcbor::simple_value\fP: any simple value, also \fRfalse\fP, \fRtrue\fP and \fRnull\fP\&.
+.IP "\(bu" 2
+\fRstd::string_view\fP: a text string\&.
+.IP "\(bu" 2
+\fRstd::span<std::byte const>\fP: a byte string\&.
+.IP "\(bu" 2
+\fRcbor::typed_array\fP: a tag of RFC 8746 over a byte string\&.
+.PP
+
+.PP
+Another kind of item gives \fRincorrect_type\fP\&. No other conversion exists\&. \fRfloat\fP and any other \fRT\fP do not compile\&. For any other result, read the node with \fRlazy\&.at_path<Path>()\fP\&.
+.SH "THE SYNTAX"
+.PP
+The grammar is RFC 9535, with EDN literals (draft-ietf-cbor-edn-literals) in brackets and in filters\&.
+
+.PP
+.IP "\(bu" 2
+\fR$\fP is the whole value\&. \fR$\&.a\fP and \fR$['a']\fP select a name\&. A name in dot form starts with a letter, \fR_\fP or a byte of 0x80 or more, and goes on with these or digits\&. A name in brackets is in single or double quotes, with the escapes of RFC 9535 section 2\&.3\&.1 and of EDN\&.
+.IP "\(bu" 2
+\fR$[0]\fP is the first element and \fR$[-1]\fP the last\&. An index is an integer of at most 16 digits without leading zeros, from -(2^53 - 1) to 2^53 - 1\&. An integer of 16 digits or less outside this range, and \fR$[01]\fP, give \fRinvalid_path\fP\&.
+.IP "\(bu" 2
+\fR$[*]\fP and \fR$\&.*\fP select every element of an array and every value of a map\&. \fR$\&.\&.a\fP, \fR$\&.\&.*\fP and \fR$\&.\&.[0]\fP select at any depth\&.
+.IP "\(bu" 2
+\fR$[0, 2]\fP has several selectors\&. \fR$[start:end:step]\fP is a slice\&. Each part of a slice can be absent\&. Step 0 selects nothing\&. A slice of a node that is not an array selects nothing\&.
+.IP "\(bu" 2
+\fR$[?test]\fP is a filter, and \fR@\fP is the current value\&. A test is a comparison, an existence test such as \fR@\&.isbn\fP, or a function\&. \fR&&\fP binds more tightly than \fR||\fP\&. \fR!\fP negates an existence test or a group in parentheses\&. A filter can use an absolute query that starts at \fR$\fP\&.
+.IP "\(bu" 2
+A literal in a filter is an EDN literal\&. A JSON number, a string, \fRtrue\fP, \fRfalse\fP and \fRnull\fP are EDN literals too\&.
+.IP "\(bu" 2
+A blank is allowed before a segment and inside brackets\&. A blank before \fR$\fP or after the last segment gives \fRinvalid_path\fP\&.
+.PP
+
+.PP
+A name selects only from a map\&. An index selects from an array, and from a map with an integer key\&.
+.SH "COMPARISONS AND FUNCTIONS"
+.PP
+A comparison is \fR==\fP, \fR!=\fP, \fR<\fP, \fR<=\fP, \fR>\fP or \fR>=\fP\&. Each side is a singular query, a literal or a function\&. A side that is a query that is not singular gives \fRinvalid_path\fP, for example \fR$[?@\&.* == 1]\fP\&.
+
+.PP
+.IP "\(bu" 2
+Two numbers compare by value, so 1 equals 1\&.0\&. Two texts compare by their bytes\&.
+.IP "\(bu" 2
+Two byte strings, two arrays, two maps and two tags can be equal and are never less\&. Arrays are equal element by element, in order\&. Maps are equal when they have the same keys with equal values\&. Tags are equal when they have the same number and equal content\&.
+.IP "\(bu" 2
+A bignum (tag 2 or 3) with a magnitude up to 64 bits is an integer in a comparison (RFC 8949, section 3\&.4\&.3)\&. A bignum with a larger magnitude is a tag\&.
+.IP "\(bu" 2
+Values of two different kinds are not equal\&.
+.IP "\(bu" 2
+A side that selects nothing is equal only to another side that selects nothing, and is never less\&. \fR<=\fP is true when \fR<\fP or \fR==\fP is true\&.
+.PP
+
+.PP
+The functions are \fRlength\fP, \fRcount\fP and \fRvalue\fP (RFC 9535, sections 2\&.4\&.4, 2\&.4\&.5 and 2\&.4\&.8)\&.
+
+.PP
+.IP "\(bu" 2
+\fRlength(x)\fP gives, for a text, the count of its bytes that are not UTF-8 continuation bytes (0x80 to 0xBF), for an array its elements, and for a map its pairs\&. For a text in valid UTF-8, this is the count of characters\&. It gives Nothing for any other value, a byte string included\&.
+.IP "\(bu" 2
+\fRcount(q)\fP gives the number of nodes in the nodelist of \fRq\fP\&.
+.IP "\(bu" 2
+\fRvalue(q)\fP gives the value of the node when \fRq\fP has one node, and Nothing otherwise\&.
+.PP
+
+.PP
+Nothing is the result of a function that has no value (RFC 9535, section 2\&.4\&.1)\&. Nothing equals Nothing and no other value\&. A function that is not well-typed (RFC 9535, section 2\&.4\&.3) gives \fRinvalid_path\fP\&.
+
+.PP
+\fRmatch\fP, \fRsearch\fP and I-Regexp are not supported\&. A path with \fRmatch\fP or \fRsearch\fP gives \fRinvalid_path\fP at run time and does not compile at compile time\&. Function extensions beyond the three above are not supported\&. Normalized paths (RFC 9535, section 2\&.7) are not given: a nodelist holds values, not their places\&.
+.SH "SINGULAR QUERIES AND NODELISTS"
+.PP
+A singular query (RFC 9535, section 2\&.3\&.5\&.1) has a name or an index in each segment, and no descendant segment\&. It selects one node at most\&. An EDN key in brackets is a name with one key, so a path with it is singular\&.
+
+.PP
+\fR\fBcbor::is_valid_path_v\fP<Path>\fP is true when the grammar accepts the path\&. \fR\fBcbor::is_singular_query_v\fP<Path>\fP is true when the path is valid and singular\&.
+
+.PP
+\fRat_path\fP with a typed result or a node reads a singular query only\&. \fRlazy\&.at_path<Path>()\fP with another path stops at a \fRstatic_assert\fP that names \fR\fBcbor::nodelist\fP\fP\&. \fRcbor::path::compile<T>\fP with such a path and a \fRT\fP that is not \fR\fBcbor::nodelist\fP\fP gives \fRnot_singular_query\fP\&.
+
+.PP
+A path that selects many nodes reads only into a \fR\fBcbor::nodelist\fP\fP: a wildcard, a descendant segment, a slice, a filter or several selectors\&. A \fR\fBcbor::nodelist\fP\fP is a \fRstd::vector<\fBcbor::lazy\fP>\fP\&. It gives every match as a \fR\fBcbor::lazy\fP\fP that holds the owner of the bytes\&. It also reads a singular path\&. A path that selects nothing gives an empty nodelist and no error\&. A node can be any CBOR item: a map, an array or a tag\&. Read it on with a step, \fRget\fP, \fRtype()\fP or \fRclone()\fP\&.
+
+.PP
+The compiler parses a compile-time path once\&. At run time it is a set of constant arrays\&. A run-time path is checked once, in \fRcompile\fP: the grammar, the singular path for a \fRT\fP that is not \fR\fBcbor::nodelist\fP\fP, and the segments against the nesting depth\&. The type \fRT\fP of a typed read is checked at compile time in both\&. Everything about the data is checked at each call\&.
+.SH "CBOR BEYOND JSON"
+.PP
+An index on a map selects the value under the equal integer key, as COSE (RFC 9052) uses it\&. \fR$[1]\fP finds the key 1 and \fR$[-2]\fP finds the key -2\&. This is not an index from the end: a map has no order in a path\&.
+
+.PP
+An EDN literal in brackets is a key\&. \fR$[h'01']\fP is a byte string, \fR$[[1, 2]]\fP an array, \fR$[1\&.5]\fP a number with a fraction, \fR$[true]\fP, and \fR$[1000("x")]\fP a tag\&. This holds at compile time and at run time\&. On an array, such a key gives \fRnot_indexable\fP\&.
+
+.PP
+Keys compare by value (RFC 8949, section 5\&.6\&.1)\&. So \fRh'01'\fP and \fRb64'AQ'\fP name the same key, and a key with a head that is not in preferred form is the same key\&. An integer and a float are different keys: \fR$[1\&.0]\fP does not find the key 1\&. \fR$[-0]\fP is the key 0, and an integer of 17 digits or more is a key\&.
+
+.PP
+When a map has the same key twice, every singular form takes the first pair\&. A wildcard, a descendant segment and a filter take all pairs\&.
+
+.PP
+A path passes a tag that it does not read, as a generic decoder does (RFC 8949, section 6\&.1)\&. A step and a typed read go to the content\&. A path that ends at the tag gives the node of the whole tagged item, so the caller reads the tag number\&.
+
+.PP
+.IP "\(bu" 2
+Tag 24 (encoded CBOR data item): the path goes into the byte string and reads the embedded item\&.
+.IP "\(bu" 2
+Tag 28 (shareable): the path passes it\&. The value is the content\&.
+.IP "\(bu" 2
+Tag 29 (shared reference): the path passes it as any other tag\&. The value is the content, the index\&. A path does not resolve the reference\&. \fR\fBcbor::decode\fP\fP does\&.
+.IP "\(bu" 2
+Tag 55799 (self-described CBOR): the path passes it at the top, inside the item and inside a tag 24\&. It does not pass it as the content of a tag 2, a tag 3 or a typed array\&. A map key behind a tag 55799 is matched as the key without the tag\&. A key behind any other tag, a tag 28 included, is a different key\&.
+.IP "\(bu" 2
+Tags 2 and 3 (bignum): the path does not pass them\&. A typed read into an integer type reads the magnitude, and an index on a bignum gives \fRnot_indexable\fP\&.
+.IP "\(bu" 2
+A tag of RFC 8746 (typed array): an index reads one element\&. A wildcard, a slice or a filter gives every element\&. A typed read into \fRcbor::typed_array\fP reads the whole array\&.
+.IP "\(bu" 2
+Any other tag: the path passes it\&. The value is the content\&.
+.PP
+
+.PP
+An element of an integer array is an integer\&. An element of a float array is a float of the same width\&. An element of a clamped uint8 array (tag 68) is an unsigned integer\&. An element of a 128-bit float array (tags 83 and 87) gives \fRincorrect_type\fP\&. An index on an element of a typed array gives \fRnot_indexable\fP\&.
+.SH "LIMITS, COST AND THREADS"
+.PP
+The limits are the constants of \fR\fBcbor::limits\fP\fP\&.
+
+.PP
+.IP "\(bu" 2
+\fRstring_length\fP: every string that the walk reads is checked, that is a key that it compares and the target\&. A string that it only skips does not count\&.
+.IP "\(bu" 2
+\fRcontainer_elements\fP: every array and map that the walk reads is checked, that is the containers on the way and the target\&. A container that it only skips does not count\&.
+.IP "\(bu" 2
+\fRnesting_depth_exceeded\fP comes where the stack of the thread ends, in the steps that recurse: a filter, a group in parentheses, a function call or a literal that is nested deeper than the stack holds, a descendant segment that goes deeper than the stack holds, and \fRclone()\fP of a node that is deeper than the stack holds\&. A path of child segments does not recurse\&. An item that a typed read only skips can be of any depth\&.
+.PP
+
+.PP
+The limits count only what a path or a lazy reads or decodes\&. A skip jumps over the content of a string, and it stops with \fRtoo_little_data\fP when the item claims more than the bytes that are left\&.
+
+.PP
+A path does not decode what it passes\&. In a map, it reads each key until the key matches and skips each value before it\&. In an array, \fR[i]\fP skips the i elements before the target, so an index is linear in the bytes of the elements before it\&. \fR[-1]\fP skips all elements except the last\&. A key that is a map or an array compares by its items and its pairs\&.
+
+.PP
+A typed read of a scalar allocates nothing, also through a tag 24 and with a key that is not text\&. A view result from an owner allocates nothing: the owner in the result is a copy of a \fRstd::shared_ptr\fP\&. The form with an rvalue \fRstd::string\fP allocates the \fRstd::shared_ptr\fP that holds the string, once\&. \fRcbor::path::compile\fP allocates\&. A nodelist read allocates the nodelist\&. A filter with a literal allocates for each child that it tests\&. An element of a typed array is read as a small CBOR item that the library writes, and this allocates once for each step\&.
+
+.PP
+A held \fR\fBcbor::lazy\fP\fP is a start point\&. A path from a lazy at \fR$\&.cars\fP does not read the bytes before \fRcars\fP again, so many reads below one node are cheaper from a lazy at that node\&. Several threads read one \fR\fBcbor::lazy\fP\fP at the same time\&. \fR\fBcbor::at_path\fP<Path, T>(encoded)\fP has no shared state\&.
+
+.PP
+A path reads the bytes up to its value and no further, so it does not find a fault after the value\&. An array or a map that claims more items than the bytes left gives \fRtoo_little_data\fP before any element is read\&. \fR\fBcbor::lazy::adopt\fP\fP and \fR\fBcbor::lazy::view\fP\fP do not read the whole item either\&. \fR\fBcbor::item_size\fP\fP and \fR\fBcbor::decode\fP\fP check a whole item\&.
+
+.PP
+A run-time \fR\fBcbor::nodelist\fP\fP query gives the result of the JSONPath Compliance Test Suite in 694 of 706 cases\&. 50 of these are valid paths with \fRmatch\fP or \fRsearch\fP, and the library refuses them\&. The other 12 are invalid in RFC 9535 and valid EDN, so a path accepts them: a number such as \fR+1\fP, \fR\&.1\fP, \fR-\&.1\fP, \fR1\&.\fP or \fR1\&.e1\fP in a filter, a key such as \fR$[1\&.0]\fP, \fR$[+1]\fP or \fR$[-0]\fP, a name with a quote such as \fR$["\\'"]\fP, and a name with the escape \fR\\u{1234}\fP or \fR\\u{10ffff}\fP\&. This library adds to RFC 9535 an index selector that finds an integer key, and EDN literals as keys and in filters\&.
+.SH "ERRORS"
+.PP
+Each function gives \fRstd::expected\fP with a \fR\fBcbor::error\fP\fP\&. A missing field and broken input have different errors, so a program tells them apart\&.
+
+.PP
+.IP "\(bu" 2
+\fRinvalid_path\fP: the path text is not valid, or it calls \fRmatch\fP or \fRsearch\fP, or a comparison has a side that is not singular, or an index of 16 digits or less is outside the range of an index\&.
+.IP "\(bu" 2
+\fRnot_singular_query\fP: \fRcbor::path::compile<T>\fP with a path that is not singular and a \fRT\fP that is not \fR\fBcbor::nodelist\fP\fP\&.
+.IP "\(bu" 2
+\fRkey_not_found\fP: a name or a key is not in the map\&.
+.IP "\(bu" 2
+\fRindex_out_of_bounds\fP: the index is outside the array\&.
+.IP "\(bu" 2
+\fRnot_indexable\fP: a name, an index or a key meets a value that is not a map or an array, for example a text, a number, a bignum or an element of a typed array\&. A name or a key meets an array or a typed array\&.
+.IP "\(bu" 2
+\fRincorrect_type\fP: a typed read finds another kind of item than \fRT\fP takes\&.
+.IP "\(bu" 2
+\fRnumber_out_of_range\fP: the integer does not fit \fRT\fP\&.
+.IP "\(bu" 2
+\fRnesting_depth_exceeded\fP: the path or the item is nested deeper than the stack of the thread holds\&.
+.IP "\(bu" 2
+\fRstring_length_exceeded\fP, \fRcontainer_elements_exceeded\fP: a limit is set and the input goes past it\&.
+.IP "\(bu" 2
+\fRtoo_little_data\fP: the bytes end before the target or before an item that the walk reads\&.
+.IP "\(bu" 2
+\fRsyntax_error\fP, \fRindefinite_length\fP: a head that the walk reads is not well-formed, or uses indefinite length\&.
+.IP "\(bu" 2
+\fRinadmissible_type_for_tag_content\fP: a tag on the way has content that its definition does not allow, for example tag 24 over a number\&.
+.IP "\(bu" 2
+\fRnodelist_too_long\fP: one step of a nodelist read selects more nodes than the top-level item has bytes\&.
+.IP "\(bu" 2
+\fRnot_enough_memory\fP: the allocation of the owner fails, in the form with an rvalue\&.
+.PP
+
+.PP
+A wrong use that the compiler cannot see throws \fRstd::logic_error\fP: a null or empty owner in a form that takes an owner, a moved-from query, and a \fR\fBcbor::lazy\fP{}\fP that holds no item in every form that takes a lazy\&.
+
+.PP
+ 
+.SH "EXAMPLES"
+ 
+.PP
+.nf
+    // bytes: a std::string with {"store": {"book": [{"title": "A", "price": 8}, {"title": "B", "price": 12},
+    //                                               {"title": "C", "price": 9}], "bicycle": {"price": 20}}}
+    auto const bicycle = cbor::at_path<"$\&.store\&.bicycle\&.price", int>(bytes);  // 20
+    auto const missing = cbor::at_path<"$\&.store\&.bicycle\&.color", int>(bytes);  // key_not_found
+    auto const doc = cbor::lazy::adopt(std::move(bytes))\&.value();
+    auto const prices = doc\&.at_path<"$\&.store\&.book[*]\&.price", cbor::nodelist>();  // 3 nodes: 8, 12, 9
+    auto const every = doc\&.at_path<"$\&.\&.price", cbor::nodelist>();                // 4 nodes: every price
+    auto const cheap = doc\&.at_path<"$\&.store\&.book[?@\&.price < 10]\&.title", cbor::nodelist>();  // 2 nodes: "A", "C"
+    auto const last = (*cheap)[1]\&.get<std::string_view>();                                  // "C"
+    auto const none = doc\&.at_path<"$\&.store\&.book[?@\&.price > 20]\&.title", cbor::nodelist>();   // an empty nodelist
+.fi
+.PP
+ 

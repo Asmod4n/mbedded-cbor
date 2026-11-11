@@ -1,0 +1,193 @@
+.TH "cbor::typed_array_view< E >" 3 "Version 0.9.0" "mbedded-cbor" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+cbor::typed_array_view \- A random access, sized range over an RFC 8746 typed array in the message\&.  
+
+.SH SYNOPSIS
+.br
+.PP
+.PP
+\fR#include <cbor/schema\&.hpp>\fP
+.SS "Public Types"
+
+.in +1c
+.ti -1c
+.RI "using \fBiterator\fP = detail::indexing_iterator<E, std::monostate, &reflection::typed_array_element_at<E>>"
+.br
+.in -1c
+.SS "Public Member Functions"
+
+.in +1c
+.ti -1c
+.RI "\fBtyped_array_view\fP (typed_array_view const &)=default"
+.br
+.ti -1c
+.RI "\fBtyped_array_view\fP (typed_array_view &&other) noexcept"
+.br
+.ti -1c
+.RI "typed_array_view & \fBoperator=\fP (typed_array_view const &)=default"
+.br
+.ti -1c
+.RI "typed_array_view & \fBoperator=\fP (typed_array_view &&other) noexcept"
+.br
+.ti -1c
+.RI "std::size_t \fBsize\fP () const"
+.br
+.ti -1c
+.RI "bool \fBempty\fP () const"
+.br
+.ti -1c
+.RI "template<class Self>"
+.br
+requires std::is_lvalue_reference_v<Self>
+.br
+iterator \fBbegin\fP (this Self &&self)
+.br
+.ti -1c
+.RI "template<class Self>"
+.br
+requires std::is_lvalue_reference_v<Self>
+.br
+iterator \fBend\fP (this Self &&self)
+.br
+.ti -1c
+.RI "template<class Self>"
+.br
+requires std::is_lvalue_reference_v<Self>
+.br
+iterator \fBcbegin\fP (this Self &&self)
+.br
+.ti -1c
+.RI "template<class Self>"
+.br
+requires std::is_lvalue_reference_v<Self>
+.br
+iterator \fBcend\fP (this Self &&self)
+.br
+.ti -1c
+.RI "template<class Self>"
+.br
+requires std::is_lvalue_reference_v<Self>
+.br
+std::reverse_iterator< iterator > \fBrbegin\fP (this Self &&self)
+.br
+.ti -1c
+.RI "template<class Self>"
+.br
+requires std::is_lvalue_reference_v<Self>
+.br
+std::reverse_iterator< iterator > \fBrend\fP (this Self &&self)
+.br
+.ti -1c
+.RI "template<class Self>"
+.br
+requires std::is_lvalue_reference_v<Self>
+.br
+std::reverse_iterator< iterator > \fBcrbegin\fP (this Self &&self)
+.br
+.ti -1c
+.RI "template<class Self>"
+.br
+requires std::is_lvalue_reference_v<Self>
+.br
+std::reverse_iterator< iterator > \fBcrend\fP (this Self &&self)
+.br
+.ti -1c
+.RI "E \fBfront\fP () const"
+.br
+.ti -1c
+.RI "E \fBback\fP () const"
+.br
+.ti -1c
+.RI "std::expected< typed_array_view, \fBerror\fP > \fBfirst\fP (std::size_t const n) const &"
+.br
+.ti -1c
+.RI "std::expected< typed_array_view, \fBerror\fP > \fBfirst\fP (std::size_t const n) &&"
+.br
+.ti -1c
+.RI "std::expected< typed_array_view, \fBerror\fP > \fBlast\fP (std::size_t const n) const &"
+.br
+.ti -1c
+.RI "std::expected< typed_array_view, \fBerror\fP > \fBlast\fP (std::size_t const n) &&"
+.br
+.ti -1c
+.RI "std::expected< E, \fBerror\fP > \fBat\fP (std::size_t const i) const"
+.br
+.ti -1c
+.RI "E \fBoperator[]\fP (std::size_t const i) const"
+.br
+.in -1c
+.SH "DESCRIPTION"
+.PP 
+
+.SS "template<class E>
+.br
+class cbor::typed_array_view< E >"A random access, sized range over an RFC 8746 typed array in the message\&. 
+
+\fRaccessor::view\fP makes it\&. It holds the owner of the bytes\&. Each element is a value of \fRE\fP, read from little endian, not a reference\&. \fRbegin\fP and \fRend\fP on a temporary do not compile\&.
+
+.PP
+.PP
+.nf
+view\&.size()     → std::size_t
+view[i]         → E
+view\&.at(i)      → std::expected<E, cbor::error>
+view\&.first(n)   → std::expected<cbor::typed_array_view<E>, cbor::error>
+view\&.last(n)    → std::expected<cbor::typed_array_view<E>, cbor::error>
+view\&.front()    → E
+view\&.back()     → E
+view\&.begin()    → iterator
+.fi
+.PP
+ 
+.PP
+.nf
+bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
+call: auto const root = cbor::schema<car>::path(std::move(bytes))
+result: accessor of a car
+call: auto const track = root\->view<"$\&.track">()
+result: typed_array_view<double> of 3 elements: 1, 2, 3
+call: std::accumulate(track\->begin(), track\->end(), 0\&.0)
+result: 6
+call: (*track)[1]
+result: 2
+call: track\->at(2)
+result: 3
+call: track\->last(2)\->front()
+result: 2
+call: track\->first(2)\->size()
+result: 2
+call: (*track)[2]
+result: 3
+
+.fi
+.PP
+
+.PP
+\fBReturn values\fP
+.RS 4
+\fIat,first,last\fP \fRindex_out_of_bounds\fP as a value 
+.PP
+.nf
+    // bytes: from schema<car>::encode(car{\&.\&.\&., {1\&.0, 2\&.0, 3\&.0}}), the member track
+    auto const root = cbor::schema<car>::path(std::move(bytes));
+    auto const track = root\->view<"$\&.track">();
+    double const sum = std::accumulate(track\->begin(), track\->end(), 0\&.0);  // 6
+    auto const past = track\->at(3);                                        // error::index_out_of_bounds
+.fi
+.PP
+ 
+.RE
+.PP
+\fBSee also\fP
+.RS 4
+\fBcbor::schema::accessor\fP 
+.RE
+.PP
+\fBExceptions\fP
+.RS 4
+\fIstd::logic_error\fP \fRoperator[]\fP outside the view, or \fRfront\fP and \fRback\fP on an empty view 
+.RE
+.PP
+

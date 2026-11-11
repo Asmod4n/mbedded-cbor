@@ -1,0 +1,149 @@
+.TH "tools" 3 "Version 0.9.0" "mbedded-cbor" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+tools \- check, split and print CBOR bytes
+.SH SYNOPSIS
+.br
+.PP
+.SS "Classes"
+
+.in +1c
+.ti -1c
+.RI "class \fBcbor::sequence\fP"
+.br
+.RI "Splits a CBOR sequence (RFC 8742) into its items\&. "
+.ti -1c
+.RI "class \fBcbor::sequence_reader\fP"
+.br
+.RI "Reads a CBOR sequence (RFC 8742) whose bytes arrive in pieces, for example from a socket\&. "
+.in -1c
+.SS "Functions"
+
+.in +1c
+.ti -1c
+.RI "std::expected< std::size_t, \fBerror\fP > \fBcbor::item_size\fP (std::string_view const encoded)"
+.br
+.RI "Gives the size in bytes of the first item in \fRencoded\fP\&. "
+.ti -1c
+.RI "std::expected< std::string, \fBerror\fP > \fBcbor::diagnostic_notation\fP (std::string_view const encoded)"
+.br
+.RI "Gives the text of the item in \fRencoded\fP in the diagnostic notation of RFC 8949 section 8\&. "
+.in -1c
+.SH "DESCRIPTION"
+.PP 
+The functions of this group check, split and print CBOR bytes\&. Each function reads the bytes that the caller passes\&. Include \fR<\fBcbor/cbor\&.hpp\fP>\fP\&.
+
+.PP
+\fR\fBcbor::item_size\fP\fP gives the size of the first item in the bytes\&. \fR\fBcbor::sequence\fP\fP gives the items of a CBOR sequence (RFC 8742) one by one\&. \fR\fBcbor::sequence_reader\fP\fP does the same for a sequence whose bytes arrive in pieces\&. \fR\fBcbor::diagnostic_notation\fP\fP prints an item as text\&.
+.SH "ITEM SIZE"
+.PP
+\fRcbor::item_size(encoded)\fP gives the size in bytes of the first item in \fRencoded\fP, as a \fRstd::expected<std::size_t, \fBcbor::error\fP>\fP\&. It checks that the item is well-formed\&. It copies nothing and allocates nothing\&. Bytes after the item do not change the result\&.
+
+.PP
+The call does not recurse\&. The nesting depth of the item does not limit it\&. An item whose head uses indefinite length gives \fRindefinite_length\fP\&.
+.SH "A CBOR SEQUENCE"
+.PP
+\fR\fBcbor::sequence\fP\fP reads a CBOR sequence (RFC 8742)\&. A CBOR sequence holds top-level items one after the other, with nothing between them\&. Each element of the range is a \fRstd::expected<std::string_view, \fBcbor::error\fP>\fP: the bytes of one item, as a view into the bytes of the owner\&. The sequence keeps the owner alive\&.
+
+.PP
+The owner is a \fRstd::shared_ptr<std::string const>\fP\&. It is also a \fRstd::shared_ptr<void const>\fP together with a view of the bytes that it keeps alive\&. A null pointer throws \fRstd::logic_error\fP\&.
+
+.PP
+An item that is not well-formed gives its error\&. The range ends after that element\&. A last item that is not complete gives \fRtoo_little_data\fP\&. The iterator gives the bytes from the current item to the end of the sequence through \fRencoded()\fP\&.
+
+.PP
+The sequence is an input range\&. It has no size\&. \fRbegin()\fP reads the first item again\&.
+
+.PP
+Each item is a top-level item of its own\&. A tag 29 in one item does not reach a tag 28 in another item\&. \fRcbor::lazy::view(owner, item)\fP reads one item in place, where \fRowner\fP is the shared pointer of the sequence\&.
+.SH "READ A SEQUENCE IN PIECES"
+.PP
+\fR\fBcbor::sequence_reader\fP\fP reads a CBOR sequence whose bytes arrive in pieces, for example from a socket\&. A piece can end in the middle of an item\&.
+
+.PP
+.IP "\(bu" 2
+\fRfeed(piece)\fP gives the reader the next bytes\&.
+.IP "\(bu" 2
+\fRnext()\fP gives the next item as a \fRstd::expected<\fBcbor::lazy\fP, \fBcbor::error\fP>\fP, when all of its bytes are there\&. While it waits for more bytes, it gives \fRtoo_little_data\fP\&. The reader continues where it stopped\&.
+.IP "\(bu" 2
+\fRempty()\fP gives \fRtrue\fP when every byte that was fed is in an item that \fRnext\fP gave\&.
+.PP
+
+.PP
+\fRfeed\fP takes the pieces in these forms:
+
+.PP
+.IP "\(bu" 2
+a \fRstd::string\fP that you move: the reader takes it without a copy;
+.IP "\(bu" 2
+a \fRstd::shared_ptr\fP to a container of bytes: the reader keeps it without a copy\&. A null pointer throws \fRstd::logic_error\fP;
+.IP "\(bu" 2
+a \fRstd::string_view\fP, or a \fRstd::string\fP that you do not move: the reader copies the bytes\&.
+.PP
+
+.PP
+A literal does not compile, because it ends with a NUL byte\&. A \fRstd::shared_ptr\fP to bytes that are not const does not compile\&.
+
+.PP
+Each item is a \fR\fBcbor::lazy\fP\fP that keeps its bytes alive\&. The item stays valid after later calls of \fRfeed\fP and after the reader ends\&. An item that is whole in a piece that the reader holds is a view into that piece\&. The reader copies only the bytes of an item that the end of a piece cuts\&. It holds the bytes of an item until all of them arrive\&.
+
+.PP
+The reader does not recurse\&. No nesting depth limits it\&.
+
+.PP
+After an error other than \fRtoo_little_data\fP, every call of \fRnext\fP gives that error, and \fRfeed\fP keeps no byte\&. The reader cannot be copied\&. A call on a reader that was moved from throws \fRstd::logic_error\fP\&.
+.SH "PRINT AS DIAGNOSTIC NOTATION"
+.PP
+\fRcbor::diagnostic_notation(encoded)\fP gives the item in \fRencoded\fP as text, in the diagnostic notation of RFC 8949 section 8\&. The text looks like JSON\&. The result is a \fRstd::expected<std::string, \fBcbor::error\fP>\fP\&. The bytes \fRencoded\fP hold exactly one item\&. A byte after the item gives \fRsyntax_error\fP\&.
+
+.PP
+.IP "\(bu" 2
+A head that is not in preferred form carries its encoding indicator\&. The bytes \fR19 00 01\fP give \fR1_1\fP\&.
+.IP "\(bu" 2
+An item of indefinite length is printed with \fR_\fP\&. The bytes \fR9f 01 ff\fP give \fR[_ 1]\fP\&.
+.IP "\(bu" 2
+A tag is printed as its number and its content\&. The bytes \fRc1 00\fP give \fR1(0)\fP\&. Tag 29 is not resolved\&.
+.IP "\(bu" 2
+The call does not check tag content, UTF-8 or duplicate keys\&.
+.PP
+
+.PP
+The bytes \fRa1 61 61 83 01 f9 41 00 41 01\fP give the text \fR{"a": [1, 2\&.5, h'01']}\fP\&.
+.SH "ERRORS"
+.PP
+Each function gives a \fRstd::expected\fP with a \fR\fBcbor::error\fP\fP\&. A wrong use throws \fRstd::logic_error\fP: a null pointer for \fR\fBcbor::sequence\fP\fP or for \fRfeed\fP, and a call on a \fR\fBcbor::sequence_reader\fP\fP that was moved from\&.
+
+.PP
+.IP "\(bu" 2
+\fRtoo_little_data\fP: the bytes end before the item ends, or a count is larger than the bytes that are left\&.
+.IP "\(bu" 2
+\fRsyntax_error\fP: a head is not well-formed, or bytes follow the item in \fRdiagnostic_notation\fP\&.
+.IP "\(bu" 2
+\fRindefinite_length\fP: a head uses indefinite length, in \fRitem_size\fP and in \fRsequence_reader\fP\&.
+.IP "\(bu" 2
+\fRstring_length_exceeded\fP: a string is longer than \fRlimits::string_length\fP, in \fRitem_size\fP and in \fRdiagnostic_notation\fP\&.
+.IP "\(bu" 2
+\fRcontainer_elements_exceeded\fP: the count of an array or a map is greater than \fRlimits::container_elements\fP, in \fRitem_size\fP and in \fRdiagnostic_notation\fP\&.
+.IP "\(bu" 2
+\fRnesting_depth_exceeded\fP: \fRdiagnostic_notation\fP of an item that is deeper than the stack of the thread holds\&.
+.PP
+
+.PP
+ 
+.SH "EXAMPLES"
+ 
+.PP
+.nf
+    // owner: the bytes 82 01 02 07, the sequence [1, 2] then 7
+    auto const first = cbor::item_size(*owner);   // 3, the bytes of [1, 2]
+    std::vector<std::string> text;
+    std::size_t covered = 0;
+    for (auto const item : cbor::sequence(owner))
+        if (item) {
+            text\&.push_back(cbor::diagnostic_notation(*item)\&.value());   // "[1, 2]", then "7"
+            covered += item\->size();                                    // 3, then 1
+        }
+.fi
+.PP
+ 

@@ -1,0 +1,182 @@
+.TH "cbor::encoder< Target >" 3 "Version 0.9.0" "mbedded-cbor" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+cbor::encoder \- Writes CBOR one data item per call, in the order of the bytes\&.  
+
+.SH SYNOPSIS
+.br
+.PP
+.PP
+\fR#include <cbor/encode\&.hpp>\fP
+.SS "Public Member Functions"
+
+.in +1c
+.ti -1c
+.RI "\fBencoder\fP (Target &target)"
+.br
+.ti -1c
+.RI "\fBencoder\fP (Target const target)"
+.br
+.ti -1c
+.RI "\fBencoder\fP (Target &target)"
+.br
+.ti -1c
+.RI "\fBencoder\fP (encoder const &)=delete"
+.br
+.ti -1c
+.RI "encoder & \fBoperator=\fP (encoder const &)=delete"
+.br
+.ti -1c
+.RI "template<class T>"
+.br
+requires integer_argument<T>
+.br
+std::expected< void, \fBerror\fP > \fBunsigned_integer\fP (T const value)
+.br
+.RI "Writes \fRvalue\fP as an unsigned integer (major type 0)\&. "
+.ti -1c
+.RI "template<class T>"
+.br
+requires integer_argument<T>
+.br
+std::expected< void, \fBerror\fP > \fBnegative_integer\fP (T const argument)
+.br
+.RI "Writes a negative integer (major type 1) with the argument \fRargument\fP\&. "
+.ti -1c
+.RI "std::expected< void, \fBerror\fP > \fBbyte_string\fP (std::span< std::byte const > const bytes)"
+.br
+.RI "Writes \fRbytes\fP as a byte string, with the shortest head for the length\&. "
+.ti -1c
+.RI "template<class V>"
+.br
+requires std::same_as<V, std::vector<std::byte>>
+.br
+std::expected< void, \fBerror\fP > \fBbyte_string\fP (V &&bytes)
+.br
+.RI "Writes a byte string that it takes by move\&. "
+.ti -1c
+.RI "std::expected< void, \fBerror\fP > \fBbyte_string\fP (std::shared_ptr< std::vector< std::byte > const > const &bytes)"
+.br
+.RI "Writes a byte string that \fRbytes\fP owns\&. "
+.ti -1c
+.RI "std::expected< void, \fBerror\fP > \fBbyte_string\fP (\fBref\fP< std::span< std::byte const > > const &bytes)"
+.br
+.RI "Writes the byte string that a \fBcbor::ref\fP views\&. "
+.ti -1c
+.RI "std::expected< void, \fBerror\fP > \fBtext_string\fP (std::string_view const text)"
+.br
+.RI "Writes \fRtext\fP as a text string, with the shortest head for the length\&. "
+.ti -1c
+.RI "template<class S>"
+.br
+requires std::same_as<S, std::string>
+.br
+std::expected< void, \fBerror\fP > \fBtext_string\fP (S &&text)
+.br
+.RI "Writes a text string that it takes by move\&. "
+.ti -1c
+.RI "std::expected< void, \fBerror\fP > \fBtext_string\fP (std::shared_ptr< std::string const > const &text)"
+.br
+.RI "Writes a text string that \fRtext\fP owns\&. "
+.ti -1c
+.RI "std::expected< void, \fBerror\fP > \fBtext_string\fP (\fBref\fP< std::string_view > const &text)"
+.br
+.RI "Writes the text string that a \fBcbor::ref\fP views\&. "
+.ti -1c
+.RI "std::expected< void, \fBerror\fP > \fBarray\fP (std::uint64_t const count)"
+.br
+.RI "Writes the head of an array (major type 4) with \fRcount\fP elements, with the shortest head for \fRcount\fP\&. "
+.ti -1c
+.RI "std::expected< void, \fBerror\fP > \fBmap\fP (std::uint64_t const count)"
+.br
+.RI "Writes the head of a map (major type 5) with \fRcount\fP pairs, with the shortest head for \fRcount\fP\&. "
+.ti -1c
+.RI "std::expected< void, \fBerror\fP > \fBtag\fP (std::uint64_t const number)"
+.br
+.RI "Writes the head of a tag (major type 6) with the tag number \fRnumber\fP, with the shortest head\&. "
+.ti -1c
+.RI "std::expected< void, \fBerror\fP > \fBsimple_value\fP (cbor::simple_value const value)"
+.br
+.RI "Writes a simple value (major type 7), for example \fRfalse_value\fP, \fRtrue_value\fP, \fRnull\fP or \fRundefined\fP\&. "
+.ti -1c
+.RI "template<std::floating_point T>"
+.br
+requires (std::numeric_limits<T>::is_iec559 && (sizeof(T) == sizeof(std::uint32_t) || sizeof(T) == sizeof(std::uint64_t) ||
+.br
+ (sizeof(T) == sizeof(std::uint16_t) && std::numeric_limits<T>::digits == heads::half_precision\&.significand_bits + 1)))
+.br
+std::expected< void, \fBerror\fP > \fBfloating_point\fP (T const value)
+.br
+.RI "Writes \fRvalue\fP as a float in the width of \fRT\fP: 16, 32 or 64 bits\&. "
+.ti -1c
+.RI "std::expected< void, \fBerror\fP > \fBtyped_array\fP (cbor::typed_array const value)"
+.br
+.RI "Writes a typed array (RFC 8746): the tag \fRvalue\&.tag\fP and then \fRvalue\&.bytes\fP as a byte string\&. "
+.ti -1c
+.RI "auto \fBfinish\fP ()"
+.br
+.RI "Ends the encoder\&. "
+.in -1c
+.SH "DESCRIPTION"
+.PP 
+
+.SS "template<class Target>
+.br
+class cbor::encoder< Target >"Writes CBOR one data item per call, in the order of the bytes\&. 
+
+The encoder counts nothing: the counts of \fR\fBarray\fP\fP and \fR\fBmap\fP\fP come from the program\&. The target is one of these:
+.IP "\(bu" 2
+a container of bytes, for example \fRstd::string\fP: the encoder appends; - a \fRstd::span\fP of bytes: the encoder writes into it and allocates nothing; - an \fBcbor::iov_writer\fP: the encoder gives pieces; - an object with \fRallocate(std::size_t)\fP, which gives a writer with \fRappend(std::string_view)\fP and \fRdone(std::size_t)\fP\&. The encoder does not write tags 28 and 29\&. Each call gives \fRstd::expected<void, \fBerror\fP>\fP\&. After an error, and after \fBcbor::encoder::finish()\fP, each call throws \fRstd::logic_error\fP\&. A copy does not compile\&.
+.PP
+
+.PP
+.PP
+.nf
+cbor::encoder e(out)                     → encoder<std::string>
+cbor::encoder e{std::span<char>(buffer)} → encoder<std::span<char>>
+cbor::encoder e(w)                       → encoder<iov_writer>
+.fi
+.PP
+ 
+.PP
+.nf
+bytes: a1 61 61 18 05
+call: std::string out;
+result: ""
+call: cbor::encoder e(out);
+result: encoder over a std::string
+call: e\&.map(1)
+result: void
+call: e\&.text_string("a")
+result: void
+call: e\&.unsigned_integer(std::uint8_t{5})
+result: void
+call: e\&.finish()
+result: 5
+call: out
+result: 5 bytes: a1 61 61 18 05
+
+.fi
+.PP
+
+.PP
+.PP
+.nf
+    std::string out;
+    cbor::encoder e(out);
+    bool const written = e\&.map(1) && e\&.text_string("a") && e\&.unsigned_integer(std::uint8_t{5});
+    auto const size = e\&.finish();  // 5: out holds {"a": 5}, a1 61 61 18 05
+.fi
+.PP
+ 
+.PP
+\fBSee also\fP
+.RS 4
+\fBcbor::encoder::finish()\fP 
+
+.PP
+\fBcbor::encode()\fP 
+.RE
+.PP
+

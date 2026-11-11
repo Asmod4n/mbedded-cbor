@@ -1,0 +1,82 @@
+.TH "cbor::item" 3 "Version 0.9.0" "mbedded-cbor" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+cbor::item \- One node of a tree from \fBcbor::decode()\fP or \fR\fBlazy::clone\fP\fP\&.  
+
+.SH SYNOPSIS
+.br
+.PP
+.PP
+\fR#include <cbor/item\&.hpp>\fP
+.SS "Public Member Functions"
+
+.in +1c
+.ti -1c
+.RI "template<cbor::type K> std::expected< item_alternative_t< K >, \fBerror\fP > \fBget\fP () const"
+.br
+.RI "Gives the value of the node when \fRtype\fP is \fRK\fP\&. "
+.in -1c
+.SS "Public Attributes"
+
+.in +1c
+.ti -1c
+.RI "cbor::type const \fBtype\fP"
+.br
+.ti -1c
+.RI "std::uint8_t const \fBadditional_information\fP"
+.br
+.in -1c
+.SH "DESCRIPTION"
+.PP 
+One node of a tree from \fBcbor::decode()\fP or \fR\fBlazy::clone\fP\fP\&. 
+
+\fRtype\fP gives the kind of the node\&. \fRadditional_information\fP gives the low 5 bits of the initial byte (RFC 8949 3)\&. \fBcbor::item::get()\fP gives the value\&. The constructor is private: only a decode makes an item\&. An item owns no memory and has no destructor to run\&. The tree owns every node and every string\&. An item gives no error\&. \fRtype\fP and \fRadditional_information\fP are data members\&.
+
+.PP
+.PP
+.nf
+(*tree)\->type                     → cbor::type const
+(*tree)\->additional_information   → std::uint8_t const
+(*tree)\->get<cbor::type::array>() → std::expected<std::span<item const>, error>
+.fi
+.PP
+ 
+.PP
+.nf
+message: [1, {"a": 2}]
+call: auto const tree = cbor::decode(bytes)
+result: owning item of [1, {"a": 2}]
+call: (*tree)\->type
+result: cbor::type::array
+call: (*tree)\->additional_information
+result: 2
+call: (*tree)\->get<cbor::type::array>()\->size()
+result: 2
+
+.fi
+.PP
+
+.PP
+.PP
+.nf
+    // bytes: a std::string with [1, {"a": 2}]
+    auto const tree = cbor::decode(bytes);
+    auto const kind = (*tree)\->type;                              // cbor::type::array
+    auto const count = (*tree)\->get<cbor::type::array>()\->size();  // 2
+.fi
+.PP
+ 
+.PP
+\fBSee also\fP
+.RS 4
+\fBcbor::item::get()\fP 
+
+.PP
+\fBcbor::decode()\fP 
+
+.PP
+\fBcbor::encode()\fP 
+.RE
+.PP
+

@@ -1,0 +1,102 @@
+.TH "cbor::describe_members< T >" 3 "Version 0.9.0" "mbedded-cbor" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+cbor::describe_members \- Describes how \fBcbor::structs\fP and cbor::schema write and read \fRT\fP\&.  
+
+.SH SYNOPSIS
+.br
+.PP
+.SH "DESCRIPTION"
+.PP 
+
+.SS "template<class T>
+.br
+struct cbor::describe_members< T >"Describes how \fBcbor::structs\fP and cbor::schema write and read \fRT\fP\&. 
+
+A specialization holds \fR\fBtag\fP\fP, a \fRstd::optional<\fBcbor::tag\fP>\fP, and \fRmembers\fP, a \fRstd::tuple\fP of \fBcbor::member\fP entries\&. \fRcbor::untagged\fP gives a map with no tag\&. The specialization stands outside every namespace, after \fRT\fP\&. \fRcbor::has_describe_members<T>\fP is true when \fRT\fP has a specialization\&.
+
+.PP
+A class that is not an aggregate, or that has a base class, needs a description\&. \fBcbor::structs\fP then reads the members, the keys and the tag from the description only\&. \fRusing base = B;\fP in the specialization names the direct base class \fRB\fP; cbor::schema takes a class with a base class only so, and the members of \fRB\fP stand in \fRmembers\fP too\&. \fRCBOR_DEFINE_DERIVED_TYPE\fP and \fRCBOR_DEFINE_DERIVED_TYPE_MEMBERS\fP write such a specialization; they take \fRBASE\fP after \fRT\fP\&.
+
+.PP
+\fRCBOR_DEFINE_TYPE(T, TAG, members\&.\&.\&.)\fP writes this specialization\&. The macro stands at global scope\&. A type whose name holds a comma goes through an alias\&. Where each key is the name of its member, CBOR_DEFINE_TYPE_MEMBERS takes the names only\&.
+
+.PP
+\fR\fBdecode\fP\fP gives \fRincorrect_type\fP for a missing tag or another tag\&. A description does not compile when it lists a member twice, gives two members one key, names a member of another class, or has no \fR\fBtag\fP\fP\&. A tag of a standard type or an invalid tag does not compile\&. With reflection, a list that differs from the public data members does not compile\&. An annotation on \fRT\fP does not compile\&.
+
+.PP
+.PP
+.nf
+cbor::has_describe_members<T>   → bool
+cbor::structs<T>::encode(value) → std::expected<std::string, cbor::error>
+.fi
+.PP
+ 
+.PP
+.nf
+message: {"content\-type": "text/plain"}
+call: cbor::has_describe_members<header>
+result: true
+call: cbor::has_describe_members<person>
+result: false
+call: auto const h = cbor::structs<header>::encode(header{"text/plain"})
+result: 30 bytes: da 00 02 71 3c a1 6c 63 6f 6e 74 65 6e 74 2d 74 79 70 65 6a 74 65 78 74 2f 70 6c 61 69 6e
+call: cbor::lazy::adopt(*h)
+result: lazy of 160060({"content\-type": "text/plain"})
+call: cbor::structs<header>::decode(*h)\&.has_value()
+result: true
+call: auto const t = cbor::structs<trailer>::encode(trailer{7})
+result: 16 bytes: da 00 02 71 3d a1 68 63 68 65 63 6b 73 75 6d 07
+call: cbor::lazy::adopt(*t)
+result: lazy of 160061({"checksum": 7})
+
+.fi
+.PP
+
+.PP
+.PP
+.nf
+template <>
+struct cbor::describe_members<reference_structs::header> {
+    static constexpr std::optional<cbor::tag> tag = cbor::tag{160060};
+    static constexpr std::tuple members{
+        cbor::member{"content\-type", &reference_structs::header::content_type},
+    };
+};
+.fi
+.PP
+ 
+.PP
+.nf
+    auto const bytes = cbor::structs<header>::encode(header{"text/plain"});  // 160060({"content\-type": "text/plain"})
+.fi
+.PP
+ 
+.PP
+.nf
+CBOR_DEFINE_TYPE(reference_structs::trailer, cbor::tag{160061},
+                 cbor::member{"checksum", &reference_structs::trailer::checksum});
+.fi
+.PP
+ 
+.PP
+.nf
+    // trailer: struct { std::uint8_t checksum; }
+    auto const bytes = cbor::structs<trailer>::encode(trailer{7});  // 160061({"checksum": 7})
+.fi
+.PP
+ 
+.PP
+\fBSee also\fP
+.RS 4
+\fBcbor::member\fP 
+
+.PP
+\fBCBOR_MEMBER\fP 
+
+.PP
+\fBCBOR_DEFINE_TYPE_MEMBERS\fP 
+.RE
+.PP
+

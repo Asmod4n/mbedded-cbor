@@ -1,0 +1,97 @@
+.TH "cbor::sequence" 3 "Version 0.9.0" "mbedded-cbor" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+cbor::sequence \- Splits a CBOR sequence (RFC 8742) into its items\&.  
+
+.SH SYNOPSIS
+.br
+.PP
+.PP
+\fR#include <cbor/sequence\&.hpp>\fP
+.SS "Classes"
+
+.in +1c
+.ti -1c
+.RI "class \fBiterator\fP"
+.br
+.RI "Reads the items of a sequence one after the other\&. "
+.in -1c
+.SS "Public Member Functions"
+
+.in +1c
+.ti -1c
+.RI "template<owning_range_of_chars Encoded> \fBsequence\fP (std::shared_ptr< Encoded const > e)"
+.br
+.RI "Makes a sequence that owns the bytes\&. "
+.ti -1c
+.RI "template<borrowed_range_of_chars Encoded> \fBsequence\fP (std::shared_ptr< void const > o, Encoded const &e)"
+.br
+.RI "Makes a sequence over bytes that \fRo\fP owns\&. "
+.ti -1c
+.RI "\fBiterator\fP \fBbegin\fP () const"
+.br
+.RI "Reads the first item and gives an iterator to it\&. "
+.ti -1c
+.RI "std::default_sentinel_t \fBend\fP () const"
+.br
+.RI "Gives the sentinel that an iterator reaches after the last item of the sequence\&. "
+.ti -1c
+.RI "bool \fBempty\fP () const"
+.br
+.RI "Tells if the sequence has no bytes\&. "
+.in -1c
+.SH "DESCRIPTION"
+.PP 
+Splits a CBOR sequence (RFC 8742) into its items\&. 
+
+Each item is a \fRstd::string_view\fP into the bytes, with no copy\&. The sequence holds the owner of the bytes\&. A view stays valid while the sequence or the owner lives\&. The sequence is an input range: it has no size, and \fR\fBbegin()\fP\fP reads the first item again\&. Each item gives the errors of \fBcbor::item_size()\fP\&. After an item with an error, the loop ends\&.
+
+.PP
+.PP
+.nf
+cbor::sequence(owner) → sequence
+s\&.begin()             → sequence::iterator
+*it                   → std::expected<std::string_view, error>
+s\&.empty()             → bool
+.fi
+.PP
+ 
+.PP
+.nf
+bytes: 01 02 03
+call: auto const owner = std::make_shared<std::string const>(bytes)
+result: shared_ptr to 3 bytes: 01 02 03
+call: auto const s = cbor::sequence(owner)
+result: sequence of 3 items: 1, 2, 3
+call: s\&.empty()
+result: false
+call: cbor::at_path<"$", std::int64_t>(**s\&.begin())
+result: 1
+
+.fi
+.PP
+
+.PP
+\fBComplexity\fP
+.RS 4
+A loop over all items: O(n) time, n the bytes of the sequence\&. O(1) memory\&. No allocation\&. \fRThe proof\fP\&. 
+.PP
+.nf
+    // owner: a std::shared_ptr<std::string const> with the sequence 1, 2, 3
+    std::int64_t sum = 0;
+    for (auto const item : cbor::sequence(owner))
+        if (item)
+            sum += cbor::at_path<"$", std::int64_t>(*item)\&.value_or(0);
+    use(sum);   // 6
+.fi
+.PP
+ 
+.RE
+.PP
+\fBSee also\fP
+.RS 4
+\fBcbor::item_size()\fP 
+.RE
+.PP
+

@@ -1,0 +1,84 @@
+.TH "cbor::member< P >" 3 "Version 0.9.0" "mbedded-cbor" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+cbor::member \- One entry of \fBcbor::describe_members\fP: the key of a member and a pointer to that member\&.  
+
+.SH SYNOPSIS
+.br
+.PP
+.PP
+\fR#include <cbor/describe\&.hpp>\fP
+.SS "Public Attributes"
+
+.in +1c
+.ti -1c
+.RI "map_key \fBkey\fP"
+.br
+.RI "The key of the member in the map\&. "
+.ti -1c
+.RI "P \fBpointer\fP"
+.br
+.RI "The pointer to the member\&. "
+.in -1c
+.SH "DESCRIPTION"
+.PP 
+
+.SS "template<class P>
+.br
+struct cbor::member< P >"One entry of \fBcbor::describe_members\fP: the key of a member and a pointer to that member\&. 
+
+The key is a text literal or an integer from -2^63 to 2^64 - 1\&. The text is the name as it is written\&. A pointer to a static member or to a member function does not compile\&. A \fRbool\fP or a character type as the key does not compile\&.
+
+.PP
+.PP
+.nf
+cbor::member{0, &senml::n}          → cbor::member<std::string senml::*>
+cbor::member{"name", &person::name} → cbor::member<std::string person::*>
+.fi
+.PP
+ 
+.PP
+.nf
+bytes: a2 00 61 74 02 f9 3e 00
+call: auto const encoded = cbor::structs<senml>::encode(senml{"t", 1\&.5})
+result: 8 bytes: a2 00 61 74 02 f9 3e 00
+call: cbor::lazy::adopt(*encoded)
+result: lazy of {0: "t", 2: 1\&.5}
+
+.fi
+.PP
+
+.PP
+.PP
+.nf
+template <>
+struct cbor::describe_members<reference_structs::senml> {
+    static constexpr std::optional<cbor::tag> tag = cbor::untagged;
+    static constexpr std::tuple members{
+        cbor::member{0, &reference_structs::senml::n},
+        cbor::member{2, &reference_structs::senml::v},
+    };
+};
+.fi
+.PP
+ 
+.PP
+.nf
+    auto const bytes = cbor::structs<senml>::encode(senml{"t", 1\&.5});  // {0: "t", 2: 1\&.5}
+.fi
+.PP
+ 
+.PP
+\fBSee also\fP
+.RS 4
+\fBCBOR_MEMBER\fP 
+
+.PP
+\fBCBOR_DEFINE_TYPE_MEMBERS\fP 
+
+.PP
+\fBcbor::describe_members\fP 
+.RE
+.PP
+

@@ -1,48 +1,97 @@
-.TH "mbedded\-cbor" "3" "2026-11-05" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.TH "mbedded-cbor" 3 "Version 0.9.0" "mbedded-cbor" \" -*- nroff -*-
+.ad l
+.nh
 .SH NAME
-mbedded\-cbor \- a header\-only C++ library for CBOR (RFC 8949)
-.SH DESCRIPTION
-mbedded\-cbor is a header\-only C++ library for CBOR (RFC 8949).
-.SS Highlights
-.IP \(bu 2
-\f[B]Fast.\f[R] \f[CR]cbor::schema\f[R] reads one field of the carsales
-message of 1000 cars in 11.6 ns.
-FlatBuffers with its Verifier takes 34.6 µs and Cap\(aqn Proto 144 ns.
-Every library checks its input.
-AMD Ryzen 9 5950X, g++ 16.2 \f[CR]\-O2 \-march=native\f[R], median of 7
-runs: the run and its context.
-.IP \(bu 2
-\f[B]Standard CBOR.\f[R] Every message that the library writes is
-standard CBOR, and every other CBOR decoder reads it.
-.IP \(bu 2
-\f[B]Safe on foreign input.\f[R] Bad input comes back as a
-\f[CR]cbor::error\f[R] value.
-No read goes outside the message.
-Nesting depth, string length and element count are constants of the
-build.
-.IP \(bu 2
-\f[B]JSONPath at compile time.\f[R] The compiler checks the path in
-\f[CR]at_path<\(dq$.user.id\(dq>\f[R].
-A path also takes CBOR keys that are not text, goes through tags and
-reads typed arrays: path.
-.SS Classes
-.SS lazy
-Use it for a message whose shape you learn while you read it.
-.SS path
-Use it for one value whose path you know.
-.SS item
-Use it for a tree that lives on after the bytes are gone, and CBOR
-written item by item.
-.SS structs
-Use it for CBOR that any program wrote, read into the members of a
-struct.
-.SS schema
-Use it for messages that your own programs write and read.
-.SS ref
-Use it for a result that points into the message and stays valid.
-.SS tools
-Use it for the end of an item, many items in a row, an item as text.
-.SS errors
-Use it for the reason why a call failed.
-.SH SEE ALSO
-cbor::lazy(3), cbor::at_path(3), cbor::item(3), cbor::structs(3), cbor::schema(3), cbor::ref(3), cbor::item_size(3), cbor::sequence(3), cbor::sequence_reader(3), cbor::diagnostic_notation(3), cbor::error(3)
+mbedded-cbor \- a header-only C++ library for CBOR (RFC 8949) 
+.PP
+
+.SH "DESCRIPTION"
+.PP
+mbedded-cbor is a header-only C++ library for CBOR (RFC 8949)\&. It reads and writes CBOR\&. \fR\fBcbor::lazy\fP\fP and \fR\fBcbor::at_path\fP\fP read only the items that you ask for\&. They skip the other items by their length\&. \fR\fBcbor::structs\fP\fP maps a C++ struct to CBOR and back\&. \fRcbor::schema\fP writes a struct as Packed CBOR (draft-ietf-cbor-packed-19)\&. It reads a field of fixed size at an offset that the compiler computes\&. \fR\fBcbor::decode\fP\fP reads a whole message into a tree of items, and \fR\fBcbor::encode\fP\fP writes a tree again\&.
+
+.PP
+Every message that the library writes is standard CBOR\&. The test suite decodes the output with other decoders\&. Bad input gives a \fR\fBcbor::error\fP\fP value, not an exception\&. No read goes outside the message\&. The compiler parses a JSONPath (RFC 9535) that you give as a template argument\&. A JSONPath also takes CBOR keys that are not text, goes through tags and reads typed arrays (RFC 8746)\&.
+
+.PP
+Include \fR<\fBcbor/cbor\&.hpp\fP>\fP\&. It includes every header of the library\&. The library needs C++23\&. It builds with g++ 15 or later, with clang 21 or later, and with the AppleClang of Xcode 26\&. With g++ 16 and \fR-std=c++26 -freflection\fP, \fR\fBcbor::structs\fP\fP reads the members by reflection, and \fRcbor::schema\fP checks each description against the members\&. The frontend of MSVC is refused\&. On Windows, build with clang-cl\&.
+.SH "WHICH PART TO USE"
+.PP
+Each group has its own man page\&. Use the group that fits your task\&.
+
+.PP
+.IP "\(bu" 2
+\fRmbedded-cbor-decode(3)\fP: \fR\fBcbor::item\fP\fP, \fR\fBcbor::decode\fP\fP and \fR\fBcbor::encode\fP\fP\&. A decoded tree and the encoder\&. Use it for a tree that lives on after the bytes are gone, and for CBOR that you write item by item\&.
+.IP "\(bu" 2
+\fRmbedded-cbor-lazy(3)\fP: \fR\fBcbor::lazy\fP\fP\&. It reads a message in place, step by step\&. Use it for a message whose shape you learn while you read it\&.
+.IP "\(bu" 2
+\fRmbedded-cbor-path(3)\fP: \fR\fBcbor::at_path\fP\fP\&. It reads one value by its JSONPath (RFC 9535), with CBOR keys that are not text, with tags and with typed arrays\&. Use it for one value when you know its JSONPath\&.
+.IP "\(bu" 2
+\fRmbedded-cbor-structs(3)\fP: \fR\fBcbor::structs\fP<T>\fP\&. It reads any CBOR into a C++ struct and writes the struct back as CBOR\&. Use it for CBOR that any program wrote, read into the members of a struct\&.
+.IP "\(bu" 2
+\fRmbedded-cbor-schema(3)\fP: \fRcbor::schema<T>\fP\&. It writes a struct as Packed CBOR, with fields at fixed offsets\&. Use it for messages that your own programs write and read\&.
+.IP "\(bu" 2
+\fRmbedded-cbor-ref(3)\fP: \fR\fBcbor::ref\fP<T>\fP and \fR\fBcbor::owning\fP<T>\fP\&. They hold results that keep the bytes of the message\&. Use them for a result that points into the message and stays valid\&.
+.IP "\(bu" 2
+\fRmbedded-cbor-tools(3)\fP: \fR\fBcbor::item_size\fP\fP, \fR\fBcbor::sequence\fP\fP, \fR\fBcbor::sequence_reader\fP\fP and \fR\fBcbor::diagnostic_notation\fP\fP\&. Use them for the end of an item, for many items in a row, and for an item as text\&.
+.IP "\(bu" 2
+\fRmbedded-cbor-errors(3)\fP: \fR\fBcbor::error\fP\fP, \fRstd::error_code\fP and the limits of a build\&. Use them for the reason why a call failed\&.
+.PP
+.SH "THREADS"
+.PP
+The library starts no thread and holds no lock\&. Many threads can read the same bytes at one time, while nothing writes them\&. Several threads can also read one \fR\fBcbor::lazy\fP\fP at one time\&. A \fR\fBcbor::lazy\fP\fP holds only its owner, its bytes and an offset\&. A read changes nothing in it\&.
+
+.PP
+The one state that changes is the stack bound of each thread\&. Each thread reads the bounds of its own stack once, at its first check for nesting\&. From the system it reads them on Linux (glibc and musl), macOS and Windows\&. On WebAssembly without threads, and on picolibc, it reads them from the linker\&. Another target does not compile\&. The first check of a thread does not run in a signal handler\&. A frame outside these bounds is not checked\&. Such a frame is, for example, the stack of a fiber or of a signal handler\&. On Linux, a change of \fRRLIMIT_STACK\fP after the first check is outside the bound\&. So is a mapping that the program places with \fRMAP_FIXED\fP below the stack of the main thread\&.
+.SH "LIMITS"
+.PP
+A limit stops input that holds a string or a container that is too large\&. Each limit is a constant of the build\&. A macro sets it, and \fR\fBcbor::limits\fP\fP gives its value\&. A macro that the build does not set has its default\&.
+
+.PP
+.IP "\(bu" 2
+\fRCBOR_STRING_LENGTH_DEFAULT\fP sets \fR\fBcbor::limits::string_length\fP\fP\&. It counts the bytes of one text string or byte string\&. The default is no limit\&. Input that goes past it gives \fR\fBcbor::error::string_length_exceeded\fP\fP\&.
+.IP "\(bu" 2
+\fRCBOR_CONTAINER_ELEMENTS_DEFAULT\fP sets \fR\fBcbor::limits::container_elements\fP\fP\&. It counts the elements of one array, or the pairs of one map\&. The default is no limit\&. Input that goes past it gives \fR\fBcbor::error::container_elements_exceeded\fP\fP\&.
+.IP "\(bu" 2
+\fRCBOR_AMPLIFICATION_ACTIVATION_THRESHOLD_DEFAULT\fP sets \fR\fBcbor::limits::amplification_activation_threshold\fP\fP\&. The default is 8388608 bytes (8 MiB)\&.
+.IP "\(bu" 2
+\fRCBOR_MAXIMUM_AMPLIFICATION_DEFAULT\fP sets \fR\fBcbor::limits::maximum_amplification\fP\fP\&. The default is 100\&.
+.PP
+
+.PP
+\fR\fBcbor::encode\fP\fP with \fR\fBcbor::cycles\fP\fP writes a value that two references reach twice\&. So each level of such references doubles the output\&. Past the activation threshold, the output may be \fRmaximum_amplification\fP times the tree at most\&. Past that, \fR\fBcbor::encode\fP\fP gives \fR\fBcbor::error::amplification_limit_breach\fP\fP and writes nothing\&. The check runs at each node\&. So it can stop before the whole tree is counted\&.
+
+.PP
+A value that does not fit \fRstd::size_t\fP does not compile\&. A limit at its default has no check in the program\&. Every translation unit of one program uses the same values\&. A different value in one translation unit breaks the one definition rule\&.
+
+.PP
+The library does not bound the size of the input\&. The program bounds it before it calls the library\&. A limit is checked by the read that meets the value\&. A count in the input reserves no memory\&. Memory grows only with the values that a call reads\&.
+
+.PP
+A limit counts what a call reads or decodes\&. An item that a call only skips does not count\&. \fR\fBcbor::item_size\fP\fP, \fR\fBcbor::decode\fP\fP and \fR\fBcbor::diagnostic_notation\fP\fP read every item, so every item counts there\&.
+
+.PP
+The nesting depth counts the arrays, maps and tags around an item\&. The top-level item has the depth 0\&. These calls recurse: \fR\fBcbor::decode\fP\fP, \fRclone\fP, \fR\fBcbor::encode\fP\fP of an item, \fR\fBcbor::diagnostic_notation\fP\fP, a filter and a descendant segment of a JSONPath, \fR\fBcbor::structs\fP\fP and \fRcbor::schema\fP\&.
+
+.PP
+Nesting has no fixed limit\&. A reader that recurses gives \fR\fBcbor::error::nesting_depth_exceeded\fP\fP when a call comes within 16 KiB of the end of the stack of its thread\&. The bound is 32 KiB on Windows or with a sanitizer\&. \fR\fBcbor::item_size\fP\fP, \fR\fBcbor::sequence_reader\fP\fP and the child segments of a JSONPath do not recurse\&. So they read any depth\&. A deep value of a user type, read by \fR\fBcbor::structs\fP\fP or \fRcbor::schema\fP, is destroyed and copied by its own recursion\&. A thread with a smaller stack than the one that decoded the value can overflow there\&.
+.SH "MEMORY"
+.PP
+\fR\fBcbor::lazy::adopt\fP\fP moves a \fRstd::string\fP into a new \fRstd::shared_ptr<std::string const>\fP, which owns the bytes\&. Its allocation can fail with \fR\fBcbor::error::not_enough_memory\fP\fP\&. \fR\fBcbor::lazy::view\fP\fP takes an owner that you give\&.
+
+.PP
+A text string or byte string comes back as a view into the bytes, in a \fR\fBcbor::ref\fP\fP\&. The \fR\fBcbor::ref\fP\fP holds the owner, so the view stays valid while the \fR\fBcbor::ref\fP\fP lives\&.
+
+.PP
+The decode calls of \fR\fBcbor::structs\fP<T>\fP and \fRcbor::schema<T>\fP take a target as their last argument\&. The target holds \fRstd::pmr\fP containers with a \fRstd::pmr::memory_resource\fP\&. Each element uses the allocator of its container\&. When the resource refuses, the call gives \fR\fBcbor::error::not_enough_memory\fP\fP\&. A \fRstd::bad_alloc\fP does not leave these calls\&.
+
+.PP
+A plain struct inside a \fRstd::pmr\fP container gets no allocator, so its members use the default resource\&. A step of a \fR\fBcbor::lazy\fP\fP, \fRget\fP and \fR\fBcbor::lazy::view\fP\fP allocate nothing\&. \fR\fBcbor::lazy::adopt\fP\fP allocates the \fRstd::shared_ptr\fP that holds the bytes\&. \fRclone\fP allocates its items\&. \fR\fBcbor::diagnostic_notation\fP\fP and the encoder into a \fRstd::string\fP allocate the string\&.
+
+.PP
+The target of the encoder chooses where the bytes go\&. A container of bytes, a fixed span, a \fR\fBcbor::iov_writer\fP\fP and a writer of your own are targets\&. The encoder allocates nothing when it writes into a fixed span\&. \fR\fBcbor::item_size\fP\fP and the iterator of \fR\fBcbor::sequence\fP\fP allocate nothing\&. Other calls take no allocator\&. A refused allocation there throws \fRstd::bad_alloc\fP\&.
+.SH "SEE ALSO"
+.PP
+\fRmbedded-cbor-decode(3)\fP, \fRmbedded-cbor-lazy(3)\fP, \fRmbedded-cbor-path(3)\fP, \fRmbedded-cbor-structs(3)\fP, \fRmbedded-cbor-schema(3)\fP, \fRmbedded-cbor-ref(3)\fP, \fRmbedded-cbor-tools(3)\fP, \fRmbedded-cbor-errors(3)\fP\&.
+
+.PP
+RFC 8949: https://www.rfc-editor.org/rfc/rfc8949 

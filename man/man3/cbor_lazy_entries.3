@@ -1,0 +1,72 @@
+.TH "cbor::lazy_entries" 3 "Version 0.9.0" "mbedded-cbor" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+cbor::lazy_entries \- The pairs of one map, from \fBcbor::lazy::entries()\fP, in the order of the bytes\&.  
+
+.SH SYNOPSIS
+.br
+.PP
+.PP
+\fR#include <cbor/lazy\&.hpp>\fP
+.SS "Public Member Functions"
+
+.in +1c
+.ti -1c
+.RI "iterator \fBbegin\fP () const"
+.br
+.ti -1c
+.RI "std::default_sentinel_t \fBend\fP () const"
+.br
+.ti -1c
+.RI "std::uint64_t \fBsize\fP () const"
+.br
+.ti -1c
+.RI "void \fBfront\fP () const =delete"
+.br
+.in -1c
+.SH "DESCRIPTION"
+.PP 
+The pairs of one map, from \fBcbor::lazy::entries()\fP, in the order of the bytes\&. 
+
+It is a forward range, a sized range and a borrowed range\&. \fRsize()\fP gives the count of pairs in the head\&. \fR*it\fP gives the key in \fRfirst\fP and the value in \fRsecond\fP, or the error of the pair\&. An iterator holds the owner of the bytes, so it stays valid after the lazy and the view end\&. \fRfront()\fP does not compile\&. When the iterator cannot step over a key or a value, \fR*it\fP gives \fRtoo_little_data\fP or another error of the bytes, and each later position gives that error\&. The view gives at most \fRsize()\fP values\&.
+
+.PP
+.PP
+.nf
+auto const view = *doc\->entries()
+view\&.size() → std::uint64_t
+.fi
+.PP
+ 
+.PP
+.nf
+message: {"a": 1, "b": 2, "c": 3}
+call: auto const view = *doc\->entries()
+result: lazy_entries of 3 pairs: "a": 1, "b": 2, "c": 3
+call: view\&.size()
+result: 3
+
+.fi
+.PP
+
+.PP
+.PP
+.nf
+    // bytes: a std::string with {"a": 1, "b": 2, "c": 3}
+    auto const map = cbor::lazy::adopt(std::move(bytes));
+    auto const view = *map\->entries();                                // 3 pairs
+    auto const rest = std::ranges::distance(view | std::views::drop(1));  // 2
+.fi
+.PP
+ 
+.PP
+\fBSee also\fP
+.RS 4
+\fBcbor::lazy::entries()\fP 
+
+.PP
+\fBcbor::lazy_elements\fP 
+.RE
+.PP
+

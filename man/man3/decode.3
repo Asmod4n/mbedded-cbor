@@ -1,0 +1,151 @@
+.TH "decode" 3 "Version 0.9.0" "mbedded-cbor" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+decode \- a decoded tree of CBOR and the encoder
+.SH SYNOPSIS
+.br
+.PP
+.SS "Classes"
+
+.in +1c
+.ti -1c
+.RI "struct \fBcbor::item\fP"
+.br
+.RI "One node of a tree from \fBcbor::decode()\fP or \fR\fBlazy::clone\fP\fP\&. "
+.ti -1c
+.RI "struct \fBcbor::cycles_t\fP"
+.br
+.RI "Selects the encode that writes each cycle of a tree with tags 28 and 29 (RFC 8949 3\&.4, IANA tags 28 and 29)\&. "
+.ti -1c
+.RI "class \fBcbor::iov_writer\fP"
+.br
+.RI "A target of \fBcbor::encoder\fP that collects pieces, not one buffer\&. "
+.ti -1c
+.RI "class \fBcbor::encoder< Target >\fP"
+.br
+.RI "Writes CBOR one data item per call, in the order of the bytes\&. "
+.in -1c
+.SS "Functions"
+
+.in +1c
+.ti -1c
+.RI "std::expected< std::reference_wrapper< \fBitem\fP const >, \fBerror\fP > \fBcbor::encoded_cbor_data_item\fP (\fBowning\fP< \fBitem\fP > const &tree, \fBitem\fP const &tagged)"
+.br
+.RI "Gives the root of the item that a tag 24 (RFC 8949 3\&.4\&.5\&.1) holds in its byte string\&. "
+.ti -1c
+.RI "std::expected< \fBowning\fP< \fBitem\fP >, \fBerror\fP > \fBcbor::decode\fP (std::string_view const encoded)"
+.br
+.RI "Decodes the one top-level item in \fRencoded\fP into a tree of \fBcbor::item\fP\&. "
+.ti -1c
+.RI "template<class Target> std::expected< std::size_t, \fBerror\fP > \fBcbor::encode\fP (\fBitem\fP const &root, Target &&target)"
+.br
+.RI "Writes the tree at \fRroot\fP and gives the count of bytes written\&. "
+.ti -1c
+.RI "template<class Target> std::expected< std::size_t, \fBerror\fP > \fBcbor::encode\fP (\fBitem\fP const &root, Target &&target, \fBcycles_t\fP)"
+.br
+.RI "Writes the tree at \fRroot\fP with tags 28 and 29 for each cycle and gives the count of bytes written\&. "
+.ti -1c
+.RI "std::expected< \fBref\fP< std::span< iovec const > >, \fBerror\fP > \fBcbor::encode_iov\fP (\fBitem\fP const &root)"
+.br
+.RI "Writes the tree at \fRroot\fP into a list of \fRstruct iovec\fP pieces, not into one buffer\&. "
+.ti -1c
+.RI "std::expected< \fBref\fP< std::span< iovec const > >, \fBerror\fP > \fBcbor::encode_iov\fP (\fBitem\fP const &root, \fBcycles_t\fP)"
+.br
+.RI "Writes the tree at \fRroot\fP with tags 28 and 29 for each cycle into a list of \fRstruct iovec\fP pieces\&. "
+.in -1c
+.SH "DESCRIPTION"
+.PP 
+\fR\fBcbor::decode\fP\fP reads one top-level item of a \fRstd::string_view\fP into a tree of \fR\fBcbor::item\fP\fP\&. \fR\fBcbor::encoder\fP\fP writes CBOR one data item per call, and \fR\fBcbor::encode\fP\fP writes a tree\&. Include \fR<\fBcbor/cbor\&.hpp\fP>\fP\&.
+
+.PP
+The tree copies each text and byte string into one memory zone that the result owns\&. It does not view the input, and it stays valid after the input ends\&. \fR\fBcbor::decode\fP\fP reads no byte after the item, so a CBOR sequence (RFC 8742) is read item by item\&. It reads every head of the item, so every limit counts each head\&. A count in a head reserves nothing: an array that claims more elements than bytes are left gives \fRtoo_little_data\fP before it reads an element\&.
+.SH "THE TREE"
+.PP
+An item has two data members: \fRtype\fP, a \fRcbor::type\fP, and \fRadditional_information\fP (RFC 8949, section 3)\&. \fRget<K>()\fP gives the value as \fRstd::expected<cbor::item_alternative_t<K>, error>\fP, where \fRK\fP is a \fRcbor::type\fP\&. A \fRK\fP that is not the \fRtype\fP of the item gives \fRincorrect_type\fP\&.
+
+.PP
+.IP "\(bu" 2
+\fRunsigned_integer\fP, \fRnegative_integer\fP: \fRstd::uint64_t\fP, the argument\&.
+.IP "\(bu" 2
+\fRbyte_string\fP, \fRtext_string\fP: \fRstd::span<std::byte const>\fP, \fRstd::string_view\fP\&.
+.IP "\(bu" 2
+\fRarray\fP: \fRstd::span<\fBcbor::item\fP const>\fP, the elements\&.
+.IP "\(bu" 2
+\fRmap\fP: \fRstd::span<\fBcbor::item\fP const>\fP, each key and its value one after the other\&.
+.IP "\(bu" 2
+\fRtag\fP, \fRunsigned_bignum\fP, \fRnegative_bignum\fP, \fRtyped_array\fP: \fRstd::pair<std::uint64_t, \fBcbor::item\fP const *>\fP, the tag number and the item of the content\&.
+.IP "\(bu" 2
+\fRshared_reference\fP: \fRstd::pair<std::uint64_t, \fBcbor::item\fP const *>\fP, the index of the tag 29 and the item that the tag 28 of that index marks\&.
+.IP "\(bu" 2
+\fRhalf_float\fP, \fRsingle_float\fP, \fRdouble_float\fP: \fRdouble\fP\&.
+.IP "\(bu" 2
+\fRfalse_value\fP, \fRtrue_value\fP, \fRnull\fP, \fRundefined\fP, \fRsimple_value\fP: \fRcbor::simple_value\fP\&.
+.PP
+
+.PP
+A bignum (tag 2 or 3) whose magnitude fits in 64 bits is the same value as a basic integer (RFC 8949, section 3\&.4\&.3)\&. \fR\fBcbor::decode\fP\fP makes it an \fRunsigned_integer\fP or a \fRnegative_integer\fP item\&. A larger bignum stays an \fRunsigned_bignum\fP or a \fRnegative_bignum\fP\&. Its content is a byte string item that holds a copy of the magnitude\&.
+.SH "TAGS 24, 28, 29 AND 55799"
+.PP
+A tag 24 is a tag item over its byte string\&. \fRcbor::encoded_cbor_data_item(tree, item)\fP gives the root of the embedded item, decoded as a top-level item of its own\&. For a tag 24 whose content is no byte string it gives \fRincorrect_type\fP\&.
+
+.PP
+Tag 28 marks a value as shared\&. Tag 29 with the index n stands for the value of the n-th tag 28\&. \fR\fBcbor::decode\fP\fP resolves both tags, with a table for one call\&. A tag 28 makes no node and marks the node of its content\&. A tag 29 is a \fRshared_reference\fP item\&. That item can be the item itself or an item above it, so the tree can hold a cycle\&. An index with no tag 28 before it gives \fRsharedref_index_not_marked\fP, and \fR28(29(0))\fP gives \fRsharedref_not_defined\fP\&.
+
+.PP
+A lazy, \fRclone\fP, \fRat_path\fP, \fR\fBcbor::path::query\fP\fP and \fR\fBcbor::diagnostic_notation\fP\fP read tag 28 and tag 29 as tags over their content\&. They resolve nothing, check no index and give no error of their own\&. A step and \fRget\fP pass both tags, as they pass every tag that they do not interpret\&. \fR\fBcbor::structs\fP<T>::decode\fP resolves them with a table for one call\&.
+
+.PP
+Tag 55799 (RFC 8949, section 3\&.4\&.6) marks bytes as CBOR\&. \fR\fBcbor::decode\fP\fP reads one leading tag 55799 as its content, so the root of its tree is the content\&. A second tag 55799, and a tag 55799 inside an item, stay tags\&.
+.SH "THE ENCODER"
+.PP
+\fR\fBcbor::encoder\fP\fP writes one data item per call, in the order of the bytes\&. An integer and a float take the width of their type, and a NaN keeps its bits\&. A count, a length and a tag number take the shortest head\&. The encoder counts nothing: the counts of \fRarray\fP and \fRmap\fP are the caller's\&. \fRfinish()\fP gives the size in bytes, or the pieces for an \fRiov_writer\fP\&.
+
+.PP
+The calls are \fRunsigned_integer\fP, \fRnegative_integer\fP, \fRbyte_string\fP, \fRtext_string\fP, \fRarray\fP, \fRmap\fP, \fRtag\fP, \fRsimple_value\fP, \fRfloating_point\fP and \fRtyped_array\fP\&. Each gives \fRstd::expected<void, \fBcbor::error\fP>\fP\&. \fRtag(28)\fP and \fRtag(29)\fP write those tags as any other tag\&. \fRtag(55799)\fP writes \fRd9 d9 f7\fP\&. No function of the library calls \fRshareable()\fP and \fRsharedref()\fP of the encoder\&. \fR\fBcbor::structs\fP\fP writes no tag 28 and no tag 29\&.
+
+.PP
+The target of the encoder is one of these:
+
+.PP
+.IP "\(bu" 2
+a container of bytes, for example \fRstd::string\fP or \fRstd::vector<std::byte>\fP: the encoder appends to it;
+.IP "\(bu" 2
+a fixed span of bytes: the encoder writes into it, allocates nothing, and gives \fRno_buffer_space\fP when an item does not fit;
+.IP "\(bu" 2
+a \fR\fBcbor::iov_writer\fP\fP: the encoder gives a list of pieces;
+.IP "\(bu" 2
+a writer of the program with \fRallocate\fP, \fRappend\fP and \fRdone\fP\&. An error of the writer comes back as a \fR\fBcbor::error\fP\fP\&.
+.PP
+
+.PP
+\fRcbor::encode(item, target)\fP writes a tree with the additional information that each item keeps\&. Each integer, length and tag number keeps the width of its head on the wire\&. A float keeps the width of its type, and a NaN keeps its bits\&. A bignum that fits in 64 bits is written in its shortest head\&. A \fRshared_reference\fP gives \fRunsupported_value\fP\&. \fRencode(tree, out, cbor::cycles)\fP writes tags 28 and 29 only for a cycle\&. It walks the tree before it writes, depth first, and follows each \fRshared_reference\fP to its item\&. An item that the walk reaches again while it is inside that item gets a tag 28\&. Each such edge is a tag 29 with the index of that mark\&. A value that two references reach without a cycle is written in full each time\&. The path through references can be deeper than the tree, so \fRencode\fP can give \fRnesting_depth_exceeded\fP for a tree that \fR\fBcbor::decode\fP\fP gave\&. A tree of \fRclone\fP keeps tags 28 and 29 as tags, and \fRencode\fP writes them as they are\&.
+
+.PP
+\fRcbor::encode_iov(item)\fP writes a tree into a list of pieces as \fRstruct iovec\fP, with their storage, which lives as long as the result\&. The pieces are for \fRwritev\fP, \fRsendmsg\fP, \fRIORING_OP_WRITEV\fP and \fRIORING_OP_SENDMSG\fP\&. The result is \fRstd::expected<\fBcbor::ref\fP<std::span<iovec const>>, \fBcbor::error\fP>\fP\&. The pieces are for sending only\&. Hold the result until the call returns, or until the last completion of the request comes\&. The encoder writes into blocks of 16 KiB and copies each byte once\&.
+
+.PP
+A text or a byte string of 32 bytes or more that the caller hands over with its owner is not copied\&. \fRstd::string&&\fP and \fRstd::vector<std::byte>&&\fP move into the result\&. A \fRstd::shared_ptr\fP or a \fR\fBcbor::ref\fP\fP is kept\&. \fR\fBcbor::encoder\fP\fP over a \fR\fBcbor::iov_writer\fP\fP takes the same forms\&.
+.SH "ERRORS"
+.PP
+Each function gives \fRstd::expected\fP with a \fR\fBcbor::error\fP\fP\&. After an error of the encoder, and after \fRfinish()\fP, each call of the encoder throws \fRstd::logic_error\fP\&. \fR\fBcbor::encoded_cbor_data_item\fP\fP throws \fRstd::logic_error\fP for an item that is not a tag 24 of that tree\&.
+
+.PP
+ 
+.SH "EXAMPLES"
+ 
+.PP
+.nf
+    std::string bytes;
+    cbor::encoder e(bytes);
+    auto const written = e\&.array(2)
+                             \&.and_then([&] { return e\&.unsigned_integer(std::uint8_t{1}); })
+                             \&.and_then([&] { return e\&.text_string("a"); })
+                             \&.and_then([&] { return e\&.finish(); });  // 5: bytes holds 82 18 01 61 61
+    auto const tree = cbor::decode(bytes);
+    auto const second = (*tree)\->get<cbor::type::array>()\->at(1)\&.get<cbor::type::text_string>();  // "a"
+    std::string out;
+    auto const size = cbor::encode(**tree, out);  // 5; out == bytes
+.fi
+.PP
+ 

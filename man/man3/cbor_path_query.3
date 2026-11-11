@@ -1,0 +1,98 @@
+.TH "cbor::path::query< T >" 3 "Version 0.9.0" "mbedded-cbor" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+cbor::path::query \- A parsed run-time path with the result type \fRT\fP\&.  
+
+.SH SYNOPSIS
+.br
+.PP
+.PP
+\fR#include <cbor/query\&.hpp>\fP
+.SS "Public Types"
+
+.in +1c
+.ti -1c
+.RI "using \fBvalue_type\fP = T"
+.br
+.ti -1c
+.RI "using \fBresult_type\fP = std::conditional_t<view_result<T>, \fBref\fP<T>, T>"
+.br
+.in -1c
+.SS "Public Member Functions"
+
+.in +1c
+.ti -1c
+.RI "\fBquery\fP (query const &)=default"
+.br
+.ti -1c
+.RI "query & \fBoperator=\fP (query const &)=default"
+.br
+.ti -1c
+.RI "\fBquery\fP (query &&other) noexcept"
+.br
+.ti -1c
+.RI "query & \fBoperator=\fP (query &&other) noexcept"
+.br
+.in -1c
+.SH "DESCRIPTION"
+.PP 
+
+.SS "template<class T>
+.br
+requires path_result<T>
+.br
+class cbor::path::query< T >"A parsed run-time path with the result type \fRT\fP\&. 
+
+Only cbor::path::compile() makes one\&. The query holds its own copy of the path data, and no view into the text of the path\&. One query reads any number of items\&. \fBcbor::at_path()\fP and \fBcbor::lazy::at_path()\fP apply it\&. \fRresult_type\fP is \fR\fBref\fP<T>\fP for a view type \fRT\fP, and \fRT\fP otherwise\&. A moved-from query throws \fRstd::logic_error\fP when it is applied\&.
+
+.PP
+.PP
+.nf
+cbor::path::compile<std::int64_t>("$\&.id")\&.value() → query<std::int64_t>
+cbor::at_path(bytes, q)                               → std::expected<std::int64_t, error>
+.fi
+.PP
+ 
+.PP
+.nf
+message: {"id": 1}
+call: auto const q = cbor::path::compile<std::int64_t>("$\&.id")\&.value()
+result: cbor::path::query<long long>
+call: cbor::at_path(bytes, q)
+result: 1
+
+.fi
+.PP
+ 
+.PP
+.nf
+message: {"id": 2, "x": 0}
+call: auto const q = cbor::path::compile<std::int64_t>("$\&.id")\&.value()
+result: cbor::path::query<long long>
+call: cbor::at_path(bytes, q)
+result: 2
+
+.fi
+.PP
+
+.PP
+.PP
+.nf
+    // first: {"id": 1}, second: {"id": 2, "x": 0}
+    auto const q = cbor::path::compile<std::int64_t>("$\&.id")\&.value();
+    auto const one = cbor::at_path(first, q);   // 1
+    auto const two = cbor::at_path(second, q);  // 2
+.fi
+.PP
+ 
+.PP
+\fBSee also\fP
+.RS 4
+cbor::path::compile() 
+
+.PP
+\fBcbor::at_path()\fP 
+.RE
+.PP
+

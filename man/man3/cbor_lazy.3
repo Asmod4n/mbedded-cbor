@@ -1,0 +1,182 @@
+.TH "cbor::lazy" 3 "Version 0.9.0" "mbedded-cbor" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+cbor::lazy \- A position in one top-level item: the owner of the bytes, the bytes and an offset\&.  
+
+.SH SYNOPSIS
+.br
+.PP
+.PP
+\fR#include <cbor/lazy\&.hpp>\fP
+.SS "Public Member Functions"
+
+.in +1c
+.ti -1c
+.RI "std::expected< \fBlazy\fP, \fBerror\fP > \fBat\fP (std::string_view key) const"
+.br
+.RI "Gives the lazy of one child\&. "
+.ti -1c
+.RI "std::expected< \fBlazy\fP, \fBerror\fP > \fBat\fP (key k) const"
+.br
+.ti -1c
+.RI "std::expected< \fBlazy\fP, \fBerror\fP > \fBat\fP (std::size_t index) const"
+.br
+.ti -1c
+.RI "std::expected< \fBlazy\fP, \fBerror\fP > \fBoperator[]\fP (std::string_view key) const"
+.br
+.RI "Gives the same result as \fBcbor::lazy::at()\fP with the same argument\&. "
+.ti -1c
+.RI "std::expected< \fBlazy\fP, \fBerror\fP > \fBoperator[]\fP (key k) const"
+.br
+.ti -1c
+.RI "std::expected< \fBlazy\fP, \fBerror\fP > \fBoperator[]\fP (std::size_t index) const"
+.br
+.ti -1c
+.RI "template<\fBfixed_string\fP Path>"
+.br
+requires \fBis_valid_path_v\fP<Path>
+.br
+std::expected< \fBlazy\fP, \fBerror\fP > \fBat_path\fP () const
+.br
+.RI "Reads the JSONPath (RFC 9535) \fRPath\fP from this lazy as the root \fR$\fP\&. "
+.ti -1c
+.RI "template<\fBfixed_string\fP Path, class T>"
+.br
+requires (\fBis_singular_query_v\fP<Path> && scalar_result<T>)
+.br
+std::expected< T, \fBerror\fP > \fBat_path\fP () const
+.br
+.ti -1c
+.RI "template<\fBfixed_string\fP Path, class T>"
+.br
+requires (\fBis_singular_query_v\fP<Path> && view_result<T>)
+.br
+std::expected< \fBref\fP< T >, \fBerror\fP > \fBat_path\fP () const
+.br
+.ti -1c
+.RI "template<\fBfixed_string\fP Path, std::same_as< \fBnodelist\fP > T>"
+.br
+requires \fBis_valid_path_v\fP<Path>
+.br
+std::expected< \fBnodelist\fP, \fBerror\fP > \fBat_path\fP () const
+.br
+.ti -1c
+.RI "template<class E>"
+.br
+requires is_path_query_v<E>
+.br
+std::expected< typename E::result_type, \fBerror\fP > \fBat_path\fP (E const &e) const
+.br
+.ti -1c
+.RI "std::expected< std::uint64_t, \fBerror\fP > \fBsize\fP () const"
+.br
+.RI "Gives the count of the head: the elements of an array, the pairs of a map, or the elements of a typed array\&. "
+.ti -1c
+.RI "std::expected< bool, \fBerror\fP > \fBempty\fP () const"
+.br
+.RI "Gives \fRtrue\fP when \fBcbor::lazy::size()\fP gives 0, and \fRfalse\fP when it gives another count\&. "
+.ti -1c
+.RI "std::expected< cbor::type, \fBerror\fP > \fBtype\fP () const"
+.br
+.RI "Gives the kind of the value at the lazy\&. "
+.ti -1c
+.RI "template<class T>"
+.br
+requires scalar_result<T> || view_result<T>
+.br
+std::expected< std::conditional_t< view_result< T >, \fBref\fP< T >, T >, \fBerror\fP > \fBget\fP () const
+.br
+.RI "Reads the value at the lazy as \fRT\fP\&. "
+.ti -1c
+.RI "std::expected< lazy_elements, \fBerror\fP > \fBelements\fP () const"
+.br
+.RI "Gives the elements of an array, or of a typed array, as a view\&. "
+.ti -1c
+.RI "std::expected< lazy_entries, \fBerror\fP > \fBentries\fP () const"
+.br
+.RI "Gives the pairs of a map, in the order of the bytes, as a view\&. "
+.ti -1c
+.RI "std::expected< \fBowning\fP< \fBitem\fP >, \fBerror\fP > \fBclone\fP () const"
+.br
+.RI "Decodes the whole item at the lazy into a tree of \fBcbor::item\fP, as \fBcbor::decode()\fP does, except that tags 28 and 29 stay tag nodes, and that a tag 55799 inside the top-level item stays a tag node\&. "
+.in -1c
+.SS "Static Public Member Functions"
+
+.in +1c
+.ti -1c
+.RI "template<borrowed_range_of_chars Encoded> static std::expected< \fBlazy\fP, \fBerror\fP > \fBview\fP (std::shared_ptr< void const > owner, Encoded const &encoded)"
+.br
+.RI "Makes the lazy of the top-level item in the bytes, in place\&. "
+.ti -1c
+.RI "template<owning_range_of_chars Encoded> static std::expected< \fBlazy\fP, \fBerror\fP > \fBview\fP (std::shared_ptr< Encoded const > owner)"
+.br
+.RI "Makes the lazy of the top-level item in \fR*owner\fP, in place\&. "
+.ti -1c
+.RI "template<owning_range_of_chars Encoded> static std::expected< \fBlazy\fP, \fBerror\fP > \fBadopt\fP (Encoded &&encoded)"
+.br
+.RI "Makes the lazy of the top-level item in \fRencoded\fP, and moves the bytes into a new owner\&. "
+.in -1c
+.SS "Public Attributes"
+
+.in +1c
+.ti -1c
+.RI "top_level_item \fBtop_level\fP"
+.br
+.ti -1c
+.RI "std::size_t \fBoffset\fP"
+.br
+.ti -1c
+.RI "std::uint64_t \fBtyped_array_tag\fP {}"
+.br
+.in -1c
+.SH "DESCRIPTION"
+.PP 
+A position in one top-level item: the owner of the bytes, the bytes and an offset\&. 
+
+It holds no decoded value\&. Each member function reads the bytes at the offset when it is called\&. \fBcbor::lazy::view()\fP and \fBcbor::lazy::adopt()\fP set the data members\&. A copy of a lazy is a second position in the same bytes\&. Several threads read one lazy at the same time\&. A \fR\fBnodelist\fP\fP is the result of a path that selects many nodes\&. A lazy made with \fR\fBcbor::lazy\fP{}\fP holds no top-level item; each member function then throws \fRstd::logic_error\fP\&.
+
+.PP
+.PP
+.nf
+cbor::lazy::adopt(bytes) → std::expected<lazy, error>
+cbor::lazy const copy = *doc
+.fi
+.PP
+ 
+.PP
+.nf
+message: [1, 2]
+call: cbor::lazy const copy = *doc
+result: lazy of [1, 2]
+call: copy\&.at(1)\->get<int>()
+result: 2
+
+.fi
+.PP
+
+.PP
+\fBExceptions\fP
+.RS 4
+\fIstd::logic_error\fP a member function of a lazy that holds no top-level item 
+.PP
+.nf
+    // bytes: a std::string with [1, 2]
+    auto const doc = cbor::lazy::adopt(std::move(bytes));
+    cbor::lazy const copy = *doc;
+    auto const second = copy\&.at(1)\->get<int>();  // 2
+    // cbor::lazy{}\&.size() throws std::logic_error
+.fi
+.PP
+ 
+.RE
+.PP
+\fBSee also\fP
+.RS 4
+\fBcbor::lazy::view()\fP 
+
+.PP
+\fBcbor::lazy::adopt()\fP 
+.RE
+.PP
+

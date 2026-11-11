@@ -1,103 +1,110 @@
-.TH "cbor::ref" "3" "2026-11-08" "mbedded\-cbor 0.9.0" "mbedded\-cbor"
+.TH "ref" 3 "Version 0.9.0" "mbedded-cbor" \" -*- nroff -*-
+.ad l
+.nh
 .SH NAME
-cbor::ref, cbor::ref<T>, cbor::owning<T> \- results that hold the bytes
+ref \- results that hold the bytes they point into
 .SH SYNOPSIS
-.IP
-.EX
-#include \f[B]<cbor/cbor.hpp>\f[R]
-.EE
-.IP
-.EX
-\f[B]template\f[R] <\f[B]class\f[R] T>
-\f[B]class\f[R] ref
-{
-\f[B]public\f[R]:
-    ref(ref const &other);
-    ref(ref &&o) \f[B]noexcept\f[R](std::is_nothrow_move_constructible_v<T> && std::is_nothrow_default_constructible_v<T>)
-        \f[B]requires\f[R] std::is_default_constructible_v<T>;
-
-    ref &\f[B]operator\f[R]=(ref const &other);
-    ref &\f[B]operator\f[R]=(ref &&o) \f[B]noexcept\f[R](std::is_nothrow_move_assignable_v<T> && std::is_nothrow_default_constructible_v<T>)
-        \f[B]requires\f[R] std::is_default_constructible_v<T>;
-    std::conditional_t<is_view<T>, T, T const &> \f[B]operator\f[R]*() const &;
-    T const *\f[B]operator\f[R]\->() const &;
-    std::string clone() const
-        \f[B]requires\f[R] std::same_as<T, std::string_view>;
-    std::vector<std::byte> clone() const
-        \f[B]requires\f[R] std::same_as<T, std::span<std::byte const>>;
-    owning<T> clone() const
-        \f[B]requires\f[R] (!std::same_as<T, std::string_view> && !std::same_as<T, std::span<std::byte const>>);
-
-    \f[B]friend\f[R] bool \f[B]operator\f[R]==(ref const &a, ref const &b)
-        \f[B]requires\f[R] std::equality_comparable<T>;
-    \f[B]friend\f[R] bool \f[B]operator\f[R]==(ref const &a, T const &b)
-        \f[B]requires\f[R] std::equality_comparable<T>;
-};
-.EE
-.IP
-.EX
-\f[B]template\f[R] <\f[B]class\f[R] T>
-\f[B]class\f[R] owning
-{
-\f[B]public\f[R]:
-    T const &\f[B]operator\f[R]*() const &;
-    T const *\f[B]operator\f[R]\->() const &;
-};
-.EE
-.SH DESCRIPTION
-\f[CR]cbor::ref<T>\f[R] and \f[CR]cbor::owning<T>\f[R] hold a result
-together with the owner of the bytes that its views point into.
-A copy shares the owner.
-\f[CR]clone\f[R] copies the bytes.
+.br
 .PP
-The examples use the types in test/doc_types.hpp, namespace
-\f[CR]reference_ref\f[R].
-.SS cbor::ref<T>
-A value and a \f[CR]std::shared_ptr\f[R] to the owner of the bytes that
-it views.
-\f[CR]*r\f[R] gives a view by value and any other \f[CR]T\f[R] as
-\f[CR]T const &\f[R].
-\f[CR]r\->\f[R] reaches the members.
-\f[CR]==\f[R] compares the values.
-A copy shares the owner and copies no bytes.
-A move leaves \f[CR]T{}\f[R] and no owner behind.
+.SS "Classes"
+
+.in +1c
+.ti -1c
+.RI "class \fBcbor::ref< T >\fP"
+.br
+.RI "A value and a \fRstd::shared_ptr\fP to the owner of the bytes that it views\&. "
+.ti -1c
+.RI "class \fBcbor::owning< T >\fP"
+.br
+.RI "A value that holds its own copy of the bytes of each view in it\&. "
+.in -1c
+.SH "DESCRIPTION"
+.PP 
+\fR\fBcbor::ref\fP<T>\fP holds a value and the owner of the bytes that its views point into\&. \fR\fBcbor::owning\fP<T>\fP holds a copy of a value and of the bytes of its views\&. Include \fR<\fBcbor/cbor\&.hpp\fP>\fP\&.
+
 .PP
-A view in the value stays valid while one \f[CR]ref\f[R] with that owner
-lives.
-A view copied out of the \f[CR]ref\f[R] does not keep the bytes.
-\f[CR]clone\f[R] copies the bytes: into a \f[CR]std::string\f[R], a byte
-vector, or a cbor::owning.
-Only the library makes a \f[CR]ref\f[R].
-\f[CR]*\f[R] and \f[CR]\->\f[R] on a temporary \f[CR]ref\f[R] do not
-compile.
-.SS cbor::owning<T>
-A value that holds its own copy of the bytes of each view in it.
-cbor::ref::clone() makes it for a \f[CR]T\f[R] that is not a single text
-or byte view.
-The copy and the value share one \f[CR]std::shared_ptr\f[R], so a view
-in it stays valid after the bytes of the \f[CR]ref\f[R] end.
-A copy of an \f[CR]owning\f[R] shares the value and copies nothing.
-It has no \f[CR]==\f[R] and no public constructor.
-The value is \f[CR]const\f[R].
-\f[CR]*\f[R] and \f[CR]\->\f[R] on a temporary \f[CR]owning\f[R] do not
-compile.
-.SH EXAMPLES
-.SS cbor::ref<T>
-.IP
-.EX
-\f[I]// bytes: a std::string with \(dqabc\(dq\f[R]
-\f[B]auto\f[R] const r = cbor::structs<std::string_view>::decode(std::move(bytes));
-\f[B]if\f[R] (r) {
-    v = **r;             \f[I]// \(dqabc\(dq, valid while *r lives\f[R]
-    same = *r == \(dqabc\(dq;  \f[I]// true\f[R]
-}
-.EE
-.SS cbor::owning<T>
-.IP
-.EX
-\f[I]// p: the cbor::ref<person> of {\(dqname\(dq: \(dqann\(dq, \(dqage\(dq: 30}\f[R]
-\f[B]auto\f[R] const own = p.clone();
-std::string_view const name = own\->name;  \f[I]// \(dqann\(dq, valid after p ends\f[R]
-.EE
-.SH SEE ALSO
-mbedded\-cbor(3), cbor::lazy(3), cbor::at_path(3), cbor::item(3), cbor::structs(3), cbor::schema(3), cbor::item_size(3), cbor::sequence(3), cbor::sequence_reader(3), cbor::diagnostic_notation(3), cbor::error(3)
+A text or a byte string comes back as a view into the bytes, and no byte is copied\&. The view sits in a \fR\fBcbor::ref\fP<T>\fP\&. The \fR\fBcbor::ref\fP<T>\fP holds the owner, so the view stays valid while the \fR\fBcbor::ref\fP<T>\fP lives\&.
+
+.PP
+A copy of a \fR\fBcbor::ref\fP<T>\fP shares the owner and copies no bytes\&.
+.SH "THE OWNER OF THE BYTES"
+.PP
+The owner is a \fRstd::shared_ptr<void const>\fP\&. Bytes come into the library in one of these forms\&. No form copies the bytes\&.
+
+.PP
+.IP "\(bu" 2
+An rvalue \fRstd::string\fP is moved into a new owner\&. \fR\fBcbor::lazy::adopt\fP\fP makes it\&.
+.IP "\(bu" 2
+A \fRstd::shared_ptr<std::string const>\fP is read in place\&. \fR\fBcbor::lazy::view\fP\fP takes it from the caller, and every result keeps it alive\&.
+.IP "\(bu" 2
+A \fRstd::shared_ptr<void const>\fP and a \fRstd::string_view\fP beside it are read in place\&. The owner keeps the bytes of the view alive\&. The library does not check that the owner holds them\&.
+.PP
+
+.PP
+A \fRstd::string\fP lvalue beside an owner does not compile\&. Its bytes can end before the owner ends\&.
+
+.PP
+\fR\fBcbor::structs\fP<T>::decode\fP, \fRcbor::schema<T>::decode\fP, \fRcbor::schema<T>::path\fP and \fR\fBcbor::at_path\fP\fP take the same forms for a view result\&. \fR\fBcbor::sequence\fP\fP takes the two forms that use a \fRstd::shared_ptr\fP, and no rvalue \fRstd::string\fP\&. The library takes no other pointer to bytes\&.
+
+.PP
+A larger object can hold the bytes\&. Two forms read them in place\&. The aliasing constructor of \fRstd::shared_ptr\fP makes an owner from a member of the object, and that owner shares the count of the object\&. Or the object is the owner, and a view of its bytes is passed beside it\&.
+
+.PP
+A \fR\fBcbor::lazy\fP\fP holds the owner of its bytes\&. So does each \fR\fBcbor::lazy\fP\fP that a step gives, and each iterator of its views\&. A \fR\fBcbor::lazy\fP\fP from a step stays valid after the \fR\fBcbor::lazy\fP\fP that gave it ends\&.
+.SH "READ THE VALUE"
+.PP
+\fR*r\fP gives the value of a \fR\fBcbor::ref\fP<T>\fP \fRr\fP\&. A view comes back by value\&. Any other \fRT\fP comes back as a \fRT const &\fP\&. \fRr->\fP reaches the members of the value\&.
+
+.PP
+For a \fR\fBcbor::ref\fP<std::string_view>\fP, \fR*r\fP is the \fRstd::string_view\fP\&. The view stays valid while \fRr\fP lives\&. A view copied out of \fRr\fP does not keep the bytes\&. Keep the \fR\fBcbor::ref\fP<T>\fP in a variable as long as its views are in use\&.
+
+.PP
+\fR*\fP and \fR->\fP on a temporary \fR\fBcbor::ref\fP<T>\fP do not compile\&. \fR==\fP works on a temporary, because it gives a \fRbool\fP\&. \fR==\fP compares the value with a \fRT\fP, and it compares two \fR\fBcbor::ref\fP<T>\fP by their values\&.
+.SH "COPY THE VALUE"
+.PP
+\fRclone()\fP copies the bytes into new memory\&. The copy stays valid after the owner ends\&.
+
+.PP
+.IP "\(bu" 2
+For a \fR\fBcbor::ref\fP<std::string_view>\fP, \fRclone()\fP gives a \fRstd::string\fP\&.
+.IP "\(bu" 2
+For a \fR\fBcbor::ref\fP<std::span<std::byte const>>\fP, \fRclone()\fP gives a \fRstd::vector<std::byte>\fP\&.
+.IP "\(bu" 2
+For any other \fRT\fP, \fRclone()\fP gives a \fR\fBcbor::owning\fP<T>\fP\&.
+.PP
+.SH "SHARE AND MOVE"
+.PP
+A copy of a \fR\fBcbor::ref\fP<T>\fP shares the owner and copies the value\&. A move takes the owner and the value\&. The moved-from \fR\fBcbor::ref\fP<T>\fP holds \fRT{}\fP and no owner\&.
+
+.PP
+Only the library makes a \fR\fBcbor::ref\fP<T>\fP\&. A program gets one from a call\&.
+.SH "THE OWNING VALUE"
+.PP
+\fRclone()\fP of a \fR\fBcbor::ref\fP<T>\fP gives a \fR\fBcbor::owning\fP<T>\fP for a \fRT\fP that is not a single text or byte view\&. The \fR\fBcbor::owning\fP<T>\fP holds a copy of the value and of the bytes of each view in it\&. A view in it stays valid while the \fR\fBcbor::owning\fP<T>\fP or one of its copies lives\&.
+
+.PP
+\fR*o\fP gives the value as a \fRT const &\fP, and \fRo->\fP reaches its members\&. The value is \fRconst\fP\&. \fR*\fP and \fR->\fP on a temporary \fR\fBcbor::owning\fP<T>\fP do not compile\&.
+
+.PP
+A copy of a \fR\fBcbor::owning\fP<T>\fP shares the value and copies no bytes\&. A \fR\fBcbor::owning\fP<T>\fP has no \fR==\fP, and no public constructor\&.
+.SH "ERRORS"
+.PP
+A \fR\fBcbor::ref\fP<T>\fP and a \fR\fBcbor::owning\fP<T>\fP give no error code\&. A wrong use does not compile: \fR*\fP and \fR->\fP on a temporary, and a \fRstd::string\fP lvalue beside an owner\&. A null owner, or an empty owner in the form with a view, given to \fR\fBcbor::lazy::view\fP\fP throws \fRstd::logic_error\fP\&.
+
+.PP
+ 
+.SH "EXAMPLES"
+ 
+.PP
+.nf
+    // bytes: a std::string with {"name": "ann"}
+    {
+        auto const doc = cbor::lazy::adopt(std::move(bytes));
+        auto const name = doc\->at("name")\->get<std::string_view>();
+        if (name)
+            kept = *name;  // a copy of the ref: it shares the owner of the bytes
+    }  // doc and name end here; kept keeps the bytes
+    std::string const copy = kept\->clone();  // "ann", in new memory
+.fi
+.PP
+ 

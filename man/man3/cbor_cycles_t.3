@@ -1,0 +1,31 @@
+.TH "cbor::cycles_t" 3 "Version 0.9.0" "mbedded-cbor" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+cbor::cycles_t \- Selects the encode that writes each cycle of a tree with tags 28 and 29 (RFC 8949 3\&.4, IANA tags 28 and 29)\&.  
+
+.SH SYNOPSIS
+.br
+.PP
+.PP
+\fR#include <cbor/encode\&.hpp>\fP
+.SH "DESCRIPTION"
+.PP 
+Selects the encode that writes each cycle of a tree with tags 28 and 29 (RFC 8949 3\&.4, IANA tags 28 and 29)\&. 
+
+\fBcbor::encode()\fP and \fBcbor::encode_iov()\fP without it write no tag 28 or 29 of their own, and a \fRshared_reference\fP gives \fRunsupported_value\fP\&.
+
+.PP
+.PP
+.nf
+cbor::encode(**tree, out, cbor::cycles) → std::expected<std::size_t, error>
+.fi
+.PP
+
+.PP
+\fBSee also\fP
+.RS 4
+\fBcbor::encode()\fP 
+.RE
+.PP
+

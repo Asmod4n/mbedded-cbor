@@ -1,0 +1,108 @@
+.TH "cbor::structs< T >" 3 "Version 0.9.0" "mbedded-cbor" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+cbor::structs \- Writes a C++ value as CBOR and reads it back\&.  
+
+.SH SYNOPSIS
+.br
+.PP
+.PP
+\fR#include <cbor/structs\&.hpp>\fP
+.SS "Static Public Member Functions"
+
+.in +1c
+.ti -1c
+.RI "template<owning_range_of_chars Encoded> static std::expected< \fBref\fP< T >, \fBerror\fP > \fBdecode\fP (Encoded &&encoded)"
+.br
+.RI "Reads one item into a \fRT\fP\&. "
+.ti -1c
+.RI "template<owning_range_of_chars Encoded> static std::expected< \fBref\fP< T >, \fBerror\fP > \fBdecode\fP (std::shared_ptr< Encoded const > encoded)"
+.br
+.RI "Reads one item into a \fRT\fP from the bytes that \fRencoded\fP owns\&. "
+.ti -1c
+.RI "template<owning_range_of_chars Encoded> static std::expected< \fBref\fP< T >, \fBerror\fP > \fBdecode\fP (std::shared_ptr< Encoded const > encoded, T &&target)"
+.br
+.RI "Reads one item into \fRtarget\fP from the bytes that \fRencoded\fP owns\&. "
+.ti -1c
+.RI "template<borrowed_range_of_chars Encoded> static std::expected< \fBref\fP< T >, \fBerror\fP > \fBdecode\fP (std::shared_ptr< void const > owner, Encoded const &encoded)"
+.br
+.RI "Reads one item into a \fRT\fP from bytes that \fRowner\fP keeps alive\&. "
+.ti -1c
+.RI "template<borrowed_range_of_chars Encoded> static std::expected< \fBref\fP< T >, \fBerror\fP > \fBdecode\fP (std::shared_ptr< void const > owner, Encoded const &encoded, T &&target)"
+.br
+.RI "Reads one item into \fRtarget\fP from bytes that \fRowner\fP keeps alive\&. "
+.ti -1c
+.RI "static std::expected< std::string, \fBerror\fP > \fBencode\fP (T const &value)"
+.br
+.RI "Writes \fRvalue\fP as one CBOR item in preferred serialization, into a new \fRstd::string\fP\&. "
+.ti -1c
+.RI "template<class Target> static std::expected< std::size_t, \fBerror\fP > \fBencode\fP (T const &value, Target &&target)"
+.br
+.RI "Appends \fRvalue\fP as one CBOR item in preferred serialization to \fRtarget\fP\&. "
+.in -1c
+.SH "DESCRIPTION"
+.PP 
+
+.SS "template<class T>
+.br
+class cbor::structs< T >"Writes a C++ value as CBOR and reads it back\&. 
+
+\fRT\fP, and each member of a struct in \fRT\fP, is one of the types in this table\&. \fR\fBencode\fP\fP writes the item of the right column\&. \fR\fBdecode\fP\fP takes only that item, under its own tag\&.
+
+.PP
+C++ type  CBOR item  \fRbool\fP, \fRstd::nullptr_t\fP, \fRcbor::simple_value\fP  \fRtrue\fP or \fRfalse\fP, \fRnull\fP, a simple value  an integer of 8 to 64 bits; \fR__int128\fP  an integer; a bignum (tag 2, 3)  an enum with a fixed underlying type  the integer  \fRfloat\fP, \fRdouble\fP  the shortest float that holds the value  \fRstd::basic_string<char>\fP, \fRstd::string_view\fP  a text string  \fRstd::span<std::byte const>\fP  a byte string  \fRstd::vector\fP, \fRstd::array\fP of \fRstd::byte\fP, an integer, \fRfloat\fP, \fRdouble\fP  an RFC 8746 typed array  \fRstd::set\fP, \fRstd::flat_set\fP  tag 258 on an array  \fRstd::chrono::sys_seconds\fP  tag 1 on an integer; \fR\fBdecode\fP\fP also takes a float whose value is a whole number  \fRstd::chrono::year_month_day\fP  tag 100 on an integer of days  \fRstd::optional<E>\fP  the item of E, or \fRnull\fP; no key when empty  \fRstd::variant<E\&.\&.\&.>\fP  the item of the alternative  \fRstd::tuple<E\&.\&.\&.>\fP, \fRstd::array<E, N>\fP  an array of that count  a map type; a multimap type  a map; a map to arrays  another container  an array  \fRcbor::tagged_item<N, E>\fP  tag N on the item of E  a struct  a map  
+
+.PP
+\fR\fBdecode\fP\fP gives \fRincorrect_type\fP for another item: a \fRstd::vector<int>\fP takes a typed array, not an array\&. An enum with no fixed underlying type does not compile in \fR\fBdecode\fP\fP\&. A \fRlong double\fP and a struct under \fRtagged_item\fP do not compile\&.
+
+.PP
+.PP
+.nf
+cbor::structs<T>::encode(value)              → std::expected<std::string, cbor::error>
+cbor::structs<T>::decode(std::move(encoded)) → std::expected<cbor::ref<T>, cbor::error>
+.fi
+.PP
+ 
+.PP
+.nf
+message: {"id": 4}
+call: auto const r = cbor::structs<reading>::encode(reading{4, std::nullopt})
+result: 5 bytes: a1 62 69 64 04
+call: cbor::lazy::adopt(*r)
+result: lazy of {"id": 4}
+call: auto const s = cbor::structs<std::set<std::uint8_t>>::encode(std::set<std::uint8_t>{3, 1})
+result: 6 bytes: d9 01 02 82 01 03
+call: cbor::lazy::adopt(*s)
+result: lazy of 258([1, 3])
+call: cbor::structs<reading>::decode(std::move(bytes))
+result: ref to reading{4, std::nullopt}
+
+.fi
+.PP
+
+.PP
+.PP
+.nf
+    // reading: struct { std::uint8_t id; std::optional<std::uint8_t> unit; }
+    auto const one = cbor::structs<reading>::encode(reading{4, std::nullopt});    // {"id": 4}
+    auto const set = cbor::structs<std::set<std::uint8_t>>::encode({3, 1});        // 258([1, 3])
+.fi
+.PP
+ 
+.PP
+\fBSee also\fP
+.RS 4
+\fBcbor::structs::encode()\fP 
+
+.PP
+\fBcbor::structs::decode()\fP 
+
+.PP
+\fBcbor::describe_members\fP 
+
+.PP
+\fBcbor::ref\fP 
+.RE
+.PP
+

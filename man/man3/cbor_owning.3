@@ -1,0 +1,76 @@
+.TH "cbor::owning< T >" 3 "Version 0.9.0" "mbedded-cbor" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+cbor::owning \- A value that holds its own copy of the bytes of each view in it\&.  
+
+.SH SYNOPSIS
+.br
+.PP
+.PP
+\fR#include <cbor/ref\&.hpp>\fP
+.SS "Public Member Functions"
+
+.in +1c
+.ti -1c
+.RI "T const & \fBoperator*\fP () const &"
+.br
+.RI "Gives the value\&. "
+.ti -1c
+.RI "void \fBoperator*\fP () const &&=delete"
+.br
+.ti -1c
+.RI "T const * \fBoperator\->\fP () const &"
+.br
+.RI "Gives the address of the value, so that \fRown->\fP reaches its members\&. "
+.ti -1c
+.RI "void \fBoperator\->\fP () const &&=delete"
+.br
+.in -1c
+.SH "DESCRIPTION"
+.PP 
+
+.SS "template<class T>
+.br
+class cbor::owning< T >"A value that holds its own copy of the bytes of each view in it\&. 
+
+\fBcbor::ref::clone()\fP makes it for a \fRT\fP that is not a single text or byte view\&. The copy and the value share one \fRstd::shared_ptr\fP, so a view in it stays valid after the bytes of the \fR\fBref\fP\fP end\&. A copy of an \fR\fBowning\fP\fP shares the value and copies nothing\&. It has no \fR==\fP and no public constructor\&. The value is \fRconst\fP\&. \fR*\fP and \fR->\fP on a temporary \fR\fBowning\fP\fP do not compile\&.
+
+.PP
+.PP
+.nf
+p\&.clone() → owning<person>
+*own      → person const &
+own\->name → std::string_view
+.fi
+.PP
+ 
+.PP
+.nf
+message: {"name": "ann", "age": 30}
+call: auto const p = cbor::structs<person>::decode(std::move(bytes))\&.value()
+result: ref to person{"ann", 30}
+call: auto const own = p\&.clone()
+result: owning of person{"ann", 30}
+call: own\->name
+result: "ann"
+
+.fi
+.PP
+
+.PP
+.PP
+.nf
+        // p: the cbor::ref<person> of {"name": "ann", "age": 30}
+        auto const own = p\&.clone();
+        std::string_view const name = own\->name;  // "ann", valid after p ends
+.fi
+.PP
+ 
+.PP
+\fBSee also\fP
+.RS 4
+\fBcbor::ref\fP 
+.RE
+.PP
+

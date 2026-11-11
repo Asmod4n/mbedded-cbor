@@ -1,0 +1,151 @@
+.TH "cbor::sequence_reader" 3 "Version 0.9.0" "mbedded-cbor" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+cbor::sequence_reader \- Reads a CBOR sequence (RFC 8742) whose bytes arrive in pieces, for example from a socket\&.  
+
+.SH SYNOPSIS
+.br
+.PP
+.PP
+\fR#include <cbor/sequence_reader\&.hpp>\fP
+.SS "Public Member Functions"
+
+.in +1c
+.ti -1c
+.RI "\fBsequence_reader\fP ()=default"
+.br
+.RI "Makes a reader that holds no byte\&. "
+.ti -1c
+.RI "\fBsequence_reader\fP (sequence_reader const &)=delete"
+.br
+.ti -1c
+.RI "\fBsequence_reader\fP & \fBoperator=\fP (\fBsequence_reader\fP const &)=delete"
+.br
+.ti -1c
+.RI "\fBsequence_reader\fP (sequence_reader &&other)=default"
+.br
+.RI "Takes the bytes and the state of \fRother\fP\&. "
+.ti -1c
+.RI "\fBsequence_reader\fP & \fBoperator=\fP (\fBsequence_reader\fP &&other)=default"
+.br
+.RI "Takes the bytes and the state of \fRother\fP\&. "
+.ti -1c
+.RI "template<borrowed_range_of_chars Piece>"
+.br
+requires (!std::is_array_v<Piece>)
+.br
+void \fBfeed\fP (Piece const piece)
+.br
+.RI "Copies the bytes of a view to the end of the sequence\&. "
+.ti -1c
+.RI "template<owning_range_of_chars Piece>"
+.br
+requires (!std::is_array_v<Piece>)
+.br
+void \fBfeed\fP (Piece const &piece)
+.br
+.RI "Copies the bytes of a container to the end of the sequence\&. "
+.ti -1c
+.RI "template<owning_range_of_chars Piece> void \fBfeed\fP (Piece &&piece)"
+.br
+.RI "Takes a container by move and holds it as the next bytes of the sequence\&. "
+.ti -1c
+.RI "template<owning_range_of_chars Piece> void \fBfeed\fP (std::shared_ptr< Piece const > piece)"
+.br
+.RI "Holds the bytes of \fRpiece\fP as the next bytes of the sequence, without a copy\&. "
+.ti -1c
+.RI "bool \fBempty\fP () const"
+.br
+.RI "Tells if the reader holds no byte that no item took\&. "
+.ti -1c
+.RI "std::expected< \fBlazy\fP, \fBerror\fP > \fBnext\fP ()"
+.br
+.RI "Gives the next item when all of its bytes are there\&. "
+.in -1c
+.SH "DESCRIPTION"
+.PP 
+Reads a CBOR sequence (RFC 8742) whose bytes arrive in pieces, for example from a socket\&. 
+
+\fR\fBfeed\fP\fP gives the reader the next piece\&. \fR\fBnext\fP\fP gives the next item as a \fBcbor::lazy\fP when all of its bytes are there, and \fRtoo_little_data\fP while it waits\&. \fR\fBempty\fP\fP is true when the reader holds no byte that no item took\&.
+
+.PP
+\fRfeed(std::move(s))\fP takes a \fRstd::string\fP by move\&. \fRfeed(shared_ptr)\fP holds the piece without a copy\&. \fRfeed(view)\fP and \fRfeed(s)\fP copy the bytes\&. An item that is whole in a piece that the reader holds is a view into that piece\&. The reader copies an item that the end of a piece cuts, and only the bytes of that item\&. Each item keeps its bytes alive after later feeds and after the reader is gone\&.
+
+.PP
+A char array, such as a literal, does not compile, because it holds a NUL after its last byte\&. A \fRstd::shared_ptr\fP to bytes that are not const does not compile\&. The reader cannot be copied\&.
+
+.PP
+.PP
+.nf
+cbor::sequence_reader r  → sequence_reader
+r\&.feed(std::move(piece)) → void
+r\&.next()                 → std::expected<lazy, error>
+r\&.empty()                → bool
+.fi
+.PP
+ 
+.PP
+.nf
+bytes: 82 01 02 03
+call: cbor::sequence_reader r
+result: sequence_reader that holds no unread byte
+call: auto first = bytes\&.substr(0, 2)
+result: 2 bytes: 82 01
+call: r\&.feed(std::move(first))
+result: void
+call: r\&.empty()
+result: false
+call: auto second = bytes\&.substr(2)
+result: 2 bytes: 02 03
+call: r\&.feed(std::move(second))
+result: void
+call: r\&.next()\->size()
+result: 2
+call: r\&.next()\->get<std::int64_t>()
+result: 3
+call: r\&.empty()
+result: true
+
+.fi
+.PP
+
+.PP
+\fBReturn values\fP
+.RS 4
+\fItoo_little_data\fP the item is not complete yet; feed more bytes 
+.br
+\fIsyntax_error\fP the bytes are not a well-formed item 
+.br
+\fIindefinite_length\fP a head uses indefinite length 
+.RE
+.PP
+\fBExceptions\fP
+.RS 4
+\fIstd::logic_error\fP a null \fRstd::shared_ptr\fP, or a call on a reader that was moved from
+.RE
+.PP
+After an error other than \fRtoo_little_data\fP, every call of \fR\fBnext\fP\fP gives that error, and \fR\fBfeed\fP\fP keeps no byte\&.
+
+.PP
+.PP
+.nf
+    cbor::sequence_reader r;
+    r\&.feed(std::move(first));       // 82 01: the start of [1, 2]
+    auto const waiting = r\&.next();  // too_little_data
+    r\&.feed(std::move(second));      // 02 03
+    auto const pair = r\&.next();     // [1, 2]
+    auto const three = r\&.next();    // 3
+.fi
+.PP
+ 
+.PP
+\fBSee also\fP
+.RS 4
+\fBcbor::sequence\fP 
+
+.PP
+\fBcbor::lazy\fP 
+.RE
+.PP
+

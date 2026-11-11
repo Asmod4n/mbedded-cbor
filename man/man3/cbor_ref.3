@@ -1,0 +1,111 @@
+.TH "cbor::ref< T >" 3 "Version 0.9.0" "mbedded-cbor" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+cbor::ref \- A value and a \fRstd::shared_ptr\fP to the owner of the bytes that it views\&.  
+
+.SH SYNOPSIS
+.br
+.PP
+.PP
+\fR#include <cbor/ref\&.hpp>\fP
+.SS "Public Member Functions"
+
+.in +1c
+.ti -1c
+.RI "\fBref\fP (ref const &other)=default"
+.br
+.RI "Shares the owner and copies the value\&. "
+.ti -1c
+.RI "ref & \fBoperator=\fP (ref const &other)=default"
+.br
+.RI "Shares the owner and copies the value\&. "
+.ti -1c
+.RI "\fBref\fP (ref &&o) noexcept(std::is_nothrow_move_constructible_v< T > &&std::is_nothrow_default_constructible_v< T >)"
+.br
+.RI "Takes the owner and the value of \fRo\fP, and leaves \fRT{}\fP and no owner in \fRo\fP\&. "
+.ti -1c
+.RI "ref & \fBoperator=\fP (ref &&o) noexcept(std::is_nothrow_move_assignable_v< T > &&std::is_nothrow_default_constructible_v< T >)"
+.br
+.RI "Takes the owner and the value of \fRo\fP, and leaves \fRT{}\fP and no owner in \fRo\fP\&. "
+.ti -1c
+.RI "std::conditional_t< is_view< T >, T, T const & > \fBoperator*\fP () const &"
+.br
+.RI "Gives the value: a view by value, any other \fRT\fP as \fRT const &\fP\&. "
+.ti -1c
+.RI "void \fBoperator*\fP () const &&=delete"
+.br
+.ti -1c
+.RI "T const * \fBoperator\->\fP () const &"
+.br
+.RI "Gives the address of the value, so that \fRr->\fP reaches its members\&. "
+.ti -1c
+.RI "void \fBoperator\->\fP () const &&=delete"
+.br
+.ti -1c
+.RI "std::string \fBclone\fP () const"
+.br
+.RI "Copies the text into a \fRstd::string\fP\&. "
+.ti -1c
+.RI "std::vector< std::byte > \fBclone\fP () const"
+.br
+.RI "Copies the bytes into a byte vector\&. "
+.ti -1c
+.RI "\fBowning\fP< T > \fBclone\fP () const"
+.br
+.RI "Copies the value and the bytes of each view in it into a \fBcbor::owning\fP\&. "
+.in -1c
+.SH "DESCRIPTION"
+.PP 
+
+.SS "template<class T>
+.br
+class cbor::ref< T >"A value and a \fRstd::shared_ptr\fP to the owner of the bytes that it views\&. 
+
+\fR*r\fP gives a view by value and any other \fRT\fP as \fRT const &\fP\&. \fRr->\fP reaches the members\&. \fR==\fP compares the values\&. A copy shares the owner and copies no bytes\&. A move leaves \fRT{}\fP and no owner behind\&.
+
+.PP
+A view in the value stays valid while one \fR\fBref\fP\fP with that owner lives\&. A view copied out of the \fR\fBref\fP\fP does not keep the bytes\&. \fR\fBclone\fP\fP copies the bytes: into a \fRstd::string\fP, a byte vector, or a \fBcbor::owning\fP\&. Only the library makes a \fR\fBref\fP\fP\&. \fR*\fP and \fR->\fP on a temporary \fR\fBref\fP\fP do not compile\&.
+
+.PP
+.PP
+.nf
+cbor::structs<std::string_view>::decode(std::move(bytes)) → std::expected<ref<std::string_view>, error>
+*r                                                        → std::string_view
+r\->member                                                 → the member of T
+r\&.clone()                                                 → std::string
+.fi
+.PP
+ 
+.PP
+.nf
+message: "abc"
+call: auto const r = cbor::structs<std::string_view>::decode(std::move(bytes))
+result: ref to "abc"
+call: std::string_view const v = **r
+result: "abc"
+call: r\->clone()
+result: "abc"
+
+.fi
+.PP
+
+.PP
+.PP
+.nf
+    // bytes: a std::string with "abc"
+    auto const r = cbor::structs<std::string_view>::decode(std::move(bytes));
+    if (r) {
+        v = **r;             // "abc", valid while *r lives
+        same = *r == "abc";  // true
+    }
+.fi
+.PP
+ 
+.PP
+\fBSee also\fP
+.RS 4
+\fBcbor::owning\fP 
+.RE
+.PP
+
