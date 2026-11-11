@@ -1,3 +1,160 @@
 /**
 @defgroup lazy read a CBOR message in place, step by step
+
+`cbor::lazy` reads a CBOR message in place. It copies no byte of the
+message. Each step reads only the heads up to its child. Include
+`<cbor/cbor.hpp>`.
+
+A `cbor::lazy` is a position in one top-level item. Each member function
+reads the bytes at the position when it is called. A copy of a lazy is a
+second position in the same bytes. Several threads can read one lazy at
+the same time.
+
+Each step gives a `std::expected` with a `cbor::error`. A chain of steps
+stops at the first error.
+
+@section lazy_make MAKE A LAZY
+
+`cbor::lazy::adopt` and `cbor::lazy::view` make the lazy of the top-level
+item. Neither copies the bytes.
+
+- `adopt(std::move(bytes))`: `bytes` is a `std::string`. It moves into
+  storage that the lazy owns. An lvalue, a `std::string_view` and a
+  literal do not compile.
+- `view(owner)`: `owner` is a `std::shared_ptr<std::string const>`. The
+  lazy reads `*owner` in place. Every result keeps `owner` alive.
+- `view(owner, part)`: `part` is a `std::string_view` into memory that
+  `owner`, a `std::shared_ptr<void const>`, keeps alive.
+
+`view` throws `std::logic_error` for a null `owner`. The form with `part`
+also throws it for an empty `owner`.
+
+`adopt` and `view` read only the first head. They skip one leading tag 55799.
+They do not check that the bytes are one complete item. A step finds a
+missing part, and no step reads a byte after the item. The bytes `82 01`
+make a lazy, and a read of the second element gives `too_little_data`.
+
+@section lazy_steps STEPS IN A MAP OR AN ARRAY
+
+`at` gives the lazy of one child. `operator[]` gives the same result.
+
+- `at(key)`: the value of the first pair whose key is the text `key`. A
+  text key does not match a byte string with the same bytes.
+- `at(cbor::key{n})`: the value of the first pair whose key is the
+  integer `n`. A bignum key that holds `n` matches too.
+- `at(index)`: the element of an array or of a typed array, counted from
+  0.
+
+A map with a key twice is no error. `at` gives the first pair.
+
+`operator[]` does not throw for a missing key or a wrong index. The
+result is a `std::expected`, so `l["a"]["b"]` does not compile. To read a
+chain, use `cbor::lazy::at_path()`.
+
+A step reads the heads from the start of its map or array to the target,
+and the head of the target. It reads no byte after the head of the target.
+A target that the input does not hold gives `too_little_data` at the
+step. A map or an array that claims more items than the bytes left gives
+`too_little_data` before the step reads an element.
+
+@section lazy_get READ A VALUE
+
+`get<T>()` reads the value at the lazy as `T`. `get` passes a tag that it
+does not interpret.
+
+- an integer type, not `bool`: an integer, or a bignum (tag 2 or 3) that
+  fits `T`.
+- `double`: a float of 16, 32 or 64 bits, or an integer or a bignum that
+  a `double` holds exactly.
+- `bool`: `false` or `true`.
+- `std::nullptr_t`: `null`.
+- `cbor::simple_value`: a simple value, for example `undefined`.
+- `std::string_view`: a text string, as a `cbor::ref<std::string_view>`.
+- `std::span<std::byte const>`: a byte string, as a
+  `cbor::ref<std::span<std::byte const>>`.
+- `cbor::typed_array`: a typed array (RFC 8746), as a
+  `cbor::ref<cbor::typed_array>`.
+- `std::float128_t`, where the compiler has it: an element of a typed
+  array of 128-bit floats.
+
+A `cbor::ref` views the bytes and keeps their owner alive. Nothing is
+copied.
+
+The binary16 float `1.5` (`f9 3e 00`) reads as `1.5`. The integer `42`
+reads as `42.0` for `double`. The bignum `2(h'05')` reads as `5` for
+`std::int64_t`.
+
+@section lazy_loop THE COUNT, THE ELEMENTS AND THE PAIRS
+
+`size()` gives the count of the head of an array, a map or a typed
+array. It reads only the head. It gives a `std::expected` of
+`std::uint64_t`. `empty()` gives `true` when the count is 0.
+
+`elements()` gives the elements of an array, or of a typed array, as a
+view. Each element is a `std::expected<cbor::lazy, cbor::error>`. The view
+reads one element at each step. It is a forward range, a sized range and
+a borrowed range, so the standard algorithms take it. It has no `front()`.
+Its `size()` gives the count of the head, and it gives exactly that many
+values.
+
+`entries()` gives the pairs of a map, in the order of the bytes, as a
+view. Each element is a `std::expected` of a pair of lazy values, or of a
+`cbor::error`. The key is `first` and the value is `second`.
+A key that occurs twice occurs twice in the view. The view is a forward
+range, a sized range and a borrowed range.
+
+An iterator holds the owner of the bytes. It stays valid after the lazy
+and the view end. When the iterator cannot step over an element, `*it`
+gives `too_little_data` or another error of the bytes. Each later position
+gives that error.
+
+@section lazy_clone COPY ONE ITEM TO A TREE
+
+`clone()` gives a `std::expected<cbor::owning<cbor::item>, cbor::error>`.
+It reads the whole item at the lazy, checks every head, and builds one
+`cbor::item` for each data item. The tree copies each text and byte
+string. It does not view the bytes of the lazy, and it stays valid after
+the lazy and its owner end. The errors of `cbor::decode` apply.
+
+`clone` keeps tags 28 and 29 as tag items. A tag 55799 inside the
+top-level item stays a tag item.
+
+`type()` gives a `std::expected<cbor::type, cbor::error>`, the kind of the
+value at the lazy.
+
+- A tag 2 or 3 whose magnitude fits 64 bits gives `unsigned_integer` or
+  `negative_integer` (RFC 8949, section 3.4.3).
+- A larger bignum gives `unsigned_bignum` or `negative_bignum`.
+- A typed array (RFC 8746) gives `typed_array`.
+- Every other tag gives `tag`. `type()` does not pass the tag.
+
+@section lazy_errors ERRORS
+
+Each step gives a `cbor::error`:
+
+- `key_not_found`: no pair has the key.
+- `index_out_of_bounds`: the index is not less than the count.
+- `not_indexable`: a key or an index on a value of the wrong kind; `size()`
+  on a value that is not an array, a map or a typed array; `elements()`
+  on a value that is not an array; `entries()` on a value that is not a
+  map.
+- `incorrect_type`: `get<T>()` of another kind of value.
+- `number_out_of_range`: a number that does not fit `T`.
+- `too_little_data`: the bytes end before the item, or a count or a string
+  is longer than the bytes left.
+- `syntax_error`: a head is broken.
+- `indefinite_length`: `elements()` or `entries()` of an array or a map of
+  indefinite length, or `clone()` of such an item.
+- `nesting_depth_exceeded`: `clone()` of an item that nests too deep.
+- `not_enough_memory`: an allocation of the owner in `adopt` fails.
+
+A wrong use throws `std::logic_error`. It throws for a null `owner` in
+`view`, and for an empty `owner` in the form with `part`. It throws for
+each member function of a lazy that holds no top-level item, for example
+a `cbor::lazy{}`.
+
+@manonly
+.SH "EXAMPLES"
+@endmanonly
+@snippet doc_reference_lazy.cpp lazy group
 */

@@ -33,6 +33,31 @@ concept front_callable = requires(V const &v) { v.front(); };
 
 }
 
+// The example of the group lazy, in the text of its page. The test exists so that the example compiles and gives the
+// values that the page states. The bytes are checked against the encoding of RFC 8949, so that the test does not rely
+// on the helpers alone.
+TEST_CASE("doc reference lazy: the example of the group lazy")
+{
+    std::string bytes = test::preferred(test::M("name"s, "ann"s, "scores"s, test::A(4, 5, 6)));
+    CHECK_EQ(bytes, "\xa2\x64\x6e\x61\x6d\x65\x63\x61\x6e\x6e\x66\x73\x63\x6f\x72\x65\x73\x83\x04\x05\x06"s);
+    // [lazy group]
+    // bytes: a std::string with {"name": "ann", "scores": [4, 5, 6]}
+    auto const doc = cbor::lazy::adopt(std::move(bytes));
+    auto const name = doc->at("name")->get<std::string_view>();  // a ref to "ann"
+    auto const scores = doc->at("scores");
+    auto const count = scores->size();                             // 3
+    auto const elements = scores->elements();
+    int total = 0;
+    for (auto const element : *elements)
+        total += element->get<int>().value_or(0);
+    // total: 15
+    // [lazy group]
+    REQUIRE(doc);
+    CHECK_EQ(**name, "ann"sv);
+    CHECK_EQ(count.value(), 3u);
+    CHECK_EQ(total, 15);
+}
+
 // lazy.hpp, snippet adopt: the bytes move into the lazy; an lvalue, a view and a literal do not compile.
 TEST_CASE("doc reference lazy: adopt")
 {
