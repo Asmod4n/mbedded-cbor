@@ -46,6 +46,10 @@ end
 
 local links = { Link = function(l) l.target = link_target(l.target); return l end }
 
+local function prefixed(prefix)
+  return { Header = function(h) h.identifier = prefix .. "-" .. h.identifier; return h end }
+end
+
 local function cpp_html(text)
   local html = pandoc.write(pandoc.Pandoc({ pandoc.CodeBlock(text, { class = "cpp" }) }), "html", PANDOC_WRITER_OPTIONS)
   local code = html:match('(<code class="sourceCode cpp">.-</code>)')
@@ -167,7 +171,7 @@ local function page_blocks(file, title, does)
   local where = group .. "/" .. file
   local text = read_file(reference .. "/" .. group .. "/" .. file)
   if text == nil then error("reference.lua: cannot read " .. where) end
-  local doc = pandoc.read(text, "gfm"):walk(links)
+  local doc = pandoc.read(text, "gfm"):walk(links):walk(prefixed(page_id(file)))
   local out = { pandoc.RawBlock("html", '<section class="method" id="' .. page_id(file) .. '">'),
     pandoc.RawBlock("html", "<h2>" .. html_escaped(title) .. "</h2>") }
   local example, skipping, declared = false, false, false
@@ -327,7 +331,7 @@ function Pandoc(doc)
     return pandoc.Pandoc(blocks, doc.meta)
   end
   local blocks, methods = {}, {}
-  local extra, extra_methods, typed = {}, {}, false
+  local extra, extra_methods, typed, extra_id = {}, {}, false, nil
   local function extra_close()
     if #extra > 0 then extra[#extra + 1] = pandoc.RawBlock("html", "</section>") end
   end
@@ -336,6 +340,7 @@ function Pandoc(doc)
       extra_close()
       local name = pandoc.utils.stringify(b)
       local id = "s-" .. name:lower():gsub("[^%w]+", "-")
+      extra_id = id
       extra[#extra + 1] = pandoc.RawBlock("html", '<section class="method" id="' .. id .. '">\n<h2>'
         .. html_escaped(name) .. "</h2>")
       extra_methods[#extra_methods + 1] = pandoc.MetaMap({ name = pandoc.MetaString(name),
@@ -346,7 +351,7 @@ function Pandoc(doc)
       examples[#examples + 1] = spec
       extra[#extra + 1] = pandoc.RawBlock("html", example_html(spec, #examples))
     elseif #extra > 0 then
-      extra[#extra + 1] = b:walk(links)
+      extra[#extra + 1] = b:walk(links):walk(prefixed(extra_id))
     elseif b.t == "Header" and b.level == 1 then
       doc.meta.pagetitle = pandoc.utils.stringify(b)
     elseif b.t == "Para" and #b.content >= 1 and pandoc.utils.stringify(b):match("^The examples use the types in") then
@@ -386,7 +391,7 @@ function Pandoc(doc)
     local text = read_file(path)
     if text == nil then error("reference.lua: cannot read " .. path) end
     local text_blocks = { pandoc.RawBlock("html", '<div class="group-text">') }
-    for _, b in ipairs(pandoc.read(text, "gfm"):walk(links).blocks) do text_blocks[#text_blocks + 1] = b end
+    for _, b in ipairs(pandoc.read(text, "gfm"):walk(links):walk(prefixed("g")).blocks) do text_blocks[#text_blocks + 1] = b end
     text_blocks[#text_blocks + 1] = pandoc.RawBlock("html", "</div>")
     for i, b in ipairs(text_blocks) do table.insert(blocks, i, b) end
   end
