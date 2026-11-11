@@ -52,8 +52,8 @@ enum class error {
     /** The bytes end before the item ends. */
     too_little_data = 1,
     /**
-     * A head is not well-formed, or a simple value is reserved in the two-byte form. Bytes after the item, where a
-     * call reads one item.
+     * A head is not well-formed, or a simple value is reserved in the two-byte form. A call that reads exactly one
+     * item finds bytes after it: cbor::diagnostic_notation() and the content of a tag 24.
      */
     syntax_error,
     /** A head uses indefinite length, and the call does not read it. */
