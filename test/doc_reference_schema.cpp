@@ -53,6 +53,26 @@ unsigned char byte_at(std::string_view const bytes, std::size_t const i)
 
 using namespace doc_reference_schema;
 
+// tools/doc/groups/schema.dox, snippet schema group: the EXAMPLES section of the man page of the group schema writes one
+// car, reads one field at its offset and reads the whole car, so a reader sees one round trip. The test checks each value
+// that the comments of the example state.
+TEST_CASE("doc reference schema: the example of the group schema")
+{
+    // [schema group]
+    auto bytes = cbor::schema<car>::encode(car{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}});  // the message of a car
+    auto const seats = cbor::schema<car>::at_path<"$.seats">(*bytes);  // 5, read at its offset
+    auto const back = cbor::schema<car>::decode(std::move(*bytes));  // the whole car
+    std::string const make = (*back)->make;  // "Volvo"
+    // [schema group]
+    REQUIRE(bytes.has_value());
+    CHECK_EQ(seats, 5);
+    REQUIRE(back.has_value());
+    CHECK_EQ(make, "Volvo");
+    CHECK_EQ((*back)->tires.size(), 2u);
+    CHECK_EQ((*back)->tires[1].diameter, 18);
+    CHECK_EQ((*back)->track[2], 3.0);
+}
+
 // schema.hpp, snippet encode: the first form returns a new string, the second appends to a std::string and returns
 // the count it
 // appended, and a span that is too small gives no_buffer_space.

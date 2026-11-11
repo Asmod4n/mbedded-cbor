@@ -1,3 +1,348 @@
 /**
 @defgroup schema structs as Packed CBOR, with fields at fixed offsets
+
+`cbor::schema<T>` writes a struct as one Packed CBOR message
+(draft-ietf-cbor-packed-19). Each field of fixed size has an offset that
+the compiler computes. A read goes to that offset. It does not walk the
+fields before it. Include `<cbor/schema.hpp>`, or `<cbor/cbor.hpp>`,
+which includes it.
+
+A decoder of Packed CBOR reads the message as a map. The keys of the map
+are the names of the members. `cbor::schema<T>` reads only a message of
+`T`. A message of another struct gives `incorrect_type`.
+
+`cbor::schema<T>` reads the description of each struct from
+`cbor::describe_members<T>`. It builds with C++23 on g++ 15, g++ 16,
+clang 23 and AppleClang. With C++26 reflection (g++ 16 with
+`-std=c++26 -freflection`), it also checks each description against the
+public members.
+
+Use `schema` for messages that your own programs write and read. Use
+`cbor::structs` for CBOR that any program writes, mapped into the members
+of a struct or a class.
+
+@section schema_describe THE DESCRIPTION
+
+Each struct has one tag. Each member has one key, and each key is a
+text. `CBOR_DEFINE_TYPE(type, tag, members...)` writes the description of
+a struct at global scope. `CBOR_DEFINE_TYPE_MEMBERS(type, tag, names...)`
+writes it from the names of the members. Each name is the key of its
+member.
+
+- `CBOR_MEMBER(type, member)` takes the name of the member as the key.
+- `cbor::member{"x", &type::member}` takes the text `x` as the key.
+- The macros write a specialization of `cbor::describe_members`.
+  `cbor::structs` reads the same specialization.
+
+These do not compile:
+
+- a struct with no description, or with `cbor::untagged` as its tag;
+- a struct in an anonymous namespace that no code uses. clang refuses it
+  with `-Wunused-const-variable`;
+- two structs of `T` with one tag number, the alternatives of a variant
+  included;
+- a tag number that a standard type uses: 0, 1, 2, 3, 24, 64 to 87, 100,
+  258, 1004 and 32873;
+- a tag number that the IANA registry calls always invalid: 21334, 65535,
+  4294967295 and 18446744073709551615;
+- a key that is not a text;
+- two members with one key;
+- a member that the description lists twice;
+- a member that the description does not list. With reflection, the
+  check uses the public members. Without reflection, Boost.PFR counts the
+  members of an aggregate where it is available, and a count that
+  differs does not compile.
+
+A type whose name holds a comma, such as `pair<int, int>`, takes an alias
+in the macro. The preprocessor splits the arguments of a macro at each
+comma.
+
+@section schema_base CLASSES WITH A BASE CLASS
+
+A class with a base class is described with its base. Use
+`CBOR_DEFINE_DERIVED_TYPE_MEMBERS(type, base, tag, members...)`, or
+`using base = B;` in `cbor::describe_members<T>`. The description then
+lists the members of the base too.
+
+With reflection, the named base must be the one direct base of the
+class. A base class that the description does not name does not compile.
+Without reflection, the named base is accepted when it is a base class
+of the type. The check also accepts an indirect base.
+
+@section schema_variant THE VARIANT MEMBERS
+
+A `std::variant` member of a described class takes these alternatives:
+
+- a class with a description and a tag;
+- a number, a `bool`, or an enum with a fixed underlying type;
+- a text or a byte string.
+
+A list, a map, an array, an optional, a variant, and `std::monostate` do
+not compile as alternatives. A list, a map, an array or an optional of
+a variant does not compile. Each alternative occurs once.
+
+The CBOR head of an item chooses its alternative. Two alternatives whose
+items begin with one head do not compile. Examples are `std::int32_t`
+with `std::uint32_t`, `float` with `std::bfloat16_t`, an enum with its
+underlying type, and two text types. The class alternatives name one
+direct base class, and it is the same base for each of them.
+
+@section schema_write WRITE A MESSAGE
+
+- `encode(value)` gives a `std::expected<std::string, cbor::error>`.
+- `encode(value, target)` appends the message to `target`. It gives the
+  count of bytes that it appended. `target` is a `std::string`, a
+  container of `char`, a `std::span<char>` or a message writer.
+- A `std::span<char>` that is shorter than the message gives
+  `no_buffer_space`.
+
+Only public members are written. Each field has a head of fixed width,
+so a value does not change the offset of a field. A float is written at
+the width of its type, and its bits are copied.
+
+A list of fixed-size structs is written with one copy where the struct in
+memory has the bytes of the element. A compile-time probe finds the layout.
+Otherwise each element is written field by field.
+
+@section schema_at_path READ ONE VALUE
+
+`cbor::schema<T>::at_path<Path>(bytes, indexes...)` reads one value with
+no accessor. The value is a number, a `bool`, an enum, or a
+`std::optional` of one. It gives a `std::expected` of the value.
+
+A path starts with `$`. A part `.name` names a member. A part `[n]` names
+an element. A part `[]` takes its index from the next argument, a
+`std::size_t`. The count
+of arguments equals the count of `[]`. The path is not JSONPath. It has
+no wildcard, no filter and no descendant segment.
+
+On a byte string, a `std::array` or a `std::vector` of `std::uint8_t` or
+`std::byte`, `[n]` reads one byte.
+
+These do not compile: a member that `T` does not have, a wrong count of
+arguments, a path to a text, and a path to a member that is not
+trivially copyable, such as a `std::vector` of structs.
+
+@section schema_path OPEN A MESSAGE
+
+`cbor::schema<T>::%path(...)` opens a message and gives the root accessor,
+`cbor::schema<T>::accessor<T>`. It checks the message once, and it reads
+no field. The forms are:
+
+- `%path(std::move(bytes))`: the string moves into the owner. Nothing is
+  copied.
+- `%path(owner)`: `owner` is a `std::shared_ptr<std::string const>`. The
+  message is read in place.
+- `%path(owner, part)`: `part` is a `std::string_view` into memory that
+  `owner`, a `std::shared_ptr<void const>`, keeps alive.
+
+An accessor holds its owner. Each value and each accessor that it gives
+holds the same owner. So a child accessor stays valid after the root
+accessor ends.
+
+@section schema_accessor READ WITH AN ACCESSOR
+
+`at_path<Path>(indexes...)` of an accessor reads a part of the message. A
+path that starts with `$` starts at the root. A path that starts with
+`@` starts at the part that the accessor names. The result is a
+`std::expected`:
+
+- a number, a `bool` or an enum gives the value;
+- a text or a byte string gives a `std::string_view` into the message;
+- a struct, a list or a map gives its accessor;
+- a `std::optional` of a type E gives a `std::optional` of the result of E.
+
+`size()` gives the count of a list or a map. `view<Path>()` gives a
+`cbor::typed_array_view` of a list of numbers. Only the root accessor has
+`view`.
+
+A `std::string_view` stays valid while an accessor of the same owner
+lives. Keep the accessor in a variable. `at_path` on a temporary
+accessor does not compile. A call on an accessor that was moved from
+throws `std::logic_error`.
+
+A `std::variant` member has `index()`, which gives the index of the held
+alternative, and `get<A>()`. `get<A>()` gives a class alternative as its
+accessor. It gives a number, `bool` or enum as its value. It gives a text
+or a byte string as a `std::string_view`. Another alternative gives
+`incorrect_type`. A path cannot end at a variant member.
+
+A list of fixed-size structs gives a random access range of element
+accessors. In an element, `@` reads a member of the element. `$` starts
+at the root.
+
+@section schema_typed_array READ A LIST OF NUMBERS
+
+`typed_array_view<E>` is a random access, sized range over a list of
+numbers in the message. Each element is a value of `E`, read in little
+endian. The view holds the owner of the bytes.
+
+- `at`, `first` and `last` give an index error as a value.
+- `operator[]`, `front` and `back` throw `std::logic_error` outside the
+  view.
+- `begin` and `end` on a temporary view do not compile.
+
+@section schema_decode READ THE WHOLE STRUCT
+
+`cbor::schema<T>::%decode(...)` reads the whole message into a `T`. It
+gives a `std::expected<cbor::ref<T>, cbor::error>`. The `cbor::ref` holds
+the owner of the bytes, and no form copies the bytes. An rvalue
+`std::string` moves into a new owner. A `std::shared_ptr<std::string const>`
+is read in place. A `std::shared_ptr<void const>` with a view of
+the bytes is read in place too.
+
+- A struct with a default constructor is made with it. Then each
+  described member is set.
+- A class with no default constructor is made by a constructor. That
+  constructor takes the described members in the order of the
+  description.
+- The forms with a `target` take the start value. A `std::pmr` container
+  with its memory resource gives the result its memory. These forms need
+  a default constructor of `T`.
+
+@section schema_apart STORE THE DESCRIPTION APART
+
+Each call takes `cbor::description_place` as a template argument. The
+default is `inside`, and the message holds the description of its
+structs.
+
+With `cbor::description_place::apart`, `encode` writes the message
+without the description. Each read form reads such a message only with
+`apart`. A read with `apart` of a message that has the description gives
+`incorrect_type`.
+
+`cbor::schema<T>::description()` gives the description. It is the same
+in every message of `T`. The size of a message written with `apart` plus
+the size of `description()` is the size of the message with the
+description. A generic decoder of Packed CBOR does not read a message
+written with `apart`.
+
+@section schema_unverified READ A MESSAGE FROM A PEER YOU TRUST
+
+`unverified_path`, `unverified_at_path` and `unverified_decode` take the
+same arguments as `%path`, `at_path` and `%decode`. They check each bound
+of the message, so no read leaves the message. They do not check the
+data of the message. A wrong byte gives a wrong value, not an error.
+
+These forms do not check:
+
+- the tag of each struct;
+- the head of a number, a `bool`, a fixed string or a `std::array`;
+- the head byte of a text, a list or a map, and the tag of a typed array;
+- the prefix of a list of fixed-size structs;
+- the start of the table, and the fillers before the items;
+- that the length of a typed array is a multiple of its element size;
+- that a `bool` byte is 0 or 1. Any other byte reads as `true`;
+- in `unverified_decode`, the order of the references and of the items.
+
+These forms check:
+
+- that each head, length and item lies inside the message;
+- that each directory entry lies between the start and the end of the
+  items;
+- each index against the count of its list, table or directory;
+- the limits of the build and, in `unverified_decode`, the nesting depth.
+
+Every accessor of `unverified_path` is unverified too.
+
+@section schema_size SIZE AND OFFSET
+
+`cbor::schema<T>::fixed_size()` gives the count of bytes of the root
+record of `T`. The root record ends the message. `fixed_size<U>()` gives
+the count of bytes that a field of type `U` takes.
+
+- A number takes its head and its argument, both of fixed width.
+- A struct takes its class tag, its table reference, a record head of 5
+  bytes and its fields.
+- A text, a list, a map, an optional of variable size, or a
+  `std::variant` takes a reference `6(N)` of 6 bytes.
+
+A type with no fixed size does not compile. `fixed_size` gives no error
+at run time.
+
+`cbor::item_size` of a message gives the size of the message.
+
+`cbor::schema<T>::member_offset<&T::m>()` gives the offset of the head of
+the member `m` from the start of its record. The fields follow the key
+order of RFC 8949, section 4.2.1: a shorter key comes first, then the
+bytes of the key. This order is not the order of the declarations.
+
+@section schema_wire THE WIRE FORMAT
+
+A message is tag 113 (Basic Packed CBOR) on an array of two items: a
+table and a rump.
+
+- The table holds the record function, tag 114, of each struct. The
+  record function gives the keys of one struct. For each struct that is
+  the element of a list of fixed-size structs, the table holds a
+  description. The description is the class tag and the key and the
+  RFC 8746 type of each member.
+- The table holds a directory of 4-byte offsets of the parts of variable
+  size.
+- The fillers are `undefined` items. They place the parts at index 16 or
+  later.
+- The parts hold the texts, the byte strings, the lists, the maps and the
+  items of the variant members.
+- The rump is the root record. It stands at the end of the message.
+
+A record starts with its class tag. A reference to its record function
+follows. The first eight references are tags 128 to 135. Later references
+are tag 6 on an array of two. Then an array with a count of 4 bytes holds
+the fields. Each field has a head of fixed width. A field of variable size
+is `6(N)`, a reference with a 4-byte `N` into the table.
+
+A `std::variant` member is a field `6(N)`. Its part is the item of the
+alternative that the variant holds. The head of the item names the
+alternative.
+
+A list of a number is an RFC 8746 typed array in little endian. A
+`std::vector<double>` is tag 86.
+
+A list of fixed-size structs is `32873([simple(j), h'...'])`. `j` is the
+index of its description in the table. From index 16 on, `6(N)` takes
+the place of `simple(j)`. The byte string holds the elements with no
+padding, in little endian. Tag 32873 is provisional. The IANA registry
+does not have it yet.
+
+@section schema_cost COST
+
+`%path` with a shared owner takes a time that does not depend on the size
+of the message. `%path` with an rvalue takes the same time, and it makes
+one allocation for the owner. Each `at_path` takes one step for each part
+of its path. `%decode` and `encode` take a time in the size of the message.
+
+An error of `%path`, `at_path` or `%decode` can cost a walk over the
+message. The walk checks whether the message ends too early.
+
+@section schema_errors ERRORS
+
+- `too_little_data`: the message ends too early. `%path`, `at_path` and
+  `%decode` give this error also where another check fails first. A
+  message that is shorter than its table and root gives it in `%path`.
+- `incorrect_type`: a message of another struct or layout, a wrong tag of
+  a struct, a wrong head of a field, a variant item whose head names no
+  alternative, or `get<A>()` of another alternative.
+- `index_out_of_bounds`: an index past the end of a list.
+- `unpopulated_table_index` and `syntax_error`: a reference or a
+  directory entry that is broken.
+- `inadmissible_type_for_tag_content`: a typed array, or a list of
+  fixed-size structs, whose length is not a multiple of its element size.
+- `nesting_depth_exceeded`: a value that is nested too deep for `encode`
+  or for `%decode`.
+- `not_enough_memory`: an allocation of the owner in `%path` fails, or an
+  allocation of the result in `%decode` fails.
+- `no_buffer_space`: a `std::span<char>` is shorter than the message.
+- `value_too_large`: the message is longer than 2^32 - 1 bytes.
+
+A null or empty owner throws `std::logic_error` in `%path`, `%decode` and
+the unverified forms. A call on a moved-from accessor throws it too.
+`operator[]`, `front` and `back` of a typed array view throw it outside
+the view.
+
+The unverified forms give the error of the check that fails.
+
+@manonly
+.SH "EXAMPLES"
+@endmanonly
+@snippet doc_reference_schema.cpp schema group
 */
