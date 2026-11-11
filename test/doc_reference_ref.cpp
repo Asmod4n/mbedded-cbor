@@ -19,6 +19,30 @@ using namespace std::string_literals;
 
 using reference_ref::person;
 
+// tools/doc/groups/ref.dox, snippet ref group: the EXAMPLES section of the man page of the group ref shows that a ref
+// keeps the bytes after the lazy that read them ends, and that clone copies the bytes. The test checks each value that
+// the comments of the example state, and the bytes against the encoding of RFC 8949.
+TEST_CASE("doc reference ref: the example of the group ref")
+{
+    std::string bytes = test::preferred(test::M("name"s, "ann"s));
+    CHECK_EQ(bytes, "\xa1\x64\x6e\x61\x6d\x65\x63\x61\x6e\x6e"s);
+    std::optional<cbor::ref<std::string_view>> kept;
+    // [ref group]
+    // bytes: a std::string with {"name": "ann"}
+    {
+        auto const doc = cbor::lazy::adopt(std::move(bytes));
+        auto const name = doc->at("name")->get<std::string_view>();
+        if (name)
+            kept = *name;  // a copy of the ref: it shares the owner of the bytes
+    }  // doc and name end here; kept keeps the bytes
+    std::string const copy = kept->clone();  // "ann", in new memory
+    // [ref group]
+    REQUIRE(kept.has_value());
+    CHECK_EQ(**kept, "ann");
+    CHECK_EQ(copy, "ann");
+    CHECK_NE(copy.data(), (**kept).data());
+}
+
 // ref.hpp, the comment of ref: *, -> and == read the value; a copy shares the owner, so a view stays valid after
 // the first ref ends.
 TEST_CASE("doc reference ref: cbor::ref")

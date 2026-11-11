@@ -1,3 +1,102 @@
 /**
 @defgroup ref results that hold the bytes they point into
+
+`cbor::ref<T>` holds a value and the owner of the bytes that its views
+point into. `cbor::owning<T>` holds a copy of a value and of the bytes
+of its views. Include `<cbor/cbor.hpp>`.
+
+A text or a byte string comes back as a view into the bytes, and no byte
+is copied. The view sits in a `cbor::ref<T>`. The `cbor::ref<T>` holds
+the owner, so the view stays valid while the `cbor::ref<T>` lives.
+
+A copy of a `cbor::ref<T>` shares the owner and copies no bytes.
+
+@section ref_owner THE OWNER OF THE BYTES
+
+The owner is a `std::shared_ptr<void const>`. Bytes come into the library
+in one of these forms. No form copies the bytes.
+
+- An rvalue `std::string` is moved into a new owner. `cbor::lazy::adopt`
+  makes it.
+- A `std::shared_ptr<std::string const>` is read in place. `cbor::lazy::view`
+  takes it from the caller, and every result keeps it alive.
+- A `std::shared_ptr<void const>` and a `std::string_view` beside it are
+  read in place. The owner keeps the bytes of the view alive. The library
+  does not check that the owner holds them.
+
+A `std::string` lvalue beside an owner does not compile. Its bytes can end
+before the owner ends.
+
+`cbor::structs<T>::%decode`, `cbor::schema<T>::%decode`, `cbor::schema<T>::%path`
+and `cbor::at_path` take the same forms for a view result. `cbor::sequence`
+takes the two forms that use a `std::shared_ptr`, and no rvalue
+`std::string`. The library takes no other pointer to bytes.
+
+A larger object can hold the bytes. Two forms read them in place. The
+aliasing constructor of `std::shared_ptr` makes an owner from a member
+of the object, and that owner shares the count of the object. Or the
+object is the owner, and a view of its bytes is passed beside it.
+
+A `cbor::lazy` holds the owner of its bytes. So does each `cbor::lazy`
+that a step gives, and each iterator of its views. A `cbor::lazy` from a
+step stays valid after the `cbor::lazy` that gave it ends.
+
+@section ref_read READ THE VALUE
+
+`*r` gives the value of a `cbor::ref<T>` `r`. A view comes back by value.
+Any other `T` comes back as a `T const &`. `r->` reaches the members of
+the value.
+
+For a `cbor::ref<std::string_view>`, `*r` is the `std::string_view`. The
+view stays valid while `r` lives. A view copied out of `r` does not keep
+the bytes. Keep the `cbor::ref<T>` in a variable as long as its views are
+in use.
+
+`*` and `->` on a temporary `cbor::ref<T>` do not compile. `==` works on
+a temporary, because it gives a `bool`. `==` compares the value with a
+`T`, and it compares two `cbor::ref<T>` by their values.
+
+@section ref_copy COPY THE VALUE
+
+`clone()` copies the bytes into new memory. The copy stays valid after
+the owner ends.
+
+- For a `cbor::ref<std::string_view>`, `clone()` gives a `std::string`.
+- For a `cbor::ref<std::span<std::byte const>>`, `clone()` gives a
+  `std::vector<std::byte>`.
+- For any other `T`, `clone()` gives a `cbor::owning<T>`.
+
+@section ref_share SHARE AND MOVE
+
+A copy of a `cbor::ref<T>` shares the owner and copies the value. A move
+takes the owner and the value. The moved-from `cbor::ref<T>` holds `T{}`
+and no owner.
+
+Only the library makes a `cbor::ref<T>`. A program gets one from a call.
+
+@section ref_owning THE OWNING VALUE
+
+`clone()` of a `cbor::ref<T>` gives a `cbor::owning<T>` for a `T` that is
+not a single text or byte view. The `cbor::owning<T>` holds a copy of the
+value and of the bytes of each view in it. A view in it stays valid while
+the `cbor::owning<T>` or one of its copies lives.
+
+`*o` gives the value as a `T const &`, and `o->` reaches its members. The
+value is `const`. `*` and `->` on a temporary `cbor::owning<T>` do not
+compile.
+
+A copy of a `cbor::owning<T>` shares the value and copies no bytes. A
+`cbor::owning<T>` has no `==`, and no public constructor.
+
+@section ref_errors ERRORS
+
+A `cbor::ref<T>` and a `cbor::owning<T>` give no error code. A wrong use
+does not compile: `*` and `->` on a temporary, and a `std::string` lvalue
+beside an owner. A null owner, or an empty owner in the form with a view,
+given to `cbor::lazy::view` throws `std::logic_error`.
+
+@manonly
+.SH "EXAMPLES"
+@endmanonly
+@snippet doc_reference_ref.cpp ref group
 */
