@@ -18,18 +18,11 @@ The encoder writes heads and short strings into blocks of CBOR_ENCODER_BLOCK_SIZ
 .PP
 .PP
 .nf
-cbor::iov_writer w; → iov_writer
-.fi
-.PP
- 
-.PP
-.nf
 call: cbor::iov_writer w; cbor::encoder e(w);
 call: e\&.text_string(text), with text a std::shared_ptr<std::string const> of 40 times "x"
 call: auto const pieces = e\&.finish()
 (*pieces)\->size(): 2, the head 78 28 and *text with no copy
 sent with writev: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-
 .fi
 .PP
 

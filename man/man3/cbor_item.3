@@ -36,14 +36,6 @@ One node of a tree from \fBcbor::decode()\fP or \fR\fBlazy::clone\fP\fP\&.
 .PP
 .PP
 .nf
-(*tree)\->type                     → cbor::type const
-(*tree)\->additional_information   → std::uint8_t const
-(*tree)\->get<cbor::type::array>() → std::expected<std::span<item const>, error>
-.fi
-.PP
- 
-.PP
-.nf
 message: [1, {"a": 2}]
 call: auto const tree = cbor::decode(bytes)
 result: owning item of [1, {"a": 2}]
@@ -53,7 +45,6 @@ call: (*tree)\->additional_information
 result: 2
 call: (*tree)\->get<cbor::type::array>()\->size()
 result: 2
-
 .fi
 .PP
 

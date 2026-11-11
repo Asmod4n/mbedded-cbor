@@ -78,15 +78,6 @@ A char array, such as a literal, does not compile, because it holds a NUL after 
 .PP
 .PP
 .nf
-cbor::sequence_reader r  → sequence_reader
-r\&.feed(std::move(piece)) → void
-r\&.next()                 → std::expected<lazy, error>
-r\&.empty()                → bool
-.fi
-.PP
- 
-.PP
-.nf
 bytes: 82 01 02 03
 call: cbor::sequence_reader r
 result: sequence_reader that holds no unread byte
@@ -106,7 +97,6 @@ call: r\&.next()\->get<std::int64_t>()
 result: 3
 call: r\&.empty()
 result: true
-
 .fi
 .PP
 

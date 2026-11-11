@@ -59,13 +59,6 @@ C++ type  CBOR item  \fRbool\fP, \fRstd::nullptr_t\fP, \fRcbor::simple_value\fP 
 .PP
 .PP
 .nf
-cbor::structs<T>::encode(value)              → std::expected<std::string, cbor::error>
-cbor::structs<T>::decode(std::move(encoded)) → std::expected<cbor::ref<T>, cbor::error>
-.fi
-.PP
- 
-.PP
-.nf
 message: {"id": 4}
 call: auto const r = cbor::structs<reading>::encode(reading{4, std::nullopt})
 result: 5 bytes: a1 62 69 64 04
@@ -77,7 +70,6 @@ call: cbor::lazy::adopt(*s)
 result: lazy of 258([1, 3])
 call: cbor::structs<reading>::decode(std::move(bytes))
 result: ref to reading{4, std::nullopt}
-
 .fi
 .PP
 

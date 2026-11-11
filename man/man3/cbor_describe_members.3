@@ -28,13 +28,6 @@ A class that is not an aggregate, or that has a base class, needs a description\
 .PP
 .PP
 .nf
-cbor::has_describe_members<T>   → bool
-cbor::structs<T>::encode(value) → std::expected<std::string, cbor::error>
-.fi
-.PP
- 
-.PP
-.nf
 message: {"content\-type": "text/plain"}
 call: cbor::has_describe_members<header>
 result: true
@@ -50,7 +43,6 @@ call: auto const t = cbor::structs<trailer>::encode(trailer{7})
 result: 16 bytes: da 00 02 71 3d a1 68 63 68 65 63 6b 73 75 6d 07
 call: cbor::lazy::adopt(*t)
 result: lazy of 160061({"checksum": 7})
-
 .fi
 .PP
 

@@ -127,18 +127,19 @@ class cbor::encoder< Target >"Writes CBOR one data item per call, in the order o
 
 The encoder counts nothing: the counts of \fR\fBarray\fP\fP and \fR\fBmap\fP\fP come from the program\&. The target is one of these:
 .IP "\(bu" 2
-a container of bytes, for example \fRstd::string\fP: the encoder appends; - a \fRstd::span\fP of bytes: the encoder writes into it and allocates nothing; - an \fBcbor::iov_writer\fP: the encoder gives pieces; - an object with \fRallocate(std::size_t)\fP, which gives a writer with \fRappend(std::string_view)\fP and \fRdone(std::size_t)\fP\&. The encoder does not write tags 28 and 29\&. Each call gives \fRstd::expected<void, \fBerror\fP>\fP\&. After an error, and after \fBcbor::encoder::finish()\fP, each call throws \fRstd::logic_error\fP\&. A copy does not compile\&.
+a container of bytes, for example \fRstd::string\fP: the encoder appends;
+.IP "\(bu" 2
+a \fRstd::span\fP of bytes: the encoder writes into it and allocates nothing;
+.IP "\(bu" 2
+a \fBcbor::iov_writer\fP: the encoder gives pieces;
+.IP "\(bu" 2
+an object with \fRallocate(std::size_t)\fP, which gives a writer with \fRappend(std::string_view)\fP and \fRdone(std::size_t)\fP\&.
 .PP
 
 .PP
+The encoder does not write tags 28 and 29\&. Each call gives \fRstd::expected<void, \fBerror\fP>\fP\&. After an error, and after \fBcbor::encoder::finish()\fP, each call throws \fRstd::logic_error\fP\&. A copy does not compile\&.
+
 .PP
-.nf
-cbor::encoder e(out)                     → encoder<std::string>
-cbor::encoder e{std::span<char>(buffer)} → encoder<std::span<char>>
-cbor::encoder e(w)                       → encoder<iov_writer>
-.fi
-.PP
- 
 .PP
 .nf
 bytes: a1 61 61 18 05
@@ -156,7 +157,6 @@ call: e\&.finish()
 result: 5
 call: out
 result: 5 bytes: a1 61 61 18 05
-
 .fi
 .PP
 

@@ -70,15 +70,6 @@ A view in the value stays valid while one \fR\fBref\fP\fP with that owner lives\
 .PP
 .PP
 .nf
-cbor::structs<std::string_view>::decode(std::move(bytes)) → std::expected<ref<std::string_view>, error>
-*r                                                        → std::string_view
-r\->member                                                 → the member of T
-r\&.clone()                                                 → std::string
-.fi
-.PP
- 
-.PP
-.nf
 message: "abc"
 call: auto const r = cbor::structs<std::string_view>::decode(std::move(bytes))
 result: ref to "abc"
@@ -86,7 +77,6 @@ call: std::string_view const v = **r
 result: "abc"
 call: r\->clone()
 result: "abc"
-
 .fi
 .PP
 

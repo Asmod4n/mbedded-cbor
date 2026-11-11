@@ -78,6 +78,14 @@ std::expected< T, \fBerror\fP > \fBcbor::at_path\fP (std::basic_string_view< cha
 .br
 .RI "Reads a view at a query in bytes that \fRowner\fP keeps alive\&. "
 .ti -1c
+.RI "template<class T, borrowed_range_of_chars Encoded>"
+.br
+requires (std::is_same_v<T, \fBlazy\fP> || std::is_same_v<T, \fBnodelist\fP>)
+.br
+std::expected< T, \fBerror\fP > \fBcbor::at_path\fP (std::shared_ptr< void const > owner, Encoded const &encoded, typename \fBpath::query\fP< T > const &e)
+.br
+.RI "Gives the lazy or the nodelist at a query in bytes that \fRowner\fP keeps alive\&. "
+.ti -1c
 .RI "template<class T, owning_range_of_chars Encoded>"
 .br
 requires (view_result<T> || std::is_same_v<T, \fBlazy\fP> || std::is_same_v<T, \fBnodelist\fP>)

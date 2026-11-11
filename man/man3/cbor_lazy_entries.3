@@ -34,19 +34,11 @@ It is a forward range, a sized range and a borrowed range\&. \fRsize()\fP gives 
 .PP
 .PP
 .nf
-auto const view = *doc\->entries()
-view\&.size() → std::uint64_t
-.fi
-.PP
- 
-.PP
-.nf
 message: {"a": 1, "b": 2, "c": 3}
 call: auto const view = *doc\->entries()
 result: lazy_entries of 3 pairs: "a": 1, "b": 2, "c": 3
 call: view\&.size()
 result: 3
-
 .fi
 .PP
 

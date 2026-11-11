@@ -18,7 +18,15 @@ Selects the encode that writes each cycle of a tree with tags 28 and 29 (RFC 894
 .PP
 .PP
 .nf
-cbor::encode(**tree, out, cbor::cycles) → std::expected<std::size_t, error>
+bytes: d8 1c 82 d8 1d 00 d8 1d 00
+call: auto const tree = cbor::decode(bytes)
+result: owning item of 28([29(0), 29(0)])
+call: std::string out;
+result: ""
+call: cbor::encode(**tree, out, cbor::cycles)
+result: 9
+call: out
+result: 9 bytes: d8 1c 82 d8 1d 00 d8 1d 00
 .fi
 .PP
 

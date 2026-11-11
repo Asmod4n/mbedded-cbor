@@ -49,19 +49,11 @@ Only cbor::path::compile() makes one\&. The query holds its own copy of the path
 .PP
 .PP
 .nf
-cbor::path::compile<std::int64_t>("$\&.id")\&.value() → query<std::int64_t>
-cbor::at_path(bytes, q)                               → std::expected<std::int64_t, error>
-.fi
-.PP
- 
-.PP
-.nf
 message: {"id": 1}
 call: auto const q = cbor::path::compile<std::int64_t>("$\&.id")\&.value()
 result: cbor::path::query<long long>
 call: cbor::at_path(bytes, q)
 result: 1
-
 .fi
 .PP
  

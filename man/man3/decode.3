@@ -54,6 +54,14 @@ decode \- a decoded tree of CBOR and the encoder
 .br
 .RI "Writes the tree at \fRroot\fP with tags 28 and 29 for each cycle into a list of \fRstruct iovec\fP pieces\&. "
 .in -1c
+.SS "Variables"
+
+.in +1c
+.ti -1c
+.RI "constexpr \fBcycles_t\fP \fBcbor::cycles\fP {}"
+.br
+.RI "The value of \fBcbor::cycles_t\fP\&. "
+.in -1c
 .SH "DESCRIPTION"
 .PP 
 \fR\fBcbor::decode\fP\fP reads one top-level item of a \fRstd::string_view\fP into a tree of \fR\fBcbor::item\fP\fP\&. \fR\fBcbor::encoder\fP\fP writes CBOR one data item per call, and \fR\fBcbor::encode\fP\fP writes a tree\&. Include \fR<\fBcbor/cbor\&.hpp\fP>\fP\&.

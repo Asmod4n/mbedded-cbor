@@ -33,19 +33,11 @@ The key is a text literal or an integer from -2^63 to 2^64 - 1\&. The text is th
 .PP
 .PP
 .nf
-cbor::member{0, &senml::n}          → cbor::member<std::string senml::*>
-cbor::member{"name", &person::name} → cbor::member<std::string person::*>
-.fi
-.PP
- 
-.PP
-.nf
 bytes: a2 00 61 74 02 f9 3e 00
 call: auto const encoded = cbor::structs<senml>::encode(senml{"t", 1\&.5})
 result: 8 bytes: a2 00 61 74 02 f9 3e 00
 call: cbor::lazy::adopt(*encoded)
 result: lazy of {0: "t", 2: 1\&.5}
-
 .fi
 .PP
 

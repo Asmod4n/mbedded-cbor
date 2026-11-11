@@ -37,14 +37,6 @@ A program reaches it through \fBcbor::category()\fP\&. \fR\fBname()\fP\fP gives 
 .PP
 .PP
 .nf
-cbor::category()\&.name()                             → char const *
-cbor::category()\&.message(condition)                 → std::string
-cbor::category()\&.default_error_condition(condition) → std::error_condition
-.fi
-.PP
- 
-.PP
-.nf
 message: {}
 call: std::error_code const e{cbor::error::no_buffer_space}
 result: std::error_code cbor:21
@@ -58,7 +50,6 @@ call: cbor::category()\&.message(13)
 result: "key not found"
 call: cbor::category()\&.message(0)
 result: "unknown cbor error"
-
 .fi
 .PP
 
