@@ -46,6 +46,19 @@ end
 
 local links = { Link = function(l) l.target = link_target(l.target); return l end }
 
+local function cpp_html(text)
+  local html = pandoc.write(pandoc.Pandoc({ pandoc.CodeBlock(text, { class = "cpp" }) }), "html", PANDOC_WRITER_OPTIONS)
+  local code = html:match('(<code class="sourceCode cpp">.-</code>)')
+  if code == nil then error("reference.lua: pandoc gave no highlighted code for: " .. text) end
+  local lines = {}
+  for line in (code .. "\n"):gmatch("(.-)\n") do
+    line = line:gsub('<span id="cb%d+%-%d+"><a href="#cb%d+%-%d+" aria%-hidden="true" tabindex="%-1"></a>', "", 1)
+    lines[#lines + 1] = line
+  end
+  local joined = table.concat(lines, "\n")
+  return (joined:gsub("</span>(\n)", "%1"):gsub("</span>(</code>)$", "%1"))
+end
+
 local function example_read(text, where)
   local spec = { calls = {} }
   for line in text:gmatch("[^\n]+") do
@@ -74,7 +87,7 @@ local function example_html(spec, n)
   local calls, shown = {}, {}
   for _, c in ipairs(spec.calls) do
     calls[#calls + 1] = c.call
-    shown[#shown + 1] = '<span class="call">' .. html_escaped(c.call) .. '</span>\n'
+    shown[#shown + 1] = '<span class="call">' .. cpp_html(c.call) .. '</span>\n'
       .. '<span class="' .. ((c.result:match("^fault") or c.result:match("^unexpected")) and "err" or "ok") .. '">'
       .. html_escaped(c.result) .. "</span>"
   end
@@ -175,7 +188,7 @@ local function page_blocks(file, title, does)
       end
     elseif b.t == "CodeBlock" and b.classes[1] == "cpp" and not skipping and not declared then
       declared = true
-      out[#out + 1] = pandoc.RawBlock("html", '<pre class="decl"><code>' .. html_escaped(b.text) .. "</code></pre>")
+      out[#out + 1] = pandoc.RawBlock("html", '<pre class="decl">' .. cpp_html(b.text) .. "</pre>")
     elseif b.t == "CodeBlock" and b.classes[1] == "output" then
       example = true
       plays[#plays + 1] = pandoc.RawBlock("html", '<div class="play">\n<div class="bar"><span class="label">Example</span></div>\n'
@@ -205,7 +218,7 @@ local function sample_html(spec)
     .. '<button class="run" type="button" data-load data-load-message="' .. html_escaped(spec.message)
     .. '" data-load-call="' .. html_escaped(c.call) .. '">Load</button></div>\n'
     .. '<div class="out"><span class="call">' .. html_escaped(spec.message) .. '</span>\n'
-    .. '<span class="call">» ' .. html_escaped(c.call) .. '</span>\n'
+    .. '<span class="call">» ' .. cpp_html(c.call) .. '</span>\n'
     .. '<span class="' .. ((c.result:match("^fault") or c.result:match("^unexpected")) and "err" or "ok") .. '">'
     .. html_escaped(c.result) .. "</span></div>\n</div>"
 end

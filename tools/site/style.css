@@ -115,7 +115,7 @@ code.sourceCode .dt, code.sourceCode .bu, code.sourceCode .ot { color: var(--ty)
 code.sourceCode .st, code.sourceCode .ch, code.sourceCode .ss, code.sourceCode .vs, code.sourceCode .sc { color: var(--lit); }
 code.sourceCode .dv, code.sourceCode .bn, code.sourceCode .fl, code.sourceCode .cn { color: var(--num); }
 code.sourceCode .co, code.sourceCode .cv, code.sourceCode .an, code.sourceCode .do, code.sourceCode .in { color: var(--cm); font-style: italic; }
-code.sourceCode .at { color: var(--muted); }
+code.sourceCode .at { color: var(--kw); }
 code.sourceCode .er, code.sourceCode .al { color: var(--err); }
 code.sourceCode > span > a { display: none; }
 details.src pre a.line, pre.types a.line { color: var(--muted); text-decoration: none; user-select: none; }
@@ -125,7 +125,7 @@ details.src pre code { padding-right: 0.8rem; }
 .method h3 { font-size: 0.95rem; margin: 1rem 0 0.2rem; }
 .method ul { padding-left: 1.2rem; max-width: 65ch; }
 main > table, .method table { border-collapse: collapse; display: block; overflow-x: auto; }
-main > div.sourceCode, main > pre { background: var(--panel); border-radius: 6px; padding: 0.6rem 0.8rem; margin: 0.8rem 0; overflow-x: auto; }
+div.sourceCode, main > pre { background: var(--panel); border-radius: 6px; padding: 0.6rem 0.8rem; margin: 0.8rem 0; overflow-x: auto; }
 main > div.sourceCode pre { margin: 0; }
 main > table td, main > table th, .method table td, .method table th { border-bottom: 1px solid var(--rule); padding: 0.3rem 0.6rem 0.3rem 0; text-align: left; vertical-align: top; }
 .play .log { max-height: 16rem; overflow-y: auto; padding: 0.5rem 0.7rem; font-family: var(--mono); font-size: 0.84rem; white-space: pre; overflow: auto; }
