@@ -33,6 +33,28 @@ using reference_structs::reading;
 using reference_structs::senml;
 using reference_structs::trailer;
 
+// tools/doc/groups/structs.dox, snippet structs group: the EXAMPLES section of the man page of the group structs
+// writes a struct and reads it back, so a reader sees one round trip. The expected bytes are the ones that RFC 8949
+// gives for the map, a text and an integer, and not the output of the library. The test checks each value that the
+// comments of the example state.
+TEST_CASE("doc reference structs: the example of the group structs")
+{
+    // [structs group]
+    // person: struct { std::string name; int age; }
+    // encoded: 16 bytes, {"age": 30, "name": "ann"}
+    auto const encoded = cbor::structs<person>::encode(person{"ann", 30});
+    // back: a ref to person{"ann", 30}
+    auto const back = cbor::structs<person>::decode(std::string(*encoded));
+    auto const age = (*back)->age;    // 30
+    auto const name = (*back)->name;  // "ann"
+    // [structs group]
+    REQUIRE(encoded.has_value());
+    CHECK_EQ(*encoded, "\xa2\x63" "age" "\x18\x1e\x64" "name" "\x63" "ann"s);
+    REQUIRE(back.has_value());
+    CHECK_EQ(age, 30);
+    CHECK_EQ(name, "ann");
+}
+
 // structs.hpp, snippet encode: encode(value) gives the bytes of a map with the member names as keys, sorted by
 // RFC 8949 4.2.1.
 TEST_CASE("doc reference structs: encode a value")

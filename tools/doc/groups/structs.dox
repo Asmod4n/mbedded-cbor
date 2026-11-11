@@ -1,3 +1,218 @@
 /**
 @defgroup structs any CBOR into a C++ struct and back
+
+`cbor::structs<T>` writes a C++ value as one CBOR item. It reads one CBOR
+item back into a value of type `T`. Include `<cbor/cbor.hpp>`.
+
+A struct is written as a map. Each public data member is one entry, and
+its key is the name of the member. A description changes the keys, adds a
+tag, or names the members of a class. See KEYS AND DESCRIPTIONS.
+
+`cbor::structs` finds the members of an aggregate by reflection. On g++ 16
+with `-std=c++26 -freflection`, the members come from reflection. On every
+other compiler, Boost.PFR 1.84 or later finds them. If the system has no
+Boost.PFR, the build uses the copy that the library ships. A class with a
+base class, and a class that is not an aggregate, needs a description.
+Every translation unit of a program must see the same Boost.PFR.
+
+@section structs_encode WRITE A VALUE
+
+`cbor::structs<T>::encode(value)` gives `std::expected<std::string,
+cbor::error>`, the bytes of the item.
+
+`cbor::structs<T>::encode(value, target)` appends the bytes to `target`. It
+gives `std::expected<std::size_t, cbor::error>`, the count of bytes that it
+appended. The target is a `std::string`, a container of `char`, a
+`std::span<char>`, or a writer of the program. A `std::span<char>` that is
+too small for the bytes gives `no_buffer_space`.
+
+The keys of a struct come in the order of RFC 8949 section 4.2.1. The
+functions write no shared value (tag 28 and tag 29).
+
+The encoder writes a float or a double in the shortest width that holds its
+value exactly (RFC 8949 section 4.1). A NaN keeps its bits:
+
+- A double NaN takes the binary16 width when the low 42 bits of its
+  significand are zero. It takes the binary32 width when the low 29 bits are
+  zero. Else it takes the binary64 width.
+- A float NaN takes the binary16 width when the low 13 bits of its
+  significand are zero. Else it takes the binary32 width.
+
+@section structs_decode READ A VALUE
+
+`cbor::structs<T>::%decode` reads one CBOR item. It does not read a byte
+after the item. It gives `std::expected<cbor::ref<T>, cbor::error>`. The
+ref holds the owner of the bytes. `*result` is the ref, and `**result` is
+the value of `T`. A `std::string_view` or a `std::span` in `T` points into
+the bytes. It stays valid while the ref lives. No form copies the bytes.
+
+The forms are:
+
+- `%decode(std::move(encoded))`: `encoded` is an rvalue of `std::string` or
+  of another owning range of `char`. The bytes move into a new owner. An
+  lvalue does not compile.
+- `%decode(owner)`: `owner` is a `std::shared_ptr` to a range of `char`. The
+  result keeps the owner.
+- `%decode(owner, target)`: the read puts the values into the containers of
+  `target`, and it uses their allocator.
+- `%decode(owner, part)`: `part` is a `std::string_view` into memory that
+  `owner`, a `std::shared_ptr<void const>`, keeps alive.
+
+The forms without `target` start from `T{}`, so `T` must be default
+constructible. A null or empty owner throws `std::logic_error`.
+
+A `target` of `std::pmr` containers sets the memory resource of each
+element. When the resource cannot give memory, the read gives `not_enough_memory`. The decoder
+reserves no memory for a count that the input states. It makes each element
+when it reads that element.
+
+@section structs_types TYPES
+
+`T`, and each member of a struct in `T`, has one of these C++ types. The
+CBOR item is on the right:
+
+- `bool`: `true` or `false`.
+- `std::nullptr_t`: `null`. `cbor::simple_value`: a simple value.
+- An integer type of 8 to 64 bits: an integer. Where the compiler has
+  `__int128`, that type and its unsigned form give an integer or a bignum
+  (tag 2 or 3).
+- An enum with a fixed underlying type: the integer of that type. `%decode`
+  does not compile for an enum with no fixed underlying type, because some
+  values of its underlying type are not values of the enum.
+- `float` and `double`: the shortest float that holds the value exactly.
+  `%decode` takes a binary16, binary32 or binary64 item. A binary64 item that
+  a `float` cannot hold exactly gives `number_out_of_range`.
+- `std::string`, `std::pmr::string` and `std::string_view`: a text string.
+- `std::span<std::byte const>`: a byte string.
+- `std::vector` or `std::array` of `std::byte`, of an integer of 8 to 64
+  bits, of `float` or of `double`: a typed array of RFC 8746, in little
+  endian. The tag is the one of the element type. For example, tag 64 is
+  for `std::byte` and `std::uint8_t`. `%decode` takes this item only. A plain
+  array gives `incorrect_type`.
+- `std::set` and `std::flat_set`: tag 258 on an array, as the CBOR sets
+  specification defines it. `%decode` takes the items in any order.
+- `std::chrono::sys_seconds`: tag 1 on an integer of seconds since
+  1970-01-01. `%decode` also takes a float whose value is a whole number.
+- `std::chrono::year_month_day`: tag 100 on an integer of days since
+  1970-01-01 (RFC 8943). `encode` throws `std::logic_error` for a date that
+  is not valid.
+- Where the standard library has `std::chrono::parse`, `%decode` also takes
+  the date-time string of tag 0 for a `sys_time`, and the full-date string
+  of tag 1004 for a `year_month_day`.
+- `std::optional<E>`: the item of `E`, or `null` when the optional is empty.
+  An empty optional member has no key in the map.
+- `std::variant<E...>`: the item of the alternative that the variant holds.
+  `%decode` gives the first alternative that accepts the item. An integer
+  alternative accepts an integer that it can hold. With
+  `std::variant<std::uint8_t, std::int64_t, std::string>`, the item 256 gives
+  the `std::int64_t` alternative.
+- `std::tuple<E...>` and `std::array<E, N>` of other types: an array of
+  exactly that count.
+- `std::map`, `std::unordered_map` and their `std::pmr` forms: a map.
+  `std::multimap` and `std::unordered_multimap`: a map from each key to the
+  array of its values. RFC 8949 section 5.6 makes a map with a repeated key
+  invalid.
+- `std::vector`, `std::deque`, `std::list` and other containers: an array.
+- `cbor::tagged_item<N, E>`: tag N on the item of `E`. `E` is not a struct.
+- A struct: a map. See KEYS AND DESCRIPTIONS.
+
+@section structs_keys KEYS AND DESCRIPTIONS
+
+The key of a member is its name, as a text string. A description sets
+another key, or a tag. Each macro writes its description at global scope,
+after the type and after the description of each struct that the type
+holds. A description that no call uses is not checked.
+
+- `CBOR_MEMBER(T, m)`: the entry of the member `m` of `T`. The key is the
+  text of the name `m`.
+- `CBOR_DEFINE_TYPE_MEMBERS(T, tag, m...)`: the description of `T` from the
+  names of its members. Each key is the name of its member. The list takes
+  up to 343 names.
+- `CBOR_DEFINE_TYPE(T, tag, entries...)`: the description of `T` from
+  entries. Each entry is `cbor::member{key, &T::m}`. A key is a text string,
+  or an integer from -2^63 to 2^64 - 1. No C++ literal holds -2^63. Use
+  `std::numeric_limits<std::int64_t>::min()` for that key.
+
+The tag is `cbor::tag{n}`, or `cbor::untagged` for a map with no tag. A
+struct whose description has a tag carries that tag. `%decode` gives
+`incorrect_type` when the tag is missing or is another tag. An untagged
+struct gives `incorrect_type` for a tag in front of its map.
+
+The rules for a description are these:
+
+- Each entry names a public, non-static data member of the type, or of a
+  public base class.
+- With reflection, the entries are exactly the public data members of the
+  type and of its public bases. Another list does not compile.
+- A member that comes twice, two members with one key, a key of `bool` or
+  of a character type, a tag of a standard type (for example 1, 258 or a tag
+  of RFC 8746), and an invalid tag do not compile.
+- An annotation `[[=cbor::key("x")]]` or `[[=cbor::tag(n)]]` on a type that
+  `structs` reads does not compile.
+- A class with a base class uses `CBOR_DEFINE_DERIVED_TYPE` or
+  `CBOR_DEFINE_DERIVED_TYPE_MEMBERS`. These take the base class after the
+  type.
+- A type whose name holds a comma needs a type alias for the macros.
+- A class with no default constructor cannot use the forms without
+  `target`. It decodes into the target that the caller gives: `%decode(owner,
+  target)`.
+
+@section structs_input INPUT FROM OTHER PROGRAMS
+
+`%decode` reads the entries of a map in any order. It skips an entry whose
+key no member has, whatever the type of its value. So a program reads the
+bytes of a newer program that added members. A new member of type
+`std::optional` also reads the bytes of an older program.
+
+@section structs_shared SHARED VALUES
+
+`%decode` reads tag 28 and tag 29 of value sharing (cbor.schmorp.de). It uses
+a table that lasts for one call. `encode` writes no shared value.
+
+- A tag 28 is allowed on each member. It keeps the value.
+- No member takes a tag 29. A tag 29 gives an error:
+  `sharedref_index_not_marked` when no tag 28 comes before the index of the
+  tag 29; `sharedref_not_complete` when that tag 28 is in a member that
+  `%decode` skips; `incorrect_type` for any other tag 29.
+
+@section structs_errors ERRORS
+
+Each function gives a `cbor::error` in its `std::expected`:
+
+- `incorrect_type`: an item of another major type; a missing or another tag
+  on a struct with a tag; a tag 29; a variant with no alternative that
+  accepts the item; a plain array for a `std::vector` or `std::array` of a
+  number type; an array of another count for a `std::tuple` or a
+  `std::array`.
+- `number_out_of_range`: an integer that the C++ type cannot hold; a
+  binary64 that a `float` cannot hold exactly; a float under tag 1 whose
+  value is not a whole number.
+- `inadmissible_type_for_tag_content`: a tag 1 over an item that is not an
+  integer or a float.
+- `key_not_found`: a member that is not `std::optional` has no key in the
+  map.
+- `duplicate_key`: a key of a member, or a key of a set or a map, that comes
+  twice.
+- `too_little_data`: the input ends inside the item.
+- `syntax_error`: a head is not well formed.
+- `indefinite_length`: a head has indefinite length.
+- `string_length_exceeded`, `container_elements_exceeded`,
+  `nesting_depth_exceeded`: a string or a container is longer than a limit
+  of the library, or the item nests too deep.
+- `sharedref_index_not_marked`, `sharedref_not_complete`: see SHARED VALUES.
+- `not_enough_memory`: a refused allocation of `%decode`, or a refusal of a
+  `std::pmr` resource.
+- `no_buffer_space`: a `std::span<char>` target that is too small.
+- `value_too_large`: the size of the bytes does not fit in `std::size_t`.
+
+These functions throw instead:
+
+- `std::logic_error`: `%decode` with a null or empty owner; `encode` of a
+  `std::chrono::year_month_day` that is not a valid date.
+- `std::bad_alloc`: `encode` when the allocation of the result is refused.
+
+@manonly
+.SH "EXAMPLES"
+@endmanonly
+@snippet doc_reference_structs.cpp structs group
 */
