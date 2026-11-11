@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Writes the detailed description of the group that the parameter group names as Markdown, from the Doxygen XML index. -->
+<!-- Writes the detailed description of the group or the page that the parameter group names as Markdown, from the Doxygen XML index. -->
 <xsl:stylesheet version="1.0"
     xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
 <xsl:import href="reference.xsl"/>
 <xsl:output method="text" encoding="UTF-8"/>
 
 <xsl:template match="/">
-  <xsl:variable name="compound" select="doxygenindex/compound[@kind='group' and name=$group]"/>
+  <xsl:variable name="compound" select="doxygenindex/compound[(@kind='group' or @kind='page') and name=$group]"/>
   <xsl:if test="not($compound)">
-    <xsl:message terminate="yes">group.xsl: no group has the name <xsl:value-of select="$group"/></xsl:message>
+    <xsl:message terminate="yes">group.xsl: no group and no page has the name <xsl:value-of select="$group"/></xsl:message>
   </xsl:if>
   <xsl:apply-templates select="document(concat($compound/@refid, '.xml'), /)/doxygen/compounddef/detaileddescription/node()" mode="group"/>
 </xsl:template>

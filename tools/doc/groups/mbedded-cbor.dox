@@ -9,6 +9,7 @@ Every message that the library writes is standard CBOR. The test suite decodes t
 
 Include `<cbor/cbor.hpp>`. It includes every header of the library. The library needs C++23. It builds with g++ 15 or later, with clang 21 or later, and with the AppleClang of Xcode 26. With g++ 16 and `-std=c++26 -freflection`, `cbor::structs` reads the members by reflection, and `cbor::schema` checks each description against the members. The frontend of MSVC is refused. On Windows, build with clang-cl.
 
+@if man
 @section overview_choose WHICH PART TO USE
 
 Each group has its own man page. Use the group that fits your task.
@@ -21,6 +22,7 @@ Each group has its own man page. Use the group that fits your task.
 - `mbedded-cbor-ref(3)`: `cbor::ref<T>` and `cbor::owning<T>`. They hold results that keep the bytes of the message. Use them for a result that points into the message and stays valid.
 - `mbedded-cbor-tools(3)`: `cbor::item_size`, `cbor::sequence`, `cbor::sequence_reader` and `cbor::diagnostic_notation`. Use them for the end of an item, for many items in a row, and for an item as text.
 - `mbedded-cbor-errors(3)`: `cbor::error`, `std::error_code` and the limits of a build. Use them for the reason why a call failed.
+@endif
 
 @section overview_threads THREADS
 
@@ -69,9 +71,11 @@ string.
 
 The target of the encoder chooses where the bytes go. A container of bytes, a fixed span, a `cbor::iov_writer` and a writer of your own are targets. The encoder allocates nothing when it writes into a fixed span. `cbor::item_size` and the iterator of `cbor::sequence` allocate nothing. Other calls take no allocator. A refused allocation there throws `std::bad_alloc`.
 
+@if man
 @section overview_see SEE ALSO
 
 `mbedded-cbor-decode(3)`, `mbedded-cbor-lazy(3)`, `mbedded-cbor-path(3)`, `mbedded-cbor-structs(3)`, `mbedded-cbor-schema(3)`, `mbedded-cbor-ref(3)`, `mbedded-cbor-tools(3)`, `mbedded-cbor-errors(3)`.
 
 RFC 8949: https://www.rfc-editor.org/rfc/rfc8949
+@endif
 */

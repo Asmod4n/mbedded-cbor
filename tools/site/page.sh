@@ -54,6 +54,7 @@ podman run --rm --network none -e COMMIT="$commit" -e SITE_GROUPS="${SITE_GROUPS
       -M tree=/src -M reference=$markdown -M impl=$work/impl -M types=$work/types -M commit=$COMMIT -M group=$1 -M examples=$work/examples-$1.json ${3:+-M grouptext=$3} "$2" -o /out/$1.html
   }
   reference index $markdown/index.md
+  reference overview $markdown/overview.md
   reference console $markdown/console.md
   lynx -dump -nolist /out/console.html > $work/console.txt
   for g in ${SITE_GROUPS:-$groups}; do

@@ -62,4 +62,5 @@ podman run --rm --network none -v "$tree":/src:ro -v "$out":/out mbedded-cbor-do
     group=$(basename $file .xml)
     group=${group#group__}
     xsltproc --stringparam group "$group" tools/doc/group.xsl $xml/index.xml > /out/groups/$group.md
-  done'
+  done
+  xsltproc --stringparam group mbedded-cbor tools/doc/group.xsl $xml/index.xml > /out/overview.md'

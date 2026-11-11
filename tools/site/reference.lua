@@ -315,6 +315,13 @@ function Pandoc(doc)
     end
     return pandoc.Pandoc(blocks, doc.meta)
   end
+  if group == "overview" then
+    doc.meta.pagetitle = "Overview"
+    local blocks = { pandoc.RawBlock("html", '<div class="group-text">') }
+    for _, b in ipairs(doc:walk(links).blocks) do blocks[#blocks + 1] = b end
+    blocks[#blocks + 1] = pandoc.RawBlock("html", "</div>")
+    return pandoc.Pandoc(blocks, doc.meta)
+  end
   if group == "console" then
     local blocks = console_blocks(doc)
     examples_write()
