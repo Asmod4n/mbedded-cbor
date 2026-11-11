@@ -6,5 +6,3 @@ The examples use the types in [test/doc_types.hpp](../../../../test/doc_types.hp
 
 | Function | Does |
 |---|---|
-| [ref&lt;T&gt;](ref.md) | holds a value and the owner of the bytes it views |
-| [owning&lt;T&gt;](owning.md) | holds a copy of a value and of the bytes of its views |

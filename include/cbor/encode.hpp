@@ -59,6 +59,17 @@ class iov_writer;
  * @code{.callseq}
  * cbor::encode(**tree, out, cbor::cycles) → std::expected<std::size_t, error>
  * @endcode
+ * @code{.example}
+ * bytes: d8 1c 82 d8 1d 00 d8 1d 00
+ * call: auto const tree = cbor::decode(bytes)
+ * result: owning item of 28([29(0), 29(0)])
+ * call: std::string out;
+ * result: ""
+ * call: cbor::encode(**tree, out, cbor::cycles)
+ * result: 9
+ * call: out
+ * result: 9 bytes: d8 1c 82 d8 1d 00 d8 1d 00
+ * @endcode
  *
  * @see cbor::encode()
  *
@@ -68,7 +79,24 @@ struct cycles_t {
     explicit cycles_t() = default;
 };
 
-/** @brief The value of cbor::cycles_t. */
+/**
+ * @brief The value of cbor::cycles_t.
+ *
+ * @code{.callseq}
+ * cbor::encode(**tree, out, cbor::cycles) → std::expected<std::size_t, error>
+ * @endcode
+ * @code{.example}
+ * bytes: d8 1c 81 d8 1d 00
+ * call: auto const tree = cbor::decode(bytes)
+ * result: owning item of 28([29(0)])
+ * call: std::string out;
+ * result: ""
+ * call: cbor::encode(**tree, out, cbor::cycles)
+ * result: 6
+ * @endcode
+ *
+ * @ingroup decode
+ */
 inline constexpr cycles_t cycles{};
 
 /**

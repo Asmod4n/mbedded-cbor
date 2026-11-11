@@ -32,9 +32,31 @@ podman run --rm --network none -v "$tree":/src:ro -v "$out":/out mbedded-cbor-do
       echo "reference: two names give the page $group/$file.md; the second is $name" >&2
       exit 1
     fi
-    mkdir -p /out/$group
+    mkdir -p /out/$group /tmp/rows
     xsltproc --stringparam name "$name" --stringparam group "$group" tools/doc/reference.xsl $xml/index.xml > /out/$group/$file.md
+    title=$(sed -n "1s/^# //p" /out/$group/$file.md | sed "s/^cbor:://; s/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g")
+    brief=$(xsltproc --stringparam name "$name" --stringparam group "$group" --stringparam part brief tools/doc/reference.xsl $xml/index.xml)
+    if [ -z "$brief" ]; then
+      echo "reference: $name has no brief description" >&2
+      exit 1
+    fi
+    printf "| [%s](%s.md) | %s |\n" "$title" "$file" "$(printf %s "$brief" | sed "s/|/\\\\|/g")" >> /tmp/rows/$group.md
   done < /tmp/names.txt
+  for hand in tools/site/reference/*/index.md; do
+    group=$(basename $(dirname $hand))
+    if ! grep -q "^|---|---|\$" $hand; then
+      echo "reference: $hand has no table" >&2
+      exit 1
+    fi
+    for file in $(sed -n "s/^| \[[^]]*\](\([A-Za-z0-9_]*\)\.md) |.*/\1/p" $hand); do
+      if [ -e /out/$group/$file.md ]; then
+        echo "reference: $hand lists $file.md, which the comments give" >&2
+        exit 1
+      fi
+    done
+    touch /tmp/rows/$group.md
+    sed "/^|---|---|\$/r /tmp/rows/$group.md" $hand > /out/$group/index.md
+  done
   mkdir -p /out/groups
   for file in $xml/group__*.xml; do
     group=$(basename $file .xml)

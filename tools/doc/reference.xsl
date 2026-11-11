@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Writes the Markdown reference page of the class or free function that the parameter name names, from the Doxygen XML index. -->
+<!-- Writes the Markdown reference page of the class or free function that the parameter name names, from the Doxygen XML index.
+     With the parameter part set to brief, it writes only the brief description of that page. -->
 <xsl:stylesheet version="1.0"
     xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
     xmlns:str="http://exslt.org/strings"
@@ -8,6 +9,7 @@
 <xsl:output method="text" encoding="UTF-8"/>
 <xsl:param name="name"/>
 <xsl:param name="group"/>
+<xsl:param name="part"/>
 <xsl:variable name="nl" select="'&#10;'"/>
 <xsl:variable name="indent_step" select="'    '"/>
 <xsl:variable name="index" select="/"/>
@@ -52,6 +54,22 @@
 <xsl:template match="compounddef|memberdef" mode="page">
   <xsl:param name="all" select="."/>
   <xsl:param name="owner" select="/.."/>
+  <xsl:choose>
+    <xsl:when test="$part = 'brief'">
+      <xsl:call-template name="inline"><xsl:with-param name="node" select="briefdescription/para"/></xsl:call-template>
+    </xsl:when>
+    <xsl:otherwise>
+      <xsl:apply-templates select="." mode="text">
+        <xsl:with-param name="all" select="$all"/>
+        <xsl:with-param name="owner" select="$owner"/>
+      </xsl:apply-templates>
+    </xsl:otherwise>
+  </xsl:choose>
+</xsl:template>
+
+<xsl:template match="compounddef|memberdef" mode="text">
+  <xsl:param name="all"/>
+  <xsl:param name="owner"/>
   <xsl:variable name="d" select="detaileddescription"/>
   <xsl:variable name="ds" select="$all/detaileddescription"/>
   <xsl:text># </xsl:text>
