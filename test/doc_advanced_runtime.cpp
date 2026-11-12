@@ -61,8 +61,8 @@ TEST_CASE("doc advanced runtime: steps and searches")
     CHECK_EQ(**seven, "seven"sv);
     CHECK_EQ(*doc.size(), 2u);
     CHECK_FALSE(*doc.empty());
-    CHECK_EQ(*doc["cars"]->size(), 2u);
-    CHECK_EQ(doc["cars"]->at(1)->at("hp")->get<std::int64_t>(), 7);
+    CHECK_EQ(*doc.at("cars")->size(), 2u);
+    CHECK_EQ(doc.at("cars")->at(1)->at("hp")->get<std::int64_t>(), 7);
     CHECK_EQ(doc.at("cars")->at(5).error(), error::index_out_of_bounds);
     CHECK_EQ(doc.at("bus").error(), error::key_not_found);
     CHECK_EQ(doc.at(0).error(), error::not_indexable);
@@ -76,7 +76,6 @@ TEST_CASE("doc advanced runtime: keys")
     CHECK_EQ(test::lazy_of_copy("\xa1\xd8\x1c\x61" "a\x01"s)->at("a").error(), error::key_not_found);
     auto const twice = *test::lazy_of_copy("\xa2\x61" "a\x01\x61" "a\x02"s);
     CHECK_EQ(twice.at("a")->get<std::int64_t>(), 1);
-    CHECK_EQ(twice["a"]->get<std::int64_t>(), 1);
     CHECK_EQ(twice.at_path<"$.a", std::int64_t>(), 1);
 }
 

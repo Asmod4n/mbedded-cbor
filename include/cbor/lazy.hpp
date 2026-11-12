@@ -228,7 +228,6 @@ public:
      * @retval not_indexable a key on a value that is not a map, or an index on a value that is not an array
      * @retval too_little_data, syntax_error, indefinite_length the bytes up to the child are broken
      * @snippet doc_reference_lazy.cpp at
-     * @see cbor::lazy::operator[]()
      * @see cbor::lazy::at_path()
      * @see cbor::lazy::get()
      * @see cbor::lazy::entries()
@@ -238,32 +237,6 @@ public:
     std::expected<lazy, error> at(key k) const;
 
     std::expected<lazy, error> at(std::size_t index) const;
-
-    /**
-     * @brief Gives the same result as cbor::lazy::at() with the same argument.
-     *
-     * It does not throw for a missing key or a wrong index.
-     * The result is a `std::expected`, so `l["a"]["b"]` does not compile.
-     * A path reads a chain (cbor::lazy::at_path()).
-     * The errors of cbor::lazy::at() apply.
-     *
-     * @code{.example}
-     * message: {"cars": [5, 7]}
-     * call: (*(*doc)["cars"])[1]->get<int>()
-     * result: 7
-     * call: (*(*doc)["cars"])[0]->get<int>()
-     * result: 5
-     * @endcode
-     *
-     * @snippet doc_reference_lazy.cpp operator_subscript
-     * @see cbor::lazy::at()
-     * @see cbor::lazy::at_path()
-     */
-    std::expected<lazy, error> operator[](std::string_view key) const;
-
-    std::expected<lazy, error> operator[](key k) const;
-
-    std::expected<lazy, error> operator[](std::size_t index) const;
 
     /**
      * @brief Reads the JSONPath (RFC 9535) `Path` from this lazy as the root `$`.

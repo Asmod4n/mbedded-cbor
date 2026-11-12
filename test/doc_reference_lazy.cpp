@@ -134,20 +134,6 @@ TEST_CASE("doc reference lazy: at")
     CHECK_EQ(doc->at("cars")->at(5).error(), cbor::error::index_out_of_bounds);
 }
 
-// lazy.hpp, snippet operator_subscript: operator[] gives the result of at and does not throw.
-TEST_CASE("doc reference lazy: operator[]")
-{
-    std::string bytes = test::preferred(test::M("cars"s, test::A(5, 7)));
-    // [operator_subscript]
-    // bytes: a std::string with {"cars": [5, 7]}
-    auto const doc = cbor::lazy::adopt(std::move(bytes));
-    auto const second = (*(*doc)["cars"])[1]->get<int>();  // 7
-    auto const bus = (*doc)["bus"];                        // key_not_found
-    // [operator_subscript]
-    CHECK_EQ(second.value(), 7);
-    CHECK_EQ(bus.error(), cbor::error::key_not_found);
-}
-
 // lazy.hpp, snippet at_path: a scalar, a text as a ref, a nodelist, a missing key, the lazy of a node, and a query
 // compiled at run time.
 TEST_CASE("doc reference lazy: at_path")

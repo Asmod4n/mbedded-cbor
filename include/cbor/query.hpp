@@ -2342,21 +2342,6 @@ std::expected<T, error> at_path(std::string_view const encoded)
     return path::walk_query<Path, view>(encoded).transform([](view const v) { return T(v.begin(), v.end()); });
 }
 
-inline std::expected<lazy, error> lazy::operator[](std::string_view const key) const
-{
-    return at(key);
-}
-
-inline std::expected<lazy, error> lazy::operator[](key const k) const
-{
-    return at(k);
-}
-
-inline std::expected<lazy, error> lazy::operator[](std::size_t const index) const
-{
-    return at(index);
-}
-
 template <fixed_string Path>
     requires is_valid_path_v<Path>
 std::expected<lazy, error> lazy::at_path() const
