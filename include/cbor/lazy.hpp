@@ -569,6 +569,8 @@ private:
     friend struct lazy_entries;
 
     friend class path;
+
+    friend class detail::canonical_ids;
 };
 
 
@@ -820,6 +822,13 @@ public:
         std::size_t count;
     };
 
+    template <class Message>
+    std::expected<std::pair<std::uint64_t, validity::offset>, error> intern_key(Message const &message,
+                                                                               validity::offset at);
+
+    std::expected<std::pair<std::uint64_t, validity::offset>, error>
+    intern_value(lazy::top_level_item const &source, validity::offset at);
+
     std::uint64_t id_of(node const &n)
     {
         auto const [at, added] = ids.try_emplace(n, ids.size());
@@ -886,12 +895,12 @@ private:
 
 template <class Message>
 std::expected<std::pair<std::uint64_t, detail::validity::offset>, error>
-detail::validity::intern_key(canonical_ids &ids, Message const &message, offset const at)
+detail::canonical_ids::intern_key(Message const &message, validity::offset const at)
 {
-    if (auto const r = check_recursion_limit(); !r) [[unlikely]]
+    if (auto const r = validity::check_recursion_limit(); !r) [[unlikely]]
         return std::unexpected(r.error());
     std::string_view encoded;
-    offset item_at = at;
+    validity::offset item_at = at;
     if constexpr (std::same_as<Message, std::string_view>) {
         encoded = message;
     } else {
@@ -901,22 +910,22 @@ detail::validity::intern_key(canonical_ids &ids, Message const &message, offset 
     auto const h = detail::heads::read_raw_head<true>(encoded, item_at);
     if (!h) [[unlikely]]
         return std::unexpected(h.error());
-    if (error const c = check_definite_length(h->major, h->info).error_or(error{}); c != error{}) [[unlikely]]
+    if (error const c = validity::check_definite_length(h->major, h->info).error_or(error{}); c != error{}) [[unlikely]]
         return std::unexpected(c);
-    using kind = canonical_ids::kind;
-    auto const scalar = [&ids](kind const of, std::uint64_t const number, std::string_view const bytes,
-                               offset const end) -> std::pair<std::uint64_t, offset> {
-        return {ids.id_of({of, number, bytes, ids.children_end(), 0}), end};
+    
+    auto const scalar = [this](kind const of, std::uint64_t const number, std::string_view const bytes,
+                               validity::offset const end) -> std::pair<std::uint64_t, validity::offset> {
+        return {id_of({of, number, bytes, children_end(), 0}), end};
     };
     if (detail::heads::is_bignum(h->major, h->argument)) {
-        detail::heads::decoder<true> d{subspan(encoded, h->at)};
+        detail::heads::decoder<true> d{validity::subspan(encoded, h->at)};
         auto const read = d.decode_bignum(h->argument);
         if (!read) [[unlikely]]
             return std::unexpected(read.error());
         if (*read) {
             bool const negative = h->argument == std::to_underlying(rfc8949::tag_number::negative_bignum);
             return scalar(negative ? kind::negative_integer : kind::positive_integer, **read, {},
-                          distance(encoded, d.encoded));
+                          validity::distance(encoded, d.encoded));
         }
     }
     switch (h->major) {
@@ -926,24 +935,24 @@ detail::validity::intern_key(canonical_ids &ids, Message const &message, offset 
         return scalar(kind::negative_integer, h->argument, {}, h->at);
     case major_type::byte_string:
     case major_type::text_string: {
-        detail::heads::decoder<true> d{subspan(encoded, h->at)};
+        detail::heads::decoder<true> d{validity::subspan(encoded, h->at)};
         auto const s = d.decode_string(h->argument);
         if (!s) [[unlikely]]
             return std::unexpected(s.error());
         return scalar(h->major == major_type::byte_string ? kind::byte_string : kind::text_string, 0, *s,
-                      distance(encoded, d.encoded));
+                      validity::distance(encoded, d.encoded));
     }
     case major_type::array:
     case major_type::map: {
         bool const map = h->major == major_type::map;
-        if (auto const r = check_pending_items(h->major, h->info, h->argument, subspan(encoded, h->at).size());
+        if (auto const r = validity::check_pending_items(h->major, h->info, h->argument, validity::subspan(encoded, h->at).size());
             !r) [[unlikely]]
             return std::unexpected(r.error());
         std::vector<std::uint64_t> items;
         std::vector<std::pair<std::uint64_t, std::uint64_t>> pairs;
-        offset next = h->at;
+        validity::offset next = h->at;
         for (std::uint64_t i = 0; i < h->argument; ++i) {
-            auto const key = intern_key(ids, message, next);
+            auto const key = intern_key(message, next);
             if (!key) [[unlikely]]
                 return std::unexpected(key.error());
             next = key->second;
@@ -951,28 +960,28 @@ detail::validity::intern_key(canonical_ids &ids, Message const &message, offset 
                 items.push_back(key->first);
                 continue;
             }
-            auto const value = intern_key(ids, message, next);
+            auto const value = intern_key(message, next);
             if (!value) [[unlikely]]
                 return std::unexpected(value.error());
             next = value->second;
             pairs.emplace_back(key->first, value->first);
         }
         if (map)
-            return std::pair{ids.id_of(std::move(pairs)), next};
-        return std::pair{ids.id_of(kind::array, 0, items), next};
+            return std::pair{id_of(std::move(pairs)), next};
+        return std::pair{id_of(kind::array, 0, items), next};
     }
     case major_type::tag: {
-        auto const content = intern_key(ids, message, h->at);
+        auto const content = intern_key(message, h->at);
         if (!content) [[unlikely]]
             return std::unexpected(content.error());
         std::array<std::uint64_t, 1> const item{content->first};
-        return std::pair{ids.id_of(kind::tag, h->argument, item), content->second};
+        return std::pair{id_of(kind::tag, h->argument, item), content->second};
     }
     case major_type::simple:
         break;
     }
     if (!detail::heads::is_floating_point(h->major, h->info)) {
-        if (error const c = check_simple_value(h->info, h->argument).error_or(error{}); c != error{}) [[unlikely]]
+        if (error const c = validity::check_simple_value(h->info, h->argument).error_or(error{}); c != error{}) [[unlikely]]
             return std::unexpected(c);
         return scalar(kind::simple, h->argument, {}, h->at);
     }
@@ -1088,10 +1097,10 @@ std::expected<bool, error> detail::validity::keys_equivalent(First const &first,
         if (h->argument != k->argument)
             return false;
         canonical_ids ids;
-        auto const x = intern_key(ids, first, first_at);
+        auto const x = ids.intern_key(first, first_at);
         if (!x) [[unlikely]]
             return std::unexpected(x.error());
-        auto const y = intern_key(ids, second, second_at);
+        auto const y = ids.intern_key(second, second_at);
         if (!y) [[unlikely]]
             return std::unexpected(y.error());
         return x->first == y->first;

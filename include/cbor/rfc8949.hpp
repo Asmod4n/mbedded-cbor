@@ -18,6 +18,7 @@ namespace cbor
 namespace detail
 {
 
+class canonical_ids;
 class encoding;
 class extended_diagnostic_notation;
 class generic;
@@ -149,6 +150,8 @@ class rfc8949
     friend class detail::extended_diagnostic_notation;
 
     friend class path;
+
+    friend class detail::canonical_ids;
 
     friend class detail::encoding;
 

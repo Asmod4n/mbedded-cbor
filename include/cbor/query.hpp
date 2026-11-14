@@ -655,9 +655,6 @@ class path
 
     static std::partial_ordering compare_numbers(exact_number const &a, exact_number const &b);
 
-    static std::expected<std::pair<std::uint64_t, detail::validity::offset>, error>
-    intern_value(detail::canonical_ids &ids, lazy::top_level_item const &source, detail::validity::offset at);
-
     struct comparables {
         lazy::resolved x;
         lazy::resolved y;
@@ -687,11 +684,15 @@ class path
     static std::expected<bool, error> test_expression(query_view const v, std::size_t index,
                                                       lazy const &current, lazy const &root);
 
-    static std::expected<void, error> apply_selector(query_view const v, selector const &s, lazy const &node,
-                                                     lazy const &root, std::vector<lazy> &nodes);
+    struct collected_nodes {
+        std::vector<lazy> nodes;
 
-    static std::expected<void, error> apply_segment(query_view const v, segment const &s, lazy const &node,
-                                                    lazy const &root, std::vector<lazy> &nodes);
+        std::expected<void, error> apply_selector(query_view const v, selector const &s, lazy const &node,
+                                                  lazy const &root);
+
+        std::expected<void, error> apply_segment(query_view const v, segment const &s, lazy const &node,
+                                                 lazy const &root);
+    };
 
     static std::expected<std::vector<lazy>, error> apply_segments(query_view const v, std::size_t segment_at,
                                                                   std::size_t segment_count,
@@ -1008,6 +1009,8 @@ class path
     friend class is_valid_path;
 
     friend struct lazy;
+
+    friend class detail::canonical_ids;
     /// @endcond
 
 public:
@@ -1378,7 +1381,7 @@ inline std::partial_ordering path::compare_numbers(exact_number const &a, exact_
 }
 
 inline std::expected<std::pair<std::uint64_t, detail::validity::offset>, error>
-path::intern_value(detail::canonical_ids &ids, lazy::top_level_item const &source, detail::validity::offset const at)
+detail::canonical_ids::intern_value(lazy::top_level_item const &source, validity::offset const at)
 {
     if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
         return std::unexpected(r.error());
@@ -1386,7 +1389,7 @@ path::intern_value(detail::canonical_ids &ids, lazy::top_level_item const &sourc
     if (!resolved) [[unlikely]]
         return std::unexpected(resolved.error());
     lazy::top_level_item const &inner = resolved->source;
-    auto const folded = integer_of(resolved->h, resolved->d);
+    auto const folded = path::integer_of(resolved->h, resolved->d);
     if (!folded) [[unlikely]]
         return std::unexpected(folded.error());
     detail::heads::head const h = folded->first;
@@ -1405,18 +1408,17 @@ path::intern_value(detail::canonical_ids &ids, lazy::top_level_item const &sourc
             return std::unexpected(e.error());
         return std::pair{id, *e};
     };
-    using kind = detail::canonical_ids::kind;
-    bool const integral = h.major == major_type::unsigned_integer || h.major == major_type::negative_integer;
+        bool const integral = h.major == major_type::unsigned_integer || h.major == major_type::negative_integer;
     bool const floating = detail::heads::is_floating_point(h.major, h.info);
     if (integral || floating) {
-        exact_number const n = number_of(h);
+        path::exact_number const n = path::number_of(h);
         if (n.nan) {
-            ids.mark_unequal();
-            return done(ids.id_of(kind::nan, 0, {}));
+            mark_unequal();
+            return done(id_of(kind::nan, 0, {}));
         }
         if (n.integral)
-            return done(ids.id_of(n.negative ? kind::negative_integer : kind::positive_integer, n.magnitude, {}));
-        return done(ids.id_of(kind::floating, std::bit_cast<std::uint64_t>(n.value), {}));
+            return done(id_of(n.negative ? kind::negative_integer : kind::positive_integer, n.magnitude, {}));
+        return done(id_of(kind::floating, std::bit_cast<std::uint64_t>(n.value), {}));
     }
     switch (h.major) {
     case major_type::byte_string:
@@ -1424,8 +1426,8 @@ path::intern_value(detail::canonical_ids &ids, lazy::top_level_item const &sourc
         auto const s = d.decode_string(h.argument);
         if (!s) [[unlikely]]
             return std::unexpected(s.error());
-        return done(ids.id_of(
-            {h.major == major_type::byte_string ? kind::byte_string : kind::text_string, 0, *s, ids.children_end(), 0}));
+        return done(id_of(
+            {h.major == major_type::byte_string ? kind::byte_string : kind::text_string, 0, *s, children_end(), 0}));
     }
     case major_type::array:
     case major_type::map: {
@@ -1434,7 +1436,7 @@ path::intern_value(detail::canonical_ids &ids, lazy::top_level_item const &sourc
             [[unlikely]]
             return std::unexpected(r.error());
         auto const child = [&]() -> std::expected<std::uint64_t, error> {
-            auto const c = intern_value(ids, inner, detail::validity::distance(inner.encoded, d.encoded));
+            auto const c = intern_value(inner, detail::validity::distance(inner.encoded, d.encoded));
             if (!c) [[unlikely]]
                 return std::unexpected(c.error());
             d.encoded = detail::validity::subspan(inner.encoded, c->second);
@@ -1456,23 +1458,23 @@ path::intern_value(detail::canonical_ids &ids, lazy::top_level_item const &sourc
             pairs.emplace_back(*key, *value);
         }
         if (map)
-            return done(ids.id_of(std::move(pairs)));
-        return done(ids.id_of(kind::array, 0, items));
+            return done(id_of(std::move(pairs)));
+        return done(id_of(kind::array, 0, items));
     }
     case major_type::tag: {
-        auto const content = intern_value(ids, inner, detail::validity::distance(inner.encoded, d.encoded));
+        auto const content = intern_value(inner, detail::validity::distance(inner.encoded, d.encoded));
         if (!content) [[unlikely]]
             return std::unexpected(content.error());
         d.encoded = detail::validity::subspan(inner.encoded, content->second);
         std::array<std::uint64_t, 1> const item{content->first};
-        return done(ids.id_of(kind::tag, h.argument, item));
+        return done(id_of(kind::tag, h.argument, item));
     }
     default: {
         if (error const c = detail::validity::check_simple_value(h.info, h.argument).error_or(error{}); c != error{})
             [[unlikely]]
             return std::unexpected(c);
         std::array<std::uint64_t, 1> const info{h.info};
-        return done(ids.id_of(kind::simple, h.argument, info));
+        return done(id_of(kind::simple, h.argument, info));
     }
     }
 }
@@ -1554,10 +1556,10 @@ inline std::expected<bool, error> path::value_equal(lazy const &a, lazy const &b
                 if (h.argument != k.argument)
                     return false;
                 detail::canonical_ids ids;
-                auto const p = intern_value(ids, a.top_level, detail::validity::offset{a.offset});
+                auto const p = ids.intern_value(a.top_level, detail::validity::offset{a.offset});
                 if (!p) [[unlikely]]
                     return std::unexpected(p.error());
-                auto const q = intern_value(ids, b.top_level, detail::validity::offset{b.offset});
+                auto const q = ids.intern_value(b.top_level, detail::validity::offset{b.offset});
                 if (!q) [[unlikely]]
                     return std::unexpected(q.error());
                 return !ids.unequal() && p->first == q->first;
@@ -1710,12 +1712,11 @@ inline std::expected<bool, error> path::test_expression(query_view const v, std:
     return compared(e.op, *a, *b);
 }
 
-inline std::expected<void, error> path::apply_selector(query_view const v, selector const &s,
-                                                           lazy const &node, lazy const &root,
-                                                           std::vector<lazy> &nodes)
+inline std::expected<void, error> path::collected_nodes::apply_selector(query_view const v, selector const &s,
+                                                                       lazy const &node, lazy const &root)
 {
     std::size_t const limit = root.top_level.encoded.size();
-    auto const append = [&nodes, limit](lazy const &l) -> std::expected<bool, error> {
+    auto const append = [this, limit](lazy const &l) -> std::expected<bool, error> {
         if (nodes.size() >= limit) [[unlikely]]
             return std::unexpected(error::nodelist_too_long);
         nodes.push_back(l);
@@ -1752,23 +1753,22 @@ inline std::expected<void, error> path::apply_selector(query_view const v, selec
     return {};
 }
 
-inline std::expected<void, error> path::apply_segment(query_view const v, segment const &s,
-                                                          lazy const &node, lazy const &root,
-                                                          std::vector<lazy> &nodes)
+inline std::expected<void, error> path::collected_nodes::apply_segment(query_view const v, segment const &s,
+                                                                      lazy const &node, lazy const &root)
 {
     if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
         return std::unexpected(r.error());
     for (selector const &each : v.selectors.subspan(s.selector_at, s.selector_count))
-        if (auto const r = apply_selector(v, each, node, root, nodes); !r) [[unlikely]]
+        if (auto const r = apply_selector(v, each, node, root); !r) [[unlikely]]
             return r;
     if (!s.descendant)
         return {};
-    std::vector<lazy> children;
+    collected_nodes children;
     selector const wildcard{selector::kind::wildcard, 0, 0, 0, std::nullopt, std::nullopt, 1, 0};
-    if (auto const r = apply_selector(v, wildcard, node, root, children); !r) [[unlikely]]
+    if (auto const r = children.apply_selector(v, wildcard, node, root); !r) [[unlikely]]
         return r;
-    for (lazy const &child : children)
-        if (auto const r = apply_segment(v, s, child, root, nodes); !r) [[unlikely]]
+    for (lazy const &child : children.nodes)
+        if (auto const r = apply_segment(v, s, child, root); !r) [[unlikely]]
             return r;
     return {};
 }
@@ -1779,13 +1779,13 @@ inline std::expected<std::vector<lazy>, error> path::apply_segments(query_view c
                                                                         lazy const &start, lazy const &root)
 {
     std::vector<lazy> nodes{start};
-    std::vector<lazy> next;
+    collected_nodes next;
     for (segment const &s : v.segments.subspan(segment_at, segment_count)) {
-        next.clear();
+        next.nodes.clear();
         for (lazy const &node : nodes)
-            if (auto const r = apply_segment(v, s, node, root, next); !r) [[unlikely]]
+            if (auto const r = next.apply_segment(v, s, node, root); !r) [[unlikely]]
                 return std::unexpected(r.error());
-        std::swap(nodes, next);
+        std::swap(nodes, next.nodes);
     }
     return nodes;
 }

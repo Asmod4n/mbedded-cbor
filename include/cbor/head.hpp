@@ -723,6 +723,8 @@ class heads
 
     friend class cbor::path;
 
+    friend class detail::canonical_ids;
+
     template <class>
     friend class cbor::encoder;
 

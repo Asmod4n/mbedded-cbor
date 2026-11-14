@@ -499,10 +499,6 @@ public:
     static std::expected<bool, error> keys_equivalent(First const &first, offset first_at,
                                                       Second const &second, offset second_at);
 
-    template <class Message>
-    static std::expected<std::pair<std::uint64_t, offset>, error>
-    intern_key(canonical_ids &ids, Message const &message, offset at);
-
     template <class Encoded>
         requires(!std::is_reference_v<Encoded>)
     static std::expected<std::shared_ptr<Encoded const>, error> make_shared_owner(Encoded &&encoded)

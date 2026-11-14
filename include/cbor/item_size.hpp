@@ -133,6 +133,8 @@ class well_formedness
 
     friend class cbor::path;
 
+    friend class detail::canonical_ids;
+
     friend class detail::generic;
 
     friend class detail::reflection;
