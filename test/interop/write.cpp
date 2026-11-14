@@ -59,8 +59,8 @@ std::span<std::byte const> span_of(std::string_view const s)
     return std::as_bytes(std::span(s));
 }
 
-// Writes the item again through one call of cbor::encoder per head. Each integer, simple value and float
-// takes the C++ type of the width that it had on the wire, so every native width of the encoder runs.
+// Writes the item again through one call of cbor::encoder per head. Each integer, simple value and float takes the C++
+// type of the width that it had on the wire. So every native width of the encoder runs.
 template <class Target>
 std::expected<void, cbor::error> item_walk(cbor::encoder<Target> &e, cbor::item const &node)
 {
@@ -151,7 +151,7 @@ std::expected<void, cbor::error> item_walk(cbor::encoder<Target> &e, cbor::item 
 // with one call per head. The input bytes are the expectation of both.
 void reencode(std::string_view const name, std::string_view const section, std::string const &input)
 {
-    auto const doc = test::lazy_of_copy(std::string_view(input));
+    auto const doc = test::make_lazy_from_copy(std::string_view(input));
     auto const item = doc.and_then([](cbor::lazy const &d) { return d.clone(); });
     if (!item) {
         case_print(std::string("decode/") + std::string(name), section, message_of(item.error()), test::hexlify(input));
@@ -194,7 +194,7 @@ void cbor_wg(std::filesystem::path const &root)
     std::ranges::sort(files);
     for (auto const &path : files) {
         std::string const file = file_read(path);
-        auto const top = test::lazy_of_copy(std::string_view(file));
+        auto const top = test::make_lazy_from_copy(std::string_view(file));
         if (!top)
             continue;
         auto const file_fail = top->at("fail").and_then([](cbor::lazy const &l) { return l.get<bool>(); });
@@ -468,8 +468,8 @@ struct cbor::describe_members<senml> {
 namespace
 {
 
-// structs<T>::encode. The expected bytes are written by hand in the preferred serialization; the decoders
-// compare values, so a float that the library writes in another width still compares equal.
+// structs<T>::encode. The expected bytes are written by hand in the preferred serialization; the decoders compare
+// values. So a float that the library writes in another width still compares equal.
 void structs_cases()
 {
     char const *const s = "RFC 8949 3, 3.4.3";
@@ -585,8 +585,8 @@ struct cbor::describe_members<sensor> {
 namespace
 {
 
-// schema<T>::encode. A generic decoder does not know Packed CBOR, so it gives the tags 113 and 114 with their
-// content (RFC 8949 3.4); the written bytes have no expectation and must only be accepted.
+// schema<T>::encode. A generic decoder does not know Packed CBOR, so it gives the tags 113 and 114 with their content
+// (RFC 8949 3.4). The written bytes have no expectation and must only be accepted.
 void packed_cases()
 {
     char const *const s = "draft-ietf-cbor-packed-19";

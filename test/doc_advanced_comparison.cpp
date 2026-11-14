@@ -46,8 +46,8 @@ TEST_CASE("doc advanced comparison: iterate an array")
     CHECK_EQ(sum, 6);
 }
 
-// The section "Shared values" shows that a lazy reads tag 29 as a plain tag over its index, and that structs refuses
-// a tag 29 into a member that cannot share.
+// The section "Shared values" shows that a lazy reads tag 29 as a plain tag over its index. That structs refuses a tag
+// 29 into a member that cannot share.
 TEST_CASE("doc advanced comparison: shared values")
 {
     auto const owner = std::make_shared<std::string const>("\x82\xd8\x1c\x61x\xd8\x1d\x00"s);

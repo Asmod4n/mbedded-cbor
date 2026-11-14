@@ -13,9 +13,9 @@ TEST_CASE("path edn comments: the commented byte strings of 3.1 of the EDN draft
     selects("<<\"foo\">>", "4463666f6f");
 }
 
-// 5.2.1, app-string-h: blank space with comments stands around each hex digit, and the content may end in an
-// eol-comment without its line feed. A "/" comment without its closing "/" is no h''. 2.3.2: the single-quoted
-// string ends at its quote, so an escaped quote inside a comment is part of the comment.
+// 5.2.1, app-string-h: blank space with comments stands around each hex digit, and the content may end in an eol-comment
+// without its line feed. A "/" comment without its closing "/" is no h''. 2.3.2: the single-quoted string ends at its
+// quote. So an escaped quote inside a comment is part of the comment.
 TEST_CASE("path edn comments: comments inside h of the EDN draft")
 {
     selects("h'01 /x/ // e'", "4101");
@@ -26,8 +26,8 @@ TEST_CASE("path edn comments: comments inside h of the EDN draft")
     refused("h'01 /x' /y/ '");
 }
 
-// 5.1, rule comment: a comment in slashes, a block comment that ends in */, and an eol-comment # or // that ends
-// with its line feed. Each form is blank space between the items of an array.
+// 5.1, rule comment: a comment in slashes, a block comment that ends in */. An eol-comment # or // that ends with its
+// line feed. Each form is blank space between the items of an array.
 TEST_CASE("path edn comments: every comment form of 5.1 of the EDN draft between items")
 {
     for (std::string_view const l : {"[1, /c/ 2]"sv, "[1, /* c */ 2]"sv, "[1, # c\n 2]"sv, "[1, // c\n 2]"sv, "[1, /*a**/ 2]"sv,
@@ -37,8 +37,8 @@ TEST_CASE("path edn comments: every comment form of 5.1 of the EDN draft between
         refused(l);
 }
 
-// 5.1: S stands between the parts of a map entry, inside simple( ), inside the parentheses of a tag, inside << >>
-// and before the closing bracket; it does not stand between a tag number and its "(".
+// 5.1: S stands between the parts of a map entry, inside simple( ), inside the parentheses of a tag, inside << >> and
+// before the closing bracket. It does not stand between a tag number and its "(".
 TEST_CASE("path edn comments: comments where rule S of the EDN draft stands")
 {
     selects("{1: /c/ 2}", "a10102");
@@ -52,8 +52,8 @@ TEST_CASE("path edn comments: comments where rule S of the EDN draft stands")
     refused("1 /c/ (2)");
 }
 
-// 1.3.5 and 5.1, rule unescaped: a carriage return in a string literal is ignored on input, so a text with CR LF is
-// the text with LF alone.
+// 1.3.5 and 5.1, rule unescaped: a carriage return in a string literal is ignored on input. So a text with CR LF is the
+// text with LF alone.
 TEST_CASE("path edn comments: a carriage return in a string literal is not part of it")
 {
     selects("[\"a\r\nb\"]", "8163610a62");

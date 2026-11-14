@@ -37,8 +37,8 @@ namespace shared_test
 // The decoded item tree of a top-level item, as lazy::clone gives it.
 using tree = cbor::owning<cbor::item>;
 
-// An item of a decoded tree together with the tree. A tree decode reads a tag 29 as a plain tag, so the tests of
-// the encoder find the value that a tag 29 names in the tree itself.
+// An item of a decoded tree together with the tree. A tree decode reads a tag 29 as a plain tag. So the tests of the
+// encoder find the value that a tag 29 names in the tree itself.
 struct place {
     tree t;
     cbor::item const *i;
@@ -105,7 +105,7 @@ place target(tree const &t)
 
 tree decoded_ref(std::string_view const wire)
 {
-    auto const l = test::lazy_of_copy(wire);
+    auto const l = test::make_lazy_from_copy(wire);
     REQUIRE(l.has_value());
     auto t = l->clone();
     REQUIRE(t.has_value());
@@ -163,8 +163,8 @@ std::string encoded_of(place const &p)
     return out;
 }
 
-// A tag 29 stands where a value is not written again. A resolved tag 29 has no identity in this test yet, so a test
-// that two values are distinct checks that the second one is written in full.
+// A tag 29 stands where a value is not written again. A resolved tag 29 has no identity in this test yet. So a test that
+// two values are distinct checks that the second one is written in full.
 inline bool is_reference(place const &p)
 {
     auto const t = p->get<cbor::type::tag>();
@@ -231,8 +231,8 @@ handle object_of(std::uint64_t const tag, handle content)
 // of another writer, which marks every node it meets twice; the decoder reads that input too.
 enum class marks { cycles, repeats_marked, none };
 
-// The public encoder writes an unsigned integer in the width of its type, so the writer writes the index of a tag 29
-// in one byte. The tests hold fewer than 256 marks.
+// The public encoder writes an unsigned integer in the width of its type. So the writer writes the index of a tag 29 in
+// one byte. The tests hold fewer than 256 marks.
 std::uint8_t index_of(std::uint64_t const i)
 {
     REQUIRE(i <= std::numeric_limits<std::uint8_t>::max());
@@ -549,8 +549,8 @@ TEST_CASE("tag 28/29: a string key without identity is written each time")
              "\x82\xa1\x6crepeated_key"s + test::native_unsigned(1) + "\xa1\x6crepeated_key"s + test::native_unsigned(2));
 }
 
-// Replaces test.rb: 'tag 28/29: same object as value AND key — only values share'. mruby keeps an
-// Array key as the same object (measured with mruby 14fc2ef), so an array key with identity shares.
+// Replaces test.rb: 'tag 28/29: same object as value AND key — only values share'. mruby keeps an Array key as the same
+// object (measured with mruby 14fc2ef). So an array key with identity shares.
 TEST_CASE("tag 28/29: an array key with identity shares with the values")
 {
     auto const a = arr({u(1), u(2), u(3)});
@@ -584,6 +584,7 @@ TEST_CASE("application tag: one object three times is written three times")
 // The iov target of the encoder gives the bytes of the string target, the marks and a long string included.
 // The iov forms exist where the platform has <sys/uio.h>, as in the library (encode.hpp); Windows has none.
 #if __has_include(<sys/uio.h>)
+// The iov target and the string target must write the same bytes. The test fails if a shared reference or a long string differs between them.
 TEST_CASE("application tag: the iov target with shared references gives the bytes of the string target")
 {
     auto const p = object_of(5000, arr({u(3), u(7)}));
@@ -653,7 +654,7 @@ TEST_CASE("lazy: a shared value keeps its identity")
 {
     auto const a = arr({u(1), u(2)});
     std::string const doc = encoded_shared(arr({a, a}), marks::repeats_marked);
-    auto const r = test::lazy_of_copy(doc)->clone();
+    auto const r = test::make_lazy_from_copy(doc)->clone();
     REQUIRE(r.has_value());
     CHECK(same(element(*r, 0), element(*r, 1)));
 }
@@ -662,7 +663,7 @@ TEST_CASE("lazy: a shared value keeps its identity")
 TEST_CASE("lazy: a cyclic array")
 {
     std::string const doc = "\xd8\x1c\x81\xd8\x1d\x00"s;
-    auto const r = test::lazy_of_copy(doc)->clone();
+    auto const r = test::make_lazy_from_copy(doc)->clone();
     REQUIRE(r.has_value());
     CHECK(same(*r, element(*r, 0)));
 }
@@ -691,7 +692,7 @@ TEST_CASE("lazy: a value shared by two map values keeps its identity")
 {
     auto const v = arr({u(1), u(2), u(3)});
     std::string const doc = encoded_shared(obj({{s("a"), v}, {s("b"), v}}), marks::repeats_marked);
-    auto const r = test::lazy_of_copy(doc)->clone();
+    auto const r = test::make_lazy_from_copy(doc)->clone();
     REQUIRE(r.has_value());
     CHECK(same(at(*r, "a"), at(*r, "b")));
 }
@@ -739,7 +740,7 @@ TEST_CASE("lazy: a registered object keeps its identity")
 {
     auto const l = object_of(5003, arr({u(99)}));
     std::string const doc = encoded_shared(obj({{s("a"), l}, {s("b"), l}}), marks::repeats_marked);
-    auto const r = test::lazy_of_copy(doc)->clone();
+    auto const r = test::make_lazy_from_copy(doc)->clone();
     REQUIRE(r.has_value());
     CHECK(same(at(*r, "a"), at(*r, "b")));
 }
@@ -752,6 +753,7 @@ concept writes_shareable = requires(E e) { e.shareable(); };
 template <class E>
 concept writes_sharedref = requires(E e) { e.sharedref(std::uint64_t{0}); };
 
+// A user of the public encoder must not write tags 28 and 29. The test fails if the encoder offers either function.
 TEST_CASE("encoder: shareable and sharedref are not public")
 {
     CHECK_FALSE(writes_shareable<cbor::encoder<std::string>>);
@@ -781,7 +783,7 @@ TEST_CASE("value sharing: lazy, at_path, decode and diagnostic notation read tag
         CAPTURE(bytes);
         std::string const doc = "\x83"s + head_of(6, 28, bytes) + "\x05"s + head_of(6, 29, bytes) +
                                 head_of(0, 0, bytes) + head_of(6, 29, bytes) + head_of(0, 7, bytes);
-        auto const l = *test::lazy_of_copy(doc);
+        auto const l = *test::make_lazy_from_copy(doc);
         CHECK_EQ(l.at(0)->type(), cbor::type::tag);
         CHECK_EQ(l.at(1)->type(), cbor::type::tag);
         CHECK_EQ(l.at(0)->get<std::uint64_t>(), 5u);
@@ -811,9 +813,9 @@ TEST_CASE("value sharing: lazy, at_path, decode and diagnostic notation read tag
     CHECK_EQ(cbor::diagnostic_notation("\x83\xd8\x1c\x05\xd8\x1d\x00\xd8\x1d\x07"sv), "[28(5), 29(0), 29(7)]");
 }
 
-// The eager table of one struct decode, for each form of the head of tag 29 and of its index: a forward index
-// is sharedref_index_not_marked, and a tag 29 into a plain member is incorrect_type. A vector of
-// std::optional is a plain array; a vector of numbers is a typed array, which holds no tag.
+// The eager table of one struct decode, for each form of the head of tag 29 and of its index: a forward index is
+// sharedref_index_not_marked. A tag 29 into a plain member is incorrect_type. A vector of std::optional is a plain
+// array; a vector of numbers is a typed array, which holds no tag.
 TEST_CASE("value sharing: an eager decode reads every form of a tag 29")
 {
     using marked_numbers = std::vector<std::optional<std::uint64_t>>;
@@ -851,10 +853,10 @@ std::span<cbor::item const> elements_of(cbor::item const &array)
 
 } // namespace shared_test
 
-// The cases of the model (proof/theories/Cycles.v, the Examples) read by cbor::decode, which resolves the
-// tags (owner decision): a tag 28 makes no node and marks the node of its content; a tag 29 is a shared_reference
-// node whose target is that node. The specification (refs/value-sharing.html) gives the first two cases; the others
-// are the traps that the model names. The model gives the expected node identities and errors.
+// The cases of the model (proof/theories/Cycles.v, the Examples) read by cbor::decode, which resolves the tags (owner
+// decision): a tag 28 makes no node and marks the node of its content. A tag 29 is a shared_reference node whose target
+// is that node. The specification (refs/value-sharing.html) gives the first two cases; the others are the traps that the
+// model names. The model gives the expected node identities and errors.
 TEST_CASE("value sharing: cbor::decode reads each case of the model")
 {
     using shared_test::elements_of;
@@ -910,8 +912,8 @@ TEST_CASE("value sharing: cbor::decode reads each case of the model")
     CHECK_EQ(target_of((*own_key)->get<cbor::type::map>().value()[0]), &**own_key);
 }
 
-// RFC 8949 3: an argument can stand in each width. The tag 29 and its index are read in each width, and the largest
-// index has no mark, on every build (the index is compared as a 64-bit number).
+// RFC 8949 3: an argument can stand in each width. The tag 29 and its index are read in each width. The largest index
+// has no mark, on every build (the index is compared as a 64-bit number).
 TEST_CASE("value sharing: cbor::decode reads a tag 29 and its index in each width")
 {
     for (std::size_t const bytes : {1uz, 2uz, 4uz, 8uz}) {
@@ -926,9 +928,9 @@ TEST_CASE("value sharing: cbor::decode reads a tag 29 and its index in each widt
              error::sharedref_index_not_marked);
 }
 
-// A long chain of tags 28 is read in a loop: 50000 tags 28 before 1 give the integer and no deep stack. The content
-// of a tag 24 is decoded with a table of its own (RFC 8949 3.4.5.1: an embedded item is a data item of its own), so
-// a tag 29 in it does not see the marks of the enclosing item.
+// A long chain of tags 28 is read in a loop: 50000 tags 28 before 1 give the integer and no deep stack. The content of a
+// tag 24 is decoded with a table of its own (RFC 8949 3.4.5.1: an embedded item is a data item of its own). So a tag 29
+// in it does not see the marks of the enclosing item.
 TEST_CASE("value sharing: cbor::decode reads a long chain of marks and a tag 24 with its own table")
 {
     constexpr std::size_t chain_length = 50000;
@@ -946,17 +948,17 @@ TEST_CASE("value sharing: cbor::decode reads a long chain of marks and a tag 24 
 // cbor::decode resolves them.
 TEST_CASE("value sharing: lazy::clone keeps tags 28 and 29")
 {
-    auto const top_level = test::lazy_of_copy("\xd8\x1c\x81\xd8\x1d\x00"s);
+    auto const top_level = test::make_lazy_from_copy("\xd8\x1c\x81\xd8\x1d\x00"s);
     REQUIRE(top_level.has_value());
     auto const tree = top_level->clone();
     REQUIRE(tree.has_value());
     CHECK_EQ((*tree)->get<cbor::type::tag>().value().first, 28u);
 }
 
-// The marks of the model reach every kind of node: a bignum that decode reads as an integer, a tag 24 and a typed
-// array. The tags of an embedded item are resolved with its own table (RFC 8949 3.4.5.1). The model gives
-// sharedref_index_not_marked for an index past the marks before the chain, and an item that ends in its tag 28 or
-// tag 29 is too little data.
+// The marks of the model reach every kind of node: a bignum that decode reads as an integer, a tag 24 and a typed array.
+// The tags of an embedded item are resolved with its own table (RFC 8949 3.4.5.1). The model gives
+// sharedref_index_not_marked for an index past the marks before the chain. An item that ends in its tag 28 or tag 29 is
+// too little data.
 TEST_CASE("value sharing: cbor::decode marks every kind of node and resolves inside a tag 24")
 {
     using shared_test::elements_of;
@@ -981,15 +983,15 @@ TEST_CASE("value sharing: cbor::decode marks every kind of node and resolves ins
 }
 
 // clone of a lazy inside the top-level item keeps tags 28 and 29 and a tag 55799 as tag nodes: only cbor::decode
-// resolves tags 28 and 29, and a tag 55799 inside an item stays a tag (owner decisions).
+// resolves tags 28 and 29. A tag 55799 inside an item stays a tag (owner decisions).
 TEST_CASE("value sharing: clone at an inner offset keeps tags 28, 29 and 55799")
 {
-    auto const top_level = test::lazy_of_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
+    auto const top_level = test::make_lazy_from_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
     REQUIRE(top_level.has_value());
     auto const reference = top_level->at(1).and_then([](cbor::lazy const &l) { return l.clone(); });
     REQUIRE(reference.has_value());
     CHECK_EQ((*reference)->get<cbor::type::tag>().value().first, 29u);
-    auto const marked = test::lazy_of_copy("\x81\xd9\xd9\xf7\x01"s);
+    auto const marked = test::make_lazy_from_copy("\x81\xd9\xd9\xf7\x01"s);
     REQUIRE(marked.has_value());
     auto const inner = marked->at(0).and_then([](cbor::lazy const &l) { return l.clone(); });
     REQUIRE(inner.has_value());
@@ -1030,9 +1032,8 @@ std::string diamonds_of(std::size_t const k)
 
 } // namespace shared_test
 
-// The owner decided that encode writes no shared reference unless the program selects cycles: without
-// cbor::cycles a tree with a shared_reference gives unsupported_value, and a tree without one is written as
-// before.
+// The owner decided that encode writes no shared reference unless the program selects cycles: without cbor::cycles a
+// tree with a shared_reference gives unsupported_value. A tree without one is written as before.
 TEST_CASE("value sharing: cbor::encode without cbor::cycles writes no tag 28 or 29")
 {
     auto const cyclic = cbor::decode("\xd8\x1c\x81\xd8\x1d\x00"sv);
@@ -1049,9 +1050,9 @@ TEST_CASE("value sharing: cbor::encode without cbor::cycles writes no tag 28 or 
     CHECK_EQ(plain, "\x82\x01\x02"s);
 }
 
-// theories/Writer.v write: with cbor::cycles the encoder puts a tag 28 on a node that a back edge of the walk reaches, and a tag 29 with
-// the index of that mark on each back edge. A value reached twice without a cycle is written twice (owner decision).
-// Each expectation is the stream that write gives for the graph that cbor::decode reads.
+// theories/Writer.v write: with cbor::cycles the encoder puts a tag 28 on a node that a back edge of the walk reaches. A
+// tag 29 with the index of that mark on each back edge. A value reached twice without a cycle is written twice (owner
+// decision). Each expectation is the stream that write gives for the graph that cbor::decode reads.
 TEST_CASE("value sharing: cbor::encode writes the marks of each cycle as Writer.v writes them")
 {
     using shared_test::encoded_again;
@@ -1065,9 +1066,9 @@ TEST_CASE("value sharing: cbor::encode writes the marks of each cycle as Writer.
     CHECK_EQ(encoded_again("\xd8\x1c\xa1\xd8\x1d\x00\x01"sv), "\xd8\x1c\xa1\xd8\x1d\x00\x01"s);
     // A mark that no reference names is not written.
     CHECK_EQ(encoded_again("\x82\xd8\x1c\x01\x02"sv), "\x82\x01\x02"s);
-    // A mark on a value whose cycle passes through a reference without a cycle: root = [X, 29(1)] with
-    // X = 28([T, 29(1)]) and T = 28([29(0)]). The walk enters T again through the last reference, then X through the
-    // reference in T, and the edge of X to T reaches T on the path: T gets a mark there too.
+    // A mark on a value whose cycle passes through a reference without a cycle: root = [X, 29(1)] with X = 28([T,
+    // 29(1)]) and T = 28([29(0)]). The walk enters T again through the last reference, then X through the reference in
+    // T. The edge of X to T reaches T on the path: T gets a mark there too.
     CHECK_EQ(encoded_again("\x82\xd8\x1c\x82\xd8\x1c\x81\xd8\x1d\x00\xd8\x1d\x01\xd8\x1d\x01"sv),
              "\x82\xd8\x1c\x82\xd8\x1c\x81\xd8\x1d\x00\xd8\x1c\x81\xd8\x1d\x00\xd8\x1c\x81\xd8\x1c\x82\xd8\x1d\x03\xd8\x1d\x03"s);
 }
@@ -1099,9 +1100,9 @@ TEST_CASE("value sharing: cbor::decode reads back what cbor::encode writes")
     }
 }
 
-// theories/Writer.v write_size: a value reached twice without a cycle doubles the output with each level. The output
-// of k levels has 2^(k+1)-1 heads; past 8 MiB and 100 times the size of the tree the encoder stops before it writes
-// (expat stops an expansion of entities the same way).
+// theories/Writer.v write_size: a value reached twice without a cycle doubles the output with each level. The output of
+// k levels has 2^(k+1)-1 heads. Past 8 MiB and 100 times the size of the tree the encoder stops before it writes (expat
+// stops an expansion of entities the same way).
 TEST_CASE("value sharing: cbor::encode writes each copy and stops at the amplification limit")
 {
     constexpr std::size_t levels = 10;
@@ -1139,9 +1140,9 @@ TEST_CASE("value sharing: cbor::encode writes each index in its shortest head")
     }
 }
 
-// The path through references can be deeper than the tree: element i of the array is 28([29(i-1)]), so the walk
-// from the last element follows every reference before it. encode stops with nesting_depth_exceeded where the stack
-// ends, although the tree has a depth of three.
+// The path through references can be deeper than the tree: element i of the array is 28([29(i-1)]). So the walk from the
+// last element follows every reference before it. encode stops with nesting_depth_exceeded where the stack ends,
+// although the tree has a depth of three.
 TEST_CASE("value sharing: a path through references deeper than the stack gives nesting_depth_exceeded")
 {
     std::size_t const n = test::levels_beyond_small_stack;
@@ -1157,9 +1158,9 @@ TEST_CASE("value sharing: a path through references deeper than the stack gives 
              error::nesting_depth_exceeded);
 }
 
-// A shared reference names one of the values that were marked before it. The decoder and the lazy reader read
-// the index through this one check, so an index that no mark has reached gives the same error on both paths,
-// and the index is converted to std::size_t only after it is known to fit.
+// A shared reference names one of the values that were marked before it. The decoder and the lazy reader read the index
+// through this one check. So an index that no mark has reached gives the same error on both paths. The index is
+// converted to std::size_t only after it is known to fit.
 TEST_CASE("value_sharing: check_sharedref_index for up to three marks")
 {
     std::array<std::uint64_t, 6> const arguments{0, 1, 2, 3, 4, std::numeric_limits<std::uint64_t>::max()};
@@ -1177,8 +1178,8 @@ template <class Argument>
 constexpr bool sharedref_index_accepts =
     requires(Argument const argument, void (*const take)(cbor::detail::value_sharing::index)) { take(argument); };
 
-// An index into the marks of tags 28 and 29 is a type of its own. A plain integer that stands where a shared
-// reference index is expected does not compile, so a count or a position cannot take its place silently.
+// An index into the marks of tags 28 and 29 is a type of its own. A plain integer that stands where a shared reference
+// index is expected does not compile. So a count or a position cannot take its place silently.
 TEST_CASE("value_sharing: index takes no plain integer")
 {
     CHECK(sharedref_index_accepts<cbor::detail::value_sharing::index>);

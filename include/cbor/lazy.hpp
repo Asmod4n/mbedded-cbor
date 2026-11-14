@@ -1238,7 +1238,7 @@ inline lazy_elements::iterator &lazy_elements::iterator::operator++()
     offset = detail::validity::distance(top_level.encoded, d.encoded);
     --left;
     if (left != 0)
-        if (auto const r = detail::validity::check_pending_items(left, d.encoded.size()); !r) [[unlikely]]
+        if (auto const r = detail::validity::check_bytes_left(left, d.encoded.size()); !r) [[unlikely]]
             failure = r.error();
     return *this;
 }
@@ -1490,7 +1490,7 @@ inline std::expected<std::uint64_t, error> lazy::size() const
         h.argument, h.major == major_type::map ? rfc8949::data_items_per_pair : 1);
     if (!items) [[unlikely]]
         return std::unexpected(error::too_little_data);
-    if (auto const r = detail::validity::check_pending_items(*items, d.encoded.size()); !r) [[unlikely]]
+    if (auto const r = detail::validity::check_bytes_left(*items, d.encoded.size()); !r) [[unlikely]]
         return std::unexpected(r.error());
     return h.argument;
 }
@@ -1637,7 +1637,7 @@ inline std::expected<lazy_elements, error> lazy::elements() const
                 return std::unexpected(error::not_indexable);
             if (auto const r = detail::validity::check_definite_length(h.major, h.info); !r) [[unlikely]]
                 return std::unexpected(r.error());
-            if (auto const r = detail::validity::check_pending_items(h.argument, d.encoded.size()); !r)
+            if (auto const r = detail::validity::check_bytes_left(h.argument, d.encoded.size()); !r)
                 [[unlikely]]
                 return std::unexpected(r.error());
             return lazy_elements(source, detail::validity::distance(source.encoded, d.encoded), h.argument,
@@ -1658,7 +1658,7 @@ inline std::expected<lazy_entries, error> lazy::entries() const
     auto const items = detail::validity::checked_mul(h.argument, rfc8949::data_items_per_pair);
     if (!items) [[unlikely]]
         return std::unexpected(error::too_little_data);
-    if (auto const r = detail::validity::check_pending_items(*items, d.encoded.size()); !r) [[unlikely]]
+    if (auto const r = detail::validity::check_bytes_left(*items, d.encoded.size()); !r) [[unlikely]]
         return std::unexpected(r.error());
     return lazy_entries(source, detail::validity::distance(source.encoded, d.encoded), h.argument);
 }

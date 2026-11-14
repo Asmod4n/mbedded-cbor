@@ -70,6 +70,7 @@
 #include <cbor/cbor.hpp>
 #include <doctest/doctest.h>
 
+#include "../ieee754.hpp"
 #include "../small_stack.hpp"
 #include "../reference/value.hpp"
 
@@ -1054,7 +1055,7 @@ TEST_CASE("qcbor IntegerConvertTest: numbers read as int64_t, uint64_t and doubl
     }
     auto const nan = read_as<double>(lazy_of(as_string({0xfa, 0x7f, 0xc0, 0x00, 0x00})));
     REQUIRE(nan.has_value());
-    CHECK(std::isnan(*nan));
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*nan), test::ieee754::binary64_quiet_nan_bits);
     CHECK(read_as<std::int64_t>(lazy_of(as_string({0xfa, 0x7f, 0xc0, 0x00, 0x00}))) == other_type);
 }
 

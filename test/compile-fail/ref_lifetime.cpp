@@ -1,6 +1,6 @@
-// Owner decision 2026-10-17: what the compiler can check about the lifetime of a view is checked. Each case reads a
-// view after the ref or the owning tree that keeps its bytes alive is gone; clang with -Wlifetime-safety refuses each
-// one, and every compiler refuses a read through a temporary. Case 0 is the safe use and must compile.
+// Owner decision 2026-10-17: what the compiler can check about the lifetime of a view is checked. Each case reads a view
+// after the ref or the owning tree that keeps its bytes alive is gone. Clang with -Wlifetime-safety refuses each one,
+// and every compiler refuses a read through a temporary. Case 0 is the safe use and must compile.
 #include <cbor/cbor.hpp>
 
 #include <memory>

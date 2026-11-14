@@ -555,8 +555,8 @@ TEST_CASE("describe: every kind of class reads and writes through its descriptio
                               virtual_base);
 }
 
-// D11: decode constructs T{} and sets the members. A type with no default constructor is written as any
-// other, and it is read only into an object that the caller gives; decode(shared_ptr) of it does not compile
+// D11: decode constructs T{} and sets the members. A type with no default constructor is written as any other. It is
+// read only into an object that the caller gives; decode(shared_ptr) of it does not compile
 // (compile_fail_structs_no_default_constructor).
 TEST_CASE("describe: a type with no default constructor decodes into an object of the caller")
 {
@@ -590,11 +590,11 @@ TEST_CASE("describe: every key form of an entry")
                               key_form<9>{1});
 }
 
-// Every width of the tag head of RFC 8949 3 (major type 6, C0): no tag, 23 in the initial byte (d7), 25 and
-// 255 in one more byte (d8), 256 and 65534 in two (d9), 65536 and 2^32-2 in four (da), 2^32 and 2^64-2 in
-// eight (db). The top of each width (65535, 2^32-1, 2^64-1) is a tag that the IANA registry calls always
-// invalid, so the value one below stands for it. Tag 24 takes one more byte too, but RFC 8949 3.4.5.1 gives
-// it to the encoded data item, so 25 shows that width.
+// Every width of the tag head of RFC 8949 3 (major type 6, C0): no tag, 23 in the initial byte (d7), 25 and 255 in one
+// more byte (d8), 256 and 65534 in two (d9), 65536 and 2^32-2 in four (da), 2^32 and 2^64-2 in eight (db). The top of
+// each width (65535, 2^32-1, 2^64-1) is a tag that the IANA registry calls always invalid. So the value one below stands
+// for it. Tag 24 takes one more byte too, but RFC 8949 3.4.5.1 gives it to the encoded data item, so 25 shows that
+// width.
 TEST_CASE("describe: every width of the tag of a description")
 {
     using namespace describe_test;
@@ -660,10 +660,10 @@ TEST_CASE("describe: decode of an unknown key, a missing key, a wrong tag and no
              cbor::error::incorrect_type);
 }
 
-// RFC 8392 3: "all claims that are not understood by implementations MUST be ignored", and mruby-cbor reads
-// only the members it lists (test.rb:624-638). The claims iss (1) and exp (4) of RFC 8392 3.1 are listed; an
-// unknown claim of each kind of key that RFC 8949 allows in a map of a struct - an integer, a negative
-// integer, a text, a byte string and a simple value - is skipped and not read.
+// RFC 8392 3: "all claims that are not understood by implementations MUST be ignored", and mruby-cbor reads only the
+// members it lists (test.rb:624-638). The claims iss (1) and exp (4) of RFC 8392 3.1 are listed. An unknown claim of
+// each kind of key that RFC 8949 allows in a map of a struct - an integer, a negative integer, a text, a byte string and
+// a simple value - is skipped and not read.
 TEST_CASE("describe: a key that no entry has is skipped")
 {
     auto const read =
@@ -707,9 +707,9 @@ TEST_CASE("describe: an aggregate with no description gives the same bytes on ev
                               describe_test::plain{1, "x"});
 }
 
-// RFC 9052 2 calls a message with no CBOR tag an untagged message. SenML (RFC 8428 6), CTAP2 and the COSE
-// header are such messages with integer keys. A description with cbor::untagged writes the map with no tag in
-// front, and a decode refuses a tag in front of the map, because the type has no tag that the tag could name.
+// RFC 9052 2 calls a message with no CBOR tag an untagged message. SenML (RFC 8428 6), CTAP2 and the COSE header are
+// such messages with integer keys. A description with cbor::untagged writes the map with no tag in front. A decode
+// refuses a tag in front of the map, because the type has no tag that the tag could name.
 TEST_CASE("describe: cbor::untagged writes and reads a map with no tag")
 {
     describe_test::senml_value v;
@@ -802,8 +802,8 @@ CBOR_DEFINE_TYPE_MEMBERS(define_type_test::none_by_name, cbor::tag{160105});
 CBOR_DEFINE_TYPE_MEMBERS(define_type_test::trailing_comma, cbor::untagged, a, b, );
 
 // CBOR_DEFINE_TYPE writes the specialization of cbor::describe_members that a user writes by hand: the tag and a
-// std::tuple of the members, so cbor::structs and cbor::schema read it alike. The tag 160100 is 0x00027164 (RFC
-// 8949 3.4); "x" (61 78) comes before "y" (61 79) by RFC 8949 4.2.1.
+// std::tuple of the members. So cbor::structs and cbor::schema read it alike. The tag 160100 is 0x00027164 (RFC 8949
+// 3.4); "x" (61 78) comes before "y" (61 79) by RFC 8949 4.2.1.
 TEST_CASE("CBOR_DEFINE_TYPE: the macro writes the description that structs and schema read")
 {
     CHECK(std::is_same_v<std::remove_cvref_t<decltype(cbor::describe_members<define_type_test::point>::tag)>,
@@ -859,9 +859,9 @@ TEST_CASE("CBOR_DEFINE_TYPE_MEMBERS: the names give the description that CBOR_DE
     CHECK_EQ(*y, 2u);
 }
 
-// A type alias of a template, one member with no tag, an empty list and a list that ends with a comma: each is a
-// form that a user writes, and each gives the map that the same description by hand gives. The tag 160104 is
-// 0x00027168 and 160105 is 0x00027169; a0 is the empty map (RFC 8949 3.1).
+// A type alias of a template, one member with no tag, an empty list and a list that ends with a comma: each is a form
+// that a user writes. Each gives the map that the same description by hand gives. The tag 160104 is 0x00027168 and
+// 160105 is 0x00027169; a0 is the empty map (RFC 8949 3.1).
 TEST_CASE("CBOR_DEFINE_TYPE_MEMBERS: an alias, one member, no member and a trailing comma")
 {
     describe_test::round_trip("\xda\x00\x02\x71\x68\xa2\x61"

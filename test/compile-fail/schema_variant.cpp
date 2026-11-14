@@ -1,16 +1,14 @@
-// cbor::schema takes a std::variant as a member of a described class. An alternative is a described class with its
-// own tag, a number, bool, an enum, a text or a byte string; the class alternatives name one and the same direct
-// base class. The head of the item chooses the alternative, so a wrong set of alternatives does not compile, with
-// a message that names the cause. CBOR_TEST_CASE selects the case: 1 a list as an alternative, 2 an untagged
-// alternative, 3 two
-// alternatives with one tag, 4 alternatives with other base classes, 5 std::monostate, 6 a std::vector of a
-// variant, 7 a std::optional of a variant, 8 a std::map to a variant, 9 a std::array of a variant, 10 one
-// alternative twice, 11 a base class and its child, 12 get of a type that is no alternative, 13 a variant as the
-// root, 14 a path into the variant, 15 a right use, which compiles, 16 std::int32_t with std::uint32_t, 17 an enum
-// with its underlying type, 18 std::string with std::string_view, 19 a fixed string, 20 a nested variant, 21 two
-// enums of one underlying type, 22 cbor::int128 with cbor::uint128, 23 char with std::uint8_t, 24 long double
-// with std::float128_t (g++), 25 float with std::bfloat16_t (g++), 26 an enum with no fixed underlying type, 27
-// a class, a number and a text, which compiles.
+// cbor::schema takes a std::variant as a member of a described class. An alternative is a described class with its own
+// tag, a number, bool, an enum, a text or a byte string. The class alternatives name one and the same direct base class.
+// The head of the item chooses the alternative, so a wrong set of alternatives does not compile, with a message that
+// names the cause. CBOR_TEST_CASE selects the case: 1 a list as an alternative, 2 an untagged alternative, 3 two
+// alternatives with one tag, 4 alternatives with other base classes, 5 std::monostate, 6 a std::vector of a variant, 7 a
+// std::optional of a variant, 8 a std::map to a variant, 9 a std::array of a variant, 10 one alternative twice, 11 a
+// base class and its child, 12 get of a type that is no alternative, 13 a variant as the root, 14 a path into the
+// variant, 15 a right use, which compiles, 16 std::int32_t with std::uint32_t, 17 an enum with its underlying type, 18
+// std::string with std::string_view, 19 a fixed string, 20 a nested variant, 21 two enums of one underlying type, 22
+// cbor::int128 with cbor::uint128, 23 char with std::uint8_t, 24 long double with std::float128_t (g++), 25 float with
+// std::bfloat16_t (g++), 26 an enum with no fixed underlying type, 27 a class, a number and a text, which compiles.
 #include <cbor/cbor.hpp>
 
 #include <string>

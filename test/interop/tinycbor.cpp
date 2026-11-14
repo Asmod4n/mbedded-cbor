@@ -23,7 +23,7 @@ result value_dump(CborValue &it)
         bool const negative = cbor_value_is_negative_integer(&it);
         if ((e = cbor_value_advance_fixed(&it)))
             return fail(e);
-        return negative ? interop::negative_dump(raw) : interop::unsigned_dump(raw);
+        return negative ? interop::dump_negative_integer(raw) : interop::dump_unsigned_integer(raw);
     }
     case CborByteStringType:
     case CborTextStringType: {
@@ -62,7 +62,7 @@ result value_dump(CborValue &it)
         }
         if ((e = cbor_value_leave_container(&it, &in)))
             return fail(e);
-        return map ? interop::map_dump(parts) : interop::array_dump(parts);
+        return map ? interop::dump_sorted_map(parts) : interop::dump_array(parts);
     }
     case CborTagType: {
         CborTag tag = 0;
@@ -72,7 +72,7 @@ result value_dump(CborValue &it)
         auto c = value_dump(it);
         if (!c)
             return c;
-        return interop::unsigned_dump(tag) + "(" + *c + ")";
+        return interop::dump_unsigned_integer(tag) + "(" + *c + ")";
     }
     case CborSimpleType:
     case CborBooleanType:
@@ -111,7 +111,7 @@ result value_dump(CborValue &it)
         }
         if ((e = cbor_value_advance_fixed(&it)))
             return fail(e);
-        return interop::float_dump(d);
+        return interop::dump_float(d);
     }
     case CborInvalidType:
         break;

@@ -69,12 +69,12 @@ inline void sequence_reader_target(std::string_view const input)
             break;
         cuts.push_back(at);
     }
-    test::sequence_outcome const read = test::reader_outcome_of(bytes, cuts, form);
-    require(read == test::reader_outcome_split_at(bytes, 0));
-    require(read == test::reader_outcome_of(bytes, cuts, form, true));
+    test::sequence_outcome const read = test::read_reader_outcome_of_cuts(bytes, cuts, form);
+    require(read == test::read_reader_outcome_split_at(bytes, 0));
+    require(read == test::read_reader_outcome_of_cuts(bytes, cuts, form, true));
     sequence_forms(bytes);
 
-    test::sequence_outcome const whole = test::sequence_outcome_of(bytes);
+    test::sequence_outcome const whole = test::read_sequence_outcome_of_bytes(bytes);
     std::size_t const n = read.items.size();
     require(n <= whole.items.size());
     for (std::size_t i = 0; i < n; ++i)

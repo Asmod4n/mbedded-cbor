@@ -42,9 +42,9 @@ bool inside(std::string const &bytes, char const *const p)
 
 } // namespace
 
-// RFC 8742 2: an empty sequence of bytes is a CBOR Sequence of no data items. empty() answers that without a
-// read, as std::ranges::empty does for any range; a sequence of bytes that are not well-formed is not empty.
-// The iterator is an input iterator: the size of each item is read once, on the step to it.
+// RFC 8742 2: an empty sequence of bytes is a CBOR Sequence of no data items. empty() answers that without a read, as
+// std::ranges::empty does for any range. A sequence of bytes that are not well-formed is not empty. The iterator is an
+// input iterator: the size of each item is read once, on the step to it.
 TEST_CASE("sequence: an empty CBOR Sequence has no element")
 {
     CHECK(elements_of(held(""sv)).empty());
@@ -71,8 +71,8 @@ TEST_CASE("sequence: each element is the view of one encoded data item")
     CHECK(inside(*bytes, e[2]->data()));
 }
 
-// RFC 8742 2: a truncated last item is detected. The bytes that follow the last complete item stay in the
-// iterator, so that a reader of a stream can wait for more bytes and read them again.
+// RFC 8742 2: a truncated last item is detected. The bytes that follow the last complete item stay in the iterator. So
+// that a reader of a stream can wait for more bytes and read them again.
 TEST_CASE("sequence: a partial last item gives too_little_data and keeps its bytes")
 {
     cbor::sequence const s{held("\x01\x19\x01"sv)};
@@ -104,15 +104,15 @@ TEST_CASE("sequence: an error ends the sequence")
     CHECK_EQ(nested[1].value().size(), 21u);
 }
 
-// Each element is a top-level item of its own (RFC 8742 2). lazy reads an element through a copy here; path reads it
-// as a view with the owner of the whole sequence, so its text points into the bytes of that owner.
+// Each element is a top-level item of its own (RFC 8742 2). lazy reads an element through a copy here. Path reads it as
+// a view with the owner of the whole sequence, so its text points into the bytes of that owner.
 TEST_CASE("sequence: lazy, path and decode read each element")
 {
     auto const owner = std::make_shared<std::string const>("\xa1\x61\x61\x63xyz\x82\x01\x02"s);
     std::vector<cbor::lazy> items;
     for (auto const e : cbor::sequence{owner}) {
         REQUIRE(e.has_value());
-        auto const l = test::lazy_of_copy(*e);
+        auto const l = test::make_lazy_from_copy(*e);
         REQUIRE(l.has_value());
         items.push_back(*l);
     }
@@ -136,13 +136,13 @@ TEST_CASE("sequence: lazy, path and decode read each element")
     CHECK(inside(*owner, (*path)->data()));
     CHECK_EQ(cbor::at_path<"$[0]", std::uint64_t>(views[1]).value(), 1u);
 
-    auto const decoded = test::value_of(items[1]);
+    auto const decoded = test::make_value_from_item(items[1]);
     REQUIRE(decoded.has_value());
     CHECK(*decoded == A(1, 2));
 }
 
-// A lazy reads tags 28 and 29 as plain tags, so a reference in the second element is a tag over its index and
-// reaches nothing in the first element.
+// A lazy reads tags 28 and 29 as plain tags. So a reference in the second element is a tag over its index and reaches
+// nothing in the first element.
 TEST_CASE("sequence: shared references do not cross elements")
 {
     auto const owner = std::make_shared<std::string const>("\xd8\x1c\x01\x81\xd8\x1d\x00"s);
@@ -150,7 +150,7 @@ TEST_CASE("sequence: shared references do not cross elements")
     for (auto const e : cbor::sequence{owner})
         views.push_back(e.value());
     REQUIRE_EQ(views.size(), 2u);
-    auto const l = test::lazy_of_copy(views[1]);
+    auto const l = test::make_lazy_from_copy(views[1]);
     REQUIRE(l.has_value());
     auto const element = l->at(0).and_then([](cbor::lazy const &e) { return e.get<std::uint64_t>(); });
     CHECK_EQ(element, 0u);
@@ -158,9 +158,9 @@ TEST_CASE("sequence: shared references do not cross elements")
     CHECK_EQ(cbor::at_path<"$[0]", std::uint64_t>(views[1]), 0u);
 }
 
-// Owner decision: a sequence takes its bytes only in the view form, so each element is a view that the sequence
-// keeps alive. A string or a view of any kind would let an element outlive its bytes; a const std::string prvalue and
-// a std::pmr::string prvalue did so once through the old constructor from std::string_view.
+// Owner decision: a sequence takes its bytes only in the view form, so each element is a view that the sequence keeps
+// alive. A string or a view of any kind would let an element outlive its bytes. A const std::string prvalue and a
+// std::pmr::string prvalue did so once through the old constructor from std::string_view.
 TEST_CASE("sequence: only a std::shared_ptr<std::string const> makes a sequence")
 {
     CHECK(std::is_constructible_v<cbor::sequence, std::shared_ptr<std::string const>>);
@@ -187,8 +187,8 @@ TEST_CASE("sequence: a count larger than the bytes left is too_little_data befor
     }
 }
 
-// tools/site/guides/complexity.md proves that a loop over a sequence reads each item once. A form that read the
-// sequence from its start for each item would take 10^10 steps here, and the test run would not end in its time.
+// tools/site/guides/complexity.md proves that a loop over a sequence reads each item once. A form that read the sequence
+// from its start for each item would take 10^10 steps here. The test run would not end in its time.
 TEST_CASE("sequence: a loop over 100000 items reads each item once")
 {
     auto const elements = elements_of(held(std::string(100000, '\x00')));

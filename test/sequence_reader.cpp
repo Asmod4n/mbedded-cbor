@@ -110,14 +110,14 @@ TEST_CASE("sequence_reader: an empty sequence and empty pieces")
         cbor::sequence_reader r;
         CHECK(r.empty());
         CHECK_EQ(r.next().error(), error::too_little_data);
-        r = test::piece_fed(std::move(r), ""sv, form, 0);
-        r = test::piece_fed(std::move(r), ""sv, form, 1);
-        r = test::piece_fed(std::move(r), ""sv, form, 2);
+        r = test::feed_piece_to_reader(std::move(r), ""sv, form, 0);
+        r = test::feed_piece_to_reader(std::move(r), ""sv, form, 1);
+        r = test::feed_piece_to_reader(std::move(r), ""sv, form, 2);
         CHECK(r.empty());
         CHECK_EQ(r.next().error(), error::too_little_data);
-        r = test::piece_fed(std::move(r), "\x82"sv, form, 0);
-        r = test::piece_fed(std::move(r), ""sv, form, 1);
-        r = test::piece_fed(std::move(r), "\x01\x02"sv, form, 2);
+        r = test::feed_piece_to_reader(std::move(r), "\x82"sv, form, 0);
+        r = test::feed_piece_to_reader(std::move(r), ""sv, form, 1);
+        r = test::feed_piece_to_reader(std::move(r), "\x01\x02"sv, form, 2);
         auto const item = r.next();
         REQUIRE(item.has_value());
         CHECK_EQ(item->encoded(), "\x82\x01\x02"sv);
@@ -146,15 +146,16 @@ TEST_CASE("sequence_reader: next() with no piece left")
     CHECK(r.empty());
 }
 
+// Items can span the pieces that were fed before one next(). The test fails if a piece is lost or if an item is cut at a piece border.
 TEST_CASE("sequence_reader: several pieces before one next()")
 {
     for (test::feed_form const form : test::feed_forms) {
         CAPTURE(static_cast<int>(form));
         cbor::sequence_reader r;
-        r = test::piece_fed(std::move(r), "\x01\x02"sv, form, 0);
-        r = test::piece_fed(std::move(r), "\x83\x01"sv, form, 1);
-        r = test::piece_fed(std::move(r), "\x02\x03\x04"sv, form, 2);
-        r = test::piece_fed(std::move(r), "\x05"sv, form, 3);
+        r = test::feed_piece_to_reader(std::move(r), "\x01\x02"sv, form, 0);
+        r = test::feed_piece_to_reader(std::move(r), "\x83\x01"sv, form, 1);
+        r = test::feed_piece_to_reader(std::move(r), "\x02\x03\x04"sv, form, 2);
+        r = test::feed_piece_to_reader(std::move(r), "\x05"sv, form, 3);
         std::vector<std::string> got;
         while (auto item = r.next())
             got.emplace_back(item->encoded());
@@ -162,15 +163,15 @@ TEST_CASE("sequence_reader: several pieces before one next()")
     }
 }
 
-// Every split of a sequence into three pieces gives the items of cbor::sequence over the whole buffer, in
-// each form of feed. The sequence holds a string, a map, a tag, a float and an array, so that a cut falls into
-// a head, an argument, the content of a string and the elements of a container.
+// Every split of a sequence into three pieces gives the items of cbor::sequence over the whole buffer, in each form of
+// feed. The sequence holds a string, a map, a tag, a float and an array. So that a cut falls into a head, an argument,
+// the content of a string and the elements of a container.
 TEST_CASE("sequence_reader: every two cuts in every form give the same items")
 {
     std::string const all = "\x01\x82\x01\x02\x63"
                             "abc\xa1\x61k\x19\x01\x00\xc1\x1a\x00\x00\x00\x01\xfb\x3f\xf0\x00\x00\x00\x00\x00"
                             "\x00\x80\x84\x80\x41z\xa0\xf6"s;
-    test::sequence_outcome const whole = test::sequence_outcome_of(all);
+    test::sequence_outcome const whole = test::read_sequence_outcome_of_bytes(all);
     REQUIRE_EQ(whole.items.size(), 8u);
     for (test::feed_form const form : test::feed_forms) {
         CAPTURE(static_cast<int>(form));
@@ -179,9 +180,9 @@ TEST_CASE("sequence_reader: every two cuts in every form give the same items")
                 CAPTURE(a);
                 CAPTURE(b);
                 std::size_t const cuts[] = {a, b};
-                CHECK_EQ(test::reader_outcome_of(all, cuts, form), whole);
+                CHECK_EQ(test::read_reader_outcome_of_cuts(all, cuts, form), whole);
             }
-        CHECK_EQ(test::reader_outcome_byte_by_byte(all, form), whole);
+        CHECK_EQ(test::read_reader_outcome_byte_by_byte(all, form), whole);
     }
 }
 
@@ -217,8 +218,8 @@ TEST_CASE("sequence_reader: an item whole in a shared piece is a view, a cut ite
     CHECK(r.empty());
 }
 
-// One item can start in bytes that the reader copied and end in a piece that it holds, and it can run over
-// more than two held pieces. The reader copies only the bytes of the cut item, so the item after it is a view.
+// One item can start in bytes that the reader copied and end in a piece that it holds. It can run over more than two
+// held pieces. The reader copies only the bytes of the cut item, so the item after it is a view.
 TEST_CASE("sequence_reader: an item over a copied piece and held pieces")
 {
     cbor::sequence_reader r;
@@ -251,14 +252,14 @@ TEST_CASE("sequence_reader: a leading tag 55799 on each item")
 {
     for (test::feed_form const form : test::feed_forms) {
         CAPTURE(static_cast<int>(form));
-        CHECK_EQ(test::reader_outcome_byte_by_byte("\xd9\xd9\xf7\x01\xd9\xd9\xf7\x82\x02\x03"sv, form),
+        CHECK_EQ(test::read_reader_outcome_byte_by_byte("\xd9\xd9\xf7\x01\xd9\xd9\xf7\x82\x02\x03"sv, form),
                  test::sequence_outcome{{"\x01"s, "\x82\x02\x03"s}, error::too_little_data});
     }
 }
 
-// A lazy that the reader gave owns its bytes. Later feeds move the unread bytes into a new buffer or compact
-// the buffer; neither may change or free the bytes of an item that is still held. The sanitizer build reads
-// freed memory as an error.
+// A lazy that the reader gave owns its bytes. Later feeds move the unread bytes into a new buffer or compact the buffer.
+// Neither may change or free the bytes of an item that is still held. The sanitizer build reads freed memory as an
+// error.
 TEST_CASE("sequence_reader: an item stays valid after later feeds and after the reader is gone")
 {
     for (test::feed_form const form : test::feed_forms) {
@@ -268,9 +269,9 @@ TEST_CASE("sequence_reader: an item stays valid after later feeds and after the 
             cbor::sequence_reader r;
             constexpr std::size_t items = 2000;
             for (std::size_t i = 0; i < items; ++i) {
-                r = test::piece_fed(std::move(r), "\x63"sv, form, 3 * i);
-                r = test::piece_fed(std::move(r), "ab"sv, form, 3 * i + 1);
-                r = test::piece_fed(std::move(r), "c"sv, form, 3 * i + 2);
+                r = test::feed_piece_to_reader(std::move(r), "\x63"sv, form, 3 * i);
+                r = test::feed_piece_to_reader(std::move(r), "ab"sv, form, 3 * i + 1);
+                r = test::feed_piece_to_reader(std::move(r), "c"sv, form, 3 * i + 2);
                 auto item = r.next();
                 REQUIRE(item.has_value());
                 held.push_back(std::move(*item));
@@ -298,9 +299,9 @@ TEST_CASE("sequence_reader: an item stays valid after the caller releases the pi
     CHECK_EQ(r.next()->get<std::uint64_t>().value(), 1u);
 }
 
-// RFC 8949 3: the initial byte alone decides that additional information 28 to 30 is not well-formed, and
-// that 31 is an indefinite length (a break for major type 7). Appendix F names these errors. The reader gives
-// the error as soon as the byte is there, at every split and in every form, and never too_little_data.
+// RFC 8949 3: the initial byte alone decides that additional information 28 to 30 is not well-formed. That 31 is an
+// indefinite length (a break for major type 7). Appendix F names these errors. The reader gives the error as soon as the
+// byte is there, at every split and in every form, and never too_little_data.
 TEST_CASE("sequence_reader: a malformed item gives its error at every split")
 {
     struct malformed {
@@ -329,9 +330,9 @@ TEST_CASE("sequence_reader: a malformed item gives its error at every split")
             CAPTURE(static_cast<int>(form));
             for (std::size_t at = 0; at <= m.bytes.size(); ++at) {
                 CAPTURE(at);
-                CHECK_EQ(test::reader_outcome_split_at(m.bytes, at, form).last, m.expected);
+                CHECK_EQ(test::read_reader_outcome_split_at(m.bytes, at, form).last, m.expected);
             }
-            CHECK_EQ(test::reader_outcome_byte_by_byte(m.bytes, form).last, m.expected);
+            CHECK_EQ(test::read_reader_outcome_byte_by_byte(m.bytes, form).last, m.expected);
         }
     }
 }
@@ -344,20 +345,20 @@ TEST_CASE("sequence_reader: after an error every call gives the error and feed k
     for (test::feed_form const form : test::feed_forms) {
         CAPTURE(static_cast<int>(form));
         cbor::sequence_reader r;
-        r = test::piece_fed(std::move(r), "\x01\x1c\x01"sv, form, 0);
+        r = test::feed_piece_to_reader(std::move(r), "\x01\x1c\x01"sv, form, 0);
         CHECK(r.next().has_value());
         CHECK_EQ(r.next().error(), error::syntax_error);
         CHECK(r.empty());
-        r = test::piece_fed(std::move(r), "\x02"sv, form, 1);
-        r = test::piece_fed(std::move(r), "\x03"sv, form, 2);
+        r = test::feed_piece_to_reader(std::move(r), "\x02"sv, form, 1);
+        r = test::feed_piece_to_reader(std::move(r), "\x03"sv, form, 2);
         CHECK(r.empty());
         CHECK_EQ(r.next().error(), error::syntax_error);
         CHECK_EQ(r.next().error(), error::syntax_error);
     }
 }
 
-// A count in the input reserves nothing (rule): an array that claims 2^64 - 1 elements, and a string that
-// claims 2^64 - 1 bytes, wait for bytes like any other item.
+// A count in the input reserves nothing (rule): an array that claims 2^64 - 1 elements. A string that claims 2^64 - 1
+// bytes, wait for bytes like any other item.
 TEST_CASE("sequence_reader: a large count waits for bytes")
 {
     for (std::string const &bytes :
@@ -366,7 +367,7 @@ TEST_CASE("sequence_reader: a large count waits for bytes")
         CAPTURE(bytes);
         for (test::feed_form const form : test::feed_forms) {
             CAPTURE(static_cast<int>(form));
-            CHECK_EQ(test::reader_outcome_byte_by_byte(bytes, form),
+            CHECK_EQ(test::read_reader_outcome_byte_by_byte(bytes, form),
                      test::sequence_outcome{{}, error::too_little_data});
         }
     }
@@ -380,11 +381,11 @@ TEST_CASE("sequence_reader: a nested item of any depth")
     std::size_t const depth = test::levels_every_stack_holds;
     for (test::feed_form const form : test::feed_forms) {
         CAPTURE(static_cast<int>(form));
-        CHECK_EQ(test::reader_outcome_byte_by_byte(nested_arrays(depth), form).items.size(), 1u);
-        CHECK_EQ(test::reader_outcome_byte_by_byte(nested_tags(depth), form).items.size(), 1u);
+        CHECK_EQ(test::read_reader_outcome_byte_by_byte(nested_arrays(depth), form).items.size(), 1u);
+        CHECK_EQ(test::read_reader_outcome_byte_by_byte(nested_tags(depth), form).items.size(), 1u);
     }
     std::string const deep = std::string(test::levels_beyond_small_stack, '\x81') + "\x80"s;
-    test::on_small_stack([&deep] { CHECK_EQ(test::reader_outcome_split_at(deep, 0).items.size(), 1u); });
+    test::on_small_stack([&deep] { CHECK_EQ(test::read_reader_outcome_split_at(deep, 0).items.size(), 1u); });
 }
 
 // RFC 8949 3 and the decision of the owner of 2026-10-12: an array or a map that announces more items than
@@ -395,18 +396,18 @@ TEST_CASE("sequence_reader: a count larger than the bytes left waits before its 
 {
     for (std::size_t at = 0; at <= "\x82\xff"sv.size(); ++at) {
         CAPTURE(at);
-        CHECK_EQ(test::reader_outcome_split_at("\x82\xff"s, at).last, error::too_little_data);
-        CHECK_EQ(test::reader_outcome_split_at("\x82\xff"s, at), test::sequence_outcome_of("\x82\xff"sv));
+        CHECK_EQ(test::read_reader_outcome_split_at("\x82\xff"s, at).last, error::too_little_data);
+        CHECK_EQ(test::read_reader_outcome_split_at("\x82\xff"s, at), test::read_sequence_outcome_of_bytes("\x82\xff"sv));
     }
     for (std::size_t at = 0; at <= "\x82\xff\x00"sv.size(); ++at) {
         CAPTURE(at);
-        CHECK_EQ(test::reader_outcome_split_at("\x82\xff\x00"s, at).last, error::syntax_error);
+        CHECK_EQ(test::read_reader_outcome_split_at("\x82\xff\x00"s, at).last, error::syntax_error);
     }
     // An empty array inside a container counts too: after 80 the outer array still waits for two items and
     // one byte follows. Found by the fuzz target.
     std::string const empty_inside = "\x84\x1a\x00\x00\x00\x00\x80\xfe"s;
-    CHECK_EQ(test::reader_outcome_split_at(empty_inside, 0), test::sequence_outcome_of(empty_inside));
-    CHECK_EQ(test::reader_outcome_split_at(empty_inside, 0).last, error::too_little_data);
+    CHECK_EQ(test::read_reader_outcome_split_at(empty_inside, 0), test::read_sequence_outcome_of_bytes(empty_inside));
+    CHECK_EQ(test::read_reader_outcome_split_at(empty_inside, 0).last, error::too_little_data);
 }
 
 // empty() says whether the reader holds a byte that no item has taken yet, as std::ranges::empty says whether
@@ -417,12 +418,12 @@ TEST_CASE("sequence_reader: empty() is true when no unread byte is held")
         CAPTURE(static_cast<int>(form));
         cbor::sequence_reader r;
         CHECK(r.empty());
-        r = test::piece_fed(std::move(r), "\x01\x82"sv, form, 0);
+        r = test::feed_piece_to_reader(std::move(r), "\x01\x82"sv, form, 0);
         CHECK_FALSE(r.empty());
         CHECK(r.next().has_value());
         CHECK_EQ(r.next().error(), error::too_little_data);
         CHECK_FALSE(r.empty());
-        r = test::piece_fed(std::move(r), "\x01\x02"sv, form, 1);
+        r = test::feed_piece_to_reader(std::move(r), "\x01\x02"sv, form, 1);
         CHECK(r.next().has_value());
         CHECK(r.empty());
     }

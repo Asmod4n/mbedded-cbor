@@ -18,7 +18,7 @@
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 
-// Each test in this file is one example of a reference page of the lazy group; the comments of lazy.hpp take the
+// Each test in this file is one example of a reference page of the lazy group. The comments of lazy.hpp take the
 // examples through the snippet markers. The tests exist so that every example compiles and gives the result that its
 // page states.
 
@@ -148,8 +148,8 @@ TEST_CASE("doc reference lazy: operator[]")
     CHECK_EQ(bus.error(), cbor::error::key_not_found);
 }
 
-// lazy.hpp, snippet at_path: a scalar, a text as a ref, a nodelist, a missing key, the lazy of a node, and a query
-// compiled at run time.
+// lazy.hpp, snippet at_path: a scalar, a text as a ref, a nodelist, a missing key, the lazy of a node. A query compiled
+// at run time.
 TEST_CASE("doc reference lazy: at_path")
 {
     std::string bytes = test::preferred(test::M("user"s, test::M("id"s, 42, "tags"s, test::A("a"s, "b"s))));

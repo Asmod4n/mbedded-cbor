@@ -95,7 +95,7 @@ class well_formedness
             auto const sum = detail::validity::checked_add(pending, added);
             if (!sum) [[unlikely]]
                 return std::unexpected(error::too_little_data);
-            if (auto const r = detail::validity::check_pending_items(*sum, d.encoded.size()); !r) [[unlikely]]
+            if (auto const r = detail::validity::check_bytes_left(*sum, d.encoded.size()); !r) [[unlikely]]
                 return std::unexpected(r.error());
             pending = *sum;
         }

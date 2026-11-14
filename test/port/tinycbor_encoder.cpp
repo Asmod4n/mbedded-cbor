@@ -99,7 +99,7 @@ std::span<std::byte const> bytes_of(std::string_view const s)
 }
 
 // The tree that cbor::decode() reads from the bytes, written again by cbor::encode().
-std::string reencoded(std::string const &bytes)
+std::string encode_again(std::string const &bytes)
 {
     auto const tree = cbor::decode(bytes);
     if (!tree)
@@ -481,7 +481,7 @@ TEST_CASE("tinycbor encoder: the rows written again from their tree")
 {
     for (row const &r : tags_data()) {
         CAPTURE(r.name);
-        CHECK_EQ(reencoded(r.output), r.output);
+        CHECK_EQ(encode_again(r.output), r.output);
     }
 }
 
@@ -503,47 +503,47 @@ TEST_CASE("tinycbor encoder: tags, arrays and maps")
     for (row const &r : tags_data()) {
         CAPTURE(r.name);
         std::string const &o = r.output;
-        CHECK_EQ(reencoded("\xc1"s + o), "\xc1"s + o);
+        CHECK_EQ(encode_again("\xc1"s + o), "\xc1"s + o);
         auto const tag24 = tag24_errors.find(r.name);
-        CHECK_EQ(reencoded("\xd8\x18"s + o), tag24 == tag24_errors.end() ? "\xd8\x18"s + o : tag24->second);
-        CHECK_EQ(reencoded("\xd8\xff"s + o), "\xd8\xff"s + o);
-        CHECK_EQ(reencoded("\xd9\1\0"s + o), "\xd9\1\0"s + o);
-        CHECK_EQ(reencoded("\xd9\xd9\xf7"s + o), o);
-        CHECK_EQ(reencoded("\xd9\xff\xff"s + o), "\xd9\xff\xff"s + o);
-        CHECK_EQ(reencoded("\xda\0\1\0\0"s + o), "\xda\0\1\0\0"s + o);
-        CHECK_EQ(reencoded("\xda\xff\xff\xff\xff"s + o), "\xda\xff\xff\xff\xff"s + o);
-        CHECK_EQ(reencoded("\xdb\0\0\0\1\0\0\0\0"s + o), "\xdb\0\0\0\1\0\0\0\0"s + o);
-        CHECK_EQ(reencoded("\xdb\xff\xff\xff\xff\xff\xff\xff\xff"s + o), "\xdb\xff\xff\xff\xff\xff\xff\xff\xff"s + o);
-        CHECK_EQ(reencoded("\xc1\xc1"s + o), "\xc1\xc1"s + o);
+        CHECK_EQ(encode_again("\xd8\x18"s + o), tag24 == tag24_errors.end() ? "\xd8\x18"s + o : tag24->second);
+        CHECK_EQ(encode_again("\xd8\xff"s + o), "\xd8\xff"s + o);
+        CHECK_EQ(encode_again("\xd9\1\0"s + o), "\xd9\1\0"s + o);
+        CHECK_EQ(encode_again("\xd9\xd9\xf7"s + o), o);
+        CHECK_EQ(encode_again("\xd9\xff\xff"s + o), "\xd9\xff\xff"s + o);
+        CHECK_EQ(encode_again("\xda\0\1\0\0"s + o), "\xda\0\1\0\0"s + o);
+        CHECK_EQ(encode_again("\xda\xff\xff\xff\xff"s + o), "\xda\xff\xff\xff\xff"s + o);
+        CHECK_EQ(encode_again("\xdb\0\0\0\1\0\0\0\0"s + o), "\xdb\0\0\0\1\0\0\0\0"s + o);
+        CHECK_EQ(encode_again("\xdb\xff\xff\xff\xff\xff\xff\xff\xff"s + o), "\xdb\xff\xff\xff\xff\xff\xff\xff\xff"s + o);
+        CHECK_EQ(encode_again("\xc1\xc1"s + o), "\xc1\xc1"s + o);
 
-        CHECK_EQ(reencoded("\x81"s + o), "\x81"s + o);
-        CHECK_EQ(reencoded("\x82"s + o + o), "\x82"s + o + o);
+        CHECK_EQ(encode_again("\x81"s + o), "\x81"s + o);
+        CHECK_EQ(encode_again("\x82"s + o + o), "\x82"s + o + o);
         constexpr int doublings = 5;
         std::string longoutput = o;
         for (int i = 0; i < doublings; ++i)
             longoutput += longoutput;
-        CHECK_EQ(reencoded("\x98\x20"s + longoutput), "\x98\x20"s + longoutput);
+        CHECK_EQ(encode_again("\x98\x20"s + longoutput), "\x98\x20"s + longoutput);
         for (int i = 0; i < 3; ++i)
             longoutput += longoutput;
-        CHECK_EQ(reencoded("\x99\1\0"s + longoutput), "\x99\1\0"s + longoutput);
-        CHECK_EQ(reencoded("\x81\x81"s + o), "\x81\x81"s + o);
-        CHECK_EQ(reencoded("\x81\x82"s + o + o), "\x81\x82"s + o + o);
-        CHECK_EQ(reencoded("\x82\x81"s + o + o), "\x82\x81"s + o + o);
-        CHECK_EQ(reencoded("\x82\x81"s + o + "\x81" + o), "\x82\x81"s + o + "\x81" + o);
+        CHECK_EQ(encode_again("\x99\1\0"s + longoutput), "\x99\1\0"s + longoutput);
+        CHECK_EQ(encode_again("\x81\x81"s + o), "\x81\x81"s + o);
+        CHECK_EQ(encode_again("\x81\x82"s + o + o), "\x81\x82"s + o + o);
+        CHECK_EQ(encode_again("\x82\x81"s + o + o), "\x82\x81"s + o + o);
+        CHECK_EQ(encode_again("\x82\x81"s + o + "\x81" + o), "\x82\x81"s + o + "\x81" + o);
 
-        CHECK_EQ(reencoded("\xa1\1"s + o), "\xa1\1"s + o);
-        CHECK_EQ(reencoded("\xa2\1"s + o + o + "\x18\x18"), "\xa2\1"s + o + o + "\x18\x18");
-        CHECK_EQ(reencoded("\xa1"s + o + o), "\xa1"s + o + o);
+        CHECK_EQ(encode_again("\xa1\1"s + o), "\xa1\1"s + o);
+        CHECK_EQ(encode_again("\xa2\1"s + o + o + "\x18\x18"), "\xa2\1"s + o + o + "\x18\x18");
+        CHECK_EQ(encode_again("\xa1"s + o + o), "\xa1"s + o + o);
         std::string longmap = "\1"s + o;
         for (int i = 0; i < doublings; ++i)
             longmap += longmap;
-        CHECK_EQ(reencoded("\xb8\x20"s + longmap), "\xb8\x20"s + longmap);
+        CHECK_EQ(encode_again("\xb8\x20"s + longmap), "\xb8\x20"s + longmap);
         for (int i = 0; i < 3; ++i)
             longmap += longmap;
-        CHECK_EQ(reencoded("\xb9\1\0"s + longmap), "\xb9\1\0"s + longmap);
-        CHECK_EQ(reencoded("\xa1\1\xa1\2"s + o), "\xa1\1\xa1\2"s + o);
-        CHECK_EQ(reencoded("\xa1\1\xa2\2"s + o + o + "\xf4"), "\xa1\1\xa2\2"s + o + o + "\xf4");
-        CHECK_EQ(reencoded("\xa2\1\xa1\2"s + o + o + "\xf4"), "\xa2\1\xa1\2"s + o + o + "\xf4");
+        CHECK_EQ(encode_again("\xb9\1\0"s + longmap), "\xb9\1\0"s + longmap);
+        CHECK_EQ(encode_again("\xa1\1\xa1\2"s + o), "\xa1\1\xa1\2"s + o);
+        CHECK_EQ(encode_again("\xa1\1\xa2\2"s + o + o + "\xf4"), "\xa1\1\xa2\2"s + o + o + "\xf4");
+        CHECK_EQ(encode_again("\xa2\1\xa1\2"s + o + o + "\xf4"), "\xa2\1\xa1\2"s + o + o + "\xf4");
     }
 }
 

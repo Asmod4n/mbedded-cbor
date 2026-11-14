@@ -186,8 +186,8 @@ TEST_CASE("structs: the examples of RFC 8949 Appendix A")
                                                    {{"a", "A"}, {"b", "B"}});
 }
 
-// A map key that the struct does not name is skipped, and a key that a member needs and the map lacks is an
-// error; an optional member may be absent.
+// A map key that the struct does not name is skipped. A key that a member needs and the map lacks is an error; an
+// optional member may be absent.
 TEST_CASE("structs: an unknown key is skipped, a missing key is an error")
 {
     auto const extra =
@@ -202,11 +202,11 @@ TEST_CASE("structs: an unknown key is skipped, a missing key is an error")
     CHECK_EQ(**zero, 0u);
 }
 
-// RFC 8949 5.6 names two ways for a repeated key; the owner decided on 2026-10-14 that an eager decode takes
-// the first: it rejects the map with duplicate_key. A struct member took the first entry with no error before
-// this test changed, and the last one before that. A key that no member has is not read, so it is no
-// duplicate. A std::map gives duplicate_key on a repeated key since the owner decision of 2026-10-16; the
-// key 1 in one byte and the key 1 in two bytes are the same key (RFC 8949 5.6).
+// RFC 8949 5.6 names two ways for a repeated key. The owner decided on 2026-10-14 that an eager decode takes the first:
+// it rejects the map with duplicate_key. A struct member took the first entry with no error before this test changed,
+// and the last one before that. A key that no member has is not read, so it is no duplicate. A std::map gives
+// duplicate_key on a repeated key since the owner decision of 2026-10-16. The key 1 in one byte and the key 1 in two
+// bytes are the same key (RFC 8949 5.6).
 TEST_CASE("structs: a repeated key of a member is duplicate_key")
 {
     CHECK_EQ(cbor::structs<pair_ab>::decode("\xa3\x61\x61\x01\x61\x61\x02\x61\x62\x80"s).error(),
@@ -267,10 +267,9 @@ TEST_CASE("structs: the view form reads the bytes of the owner")
     CHECK_THROWS_AS((void)cbor::structs<cose_sign1>::decode(std::shared_ptr<std::string const>()), std::logic_error);
 }
 
-// An owner is empty when it holds no object, whatever pointer it stores. An owner beside borrowed bytes compiles
-// (owner decision 2026-10-17); an owner beside a string does not, because the string may die first. The test exists
-// because each of these let a view outlive its bytes, and a check of the stored pointer refused an owner that holds
-// the bytes.
+// An owner is empty when it holds no object, whatever pointer it stores. An owner beside borrowed bytes compiles (owner
+// decision 2026-10-17); an owner beside a string does not, because the string may die first. The test exists because
+// each of these let a view outlive its bytes. A check of the stored pointer refused an owner that holds the bytes.
 TEST_CASE("structs: decode checks that the owner holds an object")
 {
     auto const bytes = std::make_shared<std::string const>("\xd2\x84\x43\xa1\x01\x26\xa1\x04\x42\x31\x31\x41\x7a\x42\x01\x02"s);
@@ -313,8 +312,8 @@ TEST_CASE("structs: a CTAP2 getAssertion response")
     CHECK_EQ(text, "x" + message);
 }
 
-// RFC 8949 Appendix A: 2^64 and -2^64-1 need a bignum, tag 2 or 3 on the magnitude; simple(16) and simple(255)
-// are simple values of one and two bytes.
+// RFC 8949 Appendix A: 2^64 and -2^64-1 need a bignum, tag 2 or 3 on the magnitude. Simple(16) and simple(255) are
+// simple values of one and two bytes.
 TEST_CASE("structs: bignums and simple values of RFC 8949 Appendix A")
 {
 #ifdef CBOR_HAS_INT128
@@ -360,9 +359,9 @@ struct cbor::describe_members<renamed> {
     };
 };
 
-// A generator gives each member a fixed name and carries the key of the other language in the description, so
-// a key need not be a C++ identifier and never meets a macro such as EOF. The map comes from RFC 8949 3.1 by
-// hand, under the tag of the description, 160050 = 0x00027132.
+// A generator gives each member a fixed name and carries the key of the other language in the description. So a key need
+// not be a C++ identifier and never meets a macro such as EOF. The map comes from RFC 8949 3.1 by hand, under the tag of
+// the description, 160050 = 0x00027132.
 TEST_CASE("structs: the description gives the key of a member")
 {
     std::string const bytes = "\xda\x00\x02\x71\x32\xa2\x69x-user-id\x07\x63"
@@ -419,9 +418,9 @@ struct cbor::describe_members<account> {
     };
 };
 
-// A private or protected member is state the class keeps to itself. It never goes on the wire, and a key of
-// its name on the wire is an unknown key, so the bytes of a sender cannot set it. A class with private
-// members is no aggregate, so it is read through its description, under its tag 160051 = 0x00027133.
+// A private or protected member is state the class keeps to itself. It never goes on the wire, and a key of its name on
+// the wire is an unknown key. So the bytes of a sender cannot set it. A class with private members is no aggregate, so
+// it is read through its description, under its tag 160051 = 0x00027133.
 TEST_CASE("structs: only public members are written and read")
 {
     account a;
@@ -457,14 +456,13 @@ struct named_pair {
 
 } // namespace
 
-// The owner decided on 2026-10-13 that an eager decode keeps one table of the tags 28 of one call. A tag 28
-// on a plain member is allowed and keeps the value. A tag 29 needs a member that can share a value; no plain
-// member can, so it gives incorrect_type. A tag 29 to a mark in a skipped member gives
-// sharedref_not_complete and a forward index sharedref_index_not_marked. A key that no member has is
-// skipped whatever its type (owner, 2026-11-08): a skipped key 28("a") and its skipped value 28(1) mark
-// values in a skipped member, so a later 29(1) gives sharedref_not_complete; a skipped key 29(0) and its
-// value leave the member a without a key, so key_not_found. A typed array holds no tag, so the marks stand
-// in a vector of std::optional, which is a plain array.
+// The owner decided on 2026-10-13 that an eager decode keeps one table of the tags 28 of one call. A tag 28 on a plain
+// member is allowed and keeps the value. A tag 29 needs a member that can share a value; no plain member can, so it
+// gives incorrect_type. A tag 29 to a mark in a skipped member gives sharedref_not_complete and a forward index
+// sharedref_index_not_marked. A key that no member has is skipped whatever its type (owner, 2026-11-08): a skipped key
+// 28("a") and its skipped value 28(1) mark values in a skipped member. So a later 29(1) gives sharedref_not_complete; a
+// skipped key 29(0) and its value leave the member a without a key, so key_not_found. A typed array holds no tag, so the
+// marks stand in a vector of std::optional, which is a plain array.
 TEST_CASE("structs: the table of tags 28 and 29 of one decode")
 {
     using marked_numbers = std::vector<std::optional<std::uint64_t>>;
@@ -498,8 +496,8 @@ template <class Encoded>
 concept decodable = requires(Encoded &&e) { cbor::structs<std::string_view>::decode(std::forward<Encoded>(e)); };
 
 // A moved std::string becomes the owner and is not copied: the view points into the buffer that was moved. Owner
-// decision 2026-10-17: no form copies the input, so a named string, a const string, a pointer and a view do not
-// compile; a caller who wants a copy writes it.
+// decision 2026-10-17: no form copies the input. So a named string, a const string, a pointer and a view do not compile;
+// a caller who wants a copy writes it.
 TEST_CASE("structs: decode takes a moved string as the owner and takes no other bare form")
 {
     std::string const text(40, 'x');
@@ -609,9 +607,9 @@ struct standard_containers {
     bool operator==(standard_containers const &) const = default;
 };
 
-// decode reads every standard container that encode writes. Before the fix std::list, std::deque, std::set
-// and std::vector<bool> encoded but did not compile in decode: the branch tested push_back and called reserve
-// and emplace_back, and a std::set fell through to the struct reader.
+// decode reads every standard container that encode writes. Before the fix std::list, std::deque, std::set and
+// std::vector<bool> encoded but did not compile in decode: the branch tested push_back and called reserve and
+// emplace_back. A std::set fell through to the struct reader.
 TEST_CASE("structs: every standard container that encode writes decodes")
 {
     round_trip("\x82\xf5\xf4"s, std::vector<bool>{true, false});
@@ -624,10 +622,10 @@ TEST_CASE("structs: every standard container that encode writes decodes")
         standard_containers{{1, 2}, {3}, {true}, {4, 5}, {6, 6}, {{1, 2}, {1, 3}}});
 }
 
-// RFC 8949 5.6 makes a map with a repeated key invalid, so a multimap is a map from each key to the array of its
-// values. A repeated key gives duplicate_key, as for std::map. A value that is not an array, and an empty array,
-// which encode never writes, give incorrect_type. The bytes are written by hand from RFC 8949 3.1: 0xa0 to 0xa2 are
-// maps of 0 to 2 pairs, 0x80 to 0x82 arrays of 0 to 2 items.
+// RFC 8949 5.6 makes a map with a repeated key invalid. So a multimap is a map from each key to the array of its values.
+// A repeated key gives duplicate_key, as for std::map. A value that is not an array, and an empty array, which encode
+// never writes, give incorrect_type. The bytes are written by hand from RFC 8949 3.1: 0xa0 to 0xa2 are maps of 0 to 2
+// pairs, 0x80 to 0x82 arrays of 0 to 2 items.
 template <class M>
 void multimap_check()
 {
@@ -681,10 +679,10 @@ struct large_elements {
     std::vector<std::array<std::uint64_t, 512>, bounded_allocator<std::array<std::uint64_t, 512>>> v;
 };
 
-// An array head of 2^20 elements before 1 MiB of input made decode reserve 2^20 elements of 4096 bytes, 4
-// GiB, and std::bad_alloc escaped decode. The reserve is now at most what the remaining bytes hold, so the
-// allocator that refuses more than 2 MiB is not reached, and the read ends at the first element that is no
-// array. A std::bad_alloc that does happen inside decode comes back as not_enough_memory.
+// An array head of 2^20 elements before 1 MiB of input made decode reserve 2^20 elements of 4096 bytes, 4 GiB, and
+// std::bad_alloc escaped decode. The reserve is now at most what the remaining bytes hold. So the allocator that refuses
+// more than 2 MiB is not reached, and the read ends at the first element that is no array. A std::bad_alloc that does
+// happen inside decode comes back as not_enough_memory.
 TEST_CASE("structs: decode reserves no more than the remaining bytes and returns std::bad_alloc as an error")
 {
     std::string message = "\xa1\x61v\x9a\x00\x10\x00\x00"s;
@@ -742,6 +740,7 @@ concept decodes_named_target = requires(std::shared_ptr<std::string const> owner
     cbor::structs<T>::decode(owner, target);
 };
 
+// A caller sets a limit with a pmr resource. The test fails if decode ignores that resource.
 TEST_CASE("structs decode keeps the resource of a moved pmr target")
 {
     using texts = std::pmr::vector<std::pmr::string>;
@@ -788,11 +787,11 @@ struct pmr_person {
     bool operator==(pmr_person const &) const = default;
 };
 
-// The caller bounds the memory of a decode with the resource of the target. A plain struct has no allocator, so
-// the vector cannot give its resource to the struct, but it can give it to each member that takes an allocator,
-// as uses-allocator construction ([allocator.uses.construction]) does for one object. The test puts a counting
-// resource as the default resource, so that a member that took the default resource shows as a count above zero.
-// Each name is longer than any short string buffer, so each one allocates.
+// The caller bounds the memory of a decode with the resource of the target. A plain struct has no allocator, so the
+// vector cannot give its resource to the struct. But it can give it to each member that takes an allocator, as
+// uses-allocator construction ([allocator.uses.construction]) does for one object. The test puts a counting resource as
+// the default resource, so that a member that took the default resource shows as a count above zero. Each name is longer
+// than any short string buffer, so each one allocates.
 TEST_CASE("structs: a plain struct in a std::pmr::vector takes the resource of the vector for its members")
 {
     using people = std::pmr::vector<pmr_person>;
@@ -811,18 +810,17 @@ TEST_CASE("structs: a plain struct in a std::pmr::vector takes the resource of t
         CHECK_EQ(std::string_view(p.name), long_name);
         CHECK_EQ(p.name.get_allocator().resource(), &target);
     }
-    // A debug build of the C++ library of MSVC gives each container a proxy object from its allocator, so a
-    // temporary container with the default resource takes blocks there; the count holds without that proxy.
+    // A debug build of the C++ library of MSVC gives each container a proxy object from its allocator. So a temporary
+    // container with the default resource takes blocks there; the count holds without that proxy.
 #if !defined(_ITERATOR_DEBUG_LEVEL) || _ITERATOR_DEBUG_LEVEL == 0
     CHECK_EQ(fallback.allocations, 0u);
 #endif
     CHECK_GT(target.allocations, 0u);
 }
 
-// RFC 8949 4.2.1: deterministic encoding orders the keys of a map by the bytewise lexicographic order
-// of their encoded forms. A shorter text key has a shorter head, so "b" (61 62) comes before "aa"
-// (62 61 61); an unsigned integer comes before a negative one, 1 (01) and 24 (18 18) before -1 (20).
-// The declaration order differs on purpose.
+// RFC 8949 4.2.1: deterministic encoding orders the keys of a map by the bytewise lexicographic order of their encoded
+// forms. A shorter text key has a shorter head, so "b" (61 62) comes before "aa" (62 61 61). An unsigned integer comes
+// before a negative one, 1 (01) and 24 (18 18) before -1 (20). The declaration order differs on purpose.
 TEST_CASE("structs: keys come out in the deterministic order of RFC 8949 4.2.1")
 {
     auto const t = cbor::structs<text_order>::encode(text_order{1, 2});
@@ -837,8 +835,8 @@ TEST_CASE("structs: keys come out in the deterministic order of RFC 8949 4.2.1")
 }
 
 // RFC 8949 4.2.1 and 3: a text of 23 bytes has the head 77, a text of 24 bytes the head 78 18. So the key of 23 "b"
-// comes before the key of 24 "a", though "a" sorts first by its characters. The test exists because the order of
-// the members compares the initial byte first, and a text of 24 bytes or more has a head of two bytes.
+// comes before the key of 24 "a", though "a" sorts first by its characters. The test exists because the order of the
+// members compares the initial byte first. A text of 24 bytes or more has a head of two bytes.
 TEST_CASE("structs: a key of 23 bytes comes before a key of 24 bytes")
 {
     auto const t = cbor::structs<long_text_order>::encode(long_text_order{1, 2});
@@ -846,9 +844,9 @@ TEST_CASE("structs: a key of 23 bytes comes before a key of 24 bytes")
     CHECK_EQ(*t, "\xa2\x77" + std::string(23, 'b') + "\x02\x78\x18" + std::string(24, 'a') + "\x01");
 }
 
-// RFC 8949 3.4.3 and 5.6.1: a key written as a bignum that fits 64 bits is the integer key of the same value, so
-// structs finds each member of integer_order under 2(h'18') for 24, 3(h'00') for -1 and 2(h'0001') for 1. A
-// bignum key that does not fit 64 bits names no member and is skipped.
+// RFC 8949 3.4.3 and 5.6.1: a key written as a bignum that fits 64 bits is the integer key of the same value. So structs
+// finds each member of integer_order under 2(h'18') for 24, 3(h'00') for -1 and 2(h'0001') for 1. A bignum key that does
+// not fit 64 bits names no member and is skipped.
 TEST_CASE("structs: an integer key written as a bignum that fits")
 {
     auto const back = cbor::structs<integer_order>::decode(
@@ -939,13 +937,12 @@ void tags_accepted(std::vector<std::uint64_t> const &accepted)
 
 } // namespace
 
-// The owner decided on 2026-10-15 that a standard library type takes the tag that CBOR assigns to it:
-// sys_seconds tag 1 (RFC 8949 3.4.2), year_month_day tag 100 (RFC 8943 2), std::set tag 258 (CBOR_SETS.md),
-// and a std::vector of a fixed-width number the RFC 8746 typed array of its element, little endian; std::byte
-// and std::uint8_t take tag 64. Each cell of tags x types is one case. A decode of sys_seconds also takes tag
-// 0 and a decode of year_month_day tag 1004, through std::chrono::parse; libc++ has no std::chrono::parse,
-// and the owner decided that these tags then give incorrect_type. The tag of each element type comes from the
-// table of RFC 8746 2.1 (refs/rfc8746.txt:473-539).
+// The owner decided on 2026-10-15 that a standard library type takes the tag that CBOR assigns to it: sys_seconds tag 1
+// (RFC 8949 3.4.2), year_month_day tag 100 (RFC 8943 2), std::set tag 258 (CBOR_SETS.md). A std::vector of a fixed-width
+// number the RFC 8746 typed array of its element, little endian; std::byte and std::uint8_t take tag 64. Each cell of
+// tags x types is one case. A decode of sys_seconds also takes tag 0 and a decode of year_month_day tag 1004, through
+// std::chrono::parse. Libc++ has no std::chrono::parse, and the owner decided that these tags then give incorrect_type.
+// The tag of each element type comes from the table of RFC 8746 2.1 (refs/rfc8746.txt:473-539).
 TEST_CASE("structs: the tags that each standard library type accepts")
 {
 #if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
@@ -970,8 +967,8 @@ TEST_CASE("structs: the tags that each standard library type accepts")
 }
 
 // RFC 8949 3.4.2: tag 1 holds the seconds since 1970-01-01T00:00Z; 1700000000 is 0x6553f100. RFC 8943 Table 1
-// (refs/rfc8943.txt:135-141): 1940-10-09 is day -10676 and 1980-12-08 is day 3994 under tag 100 ('d'). The content
-// of tag 1 is an integer or a float (RFC 8949 3.4.2), so a text, a byte string, a tag, true or an array under tag 1 is
+// (refs/rfc8943.txt:135-141): 1940-10-09 is day -10676 and 1980-12-08 is day 3994 under tag 100 ('d'). The content of
+// tag 1 is an integer or a float (RFC 8949 3.4.2). So a text, a byte string, a tag, true or an array under tag 1 is
 // inadmissible_type_for_tag_content, as the doc of structs decode names it (RFC 8949 5.3.2).
 TEST_CASE("structs: sys_seconds is tag 1 and year_month_day is tag 100")
 {
@@ -1035,11 +1032,10 @@ TEST_CASE("structs: std::set is tag 258")
     CHECK_EQ(cbor::structs<std::set<int>>::decode("\x82\x01\x02"s).error(), error::incorrect_type);
 }
 
-// RFC 8746 2.1: a typed array is its tag over a byte string of the elements, here little endian. The owner
-// decided on 2026-10-15 that every std::vector and std::array of a fixed-width number, std::byte and
-// std::uint8_t included, is a typed array; a byte string comes from std::span<std::byte const>. A std::array
-// takes exactly its count; a byte string whose length is no multiple of the element size is no typed array
-// (RFC 8746 2).
+// RFC 8746 2.1: a typed array is its tag over a byte string of the elements, here little endian. The owner decided on
+// 2026-10-15 that every std::vector and std::array of a fixed-width number, std::byte and std::uint8_t included, is a
+// typed array. A byte string comes from std::span<std::byte const>. A std::array takes exactly its count; a byte string
+// whose length is no multiple of the element size is no typed array (RFC 8746 2).
 TEST_CASE("structs: a vector or an array of numbers is an RFC 8746 typed array")
 {
     round_trip("\xd8\x40\x42\x01\x02"s, std::vector<std::byte>{std::byte{1}, std::byte{2}});
@@ -1146,13 +1142,12 @@ TEST_CASE("structs: tag 100 outside the years of year_month_day is number_out_of
     }
 }
 
-// Tag 0 holds an RFC 3339 date-time and tag 1004 an RFC 3339 full-date (RFC 8949 3.4.1, RFC 8943 2). The
-// inputs are the examples of RFC 3339 5.8 (refs/rfc3339.txt:515-536) and forms that the grammar of 5.6
-// (405-437) allows or refuses. The epoch values are computed from the calendar with Python calendar.timegm,
-// which is not the code under test. The owner decided on 2026-10-15: a fraction goes into a sys_time of finer
-// precision, and a time that cannot hold it gives incorrect_type; second 60 gives incorrect_type; t and z may
-// be lower case. Where the standard library has no std::chrono::parse (libc++), every input gives
-// incorrect_type.
+// Tag 0 holds an RFC 3339 date-time and tag 1004 an RFC 3339 full-date (RFC 8949 3.4.1, RFC 8943 2). The inputs are the
+// examples of RFC 3339 5.8 (refs/rfc3339.txt:515-536) and forms that the grammar of 5.6 (405-437) allows or refuses. The
+// epoch values are computed from the calendar with Python calendar.timegm, which is not the code under test. The owner
+// decided on 2026-10-15: a fraction goes into a sys_time of finer precision. A time that cannot hold it gives
+// incorrect_type; second 60 gives incorrect_type; t and z may be lower case. Where the standard library has no
+// std::chrono::parse (libc++), every input gives incorrect_type.
 TEST_CASE("structs: RFC 3339 text under tags 0 and 1004")
 {
     using namespace std::chrono;
@@ -1201,9 +1196,9 @@ struct clone_probe {
 
 }
 
-// Owner decision 2026-10-17: clone() of a ref gives an object that owns all its memory, recursively (rule: a clone
-// is recursive). Each view of the struct is copied into the zone of the result, so the result stays valid after the
-// input and the ref are gone; the address sanitizer build sees any read of the freed input.
+// Owner decision 2026-10-17: clone() of a ref gives an object that owns all its memory, recursively (rule: a clone is
+// recursive). Each view of the struct is copied into the zone of the result. So the result stays valid after the input
+// and the ref are gone; the address sanitizer build sees any read of the freed input.
 TEST_CASE("structs: clone of a ref copies every view of the struct, recursively")
 {
     std::array<std::byte, 2> const key{std::byte{1}, std::byte{2}};
@@ -1230,8 +1225,8 @@ TEST_CASE("structs: clone of a ref copies every view of the struct, recursively"
     CHECK_EQ(own, "xyz"s);
 }
 
-// A map whose count claims more pairs than its bytes can hold gives too_little_data before any pair is read; a
-// duplicate key in the first pairs is not reached.
+// A map whose count claims more pairs than its bytes can hold gives too_little_data before any pair is read. A duplicate
+// key in the first pairs is not reached.
 TEST_CASE("structs: a count longer than the bytes is too_little_data before the first pair")
 {
     CHECK_EQ(cbor::structs<std::map<int, int>>::decode("\xa2\x01\x01\x01"s).error(), error::too_little_data);
@@ -1240,8 +1235,8 @@ TEST_CASE("structs: a count longer than the bytes is too_little_data before the 
 }
 
 // RFC 8742: a program writes a CBOR sequence into one buffer of its own and keeps the bytes behind each item.
-// structs::encode into a span changes no byte behind the item, also where the item ends in a head of one byte
-// (the empty typed array), and it writes the bytes of the std::string form.
+// structs::encode into a span changes no byte behind the item, also where the item ends in a head of one byte (the empty
+// typed array). It writes the bytes of the std::string form.
 TEST_CASE("encode: a span keeps every byte behind the struct")
 {
     constexpr char sentinel = 'Z';

@@ -42,14 +42,14 @@ inline cbor::lazy suite_of(char const *const file)
     std::ifstream in(file, std::ios::binary);
     REQUIRE(in.good());
     std::string const suite{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
-    auto const root = lazy_of_copy(suite);
+    auto const root = make_lazy_from_copy(suite);
     REQUIRE(root.has_value());
     return *root;
 }
 
-// Each valid case: the compile mode gives one of the nodelists that the suite allows, as an array of exactly
-// these values, and the same result as cbor::path::compile of the same text. The text in the entry is the
-// selector of the case at its index, so an entry that no longer fits cts.cbor fails.
+// Each valid case: the compile mode gives one of the nodelists that the suite allows, as an array of exactly these
+// values. The same result as cbor::path::compile of the same text. The text in the entry is the selector of the case at
+// its index, so an entry that no longer fits cts.cbor fails.
 template <std::size_t N>
 void check_valid_cases(
     cbor::lazy const &suite,
@@ -59,7 +59,7 @@ void check_valid_cases(
     for (auto const &[index, selector, query_of] : entries) {
         CAPTURE(index);
         CAPTURE(selector);
-        auto const c = value_of(*suite.at(index));
+        auto const c = make_value_from_item(*suite.at(index));
         REQUIRE(c.has_value());
         array const &fields = *get_if<array>(*c);
         REQUIRE_EQ(fields.size(), 4u);
@@ -74,8 +74,8 @@ void check_valid_cases(
     }
 }
 
-// Each other case: a selector that RFC 9535 refuses, or that holds match() or search(), is not a valid path
-// at compile time, and an EDN form that RFC 9535 refuses is valid.
+// Each other case: a selector that RFC 9535 refuses, or that holds match() or search(), is not a valid path at compile
+// time. An EDN form that RFC 9535 refuses is valid.
 template <std::size_t N>
 void check_validity(cbor::lazy const &suite,
                     std::array<std::tuple<std::size_t, std::string_view, bool>, N> const &entries)
@@ -83,7 +83,7 @@ void check_validity(cbor::lazy const &suite,
     for (auto const &[index, selector, valid] : entries) {
         CAPTURE(index);
         CAPTURE(selector);
-        auto const c = value_of(*suite.at(index));
+        auto const c = make_value_from_item(*suite.at(index));
         REQUIRE(c.has_value());
         array const &fields = *get_if<array>(*c);
         CHECK_EQ(fields.at(1).text(), selector);

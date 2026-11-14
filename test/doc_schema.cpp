@@ -158,8 +158,8 @@ struct cbor::describe_members<doc_packed::other> {
 namespace doc_packed
 {
 
-// The section "Store the description apart" reads the data form with apart, and the data form and the description
-// together have the size of the message.
+// The section "Store the description apart" reads the data form with apart. The data form and the description together
+// have the size of the message.
 TEST_CASE("doc schema: store the description apart")
 {
     using namespace doc_packed;

@@ -858,7 +858,7 @@ static double scalar(cbor::lazy const &e)
 
 static T load()
 {
-    static auto const l = test::lazy_of_copy(file_read(DOC_PATH));
+    static auto const l = test::make_lazy_from_copy(file_read(DOC_PATH));
     T f;
     auto const els = l->elements();
     for (auto const &e : *els) {
@@ -1129,7 +1129,7 @@ static std::string_view must_text(cbor::lazy const &l)
 
 static T load()
 {
-    static auto const l = test::lazy_of_copy(file_read(DOC_PATH));
+    static auto const l = test::make_lazy_from_copy(file_read(DOC_PATH));
     T rs;
     auto const els = l->elements();
     for (auto const &e : *els) {

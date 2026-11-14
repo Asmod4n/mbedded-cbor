@@ -107,7 +107,7 @@ TEST_CASE("doc path: path syntax")
                                               M("title"s, "C"s, "price"s, 9, "isbn"s, "x"s)),
                                     "bicycle"s, M("price"s, 20)));
     std::string const bytes = preferred(doc);
-    auto const l = *test::lazy_of_copy(bytes);
+    auto const l = *test::make_lazy_from_copy(bytes);
     CHECK(*test::query("$", l) == A(doc));
     CHECK_EQ(cbor::at_path<"$.store.bicycle.price", int>(bytes), 20);
     CHECK_EQ(cbor::at_path<"$['store']['bicycle']['price']", int>(bytes), 20);
@@ -152,7 +152,7 @@ TEST_CASE("doc path: tell a missing field from broken input")
 }
 
 // The section "Errors" states that a path reads up to its value, that a count larger than the bytes left is
-// too_little_data, and that item_size checks the whole value.
+// too_little_data. That item_size checks the whole value.
 TEST_CASE("doc path: a path does not read past its value")
 {
     std::string const cut = "\x82\x01"s;
@@ -166,7 +166,7 @@ TEST_CASE("doc path: a path does not read past its value")
 // The section "What is not supported" names match and search, which a user of other JSONPath libraries tries.
 TEST_CASE("doc path: what is not supported")
 {
-    auto const l = *test::lazy_of_copy(preferred(A("abc"s)));
+    auto const l = *test::make_lazy_from_copy(preferred(A("abc"s)));
     CHECK_EQ(test::query("$[?match(@, 'a.c')]", l).error(), error::invalid_path);
     CHECK_EQ(test::query("$[?search(@, 'b')]", l).error(), error::invalid_path);
     CHECK_EQ(test::query("$[?foo(@)]", l).error(), error::invalid_path);

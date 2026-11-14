@@ -5,7 +5,7 @@
 // at_path, reads the list backwards and by page, and checks every position outside of the list.
 TEST_CASE("at_path: a fixed-size vector reads each element as at_path does")
 {
-    auto const owner = std::make_shared<std::string const>(schema_bytes(
+    auto const owner = std::make_shared<std::string const>(encode_with_schema(
         gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}, {false, color::black, {5, -6}, {7, 8}}, {true, color::black, {0, 9}, {0, 0}}}}));
     auto const root = form<gauges>::path(owner);
     REQUIRE(root.has_value());
@@ -53,7 +53,7 @@ TEST_CASE("at_path: a fixed-size vector reads each element as at_path does")
         unverified.push_back(*e.at_path<"@.at.x">());
     CHECK(unverified == std::vector<int>{3, -6, 9});
     check_positions_outside(*h);
-    auto const none = form<gauges>::path(schema_bytes(gauges{}));
+    auto const none = form<gauges>::path(encode_with_schema(gauges{}));
     REQUIRE(none.has_value());
     auto const nothing = none->at_path<"$.g">();
     REQUIRE(nothing.has_value());
@@ -65,7 +65,7 @@ TEST_CASE("at_path: a fixed-size vector reads each element as at_path does")
 // the element from the iterator must give the same error as at_path with the index.
 TEST_CASE("at_path: a wrong element in a fixed-size vector gives the error of at_path")
 {
-    std::string flags = schema_bytes(gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}}});
+    std::string flags = encode_with_schema(gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}}});
     std::size_t const element = flags.find("\x03\xfe\x01\x01\x00"s);
     REQUIRE_NE(element, std::string::npos);
     flags[element + 2] = '\x02';
@@ -80,15 +80,15 @@ TEST_CASE("at_path: a wrong element in a fixed-size vector gives the error of at
 }
 
 // An iterator of a fixed-size vector holds the owner, and a move empties the source. The test exists for the same
-// reasons as for a list of records: the iterator reads after its accessor is gone, the source of a move gives no
-// list, and the target and a move into itself read.
+// reasons as for a list of records: the iterator reads after its accessor is gone, the source of a move gives no list.
+// The target and a move into itself read.
 TEST_CASE("at_path: a fixed-size vector keeps its bytes in the iterator and moves its list")
 {
     using A = std::remove_cvref_t<decltype(*std::declval<form<gauges>::accessor<> const &>().at_path<"$.g">())>;
     A::iterator kept;
     std::optional<A> target;
     {
-        auto owner = std::make_shared<std::string const>(schema_bytes(
+        auto owner = std::make_shared<std::string const>(encode_with_schema(
             gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}, {false, color::black, {5, -6}, {7, 8}}}}));
         auto const root = form<gauges>::path(owner);
         REQUIRE(root.has_value());
@@ -117,24 +117,24 @@ TEST_CASE("at_path: a fixed-size vector keeps its bytes in the iterator and move
 // is one before the end.
 TEST_CASE("view: the iterator refuses each position outside of the view")
 {
-    auto const root = form<doubles>::path(schema_bytes(doubles{{1.0, 2.0, 4.0}}));
+    auto const root = form<doubles>::path(encode_with_schema(doubles{{1.0, 2.0, 4.0}}));
     REQUIRE(root.has_value());
     auto const v = root->view<"$.v">();
     REQUIRE(v.has_value());
     CHECK_EQ(std::bit_cast<std::uint64_t>(*(v->end() - 1)), 0x4010000000000000u);
     check_positions_outside(*v);
-    auto const empty_root = form<doubles>::path(schema_bytes(doubles{}));
+    auto const empty_root = form<doubles>::path(encode_with_schema(doubles{}));
     REQUIRE(empty_root.has_value());
     auto const e = empty_root->view<"$.v">();
     REQUIRE(e.has_value());
     check_positions_outside(*e);
 }
 
-// A move leaves an empty view in the source. The test exists because begin equals end in the source after the move,
-// and an iterator taken before the move still reads, because it holds the owner.
+// A move leaves an empty view in the source. The test exists because begin equals end in the source after the move. An
+// iterator taken before the move still reads, because it holds the owner.
 TEST_CASE("view: a moved view has begin equal to end")
 {
-    auto const root = form<doubles>::path(schema_bytes(doubles{{1.0, 2.0, 4.0}}));
+    auto const root = form<doubles>::path(encode_with_schema(doubles{{1.0, 2.0, 4.0}}));
     REQUIRE(root.has_value());
     auto source = *root->view<"$.v">();
     auto const kept = source.begin() + 2;

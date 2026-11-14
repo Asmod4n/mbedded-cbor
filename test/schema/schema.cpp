@@ -22,7 +22,7 @@ C chain_of(std::uint8_t const v)
 // and 2.0 are 3ff0000000000000 and 4000000000000000 in binary64 (IEEE 754).
 TEST_CASE("schema::at: one number of a typed array, with every check of path")
 {
-    std::string const bytes = schema_bytes(doubles{{1.0, 2.0}});
+    std::string const bytes = encode_with_schema(doubles{{1.0, 2.0}});
     using S = form<doubles>;
     CHECK_EQ(std::bit_cast<std::uint64_t>(*S::at_path<"$.v[0]">(bytes)), 0x3ff0000000000000u);
     CHECK_EQ(std::bit_cast<std::uint64_t>(*S::at_path<"$.v[]">(bytes, 1uz)), 0x4000000000000000u);
@@ -71,7 +71,7 @@ TEST_CASE("schema::at: a path to a text or a list does not compile")
 // 9 of the sample is written over with 7, the other key, and decode keeps the first entry with no error.
 TEST_CASE("schema: decode keeps the first entry of a repeated key")
 {
-    std::string bytes = schema_bytes(sample_garage);
+    std::string bytes = encode_with_schema(sample_garage);
     std::string const nine = "\x19\x00\x09"s;
     auto const at = bytes.find(nine);
     REQUIRE(at != std::string::npos);
@@ -80,15 +80,14 @@ TEST_CASE("schema: decode keeps the first entry of a repeated key")
     auto const read = form<garage>::decode(std::string(bytes));
     REQUIRE(read.has_value());
     CHECK_EQ((*read)->owners, (std::map<std::uint16_t, std::string>{{7, "seven"}}));
-    CHECK(form<garage>::decode(schema_bytes(sample_garage)).has_value());
+    CHECK(form<garage>::decode(encode_with_schema(sample_garage)).has_value());
 }
 
-// The key that the description gives takes the place of the member name in the table. The expectation is
-// counted from the draft and RFC 8949 3 by hand: the keys with the text heads 69 and 63, an empty directory,
-// f7 up to index 15, then the class tag 65536, which needs the 4-byte argument da 00 01 00 00 (RFC 8949 3 and
-// 4.1), the record head of 7 bytes, the integer with its fixed width of 18 and 1 byte, and the simple value.
-// The test exists because a tag number above 65535 makes the head of the class tag 5 bytes long, and every
-// offset behind it moves by that.
+// The key that the description gives takes the place of the member name in the table. The expectation is counted from
+// the draft and RFC 8949 3 by hand: the keys with the text heads 69 and 63, an empty directory, f7 up to index 15, then
+// the class tag 65536, which needs the 4-byte argument da 00 01 00 00 (RFC 8949 3 and 4.1), the record head of 7 bytes,
+// the integer with its fixed width of 18 and 1 byte, and the simple value. The test exists because a tag number above
+// 65535 makes the head of the class tag 5 bytes long. Every offset behind it moves by that.
 TEST_CASE("schema: the description gives the key of a member")
 {
     CHECK_EQ(form<keyed>::fixed_size(), 15u);
@@ -106,9 +105,9 @@ TEST_CASE("schema: the description gives the key of a member")
     CHECK_EQ(at_path<keyed, "$.EOF">(bytes), true);
 }
 
-// CTAP 2.1 6.2.2 lets the user of a getAssertion response be absent. An optional struct lies in the
-// fixed item as an array of a presence flag and its fields. decode reads it; a path does not step into it. Both
-// forms stay two well-formed CBOR items.
+// CTAP 2.1 6.2.2 lets the user of a getAssertion response be absent. An optional struct lies in the fixed item as an
+// array of a presence flag and its fields. decode reads it. A path does not step into it. Both forms stay two
+// well-formed CBOR items.
 TEST_CASE("schema: an optional struct and an optional string, present and absent")
 {
     passkey_login const full{{std::byte{1}, std::byte{2}}, passkey_user{{std::byte{9}}, "alice"}, "hello"};
@@ -137,13 +136,13 @@ TEST_CASE("schema: an optional struct and an optional string, present and absent
     CHECK_FALSE(back2.note.has_value());
 }
 
-// draft-ietf-cbor-packed-19 2.3 Table 2 gives tags 128..135 to the first 8 table indexes only. The test exists
-// because a root with 20 struct types needs record functions at indexes 8 to 19, which a record reaches with the
-// straight reference 6([N, rump]) at index 8 + N. chain19 is index 19, so N = 11 (0b): c6 82 0b, then the rump
-// 9a 00 00 00 03. The directory takes index 20, so the shared items start at 21 and no f7 is left. Table 1 maps
-// index 21 to 6(-3) = c6 3a 00 00 00 02 and index 22 to 6(3) = c6 1a 00 00 00 03. The table head counts 21 + 4
-// entries. A record of index 8 or more is one byte longer, so its size depends on the root. The class tag of chainK
-// is 1600 + K, 3 bytes in front of each record, and stands outside the reference: 1619 = d9 06 53 before c6 82 0b.
+// draft-ietf-cbor-packed-19 2.3 Table 2 gives tags 128..135 to the first 8 table indexes only. The test exists because a
+// root with 20 struct types needs record functions at indexes 8 to 19, which a record reaches with the straight
+// reference 6([N, rump]) at index 8 + N. chain19 is index 19. So N = 11 (0b): c6 82 0b, then the rump 9a 00 00 00 03.
+// The directory takes index 20, so the shared items start at 21 and no f7 is left. Table 1 maps index 21 to 6(-3) = c6
+// 3a 00 00 00 02 and index 22 to 6(3) = c6 1a 00 00 00 03. The table head counts 21 + 4 entries. A record of index 8 or
+// more is one byte longer, so its size depends on the root. The class tag of chainK is 1600 + K, 3 bytes in front of
+// each record, and stands outside the reference: 1619 = d9 06 53 before c6 82 0b.
 TEST_CASE("schema: a root with 20 struct types reaches indexes 8 and more with tag 6")
 {
     CHECK_EQ(form<chain0>::fixed_size<chain19>(), 3u + 3u + 5u + 2u + 6u + 6u);
@@ -200,9 +199,9 @@ TEST_CASE("schema: a root with 17 struct types starts its shared items at index 
              error::unpopulated_table_index);
 }
 
-// The tag of the class names the class on the wire. point_a and point_b have the same keys and the same layout,
-// so only the class tag tells them apart: 1520 = d9 05 f0 against 1521 = d9 05 f1 (RFC 8949 3.4). The test exists
-// because a reader that ignored the class tag would take a message of one class for the other.
+// The tag of the class names the class on the wire. point_a and point_b have the same keys and the same layout. So only
+// the class tag tells them apart: 1520 = d9 05 f0 against 1521 = d9 05 f1 (RFC 8949 3.4). The test exists because a
+// reader that ignored the class tag would take a message of one class for the other.
 TEST_CASE("schema: a root of another class tag is incorrect_type")
 {
     std::string const bytes = *form<point_a>::encode(point_a{7});
@@ -214,9 +213,9 @@ TEST_CASE("schema: a root of another class tag is incorrect_type")
     CHECK_EQ(at_path<point_a, "$.x">(bytes), 7u);
 }
 
-// The class tag of a nested record is a fixed head like any other. car holds the engine record at offset 12, and
-// the low byte of its tag 1501 = d9 05 dd is changed to de. The test exists because a forged nested tag must stop
-// decode, and a path through that record must stop too, while the root and the other fields still read.
+// The class tag of a nested record is a fixed head like any other. car holds the engine record at offset 12. The low
+// byte of its tag 1501 = d9 05 dd is changed to de. The test exists because a forged nested tag must stop decode. A path
+// through that record must stop too, while the root and the other fields still read.
 TEST_CASE("schema: a forged class tag of a nested record is incorrect_type")
 {
     std::string const bytes = *form<car>::encode(car{4, {300, 1800}, true});
@@ -230,11 +229,11 @@ TEST_CASE("schema: a forged class tag of a nested record is incorrect_type")
     CHECK_EQ(at_path<car, "$.motor.cc">(bytes), 1800u);
 }
 
-// An accessor inside an optional shares the owner of the message like every other accessor, so a read through it
-// does not see a moved-from accessor.
+// An accessor inside an optional shares the owner of the message like every other accessor. So a read through it does
+// not see a moved-from accessor.
 TEST_CASE("schema: an accessor inside an optional reads its fields")
 {
-    auto const root = form<everything>::path(schema_bytes(sample_everything));
+    auto const root = form<everything>::path(encode_with_schema(sample_everything));
     REQUIRE(root.has_value());
     auto const inner = root->at_path<"$.inner">();
     REQUIRE(inner.has_value());
@@ -247,7 +246,7 @@ TEST_CASE("schema: an accessor inside an optional reads its fields")
 // control block and holds a null pointer is still an owner; an owner with no control block is empty.
 TEST_CASE("schema: an owner is empty only when it has no control block")
 {
-    std::string const bytes = schema_bytes(sample_everything);
+    std::string const bytes = encode_with_schema(sample_everything);
     auto const held = std::make_shared<std::string const>(bytes);
     auto const alias = std::shared_ptr<void const>(held, nullptr);
     auto root = form<everything>::path(alias, std::string_view(*held));
@@ -277,8 +276,8 @@ struct nan_fields {
 CBOR_DEFINE_TYPE(nan_fields, cbor::tag{1736}, CBOR_MEMBER(nan_fields, single), CBOR_MEMBER(nan_fields, twice));
 
 // Owner decision 2026-10-12: a NaN keeps its bits. A signaling NaN of a float and a double, with its payload in the
-// lowest bit, goes through encode, decode and at_path with every bit; a conversion of the processor would set the
-// quiet bit.
+// lowest bit, goes through encode, decode and at_path with every bit. A conversion of the processor would set the quiet
+// bit.
 TEST_CASE("schema: a NaN keeps its bits through encode, decode and at_path")
 {
     nan_fields const value{std::bit_cast<float>(0x7f800001u), std::bit_cast<double>(0x7ff0000000000001ull)};
