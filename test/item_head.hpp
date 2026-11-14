@@ -124,7 +124,7 @@ inline cbor::major_type major_of(cbor::type const t)
     case cbor::type::shared_reference:
         return cbor::major_type::tag;
     default:
-        return cbor::major_type::simple_float;
+        return cbor::major_type::simple;
     }
 }
 

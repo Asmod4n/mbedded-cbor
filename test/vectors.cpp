@@ -173,7 +173,7 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
             CHECK_EQ(static_cast<std::uint8_t>(content.front()) >> 5, static_cast<std::uint8_t>(after_head.front()) >> 5);
             break;
         }
-        case cbor::major_type::simple_float:
+        case cbor::major_type::simple:
             if (info == 25)
                 CHECK_EQ(it.type, cbor::type::half_float);
             else if (info == 26)
@@ -419,7 +419,7 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
             return content;
         return value{tagged{argument_of(it), std::move(*content)}};
     }
-    case cbor::major_type::simple_float:
+    case cbor::major_type::simple:
         if (it.additional_information >= 25 && it.additional_information <= 27) {
             auto const d = l.get<double>();
             if (!d)

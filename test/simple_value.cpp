@@ -122,7 +122,7 @@ TEST_CASE("simple value: lazy::clone gives every simple value 0 to 255 as its co
         auto const r = top_level->clone();
         REQUIRE(r.has_value());
         cbor::item const &it = **r;
-        CHECK_EQ(major_of(it.type), cbor::major_type::simple_float);
+        CHECK_EQ(major_of(it.type), cbor::major_type::simple);
         CHECK_EQ(it.additional_information, v < 24 ? v : 24);
         CHECK_EQ(argument_of(it), v);
     }

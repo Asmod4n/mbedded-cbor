@@ -777,7 +777,7 @@ TEST_CASE("lazy: the content of each tag for every major type")
             {cbor::major_type::array, "\x80"s},
             {cbor::major_type::map, "\xa0"s},
             {cbor::major_type::tag, "\xc0\x00"s},
-            {cbor::major_type::simple_float, "\xf6"s},
+            {cbor::major_type::simple, "\xf6"s},
         }};
         for (auto const &[major, content] : contents) {
             CAPTURE(tag);

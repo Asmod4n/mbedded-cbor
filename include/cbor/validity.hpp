@@ -543,7 +543,7 @@ public:
         if (auto r = check_additional_information(major, info); !r) [[unlikely]]
             return r;
         if (info == std::to_underlying(rfc8949::additional_information::indefinite_length)) [[unlikely]]
-            return std::unexpected(major == major_type::simple_float ? error::syntax_error
+            return std::unexpected(major == major_type::simple ? error::syntax_error
                                                                      : error::indefinite_length);
         return {};
     }
@@ -568,7 +568,7 @@ public:
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
     check_simple_value(std::uint8_t const info, std::uint64_t const argument)
     {
-        if (info == std::to_underlying(rfc8949::simple_float_information::simple_value_follows) &&
+        if (info == std::to_underlying(rfc8949::simple_information::simple_value_follows) &&
             argument < rfc8949::simple_value_one_byte_min) [[unlikely]]
             return std::unexpected(error::syntax_error);
         return {};

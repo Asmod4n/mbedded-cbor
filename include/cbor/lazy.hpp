@@ -949,7 +949,7 @@ detail::validity::intern_key(canonical_ids &ids, Message const &message, offset 
         std::array<std::uint64_t, 1> const item{content->first};
         return std::pair{ids.id_of(kind::tag, h->argument, item), content->second};
     }
-    case major_type::simple_float:
+    case major_type::simple:
         break;
     }
     if (!heads::is_floating_point(h->major, h->info)) {
@@ -1081,7 +1081,7 @@ std::expected<bool, error> detail::validity::keys_equivalent(First const &first,
         if (h->argument != k->argument)
             return false;
         return keys_equivalent(first, h->at, second, k->at);
-    case major_type::simple_float:
+    case major_type::simple:
         break;
     }
     bool const h_float = heads::is_floating_point(h->major, h->info);
