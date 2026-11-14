@@ -41,9 +41,9 @@ std::vector<std::uint64_t> bits_of_all(std::vector<E> const &values)
 
 // view checks the tag and the length of a typed array once and then reads an element with one bounds check. The test
 // reads every element type of RFC 8746 that the schema writes. The expected bits come from RFC 8746 figure 6 and IEEE
-// 754: 1.0 is 3c00 in binary16, 3f800000 in binary32 and 3ff0000000000000 in binary64; -2 is all ones but the lowest
-// bit in two's complement. at(i) with an index equal to the size is index_out_of_bounds, an error value and no read,
-// as std::vector::at gives std::out_of_range; operator[] with that index is a wrong use and throws std::logic_error.
+// 754: 1.0 is 3c00 in binary16, 3f800000 in binary32 and 3ff0000000000000 in binary64; -2 is all ones but the lowest bit
+// in two's complement. at(i) with an index equal to the size is index_out_of_bounds, an error value and no read, as
+// std::vector::at gives std::out_of_range. Operator[] with that index is a wrong use and throws std::logic_error.
 TEST_CASE("view: every typed array gives its elements back, and an index past the end is an error value")
 {
     std::string const bytes = encode_with_schema(sample_numbers);
@@ -113,9 +113,9 @@ TEST_CASE("view: a typed array with a wrong tag or a wrong length gives no view"
     CHECK_EQ(refused(longer), error::too_little_data);
 }
 
-// The iterator of a view yields each element by value. It is a random access iterator by the concepts of the
-// standard library, so that std::ranges algorithms and range-for take the view as they take a std::span. The view is
-// a sized random access range. It is not a borrowed range: its iterators read bytes that the view keeps alive.
+// The iterator of a view yields each element by value. It is a random access iterator by the concepts of the standard
+// library. So that std::ranges algorithms and range-for take the view as they take a std::span. The view is a sized
+// random access range. It is not a borrowed range: its iterators read bytes that the view keeps alive.
 TEST_CASE("view: the iterator and the view model the standard concepts")
 {
     using V = cbor::typed_array_view<double>;
@@ -194,9 +194,9 @@ TEST_CASE("view: range-for, the iterator and std::ranges algorithms read every e
     check.operator()<"$.f64">(three_numbers.f64);
 }
 
-// front and back read the first and the last element with one load each, and rbegin and rend walk the view
-// backwards, as std::span does. first(n) and last(n) give a sub-view of n elements. n equal to the size gives the
-// whole view; n one past it is index_out_of_bounds as an error value, where std::span would have undefined behaviour.
+// front and back read the first and the last element with one load each, and rbegin and rend walk the view backwards, as
+// std::span does. first(n) and last(n) give a sub-view of n elements. n equal to the size gives the whole view. N one
+// past it is index_out_of_bounds as an error value, where std::span would have undefined behaviour.
 TEST_CASE("view: front, back, first and last")
 {
     auto const root = form<doubles>::path(encode_with_schema(doubles{{1.0, 2.0, 4.0}}));
@@ -232,9 +232,9 @@ TEST_CASE("view: front, back, first and last")
 }
 
 // The requirements of a reversible container in the C++ standard ([container.rev.reqmts]) say: a.rend() is
-// reverse_iterator(a.begin()), a.crend() is const_cast<X const&>(a).rend(), and the distance from crbegin to crend is
-// the size. The test checks each requirement on a view of three elements and on an empty view, and walks from crend
-// back to crbegin, so that the last element read is the first element of the view.
+// reverse_iterator(a.begin()), a.crend() is const_cast<X const&>(a).rend(). The distance from crbegin to crend is the
+// size. The test checks each requirement on a view of three elements and on an empty view, and walks from crend back to
+// crbegin. So that the last element read is the first element of the view.
 TEST_CASE("view: crend meets the requirements of a reversible container")
 {
     using V = cbor::typed_array_view<double>;

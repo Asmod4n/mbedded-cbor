@@ -27,8 +27,8 @@ struct optional_node {
     std::optional<std::vector<optional_node>> c;
 };
 
-// n steps of node: n maps, each holding the array of the next; the root map is at depth 0 (RFC 8949: each array or
-// map is one level), the map of step i at 2i, and the innermost empty array at 2n - 1.
+// n steps of node: n maps, each holding the array of the next. The root map is at depth 0 (RFC 8949: each array or map
+// is one level), the map of step i at 2i. The innermost empty array at 2n - 1.
 node nested(std::size_t const steps)
 {
     node root;
@@ -64,9 +64,9 @@ std::string nested_optional_bytes(std::size_t const steps)
     return bytes + "\xa0"s;
 }
 
-// The destructor of a nested value recurses once for each step, and a value deeper than the small stack overflows the
-// main thread of a Windows debug build there. The test takes it apart from its root in a loop, so that each step ends
-// with no step below it.
+// The destructor of a nested value recurses once for each step. A value deeper than the small stack overflows the main
+// thread of a Windows debug build there. The test takes it apart from its root in a loop, so that each step ends with no
+// step below it.
 void end_nested(node value)
 {
     while (!value.c.empty()) {
@@ -95,6 +95,7 @@ using namespace structs_depth;
 constexpr std::size_t steps_held = 64;
 constexpr std::size_t steps_beyond = test::small_stack_bytes / test::smallest_frame_bytes;
 
+// A struct that holds itself must stop with nesting_depth_exceeded on a small stack and not overflow it.
 TEST_CASE("structs depth: a struct that holds a vector of itself")
 {
     auto const held = cbor::structs<node>::encode(nested(steps_held));

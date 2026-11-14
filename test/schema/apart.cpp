@@ -26,9 +26,9 @@ void check_description_apart(T const &value)
 
 } // namespace schema_types
 
-// Owner decision 2026-10-20: the description of a struct is stored once, apart from the data of each key, so the
-// data does not repeat it. The data form is the message without the table entries of the description; this
-// library reads it with the type, which knows the description at compile time.
+// Owner decision 2026-10-20: the description of a struct is stored once, apart from the data of each key, so the data
+// does not repeat it. The data form is the message without the table entries of the description. This library reads it
+// with the type, which knows the description at compile time.
 TEST_CASE("description apart: the data and the description together hold what the message holds")
 {
     check_description_apart(sample_everything);
@@ -103,8 +103,8 @@ TEST_CASE("description apart: one form read as the other is refused")
     CHECK_EQ(form<everything>::path<apart>(std::string(inside)).error(), error::incorrect_type);
     CHECK_EQ(form<everything>::decode<apart>(std::string(inside)).error(), error::incorrect_type);
     CHECK_EQ((form<everything>::at_path<"$.big", apart>(inside)).error(), error::incorrect_type);
-    // The data form holds no description, so read as the form with the description inside it is shorter than its
-    // table: the doc of schema::path gives too_little_data for that.
+    // The data form holds no description. So read as the form with the description inside it is shorter than its table:
+    // the doc of schema::path gives too_little_data for that.
     for (auto const e : {form<everything>::path(std::string(data)).error(),
                          form<everything>::decode(std::string(data)).error()})
         CHECK_EQ(e, error::too_little_data);
@@ -135,8 +135,8 @@ TEST_CASE("description apart: the checks of the message hold for the data form")
     CHECK_EQ(form<everything>::path<apart>(std::string(filler)).error(), error::incorrect_type);
 }
 
-// The unverified forms read the data form inside its bounds: every changed byte and every cut, and a message read
-// as the data form, stay inside the input under AddressSanitizer.
+// The unverified forms read the data form inside its bounds: every changed byte and every cut. A message read as the
+// data form, stay inside the input under AddressSanitizer.
 TEST_CASE("description apart: the unverified forms stay inside the input")
 {
     std::string const data = encode_data_apart(sample_everything);

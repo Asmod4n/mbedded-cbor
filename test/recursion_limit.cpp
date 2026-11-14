@@ -79,11 +79,10 @@ TEST_CASE("recursion limit: lazy::clone")
     refused_on_small_stack([&deep] { return deep->clone(); });
 }
 
-// A key literal of a path is compared with a key of the map through every level (RFC 8949 5.6.1). The two
-// keys differ only in the innermost item, so the comparison enters every level of both. The path is compiled
-// on the main thread, so that the error on the small stack comes from the comparison and not from the parser
-// of the path. The main thread compiles levels_main_thread_holds levels where it holds them; a small stack
-// does not hold them for the comparison.
+// A key literal of a path is compared with a key of the map through every level (RFC 8949 5.6.1). The two keys differ
+// only in the innermost item, so the comparison enters every level of both. The path is compiled on the main thread. So
+// that the error on the small stack comes from the comparison and not from the parser of the path. The main thread
+// compiles levels_main_thread_holds levels where it holds them; a small stack does not hold them for the comparison.
 TEST_CASE("recursion limit: a key literal of a path")
 {
     auto const compiled = [](std::size_t const n) {
@@ -168,8 +167,8 @@ TEST_CASE("recursion limit: encode")
     CHECK_EQ(*failure, error::nesting_depth_exceeded);
 }
 
-// A shared value and a reference to it: a lazy at the second element meets the reference and reads the mark at the
-// depth of its own position, so the stack holds the frames of both nests.
+// A shared value and a reference to it: a lazy at the second element meets the reference and reads the mark at the depth
+// of its own position. So the stack holds the frames of both nests.
 TEST_CASE("recursion limit: a shared value read through its reference")
 {
     std::string const shared = "\x82\xd8\x1c"s + std::string(held, '\x81') + '\x00' + std::string(held, '\x81') +
@@ -182,8 +181,8 @@ TEST_CASE("recursion limit: a shared value read through its reference")
     CHECK(second->clone().has_value());
 }
 
-// structs::read_generic recurses once for the array of each struct and once for its element. nests_around(n) nests a
-// map and an array for each struct, so held / 2 structs are held levels of CBOR.
+// structs::read_generic recurses once for the array of each struct and once for its element. nests_around(n) nests a map
+// and an array for each struct. So held / 2 structs are held levels of CBOR.
 TEST_CASE("recursion limit: structs")
 {
     CHECK(cbor::structs<nest>::decode(nests_around(held / 2)).has_value());

@@ -152,7 +152,7 @@ TEST_CASE("doc path: tell a missing field from broken input")
 }
 
 // The section "Errors" states that a path reads up to its value, that a count larger than the bytes left is
-// too_little_data, and that item_size checks the whole value.
+// too_little_data. That item_size checks the whole value.
 TEST_CASE("doc path: a path does not read past its value")
 {
     std::string const cut = "\x82\x01"s;

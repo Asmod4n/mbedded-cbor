@@ -1,7 +1,7 @@
 #include "types.hpp"
 
-// Each kind of field has the size that RFC 8949 3 gives its head plus its argument, so a reader finds every
-// field at an offset the compiler knows. The expectations are counted from the specification by hand.
+// Each kind of field has the size that RFC 8949 3 gives its head plus its argument. So a reader finds every field at an
+// offset the compiler knows. The expectations are counted from the specification by hand.
 TEST_CASE("fixed_size: numbers and simple values have the size of head and argument")
 {
     // 0xf4 or 0xf5, one initial byte (RFC 8949 3.3).
@@ -59,10 +59,10 @@ TEST_CASE("fixed_size: text, bytes and arrays of fixed length")
     CHECK_EQ(form<wheel>::fixed_size<std::uint32_t[2]>(), 11u);
 }
 
-// draft-ietf-cbor-packed-19 4.2: a struct is a record, its values behind a straight reference to the table entry
-// that holds its keys. The tag of the class stands outside the reference; tag 1500 is d9 05 dc in preferred
-// serialization (RFC 8949 3.4 and 4.1). The reference is d8 80 to d8 87, the value array has a head of 9a and 4
-// bytes, so 10 bytes come before the values. wheel: 10, then 3 + 5 + 1.
+// draft-ietf-cbor-packed-19 4.2: a struct is a record, its values behind a straight reference to the table entry that
+// holds its keys. The tag of the class stands outside the reference; tag 1500 is d9 05 dc in preferred serialization
+// (RFC 8949 3.4 and 4.1). The reference is d8 80 to d8 87, the value array has a head of 9a and 4 bytes. So 10 bytes
+// come before the values. wheel: 10, then 3 + 5 + 1.
 TEST_CASE("fixed_size: a struct is a record of its values under the tag of its class")
 {
     CHECK_EQ(form<wheel>::fixed_size(), 19u);
@@ -91,9 +91,9 @@ TEST_CASE("member_offset: the head of each value, behind the class tag and the h
     CHECK_EQ(form<wheel const>::member_offset<&wheel::airPressure>(), 14u);
 }
 
-// A nested struct is a record at the offset of its member, so offsets add up. car in key order: motor (65 6d ...)
-// at 10, seats (65 73 ...) behind the engine record, hasNavSystem (6c ...) behind the 2 bytes of seats. engine in key
-// order: cc (62 ...) at 10, horsepower (6a ...) behind its 5 bytes at 15.
+// A nested struct is a record at the offset of its member. So offsets add up. car in key order: motor (65 6d ...) at 10,
+// seats (65 73 ...) behind the engine record, hasNavSystem (6c ...) behind the 2 bytes of seats. engine in key order: cc
+// (62 ...) at 10, horsepower (6a ...) behind its 5 bytes at 15.
 TEST_CASE("member_offset: offsets of nested structs add up")
 {
     CHECK_EQ(form<car>::member_offset<&car::motor>(), 10u);
@@ -103,8 +103,8 @@ TEST_CASE("member_offset: offsets of nested structs add up")
     CHECK_EQ(form<car>::member_offset<&car::hasNavSystem>(), 12u + form<engine>::fixed_size());
 }
 
-// The count of values has a head of 9a and 4 bytes whatever the count, so a member added later moves no offset, and
-// a long name or a name in UTF-8 takes no place in the record.
+// The count of values has a head of 9a and 4 bytes whatever the count. So a member added later moves no offset, and a
+// long name or a name in UTF-8 takes no place in the record.
 TEST_CASE("member_offset: the record head has one width for any count and any name")
 {
     CHECK_EQ(form<thirty>::member_offset<&thirty::m00>(), 10u);

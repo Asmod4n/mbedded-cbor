@@ -51,8 +51,8 @@ struct frame {
 
 CBOR_DEFINE_TYPE(doc_advanced_path::frame, cbor::tag{1760}, CBOR_MEMBER(doc_advanced_path::frame, mac));
 
-// The section "The forms" states that [n] of schema reads one byte of a byte string, and that a path of this page
-// gives not_indexable there. A user who knows one of the two forms tries the other.
+// The section "The forms" states that [n] of schema reads one byte of a byte string. That a path of this page gives
+// not_indexable there. A user who knows one of the two forms tries the other.
 TEST_CASE("doc advanced path: an index on a byte string")
 {
     using doc_advanced_path::frame;
@@ -176,8 +176,8 @@ TEST_CASE("doc advanced path: a typed read from a lazy")
     CHECK_EQ(**make, "kia"sv);
 }
 
-// The section "Any item as a node" shows at_path that gives a lazy node, at_path with cbor::nodelist for a
-// nodelist, and a query that compile parses once at run time.
+// The section "Any item as a node" shows at_path that gives a lazy node, at_path with cbor::nodelist for a nodelist. A
+// query that compile parses once at run time.
 TEST_CASE("doc advanced path: a node at compile time and at run time")
 {
     std::string const bytes = preferred(M("a"s, A(1, 2, 3)));
@@ -258,7 +258,7 @@ TEST_CASE("doc advanced path: the functions")
 }
 
 // The section "Keys that are not text" shows integer keys, a negative integer key and EDN literals as keys, in a
-// compile-time path and in a run-time path alike, and a typed read through a key that is not text.
+// compile-time path and in a run-time path alike. A typed read through a key that is not text.
 TEST_CASE("doc advanced path: keys that are not text")
 {
     std::string const keyed = "\xa4\x01\x61x\x21\x61y\x41\x01\x61z\x82\x01\x02\x61w"s;
@@ -291,9 +291,8 @@ TEST_CASE("doc advanced path: a typed read of an empty lazy throws")
     CHECK_THROWS_AS((void)test::at_path<"$.a">(cbor::lazy{}), std::logic_error);
 }
 
-// The section "Tags on the way" shows that tags 24, 28, 29 and 55799 are passed, and that a tag the path does
-// not know is passed to its content (RFC 8949 6.1), while a path that ends at the tag gives the node of the whole
-// tagged item.
+// The section "Tags on the way" shows that tags 24, 28, 29 and 55799 are passed. That a tag the path does not know is
+// passed to its content (RFC 8949 6.1). But a path that ends at the tag gives the node of the whole tagged item.
 TEST_CASE("doc advanced path: tags on the way")
 {
     CHECK_EQ(cbor::at_path<"$.a[1]", int>("\xa1\x61\x61\xd8\x18\x43\x82\x01\x02"s), 2);
@@ -306,8 +305,8 @@ TEST_CASE("doc advanced path: tags on the way")
     CHECK(*test::at_path("$.v", *test::make_lazy_from_copy(other)) == V(tagged{1000, A(1, 2)}));
 }
 
-// The section "Typed arrays" shows that an index reads one element, that a wildcard gives every element, and
-// that a path that ends at the tag reads the whole array.
+// The section "Typed arrays" shows that an index reads one element, that a wildcard gives every element. That a path
+// that ends at the tag reads the whole array.
 TEST_CASE("doc advanced path: a typed array")
 {
     std::string const bytes = "\xa1\x61v\xd8\x45\x44\x07\x00\x08\x00"s;
@@ -385,8 +384,8 @@ TEST_CASE("doc advanced path: the forms in detail")
     CHECK_THROWS_AS(((void)cbor::at_path<"$", std::string_view>(std::shared_ptr<void const>{}, ""sv)), std::logic_error);
 }
 
-// The section "Path syntax" gives the shorthands, the range of an index, the EDN literal that stands where RFC 9535
-// has none, and the singular operand of a comparison.
+// The section "Path syntax" gives the shorthands, the range of an index, the EDN literal that stands where RFC 9535 has
+// none. The singular operand of a comparison.
 TEST_CASE("doc advanced path: the syntax in detail")
 {
     auto const sh = *test::make_lazy_from_copy(preferred(M("a"s, M("b"s, 1), "c"s, A(2))));
@@ -425,8 +424,8 @@ TEST_CASE("doc advanced path: comparisons")
     CHECK(*test::query("$[?@.x < @.y]", one) == A());
 }
 
-// The section "Functions" states that length counts the bytes of a text that are not UTF-8 continuation bytes, and
-// that length of a byte string is Nothing, which equals only Nothing.
+// The section "Functions" states that length counts the bytes of a text that are not UTF-8 continuation bytes. That
+// length of a byte string is Nothing, which equals only Nothing.
 TEST_CASE("doc advanced path: length in detail")
 {
     auto const l = *test::make_lazy_from_copy(preferred(A(bytes{"\x01\x02"}, "ab"s, "\xc3\xbc"s)));
@@ -462,8 +461,8 @@ TEST_CASE("doc advanced path: keys compare by value")
     CHECK(*test::query("$[?@ > 0]", d) == A(1, 2));
 }
 
-// The section "Tags on the way" states that a key behind tag 55799 is matched and a key behind tag 28 is a tag,
-// that tag 55799 inside tag 24 is passed, and the errors of a tag whose content is wrong.
+// The section "Tags on the way" states that a key behind tag 55799 is matched and a key behind tag 28 is a tag, that tag
+// 55799 inside tag 24 is passed. The errors of a tag whose content is wrong.
 TEST_CASE("doc advanced path: tags in detail")
 {
     CHECK_EQ(cbor::at_path<"$.k", int>("\xa1\xd8\x1c\x61k\x01"s).error(), error::key_not_found);

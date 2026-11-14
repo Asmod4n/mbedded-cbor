@@ -72,8 +72,8 @@ TEST_CASE("item_size: a count larger than the bytes left is too_little_data befo
 }
 
 // Found by the fuzzer: 28(24(h'83')) holds an embedded array that claims three items and has none. RFC 8949 3.4.5.1 and
-// 5.3.2: the outer item is well-formed, and the embedded data item is a top-level item of its own, by owner decision.
-// item_size frames the outer item; decode reads the embedded item and gives too_little_data for it.
+// 5.3.2: the outer item is well-formed. The embedded data item is a top-level item of its own, by owner decision.
+// item_size frames the outer item. Decode reads the embedded item and gives too_little_data for it.
 TEST_CASE("item_size: a cut item inside tag 24 is framed, and decode refuses it")
 {
     std::string_view const wire = "\xd8\x1c\xd8\x18\x41\x83"sv;
@@ -85,7 +85,7 @@ TEST_CASE("item_size: a cut item inside tag 24 is framed, and decode refuses it"
 }
 
 // tools/site/guides/complexity.md proves that item_size takes one pass for each data item. A form that read an item
-// again for each item after it would take 10^10 steps for these inputs, and the test run would not end in its time.
+// again for each item after it would take 10^10 steps for these inputs. The test run would not end in its time.
 TEST_CASE("item_size: an array and a map of 100000 data items are read in one pass each")
 {
     std::string const array = "\x9a\x00\x01\x86\xa0"s + std::string(100000, '\x00');

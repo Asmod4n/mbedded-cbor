@@ -8,12 +8,11 @@
 
 using namespace std::string_view_literals;
 
-// The JSONPath Compliance Test Suite checks RFC 9535 case by case. The compile mode makes each path program
-// code, and selectors that differ only in names, strings, integer values or whitespace make the same form of
-// code. So the first valid case of each form stands here as a template argument, and the generated walk must
-// give the result that the suite allows and the result of the run-time mode; test/cts.cpp runs every case in
-// the run-time mode. A selector that RFC 9535 refuses, or that holds match() or search(), must not be a valid
-// path at compile time. Cases 158 to 389 of 706.
+// The JSONPath Compliance Test Suite checks RFC 9535 case by case. The compile mode makes each path program code, and
+// selectors that differ only in names, strings, integer values or whitespace make the same form of code. So the first
+// valid case of each form stands here as a template argument. The generated walk must give the result that the suite
+// allows and the result of the run-time mode. Test/cts.cpp runs every case in the run-time mode. A selector that RFC
+// 9535 refuses, or that holds match() or search(), must not be a valid path at compile time. Cases 158 to 389 of 706.
 TEST_CASE("path: the JSONPath Compliance Test Suite in the compile mode, cases 158 to 389")
 {
     auto const suite = test::suite_of(JSONPATH_CTS "/cts.cbor");

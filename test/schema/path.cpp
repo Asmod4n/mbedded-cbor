@@ -77,10 +77,9 @@ TEST_CASE("path: a message shorter than the least size is too_little_data, a for
 }
 
 // A path that ends at a leaf gives the value. A path that ends at a struct, a list, a fixed array or a map gives an
-// accessor. A name that is not a member, an index into a text or a map, an index past a fixed array, and a count of
-// indexes that does not match the empty brackets do not compile. A path starts at the root of the top-level item with $
-// (RFC 9535 2.2) or at the node of the accessor with @ (RFC 9535 2.3.5); on the root accessor both are the same
-// node.
+// accessor. A name that is not a member, an index into a text or a map, an index past a fixed array. A count of indexes
+// that does not match the empty brackets do not compile. A path starts at the root of the top-level item with $ (RFC
+// 9535 2.2) or at the node of the accessor with @ (RFC 9535 2.3.5). On the root accessor both are the same node.
 TEST_CASE("path: a path compiles where it names a part of the type")
 {
     CHECK(path_reads<garage, "$.names[0]">);
@@ -198,8 +197,8 @@ TEST_CASE("path: an accessor gives the values of decode in every order")
     CHECK_EQ(at_path<parking_lot, "$.cars[].model">(bytes, 3uz), "mmm"s);
 }
 
-// An accessor is read through an lvalue. The test exists because a text and a nested accessor borrow the bytes of
-// the root, and a read through a temporary root would be the only use of a root that ends at once.
+// An accessor is read through an lvalue. The test exists because a text and a nested accessor borrow the bytes of the
+// root. A read through a temporary root would be the only use of a root that ends at once.
 TEST_CASE("path: an accessor is not read through a temporary")
 {
     using D = form<parking_lot>::accessor<>;

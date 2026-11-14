@@ -149,11 +149,10 @@ TEST_CASE("lazy::adopt and at_path give not_enough_memory when the owner cannot 
     CHECK_EQ(view_error, error::not_enough_memory);
 }
 
-// A filter compared each element with its literal, or with the number of length() or count(), through a std::string
-// and a std::shared_ptr, and copied the elements into a std::vector first, so the allocations of one call grew with
-// the elements. The literal is now a
-// lazy over the bytes of the parsed path, and the elements are tested in place: an array of 40 elements costs the
-// allocations of an array of 4, in the compile mode and in the run-time mode.
+// A filter compared each element with its literal, or with the number of length() or count(), through a std::string and
+// a std::shared_ptr, and copied the elements into a std::vector first. So the allocations of one call grew with the
+// elements. The literal is now a lazy over the bytes of the parsed path. The elements are tested in place: an array of
+// 40 elements costs the allocations of an array of 4, in the compile mode and in the run-time mode.
 TEST_CASE("path: a filter with a literal allocates nothing for each element")
 {
     auto const array_of = [](std::size_t const n) {
@@ -224,7 +223,7 @@ TEST_CASE("path: a query inside a filter allocates nothing for each element in t
 }
 
 // The path that succeeds compares a key of the top-level item with a literal by value without an allocation: the
-// top-level item holds no shared value, and the literal [1, "x"] is parsed at compile time.
+// top-level item holds no shared value. The literal [1, "x"] is parsed at compile time.
 TEST_CASE("path: a key is compared without an allocation")
 {
     std::string const bytes = "\x82\x61x\xa1\x82\x01\x61x\x01"s;
@@ -239,10 +238,9 @@ TEST_CASE("path: a key is compared without an allocation")
     CHECK_EQ(found->get<std::uint64_t>(), 1u);
 }
 
-// The count in the head of an array is not trusted. The decode takes memory in proportion to the bytes of the input:
-// at most one item for each byte, in at most two blocks. Here the array claims 4096 elements and its
-// first element is not well-formed, so decode fails after it reserved room for the claimed elements, which the
-// bytes left allow.
+// The count in the head of an array is not trusted. The decode takes memory in proportion to the bytes of the input: at
+// most one item for each byte, in at most two blocks. Here the array claims 4096 elements and its first element is not
+// well-formed. So decode fails after it reserved room for the claimed elements, which the bytes left allow.
 TEST_CASE("decode: the room kept for the elements of an array is bounded by the bytes left")
 {
     std::string bytes = "\x99\x10\x00\xff"s;
@@ -256,8 +254,8 @@ TEST_CASE("decode: the room kept for the elements of an array is bounded by the 
     CHECK_LE(after - before, 4 * sizeof(cbor::item) * bytes.size());
 }
 
-// An array that claims 2^63 elements with one byte after its head is refused with too_little_data, and the
-// decode takes memory in proportion to the input and not to the claimed count: one fixed block for the items.
+// An array that claims 2^63 elements with one byte after its head is refused with too_little_data. The decode takes
+// memory in proportion to the input and not to the claimed count: one fixed block for the items.
 TEST_CASE("decode: a claimed count of 2^63 with one byte left allocates in proportion to the input")
 {
     std::string const bytes = "\x9b\x80\x00\x00\x00\x00\x00\x00\x00\x01"s;
@@ -295,8 +293,8 @@ std::size_t decode_allocations(std::string const &bytes)
 } // namespace
 
 // The items of a decode live in a memory resource that takes few large blocks, sized from the input length. An
-// allocation for each item would make the count grow with the items, so the count for 4000 items must equal the
-// count for 40 items.
+// allocation for each item would make the count grow with the items. So the count for 4000 items must equal the count
+// for 40 items.
 TEST_CASE("decode: the count of allocations does not grow with the count of items")
 {
     std::size_t const few = decode_allocations(array_of_ones(40));
@@ -304,9 +302,9 @@ TEST_CASE("decode: the count of allocations does not grow with the count of item
     CHECK_EQ(many, few);
 }
 
-// Each array claims 4096 elements, and the input has room for only one such claim. A reservation for each claim
-// would take 100 times 4096 pointers. The sum of the open reservations must stay within the bytes left, so the
-// second claim gives too_little_data, and the memory stays in proportion to the input.
+// Each array claims 4096 elements, and the input has room for only one such claim. A reservation for each claim would
+// take 100 times 4096 pointers. The sum of the open reservations must stay within the bytes left. So the second claim
+// gives too_little_data, and the memory stays in proportion to the input.
 TEST_CASE("decode: nested arrays that each claim a large count do not multiply the reserved memory")
 {
     std::string bytes;
@@ -439,9 +437,9 @@ TEST_CASE("decode: the block for the strings of a small message stays in proport
     CHECK_LT(after - before, CBOR_STRING_SAVER_CHUNK_SIZE);
 }
 
-// A sequence_reader reads a stream without end, so a feed and a next() on the path that succeeds allocate
-// nothing once the buffer of the reader and its list of pieces have grown to the size that the stream needs.
-// Each piece ends inside an item, so every item is cut and goes through the copy of its tail.
+// A sequence_reader reads a stream without end. So a feed and a next() on the path that succeeds allocate nothing once
+// the buffer of the reader and its list of pieces have grown to the size that the stream needs. Each piece ends inside
+// an item, so every item is cut and goes through the copy of its tail.
 TEST_CASE("sequence_reader: feed and next() allocate nothing on the path that succeeds")
 {
     constexpr std::size_t warm_up = 16;
@@ -525,8 +523,8 @@ TEST_CASE("sequence_reader: a claimed count of 2^64 - 1 reserves nothing")
     CHECK_LT(after - before, bytes_per_byte_read * pieces * piece_size + piece_size);
 }
 
-// After an error the reader keeps no byte that a later feed gives, so a peer that sends after a malformed item
-// does not make the reader hold memory.
+// After an error the reader keeps no byte that a later feed gives. So a peer that sends after a malformed item does not
+// make the reader hold memory.
 TEST_CASE("sequence_reader: after an error feed keeps nothing")
 {
     cbor::sequence_reader r;

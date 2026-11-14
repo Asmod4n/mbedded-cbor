@@ -18,9 +18,9 @@ namespace path_equality
 namespace
 {
 
-// The two items of a pair go into one document, [[x, y]], and the filter $[?@[0] == @[1]] selects the pair when the
-// filter comparison of RFC 9535 2.3.5.2.2 holds. Each side keeps the bytes the test gives it, so the test chooses
-// the encoding of each side.
+// The two items of a pair go into one document, [[x, y]]. The filter $[?@[0] == @[1]] selects the pair when the filter
+// comparison of RFC 9535 2.3.5.2.2 holds. Each side keeps the bytes the test gives it, so the test chooses the encoding
+// of each side.
 std::expected<bool, error> values_equal(std::string const &x, std::string const &y)
 {
     auto const l = test::make_lazy_from_copy("\x81\x82"s + x + y);
@@ -49,8 +49,8 @@ std::expected<bool, error> value_less(std::string const &x, std::string const &y
     return r->size() == 1;
 }
 
-// A map with one pair, the key in the bytes the test gives, the value 1; the path names the key as an EDN literal
-// (RFC 8949 5.6.1: the key of the path and the key of the map are equivalent or not).
+// A map with one pair, the key in the bytes the test gives, the value 1. The path names the key as an EDN literal (RFC
+// 8949 5.6.1: the key of the path and the key of the map are equivalent or not).
 std::expected<bool, error> key_found(std::string const &key, std::string_view const path)
 {
     auto const l = test::make_lazy_from_copy("\xa1"s + key + "\x01"s);
@@ -82,9 +82,9 @@ std::string const double_nan_payload = "\xfb\x7f\xf8\x00\x00\x00\x00\x00\x01"s;
 
 using namespace path_equality;
 
-// RFC 9535 2.3.3: an integer alone in brackets is an index. With an encoding indicator of the EDN draft (4.1)
-// it is a key literal, and RFC 8949 5.6.1 decides: numeric values are distinct unless they are numerically
-// equal, whatever the length of the argument of the key.
+// RFC 9535 2.3.3: an integer alone in brackets is an index. With an encoding indicator of the EDN draft (4.1) it is a
+// key literal. RFC 8949 5.6.1 decides: numeric values are distinct unless they are numerically equal, whatever the
+// length of the argument of the key.
 TEST_CASE("path equality: a map key that is an integer with a longer argument")
 {
     CHECK(key_found("\x18\x01"s, "$[1_0]") == true);
@@ -117,8 +117,8 @@ TEST_CASE("path equality: a map key that is a big number")
     CHECK(key_found("\xc2\x4a\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00"s, "$[2(h'010000000000000000')]") == false);
 }
 
-// RFC 8949 5.6.1: a float key and an integer key are different keys; floats of any width compare by their value, so
-// -0.0 and 0.0 are one key. A NaN key compares by its payload, widened to double, and its sign is not read.
+// RFC 8949 5.6.1: a float key and an integer key are different keys. Floats of any width compare by their value, so -0.0
+// and 0.0 are one key. A NaN key compares by its payload, widened to double, and its sign is not read.
 TEST_CASE("path equality: a map key that is a float")
 {
     CHECK(key_found(double_one, "$[1.0]") == true);
@@ -142,11 +142,10 @@ TEST_CASE("path equality: a map key that is a string or a simple value")
     CHECK(key_found("\x10"s, "$[simple(16)]") == false);
 }
 
-// RFC 8949 5.6.1: a map key that is a map is equivalent when it holds the same pairs, in any order. A key
-// with a duplicate pair holds fewer distinct pairs than its count, and the key of the path holds no duplicate
-// pair, so the two are never equal. Arrays are compared element by element, and an array is never a map.
-// Tagged values are equal when the tag numbers and the contents are equal, and a tagged value is distinct
-// from an untagged one.
+// RFC 8949 5.6.1: a map key that is a map is equivalent when it holds the same pairs, in any order. A key with a
+// duplicate pair holds fewer distinct pairs than its count. The key of the path holds no duplicate pair, so the two are
+// never equal. Arrays are compared element by element, and an array is never a map. Tagged values are equal when the tag
+// numbers and the contents are equal, and a tagged value is distinct from an untagged one.
 TEST_CASE("path equality: a map key that is a map or an array")
 {
     CHECK(key_found("\xa2\x61" "a\x01\x61" "b\x02"s, "$[{\"b\": 2, \"a\": 1}]") == true);
@@ -227,10 +226,10 @@ TEST_CASE("path equality: arrays in a filter")
 }
 
 // The filter reads the item that tag 24 embeds and the content of tag 55799 at each level, as the walk does. The owner
-// decided on 2026-10-12 that correct means the same value in the RFC 8949 data model (3.4.3 for tags 2 and 3), so a
-// bignum whose magnitude fits in 64 bits is that integer in a filter, also inside an array and a map, as a value and
-// as a key. A leading zero byte does not count. A larger bignum and a tag 2 over a content that is
-// not a byte string stay tags.
+// decided on 2026-10-12 that correct means the same value in the RFC 8949 data model (3.4.3 for tags 2 and 3). So a
+// bignum whose magnitude fits in 64 bits is that integer in a filter, also inside an array and a map, as a value and as
+// a key. A leading zero byte does not count. A larger bignum and a tag 2 over a content that is not a byte string stay
+// tags.
 TEST_CASE("path equality: tags in a filter")
 {
     CHECK(values_equal("\xd8\x18\x43\x82\x01\x02"s, "\x82\x01\x02"s) == true);
@@ -284,8 +283,8 @@ TEST_CASE("path equality: an element of a typed array in a filter")
 }
 
 // RFC 9535 2.3.5.2.2 asks for mathematical comparison of numbers that interoperate under I-JSON and leaves the rest to
-// the implementation. The library compares an integer and a float by their exact values, so that ==, < and > agree
-// and equality is transitive: 2^53 + 1 is greater than the float 2^53, and 2^64 - 1 is less than the float 2^64.
+// the implementation. The library compares an integer and a float by their exact values. So that ==, < and > agree and
+// equality is transitive: 2^53 + 1 is greater than the float 2^53, and 2^64 - 1 is less than the float 2^64.
 TEST_CASE("path equality: an integer and a float compare by their exact values")
 {
     std::string const two_53_plus_1 = "\x1b\x00\x20\x00\x00\x00\x00\x00\x01"s;
@@ -334,10 +333,9 @@ std::string nested_maps_in_edn(std::size_t const levels)
 } // namespace
 } // namespace path_equality
 
-// The comparison of two maps reads each item once and gives each distinct subtree one id (tree isomorphism,
-// Aho, Hopcroft and Ullman). A count of the pairs of each map in both maps, as before, made two recursive
-// comparisons for each level and took time 2^levels; 40 levels compare here at once, in a filter and as the
-// map key of a path.
+// The comparison of two maps reads each item once and gives each distinct subtree one id (tree isomorphism, Aho,
+// Hopcroft and Ullman). A count of the pairs of each map in both maps, as before, made two recursive comparisons for
+// each level and took time 2^levels. 40 levels compare here at once, in a filter and as the map key of a path.
 TEST_CASE("path equality: nested maps compare in time linear in their size")
 {
     CHECK(values_equal(nested_maps(40, false), nested_maps(40, true)) == true);

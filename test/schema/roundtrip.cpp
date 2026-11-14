@@ -1,9 +1,9 @@
 #include "types.hpp"
 #include <bit>
 
-// The order holds at every depth: the outer keys are "B" (61 42), "a" (61 61) and "z"
-// (61 7a), keys of one length ordered by their bytes; the inner record holds x before y. A decode gives every value
-// back to its member, so the order of the bytes never mixes up members.
+// The order holds at every depth: the outer keys are "B" (61 42), "a" (61 61) and "z" (61 7a), keys of one length
+// ordered by their bytes. The inner record holds x before y. A decode gives every value back to its member, so the order
+// of the bytes never mixes up members.
 TEST_CASE("encode and decode: the key order holds in an inner struct")
 {
     sorted_outer const value{5, {2, 1}, 4};
@@ -73,8 +73,8 @@ TEST_CASE("encode and decode: a fixed-size vector round trip")
 }
 
 // The table index of the description depends on how many record entries come before it. With 14 record entries the
-// description is index 14, simple(14) = ee, and no filler is left. With 17 record entries the description is index
-// 17, beyond the 16 one-byte references, so the reference is 6(-1) = c6 20 (draft Table 1: 16 - 2N - 1 = 17).
+// description is index 14, simple(14) = ee, and no filler is left. With 17 record entries the description is index 17,
+// beyond the 16 one-byte references. So the reference is 6(-1) = c6 20 (draft Table 1: 16 - 2N - 1 = 17).
 TEST_CASE("encode and decode: the reference to a description at every table index")
 {
     fifteen_entries fifteen{};

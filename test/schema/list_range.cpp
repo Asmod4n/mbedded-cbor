@@ -113,8 +113,8 @@ TEST_CASE("at_path: an empty list of records has no element")
     check_positions_outside(*cars);
 }
 
-// The unverified form reads the same elements as the verified form. The test exists because the iterator takes the
-// form of its accessor, and the element function of the unverified form must cut each element at the same place.
+// The unverified form reads the same elements as the verified form. The test exists because the iterator takes the form
+// of its accessor. The element function of the unverified form must cut each element at the same place.
 TEST_CASE("unverified_path: a list of records is a range of its elements")
 {
     auto const owner = std::make_shared<std::string const>(encode_with_schema(make_sample_lot()));
@@ -132,9 +132,8 @@ TEST_CASE("unverified_path: a list of records is a range of its elements")
     check_positions_outside(*cars);
 }
 
-// A record accessor from the iterator gives the lists inside the record. The test exists because the nested list
-// is a list of fixed-size elements, so its iterator is the other kind, and it must read what at_path reads with
-// two indexes.
+// A record accessor from the iterator gives the lists inside the record. The test exists because the nested list is a
+// list of fixed-size elements. So its iterator is the other kind, and it must read what at_path reads with two indexes.
 TEST_CASE("at_path: a list inside a record from the iterator is a range")
 {
     auto const root = form<parking_lot>::path(encode_with_schema(make_sample_lot()));
@@ -178,8 +177,8 @@ TEST_CASE("at_path: a list of const elements is a range of its elements")
     CHECK(ys == std::vector<std::uint32_t>{std::bit_cast<std::uint32_t>(2.0f), std::bit_cast<std::uint32_t>(4.0f)});
 }
 
-// A record with a wrong class tag is an error. The test exists because the element from the iterator must give the
-// same error as at_path with the index, and the other elements must still read.
+// A record with a wrong class tag is an error. The test exists because the element from the iterator must give the same
+// error as at_path with the index. The other elements must still read.
 TEST_CASE("at_path: a record with a wrong tag in a list gives the error of at_path")
 {
     std::string bytes = encode_with_schema(make_sample_lot());

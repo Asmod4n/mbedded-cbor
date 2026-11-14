@@ -1,7 +1,7 @@
-// cbor::structs reads a type with no description only when it is an aggregate with no base and no annotation,
-// so that its bytes are the same on every build. CBOR_TEST_CASE selects the case: 1 a class with a
-// constructor, 2 a class with a private member, 3 an aggregate with a base, 4 cbor::key, 8 cbor::tag on an
-// aggregate, 9 decode into a default-constructed object of a type with no default constructor.
+// cbor::structs reads a type with no description only when it is an aggregate with no base and no annotation. So that
+// its bytes are the same on every build. CBOR_TEST_CASE selects the case: 1 a class with a constructor, 2 a class with a
+// private member, 3 an aggregate with a base, 4 cbor::key, 8 cbor::tag on an aggregate, 9 decode into a
+// default-constructed object of a type with no default constructor.
 #include <cbor/cbor.hpp>
 
 #include <expected>

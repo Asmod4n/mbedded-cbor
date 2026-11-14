@@ -87,9 +87,9 @@ std::string root_tag(std::uint16_t const tag)
     return "\xd9"s + static_cast<char>(tag >> 8) + static_cast<char>(tag & 0xff);
 }
 
-// A std::vector of a fixed-width struct whose layout in memory is the layout on the wire is written with one copy; a
-// std::deque is not contiguous and is written element by element. Both give the same bytes but for the class tag of
-// the root, and both read back the same values.
+// A std::vector of a fixed-width struct whose layout in memory is the layout on the wire is written with one copy. A
+// std::deque is not contiguous and is written element by element. Both give the same bytes but for the class tag of the
+// root, and both read back the same values.
 template <class E>
 void check_both_writes_agree(std::vector<E> const &values, std::uint16_t const vector_tag, std::uint16_t const deque_tag)
 {
@@ -109,10 +109,10 @@ void check_both_writes_agree(std::vector<E> const &values, std::uint16_t const v
 
 } // namespace
 
-// The check of the layout sets the bytes of one member and reads the member back. It must give false for a struct
-// with padding, for an inner struct in another key order and for members in another order than the keys, and true
-// with nonzero default member initializers; a false result gives the element-by-element write, a wrong true result
-// gives other bytes than the deque.
+// The check of the layout sets the bytes of one member and reads the member back. It must give false for a struct with
+// padding, for an inner struct in another key order and for members in another order than the keys, and true with
+// nonzero default member initializers. A false result gives the element-by-element write, a wrong true result gives
+// other bytes than the deque.
 TEST_CASE("schema layout: a list written with one copy gives the bytes of the element-by-element write")
 {
     check_both_writes_agree<spot>({{1.0f, 0.5f, 7}, {2.0f, -1.0f, 8}}, 1911, 1912);

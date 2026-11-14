@@ -20,9 +20,8 @@
 namespace test
 {
 
-// What a reader of a CBOR Sequence hands out: the bytes of each item it gives, and the error that ends the
-// run. too_little_data ends a run whose bytes are all read; any other error ends a run at the item that has
-// it.
+// What a reader of a CBOR Sequence hands out: the bytes of each item it gives. The error that ends the run.
+// too_little_data ends a run whose bytes are all read. Any other error ends a run at the item that has it.
 struct sequence_outcome {
     std::vector<std::string> items;
     cbor::error last;
@@ -51,11 +50,11 @@ inline sequence_outcome read_sequence_outcome_of_bytes(std::string_view const by
     return out;
 }
 
-// The forms in which a piece reaches the reader: a view that the reader copies, a std::vector<char> that the
-// reader takes without a copy, a std::shared_ptr that the reader holds, an lvalue std::vector<char> that the reader
-// copies, and the four in turn, one per piece.
-// The owned forms are a std::vector<char> of the exact size of the piece and not a std::string, because the
-// inline buffer and the closing zero of a std::string hide a read of up to 16 bytes past the piece from ASan.
+// The forms in which a piece reaches the reader: a view that the reader copies, a std::vector<char> that the reader
+// takes without a copy, a std::shared_ptr that the reader holds, an lvalue std::vector<char> that the reader copies. The
+// four in turn, one per piece. The owned forms are a std::vector<char> of the exact size of the piece and not a
+// std::string, because the inline buffer and the closing zero of a std::string hide a read of up to 16 bytes past the
+// piece from ASan.
 enum class feed_form { view, rvalue, shared, lvalue, each_in_turn };
 
 inline constexpr std::array<feed_form, 5> feed_forms{feed_form::view, feed_form::rvalue, feed_form::shared,
@@ -85,9 +84,9 @@ inline cbor::sequence_reader feed_piece_to_reader(cbor::sequence_reader r, std::
     return r;
 }
 
-// Feeds the bytes to one reader in the pieces that the cuts give, and calls next() after each piece until it
-// gives an error. With moved, the reader moves into a new reader by construction and back by assignment after the
-// middle piece, so a move in the middle of a stream keeps every item.
+// Feeds the bytes to one reader in the pieces that the cuts give, and calls next() after each piece until it gives an
+// error. With moved, the reader moves into a new reader by construction and back by assignment after the middle piece.
+// So a move in the middle of a stream keeps every item.
 inline sequence_outcome read_reader_outcome_of_cuts(std::string_view const bytes, std::span<std::size_t const> const cuts,
                                           feed_form const form = feed_form::view, bool const moved = false)
 {

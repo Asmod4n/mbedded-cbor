@@ -1,8 +1,8 @@
 #include "types.hpp"
 #include <bit>
 
-// The view holds the owner of the bytes. The test reads it after the accessor and the string it came from are gone,
-// so that the sanitizer sees a read of freed memory if the view did not keep the bytes alive.
+// The view holds the owner of the bytes. The test reads it after the accessor and the string it came from are gone. So
+// that the sanitizer sees a read of freed memory if the view did not keep the bytes alive.
 TEST_CASE("view: the view keeps the bytes alive after the accessor is gone")
 {
     std::optional<cbor::typed_array_view<double>> kept;
@@ -17,10 +17,10 @@ TEST_CASE("view: the view keeps the bytes alive after the accessor is gone")
     CHECK_EQ(std::bit_cast<std::uint64_t>((*kept)[1]), 0x4000000000000000u);
 }
 
-// A sub-view holds the owner as the view does. The test drops the string, the accessor and the parent view, then
-// reads the sub-views, so that the sanitizer sees a read of freed memory if a sub-view borrowed from its parent.
-// The sub-view of an rvalue view takes the owner over, and the test reads it after the same drops. A view made from
-// an rvalue accessor takes the owner over too.
+// A sub-view holds the owner as the view does. The test drops the string, the accessor and the parent view, then reads
+// the sub-views. So that the sanitizer sees a read of freed memory if a sub-view borrowed from its parent. The sub-view
+// of an rvalue view takes the owner over, and the test reads it after the same drops. A view made from an rvalue
+// accessor takes the owner over too.
 TEST_CASE("view: a view and a sub-view keep the bytes alive after the parent is gone")
 {
     std::optional<cbor::typed_array_view<double>> copied;
@@ -52,11 +52,11 @@ TEST_CASE("view: a view and a sub-view keep the bytes alive after the parent is 
     CHECK_EQ(std::bit_cast<std::uint64_t>(taken->front()), 0x4020000000000000u);
 }
 
-// A move gives the owner of the bytes to the new object. The moved-from view or accessor must not read the bytes
-// after the new owner is gone, because they may be freed. The test drops every other owner and then uses each
-// moved-from object, so that the sanitizer sees a read of freed memory if a moved-from object kept its view. A
-// moved-from view is empty: operator[], front and back are a wrong use, at is index_out_of_bounds. A use of a
-// moved-from accessor is a wrong use. Each case is std::logic_error, as for any other wrong use of the library.
+// A move gives the owner of the bytes to the new object. The moved-from view or accessor must not read the bytes after
+// the new owner is gone, because they may be freed. The test drops every other owner and then uses each moved-from
+// object. So that the sanitizer sees a read of freed memory if a moved-from object kept its view. A moved-from view is
+// empty: operator[], front and back are a wrong use, at is index_out_of_bounds. A use of a moved-from accessor is a
+// wrong use. Each case is std::logic_error, as for any other wrong use of the library.
 TEST_CASE("view: a moved-from view and a moved-from accessor read no bytes")
 {
     using V = cbor::typed_array_view<double>;

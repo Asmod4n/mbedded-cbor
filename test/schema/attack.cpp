@@ -55,9 +55,9 @@ std::size_t probe_paths_read(std::string_view const message)
 
 constexpr std::size_t probe_paths = 6 + 2 + 2 + 3 * 2 + 3;
 
-// Reads every leaf path of probe through one root accessor, first in order and then in the reverse order, and the
-// tires through an accessor of each tire. Gives the count of paths that gave a value in the first pass. Each value of
-// a later pass is the value of the first pass.
+// Reads every leaf path of probe through one root accessor, first in order and then in the reverse order. The tires
+// through an accessor of each tire. Gives the count of paths that gave a value in the first pass. Each value of a later
+// pass is the value of the first pass.
 template <class = void>
 std::size_t probe_lot_read(std::string_view const message)
 {
@@ -171,10 +171,10 @@ TEST_CASE("attack: no text result outlives its bytes")
     CHECK_THROWS_AS((void)form<probe>::decode(std::shared_ptr<std::string const>{}), std::logic_error);
 }
 
-// An owner is empty when it holds no object, whatever pointer it stores. An owner beside borrowed bytes compiles
-// (owner decision 2026-10-17: an LMDB read transaction keeps the bytes of its value alive); an owner beside a string
-// does not, because the string may die first. The test exists because each of these let a view outlive its bytes,
-// and a check of the stored pointer refused an owner that holds the bytes.
+// An owner is empty when it holds no object, whatever pointer it stores. An owner beside borrowed bytes compiles (owner
+// decision 2026-10-17: an LMDB read transaction keeps the bytes of its value alive). An owner beside a string does not,
+// because the string may die first. The test exists because each of these let a view outlive its bytes. A check of the
+// stored pointer refused an owner that holds the bytes.
 TEST_CASE("attack: path and decode check that the owner holds an object")
 {
     auto const bytes = std::make_shared<std::string const>(*form<probe>::encode(sample_probe));
@@ -480,8 +480,8 @@ TEST_CASE("attack: a variant member under a cut or a changed byte")
 }
 
 // A tag that names no alternative is incorrect_type. A record whose tag head fits but whose values do not is
-// too_little_data. A directory entry that points one byte into the record finds no tag of an alternative there,
-// and decode, which reads the items in their order, finds the entry off its place.
+// too_little_data. A directory entry that points one byte into the record finds no tag of an alternative there. Decode,
+// which reads the items in their order, finds the entry off its place.
 TEST_CASE("attack: an unknown tag, a cut record and a wrong directory entry of a variant member")
 {
     std::string const bytes = *form<home>::encode(make_home_with_dog());
@@ -510,11 +510,10 @@ TEST_CASE("attack: an unknown tag, a cut record and a wrong directory entry of a
     CHECK_EQ(form<home>::decode(std::string(moved)).error(), error::syntax_error);
 }
 
-// A value variant under every cut and every changed byte reads no memory outside the message (ASan, UBSan). A
-// string length past its item: the verified decode checks the order of the items and gives syntax_error while
-// the length ends inside the items, too_little_data past the root; the unverified decode keeps the check of the
-// end of the items and gives the same; the path form reads to the next directory entry and gives
-// too_little_data.
+// A value variant under every cut and every changed byte reads no memory outside the message (ASan, UBSan). A string
+// length past its item: the verified decode checks the order of the items and gives syntax_error while the length ends
+// inside the items, too_little_data past the root. The unverified decode keeps the check of the end of the items and
+// gives the same. The path form reads to the next directory entry and gives too_little_data.
 TEST_CASE("attack: value and text alternatives of a variant member")
 {
     for (setting const &s : make_sample_settings()) {
@@ -536,9 +535,9 @@ TEST_CASE("attack: value and text alternatives of a variant member")
                 }
         }
     }
-    // The text "ab" of pet is the first item; note holds the bytes of an empty text and "y". The length of pet
-    // grows from 2 to 7 and swallows the head of note, so the next read starts at the empty text and ends before
-    // the root, at "y".
+    // The text "ab" of pet is the first item; note holds the bytes of an empty text and "y". The length of pet grows
+    // from 2 to 7 and swallows the head of note. So the next read starts at the empty text and ends before the root, at
+    // "y".
     std::string const swallowed = *form<shelter>::encode(shelter{std::string("ab"), "\x7a\x00\x00\x00\x00y"s});
     std::size_t const pet = swallowed.find("\x7a\x00\x00\x00\x02" "ab"sv);
     REQUIRE_NE(pet, std::string::npos);

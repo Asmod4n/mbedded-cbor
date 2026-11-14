@@ -134,9 +134,9 @@ TEST_CASE("limits sizes 2: the stack is checked beside the size limits")
              error::nesting_depth_exceeded);
 }
 
-// An iterator of elements() or entries() only skips the items it passes, and the owner decided on 2026-10-10
-// that limits count only what is read or decoded. So a string longer than the limit does not stop the walk,
-// and the read of that string does.
+// An iterator of elements() or entries() only skips the items it passes. The owner decided on 2026-10-10 that limits
+// count only what is read or decoded. So a string longer than the limit does not stop the walk, and the read of that
+// string does.
 TEST_CASE("limits sizes 2: the iterators of elements() and entries() skip without counting")
 {
     std::string const encoded = "\x82\x63"
@@ -209,9 +209,9 @@ TEST_CASE("doc basics: the error of each size limit")
     CHECK_EQ(cbor::at_path<"$[0]", int>(three).error(), error::container_elements_exceeded);
 }
 
-// The former advanced basics guide, section "Limits", whose facts now stand in tools/doc/groups/errors.dox and
-// lazy.dox: a limit is checked by the step that reads the item, so a string that is too long gives
-// string_length_exceeded at get, not at lazy::copy. A user expected it at lazy::copy.
+// The former advanced basics guide, section "Limits", whose facts now stand in tools/doc/groups/errors.dox and lazy.dox:
+// a limit is checked by the step that reads the item. So a string that is too long gives string_length_exceeded at get,
+// not at lazy::copy. A user expected it at lazy::copy.
 TEST_CASE("doc advanced basics: a string limit is checked at get")
 {
     auto const l = test::make_lazy_from_copy(preferred(V("xyz"s)));
@@ -220,8 +220,8 @@ TEST_CASE("doc advanced basics: a string limit is checked at get")
     CHECK_EQ(test::make_lazy_from_copy(array_of(3))->size().error(), error::container_elements_exceeded);
 }
 
-// The former advanced basics guide, section "Limits", whose facts now stand in tools/doc/groups/errors.dox: the
-// limits count what a call reads, and a skip does not count.
+// The former advanced basics guide, section "Limits", whose facts now stand in tools/doc/groups/errors.dox: the limits
+// count what a call reads. A skip does not count.
 TEST_CASE("doc advanced basics: a skip does not count")
 {
     std::string const bytes = preferred(M("a"s, "xyz"s, "n"s, 1));
@@ -232,8 +232,8 @@ TEST_CASE("doc advanced basics: a skip does not count")
     CHECK_EQ(test::make_value_from_item(*test::make_lazy_from_copy(bytes)).error(), error::string_length_exceeded);
 }
 
-// The former advanced path guide, section "Limits", whose facts now stand in tools/doc/groups/path.dox: a string
-// that a path reads counts, a string that it only skips does not, and every container that the walk reads counts.
+// The former advanced path guide, section "Limits", whose facts now stand in tools/doc/groups/path.dox: a string that a
+// path reads counts, a string that it only skips does not. Every container that the walk reads counts.
 TEST_CASE("doc advanced path: the size limits")
 {
     std::string const bytes = preferred(M("long"s, "xyz"s, "n"s, 1));
@@ -327,8 +327,8 @@ struct labelled {
 
 CBOR_DEFINE_TYPE_MEMBERS(labelled, cbor::tag{1749}, label);
 
-// A text alternative of a variant member is a string item, so string_length counts its length as it counts a
-// text member: a text at the limit reads, one above it is string_length_exceeded in decode and on the path.
+// A text alternative of a variant member is a string item. So string_length counts its length as it counts a text
+// member: a text at the limit reads, one above it is string_length_exceeded in decode and on the path.
 TEST_CASE("limits sizes 2: string_length on a text alternative of a variant member")
 {
     auto const fits = cbor::schema<labelled>::encode(labelled{std::string(limit, 'a')});

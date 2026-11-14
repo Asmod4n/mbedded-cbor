@@ -68,8 +68,8 @@ TEST_CASE("doc advanced runtime: steps and searches")
     CHECK_EQ(doc.at(0).error(), error::not_indexable);
 }
 
-// The section "Steps and searches in a map or an array" states that a byte string is not a text key, and that a
-// repeated key gives the first pair.
+// The section "Steps and searches in a map or an array" states that a byte string is not a text key. That a repeated key
+// gives the first pair.
 TEST_CASE("doc advanced runtime: keys")
 {
     CHECK_EQ(test::make_lazy_from_copy("\xa1\x41" "a\x01"s)->at("a").error(), error::key_not_found);
@@ -182,9 +182,8 @@ TEST_CASE("doc advanced runtime: clone and decode")
     CHECK_EQ(children_of(*(*tags))[1]->type, cbor::type::tag);
 }
 
-// The section "clone and decode" says that the tree holds a copy of each string, so that it stays valid after the
-// input ends, that a larger bignum holds a copy of its magnitude, and that only cbor::decode refuses a byte after the
-// item.
+// The section "clone and decode" says that the tree holds a copy of each string. So that it stays valid after the input
+// ends, that a larger bignum holds a copy of its magnitude. That only cbor::decode refuses a byte after the item.
 TEST_CASE("doc advanced runtime: the tree copies its strings")
 {
     std::string input = "\x82\x63" "abc\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s;
@@ -313,10 +312,10 @@ TEST_CASE("doc advanced runtime: item_size")
     CHECK_EQ(cbor::item_size("\x82\x01"sv).error(), error::too_little_data);
 }
 
-// The section "Tags 28 and 29" shows that a lazy, clone and diagnostic notation read both as plain tags, and that
-// cbor::decode resolves them: the second element is a shared_reference to the first, an index with no mark is an
-// error, and 28(29(0)) names no value. encode refuses a shared_reference; with cbor::cycles it writes the shared
-// value twice and marks only a cycle.
+// The section "Tags 28 and 29" shows that a lazy, clone and diagnostic notation read both as plain tags. That
+// cbor::decode resolves them: the second element is a shared_reference to the first, an index with no mark is an error,
+// and 28(29(0)) names no value. encode refuses a shared_reference. With cbor::cycles it writes the shared value twice
+// and marks only a cycle.
 TEST_CASE("doc advanced runtime: tags 28 and 29")
 {
     auto const tree = cbor::decode("\x82\xd8\x1c\x01\xd8\x1d\x00"sv);

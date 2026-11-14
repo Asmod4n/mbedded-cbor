@@ -1,6 +1,6 @@
-// nlohmann/json: the canonical dump of one top-level item, read with from_cbor in strict mode. The tag
-// handler "store" keeps the tag number of a byte string as its subtype; nlohmann/json refuses a tag on any other
-// item with this handler. Map keys must be text in nlohmann/json.
+// nlohmann/json: the canonical dump of one top-level item, read with from_cbor in strict mode. The tag handler "store"
+// keeps the tag number of a byte string as its subtype. Nlohmann/json refuses a tag on any other item with this handler.
+// Map keys must be text in nlohmann/json.
 #include "dump.hpp"
 
 #include <nlohmann/json.hpp>

@@ -91,8 +91,7 @@ concept schema_path_compiles = requires(std::string_view const s, Index const...
 };
 
 // The section "The message" states that a message is one tag 113 of Packed CBOR, that a list of fixed-size structs is
-// one byte string under tag 32873, that the message holds the description, and that item_size of a message is its
-// size.
+// one byte string under tag 32873, that the message holds the description. That item_size of a message is its size.
 TEST_CASE("doc advanced schema: the message")
 {
     auto const bytes = cbor::schema<car>::encode(sample);
@@ -245,7 +244,7 @@ TEST_CASE("doc advanced schema: the accessor")
     CHECK_EQ(std::bit_cast<std::uint32_t>(seen[0]), 0x40100000u);
 }
 
-// The section "The accessor" says that the accessor holds the owner, so it stays valid after the caller releases the
+// The section "The accessor" says that the accessor holds the owner. So it stays valid after the caller releases the
 // bytes, that a caller who wants a copy makes it with std::string, that an empty owner throws and that a temporary
 // accessor reads nothing.
 TEST_CASE("doc advanced schema: the accessor holds the owner")
@@ -307,8 +306,8 @@ TEST_CASE("doc advanced schema: a typed array view")
     CHECK_EQ(std::bit_cast<std::uint64_t>(std::ranges::fold_left(*track, 0.0, std::plus<>{})), 0x4018000000000000u);
 }
 
-// The section "Errors" gives the error of a cut message, of a message of another struct and of a forged head. The
-// root is read from the end, so a message of another struct that is shorter than the table and the root of car gives
+// The section "Errors" gives the error of a cut message, of a message of another struct and of a forged head. The root
+// is read from the end. So a message of another struct that is shorter than the table and the root of car gives
 // too_little_data, and a longer one gives incorrect_type.
 TEST_CASE("doc advanced schema: errors")
 {

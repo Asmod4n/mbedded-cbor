@@ -132,8 +132,8 @@ TEST_CASE("doc advanced basics: limits")
     CHECK_EQ(cbor::limits::container_elements, SIZE_MAX);
 }
 
-// The section "Nesting depth" shows that a call that recurses stops where the stack of its thread ends, and that
-// item_size, which does not recurse, reads the same item: 65536 arrays around 1 are 65537 bytes.
+// The section "Nesting depth" shows that a call that recurses stops where the stack of its thread ends. That item_size,
+// which does not recurse, reads the same item: 65536 arrays around 1 are 65537 bytes.
 TEST_CASE("doc advanced basics: nesting depth")
 {
     std::string const bytes = std::string(test::levels_beyond_small_stack, '\x81') + '\x01';
@@ -142,8 +142,8 @@ TEST_CASE("doc advanced basics: nesting depth")
     CHECK_EQ(cbor::item_size(bytes), test::levels_beyond_small_stack + 1);
 }
 
-// The section "Memory" shows that the caller bounds the memory of a decode with a std::pmr resource, and that
-// a resource that refuses after 64 bytes gives not_enough_memory.
+// The section "Memory" shows that the caller bounds the memory of a decode with a std::pmr resource. That a resource
+// that refuses after 64 bytes gives not_enough_memory.
 TEST_CASE("doc advanced basics: a std::pmr target")
 {
     using texts = std::pmr::vector<std::pmr::string>;
@@ -205,8 +205,8 @@ TEST_CASE("doc advanced basics: a lazy holds the owner")
     CHECK(*keep->at(1)->get<std::string_view>() == "b"sv);
 }
 
-// The section "Owners" states what *, -> and == of a ref give, that a copy shares the owner, and that the
-// aliasing constructor of std::shared_ptr makes an owner from an object that holds the bytes.
+// The section "Owners" states what *, -> and == of a ref give, that a copy shares the owner. That the aliasing
+// constructor of std::shared_ptr makes an owner from an object that holds the bytes.
 TEST_CASE("doc advanced basics: owners")
 {
     auto const name = test::make_lazy_from_copy(preferred(M("a"s, "xyz"s)))->at("a")->get<std::string_view>();
@@ -255,8 +255,8 @@ TEST_CASE("doc advanced basics: the forms of cbor::sequence")
     CHECK_FALSE(std::is_constructible_v<cbor::sequence, std::shared_ptr<void const>, std::string const &>);
 }
 
-// The section "Owners" states that a std::string lvalue and a std::string_view alone do not compile, and that a
-// shared_ptr or an rvalue reads the bytes with no copy.
+// The section "Owners" states that a std::string lvalue and a std::string_view alone do not compile. That a shared_ptr
+// or an rvalue reads the bytes with no copy.
 TEST_CASE("doc advanced basics: no form copies the bytes")
 {
     auto const message = [] { return preferred(V("xyz"s)); };

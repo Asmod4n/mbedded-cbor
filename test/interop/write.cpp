@@ -59,8 +59,8 @@ std::span<std::byte const> span_of(std::string_view const s)
     return std::as_bytes(std::span(s));
 }
 
-// Writes the item again through one call of cbor::encoder per head. Each integer, simple value and float
-// takes the C++ type of the width that it had on the wire, so every native width of the encoder runs.
+// Writes the item again through one call of cbor::encoder per head. Each integer, simple value and float takes the C++
+// type of the width that it had on the wire. So every native width of the encoder runs.
 template <class Target>
 std::expected<void, cbor::error> item_walk(cbor::encoder<Target> &e, cbor::item const &node)
 {
@@ -468,8 +468,8 @@ struct cbor::describe_members<senml> {
 namespace
 {
 
-// structs<T>::encode. The expected bytes are written by hand in the preferred serialization; the decoders
-// compare values, so a float that the library writes in another width still compares equal.
+// structs<T>::encode. The expected bytes are written by hand in the preferred serialization; the decoders compare
+// values. So a float that the library writes in another width still compares equal.
 void structs_cases()
 {
     char const *const s = "RFC 8949 3, 3.4.3";
@@ -585,8 +585,8 @@ struct cbor::describe_members<sensor> {
 namespace
 {
 
-// schema<T>::encode. A generic decoder does not know Packed CBOR, so it gives the tags 113 and 114 with their
-// content (RFC 8949 3.4); the written bytes have no expectation and must only be accepted.
+// schema<T>::encode. A generic decoder does not know Packed CBOR, so it gives the tags 113 and 114 with their content
+// (RFC 8949 3.4). The written bytes have no expectation and must only be accepted.
 void packed_cases()
 {
     char const *const s = "draft-ietf-cbor-packed-19";

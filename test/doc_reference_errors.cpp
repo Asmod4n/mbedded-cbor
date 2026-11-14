@@ -12,9 +12,9 @@
 
 using namespace std::string_literals;
 
-// Each test in this file is one example of a reference page of the errors group; the comment of the header gives the
-// example through the snippet markers. The tests exist so that every example compiles and gives the result that its
-// page states.
+// Each test in this file is one example of a reference page of the errors group. The comment of the header gives the
+// example through the snippet markers. The tests exist so that every example compiles and gives the result that its page
+// states.
 
 // tools/doc/groups/errors.dox, snippet errors group: the EXAMPLES section of the man page of the group errors reads a
 // missing key with cbor::lazy, and turns its error into a std::error_code. The test checks each value that the
