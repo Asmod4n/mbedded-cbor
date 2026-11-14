@@ -124,7 +124,7 @@ class sequence_reader
                     return {};
             }
             if (state == phase::elements) {
-                if (auto const r = detail::validity::check_pending_items(pending, item.size() - scanned); !r)
+                if (auto const r = detail::validity::check_bytes_left(pending, item.size() - scanned); !r)
                     [[unlikely]]
                     return r;
                 state = phase::head;

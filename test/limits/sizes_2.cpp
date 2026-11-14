@@ -164,7 +164,7 @@ TEST_CASE("limits sizes 2: the iterators of elements() and entries() skip withou
     CHECK_EQ((*pair)->second.get<int>(), 3);
 }
 
-// RFC 8949 does not bound what a decoder skips; the bytes bound it (check_pending_items). The owner decided
+// RFC 8949 does not bound what a decoder skips; the bytes bound it (check_bytes_left). The owner decided
 // on 2026-10-10 and 2026-10-18 that string_length and container_elements count only the heads that a path or
 // a lazy reads: the containers on the way, the keys it compares and the target. A string or an array above
 // its limit that is only skipped does not count, in each form: the typed read over bytes, the typed read from

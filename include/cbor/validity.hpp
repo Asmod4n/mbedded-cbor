@@ -380,14 +380,6 @@ public:
         return {};
     }
 
-    static constexpr std::expected<void, error> check_pending_items(std::uint64_t const pending,
-                                                                    std::size_t const bytes_left)
-    {
-        if (!bytes_fit(pending, bytes_left)) [[unlikely]]
-            return std::unexpected(error::too_little_data);
-        return {};
-    }
-
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
     check_pending_items(major_type const major, std::uint8_t const info, std::uint64_t const argument,
                         std::size_t const bytes_left)
@@ -395,12 +387,12 @@ public:
         if (info == std::to_underlying(rfc8949::additional_information::indefinite_length))
             return {};
         if (major == major_type::array)
-            return check_pending_items(argument, bytes_left);
+            return check_bytes_left(argument, bytes_left);
         if (major == major_type::map) {
             auto const items = checked_mul(argument, std::uint64_t{rfc8949::data_items_per_pair});
             if (!items) [[unlikely]]
                 return std::unexpected(error::too_little_data);
-            return check_pending_items(*items, bytes_left);
+            return check_bytes_left(*items, bytes_left);
         }
         return {};
     }

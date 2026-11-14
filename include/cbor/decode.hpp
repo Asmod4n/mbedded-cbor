@@ -264,7 +264,7 @@ std::expected<void, error> tree_decoder<Resolve>::decode_content(std::pmr::vecto
         auto const reserved = detail::validity::checked_add(std::uint64_t{open}, *count);
         if (!reserved) [[unlikely]]
             return std::unexpected(error::too_little_data);
-        if (auto const r = detail::validity::check_pending_items(*reserved, d.encoded.size()); !r)
+        if (auto const r = detail::validity::check_bytes_left(*reserved, d.encoded.size()); !r)
             [[unlikely]]
             return std::unexpected(r.error());
         std::size_t const n = static_cast<std::size_t>(*count);

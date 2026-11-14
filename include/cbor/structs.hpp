@@ -920,7 +920,7 @@ class generic
                                                         : detail::validity::checked_mul(
                                                               k->argument, rfc8949::data_items_per_pair)
                                                               .value_or(std::numeric_limits<std::uint64_t>::max());
-                    if (auto const p = detail::validity::check_pending_items(items, d.encoded.size()); !p)
+                    if (auto const p = detail::validity::check_bytes_left(items, d.encoded.size()); !p)
                         [[unlikely]]
                         return std::unexpected(p.error());
                     for (std::uint64_t i = 0; i < items; ++i)
