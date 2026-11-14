@@ -136,7 +136,7 @@ TEST_CASE("recursion limit: a descendant segment")
     refused_on_small_stack([&deep] { return test::query("$..[0]", *test::lazy_of_copy(deep)); });
 }
 
-// extended_diagnostic_notation::write_diagnostic recurses once for each array.
+// detail::extended_diagnostic_notation::write_diagnostic recurses once for each array.
 TEST_CASE("recursion limit: diagnostic_notation")
 {
     CHECK(cbor::diagnostic_notation(arrays_around(held, "\x00"sv)).has_value());

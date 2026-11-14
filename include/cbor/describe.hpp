@@ -22,6 +22,14 @@
 namespace cbor
 {
 
+namespace detail
+{
+
+class pfr;
+class reflection;
+
+}
+
 inline constexpr std::nullopt_t untagged = std::nullopt;
 
 struct map_key {
@@ -167,9 +175,9 @@ class describe
     template <class U, std::size_t I>
     static constexpr map_key key_of = std::get<I>(describe_members<U>::members).key;
 
-    friend class pfr;
+    friend class detail::pfr;
 
-    friend class reflection;
+    friend class detail::reflection;
 };
 
 }

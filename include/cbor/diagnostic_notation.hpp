@@ -37,6 +37,9 @@
 namespace cbor
 {
 
+namespace detail
+{
+
 class extended_diagnostic_notation
 {
     struct parsed {
@@ -77,7 +80,7 @@ class extended_diagnostic_notation
         constexpr std::size_t open(std::string &out)
         {
             std::size_t const at = out.size();
-            out.append(heads::head_size_max, '\0');
+            out.append(detail::heads::head_size_max, '\0');
             if (!opened) {
                 outermost = {at, 0};
                 opened = true;
@@ -94,13 +97,13 @@ class extended_diagnostic_notation
 
         constexpr std::size_t content_start(std::size_t const index) const
         {
-            return (index == 0 ? outermost.at : inner[index - 1].at) + heads::head_size_max;
+            return (index == 0 ? outermost.at : inner[index - 1].at) + detail::heads::head_size_max;
         }
 
         constexpr void close(std::string &out, std::size_t const index, std::string_view const head)
         {
             backpatch &b = index == 0 ? outermost : inner[index - 1];
-            b.unused = heads::head_size_max - head.size();
+            b.unused = detail::heads::head_size_max - head.size();
             std::ranges::copy(head, std::span(out).subspan(b.at + b.unused, head.size()).begin());
             unused_total += b.unused;
         }
@@ -210,7 +213,7 @@ class extended_diagnostic_notation
         if (indicator == no_indicator)
             info = argument < static_cast<std::uint64_t>(rfc8949::additional_information::one_byte_argument)
                        ? 0
-                       : heads::preferred_argument_info(argument);
+                       : detail::heads::preferred_argument_info(argument);
         else if (indicator == immediate_indicator)
             info = 0;
         else
@@ -219,17 +222,17 @@ class extended_diagnostic_notation
             if (argument >= static_cast<std::uint64_t>(rfc8949::additional_information::one_byte_argument))
                 [[unlikely]]
                 return std::unexpected(error::invalid_path);
-            heads::append_head(out, major, static_cast<std::uint8_t>(argument), argument);
+            detail::heads::append_head(out, major, static_cast<std::uint8_t>(argument), argument);
             return {};
         }
         if (info < static_cast<int>(rfc8949::additional_information::one_byte_argument) ||
             info > static_cast<int>(rfc8949::additional_information::eight_byte_argument)) [[unlikely]]
             return std::unexpected(error::invalid_path);
-        std::size_t const size = heads::argument_size(static_cast<std::uint8_t>(info));
+        std::size_t const size = detail::heads::argument_size(static_cast<std::uint8_t>(info));
         if (size < sizeof(std::uint64_t) &&
             argument >> (std::numeric_limits<std::uint8_t>::digits * size) != 0) [[unlikely]]
             return std::unexpected(error::invalid_path);
-        heads::append_head(out, major, static_cast<std::uint8_t>(info), argument);
+        detail::heads::append_head(out, major, static_cast<std::uint8_t>(info), argument);
         return {};
     }
 
@@ -483,7 +486,7 @@ class extended_diagnostic_notation
     {
         bool const nan = value != value;
         bool const infinite = !nan && (value > std::numeric_limits<double>::max() || value < -std::numeric_limits<double>::max());
-        rfc8949::simple_float_information const preferred = heads::preferred_float_info(value);
+        rfc8949::simple_float_information const preferred = detail::heads::preferred_float_info(value);
         int info;
         if (indicator == no_indicator)
             info = std::to_underlying(preferred);
@@ -501,7 +504,7 @@ class extended_diagnostic_notation
         std::uint64_t const argument =
             nan ? quiet_nan[static_cast<std::size_t>(
                       info - std::to_underlying(rfc8949::simple_float_information::half_precision_float))]
-                : heads::encode_float(static_cast<rfc8949::simple_float_information>(info), value);
+                : detail::heads::encode_float(static_cast<rfc8949::simple_float_information>(info), value);
         return append_head(out, major_type::simple_float, argument, info);
     }
 
@@ -866,7 +869,7 @@ class extended_diagnostic_notation
         constexpr auto names = std::to_array<std::string_view>({"false", "true", "null", "undefined"});
         for (std::size_t i = 0; i < names.size(); ++i)
             if (rest.starts_with(names[i])) {
-                out.push_back(heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::false_value) + i));
+                out.push_back(detail::heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::false_value) + i));
                 return at + names[i].size();
             }
         if (rest.starts_with("simple(")) {
@@ -887,7 +890,7 @@ class extended_diagnostic_notation
             next = *closed;
             if (!detail::validity::check_text_left(text, next, 1) || text[next] != ')' ||
                 value > std::numeric_limits<std::uint8_t>::max() ||
-                !detail::validity::check_simple_value(heads::preferred_argument_info(value), value))
+                !detail::validity::check_simple_value(detail::heads::preferred_argument_info(value), value))
                 [[unlikely]]
                 return std::unexpected(error::invalid_path);
             if (auto const r = append_head(out, major_type::simple_float, value, no_indicator); !r) [[unlikely]]
@@ -941,7 +944,7 @@ class extended_diagnostic_notation
     {
         if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
             return std::unexpected(r.error());
-        auto h = heads::read_raw_head<false>(encoded, at);
+        auto h = detail::heads::read_raw_head<false>(encoded, at);
         for (;;) {
             if (!h) [[unlikely]]
                 return std::unexpected(h.error());
@@ -949,7 +952,7 @@ class extended_diagnostic_notation
                 break;
             if (auto const r = append_head(out, major_type::tag, h->argument, no_indicator); !r) [[unlikely]]
                 return std::unexpected(r.error());
-            h = heads::read_raw_head<false>(encoded, h->at);
+            h = detail::heads::read_raw_head<false>(encoded, h->at);
         }
         if (h->info == std::to_underlying(rfc8949::additional_information::indefinite_length)) [[unlikely]]
             detail::validity::throw_logic_error("cbor::path: a literal holds an indefinite length");
@@ -962,7 +965,7 @@ class extended_diagnostic_notation
             return next;
         case major_type::byte_string:
         case major_type::text_string: {
-            heads::decoder<false> d{detail::validity::subspan(encoded, next)};
+            detail::heads::decoder<false> d{detail::validity::subspan(encoded, next)};
             auto const content = d.decode_string(h->argument);
             if (!content) [[unlikely]]
                 return std::unexpected(content.error());
@@ -1033,11 +1036,11 @@ class extended_diagnostic_notation
         }
         if (h->info > double_precision_float) [[unlikely]]
             return std::unexpected(error::syntax_error);
-        heads::float_key const key = heads::float_key_of(h->info, h->argument);
+        detail::heads::float_key const key = detail::heads::float_key_of(h->info, h->argument);
         if (key.nan) {
             if (auto const r = append_head(out, major_type::simple_float,
-                                           key.widened | std::uint64_t{heads::double_precision.exponent_max}
-                                                             << heads::double_precision.significand_bits,
+                                           key.widened | std::uint64_t{detail::heads::double_precision.exponent_max}
+                                                             << detail::heads::double_precision.significand_bits,
                                            double_precision_float);
                 !r) [[unlikely]]
                 return std::unexpected(r.error());
@@ -1052,7 +1055,7 @@ class extended_diagnostic_notation
     {
         if (info < std::to_underlying(rfc8949::additional_information::one_byte_argument))
             return {};
-        if (info == heads::preferred_argument_info(argument))
+        if (info == detail::heads::preferred_argument_info(argument))
             return {};
         return {'_',
                 static_cast<char>('0' + info -
@@ -1144,7 +1147,7 @@ class extended_diagnostic_notation
     {
         std::size_t const width =
             info - std::to_underlying(rfc8949::simple_float_information::half_precision_float);
-        double const value = heads::decode_float(info, argument);
+        double const value = detail::heads::decode_float(info, argument);
         std::string const indicator =
             width == 0 ? std::string{} : std::string{'_', static_cast<char>('1' + width)};
         if (std::isnan(value)) {
@@ -1157,16 +1160,16 @@ class extended_diagnostic_notation
             return "float'" + hex_of(bytes) + "'";
         }
         std::size_t const preferred =
-            std::to_underlying(heads::preferred_float_info(value)) -
+            std::to_underlying(detail::heads::preferred_float_info(value)) -
             std::to_underlying(rfc8949::simple_float_information::half_precision_float);
         return number_of(value) + (width == preferred ? std::string{} : indicator);
     }
 
-    static bool break_consumed(heads::decoder<true> &d)
+    static bool break_consumed(detail::heads::decoder<true> &d)
     {
-        if (!detail::validity::bytes_fit(heads::initial_byte_size, d.encoded.size()) ||
+        if (!detail::validity::bytes_fit(detail::heads::initial_byte_size, d.encoded.size()) ||
             d.encoded.front() !=
-                heads::initial_byte(major_type::simple_float,
+                detail::heads::initial_byte(major_type::simple_float,
                                     std::to_underlying(rfc8949::simple_float_information::break_stop_code)))
             return false;
         d.encoded.remove_prefix(1);
@@ -1174,11 +1177,11 @@ class extended_diagnostic_notation
     }
 
     static std::expected<void, error>
-    write_diagnostic(std::string &out, heads::decoder<true> &d)
+    write_diagnostic(std::string &out, detail::heads::decoder<true> &d)
     {
         if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
             return std::unexpected(r.error());
-        auto const h = heads::read_raw_head<true>(d.encoded, detail::validity::offset{});
+        auto const h = detail::heads::read_raw_head<true>(d.encoded, detail::validity::offset{});
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
         d.encoded = detail::validity::subspan(d.encoded, h->at);
@@ -1212,7 +1215,7 @@ class extended_diagnostic_notation
             for (bool first = true; !break_consumed(d); first = false) {
                 if (!first)
                     out += ", ";
-                if (auto const r = detail::validity::check_bytes_left(heads::initial_byte_size, d.encoded.size());
+                if (auto const r = detail::validity::check_bytes_left(detail::heads::initial_byte_size, d.encoded.size());
                     !r) [[unlikely]]
                     return std::unexpected(r.error());
                 auto const initial = static_cast<std::uint8_t>(d.encoded.front());
@@ -1220,7 +1223,7 @@ class extended_diagnostic_notation
                         detail::validity::check_chunk(
                             h->major,
                             static_cast<major_type>(initial >> rfc8949::additional_information_bits),
-                            heads::additional_information_of(initial))
+                            detail::heads::additional_information_of(initial))
                             .error_or(error{});
                     c != error{}) [[unlikely]]
                     return std::unexpected(c);
@@ -1297,10 +1300,12 @@ class extended_diagnostic_notation
         }
     }
 
-    friend class path;
+    friend class cbor::path;
 
-    friend std::expected<std::string, error> diagnostic_notation(std::string_view encoded);
+    friend std::expected<std::string, error> cbor::diagnostic_notation(std::string_view encoded);
 };
+
+}
 
 /**
  * @brief Gives the text of the item in @p encoded in the diagnostic notation of RFC 8949 section 8.
@@ -1340,10 +1345,10 @@ class extended_diagnostic_notation
  */
 inline std::expected<std::string, error> diagnostic_notation(std::string_view const encoded)
 {
-    heads::decoder<true> d{encoded};
+    detail::heads::decoder<true> d{encoded};
     std::string out;
     if (auto const r =
-            extended_diagnostic_notation::write_diagnostic(out, d);
+            detail::extended_diagnostic_notation::write_diagnostic(out, d);
         !r) [[unlikely]]
         return std::unexpected(r.error());
     if (auto const one = detail::validity::check_one_data_item(d.encoded); !one) [[unlikely]]

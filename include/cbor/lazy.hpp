@@ -539,7 +539,7 @@ private:
         requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
     static std::expected<std::pair<Iterator, bool>, error> find_key(Iterator first, Last last, Key key);
 
-    static std::expected<bool, error> integer_key_equivalent(heads::decoder<true> const &probe, heads::head const &k,
+    static std::expected<bool, error> integer_key_equivalent(detail::heads::decoder<true> const &probe, detail::heads::head const &k,
                                                              std::int64_t key);
 
     template <class Iterator>
@@ -877,9 +877,9 @@ detail::validity::intern_key(canonical_ids &ids, Message const &message, offset 
         encoded = message;
     } else {
         encoded = message.encoded;
-        item_at = heads::self_described_cbor_content_at(message.encoded, at);
+        item_at = detail::heads::self_described_cbor_content_at(message.encoded, at);
     }
-    auto const h = heads::read_raw_head<true>(encoded, item_at);
+    auto const h = detail::heads::read_raw_head<true>(encoded, item_at);
     if (!h) [[unlikely]]
         return std::unexpected(h.error());
     if (error const c = check_definite_length(h->major, h->info).error_or(error{}); c != error{}) [[unlikely]]
@@ -889,8 +889,8 @@ detail::validity::intern_key(canonical_ids &ids, Message const &message, offset 
                                offset const end) -> std::pair<std::uint64_t, offset> {
         return {ids.id_of({of, number, bytes, ids.children_end(), 0}), end};
     };
-    if (heads::is_bignum(h->major, h->argument)) {
-        heads::decoder<true> d{subspan(encoded, h->at)};
+    if (detail::heads::is_bignum(h->major, h->argument)) {
+        detail::heads::decoder<true> d{subspan(encoded, h->at)};
         auto const read = d.decode_bignum(h->argument);
         if (!read) [[unlikely]]
             return std::unexpected(read.error());
@@ -907,7 +907,7 @@ detail::validity::intern_key(canonical_ids &ids, Message const &message, offset 
         return scalar(kind::negative_integer, h->argument, {}, h->at);
     case major_type::byte_string:
     case major_type::text_string: {
-        heads::decoder<true> d{subspan(encoded, h->at)};
+        detail::heads::decoder<true> d{subspan(encoded, h->at)};
         auto const s = d.decode_string(h->argument);
         if (!s) [[unlikely]]
             return std::unexpected(s.error());
@@ -952,14 +952,14 @@ detail::validity::intern_key(canonical_ids &ids, Message const &message, offset 
     case major_type::simple_float:
         break;
     }
-    if (!heads::is_floating_point(h->major, h->info)) {
+    if (!detail::heads::is_floating_point(h->major, h->info)) {
         if (error const c = check_simple_value(h->info, h->argument).error_or(error{}); c != error{}) [[unlikely]]
             return std::unexpected(c);
         return scalar(kind::simple, h->argument, {}, h->at);
     }
-    heads::float_key const p = heads::float_key_of(h->info, h->argument);
+    detail::heads::float_key const p = detail::heads::float_key_of(h->info, h->argument);
     if (p.nan) {
-        constexpr std::uint64_t significand = (std::uint64_t{1} << heads::double_precision.significand_bits) - 1u;
+        constexpr std::uint64_t significand = (std::uint64_t{1} << detail::heads::double_precision.significand_bits) - 1u;
         return scalar(kind::nan, p.widened & significand, {}, h->at);
     }
     return scalar(kind::floating, std::bit_cast<std::uint64_t>(p.value == 0.0 ? 0.0 : p.value), {}, h->at);
@@ -977,36 +977,36 @@ std::expected<bool, error> detail::validity::keys_equivalent(First const &first,
         else
             return message.encoded;
     };
-    auto const skip = [](heads::decoder<true> &d) {
-        well_formedness::no_marks none;
-        return well_formedness::skip_item(d, none);
+    auto const skip = [](detail::heads::decoder<true> &d) {
+        detail::well_formedness::no_marks none;
+        return detail::well_formedness::skip_item(d, none);
     };
     auto const resolve = []<class Message>(Message const &message, offset const at) -> offset {
         if constexpr (std::same_as<Message, std::string_view>)
             return at;
         else
-            return heads::self_described_cbor_content_at(message.encoded, at);
+            return detail::heads::self_described_cbor_content_at(message.encoded, at);
     };
     std::string_view const a = encoded_of(first);
     std::string_view const b = encoded_of(second);
-    auto const h = heads::read_raw_head<true>(a, resolve(first, first_at));
+    auto const h = detail::heads::read_raw_head<true>(a, resolve(first, first_at));
     if (!h) [[unlikely]]
         return std::unexpected(h.error());
-    auto const k = heads::read_raw_head<true>(b, resolve(second, second_at));
+    auto const k = detail::heads::read_raw_head<true>(b, resolve(second, second_at));
     if (!k) [[unlikely]]
         return std::unexpected(k.error());
     if (error const c = check_definite_length(h->major, h->info).error_or(error{}); c != error{}) [[unlikely]]
         return std::unexpected(c);
     if (error const c = check_definite_length(k->major, k->info).error_or(error{}); c != error{}) [[unlikely]]
         return std::unexpected(c);
-    if (h->major != k->major || heads::is_bignum(h->major, h->argument)) [[unlikely]] {
-        auto const integer_of = [](std::string_view const encoded, heads::raw_head const n)
+    if (h->major != k->major || detail::heads::is_bignum(h->major, h->argument)) [[unlikely]] {
+        auto const integer_of = [](std::string_view const encoded, detail::heads::raw_head const n)
             -> std::expected<std::optional<std::pair<bool, std::uint64_t>>, error> {
             if (n.major == major_type::unsigned_integer || n.major == major_type::negative_integer)
                 return std::pair{n.major == major_type::negative_integer, n.argument};
-            if (!heads::is_bignum(n.major, n.argument))
+            if (!detail::heads::is_bignum(n.major, n.argument))
                 return std::nullopt;
-            heads::decoder<true> d{subspan(encoded, n.at)};
+            detail::heads::decoder<true> d{subspan(encoded, n.at)};
             auto const read = d.decode_bignum(n.argument);
             if (!read) [[unlikely]]
                 return std::unexpected(read.error());
@@ -1031,11 +1031,11 @@ std::expected<bool, error> detail::validity::keys_equivalent(First const &first,
         return h->argument == k->argument;
     case major_type::byte_string:
     case major_type::text_string: {
-        heads::decoder<true> d{subspan(a, h->at)};
+        detail::heads::decoder<true> d{subspan(a, h->at)};
         auto const s = d.decode_string(h->argument);
         if (!s) [[unlikely]]
             return std::unexpected(s.error());
-        heads::decoder<true> e{subspan(b, k->at)};
+        detail::heads::decoder<true> e{subspan(b, k->at)};
         auto const t = e.decode_string(k->argument);
         if (!t) [[unlikely]]
             return std::unexpected(t.error());
@@ -1044,8 +1044,8 @@ std::expected<bool, error> detail::validity::keys_equivalent(First const &first,
     case major_type::array: {
         if (h->argument != k->argument)
             return false;
-        heads::decoder<true> d{subspan(a, h->at)};
-        heads::decoder<true> e{subspan(b, k->at)};
+        detail::heads::decoder<true> d{subspan(a, h->at)};
+        detail::heads::decoder<true> e{subspan(b, k->at)};
         if (auto const r =
                 detail::validity::check_pending_items(h->major, h->info, h->argument, d.encoded.size());
             !r) [[unlikely]]
@@ -1084,17 +1084,17 @@ std::expected<bool, error> detail::validity::keys_equivalent(First const &first,
     case major_type::simple_float:
         break;
     }
-    bool const h_float = heads::is_floating_point(h->major, h->info);
-    bool const k_float = heads::is_floating_point(k->major, k->info);
+    bool const h_float = detail::heads::is_floating_point(h->major, h->info);
+    bool const k_float = detail::heads::is_floating_point(k->major, k->info);
     if (h_float != k_float)
         return false;
     if (!h_float)
         return h->argument == k->argument;
-    heads::float_key const p = heads::float_key_of(h->info, h->argument);
-    heads::float_key const q = heads::float_key_of(k->info, k->argument);
+    detail::heads::float_key const p = detail::heads::float_key_of(h->info, h->argument);
+    detail::heads::float_key const q = detail::heads::float_key_of(k->info, k->argument);
     if (p.nan || q.nan) {
         constexpr std::uint64_t significand =
-            (std::uint64_t{1} << heads::double_precision.significand_bits) - 1u;
+            (std::uint64_t{1} << detail::heads::double_precision.significand_bits) - 1u;
         return p.nan && q.nan && (p.widened & significand) == (q.widened & significand);
     }
     return p.value == q.value;
@@ -1102,8 +1102,8 @@ std::expected<bool, error> detail::validity::keys_equivalent(First const &first,
 
 struct lazy::resolved {
     lazy::top_level_item source;
-    heads::head h;
-    heads::decoder<true> d;
+    detail::heads::head h;
+    detail::heads::decoder<true> d;
     detail::validity::offset item_at;
 };
 
@@ -1113,8 +1113,8 @@ inline std::expected<lazy::resolved, error> lazy::resolve_container(lazy::top_le
     detail::validity::throw_logic_error_if(source.encoded.data() == nullptr,
                                            "cbor::lazy: the lazy holds no top-level item");
     for (;;) {
-        detail::validity::offset const at = heads::self_described_cbor_content_at(source.encoded, offset);
-        heads::decoder<true> d{detail::validity::subspan(source.encoded, at)};
+        detail::validity::offset const at = detail::heads::self_described_cbor_content_at(source.encoded, offset);
+        detail::heads::decoder<true> d{detail::validity::subspan(source.encoded, at)};
         auto const h = d.decode_head();
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
@@ -1142,7 +1142,7 @@ inline std::expected<lazy::resolved, error> lazy::resolve_tag_content(lazy::top_
         auto found = resolve_container(std::move(source), offset);
         if (!found) [[unlikely]]
             return found;
-        if (found->h.major != major_type::tag || !heads::is_tag_passed(found->h.argument)) [[likely]] {
+        if (found->h.major != major_type::tag || !detail::heads::is_tag_passed(found->h.argument)) [[likely]] {
             if (auto const r = detail::validity::check_pending_items(
                     found->h.major, found->h.info, found->h.argument, found->d.encoded.size());
                 !r) [[unlikely]]
@@ -1161,7 +1161,7 @@ inline std::expected<lazy::tag_content, error> lazy::read_typed_array_bytes(reso
     if (error const r = detail::validity::check_typed_array(found.h.argument, 0).error_or(error{});
         r != error{}) [[unlikely]]
         return std::unexpected(r);
-    heads::decoder<true> d = found.d;
+    detail::heads::decoder<true> d = found.d;
     auto const r = d.decode_head();
     if (!r) [[unlikely]]
         return std::unexpected(r.error());
@@ -1201,8 +1201,8 @@ inline lazy_elements::iterator &lazy_elements::iterator::operator++()
         --left;
         return *this;
     }
-    heads::decoder<false> d{detail::validity::subspan(top_level.encoded, offset)};
-    if (auto const r = well_formedness::skip_items(d, 1); !r) [[unlikely]] {
+    detail::heads::decoder<false> d{detail::validity::subspan(top_level.encoded, offset)};
+    if (auto const r = detail::well_formedness::skip_items(d, 1); !r) [[unlikely]] {
         failure = r.error();
         --left;
         return *this;
@@ -1219,12 +1219,12 @@ inline void lazy_entries::iterator::find_value()
 {
     if (left == 0)
         return;
-    heads::decoder<false> d{detail::validity::subspan(top_level.encoded, key)};
-    if (auto const r = well_formedness::skip_items(d, 1); !r) [[unlikely]] {
+    detail::heads::decoder<false> d{detail::validity::subspan(top_level.encoded, key)};
+    if (auto const r = detail::well_formedness::skip_items(d, 1); !r) [[unlikely]] {
         failure = r.error();
         return;
     }
-    if (auto const fits = detail::validity::check_bytes_left(heads::initial_byte_size, d.encoded.size());
+    if (auto const fits = detail::validity::check_bytes_left(detail::heads::initial_byte_size, d.encoded.size());
         !fits) [[unlikely]] {
         failure = fits.error();
         return;
@@ -1251,8 +1251,8 @@ inline lazy_entries::iterator &lazy_entries::iterator::operator++()
         --left;
         return *this;
     }
-    heads::decoder<false> d{detail::validity::subspan(top_level.encoded, value)};
-    if (auto const r = well_formedness::skip_items(d, 1); !r) [[unlikely]] {
+    detail::heads::decoder<false> d{detail::validity::subspan(top_level.encoded, value)};
+    if (auto const r = detail::well_formedness::skip_items(d, 1); !r) [[unlikely]] {
         failure = r.error();
         --left;
         return *this;
@@ -1274,7 +1274,7 @@ CBOR_ALWAYS_INLINE inline std::expected<lazy, error> lazy::view(std::shared_ptr<
     detail::validity::throw_logic_error_if_empty(
         owner, "cbor::lazy::view: the owner of the encoded data item is empty");
     std::string_view const content =
-        heads::self_described_cbor_content(std::string_view(std::span<char const>(encoded)));
+        detail::heads::self_described_cbor_content(std::string_view(std::span<char const>(encoded)));
     return lazy{lazy::top_level_item{std::move(owner), content}, 0, {}};
 }
 
@@ -1299,7 +1299,7 @@ template <class Key, class Entries>
     requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
 std::expected<typename Entries::iterator, error> lazy::find_key(resolved found, Key const key)
 {
-    if (heads::is_typed_array(found.h)) [[unlikely]]
+    if (detail::heads::is_typed_array(found.h)) [[unlikely]]
         if (auto const bytes = read_typed_array_bytes(found); !bytes) [[unlikely]]
             return std::unexpected(bytes.error());
     if (found.h.major != major_type::map) [[unlikely]]
@@ -1333,8 +1333,8 @@ std::expected<std::pair<Iterator, bool>, error> lazy::find_key(Iterator it, Last
         if (it.failure != error{}) [[unlikely]]
             return std::unexpected(it.failure);
         detail::validity::offset const key_at =
-            heads::self_described_cbor_content_at(it.top_level.encoded, it.key);
-        heads::decoder<true> probe{detail::validity::subspan(it.top_level.encoded, key_at)};
+            detail::heads::self_described_cbor_content_at(it.top_level.encoded, it.key);
+        detail::heads::decoder<true> probe{detail::validity::subspan(it.top_level.encoded, key_at)};
         auto const k = probe.decode_head();
         if (!k) [[unlikely]]
             return std::unexpected(k.error());
@@ -1358,13 +1358,13 @@ std::expected<std::pair<Iterator, bool>, error> lazy::find_key(Iterator it, Last
     return std::pair{std::move(it), false};
 }
 
-inline std::expected<bool, error> lazy::integer_key_equivalent(heads::decoder<true> const &probe,
-                                                               heads::head const &k, std::int64_t const key)
+inline std::expected<bool, error> lazy::integer_key_equivalent(detail::heads::decoder<true> const &probe,
+                                                               detail::heads::head const &k, std::int64_t const key)
 {
     std::uint64_t const magnitude =
         key < 0 ? ~static_cast<std::uint64_t>(key) : static_cast<std::uint64_t>(key);
-    if (heads::is_bignum(k.major, k.argument)) [[unlikely]] {
-        heads::decoder<true> d = probe;
+    if (detail::heads::is_bignum(k.major, k.argument)) [[unlikely]] {
+        detail::heads::decoder<true> d = probe;
         auto const read = d.decode_bignum(k.argument);
         if (!read) [[unlikely]]
             return std::unexpected(read.error());
@@ -1410,17 +1410,17 @@ inline std::expected<lazy::resolved, error> lazy::resolve(lazy const &node)
     if (!element) [[unlikely]]
         return std::unexpected(element.error());
     auto const h =
-        heads::decode_typed_array_element(node.typed_array_tag, *element, detail::validity::index{});
+        detail::heads::decode_typed_array_element(node.typed_array_tag, *element, detail::validity::index{});
     if (!h) [[unlikely]]
         return std::unexpected(h.error());
-    return resolved{node.top_level, *h, heads::decoder<true>{std::string_view{}},
+    return resolved{node.top_level, *h, detail::heads::decoder<true>{std::string_view{}},
                     detail::validity::offset{node.offset}};
 }
 
 template <std::integral Index>
 std::expected<lazy, error> lazy::select_index(resolved const &found, Index const i)
 {
-    if (heads::is_typed_array(found.h)) {
+    if (detail::heads::is_typed_array(found.h)) {
         auto const bytes = read_typed_array_bytes(found);
         if (!bytes) [[unlikely]]
             return std::unexpected(bytes.error());
@@ -1436,11 +1436,11 @@ std::expected<lazy, error> lazy::select_index(resolved const &found, Index const
     auto const position = detail::validity::check_index(i, found.h.argument);
     if (!position) [[unlikely]]
         return std::unexpected(position.error());
-    heads::decoder<true> d = found.d;
-    if (auto const r = well_formedness::skip_items(d, std::to_underlying(*position)); !r) [[unlikely]]
+    detail::heads::decoder<true> d = found.d;
+    if (auto const r = detail::well_formedness::skip_items(d, std::to_underlying(*position)); !r) [[unlikely]]
         return std::unexpected(r.error());
     detail::validity::offset const element = detail::validity::distance(found.source.encoded, d.encoded);
-    if (auto const target = heads::decoder<true>(d).decode_head(); !target) [[unlikely]]
+    if (auto const target = detail::heads::decoder<true>(d).decode_head(); !target) [[unlikely]]
         return std::unexpected(target.error());
     return lazy{found.source, std::to_underlying(element), {}};
 }
@@ -1451,7 +1451,7 @@ inline std::expected<std::uint64_t, error> lazy::size() const
     auto const found = resolve(*this);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
-    if (heads::is_typed_array(found->h))
+    if (detail::heads::is_typed_array(found->h))
         return read_typed_array_bytes(*found).transform([&](tag_content const &bytes) -> std::uint64_t {
             return bytes.bytes.size() / detail::validity::typed_array_element_size(found->h.argument);
         });
@@ -1479,28 +1479,28 @@ inline std::expected<cbor::type, error> lazy::type() const
         auto const found = resolve(*this);
         if (!found) [[unlikely]]
             return std::unexpected(found.error());
-        return heads::type_of(found->h.major, found->h.info, found->h.argument);
+        return detail::heads::type_of(found->h.major, found->h.info, found->h.argument);
     }
-    auto const h = heads::read_raw_head<true>(top_level.encoded, detail::validity::offset{offset});
+    auto const h = detail::heads::read_raw_head<true>(top_level.encoded, detail::validity::offset{offset});
     if (!h) [[unlikely]]
         return std::unexpected(h.error());
     if (auto const definite = detail::validity::check_definite_length(h->major, h->info); !definite)
         [[unlikely]]
         return std::unexpected(definite.error());
-    if (!heads::is_bignum(h->major, h->argument)) [[likely]]
-        return heads::type_of(h->major, h->info, h->argument);
-    auto const c = heads::read_raw_head<true>(top_level.encoded, h->at);
+    if (!detail::heads::is_bignum(h->major, h->argument)) [[likely]]
+        return detail::heads::type_of(h->major, h->info, h->argument);
+    auto const c = detail::heads::read_raw_head<true>(top_level.encoded, h->at);
     if (!c) [[unlikely]]
         return std::unexpected(c.error());
     if (c->major != major_type::byte_string ||
         !detail::validity::check_definite_length(c->major, c->info).has_value())
-        return heads::type_of(h->major, h->info, h->argument);
-    heads::decoder<true> d{detail::validity::subspan(top_level.encoded, h->at)};
+        return detail::heads::type_of(h->major, h->info, h->argument);
+    detail::heads::decoder<true> d{detail::validity::subspan(top_level.encoded, h->at)};
     auto const read = d.decode_bignum(h->argument);
     if (!read) [[unlikely]]
         return std::unexpected(read.error());
     if (!*read)
-        return heads::type_of(h->major, h->info, h->argument);
+        return detail::heads::type_of(h->major, h->info, h->argument);
     return h->argument == std::to_underlying(rfc8949::tag_number::negative_bignum)
                ? cbor::type::negative_integer
                : cbor::type::unsigned_integer;
@@ -1595,7 +1595,7 @@ inline std::expected<lazy_elements, error> lazy::elements() const
     auto const found = resolve(*this);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
-    if (heads::is_typed_array(found->h)) {
+    if (detail::heads::is_typed_array(found->h)) {
         auto const bytes = read_typed_array_bytes(*found);
         if (!bytes) [[unlikely]]
             return std::unexpected(bytes.error());
@@ -1643,7 +1643,7 @@ inline std::expected<owning<item>, error> lazy::clone() const
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
         std::string encoded;
-        heads::append_head(encoded, h->major, h->info, h->argument);
+        detail::heads::append_head(encoded, h->major, h->info, h->argument);
         return cbor::decode(encoded);
     }
     if (offset == 0)

@@ -5,6 +5,6 @@
 int main()
 {
     cbor::iov_writer writer;
-    cbor::encoding::binary_writer<cbor::iov_writer> out{writer};
+    cbor::detail::encoding::binary_writer<cbor::iov_writer> out{writer};
     static_cast<void>(out);
 }

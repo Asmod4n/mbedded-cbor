@@ -1016,7 +1016,7 @@ static void setup()
     bytes = &variant_message;
 #endif
 #if defined(ARM_S_BYTES_SPAN)
-    bytes_out.resize(doc.size() + cbor::encoding::item_size_max);
+    bytes_out.resize(doc.size() + cbor::detail::encoding::item_size_max);
 #endif
 #if defined(ARM_S_IOV_BYTES_REF)
     {

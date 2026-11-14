@@ -32,6 +32,13 @@
 namespace cbor
 {
 
+namespace detail
+{
+
+class encoding;
+
+}
+
 template <class T>
 class schema;
 
@@ -41,8 +48,6 @@ class structs;
 struct lazy;
 
 class path;
-
-class encoding;
 
 class iov_writer;
 
@@ -124,7 +129,7 @@ class CBOR_OWNER ref
 
     friend class path;
 
-    friend class encoding;
+    friend class detail::encoding;
 
     friend class iov_writer;
 

@@ -13,6 +13,8 @@ namespace cbor
 namespace detail
 {
 
+class heads;
+class reflection;
 class validity;
 
 }
@@ -36,9 +38,9 @@ class rfc8746
 
     friend class detail::validity;
 
-    friend class heads;
+    friend class detail::heads;
 
-    friend class reflection;
+    friend class detail::reflection;
 
     friend struct lazy;
 };

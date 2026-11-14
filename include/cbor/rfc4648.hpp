@@ -1,5 +1,5 @@
 // Gives the base16 and base64 alphabets and their group sizes in bits
-// to cbor::extended_diagnostic_notation.
+// to cbor::detail::extended_diagnostic_notation.
 // https://www.rfc-editor.org/rfc/rfc4648
 #pragma once
 
@@ -7,6 +7,13 @@
 
 namespace cbor
 {
+
+namespace detail
+{
+
+class extended_diagnostic_notation;
+
+}
 
 class rfc4648
 {
@@ -23,7 +30,7 @@ class rfc4648
     static constexpr std::string_view base64_alphabet =
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-    friend class extended_diagnostic_notation;
+    friend class detail::extended_diagnostic_notation;
 };
 
 }

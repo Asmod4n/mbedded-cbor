@@ -134,26 +134,26 @@ namespace detail
 template <bool Resolve>
 struct tree_decoder {
     zone &decoded;
-    heads::decoder<true> d;
+    detail::heads::decoder<true> d;
     std::size_t open = 0;
     std::vector<item const *> marks;
 
     std::expected<void, error> decode_item(std::pmr::vector<item> &into);
 
-    std::expected<void, error> decode_content(std::pmr::vector<item> &into, heads::head h, std::size_t marked = 0);
+    std::expected<void, error> decode_content(std::pmr::vector<item> &into, detail::heads::head h, std::size_t marked = 0);
 
     std::expected<void, error> decode_shareable(std::pmr::vector<item> &into, std::size_t marked);
 
     std::expected<void, error> decode_sharedref(std::pmr::vector<item> &into, std::size_t marked);
 
-    CBOR_ALWAYS_INLINE inline std::expected<void, error> decode_scalar(item &node, heads::head h);
+    CBOR_ALWAYS_INLINE inline std::expected<void, error> decode_scalar(item &node, detail::heads::head h);
 
     CBOR_NEVER_INLINE std::expected<bool, error> decode_bignum(std::pmr::vector<item> &into, std::uint64_t tag);
 };
 
 
 template <bool Resolve>
-std::expected<void, error> tree_decoder<Resolve>::decode_scalar(item &node, heads::head const h)
+std::expected<void, error> tree_decoder<Resolve>::decode_scalar(item &node, detail::heads::head const h)
 {
     switch (h.major) {
     case major_type::byte_string:
@@ -174,7 +174,7 @@ std::expected<void, error> tree_decoder<Resolve>::decode_scalar(item &node, head
         case rfc8949::simple_float_information::half_precision_float:
         case rfc8949::simple_float_information::single_precision_float:
         case rfc8949::simple_float_information::double_precision_float:
-            node.via.f64 = heads::decode_float(h.info, h.argument);
+            node.via.f64 = detail::heads::decode_float(h.info, h.argument);
             return {};
         default:
             node.via.simple_value = static_cast<simple_value>(h.argument);
@@ -188,11 +188,11 @@ std::expected<void, error> tree_decoder<Resolve>::decode_scalar(item &node, head
 template <bool Resolve>
 std::expected<bool, error> tree_decoder<Resolve>::decode_bignum(std::pmr::vector<item> &into, std::uint64_t const tag)
 {
-    auto const next = heads::read_raw_head<true>(d.encoded, detail::validity::offset{});
+    auto const next = detail::heads::read_raw_head<true>(d.encoded, detail::validity::offset{});
     if (!next || next->major != major_type::byte_string ||
         !detail::validity::check_definite_length(next->major, next->info).has_value())
         return false;
-    heads::decoder<true> const before = d;
+    detail::heads::decoder<true> const before = d;
     auto const read = d.decode_bignum(tag);
     if (!read) [[unlikely]]
         return std::unexpected(read.error());
@@ -203,7 +203,7 @@ std::expected<bool, error> tree_decoder<Resolve>::decode_bignum(std::pmr::vector
     into.emplace_back(item{tag == std::to_underlying(rfc8949::tag_number::negative_bignum)
                                ? cbor::type::negative_integer
                                : cbor::type::unsigned_integer,
-                           heads::preferred_argument_info(**read), {.u64 = **read}});
+                           detail::heads::preferred_argument_info(**read), {.u64 = **read}});
     return true;
 }
 
@@ -220,7 +220,7 @@ std::expected<void, error> tree_decoder<Resolve>::decode_item(std::pmr::vector<i
 
 template <bool Resolve>
 std::expected<void, error> tree_decoder<Resolve>::decode_content(std::pmr::vector<item> &into,
-                                                                 heads::head const head,
+                                                                 detail::heads::head const head,
                                                                  std::size_t const marked)
 {
     if constexpr (Resolve) {
@@ -231,7 +231,7 @@ std::expected<void, error> tree_decoder<Resolve>::decode_content(std::pmr::vecto
             [[unlikely]]
             return decode_sharedref(into, marked);
     }
-    if (heads::is_bignum(head.major, head.argument)) {
+    if (detail::heads::is_bignum(head.major, head.argument)) {
         auto const r = decode_bignum(into, head.argument);
         if (!r) [[unlikely]]
             return std::unexpected(r.error());
@@ -243,7 +243,7 @@ std::expected<void, error> tree_decoder<Resolve>::decode_content(std::pmr::vecto
         }
     }
     item &node = into.emplace_back(
-        item{heads::type_of(head.major, head.info, head.argument), head.info, {.u64 = head.argument}});
+        item{detail::heads::type_of(head.major, head.info, head.argument), head.info, {.u64 = head.argument}});
     if constexpr (Resolve)
         if (marked != 0) [[unlikely]]
             marks.insert(marks.end(), marked, &node);
@@ -283,7 +283,7 @@ std::expected<void, error> tree_decoder<Resolve>::decode_content(std::pmr::vecto
                     return r;
                 continue;
             }
-            item &child = nodes.emplace_back(item{heads::type_of(c->major, c->info, c->argument), c->info, {.u64 = c->argument}});
+            item &child = nodes.emplace_back(item{detail::heads::type_of(c->major, c->info, c->argument), c->info, {.u64 = c->argument}});
             if (auto const r = decode_scalar(child, *c); !r) [[unlikely]]
                 return std::unexpected(r.error());
         }
@@ -302,7 +302,7 @@ std::expected<void, error> tree_decoder<Resolve>::decode_content(std::pmr::vecto
         node.via.tag = {head.argument, &content};
         if (node.type == cbor::type::typed_array)
             if (auto const r = detail::validity::check_typed_array_content(
-                    head.argument, heads::major_type_of(content.type),
+                    head.argument, detail::heads::major_type_of(content.type),
                     content.type == cbor::type::byte_string ? content.via.bin.size() : std::size_t{});
                 !r) [[unlikely]]
                 return std::unexpected(r.error());
@@ -352,7 +352,7 @@ std::expected<void, error> tree_decoder<Resolve>::decode_sharedref(std::pmr::vec
                             .error_or(error{});
         c != error{}) [[unlikely]]
         return std::unexpected(c);
-    auto const index = value_sharing::check_sharedref_index(h->argument, marks.size());
+    auto const index = detail::value_sharing::check_sharedref_index(h->argument, marks.size());
     if (!index) [[unlikely]]
         return std::unexpected(h->argument - marks.size() < marked ? error::sharedref_not_defined : index.error());
     item const *const target = marks[std::to_underlying(*index)];
@@ -437,7 +437,7 @@ std::expected<decoded_tree, error> decode_tree(std::string_view const encoded)
  */
 inline std::expected<owning<item>, error> decode(std::string_view const encoded)
 {
-    auto const decoded = detail::decode_tree<true>(heads::self_described_cbor_content(encoded));
+    auto const decoded = detail::decode_tree<true>(detail::heads::self_described_cbor_content(encoded));
     if (!decoded) [[unlikely]]
         return std::unexpected(decoded.error());
     return decoded->tree;

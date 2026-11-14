@@ -18,6 +18,12 @@ namespace cbor
 namespace detail
 {
 
+class encoding;
+class extended_diagnostic_notation;
+class generic;
+class heads;
+class reflection;
+class well_formedness;
 class validity;
 
 template <bool>
@@ -131,17 +137,17 @@ class rfc8949
 
     friend class detail::validity;
 
-    friend class heads;
+    friend class detail::heads;
 
     friend class sequence_reader;
 
-    friend class well_formedness;
+    friend class detail::well_formedness;
 
-    friend class extended_diagnostic_notation;
+    friend class detail::extended_diagnostic_notation;
 
     friend class path;
 
-    friend class encoding;
+    friend class detail::encoding;
 
     friend struct lazy;
 
@@ -154,9 +160,9 @@ class rfc8949
     template <fixed_string Path>
     friend class is_singular_query;
 
-    friend class reflection;
+    friend class detail::reflection;
 
-    friend class generic;
+    friend class detail::generic;
 };
 
 }

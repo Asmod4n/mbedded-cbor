@@ -11,6 +11,13 @@
 namespace cbor
 {
 
+namespace detail
+{
+
+class reflection;
+
+}
+
 class packed_cbor
 {
     enum class tag_number : std::uint64_t {
@@ -23,7 +30,7 @@ class packed_cbor
 
     static constexpr std::size_t tag_content_elements = 2;
 
-    friend class reflection;
+    friend class detail::reflection;
 };
 
 }

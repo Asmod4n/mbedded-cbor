@@ -8,13 +8,21 @@
 namespace cbor
 {
 
+namespace detail
+{
+
+class generic;
+class reflection;
+
+}
+
 class rfc8943
 {
     enum class tag_number : std::uint64_t { full_date_string = 1004, days_since_epoch_date = 100 };
 
-    friend class reflection;
+    friend class detail::reflection;
 
-    friend class generic;
+    friend class detail::generic;
 };
 
 }

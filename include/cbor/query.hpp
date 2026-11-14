@@ -200,7 +200,7 @@ class path
 
     static constexpr bool function_name_char(char const c)
     {
-        return (c >= 'a' && c <= 'z') || c == '_' || extended_diagnostic_notation::digit(c);
+        return (c >= 'a' && c <= 'z') || c == '_' || detail::extended_diagnostic_notation::digit(c);
     }
 
     static constexpr std::expected<std::optional<integer>, error> read_int(std::string_view const text, std::size_t const at)
@@ -210,7 +210,7 @@ class path
         bool const negative = text[at] == '-';
         std::size_t const digits_at = at + (negative ? 1 : 0);
         std::size_t digits_end = digits_at;
-        while (digits_end < text.size() && extended_diagnostic_notation::digit(text[digits_end]))
+        while (digits_end < text.size() && detail::extended_diagnostic_notation::digit(text[digits_end]))
             ++digits_end;
         constexpr std::size_t exact_integer_digits = [] {
             std::array<char, std::numeric_limits<std::int64_t>::digits10 + 1> decimal_text{};
@@ -224,7 +224,7 @@ class path
             return std::nullopt;
         std::int64_t value = 0;
         for (char const d : std::span(text).subspan(digits_at, digits_end - digits_at))
-            value = value * extended_diagnostic_notation::decimal + (d - '0');
+            value = value * detail::extended_diagnostic_notation::decimal + (d - '0');
         if (value > rfc9535::exact_integer_max) [[unlikely]]
             return std::unexpected(error::invalid_path);
         return integer{negative ? -value : value, digits_end};
@@ -240,13 +240,13 @@ class path
         constexpr std::expected<std::size_t, error> parse_string(std::string_view const text, std::size_t const at)
         {
             std::string name;
-            auto const next = extended_diagnostic_notation::parse_quoted(text, at, name);
+            auto const next = detail::extended_diagnostic_notation::parse_quoted(text, at, name);
             if (!next) [[unlikely]]
                 return next;
             for (char const c : std::span(text).subspan(at + 1, (*next - 1) - (at + 1)))
-                if (static_cast<unsigned char>(c) < extended_diagnostic_notation::unescaped_first) [[unlikely]]
+                if (static_cast<unsigned char>(c) < detail::extended_diagnostic_notation::unescaped_first) [[unlikely]]
                     return std::unexpected(error::invalid_path);
-            if (auto const r = extended_diagnostic_notation::append_head(keys, major_type::text_string, name.size(), extended_diagnostic_notation::no_indicator); !r) [[unlikely]]
+            if (auto const r = detail::extended_diagnostic_notation::append_head(keys, major_type::text_string, name.size(), detail::extended_diagnostic_notation::no_indicator); !r) [[unlikely]]
                 return std::unexpected(r.error());
             keys += name;
             return next;
@@ -255,12 +255,12 @@ class path
         constexpr std::expected<std::size_t, error> parse_literal(std::string_view const text, std::size_t const at)
         {
             std::string literal;
-            extended_diagnostic_notation::backpatches patches;
-            auto const next = extended_diagnostic_notation::parse_literal({text, at}, literal, patches);
+            detail::extended_diagnostic_notation::backpatches patches;
+            auto const next = detail::extended_diagnostic_notation::parse_literal({text, at}, literal, patches);
             if (!next) [[unlikely]]
                 return next;
             patches.apply(literal);
-            if (auto const r = extended_diagnostic_notation::append_deterministically_encoded(
+            if (auto const r = detail::extended_diagnostic_notation::append_deterministically_encoded(
                     keys, literal, detail::validity::offset{});
                 !r) [[unlikely]]
                 return std::unexpected(r.error());
@@ -283,7 +283,7 @@ class path
                 return std::pair{*next, s};
             }
             if (c == '?') {
-                auto const e = parse_logical_or(text, extended_diagnostic_notation::blank_end(text, at + 1));
+                auto const e = parse_logical_or(text, detail::extended_diagnostic_notation::blank_end(text, at + 1));
                 if (!e) [[unlikely]]
                     return std::unexpected(e.error());
                 s.kind = selector::kind::filter;
@@ -293,21 +293,21 @@ class path
             auto const first = read_int(text, at);
             if (!first) [[unlikely]]
                 return std::unexpected(first.error());
-            std::size_t next = *first ? extended_diagnostic_notation::blank_end(text, (*first)->at) : at;
+            std::size_t next = *first ? detail::extended_diagnostic_notation::blank_end(text, (*first)->at) : at;
             if (next < text.size() && text[next] == ':') {
                 s.kind = selector::kind::slice;
                 if (*first)
                     s.start = (*first)->value;
-                next = extended_diagnostic_notation::blank_end(text, next + 1);
+                next = detail::extended_diagnostic_notation::blank_end(text, next + 1);
                 auto const end = read_int(text, next);
                 if (!end) [[unlikely]]
                     return std::unexpected(end.error());
                 if (*end) {
                     s.end = (*end)->value;
-                    next = extended_diagnostic_notation::blank_end(text, (*end)->at);
+                    next = detail::extended_diagnostic_notation::blank_end(text, (*end)->at);
                 }
                 if (next < text.size() && text[next] == ':') {
-                    next = extended_diagnostic_notation::blank_end(text, next + 1);
+                    next = detail::extended_diagnostic_notation::blank_end(text, next + 1);
                     auto const step = read_int(text, next);
                     if (!step) [[unlikely]]
                         return std::unexpected(step.error());
@@ -334,14 +334,14 @@ class path
         {
             std::vector<selector> chosen;
             for (;;) {
-                at = extended_diagnostic_notation::blank_end(text, at + 1);
+                at = detail::extended_diagnostic_notation::blank_end(text, at + 1);
                 if (auto const left = detail::validity::check_text_left(text, at, 1); !left) [[unlikely]]
                     return std::unexpected(left.error());
                 auto const s = parse_selector(text, at);
                 if (!s) [[unlikely]]
                     return std::unexpected(s.error());
                 chosen.push_back(s->second);
-                at = extended_diagnostic_notation::blank_end(text, s->first);
+                at = detail::extended_diagnostic_notation::blank_end(text, s->first);
                 if (!detail::validity::check_text_left(text, at, 1) || (text[at] != ',' && text[at] != ']'))
                     [[unlikely]]
                     return std::unexpected(error::invalid_path);
@@ -358,7 +358,7 @@ class path
             std::vector<selector> found_selectors;
             bool singular = true;
             for (;;) {
-                std::size_t const next = extended_diagnostic_notation::blank_end(text, at);
+                std::size_t const next = detail::extended_diagnostic_notation::blank_end(text, at);
                 if (!detail::validity::check_text_left(text, next, 1) ||
                     (text[next] != '.' && text[next] != '['))
                     break;
@@ -384,12 +384,12 @@ class path
                         ++at;
                     } else {
                         std::size_t end = at;
-                        while (end < text.size() && (name_first(text[end]) || (end != at && extended_diagnostic_notation::digit(text[end]))))
+                        while (end < text.size() && (name_first(text[end]) || (end != at && detail::extended_diagnostic_notation::digit(text[end]))))
                             ++end;
                         if (end == at) [[unlikely]]
                             return std::unexpected(error::invalid_path);
                         std::size_t const key_at = keys.size();
-                        if (auto const r = extended_diagnostic_notation::append_head(keys, major_type::text_string, end - at, extended_diagnostic_notation::no_indicator); !r) [[unlikely]]
+                        if (auto const r = detail::extended_diagnostic_notation::append_head(keys, major_type::text_string, end - at, detail::extended_diagnostic_notation::no_indicator); !r) [[unlikely]]
                             return std::unexpected(r.error());
                         std::ranges::copy(std::span(text).subspan(at, end - at), std::back_inserter(keys));
                         chosen.push_back({selector::kind::key, key_at, keys.size() - key_at, 0, std::nullopt, std::nullopt, 1, 0});
@@ -428,7 +428,7 @@ class path
                                                                          std::string_view const name)
         {
             std::vector<std::size_t> arguments;
-            std::size_t next = extended_diagnostic_notation::blank_end(text, at + name.size() + 1);
+            std::size_t next = detail::extended_diagnostic_notation::blank_end(text, at + name.size() + 1);
             if (next < text.size() && text[next] == ')')
                 ++next;
             else
@@ -437,13 +437,13 @@ class path
                     if (!a) [[unlikely]]
                         return a;
                     arguments.push_back(a->index);
-                    next = extended_diagnostic_notation::blank_end(text, a->at);
+                    next = detail::extended_diagnostic_notation::blank_end(text, a->at);
                     if (!detail::validity::check_text_left(text, next, 1) ||
                         (text[next] != ',' && text[next] != ')')) [[unlikely]]
                         return std::unexpected(error::invalid_path);
                     if (text[next++] == ')')
                         break;
-                    next = extended_diagnostic_notation::blank_end(text, next);
+                    next = detail::extended_diagnostic_notation::blank_end(text, next);
                 }
             if (arguments.size() != 1) [[unlikely]]
                 return std::unexpected(error::invalid_path);
@@ -517,10 +517,10 @@ class path
 
         constexpr std::expected<parsed_expression, error> parse_paren(std::string_view const text, std::size_t const at)
         {
-            auto const inner = parse_logical_or(text, extended_diagnostic_notation::blank_end(text, at + 1));
+            auto const inner = parse_logical_or(text, detail::extended_diagnostic_notation::blank_end(text, at + 1));
             if (!inner) [[unlikely]]
                 return inner;
-            std::size_t const close = extended_diagnostic_notation::blank_end(text, inner->at);
+            std::size_t const close = detail::extended_diagnostic_notation::blank_end(text, inner->at);
             if (!detail::validity::check_text_left(text, close, 1) || text[close] != ')') [[unlikely]]
                 return std::unexpected(error::invalid_path);
             return parsed_expression{close + 1, inner->index};
@@ -531,7 +531,7 @@ class path
             if (auto const left = detail::validity::check_text_left(text, at, 1); !left) [[unlikely]]
                 return std::unexpected(left.error());
             if (text[at] == '!') {
-                std::size_t const next = extended_diagnostic_notation::blank_end(text, at + 1);
+                std::size_t const next = detail::extended_diagnostic_notation::blank_end(text, at + 1);
                 bool const paren = next < text.size() && text[next] == '(';
                 auto const operand = paren ? parse_paren(text, next) : parse_primary(text, next);
                 if (!operand) [[unlikely]]
@@ -547,14 +547,14 @@ class path
             auto const left = parse_primary(text, at);
             if (!left) [[unlikely]]
                 return left;
-            std::size_t const next = extended_diagnostic_notation::blank_end(text, left->at);
+            std::size_t const next = detail::extended_diagnostic_notation::blank_end(text, left->at);
             auto const op = read_comparison_op(text, next);
             if (!op) {
                 if (expressions[left->index].kind != logical_expr::kind::filter_query) [[unlikely]]
                     return std::unexpected(error::invalid_path);
                 return left;
             }
-            auto const right = parse_primary(text, extended_diagnostic_notation::blank_end(text, next + op->second));
+            auto const right = parse_primary(text, detail::extended_diagnostic_notation::blank_end(text, next + op->second));
             if (!right) [[unlikely]]
                 return right;
             if (!comparable(left->index) || !comparable(right->index)) [[unlikely]]
@@ -571,11 +571,11 @@ class path
             parsed_expression chain = *first;
             std::optional<std::size_t> last;
             for (;;) {
-                std::size_t const next = extended_diagnostic_notation::blank_end(text, chain.at);
+                std::size_t const next = detail::extended_diagnostic_notation::blank_end(text, chain.at);
                 if (!std::string_view{std::span(text).subspan(next)}.starts_with(std::string_view("&&")))
                     return chain;
                 auto const right = parse_basic(
-                    text, extended_diagnostic_notation::blank_end(text, next + std::string_view("&&").size()));
+                    text, detail::extended_diagnostic_notation::blank_end(text, next + std::string_view("&&").size()));
                 if (!right) [[unlikely]]
                     return right;
                 std::size_t const left = last ? expressions[*last].second : chain.index;
@@ -600,11 +600,11 @@ class path
             parsed_expression chain = *first;
             std::optional<std::size_t> last;
             for (;;) {
-                std::size_t const next = extended_diagnostic_notation::blank_end(text, chain.at);
+                std::size_t const next = detail::extended_diagnostic_notation::blank_end(text, chain.at);
                 if (!std::string_view{std::span(text).subspan(next)}.starts_with(std::string_view("||")))
                     return chain;
                 auto const right = parse_logical_and(
-                    text, extended_diagnostic_notation::blank_end(text, next + std::string_view("||").size()));
+                    text, detail::extended_diagnostic_notation::blank_end(text, next + std::string_view("||").size()));
                 if (!right) [[unlikely]]
                     return right;
                 std::size_t const left = last ? expressions[*last].second : chain.index;
@@ -648,10 +648,10 @@ class path
 
     static constexpr double two_to_the_64 = 18446744073709551616.0;
 
-    static exact_number number_of(heads::head const &n);
+    static exact_number number_of(detail::heads::head const &n);
 
-    static std::expected<std::pair<heads::head, heads::decoder<true>>, error>
-    integer_of(heads::head const &n, heads::decoder<true> const content);
+    static std::expected<std::pair<detail::heads::head, detail::heads::decoder<true>>, error>
+    integer_of(detail::heads::head const &n, detail::heads::decoder<true> const content);
 
     static std::partial_ordering compare_numbers(exact_number const &a, exact_number const &b);
 
@@ -661,13 +661,13 @@ class path
     struct comparables {
         lazy::resolved x;
         lazy::resolved y;
-        heads::head h;
-        heads::head k;
+        detail::heads::head h;
+        detail::heads::head k;
     };
 
     static std::expected<comparables, error> comparables_of(lazy const &a, lazy const &b);
 
-    static constexpr bool is_number(heads::head const &h);
+    static constexpr bool is_number(detail::heads::head const &h);
 
     static std::expected<bool, error> value_equal(lazy const &a, lazy const &b);
 
@@ -759,8 +759,8 @@ class path
     static std::optional<std::expected<T, error>> try_walk_bytes(query_view const v, parsed_query const &top,
                                                                  std::string_view const encoded)
     {
-        heads::decoder<true> d{encoded};
-        heads::head h{};
+        detail::heads::decoder<true> d{encoded};
+        detail::heads::head h{};
         std::size_t step = 0;
         auto const typed_array_elements =
             [&d](std::uint64_t const tag) -> std::optional<std::expected<std::string_view, error>> {
@@ -779,11 +779,11 @@ class path
         for (;;) {
             for (;;) {
                 for (;;) {
-                    heads::decoder const before = d;
+                    detail::heads::decoder const before = d;
                     auto const t = d.decode_head();
                     if (!t) [[unlikely]]
                         return std::unexpected(t.error());
-                    if (t->major != major_type::tag || !heads::is_tag_passed(t->argument)) {
+                    if (t->major != major_type::tag || !detail::heads::is_tag_passed(t->argument)) {
                         d = before;
                         break;
                     }
@@ -803,7 +803,7 @@ class path
                 auto const embedded = d.decode_string(r->argument);
                 if (!embedded) [[unlikely]]
                     return std::unexpected(embedded.error());
-                d = heads::decoder<true>{*embedded};
+                d = detail::heads::decoder<true>{*embedded};
             }
             if (auto const r =
                     detail::validity::check_pending_items(h.major, h.info, h.argument, d.encoded.size());
@@ -817,11 +817,11 @@ class path
                 auto const position = detail::validity::check_index(each.index, h.argument);
                 if (!position) [[unlikely]]
                     return std::unexpected(position.error());
-                if (auto const r = well_formedness::skip_items(d, std::to_underlying(*position)); !r) [[unlikely]]
+                if (auto const r = detail::well_formedness::skip_items(d, std::to_underlying(*position)); !r) [[unlikely]]
                     return std::unexpected(r.error());
                 continue;
             }
-            if (each.kind == selector::kind::index && heads::is_typed_array(h)) {
+            if (each.kind == selector::kind::index && detail::heads::is_typed_array(h)) {
 #ifdef __STDCPP_FLOAT128_T__
                 if constexpr (std::is_same_v<T, std::float128_t>)
                     return std::nullopt;
@@ -839,7 +839,7 @@ class path
                     if (step == top.segment_count)
                         return std::as_bytes(detail::validity::element_span(
                             **elements, *position, detail::validity::typed_array_element_size(h.argument)));
-                auto const element = heads::decode_typed_array_element(h.argument, **elements, *position);
+                auto const element = detail::heads::decode_typed_array_element(h.argument, **elements, *position);
                 if (!element) [[unlikely]]
                     return std::unexpected(element.error());
                 if (step != top.segment_count) [[unlikely]]
@@ -847,14 +847,14 @@ class path
                 h = *element;
                 break;
             }
-            if (heads::is_typed_array(h)) [[unlikely]]
+            if (detail::heads::is_typed_array(h)) [[unlikely]]
                 if (auto const elements = typed_array_elements(h.argument); elements && !*elements) [[unlikely]]
                     return std::unexpected(elements->error());
             if (h.major != major_type::map) [[unlikely]]
                 return std::unexpected(error::not_indexable);
             std::string_view const key =
                 each.kind == selector::kind::key ? std::string_view(std::span(v.keys).subspan(each.key_at, each.key_size)) : std::string_view{};
-            heads::decoder<false> named{key};
+            detail::heads::decoder<false> named{key};
             if (each.kind == selector::kind::key) {
                 auto const n = named.decode_head();
                 if (!n) [[unlikely]]
@@ -864,10 +864,10 @@ class path
             }
             bool found = false;
             for (std::uint64_t i = 0; i < h.argument && !found; ++i) {
-                heads::decoder probe = d;
+                detail::heads::decoder probe = d;
                 probe.encoded = detail::validity::subspan(
                     probe.encoded,
-                    heads::self_described_cbor_content_at(probe.encoded, detail::validity::offset{}));
+                    detail::heads::self_described_cbor_content_at(probe.encoded, detail::validity::offset{}));
                 auto const k = probe.decode_head();
                 if (!k) [[unlikely]]
                     return std::unexpected(k.error());
@@ -884,10 +884,10 @@ class path
                         return std::nullopt;
                     found = *same;
                 }
-                if (auto const r = well_formedness::skip_items(d, 1); !r) [[unlikely]]
+                if (auto const r = detail::well_formedness::skip_items(d, 1); !r) [[unlikely]]
                     return std::unexpected(r.error());
                 if (!found)
-                    if (auto const r = well_formedness::skip_items(d, 1); !r) [[unlikely]]
+                    if (auto const r = detail::well_formedness::skip_items(d, 1); !r) [[unlikely]]
                         return std::unexpected(r.error());
             }
             if (!found) [[unlikely]]
@@ -932,7 +932,7 @@ class path
     template <class T>
     static std::expected<T, error> walk_bytes(query_view const v, parsed_query const &top, std::string_view const encoded)
     {
-        std::string_view const content = heads::self_described_cbor_content(encoded);
+        std::string_view const content = detail::heads::self_described_cbor_content(encoded);
         auto const walked = try_walk_bytes<T>(v, top, content);
         if (walked) [[likely]]
             return *walked;
@@ -1271,14 +1271,14 @@ inline std::expected<lazy, error> path::select_index(lazy const &node, std::int6
     auto found = lazy::resolve(node);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
-    if (found->h.major != major_type::array && !heads::is_typed_array(found->h))
+    if (found->h.major != major_type::array && !detail::heads::is_typed_array(found->h))
         return lazy::value_of(lazy::find_key(std::move(*found), index));
     return lazy::select_index(*found, index);
 }
 
 inline std::expected<lazy, error> path::find_key(lazy const &node, std::string_view const key)
 {
-    heads::decoder<false> text_key{key};
+    detail::heads::decoder<false> text_key{key};
     auto const literal = text_key.decode_head();
     node.throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
     auto found = lazy::resolve(node);
@@ -1291,26 +1291,26 @@ inline std::expected<lazy, error> path::find_key(lazy const &node, std::string_v
         return std::unexpected(error::not_indexable);
     for (std::uint64_t i = 0; i < h.argument; ++i) {
         detail::validity::offset const start = detail::validity::distance(source.encoded, d.encoded);
-        if (auto const r = well_formedness::skip_items(d, 1); !r) [[unlikely]]
+        if (auto const r = detail::well_formedness::skip_items(d, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
         auto const match = detail::validity::keys_equivalent(source, start, key, detail::validity::offset{});
         if (!match) [[unlikely]]
             return std::unexpected(match.error());
         if (*match)
             return lazy{source, std::to_underlying(detail::validity::distance(source.encoded, d.encoded)), {}};
-        if (auto const r = well_formedness::skip_items(d, 1); !r) [[unlikely]]
+        if (auto const r = detail::well_formedness::skip_items(d, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
             }
             return std::unexpected(error::key_not_found);
 }
 
-inline path::exact_number path::number_of(heads::head const &n)
+inline path::exact_number path::number_of(detail::heads::head const &n)
 {
     if (n.major == major_type::unsigned_integer)
         return {false, true, false, n.argument, 0.0};
     if (n.major == major_type::negative_integer)
         return {false, true, true, n.argument, 0.0};
-    double const d = heads::decode_float(n.info, n.argument);
+    double const d = detail::heads::decode_float(n.info, n.argument);
     if (std::isnan(d))
         return {true, false, false, 0, d};
     if (std::trunc(d) != d || d >= two_to_the_64 || d < -two_to_the_64)
@@ -1322,22 +1322,22 @@ inline path::exact_number path::number_of(heads::head const &n)
     return {false, true, true, static_cast<std::uint64_t>(-d) - 1u, 0.0};
 }
 
-inline std::expected<std::pair<heads::head, heads::decoder<true>>, error>
-path::integer_of(heads::head const &n, heads::decoder<true> const content)
+inline std::expected<std::pair<detail::heads::head, detail::heads::decoder<true>>, error>
+path::integer_of(detail::heads::head const &n, detail::heads::decoder<true> const content)
 {
-    if (!heads::is_bignum(n.major, n.argument))
+    if (!detail::heads::is_bignum(n.major, n.argument))
         return std::pair{n, content};
-    auto const c = heads::read_raw_head<true>(content.encoded, detail::validity::offset{});
+    auto const c = detail::heads::read_raw_head<true>(content.encoded, detail::validity::offset{});
     if (!c || c->major != major_type::byte_string ||
         !detail::validity::check_definite_length(c->major, c->info).has_value())
         return std::pair{n, content};
-    heads::decoder<true> d = content;
+    detail::heads::decoder<true> d = content;
     auto const read = d.decode_bignum(n.argument);
     if (!read) [[unlikely]]
         return std::unexpected(read.error());
     if (!*read)
         return std::pair{n, content};
-    return std::pair{heads::head{n.argument == std::to_underlying(rfc8949::tag_number::negative_bignum)
+    return std::pair{detail::heads::head{n.argument == std::to_underlying(rfc8949::tag_number::negative_bignum)
                                      ? major_type::negative_integer
                                      : major_type::unsigned_integer,
                                  0, **read},
@@ -1366,10 +1366,10 @@ inline std::partial_ordering path::compare_numbers(exact_number const &a, exact_
     else if (f.value < -two_to_the_64)
         order = std::partial_ordering::greater;
     else {
-        heads::head const whole =
+        detail::heads::head const whole =
             std::trunc(f.value) >= 0.0
-                ? heads::head{major_type::unsigned_integer, 0, static_cast<std::uint64_t>(std::trunc(f.value))}
-                : heads::head{major_type::negative_integer, 0, static_cast<std::uint64_t>(-std::trunc(f.value)) - 1u};
+                ? detail::heads::head{major_type::unsigned_integer, 0, static_cast<std::uint64_t>(std::trunc(f.value))}
+                : detail::heads::head{major_type::negative_integer, 0, static_cast<std::uint64_t>(-std::trunc(f.value)) - 1u};
         order = integers(i, number_of(whole));
         if (order == 0)
             order = f.value > std::trunc(f.value) ? std::partial_ordering::less : std::partial_ordering::greater;
@@ -1389,13 +1389,13 @@ path::intern_value(detail::canonical_ids &ids, lazy::top_level_item const &sourc
     auto const folded = integer_of(resolved->h, resolved->d);
     if (!folded) [[unlikely]]
         return std::unexpected(folded.error());
-    heads::head const h = folded->first;
-    heads::decoder<true> d = folded->second;
+    detail::heads::head const h = folded->first;
+    detail::heads::decoder<true> d = folded->second;
     auto const end = [&](detail::validity::offset const inner_end) -> std::expected<detail::validity::offset, error> {
         if (inner.encoded.data() == source.encoded.data())
             return inner_end;
-        heads::decoder<true> outer{detail::validity::subspan(source.encoded, at)};
-        if (auto const r = well_formedness::skip_items(outer, 1); !r) [[unlikely]]
+        detail::heads::decoder<true> outer{detail::validity::subspan(source.encoded, at)};
+        if (auto const r = detail::well_formedness::skip_items(outer, 1); !r) [[unlikely]]
             return std::unexpected(r.error());
         return detail::validity::distance(source.encoded, outer.encoded);
     };
@@ -1407,7 +1407,7 @@ path::intern_value(detail::canonical_ids &ids, lazy::top_level_item const &sourc
     };
     using kind = detail::canonical_ids::kind;
     bool const integral = h.major == major_type::unsigned_integer || h.major == major_type::negative_integer;
-    bool const floating = heads::is_floating_point(h.major, h.info);
+    bool const floating = detail::heads::is_floating_point(h.major, h.info);
     if (integral || floating) {
         exact_number const n = number_of(h);
         if (n.nan) {
@@ -1494,10 +1494,10 @@ inline std::expected<path::comparables, error> path::comparables_of(lazy const &
     return comparables{std::move(*x), std::move(*y), x_number->first, y_number->first};
 }
 
-constexpr bool path::is_number(heads::head const &h)
+constexpr bool path::is_number(detail::heads::head const &h)
 {
     return h.major == major_type::unsigned_integer || h.major == major_type::negative_integer ||
-           heads::is_floating_point(h.major, h.info);
+           detail::heads::is_floating_point(h.major, h.info);
 }
 
 inline std::expected<bool, error> path::value_equal(lazy const &a, lazy const &b)
@@ -1510,15 +1510,15 @@ inline std::expected<bool, error> path::value_equal(lazy const &a, lazy const &b
     auto const &[x, y, h, k] = *comparison;
     if (is_number(h) && is_number(k))
         return compare_numbers(number_of(h), number_of(k)) == 0;
-    if (h.major != k.major || heads::is_floating_point(h.major, h.info) || heads::is_floating_point(k.major, k.info))
+    if (h.major != k.major || detail::heads::is_floating_point(h.major, h.info) || detail::heads::is_floating_point(k.major, k.info))
         return false;
     detail::validity::offset const x_content = detail::validity::distance(x.source.encoded, x.d.encoded);
     detail::validity::offset const y_content = detail::validity::distance(y.source.encoded, y.d.encoded);
     switch (h.major) {
     case major_type::byte_string:
     case major_type::text_string: {
-        heads::decoder d = x.d;
-        heads::decoder e = y.d;
+        detail::heads::decoder d = x.d;
+        detail::heads::decoder e = y.d;
         auto const s = d.decode_string(h.argument);
         if (!s) [[unlikely]]
             return std::unexpected(s.error());
@@ -1582,8 +1582,8 @@ inline std::expected<bool, error> path::value_less(lazy const &a, lazy const &b)
                 return compare_numbers(number_of(h), number_of(k)) < 0;
             if (h.major != major_type::text_string || k.major != major_type::text_string)
                 return false;
-            heads::decoder d = x.d;
-            heads::decoder e = y.d;
+            detail::heads::decoder d = x.d;
+            detail::heads::decoder e = y.d;
             auto const s = d.decode_string(h.argument);
             if (!s) [[unlikely]]
                 return std::unexpected(s.error());
@@ -1607,7 +1607,7 @@ inline std::expected<path::comparable, error> path::length_of(comparable const &
         return std::uint64_t{found->h.argument};
     if (found->h.major != major_type::text_string)
         return std::monostate{};
-    heads::decoder d = found->d;
+    detail::heads::decoder d = found->d;
     auto const s = d.decode_string(found->h.argument);
     if (!s) [[unlikely]]
         return std::unexpected(s.error());
@@ -1863,7 +1863,7 @@ auto path::apply_compiled(Walk const &walk)
 inline lazy path::literal_of(std::string_view const keys, logical_expr const &e)
 {
     return lazy{lazy::top_level_item{std::shared_ptr<void const>{},
-                                     heads::self_described_cbor_content(
+                                     detail::heads::self_described_cbor_content(
                                          std::string_view(std::span(keys).subspan(e.first, e.second)))},
                 0,
                 {}};
@@ -1890,9 +1890,9 @@ inline std::expected<std::optional<path::exact_number>, error> path::number_in(l
     auto const folded = integer_of(found->h, found->d);
     if (!folded) [[unlikely]]
         return std::unexpected(folded.error());
-    heads::head const &h = folded->first;
+    detail::heads::head const &h = folded->first;
     if (h.major != major_type::unsigned_integer && h.major != major_type::negative_integer &&
-        !heads::is_floating_point(h.major, h.info))
+        !detail::heads::is_floating_point(h.major, h.info))
         return std::nullopt;
     return number_of(h);
 }
@@ -1969,7 +1969,7 @@ std::expected<bool, error> path::for_each_child(lazy const &node, F const &f)
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
     lazy const content{found->source, std::to_underlying(found->item_at), {}};
-    if (found->h.major == major_type::array || heads::is_typed_array(found->h)) {
+    if (found->h.major == major_type::array || detail::heads::is_typed_array(found->h)) {
         auto const elements = content.elements();
         if (!elements) [[unlikely]]
             return std::unexpected(elements.error());
@@ -2000,7 +2000,7 @@ std::expected<bool, error> path::for_each_sliced(lazy const &node, selector cons
     auto const found = lazy::resolve(node);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
-    if (s.step == 0 || (found->h.major != major_type::array && !heads::is_typed_array(found->h)))
+    if (s.step == 0 || (found->h.major != major_type::array && !detail::heads::is_typed_array(found->h)))
         return true;
     lazy const content{found->source, std::to_underlying(found->item_at), {}};
     auto const elements = content.elements();

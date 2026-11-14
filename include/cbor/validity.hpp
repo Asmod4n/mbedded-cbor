@@ -105,10 +105,15 @@ extern "C" [[gnu::weak]] char __stack_bottom[];
 namespace cbor
 {
 
-template <class T>
-class schema;
+namespace detail
+{
 
 class reflection;
+
+}
+
+template <class T>
+class schema;
 
 struct lazy;
 struct item;
@@ -483,7 +488,6 @@ public:
         return a + b;
     }
 
-
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_key_unique(bool const equal_key_seen)
     {
         if (equal_key_seen) [[unlikely]]
@@ -774,7 +778,7 @@ public:
         return {};
     }
 
-    friend class cbor::reflection;
+    friend class cbor::detail::reflection;
 
     template <class>
     friend class cbor::schema;

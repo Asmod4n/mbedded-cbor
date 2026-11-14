@@ -21,13 +21,22 @@
 namespace cbor
 {
 
+namespace detail
+{
+
+class generic;
 class reflection;
+
+}
 
 struct lazy;
 
 struct lazy_elements;
 
 struct lazy_entries;
+
+namespace detail
+{
 
 class well_formedness
 {
@@ -38,7 +47,7 @@ class well_formedness
     };
 
     template <bool Checked, class Marks>
-    static std::expected<void, error> skip_item(heads::decoder<Checked> &d, Marks &marks)
+    static std::expected<void, error> skip_item(detail::heads::decoder<Checked> &d, Marks &marks)
     {
         std::uint64_t pending = 1;
         while (pending != 0) {
@@ -94,7 +103,7 @@ class well_formedness
     }
 
     template <bool Checked>
-    CBOR_ALWAYS_INLINE static std::expected<void, error> skip_items(heads::decoder<Checked> &d,
+    CBOR_ALWAYS_INLINE static std::expected<void, error> skip_items(detail::heads::decoder<Checked> &d,
                                                                     std::uint64_t const count)
     {
         no_marks none;
@@ -104,7 +113,7 @@ class well_formedness
                     return r;
             return {};
         }
-        heads::decoder<false> unlimited{d.encoded};
+        detail::heads::decoder<false> unlimited{d.encoded};
         for (std::uint64_t i = 0; i < count; ++i)
             if (auto const r = skip_item(unlimited, none); !r) [[unlikely]]
                 return r;
@@ -112,22 +121,24 @@ class well_formedness
         return {};
     }
 
-    friend std::expected<std::size_t, error> item_size(std::string_view encoded);
+    friend std::expected<std::size_t, error> cbor::item_size(std::string_view encoded);
 
     friend class detail::validity;
 
-    friend struct lazy;
+    friend struct cbor::lazy;
 
-    friend struct lazy_elements;
+    friend struct cbor::lazy_elements;
 
-    friend struct lazy_entries;
+    friend struct cbor::lazy_entries;
 
-    friend class path;
+    friend class cbor::path;
 
-    friend class generic;
+    friend class detail::generic;
 
-    friend class reflection;
+    friend class detail::reflection;
 };
+
+}
 
 /**
  * @brief Gives the size in bytes of the first item in @p encoded.
@@ -155,9 +166,9 @@ class well_formedness
  */
 inline std::expected<std::size_t, error> item_size(std::string_view const encoded)
 {
-    heads::decoder<true> d{encoded};
-    well_formedness::no_marks none;
-    if (auto const r = well_formedness::skip_item(d, none); !r) [[unlikely]]
+    detail::heads::decoder<true> d{encoded};
+    detail::well_formedness::no_marks none;
+    if (auto const r = detail::well_formedness::skip_item(d, none); !r) [[unlikely]]
         return std::unexpected(r.error());
     return std::to_underlying(detail::validity::distance(encoded, d.encoded));
 }

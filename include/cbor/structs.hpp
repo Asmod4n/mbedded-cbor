@@ -65,18 +65,21 @@
 namespace cbor
 {
 
+namespace detail
+{
+
 class pfr
 {
     template <class U>
     static consteval bool struct_readable()
     {
         if constexpr (has_describe_members<U>) {
-            return reflection::description_valid<U>();
+            return detail::reflection::description_valid<U>();
 #ifdef __cpp_impl_reflection
         } else if constexpr (std::is_aggregate_v<U>) {
             static_assert(std::meta::bases_of(^^U, std::meta::access_context::unprivileged()).empty(),
                           "cbor::structs reads a class with a base class only through cbor::describe_members.");
-            static_assert(reflection::annotations_absent<U>(),
+            static_assert(detail::reflection::annotations_absent<U>(),
                           "cbor::structs reads an aggregate with no cbor::describe_members by its member "
                           "names; it takes no annotation.");
             return true;
@@ -102,7 +105,7 @@ class pfr
             return describe::members_count<U>;
 #ifdef __cpp_impl_reflection
         else
-            return reflection::data_members<U>().size();
+            return detail::reflection::data_members<U>().size();
 #elif defined(BOOST_PFR_ENABLED) && BOOST_PFR_ENABLED
         else
             return boost::pfr::tuple_size_v<U>;
@@ -120,7 +123,7 @@ class pfr
             return describe::get<I>(value);
         } else {
 #ifdef __cpp_impl_reflection
-            static constexpr auto members = reflection::data_members<V>();
+            static constexpr auto members = detail::reflection::data_members<V>();
             return value.[:members[I]:];
 #elif defined(BOOST_PFR_ENABLED) && BOOST_PFR_ENABLED
             return boost::pfr::get<I>(value);
@@ -135,7 +138,7 @@ class pfr
             return describe::key_of<U, I>;
 #ifdef __cpp_impl_reflection
         else
-            return map_key(reflection::key_of(reflection::data_members<U>()[I]));
+            return map_key(detail::reflection::key_of(detail::reflection::data_members<U>()[I]));
 #elif defined(BOOST_PFR_ENABLED) && BOOST_PFR_ENABLED
         else
             return map_key(boost::pfr::get_name<I, U>());
@@ -146,12 +149,12 @@ class pfr
     static consteval bool uses_allocator_aggregate()
     {
 #ifdef __cpp_impl_reflection
-        return reflection::uses_allocator_aggregate<E, Alloc>();
+        return detail::reflection::uses_allocator_aggregate<E, Alloc>();
 #else
         if constexpr (has_describe_members<E>)
             return false;
         else
-            return reflection::uses_allocator_aggregate<E, Alloc>();
+            return detail::reflection::uses_allocator_aggregate<E, Alloc>();
 #endif
     }
 
@@ -159,7 +162,7 @@ class pfr
     static constexpr E make_element(Alloc const &alloc, E &&from)
     {
         if constexpr (uses_allocator_aggregate<E, Alloc>())
-            return reflection::make_element<E>(alloc, std::move(from));
+            return detail::reflection::make_element<E>(alloc, std::move(from));
         else
             return std::make_obj_using_allocator<E>(alloc, std::move(from));
     }
@@ -186,19 +189,24 @@ class pfr
         }
     }
 
-    friend class generic;
+    friend class detail::generic;
 
     template <class>
-    friend class structs;
+    friend class cbor::structs;
 
     template <class T>
     friend void detail::copy_views_into_zone(T &value, detail::string_saver &zone);
 };
 
+}
+
+namespace detail
+{
+
 class generic
 {
     template <class>
-    friend class structs;
+    friend class cbor::structs;
 
     template <class T>
     friend void detail::copy_views_into_zone(T &value, detail::string_saver &zone);
@@ -216,7 +224,7 @@ class generic
     static constexpr bool is_std_array<std::array<E, N>> = true;
 
     template <class U>
-    static constexpr bool is_multimap = reflection::is_map<U> && requires(U &c, typename U::value_type const &v) {
+    static constexpr bool is_multimap = detail::reflection::is_map<U> && requires(U &c, typename U::value_type const &v) {
         { c.insert(v) } -> std::same_as<typename U::iterator>;
     };
 
@@ -266,7 +274,7 @@ class generic
     template <class E>
     static constexpr bool is_typed_array_element =
         std::same_as<E, std::byte> || std::same_as<E, float> || std::same_as<E, double> ||
-        reflection::is_typed_array_integer<E>;
+        detail::reflection::is_typed_array_integer<E>;
 
     template <class U>
     static constexpr bool is_typed_array = requires {
@@ -285,7 +293,7 @@ class generic
         else if constexpr (is_set<U>)
             return std::to_underlying(cbor_sets::tag_number::set);
         else
-            return reflection::typed_array_tag<typename U::value_type>();
+            return detail::reflection::typed_array_tag<typename U::value_type>();
     }
 
     template <class U>
@@ -326,7 +334,7 @@ class generic
     };
 
     template <class U, class V>
-    static std::expected<void, error> read_integer(heads::decoder<true> &d, V &out)
+    static std::expected<void, error> read_integer(detail::heads::decoder<true> &d, V &out)
     {
         auto const h = d.decode_head();
         if (!h) [[unlikely]]
@@ -343,19 +351,19 @@ class generic
     }
 
     template <class U>
-    static bool head_accepted(heads::head const &h)
+    static bool head_accepted(detail::heads::head const &h)
     {
         if constexpr (std::same_as<U, bool>)
-            return heads::is_boolean(h);
+            return detail::heads::is_boolean(h);
         else if constexpr (std::same_as<U, std::nullptr_t>)
-            return heads::is_null(h);
+            return detail::heads::is_null(h);
         else if constexpr (std::same_as<U, simple_value>)
-            return heads::is_simple_value(h);
+            return detail::heads::is_simple_value(h);
         else if constexpr (std::is_floating_point_v<U>)
-            return heads::is_floating_point(h.major, h.info);
-        else if constexpr (reflection::is_wide_integer<U>)
+            return detail::heads::is_floating_point(h.major, h.info);
+        else if constexpr (detail::reflection::is_wide_integer<U>)
             return h.major == major_type::unsigned_integer || h.major == major_type::negative_integer ||
-                   heads::is_bignum(h.major, h.argument);
+                   detail::heads::is_bignum(h.major, h.argument);
         else if constexpr (std::is_enum_v<U>)
             return head_accepted<std::underlying_type_t<U>>(h);
         else if constexpr (std::is_unsigned_v<U>)
@@ -369,27 +377,27 @@ class generic
             return h.major == major_type::text_string;
         else if constexpr (std::same_as<U, std::span<std::byte const>>)
             return h.major == major_type::byte_string;
-        else if constexpr (reflection::is_optional<U>)
-            return heads::is_null(h) || head_accepted<typename U::value_type>(h);
+        else if constexpr (detail::reflection::is_optional<U>)
+            return detail::heads::is_null(h) || head_accepted<typename U::value_type>(h);
         else if constexpr (is_tagged_item<U>)
             return h.major == major_type::tag && h.argument == U::number;
         else if constexpr (detail::is_std_variant<U>)
             return false;
         else if constexpr (is_std_tuple<U> || is_std_array<U>)
             return h.major == major_type::array && h.argument == std::tuple_size_v<U>;
-        else if constexpr (reflection::is_map<U>)
+        else if constexpr (detail::reflection::is_map<U>)
             return h.major == major_type::map;
         else if constexpr (requires(U const &c) { typename U::value_type; c.size(); })
             return h.major == major_type::array;
-        else if constexpr (reflection::tag_number_of<U>().has_value())
-            return h.major == major_type::tag && h.argument == *reflection::tag_number_of<U>();
+        else if constexpr (detail::reflection::tag_number_of<U>().has_value())
+            return h.major == major_type::tag && h.argument == *detail::reflection::tag_number_of<U>();
         else
             return h.major == major_type::map;
     }
 
 #ifdef CBOR_HAS_INT128
     template <class U>
-    static std::expected<void, error> read_wide_integer(heads::decoder<true> &d, U &out)
+    static std::expected<void, error> read_wide_integer(detail::heads::decoder<true> &d, U &out)
     {
         auto const h = d.decode_head();
         if (!h) [[unlikely]]
@@ -410,7 +418,7 @@ class generic
             auto const bytes = d.decode_string(b->argument);
             if (!bytes) [[unlikely]]
                 return std::unexpected(bytes.error());
-            std::span<char const> const digits = heads::magnitude_without_leading_zeros(std::span(*bytes));
+            std::span<char const> const digits = detail::heads::magnitude_without_leading_zeros(std::span(*bytes));
             if (error const c =
                     detail::validity::check_magnitude_size(digits.size(), sizeof(uint128)).error_or(error{});
                 c != error{}) [[unlikely]]
@@ -432,8 +440,8 @@ class generic
 #endif
 
     template <class U, std::size_t I = 0>
-    static std::expected<void, error> read_variant(value_sharing::sharing_decoder &d, U &out,
-                                                   heads::head const &h)
+    static std::expected<void, error> read_variant(detail::value_sharing::sharing_decoder &d, U &out,
+                                                   detail::heads::head const &h)
     {
         if constexpr (I == std::variant_size_v<U>) {
             return std::unexpected(error::incorrect_type);
@@ -446,12 +454,12 @@ class generic
     }
 
     template <class U>
-    static std::expected<void, error> read_generic(value_sharing::sharing_decoder &d, U &out)
+    static std::expected<void, error> read_generic(detail::value_sharing::sharing_decoder &d, U &out)
     {
-        using marked_value = value_sharing::sharing_decoder::marked_value;
+        using marked_value = detail::value_sharing::sharing_decoder::marked_value;
         std::size_t const first_mark = d.marked_values.size();
         for (;;) {
-            heads::decoder<true> look = d;
+            detail::heads::decoder<true> look = d;
             auto const h = look.decode_head();
             if (!h) [[unlikely]]
                 return std::unexpected(h.error());
@@ -470,7 +478,7 @@ class generic
             if (error const e = detail::validity::check_tag_content(h->argument, n->major).error_or(error{});
                 e != error{}) [[unlikely]]
                 return std::unexpected(e);
-            auto const index = value_sharing::check_sharedref_index(n->argument, d.marked_values.size());
+            auto const index = detail::value_sharing::check_sharedref_index(n->argument, d.marked_values.size());
             if (!index) [[unlikely]]
                 return std::unexpected(index.error());
             if (d.marked_values[std::to_underlying(*index)] == marked_value::in_skipped_member) [[unlikely]]
@@ -485,7 +493,7 @@ class generic
     }
 
     template <class U>
-    static std::expected<void, error> read_generic_value(value_sharing::sharing_decoder &d, U &out)
+    static std::expected<void, error> read_generic_value(detail::value_sharing::sharing_decoder &d, U &out)
     {
         if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
             return std::unexpected(r.error());
@@ -493,7 +501,7 @@ class generic
             auto const h = d.decode_head();
             if (!h) [[unlikely]]
                 return std::unexpected(h.error());
-            if (!heads::is_boolean(*h)) [[unlikely]]
+            if (!detail::heads::is_boolean(*h)) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
             out = h->info == std::to_underlying(simple_value::true_value);
             return {};
@@ -505,16 +513,16 @@ class generic
                 return std::unexpected(error::incorrect_type);
             out = static_cast<simple_value>(h->argument);
             return {};
-        } else if constexpr (reflection::is_wide_integer<U>) {
+        } else if constexpr (detail::reflection::is_wide_integer<U>) {
             return read_wide_integer(d, out);
         } else if constexpr (detail::is_std_variant<U>) {
-            heads::decoder<true> probe = d;
+            detail::heads::decoder<true> probe = d;
             auto const h = probe.decode_head();
             if (!h) [[unlikely]]
                 return std::unexpected(h.error());
             return read_variant(d, out, *h);
         } else if constexpr (std::is_enum_v<U>) {
-            static_assert(reflection::has_fixed_underlying_type<U>,
+            static_assert(detail::reflection::has_fixed_underlying_type<U>,
                           "cbor::structs reads an enum only with a fixed underlying type, because every value of that type is a value of the enum.");
             return read_integer<std::underlying_type_t<U>>(d, out);
         } else if constexpr (std::is_integral_v<U>) {
@@ -527,31 +535,31 @@ class generic
             if (!head_accepted<U>(*h)) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
             if constexpr (std::same_as<U, double>) {
-                out = heads::decode_float(h->info, h->argument);
+                out = detail::heads::decode_float(h->info, h->argument);
             } else if (h->info ==
                        std::to_underlying(rfc8949::simple_float_information::half_precision_float)) {
-                out = heads::float_decode_binary16(static_cast<std::uint16_t>(h->argument));
+                out = detail::heads::float_decode_binary16(static_cast<std::uint16_t>(h->argument));
             } else if (h->info ==
                        std::to_underlying(rfc8949::simple_float_information::single_precision_float)) {
                 out = std::bit_cast<float>(static_cast<std::uint32_t>(h->argument));
             } else {
                 double const value = std::bit_cast<double>(h->argument);
                 constexpr int narrow =
-                    heads::double_precision.significand_bits - heads::single_precision.significand_bits;
-                if (heads::is_nan(heads::double_precision, h->argument)
+                    detail::heads::double_precision.significand_bits - detail::heads::single_precision.significand_bits;
+                if (detail::heads::is_nan(detail::heads::double_precision, h->argument)
                         ? (h->argument & ((std::uint64_t{1} << narrow) - 1u)) != 0
-                        : heads::preferred_float_info(value) ==
+                        : detail::heads::preferred_float_info(value) ==
                               rfc8949::simple_float_information::double_precision_float) [[unlikely]]
                     return std::unexpected(error::number_out_of_range);
                 out = std::bit_cast<float>(static_cast<std::uint32_t>(
-                    heads::encode_float(rfc8949::simple_float_information::single_precision_float, value)));
+                    detail::heads::encode_float(rfc8949::simple_float_information::single_precision_float, value)));
             }
             return {};
         } else if constexpr (std::same_as<U, std::nullptr_t>) {
             auto const h = d.decode_head();
             if (!h) [[unlikely]]
                 return std::unexpected(h.error());
-            if (!heads::is_null(*h)) [[unlikely]]
+            if (!detail::heads::is_null(*h)) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
             return {};
         } else if constexpr (is_basic_string<U> || std::same_as<U, std::string_view>) {
@@ -586,10 +594,10 @@ class generic
             if (!head_accepted<U>(*t)) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
             return read_tag_content(d, out, *t);
-        } else if constexpr (reflection::is_optional<U>) {
-            if (detail::validity::bytes_fit(heads::initial_byte_size, d.encoded.size()) &&
+        } else if constexpr (detail::reflection::is_optional<U>) {
+            if (detail::validity::bytes_fit(detail::heads::initial_byte_size, d.encoded.size()) &&
                 d.encoded.front() ==
-                    heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::null))) {
+                    detail::heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::null))) {
                 d.encoded.remove_prefix(1);
                 out.reset();
                 return {};
@@ -626,7 +634,7 @@ class generic
                 return r;
             out.clear();
             for (std::uint64_t i = 0; i < h->argument; ++i) {
-                auto key = pfr::make_element<typename U::key_type>(out);
+                auto key = detail::pfr::make_element<typename U::key_type>(out);
                 if (auto const r = read_generic(d, key); !r) [[unlikely]]
                     return r;
                 if (auto const r = detail::validity::check_key_unique(out.contains(key)); !r) [[unlikely]]
@@ -641,14 +649,14 @@ class generic
                     !r) [[unlikely]]
                     return r;
                 for (std::uint64_t k = 0; k < values->argument; ++k) {
-                    auto value = pfr::make_element<typename U::mapped_type>(out);
+                    auto value = detail::pfr::make_element<typename U::mapped_type>(out);
                     if (auto const r = read_generic(d, value); !r) [[unlikely]]
                         return r;
                     out.emplace(key, std::move(value));
                 }
             }
             return {};
-        } else if constexpr (reflection::is_map<U>) {
+        } else if constexpr (detail::reflection::is_map<U>) {
             auto const h = d.decode_head();
             if (!h) [[unlikely]]
                 return std::unexpected(h.error());
@@ -660,10 +668,10 @@ class generic
                 return r;
             out.clear();
             for (std::uint64_t i = 0; i < h->argument; ++i) {
-                auto key = pfr::make_element<typename U::key_type>(out);
+                auto key = detail::pfr::make_element<typename U::key_type>(out);
                 if (auto const r = read_generic(d, key); !r) [[unlikely]]
                     return r;
-                auto value = pfr::make_element<typename U::mapped_type>(out);
+                auto value = detail::pfr::make_element<typename U::mapped_type>(out);
                 if (auto const r = read_generic(d, value); !r) [[unlikely]]
                     return r;
                 if constexpr (requires { out.try_emplace(std::move(key), std::move(value)); }) {
@@ -680,7 +688,7 @@ class generic
                                  out.size();
                              }) {
             using E = typename U::value_type;
-            pfr::check_default_constructible<E>();
+            detail::pfr::check_default_constructible<E>();
             static_assert(
                 requires(E &&e) { out.insert(out.end(), std::move(e)); },
                 "cbor::structs decodes a container with insert(end(), value); this container has none.");
@@ -697,13 +705,13 @@ class generic
             for (std::uint64_t i = 0; i < h->argument; ++i) {
                 if constexpr (requires {
                                   { out.emplace_back() } -> std::same_as<E &>;
-                                  requires !pfr::uses_allocator_aggregate<E, decltype(out.get_allocator())>();
+                                  requires !detail::pfr::uses_allocator_aggregate<E, decltype(out.get_allocator())>();
                               }) {
                     if (auto const r = read_generic(d, out.emplace_back()); !r)
                         [[unlikely]]
                         return r;
                 } else {
-                    E element = pfr::make_element<E>(out);
+                    E element = detail::pfr::make_element<E>(out);
                     if (auto const r = read_generic(d, element); !r) [[unlikely]]
                         return r;
                     out.insert(out.end(), std::move(element));
@@ -716,10 +724,10 @@ class generic
     }
 
     template <class U>
-    static std::expected<void, error> read_epoch(value_sharing::sharing_decoder &d, U &out)
+    static std::expected<void, error> read_epoch(detail::value_sharing::sharing_decoder &d, U &out)
     {
         using rep = std::chrono::seconds::rep;
-        heads::decoder<true> look = d;
+        detail::heads::decoder<true> look = d;
         auto const h = look.decode_head();
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
@@ -729,7 +737,7 @@ class generic
                 return std::unexpected(error::inadmissible_type_for_tag_content);
             d.encoded = look.encoded;
             auto const whole =
-                detail::validity::check_whole_number<rep>(heads::decode_float(h->info, h->argument));
+                detail::validity::check_whole_number<rep>(detail::heads::decode_float(h->info, h->argument));
             if (!whole) [[unlikely]]
                 return std::unexpected(whole.error());
             seconds = *whole;
@@ -744,7 +752,7 @@ class generic
 
 #if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
     template <class U, std::size_t N>
-    static std::expected<void, error> parse_text(value_sharing::sharing_decoder &d, U &out,
+    static std::expected<void, error> parse_text(detail::value_sharing::sharing_decoder &d, U &out,
                                                  std::array<char const *, N> const &formats)
     {
         auto const h = d.decode_head();
@@ -772,8 +780,8 @@ class generic
 #endif
 
     template <class U>
-    static std::expected<void, error> read_tag_content(value_sharing::sharing_decoder &d, U &out,
-                                                       heads::head const &tag)
+    static std::expected<void, error> read_tag_content(detail::value_sharing::sharing_decoder &d, U &out,
+                                                       detail::heads::head const &tag)
     {
         if constexpr (is_sys_time<U>) {
 #if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
@@ -808,7 +816,7 @@ class generic
                 return r;
             out.clear();
             for (std::uint64_t i = 0; i < h->argument; ++i) {
-                auto element = pfr::make_element<typename U::value_type>(out);
+                auto element = detail::pfr::make_element<typename U::value_type>(out);
                 if (auto const r = read_generic(d, element); !r) [[unlikely]]
                     return r;
                 if (auto const r = detail::validity::check_key_unique(!out.insert(std::move(element)).second);
@@ -839,26 +847,26 @@ class generic
             }
             std::span<char const> const elements(*bytes);
             for (std::size_t i = 0; i < count; ++i)
-                out[i] = reflection::read_typed_array_element<E>(
+                out[i] = detail::reflection::read_typed_array_element<E>(
                     elements.subspan(i * sizeof(E)).template first<sizeof(E)>());
             return {};
         }
     }
 
     template <class U, std::size_t I>
-    static bool key_matches(heads::head const &k, std::string_view const text)
+    static bool key_matches(detail::heads::head const &k, std::string_view const text)
     {
-        constexpr map_key key = pfr::key_of<I, U>();
+        constexpr map_key key = detail::pfr::key_of<I, U>();
         return k.major == key.major && k.argument == key.argument &&
                (key.major != major_type::text_string || text == key.text);
     }
 
     template <class U>
-    static std::expected<void, error> read_struct(value_sharing::sharing_decoder &d, U &out)
+    static std::expected<void, error> read_struct(detail::value_sharing::sharing_decoder &d, U &out)
     {
-        static_assert(pfr::struct_readable<U>());
-        constexpr std::size_t count = pfr::tuple_size_v<U>;
-        if constexpr (constexpr std::optional<std::uint64_t> tag = reflection::tag_number_of<U>(); tag.has_value()) {
+        static_assert(detail::pfr::struct_readable<U>());
+        constexpr std::size_t count = detail::pfr::tuple_size_v<U>;
+        if constexpr (constexpr std::optional<std::uint64_t> tag = detail::reflection::tag_number_of<U>(); tag.has_value()) {
             auto const t = d.decode_head();
             if (!t) [[unlikely]]
                 return std::unexpected(t.error());
@@ -876,22 +884,22 @@ class generic
             if (auto const unique = detail::validity::check_key_unique(found.test(I)); !unique) [[unlikely]]
                 return unique;
             found.set(I);
-            return read_generic(d, pfr::get<I>(out));
+            return read_generic(d, detail::pfr::get<I>(out));
         };
         for (std::uint64_t entry = 0; entry < h->argument; ++entry) {
             auto k = d.decode_head();
             if (!k) [[unlikely]]
                 return std::unexpected(k.error());
             std::string_view text;
-            if (heads::is_bignum(k->major, k->argument)) [[unlikely]] {
+            if (detail::heads::is_bignum(k->major, k->argument)) [[unlikely]] {
                 auto const read = d.decode_bignum(k->argument);
                 if (!read) [[unlikely]]
                     return std::unexpected(read.error());
                 if (*read)
-                    k = heads::head{k->argument == std::to_underlying(rfc8949::tag_number::negative_bignum)
+                    k = detail::heads::head{k->argument == std::to_underlying(rfc8949::tag_number::negative_bignum)
                                         ? major_type::negative_integer
                                         : major_type::unsigned_integer,
-                                    heads::preferred_argument_info(**read), **read};
+                                    detail::heads::preferred_argument_info(**read), **read};
             } else if (k->major == major_type::text_string) {
                 auto const t = d.decode_string(k->argument);
                 if (!t) [[unlikely]]
@@ -916,7 +924,7 @@ class generic
                         [[unlikely]]
                         return std::unexpected(p.error());
                     for (std::uint64_t i = 0; i < items; ++i)
-                        if (auto const e = well_formedness::skip_item(d, d); !e) [[unlikely]]
+                        if (auto const e = detail::well_formedness::skip_item(d, d); !e) [[unlikely]]
                             return e;
                 }
             }
@@ -928,7 +936,7 @@ class generic
                      (static_cast<void>(r = read_member(std::integral_constant<std::size_t, I>{})), true)));
             }(std::make_index_sequence<count>());
             if (!matched) {
-                if (auto const s = well_formedness::skip_item(d, d); !s) [[unlikely]]
+                if (auto const s = detail::well_formedness::skip_item(d, d); !s) [[unlikely]]
                     return s;
             } else if (!r) [[unlikely]] {
                 return r;
@@ -936,7 +944,7 @@ class generic
         }
         bool const missing = [&]<std::size_t... I>(std::index_sequence<I...>) {
             return (false || ... ||
-                    (!reflection::is_optional<std::remove_cvref_t<decltype(pfr::get<I>(out))>> &&
+                    (!detail::reflection::is_optional<std::remove_cvref_t<decltype(detail::pfr::get<I>(out))>> &&
                      !found.test(I)));
         }(std::make_index_sequence<count>());
         if (missing) [[unlikely]]
@@ -945,15 +953,15 @@ class generic
     }
 
     template <class U>
-    static consteval std::array<std::size_t, pfr::tuple_size_v<U>> key_order()
+    static consteval std::array<std::size_t, detail::pfr::tuple_size_v<U>> key_order()
     {
-        constexpr std::size_t count = pfr::tuple_size_v<U>;
+        constexpr std::size_t count = detail::pfr::tuple_size_v<U>;
         std::array<map_key, count> const keys = [&]<std::size_t... I>(std::index_sequence<I...>) {
-            return std::array<map_key, count>{pfr::key_of<I, U>()...};
+            return std::array<map_key, count>{detail::pfr::key_of<I, U>()...};
         }(std::make_index_sequence<count>());
-        std::array<std::size_t, count> const order = reflection::keys_sorted(keys);
+        std::array<std::size_t, count> const order = detail::reflection::keys_sorted(keys);
         if (std::ranges::adjacent_find(order, {}, [&](std::size_t const i) {
-                return reflection::key_encoding_of(keys[i]);
+                return detail::reflection::key_encoding_of(keys[i]);
             }) != std::ranges::end(order))
             std::unreachable();
         return order;
@@ -962,7 +970,7 @@ class generic
     template <class U>
     static bool member_present(U const &value)
     {
-        if constexpr (reflection::is_optional<U>)
+        if constexpr (detail::reflection::is_optional<U>)
             return value.has_value();
         else
             return true;
@@ -971,13 +979,13 @@ class generic
     template <std::floating_point F>
     static std::size_t float_size(F const value)
     {
-        switch (heads::preferred_float_info(value)) {
+        switch (detail::heads::preferred_float_info(value)) {
         case rfc8949::simple_float_information::half_precision_float:
-            return heads::initial_byte_size + sizeof(std::uint16_t);
+            return detail::heads::initial_byte_size + sizeof(std::uint16_t);
         case rfc8949::simple_float_information::single_precision_float:
-            return heads::initial_byte_size + sizeof(std::uint32_t);
+            return detail::heads::initial_byte_size + sizeof(std::uint32_t);
         default:
-            return heads::initial_byte_size + sizeof(std::uint64_t);
+            return detail::heads::initial_byte_size + sizeof(std::uint64_t);
         }
     }
 
@@ -988,22 +996,22 @@ class generic
             if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
                 return std::unexpected(r.error());
         if constexpr (std::same_as<U, bool> || std::same_as<U, std::nullptr_t>) {
-            return heads::initial_byte_size;
+            return detail::heads::initial_byte_size;
         } else if constexpr (std::same_as<U, simple_value>) {
-            return heads::head_size(std::to_underlying(value));
+            return detail::heads::head_size(std::to_underlying(value));
 #ifdef CBOR_HAS_INT128
-        } else if constexpr (reflection::is_wide_integer<U>) {
+        } else if constexpr (detail::reflection::is_wide_integer<U>) {
             bool negative = false;
             if constexpr (std::same_as<U, int128>)
                 negative = value < 0;
             uint128 const magnitude =
                 negative ? ~static_cast<uint128>(value) : static_cast<uint128>(value);
             if (magnitude <= std::numeric_limits<std::uint64_t>::max())
-                return heads::head_size(static_cast<std::uint64_t>(magnitude));
+                return detail::heads::head_size(static_cast<std::uint64_t>(magnitude));
             std::size_t const digits =
                 sizeof(uint128) - static_cast<std::size_t>(std::countl_zero(static_cast<std::uint64_t>(magnitude >> std::numeric_limits<std::uint64_t>::digits))) /
                                       std::numeric_limits<std::uint8_t>::digits;
-            return heads::initial_byte_size + heads::head_size(digits) + digits;
+            return detail::heads::initial_byte_size + detail::heads::head_size(digits) + digits;
 #endif
         } else if constexpr (detail::is_std_variant<U>) {
             return std::visit([](auto const &e) { return generic_size(e); }, value);
@@ -1011,10 +1019,10 @@ class generic
             return generic_size(std::to_underlying(value));
         } else if constexpr (std::is_integral_v<U>) {
             if constexpr (std::is_signed_v<U>)
-                return heads::head_size(value < 0 ? static_cast<std::uint64_t>(-1 - static_cast<std::int64_t>(value))
+                return detail::heads::head_size(value < 0 ? static_cast<std::uint64_t>(-1 - static_cast<std::int64_t>(value))
                                            : static_cast<std::uint64_t>(value));
             else
-                return heads::head_size(value);
+                return detail::heads::head_size(value);
         } else if constexpr (std::is_floating_point_v<U>) {
             static_assert(std::same_as<U, float> || std::same_as<U, double>, "cbor::structs reads and writes float and double only.");
             return float_size(value);
@@ -1022,24 +1030,24 @@ class generic
             auto const content = tag_content_size(value);
             if (!content) [[unlikely]]
                 return content;
-            return detail::validity::checked_add(heads::head_size(tag_of_standard_type<U>()), *content)
+            return detail::validity::checked_add(detail::heads::head_size(tag_of_standard_type<U>()), *content)
                 .transform_error(detail::validity::writer_error);
         } else if constexpr (is_basic_string<U> || std::same_as<U, std::string_view> ||
                              std::same_as<U, std::span<std::byte const>>) {
-            return detail::validity::checked_add(heads::head_size(value.size()), value.size())
+            return detail::validity::checked_add(detail::heads::head_size(value.size()), value.size())
                 .transform_error(detail::validity::writer_error);
-        } else if constexpr (reflection::is_optional<U>) {
+        } else if constexpr (detail::reflection::is_optional<U>) {
             if (!value)
-                return heads::initial_byte_size;
+                return detail::heads::initial_byte_size;
             return generic_size(*value);
         } else if constexpr (is_tagged_item<U>) {
             auto const content = generic_size(value.content);
             if (!content) [[unlikely]]
                 return content;
-            return detail::validity::checked_add(heads::head_size(U::number), *content)
+            return detail::validity::checked_add(detail::heads::head_size(U::number), *content)
                 .transform_error(detail::validity::writer_error);
         } else if constexpr (is_std_tuple<U> || is_std_array<U>) {
-            std::expected<std::size_t, error> size = heads::head_size(std::tuple_size_v<U>);
+            std::expected<std::size_t, error> size = detail::heads::head_size(std::tuple_size_v<U>);
             std::apply(
                 [&](auto const &...e) {
                     ((size = size.and_then([&](std::size_t const sum) {
@@ -1055,7 +1063,7 @@ class generic
         } else if constexpr (is_multimap<U>) {
             auto groups = key_groups(value);
             std::expected<std::size_t, error> size =
-                heads::head_size(std::ranges::fold_left(groups, std::uint64_t{0}, element_count));
+                detail::heads::head_size(std::ranges::fold_left(groups, std::uint64_t{0}, element_count));
             for (auto const group : groups) {
                 size = size.and_then([&](std::size_t const sum) {
                     return generic_size(group.front().first).and_then([&](std::size_t const n) {
@@ -1063,7 +1071,7 @@ class generic
                             .transform_error(detail::validity::writer_error)
                             .and_then([&group](std::size_t const total) {
                                 return detail::validity::checked_add(
-                                           total, heads::head_size(std::ranges::fold_left(
+                                           total, detail::heads::head_size(std::ranges::fold_left(
                                                       group, std::uint64_t{0}, element_count)))
                                     .transform_error(detail::validity::writer_error);
                             });
@@ -1080,8 +1088,8 @@ class generic
                     return size;
             }
             return size;
-        } else if constexpr (reflection::is_map<U>) {
-            std::size_t size = heads::head_size(value.size());
+        } else if constexpr (detail::reflection::is_map<U>) {
+            std::size_t size = detail::heads::head_size(value.size());
             for (auto const &[k, v] : value) {
                 auto const key = generic_size(k).and_then([size](std::size_t const n) {
                     return detail::validity::checked_add(size, n).transform_error(
@@ -1104,23 +1112,23 @@ class generic
                              }) {
             return elements_size(value);
         } else {
-            static_assert(pfr::struct_readable<U>());
+            static_assert(detail::pfr::struct_readable<U>());
             std::size_t present = 0;
             auto const member_size =
                 [&]<std::size_t I>(std::integral_constant<std::size_t, I>,
                                    std::size_t const sum) -> std::expected<std::size_t, error> {
-                auto const &m = pfr::get<I>(value);
+                auto const &m = detail::pfr::get<I>(value);
                 if (!member_present(m))
                     return sum;
                 ++present;
-                constexpr map_key key = pfr::key_of<I, U>();
+                constexpr map_key key = detail::pfr::key_of<I, U>();
                 auto const keyed =
-                    detail::validity::checked_add(sum, heads::head_size(key.argument) + key.text.size())
+                    detail::validity::checked_add(sum, detail::heads::head_size(key.argument) + key.text.size())
                         .transform_error(detail::validity::writer_error);
                 if (!keyed) [[unlikely]]
                     return keyed;
                 std::expected<std::size_t, error> encoded_size;
-                if constexpr (reflection::is_optional<std::remove_cvref_t<decltype(m)>>)
+                if constexpr (detail::reflection::is_optional<std::remove_cvref_t<decltype(m)>>)
                     encoded_size = generic_size(*m);
                 else
                     encoded_size = generic_size(m);
@@ -1135,12 +1143,12 @@ class generic
                      return member_size(std::integral_constant<std::size_t, I>{}, sum);
                  })),
                  ...);
-            }(std::make_index_sequence<pfr::tuple_size_v<U>>());
+            }(std::make_index_sequence<detail::pfr::tuple_size_v<U>>());
             if (!size) [[unlikely]]
                 return size;
-            std::size_t head = heads::head_size(present);
-            if constexpr (constexpr std::optional<std::uint64_t> tag = reflection::tag_number_of<U>(); tag.has_value())
-                head += heads::head_size(*tag);
+            std::size_t head = detail::heads::head_size(present);
+            if constexpr (constexpr std::optional<std::uint64_t> tag = detail::reflection::tag_number_of<U>(); tag.has_value())
+                head += detail::heads::head_size(*tag);
             return detail::validity::checked_add(*size, head).transform_error(detail::validity::writer_error);
         }
     }
@@ -1148,7 +1156,7 @@ class generic
     template <class U>
     static std::expected<std::size_t, error> elements_size(U const &value)
     {
-        std::size_t size = heads::head_size(value.size());
+        std::size_t size = detail::heads::head_size(value.size());
         for (typename U::value_type const &e : value) {
             auto const sum = generic_size(e).and_then([size](std::size_t const n) {
                 return detail::validity::checked_add(size, n).transform_error(detail::validity::writer_error);
@@ -1179,7 +1187,7 @@ class generic
                                    .transform_error(detail::validity::writer_error);
             if (!bytes) [[unlikely]]
                 return bytes;
-            return detail::validity::checked_add(heads::head_size(*bytes), *bytes)
+            return detail::validity::checked_add(detail::heads::head_size(*bytes), *bytes)
                 .transform_error(detail::validity::writer_error);
         }
     }
@@ -1199,33 +1207,33 @@ class generic
                 return std::unexpected(r.error());
         if constexpr (std::same_as<U, bool>) {
             out.subspan(at).front() =
-                heads::initial_byte(major_type::simple_float, value ? std::to_underlying(simple_value::true_value)
+                detail::heads::initial_byte(major_type::simple_float, value ? std::to_underlying(simple_value::true_value)
                                                                     : std::to_underlying(simple_value::false_value));
-            return at + heads::initial_byte_size;
+            return at + detail::heads::initial_byte_size;
         } else if constexpr (std::same_as<U, std::nullptr_t>) {
-            out.subspan(at).front() = heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::null));
-            return at + heads::initial_byte_size;
+            out.subspan(at).front() = detail::heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::null));
+            return at + detail::heads::initial_byte_size;
         } else if constexpr (std::same_as<U, simple_value>) {
-            return at + heads::write_head(out, at, major_type::simple_float, std::to_underlying(value));
+            return at + detail::heads::write_head(out, at, major_type::simple_float, std::to_underlying(value));
 #ifdef CBOR_HAS_INT128
-        } else if constexpr (reflection::is_wide_integer<U>) {
+        } else if constexpr (detail::reflection::is_wide_integer<U>) {
             bool negative = false;
             if constexpr (std::same_as<U, int128>)
                 negative = value < 0;
             uint128 const magnitude =
                 negative ? ~static_cast<uint128>(value) : static_cast<uint128>(value);
             if (magnitude <= std::numeric_limits<std::uint64_t>::max())
-                return at + heads::write_head(out, at,
+                return at + detail::heads::write_head(out, at,
                                        negative ? major_type::negative_integer : major_type::unsigned_integer,
                                        static_cast<std::uint64_t>(magnitude));
             std::size_t const digits =
                 sizeof(uint128) - static_cast<std::size_t>(std::countl_zero(static_cast<std::uint64_t>(magnitude >> std::numeric_limits<std::uint64_t>::digits))) /
                                       std::numeric_limits<std::uint8_t>::digits;
-            at += heads::write_head(out, at, major_type::tag,
+            at += detail::heads::write_head(out, at, major_type::tag,
                                     std::to_underlying(negative ? rfc8949::tag_number::negative_bignum
                                                                 : rfc8949::tag_number::unsigned_bignum));
-            at += heads::write_head(out, at, major_type::byte_string, digits);
-            auto const bytes = heads::big_endian(magnitude);
+            at += detail::heads::write_head(out, at, major_type::byte_string, digits);
+            auto const bytes = detail::heads::big_endian(magnitude);
             return write_bytes(out, at, std::span<char const>(bytes).last(digits));
 #endif
         } else if constexpr (detail::is_std_variant<U>) {
@@ -1235,34 +1243,34 @@ class generic
         } else if constexpr (std::is_integral_v<U>) {
             if constexpr (std::is_signed_v<U>) {
                 if (value < 0)
-                    return at + heads::write_head(out, at, major_type::negative_integer,
+                    return at + detail::heads::write_head(out, at, major_type::negative_integer,
                                            static_cast<std::uint64_t>(-1 - static_cast<std::int64_t>(value)));
             }
-            return at + heads::write_head(out, at, major_type::unsigned_integer, static_cast<std::uint64_t>(value));
+            return at + detail::heads::write_head(out, at, major_type::unsigned_integer, static_cast<std::uint64_t>(value));
         } else if constexpr (std::is_floating_point_v<U>) {
-            rfc8949::simple_float_information const info = heads::preferred_float_info(value);
-            return at + heads::write_head(out, at, major_type::simple_float, std::to_underlying(info), heads::encode_float(info, value));
+            rfc8949::simple_float_information const info = detail::heads::preferred_float_info(value);
+            return at + detail::heads::write_head(out, at, major_type::simple_float, std::to_underlying(info), detail::heads::encode_float(info, value));
         } else if constexpr (is_basic_string<U> || std::same_as<U, std::string_view>) {
-            at += heads::write_head(out, at, major_type::text_string, value.size());
+            at += detail::heads::write_head(out, at, major_type::text_string, value.size());
             return write_bytes(out, at, value);
         } else if constexpr (std::same_as<U, std::span<std::byte const>>) {
-            at += heads::write_head(out, at, major_type::byte_string, value.size());
+            at += detail::heads::write_head(out, at, major_type::byte_string, value.size());
             std::ranges::copy(value, std::as_writable_bytes(out.subspan(at, value.size())).begin());
             return at + value.size();
         } else if constexpr (is_tagged_standard_type<U>) {
-            at += heads::write_head(out, at, major_type::tag, tag_of_standard_type<U>());
+            at += detail::heads::write_head(out, at, major_type::tag, tag_of_standard_type<U>());
             return write_tag_content(out, at, value);
-        } else if constexpr (reflection::is_optional<U>) {
+        } else if constexpr (detail::reflection::is_optional<U>) {
             if (!value) {
-                out.subspan(at).front() = heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::null));
-                return at + heads::initial_byte_size;
+                out.subspan(at).front() = detail::heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::null));
+                return at + detail::heads::initial_byte_size;
             }
             return write_generic(out, at, *value);
         } else if constexpr (is_tagged_item<U>) {
-            at += heads::write_head(out, at, major_type::tag, U::number);
+            at += detail::heads::write_head(out, at, major_type::tag, U::number);
             return write_generic(out, at, value.content);
         } else if constexpr (is_std_tuple<U> || is_std_array<U>) {
-            at += heads::write_head(out, at, major_type::array, std::tuple_size_v<U>);
+            at += detail::heads::write_head(out, at, major_type::array, std::tuple_size_v<U>);
             std::expected<std::size_t, error> written = at;
             std::apply([&](auto const &...e) {
                 ((written = written.and_then([&](std::size_t const w) { return write_generic(out, w, e); })), ...);
@@ -1270,14 +1278,14 @@ class generic
             return written;
         } else if constexpr (is_multimap<U>) {
             auto groups = key_groups(value);
-            at += heads::write_head(out, at, major_type::map,
+            at += detail::heads::write_head(out, at, major_type::map,
                                     std::ranges::fold_left(groups, std::uint64_t{0}, element_count));
             for (auto const group : groups) {
                 auto const key = write_generic(out, at, group.front().first);
                 if (!key) [[unlikely]]
                     return key;
                 at = *key;
-                at += heads::write_head(out, at, major_type::array,
+                at += detail::heads::write_head(out, at, major_type::array,
                                         std::ranges::fold_left(group, std::uint64_t{0}, element_count));
                 for (auto const &[k, v] : group) {
                     auto const mapped = write_generic(out, at, v);
@@ -1287,8 +1295,8 @@ class generic
                 }
             }
             return at;
-        } else if constexpr (reflection::is_map<U>) {
-            at += heads::write_head(out, at, major_type::map, value.size());
+        } else if constexpr (detail::reflection::is_map<U>) {
+            at += detail::heads::write_head(out, at, major_type::map, value.size());
             for (auto const &[k, v] : value) {
                 auto const pair = write_generic(out, at, k).and_then(
                     [&](std::size_t const w) { return write_generic(out, w, v); });
@@ -1303,14 +1311,14 @@ class generic
                              }) {
             return write_elements(out, at, value);
         } else {
-            static_assert(pfr::struct_readable<U>());
-            if constexpr (constexpr std::optional<std::uint64_t> tag = reflection::tag_number_of<U>(); tag.has_value())
-                at += heads::write_head(out, at, major_type::tag, *tag);
+            static_assert(detail::pfr::struct_readable<U>());
+            if constexpr (constexpr std::optional<std::uint64_t> tag = detail::reflection::tag_number_of<U>(); tag.has_value())
+                at += detail::heads::write_head(out, at, major_type::tag, *tag);
             std::size_t const present = [&]<std::size_t... I>(std::index_sequence<I...>) {
                 return (std::size_t{0} + ... +
-                        (member_present(pfr::get<I>(value)) ? std::size_t{1} : std::size_t{0}));
-            }(std::make_index_sequence<pfr::tuple_size_v<U>>());
-            at += heads::write_head(out, at, major_type::map, present);
+                        (member_present(detail::pfr::get<I>(value)) ? std::size_t{1} : std::size_t{0}));
+            }(std::make_index_sequence<detail::pfr::tuple_size_v<U>>());
+            at += detail::heads::write_head(out, at, major_type::map, present);
             static constexpr auto order = key_order<U>();
             std::expected<std::size_t, error> written = at;
             [&]<std::size_t... J>(std::index_sequence<J...>) {
@@ -1323,7 +1331,7 @@ class generic
     template <class U>
     static std::expected<std::size_t, error> write_elements(std::span<char> const out, std::size_t at, U const &value)
     {
-        at += heads::write_head(out, at, major_type::array, value.size());
+        at += detail::heads::write_head(out, at, major_type::array, value.size());
         for (typename U::value_type const &e : value) {
             auto const element = write_generic(out, at, e);
             if (!element) [[unlikely]]
@@ -1345,9 +1353,9 @@ class generic
             return write_elements(out, at, value);
         } else {
             using E = typename U::value_type;
-            at += heads::write_head(out, at, major_type::byte_string, value.size() * sizeof(E));
+            at += detail::heads::write_head(out, at, major_type::byte_string, value.size() * sizeof(E));
             for (E const e : value) {
-                reflection::write_typed_array_element<E>(out.subspan(at).template first<sizeof(E)>(), e);
+                detail::reflection::write_typed_array_element<E>(out.subspan(at).template first<sizeof(E)>(), e);
                 at += sizeof(E);
             }
             return at;
@@ -1357,18 +1365,20 @@ class generic
     template <std::size_t I, class U>
     static std::expected<std::size_t, error> write_member(std::span<char> const out, std::size_t at, U const &value)
     {
-        auto const &m = pfr::get<I>(value);
+        auto const &m = detail::pfr::get<I>(value);
         if (!member_present(m))
             return at;
-        constexpr map_key key = pfr::key_of<I, U>();
-        at += heads::write_head(out, at, key.major, key.argument);
+        constexpr map_key key = detail::pfr::key_of<I, U>();
+        at += detail::heads::write_head(out, at, key.major, key.argument);
         at = write_bytes(out, at, key.text);
-        if constexpr (reflection::is_optional<std::remove_cvref_t<decltype(m)>>)
+        if constexpr (detail::reflection::is_optional<std::remove_cvref_t<decltype(m)>>)
             return write_generic(out, at, *m);
         else
             return write_generic(out, at, m);
     }
 };
+
+}
 
 /**
  * @brief Writes a C++ value as CBOR and reads it back.
@@ -1487,7 +1497,7 @@ public:
     template <owning_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded)
     {
-        pfr::check_default_constructible<T>();
+        detail::pfr::check_default_constructible<T>();
         return decode(std::move(encoded), T{});
     }
 
@@ -1512,7 +1522,7 @@ public:
     template <borrowed_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
-        pfr::check_default_constructible<T>();
+        detail::pfr::check_default_constructible<T>();
         return decode(std::move(owner), encoded, T{});
     }
 
@@ -1554,15 +1564,15 @@ public:
      */
     CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode(T const &value)
     {
-        auto const counted = generic::generic_size(value);
+        auto const counted = detail::generic::generic_size(value);
         if (!counted) [[unlikely]]
             return std::unexpected(counted.error());
-        auto const sum = heads::padded_size(*counted);
+        auto const sum = detail::heads::padded_size(*counted);
         if (!sum) [[unlikely]]
             return std::unexpected(sum.error());
         std::size_t const padded = *sum;
         std::string out(padded, '\0');
-        auto const written = generic::write_generic(std::span<char>(out), 0, value);
+        auto const written = detail::generic::write_generic(std::span<char>(out), 0, value);
         if (!written) [[unlikely]]
             return std::unexpected(written.error());
         out.resize(*written);
@@ -1582,41 +1592,41 @@ public:
     CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(T const &value, Target &&target)
     {
         using U = std::remove_cvref_t<Target>;
-        auto const counted = generic::generic_size(value);
+        auto const counted = detail::generic::generic_size(value);
         if (!counted) [[unlikely]]
             return std::unexpected(counted.error());
-        auto const sum = heads::padded_size(*counted);
+        auto const sum = detail::heads::padded_size(*counted);
         if (!sum) [[unlikely]]
             return std::unexpected(sum.error());
         std::size_t const padded = *sum;
         std::size_t const size = *counted;
-        if constexpr (encoding::byte_container<U> &&
+        if constexpr (detail::encoding::byte_container<U> &&
                              requires { requires std::same_as<std::ranges::range_value_t<U>, char>; }) {
             std::size_t const at = std::ranges::size(target);
             auto const total = detail::validity::checked_add(at, padded);
             if (!total) [[unlikely]]
                 return std::unexpected(detail::validity::writer_error(total.error()));
             target.resize(*total);
-            auto const written = generic::write_generic(std::span<char>(target), at, value);
+            auto const written = detail::generic::write_generic(std::span<char>(target), at, value);
             target.resize(written ? at + size : at);
             if (!written) [[unlikely]]
                 return std::unexpected(written.error());
             return size;
-        } else if constexpr (!encoding::byte_container<U> && requires { std::span<char>(target); }) {
+        } else if constexpr (!detail::encoding::byte_container<U> && requires { std::span<char>(target); }) {
             std::span<char> const out(target);
             if (detail::validity::bytes_fit(size, out.size())) {
-                auto const written = generic::write_generic(out.first(size), 0, value);
+                auto const written = detail::generic::write_generic(out.first(size), 0, value);
                 if (!written) [[unlikely]]
                     return std::unexpected(written.error());
                 return size;
             }
         }
         std::string encoded(padded, '\0');
-        auto const written = generic::write_generic(std::span<char>(encoded), 0, value);
+        auto const written = detail::generic::write_generic(std::span<char>(encoded), 0, value);
         if (!written) [[unlikely]]
             return std::unexpected(written.error());
         encoded.resize(*written);
-        decltype(auto) message = encoding::message_of(target, encoded.size());
+        decltype(auto) message = detail::encoding::message_of(target, encoded.size());
         if (auto const r = message.append(encoded); !r) [[unlikely]]
             return std::unexpected(detail::validity::writer_error(r.error()));
         if (auto const r = message.done(encoded.size()); !r) [[unlikely]]
@@ -1646,8 +1656,8 @@ private:
 
     static std::expected<T, error> read(std::string_view const encoded, T out)
     {
-        value_sharing::sharing_decoder d{{encoded}, {}};
-        if (auto const r = generic::read_generic(d, out); !r) [[unlikely]]
+        detail::value_sharing::sharing_decoder d{{encoded}, {}};
+        if (auto const r = detail::generic::read_generic(d, out); !r) [[unlikely]]
             return std::unexpected(r.error());
         return out;
     }
@@ -1666,7 +1676,7 @@ void copy_views_into_zone(T &value, string_saver &zone)
         value = zone.save(value, detail::validity::string_saver_chunk_size);
     } else if constexpr (std::is_same_v<T, typed_array>) {
         detail::copy_views_into_zone(value.bytes, zone);
-    } else if constexpr (std::is_arithmetic_v<T> || std::is_enum_v<T> || generic::is_sys_time<T> ||
+    } else if constexpr (std::is_arithmetic_v<T> || std::is_enum_v<T> || detail::generic::is_sys_time<T> ||
                          std::is_same_v<T, std::nullptr_t> ||
                          requires { typename T::traits_type; typename T::allocator_type; }) {
     } else if constexpr (requires { typename T::value_type; value.has_value(); *value; }) {
@@ -1674,11 +1684,11 @@ void copy_views_into_zone(T &value, string_saver &zone)
             detail::copy_views_into_zone(*value, zone);
     } else if constexpr (detail::is_std_variant<T>) {
         std::visit([&zone](auto &alternative) { detail::copy_views_into_zone(alternative, zone); }, value);
-    } else if constexpr (generic::is_std_tuple<T>) {
+    } else if constexpr (detail::generic::is_std_tuple<T>) {
         std::apply([&zone](auto &...element) { (detail::copy_views_into_zone(element, zone), ...); }, value);
-    } else if constexpr (generic::is_tagged_item<T>) {
+    } else if constexpr (detail::generic::is_tagged_item<T>) {
         detail::copy_views_into_zone(value.content, zone);
-    } else if constexpr (generic::is_std_vector<T> || generic::is_std_array<T>) {
+    } else if constexpr (detail::generic::is_std_vector<T> || detail::generic::is_std_array<T>) {
         for (auto &element : value)
             detail::copy_views_into_zone(element, zone);
     } else if constexpr (requires { typename T::key_type; typename T::mapped_type; }) {
@@ -1703,8 +1713,8 @@ void copy_views_into_zone(T &value, string_saver &zone)
         static_assert(std::is_class_v<T> && std::is_aggregate_v<T>,
                       "cbor::ref::clone takes a type whose views it knows how to copy.");
         [&]<std::size_t... I>(std::index_sequence<I...>) {
-            (detail::copy_views_into_zone(pfr::get<I>(value), zone), ...);
-        }(std::make_index_sequence<pfr::members_count<T>()>{});
+            (detail::copy_views_into_zone(detail::pfr::get<I>(value), zone), ...);
+        }(std::make_index_sequence<detail::pfr::members_count<T>()>{});
     }
 }
 

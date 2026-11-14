@@ -9,13 +9,21 @@
 namespace cbor
 {
 
+namespace detail
+{
+
+class generic;
+class reflection;
+
+}
+
 class notable_tags
 {
     enum class tag_number : std::uint64_t { programming_aid_for_simple_values = 21334 };
 
-    friend class reflection;
+    friend class detail::reflection;
 
-    friend class generic;
+    friend class detail::generic;
 };
 
 }

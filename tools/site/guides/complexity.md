@@ -25,13 +25,13 @@ allocation.
 Proof.
 
 1. `cbor::item_size` (include/cbor/item_size.hpp) calls
-   `well_formedness::skip_item` once and then
+   `detail::well_formedness::skip_item` once and then
    `detail::validity::distance`, which subtracts two sizes:
    O(1).
 2. `skip_item` runs one loop, `while (pending != 0)`. Each pass
    decrements `pending` and then reads exactly one head: through
-   `heads::decoder::try_decode_head` (include/cbor/head.hpp) or, when that
-   gives no head, through `heads::decoder::decode_head`.
+   `detail::heads::decoder::try_decode_head` (include/cbor/head.hpp) or, when that
+   gives no head, through `detail::heads::decoder::decode_head`.
 3. A head that is read removes at least one byte from `d.encoded`. Every
    exit of the two functions that gives a head calls
    `encoded.remove_prefix` with `initial_byte_size` or more, and
@@ -49,14 +49,14 @@ Proof.
      to 8 only after `bytes_fit(9)`. It copies 8 bytes
      with `std::copy`: 8 assignments by [alg.copy]. It never reads past
      the view. `decode_head` reads at most 9 bytes in the same way.
-   - `heads::decoder::decode_string` checks the length, takes
+   - `detail::heads::decoder::decode_string` checks the length, takes
      `std::span::first` ([span.overview]) and calls `remove_prefix`
      ([string.view.template.general]). It does not read the bytes of the
      string.
    - `checked_add`, `check_pending_items`, `check_definite_length`,
      `check_argument` and `check_simple_value` (include/cbor/validity.hpp) are each a
      fixed number of compares and arithmetic steps.
-   - `marks.mark` of `well_formedness::no_marks` does nothing.
+   - `marks.mark` of `detail::well_formedness::no_marks` does nothing.
    So the time is O(i), and O(n) because i is at most n.
 6. The memory of the call is its local variables: `pending`, `added`, a
    head and the decoder, which holds a `std::string_view`. Their number

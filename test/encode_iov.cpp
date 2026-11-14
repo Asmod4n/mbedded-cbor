@@ -97,7 +97,7 @@ TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form"
             pieces const p = std::move(*finished);
             CHECK_EQ(joined(p), expected);
             CHECK_EQ(sum_of(p), expected.size());
-            if (size > cbor::encoding::copybreak)
+            if (size > cbor::detail::encoding::copybreak)
                 CHECK(std::ranges::any_of(*p, [&](iovec const &piece) { return piece.iov_len == text.size(); }));
         }
         {
@@ -110,7 +110,7 @@ TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form"
             pieces const p = std::move(*finished);
             CHECK_EQ(joined(p), expected);
             CHECK_EQ(sum_of(p), expected.size());
-            CHECK_EQ(points_into(p, owner->data()), size > cbor::encoding::copybreak && size > 0);
+            CHECK_EQ(points_into(p, owner->data()), size > cbor::detail::encoding::copybreak && size > 0);
         }
         {
             auto const read = test::lazy_of_copy(expected)->get<std::string_view>();
@@ -123,7 +123,7 @@ TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form"
             pieces const p = std::move(*finished);
             CHECK_EQ(joined(p), expected);
             CHECK_EQ(sum_of(p), expected.size());
-            CHECK_EQ(points_into(p, (**read).data()), size > cbor::encoding::copybreak && size > 0);
+            CHECK_EQ(points_into(p, (**read).data()), size > cbor::detail::encoding::copybreak && size > 0);
         }
     }
 }
@@ -155,7 +155,7 @@ TEST_CASE("encode_iov: every form of a byte string gives the bytes of the copyin
             REQUIRE(finished.has_value());
             pieces const p = std::move(*finished);
             CHECK_EQ(joined(p), expected);
-            CHECK_EQ(points_into(p, owner->data()), size > cbor::encoding::copybreak && size > 0);
+            CHECK_EQ(points_into(p, owner->data()), size > cbor::detail::encoding::copybreak && size > 0);
         }
         {
             auto const read = test::lazy_of_copy(expected)->get<std::span<std::byte const>>();
@@ -167,7 +167,7 @@ TEST_CASE("encode_iov: every form of a byte string gives the bytes of the copyin
             REQUIRE(finished.has_value());
             pieces const p = std::move(*finished);
             CHECK_EQ(joined(p), expected);
-            CHECK_EQ(points_into(p, (**read).data()), size > cbor::encoding::copybreak && size > 0);
+            CHECK_EQ(points_into(p, (**read).data()), size > cbor::detail::encoding::copybreak && size > 0);
         }
     }
 }
@@ -215,10 +215,10 @@ TEST_CASE("encode_iov: the second encoder on a writer that has finished is a wro
 TEST_CASE("encode_iov: a head and a float at each offset before the end of a block")
 {
     for (bool const fixed : {false, true}) {
-        for (std::size_t left = 1; left <= cbor::encoding::item_size_max; ++left) {
+        for (std::size_t left = 1; left <= cbor::detail::encoding::item_size_max; ++left) {
             CAPTURE(fixed);
             CAPTURE(left);
-            std::size_t const fill = cbor::encoding::block_size - left - 3;
+            std::size_t const fill = cbor::detail::encoding::block_size - left - 3;
             std::string const text(fill, 'f');
             auto const write = [&](auto &e) -> std::expected<void, cbor::error> {
                 if (auto const r = e.text_string(std::string_view(text)); !r)
@@ -248,7 +248,7 @@ TEST_CASE("encode_iov: a head and a float at each offset before the end of a blo
 // the copy splits across two blocks.
 TEST_CASE("encode_iov: texts at the free space of a block")
 {
-    std::size_t const free = cbor::encoding::block_size - 3;
+    std::size_t const free = cbor::detail::encoding::block_size - 3;
     for (std::size_t const size : {free - 1, free, free + 1}) {
         CAPTURE(size);
         std::string const text(size, 's');
@@ -274,7 +274,7 @@ TEST_CASE("encode_iov: texts at the free space of a block")
 TEST_CASE("encode_iov: the order of blocks and references")
 {
     auto const owner = std::make_shared<std::string const>(64, 'r');
-    std::string const fill(cbor::encoding::block_size - 3, 'f');
+    std::string const fill(cbor::detail::encoding::block_size - 3, 'f');
     auto const write = [&](auto &e) -> std::expected<void, cbor::error> {
         if (auto const r = e.text_string(std::string_view(fill)); !r)
             return r;
@@ -384,7 +384,7 @@ TEST_CASE("encode: a float is a double unless preferred serialization is on")
 TEST_CASE("encode_iov: more pieces than IOV_MAX are written in turns")
 {
     constexpr std::size_t strings = 1100;
-    auto const text = std::make_shared<std::string const>(std::string(cbor::encoding::copybreak + 1, 'x'));
+    auto const text = std::make_shared<std::string const>(std::string(cbor::detail::encoding::copybreak + 1, 'x'));
     cbor::iov_writer w;
     iov_encoder e{w};
     std::string expected;

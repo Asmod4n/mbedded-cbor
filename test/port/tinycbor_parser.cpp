@@ -899,7 +899,7 @@ TEST_CASE("tinycbor parser: string length")
 // Two kinds of row differ from upstream:
 // - an indefinite-length text gives indefinite_length (the top of this file), so it is not equal;
 // - under "\xc1\xc2", tag 2 holds a text string. lazy passes a tag that it does not interpret, and it interprets
-//   tag 2 (lazy.hpp; heads::is_tag_passed leaves out tags 2, 3 and 24), so the read meets tag 2 and gives
+//   tag 2 (lazy.hpp; detail::heads::is_tag_passed leaves out tags 2, 3 and 24), so the read meets tag 2 and gives
 //   incorrect_type. Upstream skips the tag and finds the text equal.
 TEST_CASE("tinycbor parser: compare with a text string")
 {

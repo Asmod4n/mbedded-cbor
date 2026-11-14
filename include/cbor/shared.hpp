@@ -16,6 +16,11 @@
 namespace cbor
 {
 
+namespace detail
+{
+
+class generic;
+
 class value_sharing
 {
 public:
@@ -32,13 +37,15 @@ public:
 private:
     struct sharing_decoder;
 
-    friend class generic;
+    friend class detail::generic;
 
     template <class>
-    friend class structs;
+    friend class cbor::structs;
 };
 
-struct value_sharing::sharing_decoder : heads::decoder<true> {
+}
+
+struct detail::value_sharing::sharing_decoder : detail::heads::decoder<true> {
     enum class marked_value : std::uint8_t { in_skipped_member, open, value_member };
 
     std::vector<marked_value> marked_values;

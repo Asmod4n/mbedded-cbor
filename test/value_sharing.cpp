@@ -1165,7 +1165,7 @@ TEST_CASE("value_sharing: check_sharedref_index for up to three marks")
     std::array<std::uint64_t, 6> const arguments{0, 1, 2, 3, 4, std::numeric_limits<std::uint64_t>::max()};
     for (std::size_t marked = 0; marked <= 3; ++marked)
         for (std::uint64_t const argument : arguments) {
-            auto const r = cbor::value_sharing::check_sharedref_index(argument, marked);
+            auto const r = cbor::detail::value_sharing::check_sharedref_index(argument, marked);
             if (argument >= marked)
                 CHECK_EQ(r.error(), error::sharedref_index_not_marked);
             else
@@ -1175,13 +1175,13 @@ TEST_CASE("value_sharing: check_sharedref_index for up to three marks")
 
 template <class Argument>
 constexpr bool sharedref_index_accepts =
-    requires(Argument const argument, void (*const take)(cbor::value_sharing::index)) { take(argument); };
+    requires(Argument const argument, void (*const take)(cbor::detail::value_sharing::index)) { take(argument); };
 
 // An index into the marks of tags 28 and 29 is a type of its own. A plain integer that stands where a shared
 // reference index is expected does not compile, so a count or a position cannot take its place silently.
 TEST_CASE("value_sharing: index takes no plain integer")
 {
-    CHECK(sharedref_index_accepts<cbor::value_sharing::index>);
+    CHECK(sharedref_index_accepts<cbor::detail::value_sharing::index>);
     CHECK_FALSE(sharedref_index_accepts<std::size_t>);
     CHECK_FALSE(sharedref_index_accepts<std::uint64_t>);
 }

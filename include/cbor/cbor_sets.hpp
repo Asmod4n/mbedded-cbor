@@ -8,13 +8,21 @@
 namespace cbor
 {
 
+namespace detail
+{
+
+class generic;
+class reflection;
+
+}
+
 class cbor_sets
 {
     enum class tag_number : std::uint64_t { set = 258 };
 
-    friend class reflection;
+    friend class detail::reflection;
 
-    friend class generic;
+    friend class detail::generic;
 };
 
 }

@@ -133,15 +133,15 @@ class sequence_reader
                 if (auto const fits = detail::validity::check_bytes_left(phase_end, item.size()); !fits)
                     [[unlikely]]
                     return std::unexpected(fits.error());
-            heads::decoder<false> d{std::string_view{std::span(item).subspan(scanned)}};
+            detail::heads::decoder<false> d{std::string_view{std::span(item).subspan(scanned)}};
             auto const h = d.decode_head();
             if (!h) [[unlikely]] {
                 if (h.error() == error::too_little_data &&
-                    detail::validity::bytes_fit(heads::initial_byte_size, d.encoded.size())) {
+                    detail::validity::bytes_fit(detail::heads::initial_byte_size, d.encoded.size())) {
                     auto const initial = static_cast<std::uint8_t>(d.encoded.front());
-                    std::uint8_t const info = heads::additional_information_of(initial);
+                    std::uint8_t const info = detail::heads::additional_information_of(initial);
                     state = phase::argument;
-                    phase_end = scanned + heads::initial_byte_size + heads::argument_size(info);
+                    phase_end = scanned + detail::heads::initial_byte_size + detail::heads::argument_size(info);
                 }
                 return std::unexpected(h.error());
             }

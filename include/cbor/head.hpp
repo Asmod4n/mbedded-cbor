@@ -34,6 +34,18 @@
 namespace cbor
 {
 
+namespace detail
+{
+
+class encoding;
+class extended_diagnostic_notation;
+class generic;
+class reflection;
+class value_sharing;
+class well_formedness;
+
+}
+
 template <class T>
 class schema;
 
@@ -48,6 +60,16 @@ __extension__ typedef unsigned __int128 uint128;
 
 struct lazy;
 struct item;
+struct lazy_elements;
+struct lazy_entries;
+class path;
+class sequence_reader;
+
+template <class>
+class encoder;
+
+template <class>
+class structs;
 
 template <class>
 class owning;
@@ -60,8 +82,14 @@ struct tree_decoder;
 
 }
 
+std::expected<owning<item>, error> decode(std::string_view encoded);
+
+std::expected<std::size_t, error> item_size(std::string_view encoded);
 
 std::expected<std::string, error> diagnostic_notation(std::string_view encoded);
+
+namespace detail
+{
 
 class heads
 {
@@ -915,47 +943,49 @@ class heads
 
     friend class detail::validity;
 
-    friend class sequence_reader;
+    friend class cbor::sequence_reader;
 
-    friend class encoding;
+    friend class detail::encoding;
 
-    friend class well_formedness;
+    friend class detail::well_formedness;
 
-    friend class value_sharing;
+    friend class detail::value_sharing;
 
-    friend class extended_diagnostic_notation;
+    friend class detail::extended_diagnostic_notation;
 
-    friend class path;
+    friend class cbor::path;
 
     template <class>
-    friend class encoder;
+    friend class cbor::encoder;
 
-    friend struct lazy;
+    friend struct cbor::lazy;
 
     template <bool>
     friend struct detail::tree_decoder;
 
-    friend std::expected<owning<item>, error> decode(std::string_view encoded);
+    friend std::expected<owning<item>, error> cbor::decode(std::string_view encoded);
 
-    friend struct item;
+    friend struct cbor::item;
 
-    friend struct lazy_elements;
+    friend struct cbor::lazy_elements;
 
-    friend struct lazy_entries;
+    friend struct cbor::lazy_entries;
 
-    friend std::expected<std::size_t, error> item_size(std::string_view encoded);
+    friend std::expected<std::size_t, error> cbor::item_size(std::string_view encoded);
 
-    friend std::expected<std::string, error> diagnostic_notation(std::string_view encoded);
+    friend std::expected<std::string, error> cbor::diagnostic_notation(std::string_view encoded);
 
-    friend class reflection;
+    friend class detail::reflection;
 
-    friend class generic;
-
-    template <class>
-    friend class structs;
+    friend class detail::generic;
 
     template <class>
-    friend class schema;
+    friend class cbor::structs;
+
+    template <class>
+    friend class cbor::schema;
 };
+
+}
 
 }

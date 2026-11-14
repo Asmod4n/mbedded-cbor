@@ -212,11 +212,14 @@ std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &root);
 std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &root, cycles_t);
 #endif
 
+namespace detail
+{
+
 class encoding
 {
 public:
     static constexpr std::size_t block_size = CBOR_ENCODER_BLOCK_SIZE;
-    static constexpr std::size_t item_size_max = heads::initial_byte_size + sizeof(std::uint64_t);
+    static constexpr std::size_t item_size_max = detail::heads::initial_byte_size + sizeof(std::uint64_t);
     static constexpr std::size_t copybreak = 31;
     static_assert(block_size >= item_size_max, "A block must hold one whole head or float.");
     static constexpr std::size_t inline_buffer_size = CBOR_ENCODER_INLINE_BUFFER_SIZE;
@@ -334,29 +337,31 @@ private:
 #endif
 
     template <class Target>
-    friend std::expected<std::size_t, error> encode(item const &root, Target &&target);
+    friend std::expected<std::size_t, error> cbor::encode(item const &root, Target &&target);
 
     template <class Target>
-    friend std::expected<std::size_t, error> encode(item const &root, Target &&target, cycles_t);
+    friend std::expected<std::size_t, error> cbor::encode(item const &root, Target &&target, cycles_t);
 
 #if __has_include(<sys/uio.h>)
-    friend std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &root);
-    friend std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &root, cycles_t);
+    friend std::expected<ref<std::span<iovec const>>, error> cbor::encode_iov(item const &root);
+    friend std::expected<ref<std::span<iovec const>>, error> cbor::encode_iov(item const &root, cycles_t);
 #endif
 
     template <class>
     friend class cbor::encoder;
 
     template <class>
-    friend class structs;
+    friend class cbor::structs;
 
     template <class>
-    friend class schema;
+    friend class cbor::schema;
 };
 
+}
+
 template <class Writer>
-struct encoding::binary_writer {
-    static constexpr bool direct = std::same_as<Writer, encoding::span_message<char>>;
+struct detail::encoding::binary_writer {
+    static constexpr bool direct = std::same_as<Writer, detail::encoding::span_message<char>>;
     static constexpr bool blocks = requires(Writer &w, std::size_t const n) {
         { w.preallocate(n) } -> std::same_as<std::span<char>>;
     };
@@ -423,21 +428,21 @@ struct encoding::binary_writer {
     std::expected<void, std::errc> encode_head(major_type const major, std::uint8_t const info, std::uint64_t const argument)
     {
         if constexpr (!direct) {
-            if (!detail::validity::bytes_fit(heads::head_size_max, block.size() - used)) [[unlikely]]
+            if (!detail::validity::bytes_fit(detail::heads::head_size_max, block.size() - used)) [[unlikely]]
                 if (auto const r = refill(item_size_max); !r) [[unlikely]]
                     return r;
-            std::array<char, heads::head_size_max> head;
-            std::size_t const size = heads::head_encode(head, major, info, argument);
+            std::array<char, detail::heads::head_size_max> head;
+            std::size_t const size = detail::heads::head_encode(head, major, info, argument);
             std::ranges::copy(head, std::span(block).subspan(used).begin());
             used += size;
             return {};
         } else {
             std::span<char> const out = block;
             std::size_t const at = used;
-            std::size_t const size = heads::initial_byte_size + heads::argument_size(info);
+            std::size_t const size = detail::heads::initial_byte_size + detail::heads::argument_size(info);
             if (!detail::validity::bytes_fit(size, out.size() - at)) [[unlikely]]
                 return std::unexpected(std::errc::no_buffer_space);
-            used = at + heads::write_head(out.first(at + size), at, major, info, argument);
+            used = at + detail::heads::write_head(out.first(at + size), at, major, info, argument);
             return {};
         }
     }
@@ -448,19 +453,19 @@ struct encoding::binary_writer {
         std::span<char> const out = std::span<char>(block).subspan(used);
         out.front() = initial;
         std::ranges::copy(std::bit_cast<std::array<char, sizeof(T)>>(std::byteswap(argument)),
-                          out.subspan(heads::initial_byte_size).begin());
-        used += heads::initial_byte_size + sizeof(T);
+                          out.subspan(detail::heads::initial_byte_size).begin());
+        used += detail::heads::initial_byte_size + sizeof(T);
     }
 
     CBOR_ALWAYS_INLINE std::expected<void, std::errc> encode_head(major_type const major, std::uint64_t const argument)
     {
-        if (!direct && detail::validity::bytes_fit(heads::head_size_max, block.size() - used)) [[likely]] {
+        if (!direct && detail::validity::bytes_fit(detail::heads::head_size_max, block.size() - used)) [[likely]] {
             std::span<char> const out = block;
-            used += heads::head_encode(out.subspan(used).template first<heads::head_size_max>(), major,
-                                       heads::preferred_argument_info(argument), argument);
+            used += detail::heads::head_encode(out.subspan(used).template first<detail::heads::head_size_max>(), major,
+                                       detail::heads::preferred_argument_info(argument), argument);
             return {};
         }
-        return encode_head(major, heads::preferred_argument_info(argument), argument);
+        return encode_head(major, detail::heads::preferred_argument_info(argument), argument);
     }
 
     template <class E>
@@ -644,7 +649,7 @@ struct encoding::binary_writer {
         constexpr std::uint8_t info = static_cast<std::uint8_t>(
             std::to_underlying(rfc8949::additional_information::one_byte_argument) + std::countr_zero(sizeof(T)));
         if (detail::validity::bytes_fit(item_size_max, block.size() - used)) [[likely]] {
-            put_item(heads::initial_byte(major, info), argument);
+            put_item(detail::heads::initial_byte(major, info), argument);
             return {};
         }
         return encode_head(major, info, argument);
@@ -737,7 +742,7 @@ class iov_writer
         return {std::move(kept), pieces};
     }
 
-    friend class encoding;
+    friend class detail::encoding;
 };
 #endif
 
@@ -786,10 +791,10 @@ class encoder
 {
     static constexpr bool pieces = std::same_as<Target, iov_writer>;
 
-    using message_type = decltype(encoding::message_of(std::declval<Target &>(), 0));
+    using message_type = decltype(detail::encoding::message_of(std::declval<Target &>(), 0));
 
     message_type message;
-    encoding::binary_writer<std::remove_reference_t<message_type>> out;
+    detail::encoding::binary_writer<std::remove_reference_t<message_type>> out;
     bool usable = true;
 
     void throw_logic_error_if_unusable() const
@@ -821,19 +826,19 @@ class encoder
 public:
     explicit encoder(Target &target)
         requires(!pieces && !requires { typename Target::element_type; })
-        : message(encoding::message_of(target, 0)), out(message)
+        : message(detail::encoding::message_of(target, 0)), out(message)
     {
     }
 
     explicit encoder(Target const target)
         requires requires { typename Target::element_type; }
-        : message(encoding::message_of(target, 0)), out(message)
+        : message(detail::encoding::message_of(target, 0)), out(message)
     {
     }
 
     explicit encoder(Target &target)
         requires pieces
-        : message(encoding::message_of(target, 0)), out(message)
+        : message(detail::encoding::message_of(target, 0)), out(message)
     {
     }
 
@@ -1170,7 +1175,7 @@ private:
     std::expected<void, error> sharedref(std::uint64_t const index)
     {
         throw_logic_error_if_unusable();
-        return written(encoding::encode_sharedref(out, index));
+        return written(detail::encoding::encode_sharedref(out, index));
     }
 
 public:
@@ -1210,7 +1215,7 @@ public:
     std::expected<void, error> simple_value(cbor::simple_value const value)
     {
         throw_logic_error_if_unusable();
-        std::uint8_t const info = heads::preferred_argument_info(std::to_underlying(value));
+        std::uint8_t const info = detail::heads::preferred_argument_info(std::to_underlying(value));
         if (!detail::validity::check_simple_value(info, std::to_underlying(value))) [[unlikely]]
             return refused(error::reserved_simple_value);
         return written(out.encode_head(major_type::simple_float, info, std::to_underlying(value)));
@@ -1249,7 +1254,7 @@ public:
         requires(std::numeric_limits<T>::is_iec559 &&
                  (sizeof(T) == sizeof(std::uint32_t) || sizeof(T) == sizeof(std::uint64_t) ||
                   (sizeof(T) == sizeof(std::uint16_t) &&
-                   std::numeric_limits<T>::digits == heads::half_precision.significand_bits + 1)))
+                   std::numeric_limits<T>::digits == detail::heads::half_precision.significand_bits + 1)))
     std::expected<void, error> floating_point(T const value)
     {
         throw_logic_error_if_unusable();
@@ -1355,9 +1360,9 @@ encoder(Target &) -> encoder<Target>;
 template <class Element>
 encoder(std::span<Element>) -> encoder<std::span<Element>>;
 
-inline encoding::head_parts encoding::head_of(item const &node)
+inline detail::encoding::head_parts detail::encoding::head_of(item const &node)
 {
-    head_parts head{heads::major_type_of(node.type), node.additional_information, node.via.u64};
+    head_parts head{detail::heads::major_type_of(node.type), node.additional_information, node.via.u64};
     switch (node.type) {
     case cbor::type::byte_string:
         head.argument = node.via.bin.size();
@@ -1377,12 +1382,12 @@ inline encoding::head_parts encoding::head_of(item const &node)
     case cbor::type::negative_bignum:
         if (node.via.tag.content->type == cbor::type::byte_string) {
             std::span<std::byte const> const magnitude =
-                heads::magnitude_without_leading_zeros(node.via.tag.content->via.bin);
+                detail::heads::magnitude_without_leading_zeros(node.via.tag.content->via.bin);
             if (detail::validity::check_magnitude_size(magnitude.size(), sizeof(std::uint64_t))) {
                 head.major = node.type == cbor::type::negative_bignum ? major_type::negative_integer
                                                                       : major_type::unsigned_integer;
-                head.argument = heads::magnitude_value(magnitude);
-                head.info = heads::preferred_argument_info(head.argument);
+                head.argument = detail::heads::magnitude_value(magnitude);
+                head.info = detail::heads::preferred_argument_info(head.argument);
                 break;
             }
         }
@@ -1394,7 +1399,7 @@ inline encoding::head_parts encoding::head_of(item const &node)
         break;
     case cbor::type::shared_reference:
         head.argument = std::to_underlying(rfc8949::tag_number::sharedref);
-        head.info = heads::preferred_argument_info(head.argument);
+        head.info = detail::heads::preferred_argument_info(head.argument);
         break;
     case cbor::type::false_value:
     case cbor::type::true_value:
@@ -1405,15 +1410,15 @@ inline encoding::head_parts encoding::head_of(item const &node)
         break;
     case cbor::type::half_float:
         head.info = std::to_underlying(rfc8949::simple_float_information::half_precision_float);
-        head.argument = heads::encode_float(rfc8949::simple_float_information::half_precision_float, node.via.f64);
+        head.argument = detail::heads::encode_float(rfc8949::simple_float_information::half_precision_float, node.via.f64);
         break;
     case cbor::type::single_float:
         head.info = std::to_underlying(rfc8949::simple_float_information::single_precision_float);
-        head.argument = heads::encode_float(rfc8949::simple_float_information::single_precision_float, node.via.f64);
+        head.argument = detail::heads::encode_float(rfc8949::simple_float_information::single_precision_float, node.via.f64);
         break;
     case cbor::type::double_float:
         head.info = std::to_underlying(rfc8949::simple_float_information::double_precision_float);
-        head.argument = heads::encode_float(rfc8949::simple_float_information::double_precision_float, node.via.f64);
+        head.argument = detail::heads::encode_float(rfc8949::simple_float_information::double_precision_float, node.via.f64);
         break;
     case cbor::type::unsigned_integer:
     case cbor::type::negative_integer:
@@ -1422,7 +1427,7 @@ inline encoding::head_parts encoding::head_of(item const &node)
     return head;
 }
 
-inline std::span<item const> encoding::children_of(item const &node, major_type const major)
+inline std::span<item const> detail::encoding::children_of(item const &node, major_type const major)
 {
     switch (major) {
     case major_type::array:
@@ -1440,7 +1445,7 @@ inline std::span<item const> encoding::children_of(item const &node, major_type 
     return {};
 }
 
-inline item const *encoding::content_of(item const &node, major_type const major)
+inline item const *detail::encoding::content_of(item const &node, major_type const major)
 {
     if (major != major_type::tag || node.type == cbor::type::shared_reference)
         return nullptr;
@@ -1448,7 +1453,7 @@ inline item const *encoding::content_of(item const &node, major_type const major
 }
 
 template <class Writer>
-CBOR_ALWAYS_INLINE inline std::expected<void, std::errc> encoding::encode_head_and_payload(binary_writer<Writer> &out, item const &node,
+CBOR_ALWAYS_INLINE inline std::expected<void, std::errc> detail::encoding::encode_head_and_payload(binary_writer<Writer> &out, item const &node,
                                                                  head_parts const &head)
 {
     std::expected<void, std::errc> written = out.encode_head(head.major, head.info, head.argument);
@@ -1460,7 +1465,7 @@ CBOR_ALWAYS_INLINE inline std::expected<void, std::errc> encoding::encode_head_a
 }
 
 template <class Writer>
-std::expected<void, std::errc> encoding::encode_sharedref(binary_writer<Writer> &out, std::uint64_t const index)
+std::expected<void, std::errc> detail::encoding::encode_sharedref(binary_writer<Writer> &out, std::uint64_t const index)
 {
     std::expected<void, std::errc> const written =
         out.encode_head(major_type::tag, std::to_underlying(rfc8949::tag_number::sharedref));
@@ -1470,7 +1475,7 @@ std::expected<void, std::errc> encoding::encode_sharedref(binary_writer<Writer> 
 }
 
 template <class Writer>
-std::expected<void, error> encoding::encode_item(binary_writer<Writer> &out, item const &node)
+std::expected<void, error> detail::encoding::encode_item(binary_writer<Writer> &out, item const &node)
 {
     if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
         return r;
@@ -1488,9 +1493,9 @@ std::expected<void, error> encoding::encode_item(binary_writer<Writer> &out, ite
     return {};
 }
 
-inline std::uint64_t encoding::size_of(item const &node, head_parts const &head)
+inline std::uint64_t detail::encoding::size_of(item const &node, head_parts const &head)
 {
-    std::uint64_t const size = heads::initial_byte_size + heads::argument_size(head.info);
+    std::uint64_t const size = detail::heads::initial_byte_size + detail::heads::argument_size(head.info);
     if (head.major == major_type::byte_string)
         return size + node.via.bin.size();
     if (head.major == major_type::text_string)
@@ -1498,13 +1503,13 @@ inline std::uint64_t encoding::size_of(item const &node, head_parts const &head)
     return size;
 }
 
-inline std::uint64_t encoding::reference_size_of(item const &reference)
+inline std::uint64_t detail::encoding::reference_size_of(item const &reference)
 {
-    return heads::head_size(std::to_underlying(rfc8949::tag_number::sharedref)) + heads::initial_byte_size +
-           heads::argument_size(reference.additional_information);
+    return detail::heads::head_size(std::to_underlying(rfc8949::tag_number::sharedref)) + detail::heads::initial_byte_size +
+           detail::heads::argument_size(reference.additional_information);
 }
 
-class encoding::depth_first_search
+class detail::encoding::depth_first_search
 {
     struct frame {
         item const *node;
@@ -1513,7 +1518,7 @@ class encoding::depth_first_search
     };
 
     static constexpr std::uint64_t back_edge_size =
-        heads::head_size(std::to_underlying(rfc8949::tag_number::sharedref)) + heads::initial_byte_size;
+        detail::heads::head_size(std::to_underlying(rfc8949::tag_number::sharedref)) + detail::heads::initial_byte_size;
 
     std::vector<item const *> targets;
     std::unordered_map<item const *, std::uint64_t> open;
@@ -1588,7 +1593,7 @@ class encoding::depth_first_search
             ++marks;
         }
         head_parts const head = head_of(node);
-        std::expected<void, std::errc> const written = encoding::encode_head_and_payload(out, node, head);
+        std::expected<void, std::errc> const written = detail::encoding::encode_head_and_payload(out, node, head);
         if (!written) [[unlikely]]
             return std::unexpected(detail::validity::writer_error(written.error()));
         frame const here{&node, index, up};
@@ -1621,7 +1626,7 @@ class encoding::depth_first_search
             enter_path(here);
         if (path_in_map) [[unlikely]] {
             if (auto const at = open.find(&next); at != open.end()) {
-                std::expected<void, std::errc> const written = encoding::encode_sharedref(out, at->second);
+                std::expected<void, std::errc> const written = detail::encoding::encode_sharedref(out, at->second);
                 if (!written) [[unlikely]]
                     return std::unexpected(detail::validity::writer_error(written.error()));
                 return marks;
@@ -1649,7 +1654,7 @@ public:
 };
 
 template <bool Cycles, class Writer>
-std::expected<void, error> encoding::encode_tree(binary_writer<Writer> &out, item const &root)
+std::expected<void, error> detail::encoding::encode_tree(binary_writer<Writer> &out, item const &root)
 {
     if constexpr (Cycles) {
         depth_first_search walk;
@@ -1660,7 +1665,7 @@ std::expected<void, error> encoding::encode_tree(binary_writer<Writer> &out, ite
 }
 
 template <bool Cycles, class Target>
-std::expected<std::size_t, error> encoding::encode_into(item const &root, Target &&target)
+std::expected<std::size_t, error> detail::encoding::encode_into(item const &root, Target &&target)
 {
     decltype(auto) message = message_of(target, 0);
     binary_writer<std::remove_reference_t<decltype(message)>> out(message);
@@ -1676,18 +1681,18 @@ std::expected<std::size_t, error> encoding::encode_into(item const &root, Target
 template <class Target>
 std::expected<std::size_t, error> encode(item const &root, Target &&target)
 {
-    return encoding::encode_into<false>(root, std::forward<Target>(target));
+    return detail::encoding::encode_into<false>(root, std::forward<Target>(target));
 }
 
 template <class Target>
 std::expected<std::size_t, error> encode(item const &root, Target &&target, cycles_t)
 {
-    return encoding::encode_into<true>(root, std::forward<Target>(target));
+    return detail::encoding::encode_into<true>(root, std::forward<Target>(target));
 }
 
 #if __has_include(<sys/uio.h>)
 template <bool Cycles>
-std::expected<ref<std::span<iovec const>>, error> encoding::encode_iov_of(item const &root)
+std::expected<ref<std::span<iovec const>>, error> detail::encoding::encode_iov_of(item const &root)
 {
     iov_writer writer;
     binary_writer<iov_writer> out(writer);
@@ -1698,12 +1703,12 @@ std::expected<ref<std::span<iovec const>>, error> encoding::encode_iov_of(item c
 
 inline std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &root)
 {
-    return encoding::encode_iov_of<false>(root);
+    return detail::encoding::encode_iov_of<false>(root);
 }
 
 inline std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &root, cycles_t)
 {
-    return encoding::encode_iov_of<true>(root);
+    return detail::encoding::encode_iov_of<true>(root);
 }
 #endif
 }
