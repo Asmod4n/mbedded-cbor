@@ -43,10 +43,10 @@
 
 using namespace std::string_literals;
 using cbor::error;
-using tinycbor_port::error_text;
+using tinycbor_port::make_error_text;
 using tinycbor_port::no_error;
-using tinycbor_port::outcome;
-using tinycbor_port::printed;
+using tinycbor_port::make_outcome_text;
+using tinycbor_port::print_with_diagnostic_notation;
 
 namespace tinycbor_tojson
 {
@@ -109,7 +109,7 @@ std::vector<row> json_rows()
 void check_text(std::string const &data, std::string const &expected)
 {
     CAPTURE(expected);
-    CHECK_EQ(printed(data), expected);
+    CHECK_EQ(print_with_diagnostic_notation(data), expected);
 }
 
 }
@@ -172,9 +172,9 @@ TEST_CASE("tinycbor tojson: deep nesting with no end")
     std::string maps;
     for (std::size_t i = 0; i < recursions; ++i)
         maps += "\xa1\x60"s;
-    CHECK_EQ(outcome(cbor::diagnostic_notation(std::string(recursions, '\x81'))), error_text(error::too_little_data));
-    CHECK_EQ(outcome(cbor::diagnostic_notation(std::string(recursions, '\xc1'))), error_text(error::too_little_data));
-    CHECK_EQ(outcome(cbor::diagnostic_notation(maps)), error_text(error::too_little_data));
+    CHECK_EQ(make_outcome_text(cbor::diagnostic_notation(std::string(recursions, '\x81'))), make_error_text(error::too_little_data));
+    CHECK_EQ(make_outcome_text(cbor::diagnostic_notation(std::string(recursions, '\xc1'))), make_error_text(error::too_little_data));
+    CHECK_EQ(make_outcome_text(cbor::diagnostic_notation(maps)), make_error_text(error::too_little_data));
 }
 
 // invalidUtf8Strings: upstream refuses text that is not valid UTF-8. cbor::diagnostic_notation() "does not check tag
@@ -237,6 +237,6 @@ TEST_CASE("tinycbor tojson: text that is not valid UTF-8")
     };
     for (utf8_row const &r : rows) {
         CAPTURE(r.name);
-        CHECK_EQ(outcome(cbor::diagnostic_notation(r.data)), error_text(no_error));
+        CHECK_EQ(make_outcome_text(cbor::diagnostic_notation(r.data)), make_error_text(no_error));
     }
 }

@@ -40,8 +40,8 @@ TEST_CASE("at_path: parts of variable size")
     CHECK_FALSE(at_path<vehicle, "$.none">(bytes)->has_value());
 }
 
-// A directory offset from the wire that points at bytes of another kind, or a length past the start of the next
-// item, is refused and reads nothing. The directory of vehicle starts behind the prefix and its head 5a.
+// A directory offset from the wire can point at bytes of another kind. A length can reach past the start of the next
+// item. Both are refused and read nothing. The directory of vehicle starts behind the prefix and its head 5a.
 TEST_CASE("at_path: a broken offset is an error")
 {
     std::string const bytes = encode_with_schema(sample_vehicle);
@@ -138,8 +138,8 @@ TEST_CASE("at_path: an accessor of a fixed-size vector and of one element")
     CHECK_EQ(inner->at_path<"@.y">(), -2);
 }
 
-// The bytes of the vector come from the wire. The head of the vector, the description in the header, the length
-// of the byte string and every bool are checked before a value is read.
+// The bytes of the vector come from the wire. Three things are checked before a value is read. The first is the head of
+// the vector with the description in the header. The second is the length of the byte string. The third is every bool.
 TEST_CASE("at_path and decode: a broken fixed-size vector is an error")
 {
     std::string const bytes = encode_with_schema(cloud{{{1.0f, 0.5f}, {2.0f, -1.0f}}});

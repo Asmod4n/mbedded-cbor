@@ -49,8 +49,8 @@ std::expected<bool, error> value_less(std::string const &x, std::string const &y
     return r->size() == 1;
 }
 
-// A map with one pair, the key in the bytes the test gives, the value 1. The path names the key as an EDN literal (RFC
-// 8949 5.6.1: the key of the path and the key of the map are equivalent or not).
+// A map with one pair, the key in the bytes the test gives, the value 1. The path names the key as an EDN literal. RFC
+// 8949 5.6.1 says that the key of the path and the key of the map are equivalent or not.
 std::expected<bool, error> key_found(std::string const &key, std::string_view const path)
 {
     auto const l = test::make_lazy_from_copy("\xa1"s + key + "\x01"s);
@@ -93,11 +93,10 @@ TEST_CASE("path equality: a map key that is an integer with a longer argument")
     CHECK(key_found("\x02"s, "$[1_0]") == false);
 }
 
-// RFC 8949 5.6.1: map keys are compared in the data model. The library folds a big number that fits 64 bits
-// into its integer (its own data model; the generic one keeps them apart), also inside a key that is an array
-// or a map. RFC 8949 3.4.3: the value of tag 3 is -1 - n, and the empty byte string is n = 0. A byte string
-// and a tag other than 2 and 3 stay distinct from a big number. A wider big number keeps its bytes, leading
-// zeros included.
+// RFC 8949 5.6.1: map keys are compared in the data model. The library folds a big number that fits 64 bits into its
+// integer. This is its own data model. The generic one keeps them apart. The fold happens also inside a key that is an
+// array or a map. RFC 8949 3.4.3: the value of tag 3 is -1 - n, and the empty byte string is n = 0. A byte string and a
+// tag other than 2 and 3 stay distinct from a big number. A wider big number keeps its bytes, leading zeros included.
 TEST_CASE("path equality: a map key that is a big number")
 {
     CHECK(key_found("\xc2\x41\x01"s, "$[1]") == true);
@@ -227,9 +226,9 @@ TEST_CASE("path equality: arrays in a filter")
 
 // The filter reads the item that tag 24 embeds and the content of tag 55799 at each level, as the walk does. The owner
 // decided on 2026-10-12 that correct means the same value in the RFC 8949 data model (3.4.3 for tags 2 and 3). So a
-// bignum whose magnitude fits in 64 bits is that integer in a filter, also inside an array and a map, as a value and as
-// a key. A leading zero byte does not count. A larger bignum and a tag 2 over a content that is not a byte string stay
-// tags.
+// bignum whose magnitude fits in 64 bits is that integer in a filter. This holds also inside an array and a map, as a
+// value and as a key. A leading zero byte does not count. A larger bignum and a tag 2 over a content that is not a byte
+// string stay tags.
 TEST_CASE("path equality: tags in a filter")
 {
     CHECK(values_equal("\xd8\x18\x43\x82\x01\x02"s, "\x82\x01\x02"s) == true);
@@ -283,8 +282,8 @@ TEST_CASE("path equality: an element of a typed array in a filter")
 }
 
 // RFC 9535 2.3.5.2.2 asks for mathematical comparison of numbers that interoperate under I-JSON and leaves the rest to
-// the implementation. The library compares an integer and a float by their exact values. So that ==, < and > agree and
-// equality is transitive: 2^53 + 1 is greater than the float 2^53, and 2^64 - 1 is less than the float 2^64.
+// the implementation. The library compares an integer and a float by their exact values. This makes ==, < and > agree.
+// It makes equality transitive. 2^53 + 1 is greater than the float 2^53. 2^64 - 1 is less than the float 2^64.
 TEST_CASE("path equality: an integer and a float compare by their exact values")
 {
     std::string const two_53_plus_1 = "\x1b\x00\x20\x00\x00\x00\x00\x00\x01"s;
@@ -334,8 +333,8 @@ std::string nested_maps_in_edn(std::size_t const levels)
 } // namespace path_equality
 
 // The comparison of two maps reads each item once and gives each distinct subtree one id (tree isomorphism, Aho,
-// Hopcroft and Ullman). A count of the pairs of each map in both maps, as before, made two recursive comparisons for
-// each level and took time 2^levels. 40 levels compare here at once, in a filter and as the map key of a path.
+// Hopcroft and Ullman). A count of the pairs of each map in both maps made two recursive comparisons for each level. It
+// took time 2^levels. 40 levels compare here at once, in a filter and as the map key of a path.
 TEST_CASE("path equality: nested maps compare in time linear in their size")
 {
     CHECK(values_equal(nested_maps(40, false), nested_maps(40, true)) == true);

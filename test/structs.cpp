@@ -154,9 +154,9 @@ struct cbor::describe_members<integer_order> {
     };
 };
 
-// The expectations are the examples of RFC 8949 Appendix A, each read into a C++ type and written back. A
-// vector or an array of numbers is an RFC 8746 typed array since the owner decision of 2026-10-15: tag 64 for
-// bytes, tag 71 for uint64 little endian.
+// The expectations are the examples of RFC 8949 Appendix A, each read into a C++ type and written back. A vector or an
+// array of numbers is an RFC 8746 typed array since the owner decision of 2026-10-15. Tag 64 is for bytes. Tag 71 is for
+// uint64 little endian.
 TEST_CASE("structs: the examples of RFC 8949 Appendix A")
 {
     round_trip<std::uint64_t>("\x00"s, 0);
@@ -459,7 +459,7 @@ struct named_pair {
 // The owner decided on 2026-10-13 that an eager decode keeps one table of the tags 28 of one call. A tag 28 on a plain
 // member is allowed and keeps the value. A tag 29 needs a member that can share a value; no plain member can, so it
 // gives incorrect_type. A tag 29 to a mark in a skipped member gives sharedref_not_complete and a forward index
-// sharedref_index_not_marked. A key that no member has is skipped whatever its type (owner, 2026-11-08): a skipped key
+// sharedref_index_not_marked. A key that no member has is skipped, whatever its type (owner, 2026-11-08). A skipped key
 // 28("a") and its skipped value 28(1) mark values in a skipped member. So a later 29(1) gives sharedref_not_complete; a
 // skipped key 29(0) and its value leave the member a without a key, so key_not_found. A typed array holds no tag, so the
 // marks stand in a vector of std::optional, which is a plain array.
@@ -585,9 +585,9 @@ void map_keys_check()
     }
 }
 
-// RFC 8949 5.6: a map with a repeated key is not valid. The owner decided on 2026-10-16 that every map container
-// with unique keys gives duplicate_key on it in decode, as a struct member does, and keeps no entry silently. The
-// keys 1, 2 and 3 in every order are distinct and decode.
+// RFC 8949 5.6: a map with a repeated key is not valid. The owner decided on 2026-10-16 that every map container with
+// unique keys gives duplicate_key in decode. A struct member does the same. No entry is kept silently. The keys 1, 2 and
+// 3 in every order are distinct and decode.
 TEST_CASE("structs: a map container gives duplicate_key on a repeated key")
 {
     map_keys_check<std::map<int, int>>();
@@ -624,8 +624,8 @@ TEST_CASE("structs: every standard container that encode writes decodes")
 
 // RFC 8949 5.6 makes a map with a repeated key invalid. So a multimap is a map from each key to the array of its values.
 // A repeated key gives duplicate_key, as for std::map. A value that is not an array, and an empty array, which encode
-// never writes, give incorrect_type. The bytes are written by hand from RFC 8949 3.1: 0xa0 to 0xa2 are maps of 0 to 2
-// pairs, 0x80 to 0x82 arrays of 0 to 2 items.
+// never writes, give incorrect_type. The bytes are written by hand from RFC 8949 3.1. The bytes 0xa0 to 0xa2 are maps of
+// 0 to 2 pairs. The bytes 0x80 to 0x82 are arrays of 0 to 2 items.
 template <class M>
 void multimap_check()
 {
@@ -700,10 +700,10 @@ TEST_CASE("structs: decode reserves no more than the remaining bytes and returns
     CHECK_EQ(full.error(), error::not_enough_memory);
 }
 
-// An array head of 2^20 elements before 4 MiB of input made decode reserve min(2^20, 4 MiB / 4096) = 1024
-// elements of 4096 bytes before the first element was read. The allocator refuses more than 512 such
-// elements, so the decode ended with not_enough_memory. Memory now grows only with the elements that were
-// read, and the first element, a null, ends the read with incorrect_type.
+// An array head of 2^20 elements stood before 4 MiB of input. decode reserved min(2^20, 4 MiB / 4096) = 1024 elements of
+// 4096 bytes. It did so before it read the first element. The allocator refuses more than 512 such elements, so the
+// decode ended with not_enough_memory. Memory now grows only with the elements that were read, and the first element, a
+// null, ends the read with incorrect_type.
 TEST_CASE("structs: decode allocates nothing for the count of an array head")
 {
     std::string message = "\xa1\x61v\x9a\x00\x10\x00\x00"s;
@@ -717,8 +717,8 @@ struct one_int {
     int a;
 };
 
-// A key is read with the same well-formedness checks as a value: f8 10 is simple value 16 in two bytes, which
-// RFC 8949 3.3 forbids. Before the fix the key reader accepted it.
+// A key is read with the same well-formedness checks as a value. f8 10 is simple value 16 in two bytes. RFC 8949 3.3
+// forbids that form. Before the fix the key reader accepted it.
 TEST_CASE("structs: a map key that is not well-formed is a syntax error")
 {
     auto const r = cbor::structs<one_int>::decode("\xa2\xf8\x10\x00\x61"
@@ -875,13 +875,13 @@ TEST_CASE("structs: a tag 29 into a plain member is incorrect_type")
     CHECK_EQ(cbor::structs<std::vector<numbers>>::decode("\x83\xd8\x1c\x82\x01\x02\xd8\x1d\x00\xd8\x1d\x00"s)
                  .error(),
              error::incorrect_type);
-    // A chain of marks is read in a loop that marks each tag 28 and does not recurse: a chain of any length gives its
-    // value, also on a small stack.
+    // A chain of marks is read in a loop. The loop marks each tag 28 and does not recurse. A chain of any length gives
+    // its value, also on a small stack.
     std::string chain;
     for (std::size_t i = 0; i < test::levels_beyond_small_stack; ++i)
         chain += "\xd8\x1c"s;
     chain += "\x05"s;
-    test::on_small_stack([&chain] { CHECK_EQ(cbor::structs<std::uint64_t>::decode(std::string(chain)), 5u); });
+    test::run_on_small_stack([&chain] { CHECK_EQ(cbor::structs<std::uint64_t>::decode(std::string(chain)), 5u); });
 }
 
 namespace
@@ -897,8 +897,8 @@ std::string tag_head(std::uint64_t const tag)
     return "\xd9"s + static_cast<char>(tag >> 8) + static_cast<char>(tag & 0xff);
 }
 
-// One content for each tag of the cross product: the content that the registry names for the tag
-// (refs/cbor-tags.xml), with a value that every type which accepts the tag can hold.
+// There is one content for each tag of the cross product. The registry names the content for the tag
+// (refs/cbor-tags.xml). The value is one that every type which accepts the tag can hold.
 std::string content_of(std::uint64_t const tag)
 {
     switch (tag) {
@@ -937,12 +937,13 @@ void tags_accepted(std::vector<std::uint64_t> const &accepted)
 
 } // namespace
 
-// The owner decided on 2026-10-15 that a standard library type takes the tag that CBOR assigns to it: sys_seconds tag 1
-// (RFC 8949 3.4.2), year_month_day tag 100 (RFC 8943 2), std::set tag 258 (CBOR_SETS.md). A std::vector of a fixed-width
-// number the RFC 8746 typed array of its element, little endian; std::byte and std::uint8_t take tag 64. Each cell of
-// tags x types is one case. A decode of sys_seconds also takes tag 0 and a decode of year_month_day tag 1004, through
-// std::chrono::parse. Libc++ has no std::chrono::parse, and the owner decided that these tags then give incorrect_type.
-// The tag of each element type comes from the table of RFC 8746 2.1 (refs/rfc8746.txt:473-539).
+// The owner decided on 2026-10-15 that a standard library type takes the tag that CBOR assigns to it. The type
+// sys_seconds has tag 1 (RFC 8949 3.4.2). The type year_month_day has tag 100 (RFC 8943 2). The type std::set has tag
+// 258 (CBOR_SETS.md). A std::vector of a fixed-width number the RFC 8746 typed array of its element, little endian;
+// std::byte and std::uint8_t take tag 64. Each cell of tags x types is one case. A decode of sys_seconds also takes tag
+// 0 and a decode of year_month_day tag 1004, through std::chrono::parse. Libc++ has no std::chrono::parse, and the owner
+// decided that these tags then give incorrect_type. The tag of each element type comes from the table of RFC 8746 2.1
+// (refs/rfc8746.txt:473-539).
 TEST_CASE("structs: the tags that each standard library type accepts")
 {
 #if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
@@ -969,7 +970,7 @@ TEST_CASE("structs: the tags that each standard library type accepts")
 // RFC 8949 3.4.2: tag 1 holds the seconds since 1970-01-01T00:00Z; 1700000000 is 0x6553f100. RFC 8943 Table 1
 // (refs/rfc8943.txt:135-141): 1940-10-09 is day -10676 and 1980-12-08 is day 3994 under tag 100 ('d'). The content of
 // tag 1 is an integer or a float (RFC 8949 3.4.2). So a text, a byte string, a tag, true or an array under tag 1 is
-// inadmissible_type_for_tag_content, as the doc of structs decode names it (RFC 8949 5.3.2).
+// inadmissible_type_for_tag_content. The doc of structs decode names it so (RFC 8949 5.3.2).
 TEST_CASE("structs: sys_seconds is tag 1 and year_month_day is tag 100")
 {
     using namespace std::chrono;
@@ -983,10 +984,10 @@ TEST_CASE("structs: sys_seconds is tag 1 and year_month_day is tag 100")
         CHECK_EQ(cbor::structs<sys_seconds>::decode("\xc1" + content).error(), error::inadmissible_type_for_tag_content);
 }
 
-// RFC 8949 3.4.2 reads a nonnegative value of tag 1 as POSIX time and leaves a negative value and a value
-// that is not finite to the application (refs/rfc8949.txt:1047-1069). The owner decided on 2026-10-15 that a
-// float with a whole value goes into sys_seconds and any other float gives number_out_of_range. -0.0 has the
-// value 0. Each value stands in each width of RFC 8949 3.3 that holds it: 2^63 does not fit binary16.
+// RFC 8949 3.4.2 reads a nonnegative value of tag 1 as POSIX time. It leaves a negative value and a value that is not
+// finite to the application (refs/rfc8949.txt:1047-1069). The owner decided on 2026-10-15 that a float with a whole
+// value goes into sys_seconds. Any other float gives number_out_of_range. -0.0 has the value 0. Each value stands in
+// each width of RFC 8949 3.3 that holds it: 2^63 does not fit binary16.
 TEST_CASE("structs: tag 1 with a float into sys_seconds")
 {
     using namespace std::chrono;
@@ -1109,10 +1110,10 @@ std::expected<std::int64_t, error> day_of(std::string_view const text)
 } // namespace
 
 // RFC 8943 2: tag 100 holds the number of days since 1970-01-01, with no bound. std::chrono::year_month_day holds the
-// years from -32767 to 32767 (C++ [time.cal.year]). Their first and last days, -32767-01-01 and 32767-12-31, are
-// -12687428 and 11248737 days from the epoch, counted year by year in the proleptic Gregorian calendar outside
-// std::chrono. A count outside them is no date that year_month_day holds: decode gives number_out_of_range and gives
-// no other date, also for the counts at the ends of 32 and 64 bits.
+// years from -32767 to 32767 (C++ [time.cal.year]). Their first and last days are -32767-01-01 and 32767-12-31. They are
+// -12687428 and 11248737 days from the epoch. The days are counted year by year in the proleptic Gregorian calendar
+// outside std::chrono. A count outside them is no date that year_month_day holds. decode gives number_out_of_range and
+// gives no other date. This holds also for the counts at the ends of 32 and 64 bits.
 TEST_CASE("structs: tag 100 outside the years of year_month_day is number_out_of_range")
 {
     using namespace std::chrono;
@@ -1234,9 +1235,9 @@ TEST_CASE("structs: a count longer than the bytes is too_little_data before the 
     CHECK_EQ(cbor::structs<std::vector<std::string>>::decode("\x83\x61\x61"s).error(), error::too_little_data);
 }
 
-// RFC 8742: a program writes a CBOR sequence into one buffer of its own and keeps the bytes behind each item.
-// structs::encode into a span changes no byte behind the item, also where the item ends in a head of one byte (the empty
-// typed array). It writes the bytes of the std::string form.
+// RFC 8742: a program writes a CBOR sequence into one buffer of its own. It keeps the bytes behind each item.
+// structs::encode into a span changes no byte behind the item. This holds also where the item ends in a head of one byte
+// (the empty typed array). It writes the bytes of the std::string form.
 TEST_CASE("encode: a span keeps every byte behind the struct")
 {
     constexpr char sentinel = 'Z';

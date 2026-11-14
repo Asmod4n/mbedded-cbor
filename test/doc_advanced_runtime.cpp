@@ -179,7 +179,7 @@ TEST_CASE("doc advanced runtime: clone and decode")
     CHECK_EQ(*test::make_lazy_from_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->at(1)->type(), cbor::type::tag);
     auto const tags = test::make_lazy_from_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->clone();
     REQUIRE(tags.has_value());
-    CHECK_EQ(children_of(*(*tags))[1]->type, cbor::type::tag);
+    CHECK_EQ(list_children_of_item(*(*tags))[1]->type, cbor::type::tag);
 }
 
 // The section "clone and decode" says that the tree holds a copy of each string. So that it stays valid after the input
@@ -221,22 +221,22 @@ TEST_CASE("doc advanced runtime: encode")
     value const v = A(1, 2);
     std::string appended = "\x00"s;
     REQUIRE(test::encode(appended, v).has_value());
-    CHECK_EQ(appended, "\x00"s + "\x82"s + native_unsigned(1) + native_unsigned(2));
+    CHECK_EQ(appended, "\x00"s + "\x82"s + write_unsigned_at_native_width(1) + write_unsigned_at_native_width(2));
     std::vector<std::byte> bytes;
     REQUIRE(test::encode(bytes, v).has_value());
     CHECK_EQ(bytes.size(), 19u);
     std::array<char, 19> fixed{};
     REQUIRE(test::encode(std::span<char>(fixed), v).has_value());
-    CHECK_EQ(std::string(fixed.data(), fixed.size()), "\x82"s + native_unsigned(1) + native_unsigned(2));
+    CHECK_EQ(std::string(fixed.data(), fixed.size()), "\x82"s + write_unsigned_at_native_width(1) + write_unsigned_at_native_width(2));
     std::array<char, 18> small{};
     CHECK_EQ(test::encode(std::span<char>(small), v).error(), error::no_buffer_space);
     string_writer w;
     REQUIRE(test::encode(w, v).has_value());
-    CHECK_EQ(w.encoded, "\x82"s + native_unsigned(1) + native_unsigned(2));
+    CHECK_EQ(w.encoded, "\x82"s + write_unsigned_at_native_width(1) + write_unsigned_at_native_width(2));
     std::string const cycle = "\xd8\x1c\xc6\xd8\x1d\x00"s;
     auto const tagged = *test::make_lazy_from_copy(cycle)->clone();
     cbor::item const *const six = tagged->get<cbor::type::tag>().value().second;
-    CHECK_EQ(argument_of(*six), 6u);
+    CHECK_EQ(read_argument_of_item(*six), 6u);
     cbor::item const *const reference = six->get<cbor::type::tag>().value().second;
     CHECK_EQ(reference->get<cbor::type::tag>().value().first, 29u);
     std::string const wire = "\x82\xd8\x1c\x19\x00\x01\xd8\x1d\x00"s;
@@ -313,9 +313,9 @@ TEST_CASE("doc advanced runtime: item_size")
 }
 
 // The section "Tags 28 and 29" shows that a lazy, clone and diagnostic notation read both as plain tags. That
-// cbor::decode resolves them: the second element is a shared_reference to the first, an index with no mark is an error,
-// and 28(29(0)) names no value. encode refuses a shared_reference. With cbor::cycles it writes the shared value twice
-// and marks only a cycle.
+// cbor::decode resolves them. The second element is a shared_reference to the first. An index with no mark is an error.
+// 28(29(0)) names no value. encode refuses a shared_reference. With cbor::cycles it writes the shared value twice and
+// marks only a cycle.
 TEST_CASE("doc advanced runtime: tags 28 and 29")
 {
     auto const tree = cbor::decode("\x82\xd8\x1c\x01\xd8\x1d\x00"sv);
@@ -359,9 +359,9 @@ TEST_CASE("doc advanced runtime: tag 55799")
     CHECK_EQ((*decoded)->type, cbor::type::array);
     auto const tree = test::make_lazy_from_copy("\x81\xd9\xd9\xf7\x01"s)->clone();
     REQUIRE(tree.has_value());
-    cbor::item const *const inner = children_of(*(*tree))[0];
+    cbor::item const *const inner = list_children_of_item(*(*tree))[0];
     CHECK_EQ(inner->type, cbor::type::tag);
-    CHECK_EQ(argument_of(*inner), 55799u);
+    CHECK_EQ(read_argument_of_item(*inner), 55799u);
     std::string out;
     cbor::encoder e(out);
     REQUIRE(e.tag(55799).has_value());
@@ -381,7 +381,7 @@ TEST_CASE("doc advanced runtime: encode_iov")
     REQUIRE(tree.has_value());
     auto const pieces = cbor::encode_iov(**tree);
     REQUIRE(pieces.has_value());
-    auto const read = test::joined(**pieces);
+    auto const read = test::join_pieces_into_bytes(**pieces);
     REQUIRE(read.has_value());
     std::string const joined = *read;
     CHECK_EQ(joined, wire);

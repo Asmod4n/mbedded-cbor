@@ -14,13 +14,13 @@ using cbor::error;
 // too_little_data, as RFC 8949 Appendix F allows an application to wait for more bytes.
 TEST_CASE("item_size: the end of the first top-level item")
 {
-    std::string const first = encoded(V(42));
-    std::string const second = encoded(V("hello"s));
+    std::string const first = encode_value_to_wire(V(42));
+    std::string const second = encode_value_to_wire(V("hello"s));
     CHECK_EQ(cbor::item_size(first + second).value(), first.size());
     CHECK_EQ(cbor::item_size(""sv).error(), error::too_little_data);
     CHECK_EQ(cbor::item_size("\x1b"sv).error(), error::too_little_data);
-    std::string const skip = encoded(V("skip"s));
-    std::string const both = skip + encoded(V(99));
+    std::string const skip = encode_value_to_wire(V("skip"s));
+    std::string const both = skip + encode_value_to_wire(V(99));
     CHECK_EQ(cbor::item_size(std::string_view(both).substr(skip.size())).value(),
              both.size() - skip.size());
 }
@@ -60,8 +60,8 @@ TEST_CASE("item_size: the nesting depth is not bounded, and the count of items i
     CHECK_EQ(cbor::item_size("\xa1\x00\x00"sv).value(), 3u);
 }
 
-// RFC 8949 3: each data item has at least its initial byte. item_size refuses a count larger than the bytes left with
-// too_little_data before it skips an element, by owner decision.
+// RFC 8949 3: each data item has at least its initial byte. By owner decision, item_size refuses a count larger than the
+// bytes left. It gives too_little_data before it skips an element.
 TEST_CASE("item_size: a count larger than the bytes left is too_little_data before the elements")
 {
     for (std::string_view const wire : {"\x8c\xff"sv, "\x95\xf8\x04"sv, "\x95\xbf"sv, "\x88\x00\x7f"sv,

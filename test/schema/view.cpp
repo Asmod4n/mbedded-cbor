@@ -41,9 +41,10 @@ std::vector<std::uint64_t> bits_of_all(std::vector<E> const &values)
 
 // view checks the tag and the length of a typed array once and then reads an element with one bounds check. The test
 // reads every element type of RFC 8746 that the schema writes. The expected bits come from RFC 8746 figure 6 and IEEE
-// 754: 1.0 is 3c00 in binary16, 3f800000 in binary32 and 3ff0000000000000 in binary64; -2 is all ones but the lowest bit
-// in two's complement. at(i) with an index equal to the size is index_out_of_bounds, an error value and no read, as
-// std::vector::at gives std::out_of_range. Operator[] with that index is a wrong use and throws std::logic_error.
+// 754. The value 1.0 is 3c00 in binary16 and 3f800000 in binary32. It is 3ff0000000000000 in binary64. The value -2 is
+// all ones but the lowest bit in two's complement. at(i) with an index equal to the size is index_out_of_bounds. It is
+// an error value and no read, as std::vector::at gives std::out_of_range. Operator[] with that index is a wrong use and
+// throws std::logic_error.
 TEST_CASE("view: every typed array gives its elements back, and an index past the end is an error value")
 {
     std::string const bytes = encode_with_schema(sample_numbers);
@@ -86,8 +87,9 @@ TEST_CASE("view: an empty typed array has no element")
     CHECK_THROWS_AS((void)(*v)[0], std::logic_error);
 }
 
-// view makes no view when the tag is not the one of the element type or the length is not a multiple of the element
-// size. Tag 82 is binary64 in big endian and tag 85 is binary32 (RFC 8746). The errors are the same as at_path gives.
+// view makes no view in two cases. The tag is not the one of the element type. Or the length is not a multiple of the
+// element size. Tag 82 is binary64 in big endian and tag 85 is binary32 (RFC 8746). The errors are the same as at_path
+// gives.
 TEST_CASE("view: a typed array with a wrong tag or a wrong length gives no view")
 {
     std::string const bytes = encode_with_schema(doubles{{1.0, 2.0}});
@@ -194,9 +196,10 @@ TEST_CASE("view: range-for, the iterator and std::ranges algorithms read every e
     check.operator()<"$.f64">(three_numbers.f64);
 }
 
-// front and back read the first and the last element with one load each, and rbegin and rend walk the view backwards, as
-// std::span does. first(n) and last(n) give a sub-view of n elements. n equal to the size gives the whole view. N one
-// past it is index_out_of_bounds as an error value, where std::span would have undefined behaviour.
+// The functions front and back read the first and the last element with one load each. The functions rbegin and rend
+// walk the view backwards, as std::span does. The functions first(n) and last(n) give a sub-view of n elements. A value
+// of n equal to the size gives the whole view. N one past it is index_out_of_bounds as an error value, where std::span
+// would have undefined behaviour.
 TEST_CASE("view: front, back, first and last")
 {
     auto const root = form<doubles>::path(encode_with_schema(doubles{{1.0, 2.0, 4.0}}));

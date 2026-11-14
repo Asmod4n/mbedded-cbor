@@ -17,13 +17,13 @@ inline void item_size_target(std::string_view const input)
     for (std::size_t at = 0; at < input.size() && at < 64; ++at) {
         std::string_view const rest = input.substr(at);
         auto const end = cbor::item_size(rest);
-        auto const value = test::decoded(rest);
+        auto const value = test::decode_wire_into_value(rest);
         if (value)
             require(end.has_value());
         if (!end)
             continue;
         require(*end >= 1 && *end <= rest.size());
-        auto const framed = test::decoded(rest.substr(0, *end));
+        auto const framed = test::decode_wire_into_value(rest.substr(0, *end));
         if (value)
             require(framed.has_value() && same(*framed, *value));
         // RFC 8949 3.4.5.1 and 5.3.2: the byte string of tag 24 is well-formed when its head and bytes are, and the

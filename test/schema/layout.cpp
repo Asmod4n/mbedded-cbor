@@ -22,9 +22,9 @@ TEST_CASE("fixed_size: numbers and simple values have the size of head and argum
 #endif
 }
 
-// RFC 8949 3.3 has binary16, binary32 and binary64. binary128 is a typed array of one element under tag 83
-// (RFC 8746 2.1): two bytes of tag, one byte of byte string head, 16 bytes. The 80-bit extended precision of
-// x87 is widened to binary128, and bfloat16 to binary32, without loss.
+// RFC 8949 3.3 has binary16, binary32 and binary64. binary128 is a typed array of one element under tag 83 (RFC 8746
+// 2.1). It takes two bytes of tag, one byte of byte string head and 16 bytes. The 80-bit extended precision of x87 is
+// widened to binary128, and bfloat16 to binary32, without loss.
 TEST_CASE("fixed_size: floats by their digits")
 {
 #if defined(__STDCPP_FLOAT16_T__)
@@ -80,9 +80,10 @@ TEST_CASE("fixed_size: a part of variable size takes 6 bytes")
     CHECK_EQ(form<wheel>::fixed_size<std::span<std::uint8_t>>(), 6u);
 }
 
-// The offset points at the head of a value. The keys are in the table, so the 3 bytes of the class tag and the 7
-// bytes of the record head come first. The values follow the key order of RFC 8949 4.2.1, a shorter key first:
-// diameter (68 ...) at 10, snowTires (69 ...) behind its 3 bytes at 13, airPressure (6b ...) behind 1 byte at 14.
+// The offset points at the head of a value. The keys are in the table, so the 3 bytes of the class tag and the 7 bytes
+// of the record head come first. The values follow the key order of RFC 8949 4.2.1, a shorter key first. The member diameter
+// (68 ...) is at 10. The member snowTires (69 ...) is at 13, behind its 3 bytes. The member airPressure (6b ...) is at 14,
+// behind 1 byte.
 TEST_CASE("member_offset: the head of each value, behind the class tag and the head of the record")
 {
     CHECK_EQ(form<wheel>::member_offset<&wheel::diameter>(), 10u);
@@ -91,9 +92,9 @@ TEST_CASE("member_offset: the head of each value, behind the class tag and the h
     CHECK_EQ(form<wheel const>::member_offset<&wheel::airPressure>(), 14u);
 }
 
-// A nested struct is a record at the offset of its member. So offsets add up. car in key order: motor (65 6d ...) at 10,
-// seats (65 73 ...) behind the engine record, hasNavSystem (6c ...) behind the 2 bytes of seats. engine in key order: cc
-// (62 ...) at 10, horsepower (6a ...) behind its 5 bytes at 15.
+// A nested struct is a record at the offset of its member. So offsets add up. In key order, car holds motor (65 6d ...)
+// at 10. It holds seats (65 73 ...) behind the engine record. It holds hasNavSystem (6c ...) behind the 2 bytes of
+// seats. In key order, engine holds cc (62 ...) at 10. It holds horsepower (6a ...) at 15, behind its 5 bytes.
 TEST_CASE("member_offset: offsets of nested structs add up")
 {
     CHECK_EQ(form<car>::member_offset<&car::motor>(), 10u);

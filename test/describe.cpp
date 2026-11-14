@@ -499,11 +499,10 @@ T with_a(std::uint8_t const a)
 
 } // namespace describe_test
 
-// Each kind of class that cbor::describe_members takes, written as the tag of the description (RFC 8949 3.4,
-// 160010 = 0x0002710a in four bytes, DA) over a map whose keys come in the order of RFC 8949 4.2.1. Every
-// kind gives the same bytes on every build, because the description is the only list of members. A member
-// that the description leaves out keeps the value of the default constructor, also when the map holds its
-// name.
+// Each kind of class that cbor::describe_members takes is written as the tag of the description. The tag 160010 is
+// 0x0002710a in four bytes, DA (RFC 8949 3.4). The tag is followed by a map. The keys of the map come in the order of
+// RFC 8949 4.2.1. Every kind gives the same bytes on every build, because the description is the only list of members. A
+// member that the description leaves out keeps the value of the default constructor, also when the map holds its name.
 TEST_CASE("describe: every kind of class reads and writes through its description")
 {
     using namespace describe_test;
@@ -570,9 +569,10 @@ TEST_CASE("describe: a type with no default constructor decodes into an object o
     CHECK_EQ((*read)->a, 7u);
 }
 
-// Each key form of an entry, written from RFC 8949 3: the identifier as text, an explicit text, and integers
-// at the edges of the additional information (23 in the initial byte, 24 in one more byte; -24 and -25
-// likewise), 2^64-1 with eight bytes of major type 0, and -2^63 as major type 1 with the argument 2^63-1.
+// Each key form of an entry is written from RFC 8949 3. The forms are the identifier as text and an explicit text. They
+// also are integers at the edges of the additional information. The value 23 stands in the initial byte. The value 24
+// stands in one more byte. The values -24 and -25 do the same. The last two are 2^64-1 with eight bytes of major type 0,
+// and -2^63 as major type 1 with the argument 2^63-1.
 TEST_CASE("describe: every key form of an entry")
 {
     using namespace describe_test;
@@ -590,11 +590,11 @@ TEST_CASE("describe: every key form of an entry")
                               key_form<9>{1});
 }
 
-// Every width of the tag head of RFC 8949 3 (major type 6, C0): no tag, 23 in the initial byte (d7), 25 and 255 in one
-// more byte (d8), 256 and 65534 in two (d9), 65536 and 2^32-2 in four (da), 2^32 and 2^64-2 in eight (db). The top of
-// each width (65535, 2^32-1, 2^64-1) is a tag that the IANA registry calls always invalid. So the value one below stands
-// for it. Tag 24 takes one more byte too, but RFC 8949 3.4.5.1 gives it to the encoded data item, so 25 shows that
-// width.
+// Every width of the tag head of RFC 8949 3 is checked (major type 6, C0). A struct with no tag has no head. The tag 23
+// stands in the initial byte (d7). The tags 25 and 255 stand in one more byte (d8). The tags 256 and 65534 stand in two
+// (d9). The tags 65536 and 2^32-2 stand in four (da). The tags 2^32 and 2^64-2 stand in eight (db). The top of each
+// width (65535, 2^32-1, 2^64-1) is a tag that the IANA registry calls always invalid. So the value one below stands for
+// it. Tag 24 takes one more byte too, but RFC 8949 3.4.5.1 gives it to the encoded data item, so 25 shows that width.
 TEST_CASE("describe: every width of the tag of a description")
 {
     using namespace describe_test;
@@ -661,9 +661,9 @@ TEST_CASE("describe: decode of an unknown key, a missing key, a wrong tag and no
 }
 
 // RFC 8392 3: "all claims that are not understood by implementations MUST be ignored", and mruby-cbor reads only the
-// members it lists (test.rb:624-638). The claims iss (1) and exp (4) of RFC 8392 3.1 are listed. An unknown claim of
-// each kind of key that RFC 8949 allows in a map of a struct - an integer, a negative integer, a text, a byte string and
-// a simple value - is skipped and not read.
+// members it lists (test.rb:624-638). The claims iss (1) and exp (4) of RFC 8392 3.1 are listed. RFC 8949 allows five
+// kinds of key in a map of a struct. They are an integer, a negative integer, a text, a byte string and a simple value.
+// An unknown claim of each kind is skipped and not read.
 TEST_CASE("describe: a key that no entry has is skipped")
 {
     auto const read =
@@ -827,8 +827,8 @@ TEST_CASE("CBOR_DEFINE_TYPE: a template instance through an alias")
                               define_type_test::two_ints{1, 2});
 }
 
-// A rename is an explicit cbor::member, a class with a constructor takes the described members in their order, a
-// type in an anonymous namespace is described at global scope as any other.
+// A rename is an explicit cbor::member. A class with a constructor takes the described members in their order. A type in
+// an anonymous namespace is described at global scope as any other.
 TEST_CASE("CBOR_DEFINE_TYPE: a rename, a class with a constructor and a type in an anonymous namespace")
 {
     describe_test::round_trip("\xa1\x67user-id\x05"s, define_type_test::renamed{5});
@@ -842,8 +842,8 @@ TEST_CASE("CBOR_DEFINE_TYPE: a rename, a class with a constructor and a type in 
 }
 
 // CBOR_DEFINE_TYPE_MEMBERS takes the type once and the names of the members. It writes the same description as
-// CBOR_DEFINE_TYPE with one CBOR_MEMBER for each name: the key of each member is its name, in the order of the
-// list. The tag 160106 is 0x0002716a (RFC 8949 3.4); "x" (61 78) comes before "y" (61 79).
+// CBOR_DEFINE_TYPE with one CBOR_MEMBER for each name. The key of each member is its name. The keys are in the order of
+// the list. The tag 160106 is 0x0002716a (RFC 8949 3.4); "x" (61 78) comes before "y" (61 79).
 TEST_CASE("CBOR_DEFINE_TYPE_MEMBERS: the names give the description that CBOR_DEFINE_TYPE gives with CBOR_MEMBER")
 {
     using described = cbor::describe_members<define_type_test::point_by_names>;
@@ -859,9 +859,9 @@ TEST_CASE("CBOR_DEFINE_TYPE_MEMBERS: the names give the description that CBOR_DE
     CHECK_EQ(*y, 2u);
 }
 
-// A type alias of a template, one member with no tag, an empty list and a list that ends with a comma: each is a form
-// that a user writes. Each gives the map that the same description by hand gives. The tag 160104 is 0x00027168 and
-// 160105 is 0x00027169; a0 is the empty map (RFC 8949 3.1).
+// Each of these is a form that a user writes. One is a type alias of a template. One is a member with no tag. One is an
+// empty list. One is a list that ends with a comma. Each gives the map that the same description by hand gives. The tag
+// 160104 is 0x00027168 and 160105 is 0x00027169; a0 is the empty map (RFC 8949 3.1).
 TEST_CASE("CBOR_DEFINE_TYPE_MEMBERS: an alias, one member, no member and a trailing comma")
 {
     describe_test::round_trip("\xda\x00\x02\x71\x68\xa2\x61"

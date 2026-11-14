@@ -89,8 +89,8 @@ TEST_CASE("description apart: every target of encode writes the same bytes")
     CHECK_EQ(w.encoded, data);
 }
 
-// A message read as the data form and the data form read as a message are refused: the byte after the head of
-// the table is the head of the directory in one form and the first entry of the description in the other. A short
+// A message read as the data form is refused. The data form read as a message is refused. The byte after the head of the
+// table is the head of the directory in one form. In the other form it is the first entry of the description. A short
 // input ends as too_little_data before that byte is read.
 TEST_CASE("description apart: one form read as the other is refused")
 {
@@ -112,8 +112,8 @@ TEST_CASE("description apart: one form read as the other is refused")
     CHECK_EQ(form<empty>::path(std::string(small)).error(), error::too_little_data);
 }
 
-// The data form keeps every check of the message: a cut gives too_little_data, a forged directory entry and a
-// forged filler give an error in the verified forms.
+// The data form keeps every check of the message. A cut gives too_little_data. A forged directory entry and a forged
+// filler give an error in the verified forms.
 TEST_CASE("description apart: the checks of the message hold for the data form")
 {
     std::string const data = encode_data_apart(sample_everything);

@@ -105,8 +105,8 @@ TEST_CASE("doc advanced path: a view with its owner")
     }(std::string_view(*owner))));
 }
 
-// The table of the section "The forms" names a copy form, an owner beside a view, the move of an rvalue std::string
-// and the run-time forms over bytes. A user who reads the table calls each of them.
+// The table of the section "The forms" names a copy form and an owner beside a view. It names the move of an rvalue
+// std::string. It also names the run-time forms over bytes. A user who reads the table calls each of them.
 TEST_CASE("doc advanced path: every form of the table")
 {
     std::string encoded = preferred(M("name"s, std::string(40, 'a'), "key"s, bytes{"\x01\x02"}, "n"s, 7));
@@ -190,8 +190,8 @@ TEST_CASE("doc advanced path: a node at compile time and at run time")
     CHECK(*test::query("$.b", l) == A());
     auto const e = cbor::path::compile<cbor::nodelist>("$.a[?@ > 1]");
     REQUIRE(e.has_value());
-    CHECK(*test::values_of(l.at_path(*e)) == A(2, 3));
-    CHECK(*test::values_of(l.at_path<"$.b", cbor::nodelist>()) == A());
+    CHECK(*test::make_values_from_nodelist(l.at_path(*e)) == A(2, 3));
+    CHECK(*test::make_values_from_nodelist(l.at_path<"$.b", cbor::nodelist>()) == A());
 }
 
 
@@ -257,8 +257,8 @@ TEST_CASE("doc advanced path: the functions")
     CHECK_FALSE(cbor::is_valid_path_v<"$[?match(@.t, 'a.c')]">);
 }
 
-// The section "Keys that are not text" shows integer keys, a negative integer key and EDN literals as keys, in a
-// compile-time path and in a run-time path alike. A typed read through a key that is not text.
+// The section "Keys that are not text" shows integer keys, a negative integer key and EDN literals as keys. It shows
+// them in a compile-time path and in a run-time path alike. A typed read through a key that is not text.
 TEST_CASE("doc advanced path: keys that are not text")
 {
     std::string const keyed = "\xa4\x01\x61x\x21\x61y\x41\x01\x61z\x82\x01\x02\x61w"s;
@@ -346,9 +346,9 @@ TEST_CASE("doc advanced path: the errors")
     CHECK_THROWS_AS((void)test::at_path("$", cbor::lazy{}), std::logic_error);
 }
 
-// The section "Limits" shows that the end of the stack of the thread bounds a descendant segment, which recurses,
-// and not a path of child segments, which does not. The examples with a limit set are in test/limits/, built with
-// the flags that the examples name.
+// The section "Limits" shows what bounds a path. The end of the stack of the thread bounds a descendant segment, which
+// recurses. It does not bound a path of child segments, which does not recurse. The examples with a limit set are in
+// test/limits/, built with the flags that the examples name.
 TEST_CASE("doc advanced path: the limits")
 {
     std::string const deep = test::repeat("\x81"sv, test::levels_beyond_small_stack) + '\x01';
@@ -461,7 +461,7 @@ TEST_CASE("doc advanced path: keys compare by value")
     CHECK(*test::query("$[?@ > 0]", d) == A(1, 2));
 }
 
-// The section "Tags on the way" states that a key behind tag 55799 is matched and a key behind tag 28 is a tag, that tag
+// The section "Tags on the way" states three facts. A key behind tag 55799 is matched. A key behind tag 28 is a tag. Tag
 // 55799 inside tag 24 is passed. The errors of a tag whose content is wrong.
 TEST_CASE("doc advanced path: tags in detail")
 {

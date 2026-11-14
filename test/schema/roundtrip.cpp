@@ -1,7 +1,7 @@
 #include "types.hpp"
 #include <bit>
 
-// The order holds at every depth: the outer keys are "B" (61 42), "a" (61 61) and "z" (61 7a), keys of one length
+// The order holds at every depth. The outer keys are "B" (61 42), "a" (61 61) and "z" (61 7a). Keys of one length are
 // ordered by their bytes. The inner record holds x before y. A decode gives every value back to its member, so the order
 // of the bytes never mixes up members.
 TEST_CASE("encode and decode: the key order holds in an inner struct")

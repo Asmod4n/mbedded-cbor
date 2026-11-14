@@ -89,8 +89,8 @@ void end_chain(holder chain)
     }
 }
 
-// Each link of a holder chain is two levels, each of at least one frame of the smallest size: a chain with half as many
-// links as a stack has such frames is deeper than that stack. Its destructor recurses once for each link on the
+// Each link of a holder chain is two levels. Each level has at least one frame of the smallest size. A chain with half
+// as many links as a stack has such frames is deeper than that stack. Its destructor recurses once for each link on the
 // thread that ends it, the main thread.
 constexpr std::size_t links_per_level = 2;
 
@@ -181,8 +181,8 @@ read_values every_reader(std::size_t const levels, holder const &chain, outcome 
 
 using namespace limits_stack;
 
-// Every reader that walks nested items reads a depth on the main thread and gives its value: the depth that the main
-// thread holds where it holds it. So that a reader that stops too early fails there.
+// Every reader that walks nested items reads a depth on the main thread and gives its value. This is the depth that the
+// main thread holds where it holds it. So that a reader that stops too early fails there.
 TEST_CASE("stack: every recursive reader reads a depth that the main thread holds")
 {
     holder chain = holder_chain((test::levels_main_thread_reads - 1) / links_per_level);
@@ -190,9 +190,9 @@ TEST_CASE("stack: every recursive reader reads a depth that the main thread hold
     end_chain(std::move(chain));
 }
 
-// An input deeper than a small stack holds: every recursive reader stops with nesting_depth_exceeded where the stack
-// of its thread ends, and does not run past the stack. On WebAssembly without threads the main thread runs it, and
-// the stack of the program is small there.
+// The input is deeper than a small stack holds. Every recursive reader stops with nesting_depth_exceeded where the stack
+// of its thread ends. It does not run past the stack. On WebAssembly without threads the main thread runs it, and the
+// stack of the program is small there.
 TEST_CASE("stack: every recursive reader on a small stack refuses an input deeper than the stack")
 {
     for (std::size_t const bytes : {test::small_stack_bytes, larger_stack_bytes}) {
@@ -204,7 +204,7 @@ TEST_CASE("stack: every recursive reader on a small stack refuses an input deepe
         constexpr outcome chain_expected = test::threads_available ? outcome::refused : outcome::value;
         holder chain = holder_chain(links);
         read_values kept;
-        test::on_stack_of(bytes, [&kept, &chain] {
+        test::run_on_stack_of_bytes(bytes, [&kept, &chain] {
             kept = every_reader(test::levels_beyond_small_stack, chain, outcome::refused, chain_expected);
         });
         end_chain(std::move(chain));
@@ -234,7 +234,7 @@ TEST_CASE("stack: a deep tree of the library ends and encodes on a small stack")
     auto cloned = l->clone();
     REQUIRE(cloned.has_value());
     std::optional<cbor::owning<cbor::item>> clone(std::move(*cloned));
-    test::on_small_stack([&tree, &clone] {
+    test::run_on_small_stack([&tree, &clone] {
         std::string out;
         auto const written = cbor::encode(**tree, out);
         REQUIRE_FALSE(written.has_value());

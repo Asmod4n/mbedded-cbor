@@ -13,8 +13,8 @@ std::string text_of(std::expected<std::string_view, cbor::error> const &r)
     return r ? std::string(*r) : "(error)"s;
 }
 
-// One read of every field of car i, through leaf paths from the root and through an accessor of the car and of each
-// wheel, compared with the decoded car.
+// One read of every field of car i is compared with the decoded car. It uses leaf paths from the root. It also uses an
+// accessor of the car and of each wheel.
 template <class = void>
 void lot_car_matches(form<parking_lot>::accessor<> const &lot, parking_lot const &back, std::size_t const i)
 {
@@ -79,7 +79,8 @@ TEST_CASE("path: a message shorter than the least size is too_little_data, a for
 // A path that ends at a leaf gives the value. A path that ends at a struct, a list, a fixed array or a map gives an
 // accessor. A name that is not a member, an index into a text or a map, an index past a fixed array. A count of indexes
 // that does not match the empty brackets do not compile. A path starts at the root of the top-level item with $ (RFC
-// 9535 2.2) or at the node of the accessor with @ (RFC 9535 2.3.5). On the root accessor both are the same node.
+// 9535 2.2). It can also start at the node of the accessor with @ (RFC 9535 2.3.5). On the root accessor both are the
+// same node.
 TEST_CASE("path: a path compiles where it names a part of the type")
 {
     CHECK(path_reads<garage, "$.names[0]">);
@@ -170,8 +171,8 @@ TEST_CASE("path: the root keeps the owner after the caller releases it")
     CHECK_EQ(*seat, sample_ticket.seats.at(1));
 }
 
-// An accessor reads each field of a list of several cars as decode reads it, in order, in the reverse order and in
-// a shuffled order. The test exists because a read that goes back must not take a value of another car.
+// An accessor reads each field of a list of several cars as decode reads it. It reads them in order, in the reverse
+// order and in a shuffled order. The test exists because a read that goes back must not take a value of another car.
 TEST_CASE("path: an accessor gives the values of decode in every order")
 {
     std::string const bytes = encode_with_schema(make_sample_lot());

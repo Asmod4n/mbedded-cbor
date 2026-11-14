@@ -140,7 +140,7 @@ std::expected<std::string, error> bytes_of(std::expected<cbor::lazy, error> cons
         .transform([](cbor::ref<std::span<std::byte const>> const &r) { return as_string(*r); });
 }
 
-std::expected<std::uint64_t, error> count_of(std::expected<cbor::lazy, error> const &at)
+std::expected<std::uint64_t, error> count_pieces(std::expected<cbor::lazy, error> const &at)
 {
     return at.and_then([](cbor::lazy const &l) { return l.size(); });
 }
@@ -441,9 +441,9 @@ TEST_CASE("qcbor ParseMapTest: a map with nested array and map decodes")
     REQUIRE(doc.has_value());
     CHECK(doc->size() == 3u);
     CHECK(read_as<std::int64_t>(doc->at("first integer")) == 42);
-    CHECK(count_of(doc->at("an array of two strings")) == 2u);
+    CHECK(count_pieces(doc->at("an array of two strings")) == 2u);
     auto const map = doc->at("map in a map");
-    CHECK(count_of(map) == 4u);
+    CHECK(count_pieces(map) == 4u);
     REQUIRE(map.has_value());
     CHECK(bytes_of(map->at("bytes 1")) == std::string("xxxx"));
     CHECK(bytes_of(map->at("bytes 2")) == std::string("yyyy"));
@@ -473,7 +473,7 @@ TEST_CASE("qcbor ParseMapTest: a large count with no elements gives too_little_d
     for (auto const &head : {as_string({0x99, 0xff, 0xfe}), as_string({0x99, 0xff, 0xff}), as_string({0xb9, 0x7f, 0xff}),
                              as_string({0xba, 0x00, 0x00, 0x80, 0x00})}) {
         CAPTURE(head.size());
-        CHECK(count_of(lazy_of(head)) == std::unexpected(error::too_little_data));
+        CHECK(count_pieces(lazy_of(head)) == std::unexpected(error::too_little_data));
         CHECK(cbor::decode(head).error_or(error{}) == error::too_little_data);
     }
 }

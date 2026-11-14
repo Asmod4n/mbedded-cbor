@@ -58,10 +58,10 @@
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 using cbor::error;
-using tinycbor_port::error_text;
+using tinycbor_port::make_error_text;
 using tinycbor_port::no_error;
-using tinycbor_port::outcome;
-using tinycbor_port::printed;
+using tinycbor_port::make_outcome_text;
+using tinycbor_port::print_with_diagnostic_notation;
 
 namespace tinycbor_parser
 {
@@ -323,7 +323,7 @@ std::vector<element> elements_of(std::vector<float_row> const &rows)
 {
     std::vector<element> elements;
     for (float_row const &r : rows)
-        elements.push_back({std::string(r.name), r.data, printed(r.data), false});
+        elements.push_back({std::string(r.name), r.data, print_with_diagnostic_notation(r.data), false});
     return elements;
 }
 
@@ -343,12 +343,12 @@ std::vector<element> arrays_data()
 void check_one(std::string const &data, std::string const &expected, bool const indefinite)
 {
     CAPTURE(expected);
-    CHECK_EQ(printed(data), expected);
+    CHECK_EQ(print_with_diagnostic_notation(data), expected);
     auto const size = cbor::item_size(data);
     if (indefinite) {
-        CHECK_EQ(outcome(size), error_text(error::indefinite_length));
+        CHECK_EQ(make_outcome_text(size), make_error_text(error::indefinite_length));
     } else {
-        CHECK_EQ(outcome(size), error_text(no_error));
+        CHECK_EQ(make_outcome_text(size), make_error_text(no_error));
         if (size)
             CHECK_EQ(*size, data.size());
     }
@@ -370,9 +370,9 @@ using namespace tinycbor_parser;
 // initParserEmpty: an empty buffer holds no item. RFC 8949 Appendix F: the input ends before the item.
 TEST_CASE("tinycbor parser: an empty buffer is too little data")
 {
-    CHECK_EQ(outcome(cbor::decode(""sv)), error_text(error::too_little_data));
-    CHECK_EQ(outcome(cbor::item_size(""sv)), error_text(error::too_little_data));
-    CHECK_EQ(outcome(cbor::diagnostic_notation(""sv)), error_text(error::too_little_data));
+    CHECK_EQ(make_outcome_text(cbor::decode(""sv)), make_error_text(error::too_little_data));
+    CHECK_EQ(make_outcome_text(cbor::item_size(""sv)), make_error_text(error::too_little_data));
+    CHECK_EQ(make_outcome_text(cbor::diagnostic_notation(""sv)), make_error_text(error::too_little_data));
 }
 
 // integers: the raw argument, the sign, and the value as std::int64_t and as int. Upstream reads the value with
@@ -434,16 +434,16 @@ TEST_CASE("tinycbor parser: integers")
         bool const in_int = r.in_int64 && r.value >= std::numeric_limits<int>::min() &&
                             r.value <= std::numeric_limits<int>::max();
         if (r.in_int64) {
-            CHECK_EQ(outcome(as_int64), error_text(no_error));
+            CHECK_EQ(make_outcome_text(as_int64), make_error_text(no_error));
             CHECK_EQ(as_int64.value_or(0), r.value);
         } else {
-            CHECK_EQ(outcome(as_int64), error_text(error::number_out_of_range));
+            CHECK_EQ(make_outcome_text(as_int64), make_error_text(error::number_out_of_range));
         }
         if (in_int) {
-            CHECK_EQ(outcome(as_int), error_text(no_error));
+            CHECK_EQ(make_outcome_text(as_int), make_error_text(no_error));
             CHECK_EQ(as_int.value_or(0), r.value);
         } else {
-            CHECK_EQ(outcome(as_int), error_text(error::number_out_of_range));
+            CHECK_EQ(make_outcome_text(as_int), make_error_text(error::number_out_of_range));
         }
     }
 }
@@ -495,7 +495,7 @@ TEST_CASE("tinycbor parser: half floats")
         else
             CHECK_EQ(std::bit_cast<std::uint64_t>(value), std::bit_cast<std::uint64_t>(r.value));
         std::string out;
-        CHECK_EQ(outcome(cbor::encode(**tree, out)), error_text(no_error));
+        CHECK_EQ(make_outcome_text(cbor::encode(**tree, out)), make_error_text(no_error));
         CHECK_EQ(out, data);
     }
 }
@@ -532,7 +532,7 @@ TEST_CASE("tinycbor parser fixed: floats")
     for (float_row const &r : float_rows()) {
         CAPTURE(r.name);
         CAPTURE(r.upstream);
-        std::string const text = printed(r.data);
+        std::string const text = print_with_diagnostic_notation(r.data);
         CAPTURE(text);
         CHECK(tinycbor_port::float_text_holds(text, r.value, r.indicator));
         auto const size = cbor::item_size(r.data);
@@ -738,11 +738,11 @@ TEST_CASE("tinycbor parser: an item through cbor::sequence_reader")
         reader.feed(std::string(e.data));
         auto const item = reader.next();
         if (e.indefinite) {
-            CHECK_EQ(outcome(item), error_text(error::indefinite_length));
+            CHECK_EQ(make_outcome_text(item), make_error_text(error::indefinite_length));
             continue;
         }
-        REQUIRE_EQ(outcome(item), error_text(no_error));
-        CHECK_EQ(printed(item->encoded()), e.text);
+        REQUIRE_EQ(make_outcome_text(item), make_error_text(no_error));
+        CHECK_EQ(print_with_diagnostic_notation(item->encoded()), e.text);
         CHECK(reader.empty());
     }
 }
@@ -759,12 +759,12 @@ TEST_CASE("tinycbor parser: an item that arrives one byte at a time")
         cbor::sequence_reader reader;
         for (std::size_t i = 0; i + 1 < e.data.size(); ++i) {
             reader.feed(e.data.substr(i, 1));
-            CHECK_EQ(outcome(reader.next()), error_text(error::too_little_data));
+            CHECK_EQ(make_outcome_text(reader.next()), make_error_text(error::too_little_data));
         }
         reader.feed(e.data.substr(e.data.size() - 1));
         auto const item = reader.next();
-        REQUIRE_EQ(outcome(item), error_text(no_error));
-        CHECK_EQ(printed(item->encoded()), e.text);
+        REQUIRE_EQ(make_outcome_text(item), make_error_text(no_error));
+        CHECK_EQ(print_with_diagnostic_notation(item->encoded()), e.text);
         CHECK(reader.empty());
     }
 }
@@ -822,7 +822,7 @@ TEST_CASE("tinycbor parser: chunks of a string")
         check_one("\x82"s + r.data + type, "[" + shown + ", " + empty + "]", chunked);
         check_one("\x9f"s + r.data + type + "\xff", "[_ " + shown + ", " + empty + "]", true);
         if (!chunked)
-            CHECK_EQ(printed(r.data), r.concatenated);
+            CHECK_EQ(print_with_diagnostic_notation(r.data), r.concatenated);
     }
 }
 
@@ -882,10 +882,10 @@ TEST_CASE("tinycbor parser: string length")
         CAPTURE(r.name);
         auto const tree = cbor::decode(r.data);
         if (r.name.starts_with("_")) {
-            CHECK_EQ(outcome(tree), error_text(error::indefinite_length));
+            CHECK_EQ(make_outcome_text(tree), make_error_text(error::indefinite_length));
             continue;
         }
-        REQUIRE_EQ(outcome(tree), error_text(no_error));
+        REQUIRE_EQ(make_outcome_text(tree), make_error_text(no_error));
         cbor::item const &node = **tree;
         if (node.type == cbor::type::text_string)
             CHECK_EQ(node.get<cbor::type::text_string>()->size(), r.expected);
@@ -977,10 +977,10 @@ TEST_CASE("tinycbor parser: compare with a text string")
             auto const text = doc->get<std::string_view>();
             bool const equal = text.has_value() && **text == r.string;
             if (indefinite_text && prefix.size() < 2) {
-                CHECK_EQ(outcome(text), error_text(error::indefinite_length));
+                CHECK_EQ(make_outcome_text(text), make_error_text(error::indefinite_length));
                 CHECK_FALSE(equal);
             } else if (prefix.size() == 2) {
-                CHECK_EQ(outcome(text), error_text(error::incorrect_type));
+                CHECK_EQ(make_outcome_text(text), make_error_text(error::incorrect_type));
                 CHECK_FALSE(equal);
             } else {
                 CHECK_EQ(equal, r.expected);
@@ -1056,16 +1056,16 @@ TEST_CASE("tinycbor parser: find a key in a map")
         auto const doc = cbor::lazy::adopt(std::string(r.data));
         REQUIRE(doc.has_value());
         auto const value = doc->at("needle");
-        CHECK_EQ(outcome(value), error_text(r.port));
+        CHECK_EQ(make_outcome_text(value), make_error_text(r.port));
         if (!value)
             continue;
-        CHECK_EQ(outcome(value->type()), error_text(no_error));
+        CHECK_EQ(make_outcome_text(value->type()), make_error_text(no_error));
         CHECK_EQ(value->type().value_or(cbor::type::null), cbor::type::tag);
         auto const tree = value->clone();
-        REQUIRE_EQ(outcome(tree), error_text(no_error));
+        REQUIRE_EQ(make_outcome_text(tree), make_error_text(no_error));
         CHECK_EQ((*tree)->get<cbor::type::tag>().value_or(std::pair<std::uint64_t, cbor::item const *>{}).first, 42u);
         auto const text = value->get<std::string_view>();
-        REQUIRE_EQ(outcome(text), error_text(no_error));
+        REQUIRE_EQ(make_outcome_text(text), make_error_text(no_error));
         CHECK_EQ(**text, "haystack"sv);
     }
 }
@@ -1119,16 +1119,16 @@ TEST_CASE("tinycbor parser: checked integers")
         auto const as_int64 = cbor::at_path<"$", std::int64_t>(r.data);
         auto const as_int = cbor::at_path<"$", int>(r.data);
         if (r.in_int64) {
-            CHECK_EQ(outcome(as_int64), error_text(no_error));
+            CHECK_EQ(make_outcome_text(as_int64), make_error_text(no_error));
             CHECK_EQ(as_int64.value_or(0), r.value);
         } else {
-            CHECK_EQ(outcome(as_int64), error_text(error::number_out_of_range));
+            CHECK_EQ(make_outcome_text(as_int64), make_error_text(error::number_out_of_range));
         }
         if (r.in_int64 && r.value >= std::numeric_limits<int>::min() && r.value <= std::numeric_limits<int>::max()) {
-            CHECK_EQ(outcome(as_int), error_text(no_error));
+            CHECK_EQ(make_outcome_text(as_int), make_error_text(no_error));
             CHECK_EQ(as_int.value_or(0), r.value);
         } else {
-            CHECK_EQ(outcome(as_int), error_text(error::number_out_of_range));
+            CHECK_EQ(make_outcome_text(as_int), make_error_text(error::number_out_of_range));
         }
     }
 }
@@ -1141,7 +1141,7 @@ TEST_CASE("tinycbor parser: valid items are well-formed")
         CHECK(cbor::diagnostic_notation(e.data).has_value());
         auto const size = cbor::item_size(e.data);
         if (e.indefinite)
-            CHECK_EQ(outcome(size), error_text(error::indefinite_length));
+            CHECK_EQ(make_outcome_text(size), make_error_text(error::indefinite_length));
         else
             CHECK_EQ(size.value_or(0), e.data.size());
     }
@@ -1396,16 +1396,16 @@ TEST_CASE("tinycbor parser: validation of items that are not well-formed")
     for (validation_row const &r : validation_rows()) {
         CAPTURE(r.name);
         CAPTURE(r.upstream);
-        CHECK_EQ(outcome(cbor::diagnostic_notation(r.data)), error_text(r.expected));
+        CHECK_EQ(make_outcome_text(cbor::diagnostic_notation(r.data)), make_error_text(r.expected));
         error const strict = opens_indefinite(r.data) ? error::indefinite_length : r.expected;
-        CHECK_EQ(outcome(cbor::decode(r.data)), error_text(strict));
-        CHECK_EQ(outcome(cbor::item_size(r.data)), error_text(strict));
+        CHECK_EQ(make_outcome_text(cbor::decode(r.data)), make_error_text(strict));
+        CHECK_EQ(make_outcome_text(cbor::item_size(r.data)), make_error_text(strict));
         if (r.name.starts_with("map")) {
             auto const doc = cbor::lazy::adopt(std::string(r.data));
             REQUIRE(doc.has_value());
             auto const map = doc->at(std::size_t{0});
             auto const value = map ? map->at("foobar") : map;
-            CHECK_EQ(outcome(value), error_text(strict));
+            CHECK_EQ(make_outcome_text(value), make_error_text(strict));
         }
     }
 }
@@ -1489,7 +1489,7 @@ TEST_CASE("tinycbor parser: strict validation of tag content")
     for (tag_row const &r : rows) {
         CAPTURE(r.name);
         CAPTURE(r.upstream);
-        CHECK_EQ(outcome(cbor::decode(r.data)), error_text(r.expected));
+        CHECK_EQ(make_outcome_text(cbor::decode(r.data)), make_error_text(r.expected));
     }
 }
 
@@ -1518,8 +1518,8 @@ TEST_CASE("tinycbor parser: strict validation of a byte after the item")
     };
     for (garbage_row const &r : rows) {
         CAPTURE(r.name);
-        CHECK_EQ(outcome(cbor::diagnostic_notation(r.data)), error_text(error::syntax_error));
-        CHECK_EQ(outcome(cbor::decode(r.data)), error_text(no_error));
+        CHECK_EQ(make_outcome_text(cbor::diagnostic_notation(r.data)), make_error_text(error::syntax_error));
+        CHECK_EQ(make_outcome_text(cbor::decode(r.data)), make_error_text(no_error));
         CHECK_EQ(cbor::item_size(r.data).value_or(0), r.data.size() - 1);
     }
 }
@@ -1531,15 +1531,15 @@ TEST_CASE("tinycbor parser: strict validation of a byte after the item")
 // two keys are read, and the second gives duplicate_key, as upstream intends.
 TEST_CASE("tinycbor parser: strict validation of keys that are not unique")
 {
-    CHECK_EQ(outcome(cbor::structs<std::map<std::int64_t, std::int64_t>>::decode("\xa2\0\1\0\2"s)),
-             error_text(error::duplicate_key));
-    CHECK_EQ(outcome(cbor::structs<std::map<std::string, std::int64_t>>::decode("\xa2\x61z\1\x61z\2"s)),
-             error_text(error::duplicate_key));
-    CHECK_EQ(outcome(cbor::structs<std::map<std::string, std::int64_t>>::decode("\xa2\x81\x65Hello\1\x81\x65Hello\2"s)),
-             error_text(error::incorrect_type));
-    CHECK_EQ(outcome(cbor::structs<std::map<std::vector<std::string>, std::int64_t>>::decode(
+    CHECK_EQ(make_outcome_text(cbor::structs<std::map<std::int64_t, std::int64_t>>::decode("\xa2\0\1\0\2"s)),
+             make_error_text(error::duplicate_key));
+    CHECK_EQ(make_outcome_text(cbor::structs<std::map<std::string, std::int64_t>>::decode("\xa2\x61z\1\x61z\2"s)),
+             make_error_text(error::duplicate_key));
+    CHECK_EQ(make_outcome_text(cbor::structs<std::map<std::string, std::int64_t>>::decode("\xa2\x81\x65Hello\1\x81\x65Hello\2"s)),
+             make_error_text(error::incorrect_type));
+    CHECK_EQ(make_outcome_text(cbor::structs<std::map<std::vector<std::string>, std::int64_t>>::decode(
                  "\xa2\x81\x65Hello\1\x81\x65Hello\2"s)),
-             error_text(error::duplicate_key));
+             make_error_text(error::duplicate_key));
 }
 
 // incompleteData: each prefix of an item that ends before the last byte but one is too little data. A prefix that
@@ -1555,11 +1555,11 @@ TEST_CASE("tinycbor parser: incomplete data")
         for (std::size_t length = 0; length + 1 < e.data.size(); ++length) {
             CAPTURE(length);
             std::string const prefix = e.data.substr(0, length);
-            CHECK_EQ(outcome(cbor::diagnostic_notation(prefix)), error_text(error::too_little_data));
+            CHECK_EQ(make_outcome_text(cbor::diagnostic_notation(prefix)), make_error_text(error::too_little_data));
             if (e.indefinite)
                 continue;
-            CHECK_EQ(outcome(cbor::decode(prefix)), error_text(error::too_little_data));
-            CHECK_EQ(outcome(cbor::item_size(prefix)), error_text(error::too_little_data));
+            CHECK_EQ(make_outcome_text(cbor::decode(prefix)), make_error_text(error::too_little_data));
+            CHECK_EQ(make_outcome_text(cbor::item_size(prefix)), make_error_text(error::too_little_data));
         }
     }
 }
@@ -1586,11 +1586,11 @@ TEST_CASE("tinycbor parser: the end of the first item")
     };
     for (end_row const &r : rows) {
         CAPTURE(r.name);
-        CHECK_EQ(outcome(cbor::diagnostic_notation(r.data.substr(0, r.offset))), error_text(no_error));
-        CHECK_EQ(outcome(cbor::diagnostic_notation(r.data)), error_text(error::syntax_error));
+        CHECK_EQ(make_outcome_text(cbor::diagnostic_notation(r.data.substr(0, r.offset))), make_error_text(no_error));
+        CHECK_EQ(make_outcome_text(cbor::diagnostic_notation(r.data)), make_error_text(error::syntax_error));
         auto const size = cbor::item_size(r.data);
         if (r.indefinite)
-            CHECK_EQ(outcome(size), error_text(error::indefinite_length));
+            CHECK_EQ(make_outcome_text(size), make_error_text(error::indefinite_length));
         else
             CHECK_EQ(size.value_or(0), r.offset);
     }
@@ -1632,16 +1632,16 @@ TEST_CASE("tinycbor parser: deep nesting")
     };
     for (deep_row const &r : rows) {
         CAPTURE(r.name);
-        CHECK_EQ(outcome(cbor::diagnostic_notation(r.data)), error_text(no_error));
+        CHECK_EQ(make_outcome_text(cbor::diagnostic_notation(r.data)), make_error_text(no_error));
         auto const size = cbor::item_size(r.data);
         if (r.indefinite)
-            CHECK_EQ(outcome(size), error_text(error::indefinite_length));
+            CHECK_EQ(make_outcome_text(size), make_error_text(error::indefinite_length));
         else
             CHECK_EQ(size.value_or(0), r.data.size());
         if (r.find != no_error) {
             auto const doc = cbor::lazy::adopt(std::string(r.data));
             REQUIRE(doc.has_value());
-            CHECK_EQ(outcome(doc->at("foo")), error_text(r.find));
+            CHECK_EQ(make_outcome_text(doc->at("foo")), make_error_text(r.find));
         }
     }
 }

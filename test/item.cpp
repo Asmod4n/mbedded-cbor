@@ -125,9 +125,9 @@ TEST_CASE("decode: a node decoded twice gives two items that the caller owns")
     REQUIRE(first.has_value());
     REQUIRE(second.has_value());
     CHECK_NE(&**first, &**second);
-    CHECK_EQ(argument_of(*(*first)), argument_of(*(*second)));
-    auto const a = children_of(**first);
-    auto const b = children_of(**second);
+    CHECK_EQ(read_argument_of_item(*(*first)), read_argument_of_item(*(*second)));
+    auto const a = list_children_of_item(**first);
+    auto const b = list_children_of_item(**second);
     REQUIRE_EQ(a.size(), 2u);
     REQUIRE_EQ(b.size(), 2u);
     CHECK_NE(a[1], b[1]);
@@ -144,7 +144,7 @@ TEST_CASE("decode: the tree stays valid after the input is gone")
     auto const tree = cbor::decode(*input);
     input.reset();
     REQUIRE(tree.has_value());
-    auto const children = children_of(**tree);
+    auto const children = list_children_of_item(**tree);
     REQUIRE_EQ(children.size(), 3u);
     CHECK_EQ(children[0]->get<cbor::type::text_string>().value(), "hi"sv);
     CHECK_EQ(children[1]->get<cbor::type::byte_string>().value().size(), 2u);
@@ -154,10 +154,8 @@ TEST_CASE("decode: the tree stays valid after the input is gone")
     CHECK_EQ(embedded->get().get<cbor::type::text_string>().value(), "b"sv);
 }
 
-// RFC 8949 3.1: the argument of a string head is its length in bytes. A
-// length that the bytes left cannot hold is too_little_data before any
-// memory is taken for the copy (rule: a count in the input reserves
-// nothing).
+// RFC 8949 3.1: the argument of a string head is its length in bytes. A length that the bytes left cannot hold is
+// too_little_data. This holds before any memory is taken for the copy (rule: a count in the input reserves nothing).
 TEST_CASE("decode: a string length larger than the input is too_little_data")
 {
     for (std::string const &wire : {"\x7b\x80\x00\x00\x00\x00\x00\x00\x00"s,
@@ -184,20 +182,19 @@ TEST_CASE("decode: bytes after the data item are not read")
     CHECK_EQ((*first)->get<cbor::type::unsigned_integer>(), 1u);
 }
 
-// The fault: decode on the lazy inside a temporary expected returned a
-// reference into the top-level item that the temporary freed at the end
-// of the statement. The result now owns its items and the top-level
-// item, so it stays valid after the lazy is gone.
+// The fault: decode on the lazy inside a temporary expected returned a reference into the top-level item. The temporary
+// freed that item at the end of the statement. The result now owns its items and the top-level item, so it stays valid
+// after the lazy is gone.
 TEST_CASE("decode: the item outlives the lazy that decoded it")
 {
     std::string const s("\x83\x01\x02\x03"sv);
     auto const r = test::make_lazy_from_copy(s)->clone();
     REQUIRE(r.has_value());
     CHECK_EQ((*r)->type, cbor::type::array);
-    CHECK_EQ(argument_of(*(*r)), 3u);
-    auto const elements = children_of(**r);
+    CHECK_EQ(read_argument_of_item(*(*r)), 3u);
+    auto const elements = list_children_of_item(**r);
     REQUIRE_EQ(elements.size(), 3u);
-    CHECK_EQ(argument_of(*elements[2]), 3u);
+    CHECK_EQ(read_argument_of_item(*elements[2]), 3u);
 }
 
 // A child reached through two paths decodes to the same content.
@@ -206,7 +203,7 @@ TEST_CASE("decode: a child decoded through two paths has one content")
     auto const top_level = test::make_lazy_from_copy(std::string("\xa1\x61k\x82\x01\x02"sv));
     REQUIRE(top_level.has_value());
     auto const map = item_of(top_level->clone());
-    CHECK_EQ(argument_of(*map), 1u);
+    CHECK_EQ(read_argument_of_item(*map), 1u);
     auto const entries = top_level->entries();
     REQUIRE(entries.has_value());
     auto const entry = *entries->begin();
@@ -215,10 +212,10 @@ TEST_CASE("decode: a child decoded through two paths has one content")
     REQUIRE(value.has_value());
     auto const by_key = item_of(value->clone());
     auto const by_entry = item_of(entry->second.clone());
-    CHECK_EQ(argument_of(*by_key), argument_of(*by_entry));
-    REQUIRE_EQ(children_of(*by_key).size(), 2u);
-    REQUIRE_EQ(children_of(*by_entry).size(), 2u);
-    CHECK_EQ(argument_of(*children_of(*by_key)[1]), argument_of(*children_of(*by_entry)[1]));
+    CHECK_EQ(read_argument_of_item(*by_key), read_argument_of_item(*by_entry));
+    REQUIRE_EQ(list_children_of_item(*by_key).size(), 2u);
+    REQUIRE_EQ(list_children_of_item(*by_entry).size(), 2u);
+    CHECK_EQ(read_argument_of_item(*list_children_of_item(*by_key)[1]), read_argument_of_item(*list_children_of_item(*by_entry)[1]));
 }
 
 // RFC 8949 3.1: an array is its count and its data items. A map holds each pair as key and value, one after the other.
@@ -228,17 +225,17 @@ TEST_CASE("decode: an array and a map hold their data items in the order of the 
     auto const top_level = test::make_lazy_from_copy(std::string("\x82\x01\xa2\x61k\x62hi\x02\x80"sv));
     REQUIRE(top_level.has_value());
     auto const array = item_of(top_level->clone());
-    auto const elements = children_of(*array);
+    auto const elements = list_children_of_item(*array);
     REQUIRE_EQ(elements.size(), 2u);
-    CHECK_EQ(argument_of(*elements[0]), 1u);
+    CHECK_EQ(read_argument_of_item(*elements[0]), 1u);
     CHECK_EQ(elements[1]->type, cbor::type::map);
-    auto const pairs = children_of(*elements[1]);
+    auto const pairs = list_children_of_item(*elements[1]);
     REQUIRE_EQ(pairs.size(), 4u);
     CHECK_EQ(pairs[0]->get<cbor::type::text_string>().value(), "k");
     CHECK_EQ(pairs[1]->get<cbor::type::text_string>().value(), "hi");
-    CHECK_EQ(argument_of(*pairs[2]), 2u);
+    CHECK_EQ(read_argument_of_item(*pairs[2]), 2u);
     CHECK_EQ(pairs[3]->type, cbor::type::array);
-    CHECK(children_of(*pairs[3]).empty());
+    CHECK(list_children_of_item(*pairs[3]).empty());
 }
 
 // The children of every container stand in one vector, and each container shows its own part. Nested
@@ -249,26 +246,26 @@ TEST_CASE("decode: nested arrays and maps each show their own children")
     auto const top_level = test::make_lazy_from_copy(std::string("\x84\x82\x01\x82\x02\x03\xa1\x04\x81\x05\x80\x06"sv));
     REQUIRE(top_level.has_value());
     auto const root = item_of(top_level->clone());
-    auto const outer = children_of(*root);
+    auto const outer = list_children_of_item(*root);
     REQUIRE_EQ(outer.size(), 4u);
-    auto const first = children_of(*outer[0]);
+    auto const first = list_children_of_item(*outer[0]);
     REQUIRE_EQ(first.size(), 2u);
-    CHECK_EQ(argument_of(*first[0]), 1u);
-    auto const inner = children_of(*first[1]);
+    CHECK_EQ(read_argument_of_item(*first[0]), 1u);
+    auto const inner = list_children_of_item(*first[1]);
     REQUIRE_EQ(inner.size(), 2u);
-    CHECK_EQ(argument_of(*inner[0]), 2u);
-    CHECK_EQ(argument_of(*inner[1]), 3u);
-    auto const pairs = children_of(*outer[1]);
+    CHECK_EQ(read_argument_of_item(*inner[0]), 2u);
+    CHECK_EQ(read_argument_of_item(*inner[1]), 3u);
+    auto const pairs = list_children_of_item(*outer[1]);
     REQUIRE_EQ(pairs.size(), 2u);
-    CHECK_EQ(argument_of(*pairs[0]), 4u);
-    auto const value = children_of(*pairs[1]);
+    CHECK_EQ(read_argument_of_item(*pairs[0]), 4u);
+    auto const value = list_children_of_item(*pairs[1]);
     REQUIRE_EQ(value.size(), 1u);
-    CHECK_EQ(argument_of(*value[0]), 5u);
-    CHECK(children_of(*outer[2]).empty());
-    CHECK_EQ(argument_of(*outer[3]), 6u);
+    CHECK_EQ(read_argument_of_item(*value[0]), 5u);
+    CHECK(list_children_of_item(*outer[2]).empty());
+    CHECK_EQ(read_argument_of_item(*outer[3]), 6u);
 }
 
-// A count in the input reserves nothing: an array that claims 2^63 elements with one byte after its head is refused
+// A count in the input reserves nothing. An array that claims 2^63 elements has one byte after its head. It is refused
 // before any element is read. The decode allocates in proportion to the input only.
 TEST_CASE("decode: an array that claims more elements than bytes is refused")
 {
@@ -284,17 +281,17 @@ TEST_CASE("decode: an array that claims more elements than bytes is refused")
     CHECK_EQ(m.error(), cbor::error::too_little_data);
 }
 
-// The check of the count admits a count equal to the bytes left: five empty arrays in five bytes are five
-// children, each with no children of its own.
+// The check of the count admits a count equal to the bytes left. Five empty arrays in five bytes are five children. Each
+// child has no children of its own.
 TEST_CASE("decode: a count equal to the bytes left of empty children is read")
 {
     auto const top_level = test::make_lazy_from_copy(std::string("\x85\x80\x80\x80\x80\x80"sv));
     REQUIRE(top_level.has_value());
     auto const root = item_of(top_level->clone());
-    auto const elements = children_of(*root);
+    auto const elements = list_children_of_item(*root);
     REQUIRE_EQ(elements.size(), 5u);
     for (cbor::item const *const e : elements)
-        CHECK(children_of(*e).empty());
+        CHECK(list_children_of_item(*e).empty());
 }
 
 // Many sibling containers make the one vector of children grow many times while earlier containers already
@@ -309,12 +306,12 @@ TEST_CASE("decode: many sibling containers keep their children through the growt
     auto const top_level = cbor::lazy::adopt(std::move(wire));
     REQUIRE(top_level.has_value());
     auto const root = item_of(top_level->clone());
-    auto const elements = children_of(*root);
+    auto const elements = list_children_of_item(*root);
     REQUIRE_EQ(elements.size(), siblings);
     std::size_t sum = 0;
     for (cbor::item const *const e : elements)
-        for (cbor::item const *const c : children_of(*e))
-            sum += argument_of(*c);
+        for (cbor::item const *const c : list_children_of_item(*e))
+            sum += read_argument_of_item(*c);
     CHECK_EQ(sum, siblings * 3);
 }
 
@@ -325,19 +322,19 @@ TEST_CASE("decode: a bignum and a typed array are tags over a byte string")
     auto const top_level = test::make_lazy_from_copy(std::string("\x82\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00\xd8\x40\x42\x01\x02"sv));
     REQUIRE(top_level.has_value());
     auto const root = item_of(top_level->clone());
-    auto const elements = children_of(*root);
+    auto const elements = list_children_of_item(*root);
     REQUIRE_EQ(elements.size(), 2u);
     CHECK_EQ(elements[0]->type, cbor::type::unsigned_bignum);
-    CHECK_EQ(argument_of(*elements[0]), 2u);
+    CHECK_EQ(read_argument_of_item(*elements[0]), 2u);
     auto const *const magnitude = elements[0]->get<cbor::type::unsigned_bignum>().value().second;
     CHECK_EQ(magnitude->get<cbor::type::byte_string>().value().size(), 9u);
-    CHECK_EQ(argument_of(*elements[1]), 64u);
+    CHECK_EQ(read_argument_of_item(*elements[1]), 64u);
     auto const *const typed = elements[1]->get<cbor::type::typed_array>().value().second;
     CHECK_EQ(typed->get<cbor::type::byte_string>().value().size(), 2u);
 }
 
-// RFC 8949 5.6 lets a decoder that is not in a deterministic profile keep one entry of a repeated key. decode
-// builds the item of such a map with no error, at the top and inside an array.
+// RFC 8949 5.6 lets a decoder keep one entry of a repeated key. This holds for a decoder that is not in a deterministic
+// profile. decode builds the item of such a map with no error. This holds at the top and inside an array.
 TEST_CASE("decode: a map with a repeated key is read with no error")
 {
     auto const twice = test::make_lazy_from_copy(std::string("\xa2\x61k\x01\x61k\x02"sv));
@@ -376,8 +373,8 @@ TEST_CASE("decode: a map of 65536 keys is read with a repeated key")
     CHECK(twice->clone().has_value());
 }
 
-// A fuzzer held one core for more than 10 s with one map of 65535 integer keys, because integer keys were compared pair
-// by pair. decode compares no keys. So the map reads in one walk with a repeated key or not.
+// A fuzzer held one core for more than 10 s with one map of 65535 integer keys. The keys were compared pair by pair.
+// decode compares no keys. So the map reads in one walk with a repeated key or not.
 TEST_CASE("decode: a map of 65535 integer keys is read with a repeated key")
 {
     constexpr std::size_t count = 65535;
@@ -407,7 +404,7 @@ TEST_CASE("decode: a temporary lazy gives an item")
     auto const r = std::move(*test::make_lazy_from_copy(std::string("\x01"sv))).clone();
     REQUIRE(r.has_value());
     CHECK_EQ((*r)->type, cbor::type::unsigned_integer);
-    CHECK_EQ(argument_of(*(*r)), 1u);
+    CHECK_EQ(read_argument_of_item(*(*r)), 1u);
 }
 
 // The order does not matter: a child decoded first and decoded again
@@ -423,8 +420,8 @@ TEST_CASE("decode: a child decoded before its parent has the same content after 
     auto const again = top_level->at(1);
     REQUIRE(again.has_value());
     auto const later = item_of(again->clone());
-    CHECK_EQ(argument_of(*later), argument_of(*inner));
-    CHECK_EQ(argument_of(*children_of(*later)[1]), argument_of(*children_of(*inner)[1]));
+    CHECK_EQ(read_argument_of_item(*later), read_argument_of_item(*inner));
+    CHECK_EQ(read_argument_of_item(*list_children_of_item(*later)[1]), read_argument_of_item(*list_children_of_item(*inner)[1]));
 }
 
 // The owner decided that a tree decode reads tags 28 and 29 as plain tags: 28 over the shared value and 29 over
@@ -434,13 +431,13 @@ TEST_CASE("decode: a shared reference points to the item of the shared value")
     auto const top_level = test::make_lazy_from_copy(std::string("\x82\xd8\x1c\x62hi\xd8\x1d\x00"sv));
     REQUIRE(top_level.has_value());
     auto const root = item_of(top_level->clone());
-    auto const elements = children_of(*root);
+    auto const elements = list_children_of_item(*root);
     REQUIRE_EQ(elements.size(), 2u);
     CHECK_EQ(elements[0]->type, cbor::type::tag);
-    CHECK_EQ(argument_of(*elements[0]), 28u);
+    CHECK_EQ(read_argument_of_item(*elements[0]), 28u);
     auto const *const value = elements[0]->get<cbor::type::tag>().value().second;
     CHECK_EQ(value->get<cbor::type::text_string>().value(), "hi");
-    CHECK_EQ(argument_of(*elements[1]), 29u);
+    CHECK_EQ(read_argument_of_item(*elements[1]), 29u);
     CHECK_EQ(elements[1]->get<cbor::type::tag>().value().first, 29u);
     CHECK_EQ(elements[1]->get<cbor::type::tag>().value().second->get<cbor::type::unsigned_integer>(), 0u);
 }
@@ -453,7 +450,7 @@ TEST_CASE("decode: a tag 29 after its mark is a tag over its index")
     auto const element = top_level->at(1);
     REQUIRE(element.has_value());
     auto const inner = item_of(element->clone());
-    cbor::item const &reference = *children_of(*inner)[0];
+    cbor::item const &reference = *list_children_of_item(*inner)[0];
     CHECK_EQ(reference.get<cbor::type::tag>().value().first, 29u);
     CHECK_EQ(reference.get<cbor::type::tag>().value().second->get<cbor::type::unsigned_integer>().value(), 0u);
 }
@@ -466,7 +463,7 @@ TEST_CASE("decode: a cyclic array is its own element")
     auto const root = item_of(top_level->clone());
     auto const *const array = root->get<cbor::type::tag>().value().second;
     CHECK_EQ(array->type, cbor::type::array);
-    auto const elements = children_of(*array);
+    auto const elements = list_children_of_item(*array);
     REQUIRE_EQ(elements.size(), 1u);
     CHECK_EQ(elements[0]->get<cbor::type::tag>().value().first, 29u);
 }
@@ -518,9 +515,9 @@ TEST_CASE("decode: a long chain of shared references is read without recursion")
     CHECK_EQ(reference->second->get<cbor::type::unsigned_integer>().value(), chain_length - 2u);
 }
 
-// The stack is checked where the decode recurses: n tags 100(...) around 0 hold an integer at depth n, and so do n
-// arrays around 0. A depth that every stack holds is read, and an input deeper than a small stack holds is refused
-// on a thread with that stack.
+// The stack is checked where the decode recurses. n tags 100(...) around 0 hold an integer at depth n. So do n arrays
+// around 0. A depth that every stack holds is read, and an input deeper than a small stack holds is refused on a thread
+// with that stack.
 TEST_CASE("decode: the depth is bounded by the stack of the thread")
 {
     for (std::string_view const level : {"\xd8\x64"sv, "\x81"sv}) {
@@ -563,9 +560,10 @@ TEST_CASE("decode: a float16 keeps additional information 25")
 namespace item_test
 {
 
-// Every value of cbor::type, each from the shortest item that has it. The expectation is written from RFC 8949
-// 3.1 and 3.3 (major types, simple values 20 to 23, floats of additional information 25 to 27), 3.4.3 (tags 2
-// and 3) and RFC 8746 2 (tags 64 to 87 without the reserved tag 76). lazy and item give the same answer.
+// Every value of cbor::type, each from the shortest item that has it. The expectation is written from RFC 8949 and RFC
+// 8746. It uses 3.1 and 3.3 (major types, simple values 20 to 23, floats of additional information 25 to 27). It uses
+// 3.4.3 (tags 2 and 3). It uses RFC 8746 2 (tags 64 to 87 without the reserved tag 76). lazy and item give the same
+// answer.
 TEST_CASE("type: every type of an item, through lazy and through the decoded item")
 {
     struct row {
@@ -616,7 +614,7 @@ TEST_CASE("type: lazy and the item keep tags 28 and 29")
     CHECK_EQ(*root->at(0)->type(), cbor::type::tag);
     CHECK_EQ(*root->at(1)->type(), cbor::type::tag);
     auto const tree = item_of(root->clone());
-    auto const elements = children_of(*tree);
+    auto const elements = list_children_of_item(*tree);
     CHECK_EQ(elements[0]->type, cbor::type::tag);
     CHECK_EQ(elements[1]->type, cbor::type::tag);
 }
@@ -660,7 +658,7 @@ TEST_CASE("encode: a tree is written with the head widths of its input, also wit
 #if __has_include(<sys/uio.h>)
         auto const pieces = cbor::encode_iov(*root);
         REQUIRE(pieces.has_value());
-        auto const read = test::joined(**pieces);
+        auto const read = test::join_pieces_into_bytes(**pieces);
         REQUIRE(read.has_value());
         std::string const joined = *read;
         CHECK_EQ(joined, r.own);
@@ -756,7 +754,7 @@ TEST_CASE("decode: the embedded item of a tag 24 lives as long as the result")
     auto const inner_found = cbor::encoded_cbor_data_item(*root, outer);
     REQUIRE(inner_found.has_value());
     cbor::item const &inner = inner_found->get();
-    auto const children = children_of(inner);
+    auto const children = list_children_of_item(inner);
     REQUIRE_EQ(children.size(), 2u);
     CHECK_EQ(children[0]->get<cbor::type::unsigned_integer>().value(), 1u);
     CHECK_EQ(children[1]->get<cbor::type::text_string>().value(), "x");
@@ -768,7 +766,7 @@ TEST_CASE("clone: a tag 28 and a tag 29 are tag nodes")
 {
     std::string const wire = "\x82\xd8\x1c\x82\x01\x02\xd8\x1d\x00"s;
     auto const root = item_of(test::make_lazy_from_copy(std::string(wire))->clone());
-    auto const children = children_of(*root);
+    auto const children = list_children_of_item(*root);
     CHECK(children[0]->get<cbor::type::tag>().value().second->get<cbor::type::array>().has_value());
     CHECK_EQ(children[1]->get<cbor::type::tag>().value().first, 29u);
     CHECK_EQ(children[1]->get<cbor::type::tag>().value().second->get<cbor::type::unsigned_integer>().value(), 0u);
@@ -781,7 +779,7 @@ TEST_CASE("decode: a shared reference inside tag 24 refers to a mark inside the 
     auto const top_level = test::make_lazy_from_copy(std::string("\xd8\x18\x48\x82\xd8\x1c\x61\x61\xd8\x1d\x00"sv));
     REQUIRE(top_level.has_value());
     auto const root = item_of(top_level->clone());
-    auto const elements = children_of(cbor::encoded_cbor_data_item(root, *root).value().get());
+    auto const elements = list_children_of_item(cbor::encoded_cbor_data_item(root, *root).value().get());
     REQUIRE_EQ(elements.size(), 2u);
     CHECK_EQ(elements[1]->get<cbor::type::tag>().value().first, 29u);
 }
@@ -827,9 +825,9 @@ TEST_CASE("decode: malformed bytes inside tag 24 give their own error")
     CHECK_EQ(inside.error(), outside.error());
 }
 
-// The recursion goes on across the boundary: the embedded root of 24(<<0>>) is read by the same recursion, below the
-// tag and its byte string. So 24(<<0>>) inside a depth that every stack holds is read, and inside an input deeper than
-// a small stack holds it is refused on a thread with that stack.
+// The recursion goes on across the boundary: the embedded root of 24(<<0>>) is read by the same recursion, below the tag
+// and its byte string. So 24(<<0>>) is read inside a depth that every stack holds. It is refused inside an input deeper
+// than a small stack holds, on a thread with that stack.
 TEST_CASE("decode: the stack check goes on inside tag 24")
 {
     auto const read = test::make_lazy_from_copy(test::repeat("\x81"sv, test::levels_every_stack_holds) + "\xd8\x18\x41\x00"s);
@@ -865,8 +863,8 @@ namespace item_test
 
 // RFC 8949 3.3: a float of 16 or 32 bits is held as a double. Encode narrows it back to the width of its additional
 // information. A conversion of the processor sets the quiet bit of a signalling NaN, so a NaN is widened and narrowed by
-// its bits. Each width is checked with a signalling NaN, a quiet NaN with a payload, negative zero and the smallest
-// subnormal, which must all come back byte for byte.
+// its bits. Each width is checked with four values: a signalling NaN, a quiet NaN with a payload, negative zero and the
+// smallest subnormal. All must come back byte for byte.
 TEST_CASE("encode: a float of each width comes back byte for byte")
 {
     struct row {
@@ -905,9 +903,9 @@ TEST_CASE("encode: a float of each width comes back byte for byte")
 // set, so every pair of major type 0 to 7 and additional information 0 to 27 is checked. A head that is not in preferred
 // form is well-formed, so an argument of 1 stands in every width. A simple value in one extra byte needs 32 or more.
 // Each tag takes a content that RFC 8949 3.4 admits; tag 29 needs a mark and has its own tests. The expected type is
-// written from the tables of RFC 8949 3.1 and 3.3. A tag 2 or 3 over h'05' fits a basic integer and is that integer (RFC
-// 8949 3.4.3). encode writes each head at its input width, a folded bignum in the shortest head. A float at its width,
-// which also checks the major type that encode takes from the type.
+// written from the tables of RFC 8949 3.1 and 3.3. A tag 2 or 3 over h'05' fits a basic integer. It is that integer (RFC
+// 8949 3.4.3). encode writes each head at its input width. It writes a folded bignum in the shortest head. A float at
+// its width, which also checks the major type that encode takes from the type.
 TEST_CASE("decode: every major type and additional information gives the type of RFC 8949")
 {
     for (unsigned major = 0; major < test::rfc8949::major_types; ++major) {
@@ -1035,8 +1033,8 @@ TEST_CASE("item: no caller builds an item")
 
 }
 
-// RFC 8949 3: each data item has at least its initial byte. decode refuses a count larger than the bytes left with
-// too_little_data before it reads an element, by owner decision. The malformed element after the head is not reached.
+// RFC 8949 3: each data item has at least its initial byte. By owner decision, decode refuses a count larger than the
+// bytes left. It gives too_little_data before it reads an element. The malformed element after the head is not reached.
 TEST_CASE("decode: a count larger than the bytes left is too_little_data before the elements")
 {
     for (std::string const &wire : {"\x8c\xff"s, "\x95\xf8\x04"s, "\x95\xbf"s, "\x88\x00\x7f"s, "\x87\xd8\x1c\x1f"s,
@@ -1156,8 +1154,8 @@ void check_every_kind(cbor::item const &it, std::index_sequence<I...>)
 
 } // namespace
 
-// get<K> must give its value for the type of the item and incorrect_type for each of the other 18 types: the set of
-// types is finite, so every pair is checked.
+// get<K> must give its value for the type of the item. It must give incorrect_type for each of the other 18 types. The
+// set of types is finite, so every pair is checked.
 TEST_CASE("item get<K>: the value for its own type and incorrect_type for every other type")
 {
     for (sample const &s : samples) {
@@ -1173,8 +1171,8 @@ TEST_CASE("item get<K>: the value for its own type and incorrect_type for every 
     }
 }
 
-// The values that get<K> gives are the head fields of RFC 8949 3.1: an integer gives its argument, a negative
-// integer too (its value is -1 minus the argument).
+// The values that get<K> gives are the head fields of RFC 8949 3.1. An integer gives its argument. A negative integer
+// does too. Its value is -1 minus the argument.
 TEST_CASE("item get<K>: the values of the head")
 {
     auto const u = cbor::decode("\x18\x64"sv);
@@ -1199,10 +1197,10 @@ TEST_CASE("item get<K>: the values of the head")
 }
 
 // RFC 8949 5.3.2 and 5.4: a tag passes its content as it is, unless the decoder turns it into a native form. The owner
-// decided that a tree decode turns a tag 2 or 3 into an integer only over a byte string, and decodes the content of a
-// tag 24 only when it is a byte string. Any other content stays under the tag. The type of a tag 2 or 3 item is the kind
-// of that tag (tools/doc/groups/lazy.dox). So decode accepts each of these tags over an item of each major type (the
-// finite set), and the documentation of decode says so.
+// decided two things. A tree decode turns a tag 2 or 3 into an integer only over a byte string. It decodes the content
+// of a tag 24 only when it is a byte string. Any other content stays under the tag. The type of a tag 2 or 3 item is the
+// kind of that tag (tools/doc/groups/lazy.dox). So decode accepts each of these tags over an item of each major type
+// (the finite set), and the documentation of decode says so.
 TEST_CASE("decode: tags 0 to 5, 21 to 24 and 32 to 36 over every major type stay tags or give their integer")
 {
     std::array<std::string, 8> const contents{"\x00"s, "\x20"s, "\x41\x01"s, "\x61\x61"s,

@@ -25,8 +25,8 @@ namespace test
 {
 
 // A recursive reader stops with nesting_depth_exceeded where the stack of its thread ends. The tests run the deep reads
-// on a thread with a small stack, because the stack of the main thread is as large as the platform gives it. A test does
-// not make it larger (owner, 2026-11-07). A test may make a stack smaller to test the bound.
+// on a thread with a small stack. The stack of the main thread is as large as the platform gives it. A test does not
+// make it larger (owner, 2026-11-07). A test may make a stack smaller to test the bound.
 inline constexpr std::size_t small_stack_bytes = 64 * 1024;
 
 // Each level of a recursion takes at least one call frame. A call frame takes at least 16 bytes on the listed targets
@@ -45,9 +45,9 @@ inline constexpr std::size_t levels_every_stack_holds = 32;
 
 // The main thread of a program on Linux, macOS and Windows in a release build holds levels_main_thread_holds for every
 // reader. A Windows debug build (_DEBUG, from /MDd) has larger frames, and WebAssembly and picolibc have a stack of 64
-// KiB or less. A clang build with ASan and no optimization has frames so large that keys_equivalent and the readers
-// of limits/stack.cpp need more than the 8 MiB main stack of Linux for 1024 levels: they pass with 16 MiB. A test reads
-// the deep input on the main thread where it holds it, so that a reader that stops too early fails there.
+// KiB or less. A clang build with ASan and no optimization has very large frames. For 1024 levels, keys_equivalent needs
+// more than the 8 MiB main stack of Linux. The readers of limits/stack.cpp need more too. They pass with 16 MiB. A test
+// reads the deep input on the main thread where it holds it, so that a reader that stops too early fails there.
 #if defined(__clang__) && !defined(__OPTIMIZE__) && defined(__has_feature)
 #if __has_feature(address_sanitizer)
 #define CBOR_TEST_FRAMES_EXCEED_MAIN_STACK 1
@@ -90,10 +90,10 @@ inline void *run(void *const work)
 
 } // namespace small_stack_detail
 
-// Runs the work on a thread with a stack of the given size. std::thread takes no stack size. _beginthreadex and the
-// attributes of POSIX threads do. A target without threads runs the work on the calling thread: there the stack of the
-// program is the small stack (WebAssembly gives 64 KiB unless the link sets another).
-inline void on_stack_of(std::size_t const bytes, std::function<void()> work)
+// Runs the work on a thread with a stack of the given size. The type std::thread takes no stack size. The function
+// _beginthreadex and the attributes of POSIX threads take one. A target without threads runs the work on the calling
+// thread. There the stack of the program is the small stack. WebAssembly gives 64 KiB unless the link sets another.
+inline void run_on_stack_of_bytes(std::size_t const bytes, std::function<void()> work)
 {
     if constexpr (!threads_available) {
         static_cast<void>(bytes);
@@ -121,9 +121,9 @@ inline void on_stack_of(std::size_t const bytes, std::function<void()> work)
     }
 }
 
-inline void on_small_stack(std::function<void()> work)
+inline void run_on_small_stack(std::function<void()> work)
 {
-    on_stack_of(small_stack_bytes, std::move(work));
+    run_on_stack_of_bytes(small_stack_bytes, std::move(work));
 }
 
 // Runs a read on the small stack and gives its error, or nothing when it gave a value. A value that the read gives
@@ -132,7 +132,7 @@ template <class Read>
 std::optional<cbor::error> error_on_small_stack(Read const &read)
 {
     std::optional<cbor::error> failure;
-    on_small_stack([&read, &failure] {
+    run_on_small_stack([&read, &failure] {
         auto const r = read();
         if (!r)
             failure = r.error();

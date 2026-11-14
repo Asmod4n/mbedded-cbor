@@ -45,9 +45,9 @@ TEST_CASE("path edn literals: the floats of Table 2 of the EDN draft")
         selects(l, "f97e00");
 }
 
-// 4.1, Table 7: the examples of definite length encoding indicators, one for each major type. Each literal is the
-// data item that the column "ignoring e.i." encodes. 'A'_1 and "A"_1 are not here: in a path, a quoted string is
-// a name selector of RFC 9535 2.3.1, which takes no encoding indicator.
+// 4.1, Table 7: the examples of definite length encoding indicators, one for each major type. Each literal is the data
+// item that the column "ignoring e.i." encodes. 'A'_1 and "A"_1 are not here. In a path, a quoted string is a name
+// selector of RFC 9535 2.3.1. It takes no encoding indicator.
 TEST_CASE("path edn literals: the encoding indicators of Table 7 of the EDN draft")
 {
     selects("1_1", "01");
@@ -178,9 +178,9 @@ TEST_CASE("path edn literals: a container that does not end and a repeated key")
     CHECK_EQ(q.error(), error::duplicate_key);
 }
 
-// The owner decided on 2026-11-08 that the EDN literals of a path write no indefinite length, because the
-// library reads none. Each form of the EDN draft that writes one (4.2 [_ and {_, 4.3 (_ and the empty ''_ and
-// ""_) is refused at run time and at compile time.
+// The owner decided on 2026-11-08 that the EDN literals of a path write no indefinite length, because the library reads
+// none. Each form of the EDN draft that writes one is refused at run time and at compile time. These forms are 4.2 [_
+// and {_, and 4.3 (_ and the empty ''_ and ""_).
 TEST_CASE("path edn literals: an indefinite-length literal is invalid_path")
 {
     for (std::string_view const l :
@@ -191,12 +191,12 @@ TEST_CASE("path edn literals: an indefinite-length literal is invalid_path")
     CHECK_FALSE(cbor::is_valid_path_v<"$[''_]">);
 }
 
-// RFC 8949 Appendix A: the diagnostic notation that cbor::diagnostic_notation writes for an example is a
-// literal of the same value. Every example that a selector reads as a key literal (not an integer, which is
-// an index, and not a text, which is a name of RFC 9535) selects the key of its own bytes. Not here: the
-// examples whose key is of indefinite length, as at_path does not read indefinite-length input
-// (the former basics guide, whose facts now stand in tools/doc/groups/errors.dox). Three floats whose decimal form has
-// more digits than an exact conversion takes read back only where std::from_chars converts them.
+// RFC 8949 Appendix A: the diagnostic notation that cbor::diagnostic_notation writes for an example is a literal of the
+// same value. Every example that a selector reads as a key literal selects the key of its own bytes. An integer is an
+// index and not a key literal. A text is a name of RFC 9535 and not a key literal. Not here are the examples whose key
+// is of indefinite length. at_path does not read indefinite-length input. See the former basics guide, whose facts now
+// stand in tools/doc/groups/errors.dox. Three floats whose decimal form has more digits than an exact conversion takes
+// read back only where std::from_chars converts them.
 TEST_CASE("path edn literals: the diagnostic notation of each example of RFC 8949 Appendix A is a key")
 {
     for (std::string_view const hex : {"c249010000000000000000"sv,
@@ -255,11 +255,12 @@ TEST_CASE("path edn literals: the diagnostic notation of each example of RFC 894
         }
 }
 
-// The parser writes each container and each embedded item with a placeholder for its head and fills it at the close,
-// then closes the gaps in one pass. So a literal is parsed in linear time. These literals check a head at every level, a
-// tag before a container, empty containers, an embedded item that holds containers, the encoding indicators of a head (a
-// key selects by value, so in preferred serialization). A map as the key of a map. The bytes are written from RFC 8949
-// 3, 3.4.5.1 and 4.2.1 (key order) and from draft-ietf-cbor-edn-literals-28 2.4 to 4.1.
+// The parser writes each container and each embedded item with a placeholder for its head. It fills the placeholder at
+// the close. Then it closes the gaps in one pass. So a literal is parsed in linear time. These literals check a head at
+// every level. They check a tag before a container, empty containers and an embedded item that holds containers. They
+// check the encoding indicators of a head. A key selects by value, so it uses the preferred serialization. A map as the
+// key of a map. The bytes are written from RFC 8949 3, 3.4.5.1 and 4.2.1 (key order) and from
+// draft-ietf-cbor-edn-literals-28 2.4 to 4.1.
 TEST_CASE("path edn literals: nested and embedded literals give the bytes of their heads")
 {
     for (std::size_t const levels : {std::size_t{64}, test::levels_main_thread_reads}) {

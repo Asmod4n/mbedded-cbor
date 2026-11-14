@@ -18,10 +18,9 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 using cbor::error;
 
-// This binary is built with -DCBOR_STRING_LENGTH_DEFAULT=2 and -DCBOR_CONTAINER_ELEMENTS_DEFAULT=2, as a user
-// sets the size limits. Each limit is read at the bound, one below and one above it. The expectation is the
-// decision of the owner of 2026-10-09: a value up to the limit passes, a value above it fails with the error
-// of that limit.
+// This binary is built with -DCBOR_STRING_LENGTH_DEFAULT=2 and -DCBOR_CONTAINER_ELEMENTS_DEFAULT=2, as a user sets the
+// size limits. Each limit is read at the bound, one below and one above it. The expectation is the decision of the owner
+// of 2026-10-09. A value up to the limit passes. A value above it fails with the error of that limit.
 
 namespace
 {
@@ -119,9 +118,9 @@ TEST_CASE("limits sizes 2: a head that claims 2^64 - 1 is refused at the head")
     CHECK_EQ(cbor::diagnostic_notation(array).error(), error::container_elements_exceeded);
 }
 
-// The stack is checked in the form of the code that checks the size limits too: n tags 100(...) around 0 hold an
-// integer at depth n. A depth that every stack holds is read; an input deeper than a small stack holds is refused on a
-// thread with that stack.
+// The stack is checked in the form of the code that checks the size limits too. Take n tags 100(...) around 0. They hold
+// an integer at depth n. A depth that every stack holds is read; an input deeper than a small stack holds is refused on
+// a thread with that stack.
 TEST_CASE("limits sizes 2: the stack is checked beside the size limits")
 {
     std::string const held = test::repeat("\xd8\x64"sv, test::levels_every_stack_holds) + '\x00';
@@ -164,11 +163,11 @@ TEST_CASE("limits sizes 2: the iterators of elements() and entries() skip withou
     CHECK_EQ((*pair)->second.get<int>(), 3);
 }
 
-// RFC 8949 does not bound what a decoder skips; the bytes bound it (check_bytes_left). The owner decided
-// on 2026-10-10 and 2026-10-18 that string_length and container_elements count only the heads that a path or
-// a lazy reads: the containers on the way, the keys it compares and the target. A string or an array above
-// its limit that is only skipped does not count, in each form: the typed read over bytes, the typed read from
-// a lazy, at_path, query and the lazy chain. The same item, read, is refused.
+// RFC 8949 does not bound what a decoder skips; the bytes bound it (check_bytes_left). The owner decided on 2026-10-10
+// and 2026-10-18 what string_length and container_elements count. They count only the heads that a path or a lazy reads.
+// These are the containers on the way, the keys it compares and the target. A string or an array above its limit that is
+// only skipped does not count. This holds in each form: the typed read over bytes, the typed read from a lazy, at_path,
+// query and the lazy chain. The same item, read, is refused.
 TEST_CASE(
     "limits sizes 2: an item that a path or a lazy only skips does not count, and the same item read does")
 {
@@ -209,9 +208,9 @@ TEST_CASE("doc basics: the error of each size limit")
     CHECK_EQ(cbor::at_path<"$[0]", int>(three).error(), error::container_elements_exceeded);
 }
 
-// The former advanced basics guide, section "Limits", whose facts now stand in tools/doc/groups/errors.dox and lazy.dox:
-// a limit is checked by the step that reads the item. So a string that is too long gives string_length_exceeded at get,
-// not at lazy::copy. A user expected it at lazy::copy.
+// This comes from the former advanced basics guide, section "Limits". Its facts now stand in tools/doc/groups/errors.dox
+// and lazy.dox. A limit is checked by the step that reads the item. So a string that is too long gives
+// string_length_exceeded at get, not at lazy::copy. A user expected it at lazy::copy.
 TEST_CASE("doc advanced basics: a string limit is checked at get")
 {
     auto const l = test::make_lazy_from_copy(preferred(V("xyz"s)));
@@ -232,8 +231,9 @@ TEST_CASE("doc advanced basics: a skip does not count")
     CHECK_EQ(test::make_value_from_item(*test::make_lazy_from_copy(bytes)).error(), error::string_length_exceeded);
 }
 
-// The former advanced path guide, section "Limits", whose facts now stand in tools/doc/groups/path.dox: a string that a
-// path reads counts, a string that it only skips does not. Every container that the walk reads counts.
+// This comes from the former advanced path guide, section "Limits". Its facts now stand in tools/doc/groups/path.dox. A
+// string that a path reads counts. A string that it only skips does not count. Every container that the walk reads
+// counts.
 TEST_CASE("doc advanced path: the size limits")
 {
     std::string const bytes = preferred(M("long"s, "xyz"s, "n"s, 1));
@@ -295,8 +295,8 @@ TEST_CASE("limits sizes 2: the string and container limits of packed")
 
 #endif
 
-// Limits apply to the output only (owner, 2026-10-18): the reader skips over an item to find its end and gives
-// a string or a container above the limit as an item. A read of its value gives the error of the limit.
+// Limits apply to the output only (owner, 2026-10-18). The reader skips over an item to find its end. It gives a string
+// or a container above the limit as an item. A read of its value gives the error of the limit.
 TEST_CASE("limits sizes 2: sequence_reader gives an item above a size limit, and its read fails")
 {
     for (test::feed_form const form : test::feed_forms) {
@@ -328,7 +328,7 @@ struct labelled {
 CBOR_DEFINE_TYPE_MEMBERS(labelled, cbor::tag{1749}, label);
 
 // A text alternative of a variant member is a string item. So string_length counts its length as it counts a text
-// member: a text at the limit reads, one above it is string_length_exceeded in decode and on the path.
+// member. A text at the limit reads. A text one above it is string_length_exceeded in decode and on the path.
 TEST_CASE("limits sizes 2: string_length on a text alternative of a variant member")
 {
     auto const fits = cbor::schema<labelled>::encode(labelled{std::string(limit, 'a')});

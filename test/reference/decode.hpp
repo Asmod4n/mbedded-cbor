@@ -15,9 +15,9 @@
 namespace test
 {
 
-// The index selector of RFC 9535 through the public interface of lazy: an index counts from the end when it
-// is negative, and on a map it names the integer key, as at_path reads it.
-inline std::expected<cbor::lazy, cbor::error> select_index(cbor::lazy const &l, std::int64_t const index)
+// The index selector of RFC 9535 through the public interface of lazy. An index counts from the end when it is negative.
+// On a map it names the integer key, as at_path reads it.
+inline std::expected<cbor::lazy, cbor::error> select_element_by_index(cbor::lazy const &l, std::int64_t const index)
 {
     if (auto const e = l.elements(); !e && e.error() == cbor::error::not_indexable)
         return l.at(cbor::key{index});
@@ -35,7 +35,7 @@ inline std::expected<cbor::lazy, cbor::error> select_index(cbor::lazy const &l, 
 inline std::expected<value, error> make_value_from_item(cbor::item const &it);
 
 template <cbor::type K>
-std::expected<value, error> tag_value(cbor::item const &it)
+std::expected<value, error> make_value_from_tag_item(cbor::item const &it)
 {
     std::pair<std::uint64_t, cbor::item const *> const tag = it.get<K>().value();
     std::uint64_t const number = tag.first;
@@ -44,14 +44,14 @@ std::expected<value, error> tag_value(cbor::item const &it)
     if ((number == 2 || number == 3) && magnitude) {
         bool const negative_value = number == 3;
         std::string_view const m =
-            magnitude_without_leading_zeros(std::string_view(reinterpret_cast<char const *>(magnitude->data()), magnitude->size()));
+            strip_leading_zeros_of_magnitude(std::string_view(reinterpret_cast<char const *>(magnitude->data()), magnitude->size()));
         if (m.size() <= sizeof(std::uint64_t)) {
             std::uint64_t n = 0;
             for (char const c : m)
                 n = n << 8 | static_cast<unsigned char>(c);
             return negative_value ? value{negative{n}} : value{n};
         }
-        return value{bignum{negative_value, negative_value ? magnitude_plus_one(m) : std::string(m)}};
+        return value{bignum{negative_value, negative_value ? add_one_to_magnitude(m) : std::string(m)}};
     }
     auto c = make_value_from_item(inner);
     if (!c)
@@ -59,9 +59,9 @@ std::expected<value, error> tag_value(cbor::item const &it)
     return value{tagged{number, std::move(*c)}};
 }
 
-// The reference model of a decoded item tree. Tags 28 and 29 are plain tags over their content, as RFC 8949
-// 3.4 lets a reader that does not know a tag pass it on. A bignum that fits 64 bits is an integer. Tag 24 is a tag
-// over its byte string.
+// The reference model of a decoded item tree. Tags 28 and 29 are plain tags over their content. RFC 8949 3.4 lets a
+// reader that does not know a tag pass it on. A bignum that fits 64 bits is an integer. Tag 24 is a tag over its byte
+// string.
 inline std::expected<value, error> make_value_from_item(cbor::item const &it)
 {
     switch (it.type) {
@@ -117,13 +117,13 @@ inline std::expected<value, error> make_value_from_item(cbor::item const &it)
         return value{std::move(m)};
     }
     case cbor::type::tag:
-        return tag_value<cbor::type::tag>(it);
+        return make_value_from_tag_item<cbor::type::tag>(it);
     case cbor::type::unsigned_bignum:
-        return tag_value<cbor::type::unsigned_bignum>(it);
+        return make_value_from_tag_item<cbor::type::unsigned_bignum>(it);
     case cbor::type::negative_bignum:
-        return tag_value<cbor::type::negative_bignum>(it);
+        return make_value_from_tag_item<cbor::type::negative_bignum>(it);
     case cbor::type::typed_array:
-        return tag_value<cbor::type::typed_array>(it);
+        return make_value_from_tag_item<cbor::type::typed_array>(it);
     case cbor::type::shared_reference:
         return value{tagged{std::uint64_t{29},
                             value{it.get<cbor::type::shared_reference>().value().first}}};
@@ -147,7 +147,7 @@ inline std::expected<value, error> make_value_from_item(std::expected<cbor::lazy
     return make_value_from_item(*l);
 }
 
-inline std::expected<value, error> decoded(std::string_view const wire)
+inline std::expected<value, error> decode_wire_into_value(std::string_view const wire)
 {
     auto const l = test::make_lazy_from_copy(wire);
     if (!l)
@@ -155,9 +155,9 @@ inline std::expected<value, error> decoded(std::string_view const wire)
     return make_value_from_item(*l);
 }
 
-inline error decode_error(std::string_view const wire)
+inline error read_decode_error_of_wire(std::string_view const wire)
 {
-    auto const v = decoded(wire);
+    auto const v = decode_wire_into_value(wire);
     REQUIRE_FALSE(v.has_value());
     return v.error();
 }

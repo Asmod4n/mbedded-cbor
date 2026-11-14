@@ -74,22 +74,22 @@ TEST_CASE("test vectors: RFC 8949 Appendix A")
     for (vector_case const &c : cases) {
         CAPTURE(c.hex);
         std::string const wire = test::unhexlify(c.hex);
-        auto const v = decoded(wire);
+        auto const v = decode_wire_into_value(wire);
         if (!v) {
             CHECK_EQ(v.error(), error::indefinite_length);
             continue;
         }
         if (c.roundtrip) {
-            auto const back = decoded(encoded(*v));
+            auto const back = decode_wire_into_value(encode_value_to_wire(*v));
             REQUIRE(back.has_value());
             CHECK(*back == *v);
         }
     }
 }
 
-// fail.json holds data items that are not well-formed. Read as exactly one data item, none may
-// succeed: decode fails, or bytes remain after the item, which RFC 8949 Appendix F calls too much
-// data. cbor::decode itself leaves trailing bytes alone, as CBOR.decode of mruby-cbor does.
+// fail.json holds data items that are not well-formed. Each item is read as exactly one data item. None may succeed.
+// decode fails, or bytes remain after the item. RFC 8949 Appendix F calls this too much data. cbor::decode itself leaves
+// trailing bytes alone, as CBOR.decode of mruby-cbor does.
 TEST_CASE("test vectors: not well-formed items fail")
 {
     auto const cases = cases_of(TEST_VECTORS "/fail.json");
@@ -101,16 +101,16 @@ TEST_CASE("test vectors: not well-formed items fail")
         std::string const wire = test::unhexlify(c.hex);
         auto const end = cbor::item_size(wire);
         bool const one_item = end.has_value() && *end == wire.size();
-        CHECK_FALSE((one_item && decoded(wire).has_value()));
+        CHECK_FALSE((one_item && decode_wire_into_value(wire).has_value()));
     }
 }
 
-// RFC 8949 section 3: the head of every example gives the major type in the high 3 bits, the additional information in
-// the low 5 bits and the argument after it. The item of each example keeps these fields from the wire. Its content
-// follows section 3.1: a string is the bytes after the head, an array and a map hold as many members as the argument
-// says, a tag points to its content, a float holds the bits of the argument in the width of the additional information.
-// Indefinite lengths are refused, as cbor::decode refuses them. Every example is in preferred form, which is the own
-// form of encode(item), so encode gives the bytes of the example.
+// RFC 8949 section 3: the head of every example gives the major type in the high 3 bits. It gives the additional
+// information in the low 5 bits. The argument follows it. The item of each example keeps these fields from the wire. The
+// content follows section 3.1. A string is the bytes after the head. An array and a map hold as many members as the
+// argument says. A tag points to its content. A float holds the bits of the argument in the width of the additional
+// information. Indefinite lengths are refused, as cbor::decode refuses them. Every example is in preferred form, which
+// is the own form of encode(item), so encode gives the bytes of the example.
 TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fields of the wire")
 {
     auto const cases = cases_of(TEST_VECTORS "/appendix_a.json");
@@ -141,7 +141,7 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
             argument = argument << 8 | static_cast<std::uint8_t>(wire[i]);
         cbor::major_type const major = static_cast<cbor::major_type>(initial >> 5);
         CHECK_EQ(it.additional_information, info);
-        CHECK_EQ(argument_of(it), argument);
+        CHECK_EQ(read_argument_of_item(it), argument);
         std::string_view const after_head = std::string_view(wire).substr(1 + argument_bytes);
         switch (major) {
         case cbor::major_type::unsigned_integer:
@@ -165,11 +165,11 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
         case cbor::major_type::array:
         case cbor::major_type::map:
             REQUIRE((it.type == cbor::type::array || it.type == cbor::type::map));
-            CHECK_EQ(children_of(it).size(), it.type == cbor::type::map ? 2 * argument : argument);
+            CHECK_EQ(list_children_of_item(it).size(), it.type == cbor::type::map ? 2 * argument : argument);
             break;
         case cbor::major_type::tag: {
             std::string content;
-            REQUIRE(cbor::encode(*tag_content_of(it), content).has_value());
+            REQUIRE(cbor::encode(*read_tag_content_of_item(it), content).has_value());
             CHECK_EQ(static_cast<std::uint8_t>(content.front()) >> 5, static_cast<std::uint8_t>(after_head.front()) >> 5);
             break;
         }
@@ -181,7 +181,7 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
             else if (info == 27)
                 CHECK_EQ(it.type, cbor::type::double_float);
             else
-                CHECK_EQ(argument_of(it), argument);
+                CHECK_EQ(read_argument_of_item(it), argument);
             break;
         }
     }
@@ -233,8 +233,8 @@ std::string member_bytes(cbor::lazy const &object, std::string_view const key)
     return out;
 }
 
-// The files are CBOR. They are read with the library under test: lazy finds the members, and item_size gives
-// the bytes of each "decoded" item, which the tests below decode as the expectation.
+// The files are CBOR. They are read with the library under test. lazy finds the members. item_size gives the bytes of
+// each "decoded" item. The tests below decode those bytes as the expectation.
 std::vector<wg_vector> wg_vectors_of(std::string const &path)
 {
     std::string const file = file_read(path);
@@ -285,13 +285,13 @@ std::string magnitude_of_unsigned(std::uint64_t const u)
     return out;
 }
 
-std::string magnitude_without_leading_zeros(std::string_view const m)
+std::string strip_leading_zeros_of_magnitude(std::string_view const m)
 {
     std::size_t const first = m.find_first_not_of('\0');
     return first == std::string_view::npos ? std::string() : std::string(m.substr(first));
 }
 
-std::string magnitude_plus_one(std::string m)
+std::string add_one_to_magnitude(std::string m)
 {
     for (auto it = m.rbegin(); it != m.rend(); ++it) {
         *it = static_cast<char>(static_cast<unsigned char>(*it) + 1u);
@@ -308,15 +308,15 @@ std::optional<integer_value> integer_of(value const &v)
     if (auto const *u = std::get_if<std::uint64_t>(&v.kind))
         return integer_value{false, magnitude_of_unsigned(*u)};
     if (auto const *n = std::get_if<negative>(&v.kind))
-        return integer_value{true, magnitude_plus_one(magnitude_of_unsigned(n->argument))};
+        return integer_value{true, add_one_to_magnitude(magnitude_of_unsigned(n->argument))};
     if (auto const *b = get_if<bignum>(v))
-        return integer_value{b->negative, magnitude_without_leading_zeros(b->magnitude)};
+        return integer_value{b->negative, strip_leading_zeros_of_magnitude(b->magnitude)};
     if (auto const *t = get_if<tagged>(v); t != nullptr && (t->tag == 2 || t->tag == 3)) {
         auto const *content = get_if<bytes>(t->content);
         if (content == nullptr)
             return std::nullopt;
-        std::string const n = magnitude_without_leading_zeros(content->b);
-        return integer_value{t->tag == 3, t->tag == 3 ? magnitude_plus_one(n) : n};
+        std::string const n = strip_leading_zeros_of_magnitude(content->b);
+        return integer_value{t->tag == 3, t->tag == 3 ? add_one_to_magnitude(n) : n};
     }
     return std::nullopt;
 }
@@ -363,9 +363,9 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
     cbor::item const &it = **decoded_item;
     switch (find_major_type_of(it.type)) {
     case cbor::major_type::unsigned_integer:
-        return value{argument_of(it)};
+        return value{read_argument_of_item(it)};
     case cbor::major_type::negative_integer:
-        return value{negative{argument_of(it)}};
+        return value{negative{read_argument_of_item(it)}};
     case cbor::major_type::byte_string: {
         std::string b;
         auto const content = it.get<cbor::type::byte_string>().value();
@@ -418,7 +418,7 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
         auto content = lazy_value(*content_lazy);
         if (!content)
             return content;
-        return value{tagged{argument_of(it), std::move(*content)}};
+        return value{tagged{read_argument_of_item(it), std::move(*content)}};
     }
     case cbor::major_type::simple:
         if (it.additional_information >= 25 && it.additional_information <= 27) {
@@ -427,7 +427,7 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
                 return std::unexpected(d.error());
             return value{*d};
         }
-        return value{simple{static_cast<std::uint8_t>(argument_of(it))}};
+        return value{simple{static_cast<std::uint8_t>(read_argument_of_item(it))}};
     }
     return std::unexpected(error::syntax_error);
 }
@@ -492,20 +492,20 @@ wg_count wg_good_check(wg_vector const &v)
     REQUIRE_FALSE(v.decoded.empty());
     // No depth is fixed. A vector nested deeper than the stack of the main thread holds gives nesting_depth_exceeded;
     // the test case counts it and checks the count.
-    if (auto const shallow = decoded(v.encoded);
+    if (auto const shallow = decode_wire_into_value(v.encoded);
         !shallow && shallow.error() == error::nesting_depth_exceeded) {
         return {1, 1};
     }
-    auto const expected = decoded(v.decoded);
+    auto const expected = decode_wire_into_value(v.decoded);
     REQUIRE(expected.has_value());
 
-    auto const d = decoded(v.encoded);
+    auto const d = decode_wire_into_value(v.encoded);
     REQUIRE(d.has_value());
     CHECK(equivalent(*d, *expected));
     if (v.roundtrip) {
         // The encoder writes a run-time number at its native width, so the bytes differ from the vector,
         // which is in preferred form. The value read back must be the same.
-        auto const back = decoded(wire_encoded(*d));
+        auto const back = decode_wire_into_value(wire_encoded(*d));
         REQUIRE(back.has_value());
         CHECK(equivalent(*back, *expected));
     }
@@ -565,9 +565,9 @@ TEST_CASE("cbor-wg test vectors: every good vector decodes to its decoded item")
         }
     }
     CHECK_EQ(count.vectors, 88u + 11u + 5u + 2u + 7u + 4u + 5u + 8u + 22u + 6u + 1165u);
-    // Three vectors nest deeper than 128 levels. No depth is fixed: they decode where the stack of the main thread
-    // holds them, and give nesting_depth_exceeded where it does not (the frames of a Windows debug build, the stack of
-    // a WebAssembly program).
+    // Three vectors nest deeper than 128 levels. No depth is fixed. They decode where the stack of the main thread holds
+    // them. They give nesting_depth_exceeded where it does not. Two cases are the frames of a Windows debug build and
+    // the stack of a WebAssembly program.
     if constexpr (test::main_thread_holds_deep_input)
         CHECK_EQ(count.nesting_depth_exceeded, 0u);
     else
@@ -583,7 +583,7 @@ TEST_CASE("cbor-wg test vectors: every bad vector fails")
         CAPTURE(v.description);
         CAPTURE(v.encoded);
         REQUIRE(v.fail);
-        auto const d = decoded(v.encoded);
+        auto const d = decode_wire_into_value(v.encoded);
         auto const l = lazy_value_of(v.encoded);
         auto const text = cbor::diagnostic_notation(v.encoded);
         if (v.encoded == "\x62\xc0\xae"sv) {
@@ -631,7 +631,7 @@ TEST_CASE("cbor-wg test vectors: indefinite length is refused")
                 hex.push_back(edn.at(at));
         CAPTURE(hex);
         std::string const wire = test::unhexlify(hex);
-        CHECK_EQ(decoded(wire).error(), error::indefinite_length);
+        CHECK_EQ(decode_wire_into_value(wire).error(), error::indefinite_length);
         CHECK_EQ(lazy_value_of(wire).error(), error::indefinite_length);
         CHECK(cbor::diagnostic_notation(wire).has_value());
         ++checked;
@@ -639,9 +639,9 @@ TEST_CASE("cbor-wg test vectors: indefinite length is refused")
     CHECK_EQ(checked, 11u);
 }
 
-// RFC 8949 3.4.1 and 3.4.2 name the content of tags 0 and 1, but the library interprets neither tag (owner,
-// 2026-10-13). So every content passes as a plain tag in decode, lazy and diagnostic_notation: one item of each
-// major type, each float width and two simple values, alone and behind a tag 28 or a tag 29.
+// RFC 8949 3.4.1 and 3.4.2 name the content of tags 0 and 1, but the library interprets neither tag (owner, 2026-10-13).
+// So every content passes as a plain tag in decode, lazy and diagnostic_notation. The contents are one item of each
+// major type, each float width and two simple values. Each stands alone and behind a tag 28 or a tag 29.
 TEST_CASE("tags 0 and 1: decode, lazy and diagnostic_notation pass every content")
 {
     std::array<std::string_view, 12> const contents{
@@ -656,7 +656,7 @@ TEST_CASE("tags 0 and 1: decode, lazy and diagnostic_notation pass every content
             std::string const forward = std::string(1, tag) + "\xd8\x1d\x00"s;
             for (std::string const &wire : {plain, marked, inside, forward}) {
                 CAPTURE(wire);
-                CHECK(decoded(wire).has_value());
+                CHECK(decode_wire_into_value(wire).has_value());
                 CHECK(lazy_value_of(wire).has_value());
                 CHECK(cbor::diagnostic_notation(wire).has_value());
             }
@@ -759,7 +759,7 @@ TEST_CASE("sequence_reader: not well-formed items give one error at every split"
 }
 
 // Every test that reads hex digits goes through test::unhexlify. So a wrong literal must fail the test and not become
-// other bytes. binascii.unhexlify of Python takes both cases and refuses an odd count and a character that is not a hex
+// other bytes. binascii.unhexlify of Python takes both cases. It refuses an odd count and a character that is not a hex
 // digit. Test::hexlify writes lower case, as binascii.hexlify does.
 TEST_CASE("hex: unhexlify and hexlify of the tests read and write as binascii of Python")
 {

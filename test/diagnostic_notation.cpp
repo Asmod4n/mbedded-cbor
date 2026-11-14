@@ -28,9 +28,9 @@ std::string inspected(std::string_view const hex)
 
 } // namespace
 
-// RFC 8949 Appendix A gives the diagnostic notation of each example. The text is the table of the RFC, except where
-// the draft of EDN asks for another form: an encoding indicator on a float that is not in its preferred
-// serialization (Table 2 of the draft). A bignum shows as its tag, and a text string shows its UTF-8 unescaped.
+// RFC 8949 Appendix A gives the diagnostic notation of each example. The text is the table of the RFC. One exception
+// holds where the draft of EDN asks for another form. A float that is not in its preferred serialization carries an
+// encoding indicator (Table 2 of the draft). A bignum shows as its tag, and a text string shows its UTF-8 unescaped.
 TEST_CASE("diagnostic_notation: the examples of RFC 8949 Appendix A")
 {
     std::pair<std::string_view, std::string_view> const examples[] = {
@@ -158,9 +158,9 @@ TEST_CASE("diagnostic_notation: the diagnostic field of the test vectors")
     CHECK_EQ(checked, 17u);
 }
 
-// draft-ietf-cbor-edn-literals-28 4.1 Table 7 and 4.2 (the table writes "A"_1 beside 79000161, whose content is
-// the letter a): a head that is not the preferred one carries _0 to _3,
-// an empty indefinite-length string is ''_ or ""_ (4.3), and 3.7 notes a NaN with a payload as float''.
+// This follows draft-ietf-cbor-edn-literals-28 4.1 Table 7 and 4.2. The table writes "A"_1 beside 79000161, whose
+// content is the letter a. A head that is not the preferred one carries _0 to _3. An empty indefinite-length string is
+// ''_ or ""_ (4.3). Section 3.7 notes a NaN with a payload as float''.
 TEST_CASE("diagnostic_notation: encoding indicators of the EDN draft")
 {
     CHECK_EQ(inspected("190001"), "1_1");
@@ -237,11 +237,10 @@ TEST_CASE("diagnostic_notation: an item that is not well-formed is an error")
              error::nesting_depth_exceeded);
 }
 
-// RFC 8949 3.2.3: each chunk of an indefinite-length string is a definite-length string of the same major
-// type. A chunk of another major type, a chunk of indefinite length and a head with the reserved additional
-// information 28 to 30 (RFC 8949 3) are not well-formed. Every initial byte except the break 0xff stands once
-// as the chunk of each string type. Its argument and its content follow in full, so that only the initial
-// byte decides.
+// RFC 8949 3.2.3: each chunk of an indefinite-length string is a definite-length string of the same major type. These
+// items are not well-formed. One has a chunk of another major type. One has a chunk of indefinite length. One has a head
+// with the reserved additional information 28 to 30 (RFC 8949 3). Every initial byte except the break 0xff stands once
+// as the chunk of each string type. Its argument and its content follow in full, so that only the initial byte decides.
 TEST_CASE("diagnostic_notation: the chunk of an indefinite-length string for every initial byte")
 {
     constexpr unsigned additional_information_bits = 5;
@@ -273,10 +272,10 @@ TEST_CASE("diagnostic_notation: the chunk of an indefinite-length string for eve
         }
 }
 
-// RFC 8949 Section 3.2.3: an indefinite-length string is a sequence of chunks that ends with the break 0xff. 5f and
-// 7f with no byte after them have neither a chunk nor a break. Section 3.4: a tag is followed by its content, and
-// c1 18 is tag 1 with a head whose one-byte argument (Section 3) is missing. The test exists because each of these
-// reads a head where no byte or too few bytes are left, and each must give too_little_data.
+// RFC 8949 Section 3.2.3: an indefinite-length string is a sequence of chunks. The break 0xff ends it. 5f and 7f with no
+// byte after them have neither a chunk nor a break. Section 3.4: a tag is followed by its content, and c1 18 is tag 1
+// with a head whose one-byte argument (Section 3) is missing. The test exists because each of these reads a head where
+// no byte or too few bytes are left, and each must give too_little_data.
 TEST_CASE("diagnostic_notation: a chunk or a tag content with too few bytes is too_little_data")
 {
     CHECK_EQ(cbor::diagnostic_notation("\x5f"sv).error(), error::too_little_data);
@@ -286,8 +285,8 @@ TEST_CASE("diagnostic_notation: a chunk or a tag content with too few bytes is t
     CHECK_EQ(cbor::diagnostic_notation("\xc1\x19\x01"sv).error(), error::too_little_data);
 }
 
-// The owner decided that diagnostic notation interprets no tag. It prints 28(...) and 29(n) as plain tags and
-// checks no index and no tag content, also where a lazy or a struct decode would refuse the bytes.
+// The owner decided that diagnostic notation interprets no tag. It prints 28(...) and 29(n) as plain tags. It checks no
+// index and no tag content. This holds also where a lazy or a struct decode would refuse the bytes.
 TEST_CASE("diagnostic_notation: tags 28 and 29 are plain tags")
 {
     CHECK_EQ(inspected("d81d05"), "29(5)");
@@ -333,8 +332,8 @@ TEST_CASE("diagnostic_notation: a tag encloses an indefinite-length item")
     CHECK_EQ(inspected("c09fff"), "0([_ ])");
 }
 
-// RFC 8949 3: each data item has at least its initial byte. diagnostic_notation refuses a count larger than the bytes
-// left with too_little_data before it writes an element, by owner decision.
+// RFC 8949 3: each data item has at least its initial byte. By owner decision, diagnostic_notation refuses a count
+// larger than the bytes left. It gives too_little_data before it writes an element.
 TEST_CASE("diagnostic_notation: a count larger than the bytes left is too_little_data before the elements")
 {
     for (std::string_view const wire : {"\x8c\xff"sv, "\x95\xf8\x04"sv, "\x95\xbf"sv, "\x88\x00\x7f"sv,

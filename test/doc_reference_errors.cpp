@@ -16,9 +16,9 @@ using namespace std::string_literals;
 // example through the snippet markers. The tests exist so that every example compiles and gives the result that its page
 // states.
 
-// tools/doc/groups/errors.dox, snippet errors group: the EXAMPLES section of the man page of the group errors reads a
-// missing key with cbor::lazy, and turns its error into a std::error_code. The test checks each value that the
-// comments of the example state.
+// tools/doc/groups/errors.dox, snippet errors group. The EXAMPLES section of the man page of the group errors reads a
+// missing key with cbor::lazy. It turns the error into a std::error_code. The test checks each value that the comments
+// of the example state.
 TEST_CASE("doc reference errors: the example of the group errors")
 {
     std::string bytes = test::preferred(test::M("a"s, 1));

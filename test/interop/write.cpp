@@ -1,8 +1,8 @@
-// Writes every interop case as one line "name TAB section TAB written TAB expected" to stdout. written and
-// expected are hex. written comes from a public writer of the library: cbor::encoder, cbor::encode(item),
-// structs<T>::encode or schema<T>::encode. expected holds the same value in bytes that do not come from the
-// writer under test: the input of a re-encode, or bytes written by hand from RFC 8949 and RFC 8746. A dash
-// stands for a case with no expected bytes; the decoders must then only accept the written bytes. A writer
+// Writes every interop case as one line to stdout. The line is "name TAB section TAB written TAB expected". Written and
+// expected are hex. Written comes from a public writer of the library. The writers are cbor::encoder,
+// cbor::encode(item), structs<T>::encode and schema<T>::encode. Expected holds the same value in bytes that do not come
+// from the writer under test. These bytes are the input of a re-encode, or bytes written by hand from RFC 8949 and RFC
+// 8746. A dash stands for a case with no expected bytes; the decoders must then only accept the written bytes. A writer
 // that refuses a value gives "!" and the error in place of written, so the driver reports it.
 #include <cbor/cbor.hpp>
 #include "../rfc8746.hpp"
@@ -397,7 +397,7 @@ void shared_values()
     }
 }
 
-// Every tag of RFC 8746 Table 1 except the reserved 76, written by encoder::typed_array. 16 bytes are a
+// Every tag of RFC 8746 Table 1 is written by encoder::typed_array. The reserved tag 76 is the exception. 16 bytes are a
 // whole number of elements for every element size.
 void typed_arrays()
 {

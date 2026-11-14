@@ -69,7 +69,7 @@ std::vector<cbor::item const *> marks_of(tree const &t)
             pending.push_back(tag->second);
         }
         if (i->type == cbor::type::array || i->type == cbor::type::map) {
-            auto const c = children_of(*i);
+            auto const c = list_children_of_item(*i);
             for (auto it = c.rbegin(); it != c.rend(); ++it)
                 pending.push_back(*it);
         }
@@ -77,7 +77,8 @@ std::vector<cbor::item const *> marks_of(tree const &t)
     return marks;
 }
 
-// The item that a mark of tag 28 or a reference of tag 29 stands for, read from the tree by the index of the mark.
+// This is the item that a mark of tag 28 or a reference of tag 29 stands for. It is read from the tree by the index of
+// the mark.
 place target(place n)
 {
     constexpr int most_steps = 1000;
@@ -117,7 +118,7 @@ std::vector<place> children(P const &container)
 {
     place const c = target(container);
     std::vector<place> out;
-    for (cbor::item const *const child : children_of(*c))
+    for (cbor::item const *const child : list_children_of_item(*c))
         out.push_back(place{c.t, child});
     return out;
 }
@@ -223,12 +224,12 @@ handle object_of(std::uint64_t const tag, handle content)
     return std::make_shared<node>(node{object{tag, std::move(content)}});
 }
 
-// The writer of the application. It decides what has identity: an integer has none, and a string key has none, as
-// mruby copies an unfrozen String key. The encoder writes tags 28 and 29 only for a cycle: a first pass walks the
-// value as the write walks it and finds each node that a cycle reaches again. The second pass writes tag 28 before
-// such a node and tag 29 with its index where the cycle reaches the node again, through the public encoder. A node
-// that two places hold without a cycle is written in full at each place. The mode repeats_marked writes the input
-// of another writer, which marks every node it meets twice; the decoder reads that input too.
+// The writer of the application. It decides what has identity: an integer has none, and a string key has none, as mruby
+// copies an unfrozen String key. The encoder writes tags 28 and 29 only for a cycle. A first pass walks the value as the
+// write walks it. It finds each node that a cycle reaches again. The second pass writes tag 28 before such a node. It
+// writes tag 29 with its index where the cycle reaches the node again. It does this through the public encoder. A node
+// that two places hold without a cycle is written in full at each place. The mode repeats_marked writes the input of
+// another writer, which marks every node it meets twice; the decoder reads that input too.
 enum class marks { cycles, repeats_marked, none };
 
 // The public encoder writes an unsigned integer in the width of its type. So the writer writes the index of a tag 29 in
@@ -378,15 +379,15 @@ tree round_trip(handle const &v, marks const mode = marks::cycles)
 } // namespace shared_test
 
 // The owner decided that tags 28 and 29 exist only to write cycles. A value that two places hold without a cycle is
-// written in full at each place, with no tag 28, and decodes to two equal values.
+// written in full at each place. It has no tag 28. It decodes to two equal values.
 TEST_CASE("tag 28/29: a repeated value without a cycle is written twice")
 {
     auto const a = arr({u(1), u(2)});
-    std::string const one = "\x82"s + test::native_unsigned(1) + test::native_unsigned(2);
+    std::string const one = "\x82"s + test::write_unsigned_at_native_width(1) + test::write_unsigned_at_native_width(2);
     CHECK_EQ(encoded_shared(arr({a, a})), "\x82"s + one + one);
     auto const r = round_trip(arr({a, a}));
     CHECK_FALSE(is_reference(children(r)[1]));
-    CHECK_EQ(argument_of(*element(element(r, 1), 1)), 2u);
+    CHECK_EQ(read_argument_of_item(*element(element(r, 1), 1)), 2u);
 }
 
 // Ported from test.rb: 'tag 28/29: repeated value → identity preserved (eager)'. The input comes from a writer that
@@ -437,8 +438,8 @@ TEST_CASE("tag 28/29: a cyclic array and a cyclic map")
     std::get<std::vector<std::pair<handle, handle>>>(h->kind).clear();
 }
 
-// A cycle can come from the wire. encode of the tree writes the reference as it stands and does not follow
-// it, so a cycle ends.
+// A cycle can come from the wire. encode of the tree writes the reference as it stands. It does not follow it, so a
+// cycle ends.
 TEST_CASE("tag 28/29: encode of a tree with a cycle ends")
 {
     tree const a = decoded_ref("\xd8\x1c\x81\xd8\x1d\x00"sv);
@@ -546,11 +547,11 @@ TEST_CASE("tag 28/29: a string key without identity is written each time")
 {
     auto const k = s("repeated_key");
     CHECK_EQ(encoded_shared(arr({obj({{k, u(1)}}), obj({{k, u(2)}})})),
-             "\x82\xa1\x6crepeated_key"s + test::native_unsigned(1) + "\xa1\x6crepeated_key"s + test::native_unsigned(2));
+             "\x82\xa1\x6crepeated_key"s + test::write_unsigned_at_native_width(1) + "\xa1\x6crepeated_key"s + test::write_unsigned_at_native_width(2));
 }
 
 // Replaces test.rb: 'tag 28/29: same object as value AND key — only values share'. mruby keeps an Array key as the same
-// object (measured with mruby 14fc2ef). So an array key with identity shares.
+// object. It was measured with mruby 14fc2ef. So an array key with identity shares.
 TEST_CASE("tag 28/29: an array key with identity shares with the values")
 {
     auto const a = arr({u(1), u(2), u(3)});
@@ -577,7 +578,7 @@ TEST_CASE("application tag: one object three times is written three times")
     shared_writer w;
     w.count(arr({p, p, p}), false);
     CHECK_EQ(w.content_reads, 3);
-    std::string const one = "\xd9\x13\x88\x82"s + test::native_unsigned(3) + test::native_unsigned(7);
+    std::string const one = "\xd9\x13\x88\x82"s + test::write_unsigned_at_native_width(3) + test::write_unsigned_at_native_width(7);
     CHECK_EQ(encoded_shared(arr({p, p, p})), "\x83"s + one + one + one);
 }
 
@@ -596,7 +597,7 @@ TEST_CASE("application tag: the iov target with shared references gives the byte
     REQUIRE(w.write(e, v, false).has_value());
     auto const pieces = e.finish();
     REQUIRE(pieces.has_value());
-    auto const read = test::joined(**pieces);
+    auto const read = test::join_pieces_into_bytes(**pieces);
     REQUIRE(read.has_value());
     std::string const joined = *read;
     CHECK_EQ(joined, encoded_shared(v));
@@ -611,7 +612,7 @@ TEST_CASE("application tag: distinct objects with equal content do not share")
     shared_writer w;
     w.count(arr({p1, p2}), false);
     CHECK_EQ(w.content_reads, 2);
-    CHECK_EQ(encoded_shared(arr({p1, p2})), "\x82\xd9\x13\x88\x82"s + test::native_unsigned(1) + test::native_unsigned(2) + "\xd9\x13\x88\x82"s + test::native_unsigned(1) + test::native_unsigned(2));
+    CHECK_EQ(encoded_shared(arr({p1, p2})), "\x82\xd9\x13\x88\x82"s + test::write_unsigned_at_native_width(1) + test::write_unsigned_at_native_width(2) + "\xd9\x13\x88\x82"s + test::write_unsigned_at_native_width(1) + test::write_unsigned_at_native_width(2));
 }
 
 // Ported from test.rb: 'registered tag + sharedref: instance with self-referential field'. The tag item of the
@@ -619,7 +620,7 @@ TEST_CASE("application tag: distinct objects with equal content do not share")
 TEST_CASE("application tag: a reference inside the content names the object")
 {
     auto const r = decoded_ref("\xd8\x1c\xd9\x13\x88\x81\xd8\x1d\x00"sv);
-    CHECK_EQ(argument_of(*target(r)), 5000u);
+    CHECK_EQ(read_argument_of_item(*target(r)), 5000u);
     CHECK(same(element(content(r), 0), r));
 }
 
@@ -627,7 +628,7 @@ TEST_CASE("application tag: a reference inside the content names the object")
 TEST_CASE("application tag: a reference after the object names the object")
 {
     auto const r = decoded_ref("\x82\xd8\x1c\xd9\x13\x88\x81\x01\xd8\x1d\x00"sv);
-    CHECK_EQ(argument_of(*element(r, 0)), 5000u);
+    CHECK_EQ(read_argument_of_item(*element(r, 0)), 5000u);
     CHECK(same(element(r, 0), element(r, 1)));
 }
 
@@ -637,7 +638,7 @@ TEST_CASE("application tag: two objects that name each other")
     // 28 5000([28 5000([29 0])])
     auto const r = decoded_ref("\xd8\x1c\xd9\x13\x88\x81\xd8\x1c\xd9\x13\x88\x81\xd8\x1d\x00"sv);
     place const peer = element(content(r), 0);
-    CHECK_EQ(argument_of(*peer), 5000u);
+    CHECK_EQ(read_argument_of_item(*peer), 5000u);
     CHECK(same(element(content(peer), 0), r));
 }
 
@@ -645,8 +646,8 @@ TEST_CASE("application tag: two objects that name each other")
 TEST_CASE("application tag: a tag without meaning is a tag item")
 {
     auto const r = decoded_ref("\xc1\x01"sv);
-    CHECK_EQ(argument_of(*target(r)), 1u);
-    CHECK_EQ(argument_of(*content(r)), 1u);
+    CHECK_EQ(read_argument_of_item(*target(r)), 1u);
+    CHECK_EQ(read_argument_of_item(*content(r)), 1u);
 }
 
 // Ported from test.rb: 'tag 28/29: shared value preserved via lazy.value'.
@@ -682,7 +683,7 @@ TEST_CASE("application tag: a content made at the time of the write")
         REQUIRE(w.write(e, fresh, false).has_value());
     }
     REQUIRE(e.finish().has_value());
-    std::string const one = "\xd9\x13\x88\x82"s + test::native_unsigned(1) + "\x82"s + test::native_unsigned(2) + test::native_unsigned(3);
+    std::string const one = "\xd9\x13\x88\x82"s + test::write_unsigned_at_native_width(1) + "\x82"s + test::write_unsigned_at_native_width(2) + test::write_unsigned_at_native_width(3);
     CHECK_EQ(out, one + one);
 }
 
@@ -702,7 +703,7 @@ TEST_CASE("lazy: a value shared by two map values keeps its identity")
 TEST_CASE("tag 28: inside tag 28 without a reference")
 {
     auto const r = decoded_ref("\xd8\x1c\xd8\x1c\x18\x2a"sv);
-    CHECK_EQ(argument_of(*target(r)), 42u);
+    CHECK_EQ(read_argument_of_item(*target(r)), 42u);
 }
 
 // Ported from test.rb: 'registered tag + sharedref: same instance in array → identity preserved'. The
@@ -774,9 +775,9 @@ std::string head_of(std::uint8_t const major, std::uint64_t const argument, std:
 
 } // namespace shared_test
 
-// The owner decided on 2026-10-13 that every reader but an eager struct decode reads tags 28 and 29 as plain tags:
-// 28 over its content and 29 over its content, with no index check and no error of its own. RFC 8949 3 lets the
-// argument of a head take 1, 2, 4 or 8 bytes, and each form is read the same.
+// The owner decided on 2026-10-13 that every reader but an eager struct decode reads tags 28 and 29 as plain tags. Tag
+// 28 stays over its content. Tag 29 stays over its content. There is no index check and no error of its own. RFC 8949 3
+// lets the argument of a head take 1, 2, 4 or 8 bytes, and each form is read the same.
 TEST_CASE("value sharing: lazy, at_path, decode and diagnostic notation read tags 28 and 29 as tags")
 {
     for (std::size_t const bytes : {1uz, 2uz, 4uz, 8uz}) {
@@ -797,7 +798,7 @@ TEST_CASE("value sharing: lazy, at_path, decode and diagnostic notation read tag
         CHECK(types == std::vector<cbor::type>(3, cbor::type::tag));
         auto const tree = l.clone();
         REQUIRE(tree.has_value());
-        auto const elements = children_of(**tree);
+        auto const elements = list_children_of_item(**tree);
         REQUIRE_EQ(elements.size(), 3u);
         for (auto const &[element, number, index] : {std::tuple{elements[0], 28u, 5u}, std::tuple{elements[1], 29u, 0u},
                                                     std::tuple{elements[2], 29u, 7u}}) {
@@ -853,10 +854,10 @@ std::span<cbor::item const> elements_of(cbor::item const &array)
 
 } // namespace shared_test
 
-// The cases of the model (proof/theories/Cycles.v, the Examples) read by cbor::decode, which resolves the tags (owner
-// decision): a tag 28 makes no node and marks the node of its content. A tag 29 is a shared_reference node whose target
-// is that node. The specification (refs/value-sharing.html) gives the first two cases; the others are the traps that the
-// model names. The model gives the expected node identities and errors.
+// These are the cases of the model (proof/theories/Cycles.v, the Examples). cbor::decode reads them and resolves the
+// tags (owner decision). A tag 28 makes no node and marks the node of its content. A tag 29 is a shared_reference node
+// whose target is that node. The specification (refs/value-sharing.html) gives the first two cases; the others are the
+// traps that the model names. The model gives the expected node identities and errors.
 TEST_CASE("value sharing: cbor::decode reads each case of the model")
 {
     using shared_test::elements_of;
@@ -929,8 +930,8 @@ TEST_CASE("value sharing: cbor::decode reads a tag 29 and its index in each widt
 }
 
 // A long chain of tags 28 is read in a loop: 50000 tags 28 before 1 give the integer and no deep stack. The content of a
-// tag 24 is decoded with a table of its own (RFC 8949 3.4.5.1: an embedded item is a data item of its own). So a tag 29
-// in it does not see the marks of the enclosing item.
+// tag 24 is decoded with a table of its own. RFC 8949 3.4.5.1 says that an embedded item is a data item of its own. So a
+// tag 29 in it does not see the marks of the enclosing item.
 TEST_CASE("value sharing: cbor::decode reads a long chain of marks and a tag 24 with its own table")
 {
     constexpr std::size_t chain_length = 50000;
@@ -982,7 +983,7 @@ TEST_CASE("value sharing: cbor::decode marks every kind of node and resolves ins
     CHECK_EQ(cbor::decode("\xd8\x1c"sv).error(), error::too_little_data);
 }
 
-// clone of a lazy inside the top-level item keeps tags 28 and 29 and a tag 55799 as tag nodes: only cbor::decode
+// clone of a lazy inside the top-level item keeps tags 28 and 29 and a tag 55799 as tag nodes. Only cbor::decode
 // resolves tags 28 and 29. A tag 55799 inside an item stays a tag (owner decisions).
 TEST_CASE("value sharing: clone at an inner offset keeps tags 28, 29 and 55799")
 {
@@ -1066,9 +1067,9 @@ TEST_CASE("value sharing: cbor::encode writes the marks of each cycle as Writer.
     CHECK_EQ(encoded_again("\xd8\x1c\xa1\xd8\x1d\x00\x01"sv), "\xd8\x1c\xa1\xd8\x1d\x00\x01"s);
     // A mark that no reference names is not written.
     CHECK_EQ(encoded_again("\x82\xd8\x1c\x01\x02"sv), "\x82\x01\x02"s);
-    // A mark on a value whose cycle passes through a reference without a cycle: root = [X, 29(1)] with X = 28([T,
-    // 29(1)]) and T = 28([29(0)]). The walk enters T again through the last reference, then X through the reference in
-    // T. The edge of X to T reaches T on the path: T gets a mark there too.
+    // A mark stands on a value whose cycle passes through a reference without a cycle. The root is [X, 29(1)] with X =
+    // 28([T, 29(1)]) and T = 28([29(0)]). The walk enters T again through the last reference, then X through the
+    // reference in T. The edge of X to T reaches T on the path: T gets a mark there too.
     CHECK_EQ(encoded_again("\x82\xd8\x1c\x82\xd8\x1c\x81\xd8\x1d\x00\xd8\x1d\x01\xd8\x1d\x01"sv),
              "\x82\xd8\x1c\x82\xd8\x1c\x81\xd8\x1d\x00\xd8\x1c\x81\xd8\x1d\x00\xd8\x1c\x81\xd8\x1c\x82\xd8\x1d\x03\xd8\x1d\x03"s);
 }
@@ -1101,8 +1102,8 @@ TEST_CASE("value sharing: cbor::decode reads back what cbor::encode writes")
 }
 
 // theories/Writer.v write_size: a value reached twice without a cycle doubles the output with each level. The output of
-// k levels has 2^(k+1)-1 heads. Past 8 MiB and 100 times the size of the tree the encoder stops before it writes (expat
-// stops an expansion of entities the same way).
+// k levels has 2^(k+1)-1 heads. The encoder stops before it writes. It stops past 8 MiB and 100 times the size of the
+// tree. expat stops an expansion of entities the same way.
 TEST_CASE("value sharing: cbor::encode writes each copy and stops at the amplification limit")
 {
     constexpr std::size_t levels = 10;
@@ -1127,8 +1128,8 @@ TEST_CASE("value sharing: a large value in a cycle is written with no amplificat
     CHECK_EQ(shared_test::encoded_again(input), input);
 }
 
-// Each mark gets the index of its place in the output, in the shortest head (RFC 8949 4.2.1): n values that each
-// hold themselves come back as they were written, with indices of one, two, three and five bytes.
+// Each mark gets the index of its place in the output, in the shortest head (RFC 8949 4.2.1). Take n values that each
+// hold themselves come back as they were written. The indices have one, two, three and five bytes.
 TEST_CASE("value sharing: cbor::encode writes each index in its shortest head")
 {
     for (std::size_t const n : {24uz, 25uz, 257uz, 65537uz}) {
@@ -1141,8 +1142,8 @@ TEST_CASE("value sharing: cbor::encode writes each index in its shortest head")
 }
 
 // The path through references can be deeper than the tree: element i of the array is 28([29(i-1)]). So the walk from the
-// last element follows every reference before it. encode stops with nesting_depth_exceeded where the stack ends,
-// although the tree has a depth of three.
+// last element follows every reference before it. encode stops with nesting_depth_exceeded where the stack ends. The
+// tree has a depth of three.
 TEST_CASE("value sharing: a path through references deeper than the stack gives nesting_depth_exceeded")
 {
     std::size_t const n = test::levels_beyond_small_stack;

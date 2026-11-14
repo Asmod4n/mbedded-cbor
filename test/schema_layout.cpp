@@ -110,9 +110,9 @@ void check_both_writes_agree(std::vector<E> const &values, std::uint16_t const v
 } // namespace
 
 // The check of the layout sets the bytes of one member and reads the member back. It must give false for a struct with
-// padding, for an inner struct in another key order and for members in another order than the keys, and true with
-// nonzero default member initializers. A false result gives the element-by-element write, a wrong true result gives
-// other bytes than the deque.
+// padding. It must give false for an inner struct in another key order. It must give false for members in another order
+// than the keys. It must give true with nonzero default member initializers. A false result gives the element-by-element
+// write, a wrong true result gives other bytes than the deque.
 TEST_CASE("schema layout: a list written with one copy gives the bytes of the element-by-element write")
 {
     check_both_writes_agree<spot>({{1.0f, 0.5f, 7}, {2.0f, -1.0f, 8}}, 1911, 1912);

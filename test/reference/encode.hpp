@@ -22,12 +22,12 @@ namespace test
 // A bignum of the model is an integer where its value fits 64 bits, and a tag over its magnitude otherwise. A
 // negative bignum of absolute value zero is no value.
 template <class Target>
-std::expected<void, error> bignum_encode(cbor::encoder<Target> &e, bignum const &b)
+std::expected<void, error> encode_bignum_to_wire(cbor::encoder<Target> &e, bignum const &b)
 {
-    std::string_view const m = magnitude_without_leading_zeros(b.magnitude);
+    std::string_view const m = strip_leading_zeros_of_magnitude(b.magnitude);
     if (b.negative && m.empty())
         return std::unexpected(error::unsupported_value);
-    std::string const n = b.negative ? magnitude_minus_one(m) : std::string(m);
+    std::string const n = b.negative ? subtract_one_from_magnitude(m) : std::string(m);
     if (n.size() <= sizeof(std::uint64_t)) {
         std::uint64_t a = 0;
         for (char const c : n)
@@ -39,8 +39,8 @@ std::expected<void, error> bignum_encode(cbor::encoder<Target> &e, bignum const 
     return e.byte_string(std::as_bytes(std::span(n)));
 }
 
-// The reference model written through the public encoder: an integer at its native width of 64 bits, a float as
-// a double, a bignum as tag 2 or 3 over its magnitude, every other head in its shortest form.
+// This is the reference model written through the public encoder. An integer has its native width of 64 bits. A float is
+// a double. A bignum is tag 2 or 3 over its magnitude. Every other head is in its shortest form.
 template <class Target>
 std::expected<void, error> encode_value(cbor::encoder<Target> &e, value const &v)
 {
@@ -62,7 +62,7 @@ std::expected<void, error> encode_value(cbor::encoder<Target> &e, value const &v
             } else if constexpr (std::same_as<K, bytes *>) {
                 return e.byte_string(std::as_bytes(std::span(k->b)));
             } else if constexpr (std::same_as<K, bignum *>) {
-                return bignum_encode(e, *k);
+                return encode_bignum_to_wire(e, *k);
             } else if constexpr (std::same_as<K, array *>) {
                 if (auto const r = e.array(k->size()); !r)
                     return r;
@@ -127,7 +127,7 @@ struct string_writer {
     }
 };
 
-inline std::string encoded(value const &v)
+inline std::string encode_value_to_wire(value const &v)
 {
     std::string out;
     auto const written = encode(out, v);
@@ -138,10 +138,10 @@ inline std::string encoded(value const &v)
 
 inline void check_both(std::string_view const wire, value const &expected)
 {
-    auto const v = decoded(wire);
+    auto const v = decode_wire_into_value(wire);
     REQUIRE(v.has_value());
     CHECK(*v == expected);
-    auto const back = decoded(encoded(expected));
+    auto const back = decode_wire_into_value(encode_value_to_wire(expected));
     REQUIRE(back.has_value());
     CHECK(*back == expected);
 }

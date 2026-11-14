@@ -53,9 +53,9 @@ unsigned char byte_at(std::string_view const bytes, std::size_t const i)
 
 using namespace doc_reference_schema;
 
-// tools/doc/groups/schema.dox, snippet schema group: the EXAMPLES section of the man page of the group schema writes one
-// car, reads one field at its offset and reads the whole car. So a reader sees one round trip. The test checks each
-// value that the comments of the example state.
+// tools/doc/groups/schema.dox, snippet schema group. The EXAMPLES section of the man page of the group schema writes one
+// car. It reads one field at its offset. It also reads the whole car. So a reader sees one round trip. The test checks
+// each value that the comments of the example state.
 TEST_CASE("doc reference schema: the example of the group schema")
 {
     // [schema group]
@@ -204,9 +204,9 @@ TEST_CASE("doc reference schema: description")
     CHECK_EQ(root->at_path<"$.tires[1].diameter">(), 18);
 }
 
-// schema.hpp, snippet fixed_size: the root of tire takes 3 bytes of class tag, 2 bytes of tag 128, 5 bytes of record
-// head, 3 bytes
-// for the std::uint16_t and 5 for the float. A text is a reference 6(N) of 6 bytes. The root ends the message.
+// schema.hpp, snippet fixed_size. The root of tire takes 3 bytes of class tag and 2 bytes of tag 128. It takes 5 bytes
+// of record head, 3 bytes for the std::uint16_t and 5 for the float. A text is a reference 6(N) of 6 bytes. The root
+// ends the message.
 TEST_CASE("doc reference schema: fixed_size")
 {
     // [fixed_size]
@@ -392,9 +392,9 @@ TEST_CASE("doc reference schema: tag")
     CHECK_EQ(byte_at(*bytes, root + 2), 0x0a);
 }
 
-// schema/wire.md: the message starts with tag 113 on an array of two and a table with a four-byte count, the first entry
-// of the table is a tag 114. The vector of tires is tag 32873 (d9 80 69), the list of double is RFC 8746 tag 86
-// (binary64, little endian, d8 56). The text is a reference 6(N) with a four-byte N (c6 1a).
+// schema/wire.md. The message starts with tag 113 on an array of two. The array holds a table with a four-byte count.
+// The first entry of the table is a tag 114. The vector of tires is tag 32873 (d9 80 69), the list of double is RFC 8746
+// tag 86 (binary64, little endian, d8 56). The text is a reference 6(N) with a four-byte N (c6 1a).
 TEST_CASE("doc reference schema: wire")
 {
     std::string const bytes = sample_bytes();

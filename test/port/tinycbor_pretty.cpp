@@ -41,10 +41,10 @@
 
 using namespace std::string_literals;
 using cbor::error;
-using tinycbor_port::error_text;
+using tinycbor_port::make_error_text;
 using tinycbor_port::no_error;
-using tinycbor_port::outcome;
-using tinycbor_port::printed;
+using tinycbor_port::make_outcome_text;
+using tinycbor_port::print_with_diagnostic_notation;
 
 namespace tinycbor_pretty
 {
@@ -314,7 +314,7 @@ TEST_CASE("tinycbor pretty: valid input")
     for (row const &r : valid_rows()) {
         CAPTURE(r.name);
         CAPTURE(r.upstream);
-        CHECK_EQ(printed(r.data), r.expected);
+        CHECK_EQ(print_with_diagnostic_notation(r.data), r.expected);
     }
 }
 
@@ -326,10 +326,10 @@ TEST_CASE("tinycbor pretty: input that ends too early")
         all.push_back(r.data);
     for (std::string const &d : all) {
         std::string const data = "\x81"s + d;
-        CAPTURE(printed(d));
+        CAPTURE(print_with_diagnostic_notation(d));
         for (std::size_t length = 1; length + 1 < data.size(); ++length) {
             CAPTURE(length);
-            CHECK_EQ(outcome(cbor::diagnostic_notation(data.substr(0, length))), error_text(error::too_little_data));
+            CHECK_EQ(make_outcome_text(cbor::diagnostic_notation(data.substr(0, length))), make_error_text(error::too_little_data));
         }
     }
 }
@@ -340,7 +340,7 @@ TEST_CASE("tinycbor pretty: input that is not well-formed")
     for (invalid_row const &r : invalid_rows()) {
         CAPTURE(r.name);
         CAPTURE(r.upstream);
-        CHECK_EQ(outcome(cbor::diagnostic_notation("\x81"s + r.data)), error_text(r.expected));
+        CHECK_EQ(make_outcome_text(cbor::diagnostic_notation("\x81"s + r.data)), make_error_text(r.expected));
     }
 }
 
@@ -370,6 +370,6 @@ TEST_CASE("tinycbor pretty: deep nesting")
     };
     for (deep_row const &r : rows) {
         CAPTURE(r.name);
-        CHECK_EQ(printed(r.data), r.expected);
+        CHECK_EQ(print_with_diagnostic_notation(r.data), r.expected);
     }
 }

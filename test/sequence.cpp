@@ -42,9 +42,9 @@ bool inside(std::string const &bytes, char const *const p)
 
 } // namespace
 
-// RFC 8742 2: an empty sequence of bytes is a CBOR Sequence of no data items. empty() answers that without a read, as
-// std::ranges::empty does for any range. A sequence of bytes that are not well-formed is not empty. The iterator is an
-// input iterator: the size of each item is read once, on the step to it.
+// RFC 8742 2: an empty sequence of bytes is a CBOR Sequence of no data items. The function empty() answers that without
+// a read. std::ranges::empty does the same for any range. A sequence of bytes that are not well-formed is not empty. The
+// iterator is an input iterator: the size of each item is read once, on the step to it.
 TEST_CASE("sequence: an empty CBOR Sequence has no element")
 {
     CHECK(elements_of(held(""sv)).empty());

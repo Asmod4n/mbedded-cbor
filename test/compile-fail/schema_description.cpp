@@ -1,11 +1,12 @@
 // cbor::schema takes each struct of its table only through cbor::describe_members<T>. So that the bytes come from one
 // list of members, keys and tags on every build. A wrong description does not compile, with a message that names the
-// cause. CBOR_TEST_CASE selects the case: 1 a root with no description, 2 an inner struct with no description, 3 a root
-// with cbor::untagged, 4 two structs with one tag, 5 two members with one key, 6 a public member that the description
-// leaves out, 7 a class with a base class that the description does not name, 8 cbor::tag on a described class, 9
-// cbor::key on a member of a described class, 10 a right description, which compiles, 11 a class with a base class that
-// CBOR_DEFINE_DERIVED_TYPE_MEMBERS names, which compiles, 12 a class with a named base class whose description leaves
-// out the member of the base, which reflection finds.
+// cause. CBOR_TEST_CASE selects the case. Case 1: a root with no description. Case 2: an inner struct with no
+// description. Case 3: a root with cbor::untagged. Case 4: two structs with one tag. Case 5: two members with one key.
+// Case 6: a public member that the description leaves out. Case 7: a class with a base class that the description does
+// not name. Case 8: cbor::tag on a described class. Case 9: cbor::key on a member of a described class. Case 10: a right
+// description, which compiles. Case 11: a class with a base class that CBOR_DEFINE_DERIVED_TYPE_MEMBERS names, which
+// compiles. Case 12: a class with a named base class whose description leaves out the member of the base, which
+// reflection finds.
 #include <cbor/cbor.hpp>
 
 #include <cstdint>

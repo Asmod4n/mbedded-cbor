@@ -245,7 +245,7 @@ inline std::optional<test::value> walked(test::value const &start, std::vector<s
                 auto const *b = test::get_if<test::bytes>(t->content);
                 if (!b)
                     return std::nullopt;
-                auto inner = test::decoded(b->b);
+                auto inner = test::decode_wire_into_value(b->b);
                 if (!inner)
                     throw undecided{};
                 v = *inner;
@@ -348,7 +348,7 @@ void typed_read_check(std::string const &document, std::vector<step> const &step
     std::expected<cbor::lazy, cbor::error> node = *root;
     for (step const &s : steps)
         node = node.and_then([&s](cbor::lazy const &l) {
-            return std::holds_alternative<std::int64_t>(s) ? test::select_index(l, std::get<std::int64_t>(s))
+            return std::holds_alternative<std::int64_t>(s) ? test::select_element_by_index(l, std::get<std::int64_t>(s))
                                                            : l.at(std::get<std::string_view>(s));
         });
     auto const chained = node.and_then([](cbor::lazy const &l) { return l.get<T>(); });
@@ -455,7 +455,7 @@ inline void path_target(std::string_view const input)
     std::size_t const split = std::min<std::size_t>(static_cast<unsigned char>(input.front()) % 64, input.size() - 1);
     std::string_view const path_bytes = input.substr(1, split);
     std::string_view const document = input.substr(1 + split);
-    auto const eager = test::decoded(document);
+    auto const eager = test::decode_wire_into_value(document);
     if (!eager)
         return;
     std::vector<std::string> keys;

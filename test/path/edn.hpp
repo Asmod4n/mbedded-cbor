@@ -21,8 +21,8 @@ using cbor::error;
 namespace path_edn
 {
 
-// The library converts a decimal float with std::from_chars where the standard library has it for double: libstdc++
-// says so with __cpp_lib_to_chars, libc++ from LLVM 20 with its availability macro, which on Apple depends on the
+// The library converts a decimal float with std::from_chars where the standard library has it for double. libstdc++ says
+// so with __cpp_lib_to_chars. LLVM 20 libc++ says so with its availability macro. On Apple that macro depends on the
 // deployment target.
 #if defined(__cpp_lib_to_chars) || (defined(_LIBCPP_VERSION) && _LIBCPP_AVAILABILITY_HAS_FROM_CHARS_FLOATING_POINT)
 inline constexpr bool from_chars_reads_double = true;

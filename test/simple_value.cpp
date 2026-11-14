@@ -124,7 +124,7 @@ TEST_CASE("simple value: lazy::clone gives every simple value 0 to 255 as its co
         cbor::item const &it = **r;
         CHECK_EQ(find_major_type_of(it.type), cbor::major_type::simple);
         CHECK_EQ(it.additional_information, v < 24 ? v : 24);
-        CHECK_EQ(argument_of(it), v);
+        CHECK_EQ(read_argument_of_item(it), v);
     }
 }
 
@@ -135,7 +135,7 @@ TEST_CASE("simple value: decode and encode for every simple value 0 to 255")
         auto const v = static_cast<std::uint8_t>(i);
         CAPTURE(i);
         if (reserved(v)) {
-            CHECK_EQ(decode_error(wire_of(v)), error::syntax_error);
+            CHECK_EQ(read_decode_error_of_wire(wire_of(v)), error::syntax_error);
             string_writer w;
             auto const r = test::encode(w, V(simple{v}));
             REQUIRE_FALSE(r.has_value());

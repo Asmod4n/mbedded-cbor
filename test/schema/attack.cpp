@@ -221,10 +221,10 @@ TEST_CASE("attack: a shifted root is incorrect_type")
     CHECK_EQ(form<probe>::path(bytes + "\x00"s).error(), error::incorrect_type);
 }
 
-// RFC 8949 3: each fixed field has one head. The heads that are valid are written here from RFC 8949 3.3 and 3.4
-// and the fixed widths of the schema: a bool is f4 or f5, an int16 is 19 or 39, a uint64 is 1b, a double fb, a
-// float fa, an int128 the tag c2 or c3, a char[3] the text head 63. Every other head is incorrect_type. The test
-// exists because a reader that ignored the head would read the argument of another type.
+// RFC 8949 3: each fixed field has one head. The valid heads are written here from RFC 8949 3.3 and 3.4 and the fixed
+// widths of the schema. A bool is f4 or f5. An int16 is 19 or 39. A uint64 is 1b. A double is fb. A float is fa. An
+// int128 has the tag c2 or c3. A char[3] has the text head 63. Every other head is incorrect_type. The test exists
+// because a reader that ignored the head would read the argument of another type.
 TEST_CASE("attack: every forged head of a fixed field is incorrect_type")
 {
     std::string const bytes = *form<probe>::encode(sample_probe);
@@ -268,9 +268,9 @@ TEST_CASE("attack: a forged byte anywhere in the root reads nothing outside the 
     }
 }
 
-// A directory entry of the wire is forged to the edges of the message: before the shared items, inside the root,
-// past the end, and to the largest u32. The test exists because an item that begins in the directory or ends in the
-// root would overlap bytes that another path reads as another type.
+// A directory entry of the wire is forged to the edges of the message. The forged values are before the shared items,
+// inside the root, past the end, and the largest u32. The test exists because of overlap. An item that begins in the
+// directory or ends in the root would overlap bytes. Another path reads those bytes as another type.
 TEST_CASE("attack: a directory entry out of range is an error")
 {
     std::string const bytes = *form<probe>::encode(sample_probe);
@@ -319,10 +319,10 @@ TEST_CASE("attack: overlapping items are an error")
     CHECK_EQ(at_path<login, "$.id">(into_root), 5u);
 }
 
-// Each item of a packed message starts with an RFC 8949 head: a typed array with the tag head d8 56 and the head
-// 5a of its byte string, a text with the head 7a. A four-byte argument is read big endian (RFC 8949 Section 3).
-// A directory entry is forged so that the head of the last item no longer fits before the root record. The test
-// exists because the read of that head must stop at the bytes that are left and give too_little_data.
+// Each item of a packed message starts with an RFC 8949 head. A typed array has the tag head d8 56 and the head 5a of
+// its byte string. A text has the head 7a. A four-byte argument is read big endian (RFC 8949 Section 3). A directory
+// entry is forged so that the head of the last item no longer fits before the root record. The test exists because the
+// read of that head must stop at the bytes that are left and give too_little_data.
 TEST_CASE("attack: an item head that does not fit before the root is too_little_data")
 {
     auto const big_endian = [](std::size_t const x) {
@@ -511,9 +511,9 @@ TEST_CASE("attack: an unknown tag, a cut record and a wrong directory entry of a
 }
 
 // A value variant under every cut and every changed byte reads no memory outside the message (ASan, UBSan). A string
-// length past its item: the verified decode checks the order of the items and gives syntax_error while the length ends
-// inside the items, too_little_data past the root. The unverified decode keeps the check of the end of the items and
-// gives the same. The path form reads to the next directory entry and gives too_little_data.
+// length can reach past its item. The verified decode checks the order of the items. It gives syntax_error while the
+// length ends inside the items. It gives too_little_data past the root. The unverified decode keeps the check of the end
+// of the items and gives the same. The path form reads to the next directory entry and gives too_little_data.
 TEST_CASE("attack: value and text alternatives of a variant member")
 {
     for (setting const &s : make_sample_settings()) {

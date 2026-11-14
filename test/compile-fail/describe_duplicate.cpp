@@ -1,6 +1,6 @@
-// Two entries of one description that give one map key, or that name one member twice, must not compile:
-// RFC 8949 5.6 leaves a map with a repeated key to the decoder, and the owner decided that a description
-// never writes one. CBOR_TEST_CASE selects the case: 1 two text keys, 2 two integer keys, 3 one member twice, 4
+// Two entries of one description that give one map key, or that name one member twice, must not compile: RFC 8949 5.6
+// leaves a map with a repeated key to the decoder, and the owner decided that a description never writes one.
+// CBOR_TEST_CASE selects the case. Case 1: two text keys. Case 2: two integer keys. Case 3: one member twice. Case 4:
 // one member of a base twice, once through a pointer cast to the derived class, which names the same member.
 #include <cbor/cbor.hpp>
 

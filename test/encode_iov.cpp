@@ -27,9 +27,9 @@ namespace
 using iov_encoder = cbor::encoder<cbor::iov_writer>;
 using pieces = cbor::ref<std::span<iovec const>>;
 
-std::string joined(pieces const &p)
+std::string join_pieces_into_bytes(pieces const &p)
 {
-    auto const bytes = test::joined(*p);
+    auto const bytes = test::join_pieces_into_bytes(*p);
     REQUIRE(bytes.has_value());
     return *bytes;
 }
@@ -68,9 +68,9 @@ std::string text_item(std::string_view const text)
 
 } // namespace
 
-// Each of the three forms that carry an owner must give the same bytes as the form that copies, for
-// sizes around the reference size and around the block size. A string at or above the reference size
-// must stay where its owner keeps it, else the list holds a copy and the form gains nothing.
+// Each of the three forms that carry an owner must give the same bytes as the form that copies. This must hold for sizes
+// around the reference size and around the block size. A string at or above the reference size must stay where its owner
+// keeps it. Otherwise the list holds a copy and the form gains nothing.
 TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form")
 {
     for (std::size_t const size : {0uz, 31uz, 32uz, 33uz, 16383uz, 16384uz, 16385uz, 20000uz}) {
@@ -85,7 +85,7 @@ TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form"
             auto finished = e.finish();
             REQUIRE(finished.has_value());
             pieces const p = std::move(*finished);
-            CHECK_EQ(joined(p), expected);
+            CHECK_EQ(join_pieces_into_bytes(p), expected);
             CHECK_EQ(sum_piece_lengths(p), expected.size());
         }
         {
@@ -95,7 +95,7 @@ TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form"
             auto finished = e.finish();
             REQUIRE(finished.has_value());
             pieces const p = std::move(*finished);
-            CHECK_EQ(joined(p), expected);
+            CHECK_EQ(join_pieces_into_bytes(p), expected);
             CHECK_EQ(sum_piece_lengths(p), expected.size());
             if (size > cbor::detail::encoding::copybreak)
                 CHECK(std::ranges::any_of(*p, [&](iovec const &piece) { return piece.iov_len == text.size(); }));
@@ -108,7 +108,7 @@ TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form"
             auto finished = e.finish();
             REQUIRE(finished.has_value());
             pieces const p = std::move(*finished);
-            CHECK_EQ(joined(p), expected);
+            CHECK_EQ(join_pieces_into_bytes(p), expected);
             CHECK_EQ(sum_piece_lengths(p), expected.size());
             CHECK_EQ(points_into(p, owner->data()), size > cbor::detail::encoding::copybreak && size > 0);
         }
@@ -121,7 +121,7 @@ TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form"
             auto finished = e.finish();
             REQUIRE(finished.has_value());
             pieces const p = std::move(*finished);
-            CHECK_EQ(joined(p), expected);
+            CHECK_EQ(join_pieces_into_bytes(p), expected);
             CHECK_EQ(sum_piece_lengths(p), expected.size());
             CHECK_EQ(points_into(p, (**read).data()), size > cbor::detail::encoding::copybreak && size > 0);
         }
@@ -143,7 +143,7 @@ TEST_CASE("encode_iov: every form of a byte string gives the bytes of the copyin
             auto finished = e.finish();
             REQUIRE(finished.has_value());
             pieces const p = std::move(*finished);
-            CHECK_EQ(joined(p), expected);
+            CHECK_EQ(join_pieces_into_bytes(p), expected);
             CHECK_EQ(sum_piece_lengths(p), expected.size());
         }
         {
@@ -154,7 +154,7 @@ TEST_CASE("encode_iov: every form of a byte string gives the bytes of the copyin
             auto finished = e.finish();
             REQUIRE(finished.has_value());
             pieces const p = std::move(*finished);
-            CHECK_EQ(joined(p), expected);
+            CHECK_EQ(join_pieces_into_bytes(p), expected);
             CHECK_EQ(points_into(p, owner->data()), size > cbor::detail::encoding::copybreak && size > 0);
         }
         {
@@ -166,7 +166,7 @@ TEST_CASE("encode_iov: every form of a byte string gives the bytes of the copyin
             auto finished = e.finish();
             REQUIRE(finished.has_value());
             pieces const p = std::move(*finished);
-            CHECK_EQ(joined(p), expected);
+            CHECK_EQ(join_pieces_into_bytes(p), expected);
             CHECK_EQ(points_into(p, (**read).data()), size > cbor::detail::encoding::copybreak && size > 0);
         }
     }
@@ -190,7 +190,7 @@ TEST_CASE("encode_iov: the pieces outlive the caller's owner")
     auto finished = e.finish();
     REQUIRE(finished.has_value());
     pieces const p = std::move(*finished);
-    CHECK_EQ(joined(p), expected + expected);
+    CHECK_EQ(join_pieces_into_bytes(p), expected + expected);
 }
 
 // Two encoders can share one writer. When the first finishes, the writer hands its pieces over. A later write
@@ -206,7 +206,7 @@ TEST_CASE("encode_iov: the second encoder on a writer that has finished is a wro
     REQUIRE(finished.has_value());
     pieces const p = std::move(*finished);
     CHECK_THROWS_AS(std::ignore = second.finish(), std::logic_error);
-    CHECK_EQ(joined(p), "\x18\x01"sv);
+    CHECK_EQ(join_pieces_into_bytes(p), "\x18\x01"sv);
 }
 
 // A head and a float write nine bytes before they count their own size. At each of the nine offsets
@@ -238,14 +238,14 @@ TEST_CASE("encode_iov: a head and a float at each offset before the end of a blo
             auto finished = e.finish();
             REQUIRE(finished.has_value());
             pieces const p = std::move(*finished);
-            CHECK_EQ(joined(p), expected);
+            CHECK_EQ(join_pieces_into_bytes(p), expected);
             CHECK_EQ(sum_piece_lengths(p), expected.size());
         }
     }
 }
 
-// A text that fills the free space of a block exactly, or misses it by one byte either way, is where
-// the copy splits across two blocks.
+// A text can fill the free space of a block exactly. It can also miss it by one byte either way. There the copy splits
+// across two blocks.
 TEST_CASE("encode_iov: texts at the free space of a block")
 {
     std::size_t const free = cbor::detail::encoding::block_size - 3;
@@ -264,13 +264,13 @@ TEST_CASE("encode_iov: texts at the free space of a block")
         auto finished = e.finish();
         REQUIRE(finished.has_value());
         pieces const p = std::move(*finished);
-        CHECK_EQ(joined(p), expected);
+        CHECK_EQ(join_pieces_into_bytes(p), expected);
         CHECK_EQ(sum_piece_lengths(p), expected.size());
     }
 }
 
-// A reference closes the open part of the block first. The order of the pieces must be the order of
-// the bytes, also when a reference follows a full block and a block follows a reference.
+// A reference closes the open part of the block first. The order of the pieces must be the order of the bytes. This
+// holds also when a reference follows a full block and when a block follows a reference.
 TEST_CASE("encode_iov: the order of blocks and references")
 {
     auto const owner = std::make_shared<std::string const>(64, 'r');
@@ -293,7 +293,7 @@ TEST_CASE("encode_iov: the order of blocks and references")
     auto finished = e.finish();
     REQUIRE(finished.has_value());
     pieces const p = std::move(*finished);
-    CHECK_EQ(joined(p), expected);
+    CHECK_EQ(join_pieces_into_bytes(p), expected);
     CHECK_EQ(sum_piece_lengths(p), expected.size());
 }
 
@@ -307,7 +307,7 @@ TEST_CASE("encode_iov: finish after one item, and after none")
         REQUIRE(e.unsigned_integer(std::uint8_t{5}).has_value());
         auto finished = e.finish();
         REQUIRE(finished.has_value());
-        CHECK_EQ(joined(*finished), "\x18\x05"sv);
+        CHECK_EQ(join_pieces_into_bytes(*finished), "\x18\x05"sv);
     }
     {
         cbor::iov_writer w;
@@ -331,7 +331,7 @@ TEST_CASE("encode_iov: a write after finish and a second finish are a wrong use"
     pieces const p = std::move(*finished);
     CHECK_THROWS_AS(std::ignore = e.unsigned_integer(std::uint8_t{6}), std::logic_error);
     CHECK_THROWS_AS(std::ignore = e.finish(), std::logic_error);
-    CHECK_EQ(joined(p), "\x18\x05"sv);
+    CHECK_EQ(join_pieces_into_bytes(p), "\x18\x05"sv);
 }
 
 // The forms that carry an owner must still copy with every other writer, and give the same bytes.
@@ -355,16 +355,16 @@ TEST_CASE("encode_iov: the encoder over views gives the bytes of encode")
          {"\x00"sv, "\x18\x64"sv, "\x3b\xff\xff\xff\xff\xff\xff\xff\xff"sv, "\xf9\x3c\x00"sv,
           "\xfb\x7e\x37\xe4\x3c\x88\x00\x75\x9c"sv, "\x64\x49\x45\x54\x46"sv, "\x83\x01\x82\x02\x03\x82\x04\x05"sv,
           "\xa2\x61\x61\x01\x61\x62\x82\x02\x03"sv, "\xc1\x1a\x51\x4b\x67\xb0"sv}) {
-        auto const v = decoded(wire);
+        auto const v = decode_wire_into_value(wire);
         REQUIRE(v.has_value());
         auto const p = test::encode_iov(*v);
         REQUIRE(p.has_value());
-        CHECK_EQ(joined(*p), encoded(*v));
+        CHECK_EQ(join_pieces_into_bytes(*p), encode_value_to_wire(*v));
     }
     value const long_text{std::string(40000, 'w')};
     auto const p = test::encode_iov(long_text);
     REQUIRE(p.has_value());
-    CHECK_EQ(joined(*p), encoded(long_text));
+    CHECK_EQ(join_pieces_into_bytes(*p), encode_value_to_wire(long_text));
 }
 
 // Without preferred serialization the encoder writes every float as a double, the width that needs no
@@ -379,8 +379,8 @@ TEST_CASE("encode: a float is a double unless preferred serialization is on")
     CHECK_EQ(p.encoded, "\xfb\x3f\xf0\x00\x00\x00\x00\x00\x00"sv);
 }
 
-// writev takes at most IOV_MAX pieces in one call. An encoding with more pieces is read back in turns by test::joined,
-// the one place that splits. 1100 long strings with owners give more than the 1024 of Linux.
+// writev takes at most IOV_MAX pieces in one call. test::joined reads an encoding with more pieces back in turns. It is
+// the one place that splits. 1100 long strings with owners give more pieces than the 1024 of Linux.
 TEST_CASE("encode_iov: more pieces than IOV_MAX are written in turns")
 {
     constexpr std::size_t strings = 1100;
@@ -400,7 +400,7 @@ TEST_CASE("encode_iov: more pieces than IOV_MAX are written in turns")
     REQUIRE(finished.has_value());
     pieces const p = std::move(*finished);
     CHECK_GT(p->size(), strings);
-    CHECK_EQ(joined(p), expected);
+    CHECK_EQ(join_pieces_into_bytes(p), expected);
 }
 
 // The pieces are made for sending: sendmsg over a pair of Unix sockets carries the bytes of encode. The message
@@ -417,13 +417,13 @@ TEST_CASE("encode_iov: sendmsg sends the bytes of encode")
     auto finished = e.finish();
     REQUIRE(finished.has_value());
     pieces const p = std::move(*finished);
-    std::string const expected = joined(p);
+    std::string const expected = join_pieces_into_bytes(p);
     REQUIRE_LT(expected.size(), socket_buffer_least);
     std::array<int, 2> ends{};
     REQUIRE_EQ(socketpair(AF_UNIX, SOCK_STREAM, 0, ends.data()), 0);
     msghdr message{};
     message.msg_iov = const_cast<iovec *>(p->data());
-    auto const count = test::count_of<decltype(message.msg_iovlen)>(p->size());
+    auto const count = test::count_pieces<decltype(message.msg_iovlen)>(p->size());
     REQUIRE(count.has_value());
     message.msg_iovlen = *count;
     ssize_t const sent = sendmsg(ends[0], &message, 0);

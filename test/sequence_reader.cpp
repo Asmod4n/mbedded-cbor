@@ -65,7 +65,7 @@ TEST_CASE("sequence_reader: hands out each item when its last byte arrives")
     CHECK_EQ(r.next().error(), error::too_little_data);
 }
 
-// A new user feeds what a socket gives first: a literal through std::string_view, a std::string by name, a
+// A new user feeds what a socket gives first. The forms are a literal through std::string_view, a std::string by name, a
 // std::string that is moved in, and a std::shared_ptr. Each form gives the same items.
 TEST_CASE("sequence_reader: each form of bytes that a user tries first")
 {
@@ -385,13 +385,13 @@ TEST_CASE("sequence_reader: a nested item of any depth")
         CHECK_EQ(test::read_reader_outcome_byte_by_byte(nested_tags(depth), form).items.size(), 1u);
     }
     std::string const deep = std::string(test::levels_beyond_small_stack, '\x81') + "\x80"s;
-    test::on_small_stack([&deep] { CHECK_EQ(test::read_reader_outcome_split_at(deep, 0).items.size(), 1u); });
+    test::run_on_small_stack([&deep] { CHECK_EQ(test::read_reader_outcome_split_at(deep, 0).items.size(), 1u); });
 }
 
-// RFC 8949 3 and the decision of the owner of 2026-10-12: an array or a map that announces more items than
-// bytes follow gives too_little_data before any of its elements is read, in every reader. Each item takes one
-// byte at least, so such a container cannot be complete. With the bytes that complete the count, the element
-// is read and gives its own error.
+// RFC 8949 3 and the decision of the owner of 2026-10-12 apply. An array or a map announces more items than bytes
+// follow. Every reader gives too_little_data before it reads any of its elements. Each item takes one byte at least, so
+// such a container cannot be complete. With the bytes that complete the count, the element is read and gives its own
+// error.
 TEST_CASE("sequence_reader: a count larger than the bytes left waits before its elements")
 {
     for (std::size_t at = 0; at <= "\x82\xff"sv.size(); ++at) {
@@ -446,10 +446,10 @@ TEST_CASE("sequence_reader: copy does not compile, a moved-from reader throws")
     CHECK_THROWS_AS(static_cast<void>(r.empty()), std::logic_error);
 }
 
-// The reader dropped the pieces it had read from the front of its list at each feed, and moved every piece that
-// waited behind them: with k pieces that wait, a feed after each next took k steps, and 80000 pieces took 9 s. It now
-// drops them when they are at least half of the list, so each piece is moved a bounded number of times on average.
-// A form that moves every waiting piece at each feed takes 10^10 steps here, and the test run would not end in time.
+// The reader dropped the pieces it had read from the front of its list at each feed. It also moved every piece that
+// waited behind them. With k pieces that wait, a feed after each next took k steps. 80000 pieces took 9 s. It now drops
+// them when they are at least half of the list, so each piece is moved a bounded number of times on average. A form that
+// moves every waiting piece at each feed takes 10^10 steps here, and the test run would not end in time.
 TEST_CASE("sequence_reader: a feed after each next with 100000 pieces that wait")
 {
     constexpr std::size_t waiting = 100000;

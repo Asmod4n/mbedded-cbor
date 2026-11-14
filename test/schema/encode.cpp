@@ -1,11 +1,12 @@
 #include "types.hpp"
 
 // draft-ietf-cbor-packed-19 3.1 and 4.2: tag 113 holds an array of the table and the rump. The table holds the record
-// function 114 over the keys at index 0, the directory at index 1 (a byte string of the u32 offsets of the shared
-// items), f7 up to index 15. The shared items from index 16 on, each with a head of fixed width. The rump is the class
-// tag 1507 = d9 05 e3 (RFC 8949 3.4), then the record d8 80 with the count 9a 00 00 00 03, every number in the width of
-// its type. The string as 6(0) = c6 1a 00 00 00 00, which 2.2 resolves to index 16. The table head counts 17 entries.
-// The string starts at byte 45 (2d). The bytes are written from the draft and RFC 8949 3 by hand.
+// function 114 over the keys at index 0. It holds the directory at index 1, a byte string of the u32 offsets of the
+// shared items. It holds f7 up to index 15. The shared items from index 16 on, each with a head of fixed width. The rump
+// is the class tag 1507 = d9 05 e3 (RFC 8949 3.4). Then comes the record d8 80 with the count 9a 00 00 00 03. Every
+// number has the width of its type. The string as 6(0) = c6 1a 00 00 00 00, which 2.2 resolves to index 16. The table
+// head counts 17 entries. The string starts at byte 45 (2d). The bytes are written from the draft and RFC 8949 3 by
+// hand.
 TEST_CASE("encode: a struct with a number, a bool and a string")
 {
     std::string const bytes = encode_with_schema(login{5, true, "ab"});
@@ -60,10 +61,10 @@ TEST_CASE("encode: a key given in cbor::describe_members is sorted by that key")
 }
 
 // A negative int16 is major type 1 with -1 - n in two bytes (RFC 8949 3.1). A float stays binary32 (fa). The values
-// stand in the key order of RFC 8949 4.2.1: f, o, t, v. The empty optional is shared item 16, an empty array. The
-// list of uint16 is shared item 17, a typed array of RFC 8746: tag 69 (uint16, little endian) = d8 45 over a byte
-// string of four bytes. Item 17 is 6(-1) = c6 3a 00 00 00 00, because 2.2 maps a negative N to index 16 - 2N - 1.
-// The items start at 46 (2e) and 51 (33). The rump starts with the class tag 1508 = d9 05 e4.
+// stand in the key order of RFC 8949 4.2.1: f, o, t, v. The empty optional is shared item 16, an empty array. The list
+// of uint16 is shared item 17. It is a typed array of RFC 8746. Its tag is 69 (uint16, little endian) = d8 45. The tag
+// is over a byte string of four bytes. Item 17 is 6(-1) = c6 3a 00 00 00 00, because 2.2 maps a negative N to index 16 -
+// 2N - 1. The items start at 46 (2e) and 51 (33). The rump starts with the class tag 1508 = d9 05 e4.
 TEST_CASE("encode: signed numbers, floats, a list and an empty optional")
 {
     std::string const bytes = encode_with_schema(measures{-5, 1.5f, {7, 8}, std::nullopt});
@@ -95,10 +96,10 @@ TEST_CASE("encode: a list of structs that hold strings")
     check_one_item(bytes);
 }
 
-// The schema writes a list of a fixed-width number as a typed array of RFC 8746 in little endian. The tag numbers
-// come from RFC 8746 figure 6: uint16le 69, uint32le 70, uint64le 71, sint8 72, sint16le 77, sint32le 78,
-// sint64le 79, float16le 84, float32le 85, float64le 86. The byte string holds the elements with the lowest byte
-// first. The test exists because the tag tells every other reader the type of the elements.
+// The schema writes a list of a fixed-width number as a typed array of RFC 8746 in little endian. The tag numbers come
+// from RFC 8746 figure 6. They are uint16le 69, uint32le 70, uint64le 71 and sint8 72. They are also sint16le 77,
+// sint32le 78, sint64le 79, float16le 84, float32le 85 and float64le 86. The byte string holds the elements with the
+// lowest byte first. The test exists because the tag tells every other reader the type of the elements.
 TEST_CASE("encode: a list of a fixed-width number is a typed array of RFC 8746")
 {
     std::string const bytes = encode_with_schema(sample_numbers);
@@ -223,14 +224,15 @@ TEST_CASE("encode: into the exact span that a writer allocates")
 }
 
 // Owner decision 2026-10-19: a vector of structs whose members all have a fixed width is one byte string of its
-// elements, little endian and without padding, under tag 32873 (the first unassigned number of the first-come
-// range of the IANA registry, provisional). The header, the table of tag 113 (draft-ietf-cbor-packed-19 3.1),
-// describes the element once: [class tag, [[key, RFC 8746 tag], ...]]. The description of point stands at table
-// index 2, after the two record entries: 82 19 06 5e 82 82 61 78 18 55 82 61 79 18 55 (tag 85 is float32 little
-// endian, RFC 8746 2.1). The vector refers to it with simple(2) = e2 (draft Table 1), so a reader that unpacks
-// finds the description in its place. The directory takes index 3, the fillers 4 to 15. The vector is item 16 at
-// 61 (3d): d9 80 69 82 e2 and a byte string of 16 bytes. 1.0f is 3f800000, 2.0f is 40000000, 0.5f is 3f000000,
-// -1.0f is bf800000 (IEEE 754), low byte first. The bytes are written from the draft and the RFCs by hand.
+// elements. The byte string is little endian and has no padding. It stands under tag 32873. This is the first unassigned
+// number of the first-come range of the IANA registry. It is provisional. The header, the table of tag 113
+// (draft-ietf-cbor-packed-19 3.1), describes the element once: [class tag, [[key, RFC 8746 tag], ...]]. The description
+// of point stands at table index 2, after the two record entries. It is 82 19 06 5e 82 82 61 78 18 55 82 61 79 18 55.
+// Tag 85 is float32 little endian (RFC 8746 2.1). The vector refers to it with simple(2) = e2 (draft Table 1), so a
+// reader that unpacks finds the description in its place. The directory takes index 3, the fillers 4 to 15. The vector
+// is item 16 at 61 (3d). It is d9 80 69 82 e2 and a byte string of 16 bytes. The bytes are low byte first (IEEE 754).
+// 1.0f is 3f800000. 2.0f is 40000000. 0.5f is 3f000000. -1.0f is bf800000. The bytes are written from the draft and the
+// RFCs by hand.
 TEST_CASE("encode: a vector of fixed-size structs is one byte string under tag 32873")
 {
     std::string const bytes = encode_with_schema(cloud{{{1.0f, 0.5f}, {2.0f, -1.0f}}});
@@ -246,9 +248,9 @@ TEST_CASE("encode: a vector of fixed-size structs is one byte string under tag 3
 
 // The description names every leaf in the key order of RFC 8949 4.2.1: "at" (62 61 74) before "on" (62 6f 6e), "range"
 // before "shade". An inner struct is described in place with its own class tag 1622 = 19 06 56. A std::array takes [key,
-// tag, count]. bool takes uint8 (tag 64), the enum color the tag of its underlying uint16 (69, little endian), int8 the
-// tag 72. An element is at.x, at.y, on, range[0], range[1], shade: 9 bytes. The table holds gauges, gauge and
-// sorted_inner, so the description is index 3 and the reference simple(3) = e3.
+// tag, count]. bool takes uint8 (tag 64). The enum color takes the tag of its underlying uint16 (69, little endian).
+// int8 takes the tag 72. An element is at.x, at.y, on, range[0], range[1], shade: 9 bytes. The table holds gauges, gauge
+// and sorted_inner, so the description is index 3 and the reference simple(3) = e3.
 TEST_CASE("encode: a fixed-size struct with bool, enum, an inner struct and an array")
 {
     std::string const bytes = encode_with_schema(gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}}});
@@ -263,7 +265,7 @@ TEST_CASE("encode: a fixed-size struct with bool, enum, an inner struct and an a
 }
 
 // A variant member is a reference field. Its item is the record of the held alternative. So the class tag of the
-// alternative is the head of the item: 1740 = d9 06 cc for dog, 1741 = d9 06 cd for cat.
+// alternative is the head of the item. It is 1740 = d9 06 cc for dog. It is 1741 = d9 06 cd for cat.
 TEST_CASE("encode: a variant member writes the record of the held alternative as its item")
 {
     auto const with_dog = form<home>::encode(make_home_with_dog());
@@ -323,8 +325,9 @@ void check_value_alternative(T const value, std::string_view const head)
 } // namespace schema_types
 
 // Each fixed kind as an alternative is the field that encode_value writes, as an item of its own. The expected first
-// bytes come from RFC 8949 3.1 and 3.3 (major type and additional information 24 to 27 for a head of fixed width), RFC
-// 8949 3.4.3 for tags 2 and 3 (bignum, 16 bytes: 50). RFC 8746 tag 83 (d8 53) for binary128.
+// bytes come from two places in RFC 8949. Sections 3.1 and 3.3 give the major type and the additional information 24 to
+// 27 for a head of fixed width. Section 3.4.3 gives tags 2 and 3 (bignum, 16 bytes: 50). RFC 8746 tag 83 (d8 53) for
+// binary128.
 TEST_CASE("encode: each fixed kind as a variant alternative starts with its CBOR head")
 {
     check_value_alternative<bool>(false, "\xf4"sv);
@@ -361,8 +364,8 @@ TEST_CASE("encode: each fixed kind as a variant alternative starts with its CBOR
     check_value_alternative<level>(level::high, "\x19"sv);
 }
 
-// A text or byte string alternative is the string item that a std::string member writes: head 7a or 5a with a
-// 4-byte length, then the bytes. A class alternative is its record, with its class tag first.
+// A text or byte string alternative is the string item that a std::string member writes. It has head 7a or 5a with a
+// 4-byte length. The bytes follow. A class alternative is its record, with its class tag first.
 TEST_CASE("encode: a text, a byte string and a class as alternatives of one variant")
 {
     for (setting const &s : make_sample_settings()) {
@@ -379,7 +382,7 @@ TEST_CASE("encode: a text, a byte string and a class as alternatives of one vari
     CHECK_NE(with_dog->find("\xd9\x06\xcc"sv), std::string::npos);
 }
 
-// RFC 8742: a program writes a CBOR sequence into one buffer of its own and keeps the bytes behind each item.
+// RFC 8742: a program writes a CBOR sequence into one buffer of its own. It keeps the bytes behind each item.
 // schema::encode into a span changes no byte behind the message. It writes the bytes of the std::string form.
 TEST_CASE("encode: a span keeps every byte behind the message")
 {

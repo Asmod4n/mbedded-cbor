@@ -222,7 +222,7 @@ TEST_CASE("doc reference item: encode_iov")
     REQUIRE(tree);
     REQUIRE(pieces);
     CHECK_EQ((*pieces)->size(), 1u);
-    auto const joined = test::joined(**pieces);
+    auto const joined = test::join_pieces_into_bytes(**pieces);
     REQUIRE(joined.has_value());
     CHECK_EQ(*joined, bytes);
     CHECK_EQ(cbor::diagnostic_notation(*joined), "[1, \"a\"]");
@@ -450,12 +450,12 @@ TEST_CASE("doc reference item: iov_writer")
     CHECK(written);
     REQUIRE(pieces);
     REQUIRE_EQ((*pieces)->size(), 2u);
-    auto const head = test::joined((*pieces)->first(1));
+    auto const head = test::join_pieces_into_bytes((*pieces)->first(1));
     REQUIRE(head.has_value());
     CHECK_EQ(*head, "\x78\x28"sv);
     CHECK_EQ(static_cast<void const *>((**pieces)[1].iov_base), static_cast<void const *>(text->data()));
     CHECK_EQ((**pieces)[1].iov_len, text->size());
-    auto const sent = test::joined(**pieces);
+    auto const sent = test::join_pieces_into_bytes(**pieces);
     REQUIRE(sent.has_value());
     CHECK_EQ(cbor::diagnostic_notation(*sent), "\"" + *text + "\"");
 }

@@ -40,7 +40,7 @@ namespace tinycbor_port
 // The value 0 is no enumerator of cbor::error: a table row with it expects a result and no error.
 inline constexpr cbor::error no_error{};
 
-inline std::string error_text(cbor::error const e)
+inline std::string make_error_text(cbor::error const e)
 {
     if (e == no_error)
         return "no error";
@@ -48,17 +48,17 @@ inline std::string error_text(cbor::error const e)
 }
 
 template <class T>
-std::string outcome(std::expected<T, cbor::error> const &r)
+std::string make_outcome_text(std::expected<T, cbor::error> const &r)
 {
-    return error_text(r ? no_error : r.error());
+    return make_error_text(r ? no_error : r.error());
 }
 
 // The diagnostic notation of the bytes, or the text of the error. A failed check then shows the error.
-inline std::string printed(std::string_view const bytes)
+inline std::string print_with_diagnostic_notation(std::string_view const bytes)
 {
     auto const r = cbor::diagnostic_notation(bytes);
     if (!r)
-        return "error: " + error_text(r.error());
+        return "error: " + make_error_text(r.error());
     return *r;
 }
 

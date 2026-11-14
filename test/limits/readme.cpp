@@ -23,9 +23,8 @@ TEST_CASE("doc readme: set limits")
     CHECK_EQ(n.error(), cbor::error::container_elements_exceeded);
 }
 
-// The limits hold across the boundary of tag 24: an array embedded in a byte string counts against the
-// container limit as an outer array does. The byte string of 103 bytes is within the string limit of this
-// build.
+// The limits hold across the boundary of tag 24. An array embedded in a byte string counts against the container limit
+// as an outer array does. The byte string of 103 bytes is within the string limit of this build.
 TEST_CASE("limits readme: an array inside tag 24 counts")
 {
     std::string const embedded = "\x98\x65"s + std::string(101, '\x00');

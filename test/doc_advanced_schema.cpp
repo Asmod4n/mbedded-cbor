@@ -90,8 +90,8 @@ concept schema_path_compiles = requires(std::string_view const s, Index const...
     cbor::schema<T>::template at_path<Path>(s, i...);
 };
 
-// The section "The message" states that a message is one tag 113 of Packed CBOR, that a list of fixed-size structs is
-// one byte string under tag 32873, that the message holds the description. That item_size of a message is its size.
+// The section "The message" states three facts. A message is one tag 113 of Packed CBOR. A list of fixed-size structs is
+// one byte string under tag 32873. The message holds the description. That item_size of a message is its size.
 TEST_CASE("doc advanced schema: the message")
 {
     auto const bytes = cbor::schema<car>::encode(sample);
@@ -205,8 +205,9 @@ TEST_CASE("doc advanced schema: one byte of a byte string")
     CHECK_EQ(cbor::schema<frame>::at_path<"$.payload[]">(*packet, 2uz).error(), error::index_out_of_bounds);
 }
 
-// The section "One value with no accessor" says that a path to a view, to a member that is not trivially copyable,
-// to a missing member or with a wrong count of indexes does not compile.
+// The section "One value with no accessor" lists paths that do not compile. They are a path to a view and a path to a
+// member that is not trivially copyable. They are also a path to a missing member and a path with a wrong count of
+// indexes.
 TEST_CASE("doc advanced schema: a wrong path does not compile")
 {
     CHECK(schema_path_compiles<car, "$.seats">);
@@ -245,8 +246,7 @@ TEST_CASE("doc advanced schema: the accessor")
 }
 
 // The section "The accessor" says that the accessor holds the owner. So it stays valid after the caller releases the
-// bytes, that a caller who wants a copy makes it with std::string, that an empty owner throws and that a temporary
-// accessor reads nothing.
+// bytes. A caller who wants a copy makes it with std::string. An empty owner throws. A temporary accessor reads nothing.
 TEST_CASE("doc advanced schema: the accessor holds the owner")
 {
     auto owner = std::make_shared<std::string const>(*cbor::schema<car>::encode(sample));

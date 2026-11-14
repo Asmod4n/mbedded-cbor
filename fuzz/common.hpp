@@ -61,7 +61,7 @@ inline void require_error_value(cbor::error const e)
 
 // RFC 8949 3.4.3: a bignum whose magnitude fits 64 bits is the same number as the integer, and the encoder
 // writes the integer. The comparison therefore reads both forms as one.
-inline std::string magnitude_without_leading_zeros(std::string_view m)
+inline std::string strip_leading_zeros_of_magnitude(std::string_view m)
 {
     while (!m.empty() && m.front() == '\0')
         m.remove_prefix(1);
@@ -76,7 +76,7 @@ inline std::uint64_t magnitude_value(std::string_view const m)
     return v;
 }
 
-inline std::string magnitude_minus_one(std::string m)
+inline std::string subtract_one_from_magnitude(std::string m)
 {
     for (auto it = m.rbegin(); it != m.rend(); ++it) {
         if (*it != '\0') {
@@ -85,18 +85,18 @@ inline std::string magnitude_minus_one(std::string m)
         }
         *it = '\xff';
     }
-    return magnitude_without_leading_zeros(m);
+    return strip_leading_zeros_of_magnitude(m);
 }
 
 inline test::value canonical(test::value const &v)
 {
     if (auto const *b = std::get_if<test::bignum *>(&v.kind)) {
-        std::string const m = magnitude_without_leading_zeros((*b)->magnitude);
+        std::string const m = strip_leading_zeros_of_magnitude((*b)->magnitude);
         if (!(*b)->negative)
             return m.size() <= 8 ? test::value{magnitude_value(m)} : test::value{test::bignum{false, m}};
         if (m.empty())
             return v;
-        std::string const n = magnitude_minus_one(m);
+        std::string const n = subtract_one_from_magnitude(m);
         return n.size() <= 8 ? test::value{test::negative{magnitude_value(n)}} : test::value{test::bignum{true, m}};
     }
     if (auto const *a = std::get_if<test::array *>(&v.kind)) {
@@ -229,7 +229,7 @@ inline test::value value_from(source &in, refusal &r, int const depth)
     case 2: {
         bool const negative = in.byte() & 1;
         std::string m = in.string();
-        if (negative && magnitude_without_leading_zeros(m).empty())
+        if (negative && strip_leading_zeros_of_magnitude(m).empty())
             r.zero_negative = true;
         return {test::bignum{negative, std::move(m)}};
     }

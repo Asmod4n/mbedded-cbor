@@ -1,8 +1,8 @@
-// The accessor of a list is a range only where the list holds records or fixed-size structs, and only as an lvalue.
-// An rvalue accessor ends before its iterators do, so begin, cbegin and rbegin on it do not compile. A list of
-// texts, of optional structs or of lists has no iterator of elements. CBOR_TEST_CASE selects the case: 1 a list of
-// texts, 2 a list of optional structs, 3 a list of lists, 4 begin on an rvalue, 5 cbegin on an rvalue, 6 rbegin on an
-// rvalue, 7 the right uses on lvalues, which compile.
+// The accessor of a list is a range only where the list holds records or fixed-size structs, and only as an lvalue. An
+// rvalue accessor ends before its iterators do, so begin, cbegin and rbegin on it do not compile. A list of texts, of
+// optional structs or of lists has no iterator of elements. CBOR_TEST_CASE selects the case. Case 1: a list of texts.
+// Case 2: a list of optional structs. Case 3: a list of lists. Case 4: begin on an rvalue. Case 5: cbegin on an rvalue.
+// Case 6: rbegin on an rvalue. Case 7: the right uses on lvalues, which compile.
 #include <cbor/cbor.hpp>
 
 #include <cstdint>

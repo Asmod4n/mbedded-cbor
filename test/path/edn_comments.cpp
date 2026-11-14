@@ -37,8 +37,9 @@ TEST_CASE("path edn comments: every comment form of 5.1 of the EDN draft between
         refused(l);
 }
 
-// 5.1: S stands between the parts of a map entry, inside simple( ), inside the parentheses of a tag, inside << >> and
-// before the closing bracket. It does not stand between a tag number and its "(".
+// 5.1: S stands in these places. It stands between the parts of a map entry. It stands inside simple( ) and inside the
+// parentheses of a tag. It stands inside << >> and before the closing bracket. It does not stand between a tag number
+// and its "(".
 TEST_CASE("path edn comments: comments where rule S of the EDN draft stands")
 {
     selects("{1: /c/ 2}", "a10102");

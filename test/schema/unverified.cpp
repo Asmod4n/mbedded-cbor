@@ -78,8 +78,8 @@ TEST_CASE("unverified: the same results as the verified forms on a message that 
     CHECK_EQ(encode_again(form<vehicle>::unverified_decode(owner)), *owner);
 }
 
-// The unverified forms skip the checks of the data: a forged class tag, a forged head of a number, a forged tag of
-// a typed array and a forged head of a fixed-size vector give a value where the verified forms give incorrect_type.
+// The unverified forms skip the checks of the data. They give a value for four forged parts. The parts are a class tag,
+// a head of a number, a tag of a typed array and a head of a fixed-size vector. The verified forms give incorrect_type.
 TEST_CASE("unverified: a forged type byte gives a value, not an error")
 {
     std::string const bytes = encode_with_schema(sample_everything);
@@ -106,8 +106,8 @@ TEST_CASE("unverified: a forged type byte gives a value, not an error")
     CHECK_EQ(form<everything>::unverified_at_path<"$.gauges[1].on">(vector_head), false);
 }
 
-// The unverified forms keep every check of a bound: a cut message, an index past the end and a length past the
-// end give the same error in both forms.
+// The unverified forms keep every check of a bound. A cut message, an index past the end and a length past the end give
+// the same error in both forms.
 TEST_CASE("unverified: a bound is checked as in the verified forms")
 {
     std::string const bytes = encode_with_schema(sample_everything);

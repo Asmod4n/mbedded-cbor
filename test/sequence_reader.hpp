@@ -50,10 +50,10 @@ inline sequence_outcome read_sequence_outcome_of_bytes(std::string_view const by
     return out;
 }
 
-// The forms in which a piece reaches the reader: a view that the reader copies, a std::vector<char> that the reader
-// takes without a copy, a std::shared_ptr that the reader holds, an lvalue std::vector<char> that the reader copies. The
-// four in turn, one per piece. The owned forms are a std::vector<char> of the exact size of the piece and not a
-// std::string, because the inline buffer and the closing zero of a std::string hide a read of up to 16 bytes past the
+// These are the forms in which a piece reaches the reader. A view is copied by the reader. A std::vector<char> is taken
+// without a copy. A std::shared_ptr is held by the reader. An lvalue std::vector<char> is copied by the reader. The four
+// in turn, one per piece. The owned forms are a std::vector<char> of the exact size of the piece. They are not a
+// std::string. The inline buffer and the closing zero of a std::string would hide a read of up to 16 bytes past the
 // piece from ASan.
 enum class feed_form { view, rvalue, shared, lvalue, each_in_turn };
 

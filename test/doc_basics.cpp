@@ -108,8 +108,8 @@ TEST_CASE("doc basics: std::string as the type copies the text")
     CHECK_EQ(*raw, std::vector{std::byte{1}, std::byte{2}});
 }
 
-// The section "Results that point into the bytes" shows the owner rule: the view stays valid after the owner of the
-// caller ends, because the ref holds the bytes.
+// The section "Results that point into the bytes" shows the owner rule. The view stays valid after the owner of the
+// caller ends. The ref holds the bytes.
 TEST_CASE("doc basics: results that point into the bytes")
 {
     std::string bytes = preferred(M("name"s, "ann"s));
@@ -134,7 +134,7 @@ TEST_CASE("doc basics: results that point into the bytes")
     CHECK_FALSE(([]<class R>(R &&) { return requires(R &&r) { *std::forward<R>(r); }; }(std::move(**kept))));
 }
 
-// The section "Threads" shows two threads that read the same bytes, one with a path over the bytes and one with a
+// The section "Threads" shows two threads that read the same bytes. One uses a path over the bytes. The other uses a
 // lazy of its own.
 TEST_CASE("doc basics: threads" * doctest::skip(!test::threads_available))
 {

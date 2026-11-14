@@ -16,10 +16,10 @@ C chain_of(std::uint8_t const v)
 
 } // namespace schema_types
 
-// schema::at reads one number from the message with no accessor and no owner, because the number is returned by
-// value. It makes every check that path and accessor::at make: the table of keys, the undefined values after the
-// directory, the tag of the root, the tag and the length of the typed array, and the index. The expected bits of 1.0
-// and 2.0 are 3ff0000000000000 and 4000000000000000 in binary64 (IEEE 754).
+// schema::at reads one number from the message with no accessor and no owner, because the number is returned by value.
+// It makes every check that path and accessor::at make. The checks are the table of keys, the undefined values after the
+// directory and the tag of the root. They are also the tag and the length of the typed array, and the index. The
+// expected bits of 1.0 and 2.0 are 3ff0000000000000 and 4000000000000000 in binary64 (IEEE 754).
 TEST_CASE("schema::at: one number of a typed array, with every check of path")
 {
     std::string const bytes = encode_with_schema(doubles{{1.0, 2.0}});
@@ -84,10 +84,11 @@ TEST_CASE("schema: decode keeps the first entry of a repeated key")
 }
 
 // The key that the description gives takes the place of the member name in the table. The expectation is counted from
-// the draft and RFC 8949 3 by hand: the keys with the text heads 69 and 63, an empty directory, f7 up to index 15, then
-// the class tag 65536, which needs the 4-byte argument da 00 01 00 00 (RFC 8949 3 and 4.1), the record head of 7 bytes,
-// the integer with its fixed width of 18 and 1 byte, and the simple value. The test exists because a tag number above
-// 65535 makes the head of the class tag 5 bytes long. Every offset behind it moves by that.
+// the draft and RFC 8949 3 by hand. The keys have the text heads 69 and 63. The directory is empty. f7 stands up to
+// index 15. Then comes the class tag 65536, which needs the 4-byte argument da 00 01 00 00 (RFC 8949 3 and 4.1). Then
+// comes the record head of 7 bytes. Then come the integer with its fixed width of 18 and 1 byte, and the simple value.
+// The test exists because a tag number above 65535 makes the head of the class tag 5 bytes long. Every offset behind it
+// moves by that.
 TEST_CASE("schema: the description gives the key of a member")
 {
     CHECK_EQ(form<keyed>::fixed_size(), 15u);
@@ -136,13 +137,13 @@ TEST_CASE("schema: an optional struct and an optional string, present and absent
     CHECK_FALSE(back2.note.has_value());
 }
 
-// draft-ietf-cbor-packed-19 2.3 Table 2 gives tags 128..135 to the first 8 table indexes only. The test exists because a
-// root with 20 struct types needs record functions at indexes 8 to 19, which a record reaches with the straight
+// draft-ietf-cbor-packed-19 2.3 Table 2 gives tags 128..135 to the first 8 table indexes only. The test exists because
+// of a root with 20 struct types. It needs record functions at indexes 8 to 19. A record reaches them with the straight
 // reference 6([N, rump]) at index 8 + N. chain19 is index 19. So N = 11 (0b): c6 82 0b, then the rump 9a 00 00 00 03.
 // The directory takes index 20, so the shared items start at 21 and no f7 is left. Table 1 maps index 21 to 6(-3) = c6
-// 3a 00 00 00 02 and index 22 to 6(3) = c6 1a 00 00 00 03. The table head counts 21 + 4 entries. A record of index 8 or
-// more is one byte longer, so its size depends on the root. The class tag of chainK is 1600 + K, 3 bytes in front of
-// each record, and stands outside the reference: 1619 = d9 06 53 before c6 82 0b.
+// 3a 00 00 00 02. It maps index 22 to 6(3) = c6 1a 00 00 00 03. The table head counts 21 + 4 entries. A record of index
+// 8 or more is one byte longer, so its size depends on the root. The class tag of chainK is 1600 + K. It takes 3 bytes
+// in front of each record. It stands outside the reference: 1619 = d9 06 53 before c6 82 0b.
 TEST_CASE("schema: a root with 20 struct types reaches indexes 8 and more with tag 6")
 {
     CHECK_EQ(form<chain0>::fixed_size<chain19>(), 3u + 3u + 5u + 2u + 6u + 6u);
@@ -175,9 +176,9 @@ TEST_CASE("schema: a root with 20 struct types reaches indexes 8 and more with t
              "yz"s);
 }
 
-// draft-ietf-cbor-packed-19 2.2 Table 1: with 17 struct types the directory is index 17 and the first shared item
-// is index 18, which is 6(1) = c6 1a 00 00 00 01. The test exists because a reference below index 18 then names
-// no shared item: 6(0) is index 16, a record function, and the reader refuses it.
+// draft-ietf-cbor-packed-19 2.2 Table 1 applies. With 17 struct types the directory is index 17. The first shared item
+// is index 18, which is 6(1) = c6 1a 00 00 00 01. The test exists because a reference below index 18 then names no
+// shared item. 6(0) is index 16, a record function. The reader refuses it.
 TEST_CASE("schema: a root with 17 struct types starts its shared items at index 18")
 {
     chain3 const value = chain_of<chain3>(3);

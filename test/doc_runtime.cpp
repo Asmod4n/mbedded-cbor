@@ -29,8 +29,8 @@ concept dereferences = requires(R &&r) { *std::forward<R>(r); };
 template <class R>
 concept arrows = requires(R &&r) { std::forward<R>(r).operator->(); };
 
-// The section "Loop over an array or a map" shows this function whole, because a loop over std::expected values is
-// the place where a new user leaves out a check.
+// The section "Loop over an array or a map" shows this function whole. A loop over std::expected values is the place
+// where a new user leaves out a check.
 std::expected<std::int64_t, cbor::error> sum(std::string_view bytes)
 {
     auto const array = test::make_lazy_from_copy(bytes);

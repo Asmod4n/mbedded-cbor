@@ -29,9 +29,9 @@ bool nodelist_matches(std::expected<value, cbor::error> const &r, value const &n
 } // namespace
 
 // The JSONPath Compliance Test Suite checks RFC 9535 case by case. Each document is the CBOR form of the JSON document
-// of the suite. So the run time form of cbor::query must answer as a JSONPath implementation does, except where a path
-// takes an EDN literal that RFC 9535 refuses. The owner decided that the library has no regular expressions, so a
-// selector with match() or search() must be refused; those cases are counted apart.
+// of the suite. So the run-time form of cbor::query must answer as a JSONPath implementation does. One exception holds:
+// a path can take an EDN literal that RFC 9535 refuses. The owner decided that the library has no regular expressions,
+// so a selector with match() or search() must be refused; those cases are counted apart.
 TEST_CASE("path: the JSONPath Compliance Test Suite")
 {
     std::ifstream in(JSONPATH_CTS "/cts.cbor", std::ios::binary);

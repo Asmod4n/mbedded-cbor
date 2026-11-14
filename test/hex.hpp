@@ -1,5 +1,5 @@
-// Gives the bytes of a text of hex digits and the hex digits of bytes, as binascii.unhexlify and binascii.hexlify
-// of Python do (RFC 4648 8, base 16). A wrong text throws std::logic_error, so a test with a wrong literal fails.
+// Gives the bytes of a text of hex digits and the hex digits of bytes. Python does the same with binascii.unhexlify and
+// binascii.hexlify (RFC 4648 8, base 16). A wrong text throws std::logic_error, so a test with a wrong literal fails.
 #pragma once
 
 #include <charconv>

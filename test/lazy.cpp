@@ -77,12 +77,12 @@ cbor::lazy at(cbor::lazy const &l, cbor::key const key)
 // Ported from test.rb: 'lazy: basic key access (string, integer, mixed)'.
 TEST_CASE("lazy: key access by string and by integer")
 {
-    std::string const a = encoded(M("a"s, 1, "b"s, 2));
+    std::string const a = encode_value_to_wire(M("a"s, 1, "b"s, 2));
     CHECK(value_at(at(lazy_of(a), "a")) == V(1));
-    std::string const b = encoded(M(1, "one"s, 2, "two"s));
+    std::string const b = encode_value_to_wire(M(1, "one"s, 2, "two"s));
     CHECK(value_at(at(lazy_of(b), cbor::key{1})) == V("one"s));
     CHECK(value_at(at(lazy_of(b), cbor::key{2})) == V("two"s));
-    std::string const c = encoded(M(1, "int"s, "str"s, "s"s, 100, "c"s));
+    std::string const c = encode_value_to_wire(M(1, "int"s, "str"s, "s"s, 100, "c"s));
     CHECK(value_at(at(lazy_of(c), cbor::key{1})) == V("int"s));
     CHECK(value_at(at(lazy_of(c), "str")) == V("s"s));
     CHECK(value_at(at(lazy_of(c), cbor::key{100})) == V("c"s));
@@ -93,11 +93,11 @@ TEST_CASE("lazy: key access by string and by integer")
 // not_indexable.
 TEST_CASE("lazy: access errors")
 {
-    std::string const empty_array = encoded(A());
-    std::string const empty_map = encoded(M());
-    std::string const one = encoded(M("a"s, 1));
-    std::string const three = encoded(A(1, 2, 3));
-    std::string const scalar = encoded(V(42));
+    std::string const empty_array = encode_value_to_wire(A());
+    std::string const empty_map = encode_value_to_wire(M());
+    std::string const one = encode_value_to_wire(M("a"s, 1));
+    std::string const three = encode_value_to_wire(A(1, 2, 3));
+    std::string const scalar = encode_value_to_wire(V(42));
     CHECK_EQ(lazy_of(empty_array).at(0).error(), error::index_out_of_bounds);
     CHECK_EQ(lazy_of(empty_map).at("x").error(), error::key_not_found);
     CHECK_EQ(lazy_of(one).at("missing").error(), error::key_not_found);
@@ -114,7 +114,7 @@ TEST_CASE("lazy: access errors")
 // literal index chooses the array form, so at(1) never reads the map key 1.
 TEST_CASE("lazy: at(std::size_t) reads an array, at(cbor::key) reads a map")
 {
-    std::string const both = encoded(A(M(1, "one"s), 7));
+    std::string const both = encode_value_to_wire(A(M(1, "one"s), 7));
     cbor::lazy const root = lazy_of(both);
     CHECK(value_at(at(root, 1)) == V(7));
     CHECK(value_at(at(at(root, 0), cbor::key{1})) == V("one"s));
@@ -127,13 +127,13 @@ TEST_CASE("lazy: at(std::size_t) reads an array, at(cbor::key) reads a map")
 // Ported from test.rb: 'lazy: deep nesting + wide maps'.
 TEST_CASE("lazy: deep nesting and a wide map")
 {
-    std::string const deep = encoded(A(A(A(A(A(42))))));
+    std::string const deep = encode_value_to_wire(A(A(A(A(A(42))))));
     CHECK(value_at(at(at(at(at(at(lazy_of(deep), 0), 0), 0), 0), 0)) == V(42));
     map wide;
     constexpr int wide_entries = 100;
     for (int i = 0; i < wide_entries; ++i)
         wide.push_back(entry{V("key_" + std::to_string(i)), V(i)});
-    std::string const w = encoded(value{wide});
+    std::string const w = encode_value_to_wire(value{wide});
     CHECK(value_at(at(lazy_of(w), "key_0")) == V(0));
     CHECK(value_at(at(lazy_of(w), "key_50")) == V(50));
     CHECK(value_at(at(lazy_of(w), "key_99")) == V(99));
@@ -144,10 +144,10 @@ TEST_CASE("lazy: deep nesting and a wide map")
 // application counts a negative index from size(). A path keeps the negative index of RFC 9535.
 TEST_CASE("lazy: negative indices and misses")
 {
-    std::string const h = encoded(M("a"s, 1, "b"s, M("c"s, 42)));
+    std::string const h = encode_value_to_wire(M("a"s, 1, "b"s, M("c"s, 42)));
     CHECK_EQ(lazy_of(h).at("missing").error(), error::key_not_found);
     CHECK(value_at(at(at(lazy_of(h), "b"), "c")) == V(42));
-    std::string const a = encoded(A(10, 20, 30, 40, 50));
+    std::string const a = encode_value_to_wire(A(10, 20, 30, 40, 50));
     cbor::lazy const l = lazy_of(a);
     CHECK(value_at(at(l, static_cast<std::size_t>(*l.size() - 1))) == V(50));
     CHECK(value_at(at(l, static_cast<std::size_t>(*l.size() - 5))) == V(10));
@@ -156,7 +156,7 @@ TEST_CASE("lazy: negative indices and misses")
     CHECK_EQ(cbor::at_path<"$[-99]", std::uint64_t>(a).error(), error::index_out_of_bounds);
 }
 
-// RFC 9535 2.3.3.2: an index i selects the element Normalize(i, len), and only an index in 0 to len - 1 after the
+// RFC 9535 2.3.3.2: an index i selects the element Normalize(i, len). Only an index in 0 to len - 1 after the
 // normalization selects an element. lazy::at counts from 0 as std::vector::at does. A path also takes a negative index.
 // Both are checked for each index around each small length, and at the ends of the index range of I-JSON (RFC 9535 2.1).
 // So that no index selects an element outside the array.
@@ -197,7 +197,7 @@ TEST_CASE("lazy: at and a path index select the element that Normalize of RFC 95
 // Ported from test.rb: 'lazy: can still navigate child lazies after calling .value on parent'.
 TEST_CASE("lazy: a value of the parent does not change the children")
 {
-    std::string const doc = encoded(M("a"s, M("b"s, 42)));
+    std::string const doc = encode_value_to_wire(M("a"s, M("b"s, 42)));
     CHECK(value_at(lazy_of(doc)) == M("a"s, M("b"s, 42)));
     CHECK(value_at(at(at(lazy_of(doc), "a"), "b")) == V(42));
 }
@@ -210,7 +210,7 @@ TEST_CASE("lazy: random access")
     constexpr int random_reads = 200;
     for (int i = 1; i <= status_count; ++i)
         statuses.push_back(M("id"s, i, "txt"s, "msg" + std::to_string(i)));
-    std::string const doc = encoded(M("statuses"s, value{statuses}));
+    std::string const doc = encode_value_to_wire(M("statuses"s, value{statuses}));
     std::mt19937 rng(1);
     for (int n = 0; n < random_reads; ++n) {
         std::size_t const i = rng() % status_count;
@@ -228,11 +228,11 @@ TEST_CASE("lazy: a truncated item before the target")
 // Ported from test.rb: 'lazy: huge aref index handled cleanly'.
 TEST_CASE("lazy: a huge index")
 {
-    std::string const doc = encoded(A(1, 2, 3));
+    std::string const doc = encode_value_to_wire(A(1, 2, 3));
     CHECK_EQ(lazy_of(doc).at(0x7fffffff).error(), error::index_out_of_bounds);
 }
 
-// Found by the fuzz corpus: a reference inside the mark it names, d8 1c d8 1d 00, once led the navigation back to
+// The fuzz corpus found this. A reference inside the mark it names, d8 1c d8 1d 00, once led the navigation back to
 // itself without end. A lazy now reads both as plain tags, so the step reaches the integer 0, which has no element.
 TEST_CASE("lazy: a reference inside its own mark is a plain tag")
 {
@@ -279,8 +279,8 @@ std::vector<value> elements_of(std::string const &document)
 // The elements of an array come in wire order, each as a view of its own.
 TEST_CASE("lazy: the elements of an array")
 {
-    CHECK(elements_of(encoded(A(1, "a"s, A(2)))) == std::vector<value>{V(1), V("a"s), A(2)});
-    CHECK(elements_of(encoded(A())).empty());
+    CHECK(elements_of(encode_value_to_wire(A(1, "a"s, A(2)))) == std::vector<value>{V(1), V("a"s), A(2)});
+    CHECK(elements_of(encode_value_to_wire(A())).empty());
 }
 
 // A mark around the array is passed, as at passes it.
@@ -292,7 +292,7 @@ TEST_CASE("lazy: the elements of a marked array")
 // The entries of a map come in wire order, each as a pair of key and value.
 TEST_CASE("lazy: the entries of a map")
 {
-    auto const entries = lazy_of(encoded(M("a"s, 1, 2, "b"s))).entries();
+    auto const entries = lazy_of(encode_value_to_wire(M("a"s, 1, 2, "b"s))).entries();
     REQUIRE(entries.has_value());
     std::vector<value> keys;
     std::vector<value> values;
@@ -308,13 +308,13 @@ TEST_CASE("lazy: the entries of a map")
 // Only an array has elements and only a map has entries.
 TEST_CASE("lazy: elements and entries of the wrong kind")
 {
-    CHECK_EQ(lazy_of(encoded(M("a"s, 1))).elements().error(), error::not_indexable);
-    CHECK_EQ(lazy_of(encoded(A(1))).entries().error(), error::not_indexable);
-    CHECK_EQ(lazy_of(encoded(V(1))).elements().error(), error::not_indexable);
+    CHECK_EQ(lazy_of(encode_value_to_wire(M("a"s, 1))).elements().error(), error::not_indexable);
+    CHECK_EQ(lazy_of(encode_value_to_wire(A(1))).entries().error(), error::not_indexable);
+    CHECK_EQ(lazy_of(encode_value_to_wire(V(1))).elements().error(), error::not_indexable);
 }
 
 // The standard algorithms and views take entries and elements as they take any standard view. Each concept that the two
-// types claim is checked here at compile time: the iterators are forward iterators, the ranges are views, sized ranges
+// types claim is checked here at compile time. The iterators are forward iterators. The ranges are views, sized ranges
 // and borrowed ranges. An iterator outlives the range.
 TEST_CASE("lazy: entries and elements model the standard concepts they claim")
 {
@@ -346,13 +346,13 @@ concept front_reads = requires(R const &r) { r.front(); };
 // the byte after the array.
 TEST_CASE("lazy: size and empty of entries and elements")
 {
-    auto const entries = lazy_of(encoded(M("a"s, 1, "b"s, 2))).entries();
+    auto const entries = lazy_of(encode_value_to_wire(M("a"s, 1, "b"s, 2))).entries();
     REQUIRE(entries.has_value());
     CHECK_EQ(entries->size(), 2u);
     CHECK_EQ(std::ranges::size(*entries), 2u);
     CHECK_FALSE(entries->empty());
     CHECK(static_cast<bool>(*entries));
-    auto const none = lazy_of(encoded(A())).elements();
+    auto const none = lazy_of(encode_value_to_wire(A())).elements();
     REQUIRE(none.has_value());
     CHECK_EQ(none->size(), 0u);
     CHECK(none->empty());
@@ -366,7 +366,7 @@ TEST_CASE("lazy: size and empty of entries and elements")
 // std::ranges::find_if gives stays valid after the range is gone (borrowed_range).
 TEST_CASE("lazy: std::views::take, std::views::drop and find_if over entries and elements")
 {
-    auto const elements = lazy_of(encoded(A(1, 2, 3, 4))).elements();
+    auto const elements = lazy_of(encode_value_to_wire(A(1, 2, 3, 4))).elements();
     REQUIRE(elements.has_value());
     std::vector<value> taken;
     for (auto const element : *elements | std::views::take(2))
@@ -380,7 +380,7 @@ TEST_CASE("lazy: std::views::take, std::views::drop and find_if over entries and
 
     cbor::lazy_entries::iterator found;
     {
-        cbor::lazy const map = lazy_of(encoded(M("a"s, 1, "b"s, 2, "c"s, 3)));
+        cbor::lazy const map = lazy_of(encode_value_to_wire(M("a"s, 1, "b"s, 2, "c"s, 3)));
         found = std::ranges::find_if(*map.entries(), [](auto const &entry) {
             return entry.has_value() && value_at(entry->second) == V(2);
         });
@@ -397,7 +397,7 @@ TEST_CASE("lazy: std::views::take, std::views::drop and find_if over entries and
 // the place it was copied from.
 TEST_CASE("lazy: a copy of an entries iterator walks the same pairs")
 {
-    auto const entries = lazy_of(encoded(M("a"s, 1, "b"s, 2))).entries();
+    auto const entries = lazy_of(encode_value_to_wire(M("a"s, 1, "b"s, 2))).entries();
     REQUIRE(entries.has_value());
     auto first = entries->begin();
     auto const copy = first;
@@ -413,7 +413,7 @@ TEST_CASE("lazy: a copy of an entries iterator walks the same pairs")
 // The std::ranges algorithms walk the entries and the elements.
 TEST_CASE("lazy: std::ranges algorithms over entries and elements")
 {
-    auto const entries = lazy_of(encoded(M("a"s, 1, 2, "b"s, "c"s, 3))).entries();
+    auto const entries = lazy_of(encode_value_to_wire(M("a"s, 1, 2, "b"s, "c"s, 3))).entries();
     REQUIRE(entries.has_value());
     CHECK_EQ(std::ranges::distance(*entries), 3);
     auto const found = std::ranges::find_if(*entries, [](auto const &entry) {
@@ -426,7 +426,7 @@ TEST_CASE("lazy: std::ranges algorithms over entries and elements")
              }),
              2);
 
-    auto const elements = lazy_of(encoded(A(1, 2, 3))).elements();
+    auto const elements = lazy_of(encode_value_to_wire(A(1, 2, 3))).elements();
     REQUIRE(elements.has_value());
     CHECK_EQ(std::ranges::distance(*elements), 3);
     CHECK(std::ranges::all_of(*elements, [](auto const &element) { return element.has_value(); }));
@@ -443,14 +443,14 @@ TEST_CASE("lazy: at gives the value of a present key")
     CHECK(value_at(*l.at("b")) == V(2));
     CHECK(value_at(*l.at(cbor::key{7})) == V("seven"s));
     CHECK(value_at(*l.at(cbor::key{-2})) == V("minus"s));
-    CHECK_EQ(lazy_of(encoded(M())).at("a").error(), error::key_not_found);
+    CHECK_EQ(lazy_of(encode_value_to_wire(M())).at("a").error(), error::key_not_found);
 }
 
 // at is a lookup in a map. An array or a scalar has no keys.
 TEST_CASE("lazy: a key in an item that is not a map")
 {
-    CHECK_EQ(lazy_of(encoded(A(1))).at(cbor::key{0}).error(), error::not_indexable);
-    CHECK_EQ(lazy_of(encoded(V(1))).at("a").error(), error::not_indexable);
+    CHECK_EQ(lazy_of(encode_value_to_wire(A(1))).at(cbor::key{0}).error(), error::not_indexable);
+    CHECK_EQ(lazy_of(encode_value_to_wire(V(1))).at("a").error(), error::not_indexable);
 }
 
 // A key under tag 29 is a tag and no text key.
@@ -472,7 +472,7 @@ TEST_CASE("lazy: at in a truncated map gives the error")
 // at the end. Std::ranges::find_if over [begin, from) searches the part before it.
 TEST_CASE("lazy: an element iterator steps on and searches back with std::ranges")
 {
-    auto const elements = lazy_of(encoded(A(1, 2, 3, 4))).elements();
+    auto const elements = lazy_of(encode_value_to_wire(A(1, 2, 3, 4))).elements();
     REQUIRE(elements.has_value());
     auto const two = std::ranges::next(elements->begin(), 1, std::default_sentinel);
     auto const four = std::ranges::next(two, 2, std::default_sentinel);
@@ -492,7 +492,7 @@ TEST_CASE("lazy: an entry iterator outlives the lazy that gave it")
 {
     std::optional<cbor::lazy_entries::iterator> kept;
     {
-        std::string message = encoded(M("a"s, 1, "b"s, 2, "c"s, 3));
+        std::string message = encode_value_to_wire(M("a"s, 1, "b"s, 2, "c"s, 3));
         auto const l = cbor::lazy::adopt(std::move(message));
         REQUIRE(l.has_value());
         kept = l->entries()->begin();
@@ -551,9 +551,10 @@ TEST_CASE("lazy: get refuses an integer it cannot hold")
 }
 
 // Floats of the three widths of Appendix A. An integer is a double where the double holds it exactly (owner,
-// 2026-10-10): IEEE 754 binary64 has 53 bits of significand. So an integer whose bits from the highest set bit to the
-// lowest set bit fit in 53 bits is exact. -2^63 and -2^64 are exact. 2^53 + 1 and -2^63 + 1 need 54 and 63 bits. -(2^53
-// + 2) is exact. Its argument 2^53 + 1 is not, so the conversion must not round the argument first.
+// 2026-10-10): IEEE 754 binary64 has 53 bits of significand. So an integer is exact when its bits fit in 53 bits. The
+// bits count from the highest set bit to the lowest set bit. The values -2^63 and -2^64 are exact. The values 2^53 + 1
+// and -2^63 + 1 need 54 and 63 bits. The value -(2^53 + 2) is exact. Its argument 2^53 + 1 is not, so the conversion
+// must not round the argument first.
 TEST_CASE("lazy: get reads a float")
 {
     CHECK_EQ(*get<double>("\xf9\x3c\x00"s), 1.0);
@@ -664,7 +665,7 @@ TEST_CASE("encode: a typed array with a wrong tag or length")
 // the application writes the tag and the bytes of the embedded item, and a view passes through the tag into it.
 TEST_CASE("tag 24: an embedded item written by the application is read through")
 {
-    std::string const embedded = test::encoded(A(2, 3));
+    std::string const embedded = test::encode_value_to_wire(A(2, 3));
     test::string_writer w;
     {
         cbor::encoder e(w);
@@ -674,7 +675,7 @@ TEST_CASE("tag 24: an embedded item written by the application is read through")
         REQUIRE(e.byte_string(std::as_bytes(std::span(embedded))).has_value());
         REQUIRE(e.finish().has_value());
     }
-    CHECK_EQ(w.encoded, "\x82"s + test::native_unsigned(1) + "\xd8\x18\x53\x82"s + test::native_unsigned(2) + test::native_unsigned(3));
+    CHECK_EQ(w.encoded, "\x82"s + test::write_unsigned_at_native_width(1) + "\xd8\x18\x53\x82"s + test::write_unsigned_at_native_width(2) + test::write_unsigned_at_native_width(3));
     auto const inner = lazy_of(w.encoded).at(1);
     REQUIRE(inner.has_value());
     auto const three = inner->at(1);
@@ -699,7 +700,7 @@ namespace
 {
 
 // RFC 8949 3.1: an unsigned integer has the value of its argument. A negative integer has the value -1 minus its
-// argument. get<T> gives that value exactly when it lies in the range of T, and number_out_of_range otherwise.
+// argument. get<T> gives that value exactly when it lies in the range of T. Otherwise it gives number_out_of_range.
 template <class T>
 void get_is_exact_at_the_edges_of()
 {
@@ -715,7 +716,7 @@ void get_is_exact_at_the_edges_of()
             bool const fits = expected >= cbor::int128{std::numeric_limits<T>::min()} &&
                               expected <= cbor::int128{std::numeric_limits<T>::max()};
             auto const r =
-                get<T>(negative_value ? encoded(value{negative{argument}}) : encoded(value{argument}));
+                get<T>(negative_value ? encode_value_to_wire(value{negative{argument}}) : encode_value_to_wire(value{argument}));
             if (fits)
                 CHECK(r == T(expected));
             else
@@ -725,8 +726,9 @@ void get_is_exact_at_the_edges_of()
 
 } // namespace
 
-// The standard integer widths and signednesses are a finite set. So each member is checked at both ends of its range and
-// at both ends of the 64-bit argument: a range check that one width misses would change a value without an error.
+// The standard integer widths and signednesses are a finite set. So each member is checked at both ends of its range. It
+// is also checked at both ends of the 64-bit argument. A range check that one width misses would change a value without
+// an error.
 TEST_CASE("lazy: get reads every integer width up to its edge")
 {
     get_is_exact_at_the_edges_of<std::int8_t>();
@@ -745,8 +747,8 @@ TEST_CASE("lazy: get reads every integer width up to its edge")
 // tag that it does not interpret. The registration of tag 29 (value-sharing) makes its content an unsigned integer. The
 // rule table holds a row only for a tag that the library interprets (owner, 2026-10-13), so every other tag takes every
 // major type. A lazy reads the content of tags 2, 3 and 24 when it reads the value; cbor::decode reads the content of
-// the other tags. This test exists so that no content that these sections forbid passes a reader that interprets the
-// tag, and so that no reader refuses a tag that the library does not interpret.
+// the other tags. This test has two purposes. No content that these sections forbid may pass a reader that interprets
+// the tag. No reader may refuse a tag that the library does not interpret.
 TEST_CASE("lazy: the content of each tag for every major type")
 {
     std::vector<std::uint64_t> tags;
@@ -754,8 +756,8 @@ TEST_CASE("lazy: the content of each tag for every major type")
         tags.push_back(tag);
     tags.push_back(1113);
     tags.push_back(std::numeric_limits<std::uint64_t>::max());
-    // RFC 8949 3: the head of a tag is the head of an unsigned integer with major type 6 in the three high
-    // bits, above the five bits of the additional information.
+    // RFC 8949 3: the head of a tag is the head of an unsigned integer. It has major type 6 in the three high bits. The
+    // five bits of the additional information are below them.
     constexpr unsigned additional_information_bits = 5;
     constexpr auto tag_major_bits =
         static_cast<std::uint8_t>(std::to_underlying(cbor::major_type::tag) << additional_information_bits);
@@ -777,7 +779,7 @@ TEST_CASE("lazy: the content of each tag for every major type")
         for (auto const &[major, content] : contents) {
             CAPTURE(tag);
             CAPTURE(major);
-            std::string tagged = encoded(value{tag}) + content;
+            std::string tagged = encode_value_to_wire(value{tag}) + content;
             tagged[0] = static_cast<char>(static_cast<std::uint8_t>(tagged[0]) | tag_major_bits);
             bool admitted = true;
             if (byte_string_only)
@@ -842,7 +844,7 @@ TEST_CASE("lazy: view of an aliasing owner holds the owner until the last lazy e
     bool released = false;
     std::optional<cbor::lazy> name;
     {
-        auto const owner = std::make_shared<buffer_owner>(encoded(M("user"s, M("name"s, "ann"s))), &released);
+        auto const owner = std::make_shared<buffer_owner>(encode_value_to_wire(M("user"s, M("name"s, "ann"s))), &released);
         auto const doc = cbor::lazy::view(owner, std::string_view(owner->bytes));
         REQUIRE(doc.has_value());
         name.emplace(*doc->at("user").and_then([](cbor::lazy const &u) { return u.at("name"); }));
@@ -861,7 +863,7 @@ TEST_CASE("lazy: view of an aliasing owner holds the owner until the last lazy e
 // next step, so an error anywhere reaches the end of the chain.
 TEST_CASE("lazy: copy, at and get as a chain")
 {
-    std::string bytes = encoded(M("statuses"s, A(M("user"s, M("name"s, "ann"s)), M("user"s, M("name"s, "bob"s)))));
+    std::string bytes = encode_value_to_wire(M("statuses"s, A(M("user"s, M("name"s, "ann"s)), M("user"s, M("name"s, "bob"s)))));
     std::span<char const> const data(bytes);
     cbor::lazy const doc = *cbor::lazy::adopt(std::move(bytes));
     auto const name = doc.at("statuses")
@@ -914,7 +916,7 @@ TEST_CASE("lazy: a view holds the top-level item")
     bool released = false;
     std::optional<cbor::ref<std::string_view>> view;
     {
-        auto const owner = std::make_shared<buffer_owner>(encoded(M("name"s, "ann"s)), &released);
+        auto const owner = std::make_shared<buffer_owner>(encode_value_to_wire(M("name"s, "ann"s)), &released);
         auto const name = cbor::lazy::view(owner, std::string_view(owner->bytes))
                               .and_then([](cbor::lazy const &d) { return d.at("name"); })
                               .and_then([](cbor::lazy const &n) { return n.get<std::string_view>(); });
@@ -974,8 +976,8 @@ TEST_CASE("lazy: view checks that the owner holds an object")
     CHECK_EQ(**name, "xyz"sv);
 }
 
-// take moves a range that owns its bytes into the lazy, so nothing is copied. A range that the caller still names, a
-// const range and a range that owns nothing do not compile, because each would either copy or dangle.
+// take moves a range that owns its bytes into the lazy, so nothing is copied. These ranges do not compile: a range that
+// the caller still names, a const range, and a range that owns nothing. Each would either copy or dangle.
 TEST_CASE("lazy::take: only an owning rvalue range compiles")
 {
     auto const takeable = []<class S>(S &&) { return requires(S &&t) { cbor::lazy::adopt(std::forward<S>(t)); }; };
@@ -1031,7 +1033,7 @@ TEST_CASE("lazy: copy moves an rvalue string and copies everything else")
         return std::string(**r);
     };
     std::string const text(40, 't');
-    std::string const message = encoded(M("k"s, text));
+    std::string const message = encode_value_to_wire(M("k"s, text));
     auto buffer = std::make_unique<std::string>(message);
     std::span<char const> const data(*buffer);
     auto const moved = cbor::lazy::adopt(std::move(*buffer));
@@ -1118,17 +1120,17 @@ TEST_CASE("lazy: an array of the same map many times is read with no error")
 // are not checked before the call.
 TEST_CASE("lazy: size and empty")
 {
-    cbor::lazy const map = lazy_of(encoded(M("a"s, 1, 2, "b"s)));
+    cbor::lazy const map = lazy_of(encode_value_to_wire(M("a"s, 1, 2, "b"s)));
     CHECK_EQ(map.size().value(), 2u);
     CHECK_FALSE(map.empty().value());
 
-    cbor::lazy const array = lazy_of(encoded(A(1, 2, 3)));
+    cbor::lazy const array = lazy_of(encode_value_to_wire(A(1, 2, 3)));
     CHECK_EQ(array.size().value(), 3u);
     CHECK_FALSE(array.empty().value());
-    CHECK(lazy_of(encoded(A())).empty().value());
+    CHECK(lazy_of(encode_value_to_wire(A())).empty().value());
     CHECK(lazy_of("\xa0"s).empty().value());
-    CHECK_EQ(lazy_of(encoded(V(1))).size().error(), error::not_indexable);
-    CHECK_EQ(lazy_of(encoded(V("a"s))).empty().error(), error::not_indexable);
+    CHECK_EQ(lazy_of(encode_value_to_wire(V(1))).size().error(), error::not_indexable);
+    CHECK_EQ(lazy_of(encode_value_to_wire(V("a"s))).empty().error(), error::not_indexable);
     CHECK_EQ(lazy_of("\xd8\x1c\x82\x01\x02"s).size().value(), 2u);
 }
 
@@ -1239,9 +1241,9 @@ TEST_CASE("lazy: two threads read one root lazy" * doctest::skip(!test::threads_
         }
 }
 
-// A tag 28 may hold a tag 29, as CBOR::XS, cbor2 and cbor-x accept. A lazy passes both tags and reads the index:
-// in [28(1), 28(29(0)), 29(1)] the elements read 1, 0 and 1. A chain of such values, 28(1) then 28(29(k - 1)) for
-// each k, reads k - 1 at element k, and reading all of them is linear.
+// A tag 28 may hold a tag 29, as CBOR::XS, cbor2 and cbor-x accept. A lazy passes both tags and reads the index: in
+// [28(1), 28(29(0)), 29(1)] the elements read 1, 0 and 1. Take a chain of such values: 28(1) then 28(29(k - 1)) for each
+// k. It reads k - 1 at element k. Reading all of them is linear.
 TEST_CASE("lazy: a tag 28 that holds a tag 29 reads the index")
 {
     std::string const small("\x83\xd8\x1c\x01\xd8\x1c\xd8\x1d\x00\xd8\x1d\x01", 12);
@@ -1283,10 +1285,9 @@ TEST_CASE("lazy: a step to an element past the end of the input fails at once")
     CHECK_EQ(test::make_lazy_from_copy(std::string("\x82\x01\x19\x01", 4))->at(std::size_t{1}).error(), error::too_little_data);
 }
 
-// size() returned the count of the head, also when the bytes after the
-// head cannot hold that many items. A caller who reserves with size()
-// then reserved what the input claimed. size() now checks the count
-// against the bytes that are left, as elements() and entries() do.
+// size() returned the count of the head, also when the bytes after the head cannot hold that many items. A caller
+// reserved memory with size(). It reserved what the input claimed. Now size() checks the count against the bytes that
+// are left, as elements() and entries() do.
 TEST_CASE("lazy size refuses a count that the bytes cannot hold")
 {
     using namespace std::string_literals;
@@ -1396,8 +1397,8 @@ TEST_CASE("at_path: the copy form and the view form of a text")
     CHECK_EQ((**taken).data(), data.subspan(3).data());
 }
 
-// RFC 8949 3: each data item has at least its initial byte. A step into an array or a map whose count is larger than
-// the bytes left is too_little_data before any element is read, by owner decision, as size() gives.
+// RFC 8949 3: each data item has at least its initial byte. A step into an array or a map is too_little_data when its
+// count is larger than the bytes left. This holds before any element is read, by owner decision, as size() gives.
 TEST_CASE("lazy: a count larger than the bytes left is too_little_data before the elements")
 {
     for (std::string const &wire : {"\x8c\xff"s, "\x95\xf8\x04"s, "\x95\xbf"s, "\x88\x00\x7f"s, "\x87\xd8\x1c\x1f"s,
@@ -1537,9 +1538,10 @@ TEST_CASE("lazy: an element of each typed array gives its raw bytes")
     }
 }
 
-// CBOR has no data item of 128 bits for a float (RFC 8949 3.3), so decode() of such an element is incorrect_type.
-// The bit patterns below are IEEE 754 binary128: sign bit, 15 bits of exponent with bias 16383, 112 bits of
-// fraction. 1.0 is 3fff 0..0, -2.0 is c000 0..0, infinity is 7fff 0..0, a quiet NaN is 7fff 8000 0..0.
+// CBOR has no data item of 128 bits for a float (RFC 8949 3.3), so decode() of such an element is incorrect_type. The
+// bit patterns below are IEEE 754 binary128. The layout is the sign bit, 15 bits of exponent with bias 16383 and 112
+// bits of fraction. The value 1.0 is 3fff 0..0. The value -2.0 is c000 0..0. Infinity is 7fff 0..0. A quiet NaN is 7fff
+// 8000 0..0.
 TEST_CASE("lazy: an element of a float128 typed array")
 {
     using typed_array_index::typed_array_of;
@@ -1632,17 +1634,17 @@ TEST_CASE("lazy: an index reads a typed array through tag 24 and tag 28")
     CHECK_EQ(doc.at(1)->at(1).error(), error::not_indexable);
 }
 
-// operator[] is the same call as at, so that a lazy reads as a container. It gives std::expected and does not
-// throw, because the bytes are not checked before the call and a missing key is a value, not a fault of ours.
+// operator[] is the same call as at, so that a lazy reads as a container. It gives std::expected and does not throw. The
+// bytes are not checked before the call. A missing key is a value, not a fault of ours.
 TEST_CASE("lazy: operator[] gives what at gives")
 {
-    cbor::lazy const map = lazy_of(encoded(M("a"s, A(1, 2), 2, "two"s)));
+    cbor::lazy const map = lazy_of(encode_value_to_wire(M("a"s, A(1, 2), 2, "two"s)));
     CHECK(value_at(*map["a"]) == value_at(*map.at("a")));
     CHECK(value_at(*map[cbor::key{2}]) == V("two"s));
     CHECK(value_at(*(*map["a"])[std::size_t{1}]) == V(2));
     CHECK_EQ(map["z"].error(), error::key_not_found);
     CHECK_EQ(map["z"].error(), map.at("z").error());
-    cbor::lazy const array = lazy_of(encoded(A(1, 2)));
+    cbor::lazy const array = lazy_of(encode_value_to_wire(A(1, 2)));
     CHECK(value_at(*array[std::size_t{0}]) == V(1));
     CHECK_EQ(array["a"].error(), error::not_indexable);
     CHECK_EQ(array[std::size_t{2}].error(), array.at(std::size_t{2}).error());
@@ -1663,8 +1665,8 @@ TEST_CASE("lazy: a repeated key gives the first pair")
     CHECK(value_at(*numbers[cbor::key{1}]) == V(1));
 }
 
-// RFC 9535 2.3.5.1: a single result needs a singular query. compile refuses any other query for every
-// result type that is not cbor::nodelist, and a nodelist takes both.
+// RFC 9535 2.3.5.1: a single result needs a singular query. compile refuses any other query for every result type that
+// is not cbor::nodelist. A nodelist takes both.
 TEST_CASE("lazy: compile refuses a query that is not singular for a single result")
 {
     auto const each = []<class T>() {
@@ -1722,16 +1724,16 @@ TEST_CASE("lazy: at_path over bare bytes compiles for a scalar only")
 // at_path. The literal form gives the same nodelist.
 TEST_CASE("lazy: one query applies to many documents")
 {
-    std::string const one = encoded(M("a"s, A(1, 2)));
-    std::string const two = encoded(M("a"s, A(3, 4, 5)));
+    std::string const one = encode_value_to_wire(M("a"s, A(1, 2)));
+    std::string const two = encode_value_to_wire(M("a"s, A(3, 4, 5)));
     auto const all = *cbor::path::compile<cbor::nodelist>("$.a[*]");
     auto const first = *cbor::path::compile<int>("$.a[0]");
     cbor::lazy const l1 = *test::make_lazy_from_copy(one);
     cbor::lazy const l2 = *test::make_lazy_from_copy(two);
     CHECK_EQ(l1.at_path(all)->size(), 2u);
     CHECK_EQ(l2.at_path(all)->size(), 3u);
-    CHECK(*test::values_of(l1.at_path(all)) == *test::values_of(l1.at_path(all)));
-    CHECK(*test::values_of(l1.at_path(all)) == *test::values_of(l1.at_path<"$.a[*]", cbor::nodelist>()));
+    CHECK(*test::make_values_from_nodelist(l1.at_path(all)) == *test::make_values_from_nodelist(l1.at_path(all)));
+    CHECK(*test::make_values_from_nodelist(l1.at_path(all)) == *test::make_values_from_nodelist(l1.at_path<"$.a[*]", cbor::nodelist>()));
     CHECK_EQ(*l1.at_path(first), 1);
     CHECK_EQ(*l2.at_path(first), 3);
     CHECK_EQ(*cbor::at_path(one, first), 1);
@@ -1741,7 +1743,7 @@ TEST_CASE("lazy: one query applies to many documents")
     CHECK_EQ(cbor::at_path(std::string(two), all)->size(), 3u);
     auto const node = cbor::at_path(shared, *cbor::path::compile<cbor::lazy>("$.a[2]"));
     CHECK(test::make_value_from_item(node) == V(5));
-    std::string const text = encoded(M("s"s, "x"s));
+    std::string const text = encode_value_to_wire(M("s"s, "x"s));
     auto const s = *cbor::path::compile<std::string_view>("$.s");
     auto const from_view = cbor::at_path(std::string(text), s);
     CHECK_EQ(**from_view, "x"sv);
@@ -1755,7 +1757,7 @@ TEST_CASE("lazy: one query applies to many documents")
 // no read reaches freed memory.
 TEST_CASE("lazy: a copy of a query outlives the original")
 {
-    std::string const doc = encoded(M("k"s, A(7)));
+    std::string const doc = encode_value_to_wire(M("k"s, A(7)));
     std::optional<cbor::path::query<int>> original = *cbor::path::compile<int>("$['k'][0]");
     cbor::path::query<int> const copy = *original;
     original.reset();
@@ -1766,7 +1768,7 @@ TEST_CASE("lazy: a copy of a query outlives the original")
 // other wrong use; the moved-to query applies as before.
 TEST_CASE("lazy: a moved-from query is a wrong use")
 {
-    std::string const doc = encoded(M("a"s, "x"s));
+    std::string const doc = encode_value_to_wire(M("a"s, "x"s));
     cbor::lazy const l = *test::make_lazy_from_copy(doc);
     auto number = *cbor::path::compile<int>("$.a");
     auto const moved_number = std::move(number);
@@ -1785,11 +1787,11 @@ TEST_CASE("lazy: a moved-from query is a wrong use")
     CHECK_EQ(l.at_path(moved_nodes)->size(), 1u);
 }
 
-// The parse of a query recurses into each filter. So a query with one filter in another more often than a small stack
-// holds does not compile on a thread with that stack, and one filter does.
+// The parse of a query recurses into each filter. So a query with one filter in another does not compile on a thread
+// with a small stack. This holds when the filters nest more often than that stack holds. One filter does compile.
 TEST_CASE("lazy: the compile of a query stops where the stack of the thread ends")
 {
-    std::string const doc = encoded(A(1));
+    std::string const doc = encode_value_to_wire(A(1));
     cbor::lazy const l = *test::make_lazy_from_copy(doc);
     constexpr std::size_t depth = test::levels_beyond_small_stack;
     std::string const deep = "$" + test::repeat("[?@", depth) + ".a" + std::string(depth, ']');
@@ -1803,7 +1805,7 @@ TEST_CASE("lazy: the compile of a query stops where the stack of the thread ends
 // sanitizer shows that no access races.
 TEST_CASE("lazy: threads apply one query at once" * doctest::skip(!test::threads_available))
 {
-    std::string const doc = encoded(M("a"s, A(1, 2, 3)));
+    std::string const doc = encode_value_to_wire(M("a"s, A(1, 2, 3)));
     cbor::lazy const l = *test::make_lazy_from_copy(doc);
     auto const e = *cbor::path::compile<cbor::nodelist>("$.a[?@ > 1]");
     std::array<std::size_t, 4> found{};
@@ -1839,7 +1841,8 @@ TEST_CASE("lazy: the clone of empty input gives the error of decode")
 }
 
 // RFC 8746 2.1 (refs/rfc8746.txt:143): the content of a typed array tag is a byte string. A typed array tag whose
-// content is not one is refused the same way by every reader, whether the reader reads the content or only the tag.
+// content is not a typed array is refused the same way by every reader. This holds whether the reader reads the content
+// or only the tag.
 TEST_CASE("lazy: a typed array tag with content that is no byte string is refused by every reader")
 {
     std::string const wire = "\xd8\x51\x88\x51\x51\x51\x51\x51\x51\x40\x40\x51\x6b\x40\x40\xf9\x04\x7c\x60\x00\xd8\x51\x0a\x00\x00\x51\xd8\x51\x88\x51\x51\x41\x51\x23\x51\x40\x51\x51\x40\x40\x00\x00\x0a\x51\x51\x51\x52\x51\x75\x40\x40\xc7\x81\x81\x81\xd8\x1c\xed\xd0\xf3\x0b\xa0"s;

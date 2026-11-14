@@ -161,8 +161,8 @@ TEST_CASE("decode and at_path: every typed array gives its elements back")
     CHECK_EQ(list->at_path<"@[]">(1uz).error(), error::index_out_of_bounds);
 }
 
-// A list of doubles that does not carry tag 86, or whose byte string is not a multiple of eight bytes, is refused
-// as an error value by decode and by path. Tag 82 is binary64 in big endian and tag 85 is binary32 (RFC 8746).
+// A list of doubles may not carry tag 86. Its byte string may not be a multiple of eight bytes. In both cases decode and
+// path refuse it as an error value. Tag 82 is binary64 in big endian and tag 85 is binary32 (RFC 8746).
 TEST_CASE("decode and at_path: a typed array with a wrong tag or a wrong length is refused")
 {
     std::string const bytes = encode_with_schema(doubles{{1.0, 2.0}});
@@ -270,10 +270,10 @@ TEST_CASE("decode: the head of a fixed string and of a std::array is checked")
     CHECK_EQ(form<everything>::decode(std::string(array_head)).error(), error::incorrect_type);
 }
 
-// A class with no default constructor is built by its constructor, which takes the described members in the order
-// of the description, as mrb_cpp_new of mruby-c-ext-helpers forwards its arguments to new T(...). The wire does not
-// show how a class is built, so the same description gives the bytes of an aggregate. The key order (unit before
-// value) differs from the order of the description, so a mix-up of the two orders shows here.
+// A class with no default constructor is built by its constructor. The constructor takes the described members in the
+// order of the description. This is as mrb_cpp_new of mruby-c-ext-helpers forwards its arguments to new T(...). The wire
+// does not show how a class is built, so the same description gives the bytes of an aggregate. The key order (unit
+// before value) differs from the order of the description, so a mix-up of the two orders shows here.
 TEST_CASE("decode: a class with a constructor takes its described members in the order of the description")
 {
     std::string const bytes = encode_with_schema(reading{7, "kg"});
@@ -288,8 +288,8 @@ TEST_CASE("decode: a class with a constructor takes its described members in the
     CHECK_EQ(at_path<reading, "$.unit">(bytes), "kg");
 }
 
-// Each place that makes an element builds a class with a constructor the same way: an element of a vector, the
-// value of an optional and the value of a map.
+// Each place that makes an element builds a class with a constructor the same way. The places are an element of a
+// vector, the value of an optional and the value of a map.
 TEST_CASE("decode: a class with a constructor in a vector, an optional and a map")
 {
     station const full{{reading{1, "a"}, reading{2, "bb"}}, reading{3, "ccc"}, {{9, reading{4, "dddd"}}}};
@@ -367,8 +367,8 @@ TEST_CASE("a message cut at any length is too_little_data")
     }
 }
 
-// Only a cut message of the type is too_little_data: a message of another type, a message with a byte after it and
-// text that is not CBOR keep their error.
+// Only a cut message of the type is too_little_data. A message of another type keeps its error. A message with a byte
+// after it keeps its error. Text that is not CBOR keeps its error.
 TEST_CASE("a whole message of another type keeps its error")
 {
     std::string const whole = *form<byte_fields>::encode(make_byte_fields());
@@ -419,8 +419,8 @@ TEST_CASE("decode: a target that holds another alternative gets the alternative 
     CHECK_EQ(std::get<cat>((*back)->pet).toys.size(), 2u);
 }
 
-// Each kind of alternative comes back from decode and from the unverified decode: bool, a number, a float, a text, a
-// byte string, an empty text as the last item. A class next to a number and a text.
+// Each kind of alternative comes back from decode and from the unverified decode. The kinds are bool, a number, a float,
+// a text and a byte string. An empty text is the last item. A class next to a number and a text.
 TEST_CASE("decode: value, text and class alternatives of a variant member")
 {
     for (setting const &s : make_sample_settings()) {

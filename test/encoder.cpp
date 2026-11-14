@@ -42,9 +42,9 @@ concept unsigned_integer_accepts = requires(cbor::encoder<std::string> &e, T con
 template <class T>
 concept negative_integer_accepts = requires(cbor::encoder<std::string> &e, T const v) { e.negative_integer(v); };
 
-// RFC 8949 3.1: major type 0 and 1 carry the argument in the head. The encoder writes it in the width of the
-// type the caller gives, as the owner decided for every encoder: one byte for std::uint8_t, eight for
-// std::uint64_t, even when a shorter head would hold the value.
+// RFC 8949 3.1: major type 0 and 1 carry the argument in the head. The encoder writes it in the width of the type that
+// the caller gives, as the owner decided for every encoder. It writes one byte for std::uint8_t and eight for
+// std::uint64_t. It does so even when a shorter head would hold the value.
 TEST_CASE("encoder: an integer is written in the width of its type")
 {
     CHECK_EQ(written([](auto &e) { return e.unsigned_integer(std::uint8_t{5}); }), "\x18\x05"sv);
@@ -221,9 +221,8 @@ TEST_CASE("encoder: finish gives the size, and a call after it throws")
     CHECK_THROWS_AS((void)e.array(0), std::logic_error);
 }
 
-// The iov target gives pieces: the heads and short strings in blocks of the encoder, a long string whose
-// owner the caller handed over as a piece of its own with no copy. Joined, the pieces are the bytes of the
-// string target.
+// The iov target gives pieces. The heads and short strings are in blocks of the encoder. A long string has an owner that
+// the caller handed over. It is a piece of its own, with no copy. Joined, the pieces are the bytes of the string target.
 TEST_CASE("encoder: the iov target gives the bytes of the string target in pieces")
 {
     auto const text = std::make_shared<std::string const>(std::string(40, 'x'));
@@ -234,7 +233,7 @@ TEST_CASE("encoder: the iov target gives the bytes of the string target in piece
     REQUIRE(e.unsigned_integer(std::uint8_t{7}).has_value());
     auto const pieces = e.finish();
     REQUIRE(pieces.has_value());
-    auto const joined = test::joined(**pieces);
+    auto const joined = test::join_pieces_into_bytes(**pieces);
     REQUIRE(joined.has_value());
     bool const referenced = std::ranges::any_of(**pieces, [&](iovec const &piece) {
         return static_cast<void const *>(piece.iov_base) == static_cast<void const *>(text->data());
@@ -244,8 +243,8 @@ TEST_CASE("encoder: the iov target gives the bytes of the string target in piece
 }
 
 // RFC 8742: a program writes a CBOR sequence item after item into one buffer of its own and keeps the bytes behind each
-// item. The encoder over a span and cbor::encode into a span change no byte behind the item, also where the item ends in
-// a head of one byte. They write the bytes of the std::string form.
+// item. The encoder over a span and cbor::encode into a span change no byte behind the item. This holds also where the
+// item ends in a head of one byte. They write the bytes of the std::string form.
 TEST_CASE("encoder: a span keeps every byte behind the item")
 {
     constexpr char sentinel = 'Z';

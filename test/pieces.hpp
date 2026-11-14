@@ -1,7 +1,6 @@
-// Reads the pieces of an iov_writer back the way a caller sends them: writev
-// into a temporary file, IOV_MAX pieces at a time, then read until the file
-// has given every byte. Only the file descriptor reads and writes the file.
-// https://pubs.opengroup.org/onlinepubs/9799919799/functions/writev.html
+// Reads the pieces of an iov_writer back the way a caller sends them. It calls writev into a temporary file, IOV_MAX
+// pieces at a time. Then it reads until the file has given every byte. Only the file descriptor reads and writes the
+// file. https://pubs.opengroup.org/onlinepubs/9799919799/functions/writev.html
 #ifndef CBOR_TEST_PIECES_HPP
 #define CBOR_TEST_PIECES_HPP
 
@@ -30,7 +29,7 @@
 namespace test {
 
 template <class T>
-std::expected<T, std::errc> count_of(std::size_t const n)
+std::expected<T, std::errc> count_pieces(std::size_t const n)
 {
     if (!std::in_range<T>(n))
         return std::unexpected(std::errc::value_too_large);
@@ -47,7 +46,7 @@ inline std::errc read_errno_as_errc()
     return static_cast<std::errc>(errno);
 }
 
-inline std::expected<std::string, std::errc> joined(std::span<iovec const> const pieces)
+inline std::expected<std::string, std::errc> join_pieces_into_bytes(std::span<iovec const> const pieces)
 {
     long const iov_max = sysconf(_SC_IOV_MAX);
     if (iov_max <= 0)
@@ -59,7 +58,7 @@ inline std::expected<std::string, std::errc> joined(std::span<iovec const> const
     std::size_t const step = static_cast<std::size_t>(iov_max);
     for (std::size_t at = 0; at < pieces.size(); at += step) {
         std::span<iovec const> const part = pieces.subspan(at).first(std::min(step, pieces.size() - at));
-        auto const count = count_of<int>(part.size());
+        auto const count = count_pieces<int>(part.size());
         if (!count)
             return std::unexpected(count.error());
         ssize_t const sent = writev(fd, part.data(), *count);

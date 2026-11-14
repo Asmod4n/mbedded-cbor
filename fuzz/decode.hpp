@@ -25,12 +25,12 @@ namespace fuzz
 // deep inside grows deeper than the input was; the decode of the written bytes then refuses it by its depth limit.
 inline void decode_encode_decode(std::string_view const input)
 {
-    auto const value = test::decoded(input);
+    auto const value = test::decode_wire_into_value(input);
     if (!value)
         return;
     string_writer w;
     require(test::encode(w, *value).has_value());
-    auto const again = test::decoded(w.encoded);
+    auto const again = test::decode_wire_into_value(w.encoded);
     if (!again) {
         require(again.error() == cbor::error::nesting_depth_exceeded);
         return;
@@ -84,8 +84,8 @@ inline void tree_encode(std::string_view const input)
     std::string out;
     auto const written = cbor::encode(**tree, out);
     require(written.has_value() && *written == out.size());
-    auto const value = test::decoded(input.substr(0, *end));
-    auto const again = test::decoded(out);
+    auto const value = test::decode_wire_into_value(input.substr(0, *end));
+    auto const again = test::decode_wire_into_value(out);
     require(value.has_value() == again.has_value());
     if (value)
         require(same(*value, *again));
@@ -99,7 +99,7 @@ inline void tree_encode(std::string_view const input)
     require(cbor::encode(**tree_again, twice).has_value() && twice == out);
     auto const pieces = cbor::encode_iov(**tree);
     require(pieces.has_value());
-    auto const joined = test::joined(**pieces);
+    auto const joined = test::join_pieces_into_bytes(**pieces);
     require(joined.has_value() && *joined == out);
     encode_targets(**tree, out);
 }

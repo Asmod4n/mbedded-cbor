@@ -294,10 +294,10 @@ value M(T... t)
     return {std::move(m)};
 }
 
-// The preferred serialization of RFC 8949 4.2.2, written by hand from the specification: the shortest head
-// for every argument and the shortest float that keeps the value. Documentation examples read this form,
-// because it is what most senders write and what diagnostic notation prints without encoding indicators.
-inline void preferred_head(std::string &out, unsigned const major, std::uint64_t const argument)
+// This is the preferred serialization of RFC 8949 4.2.2, written by hand from the specification. Every argument has the
+// shortest head. A float has the shortest form that keeps the value. Documentation examples read this form, because it
+// is what most senders write and what diagnostic notation prints without encoding indicators.
+inline void write_preferred_head(std::string &out, unsigned const major, std::uint64_t const argument)
 {
     constexpr int bits_per_byte = std::numeric_limits<unsigned char>::digits;
     auto const put = [&](unsigned const info, int const bytes) {
@@ -317,7 +317,7 @@ inline void preferred_head(std::string &out, unsigned const major, std::uint64_t
         put(test::rfc8949::eight_byte_argument, sizeof(std::uint64_t));
 }
 
-inline bool float_fits(double const v, test::ieee754::binary_format const f)
+inline bool float_fits_format(double const v, test::ieee754::binary_format const f)
 {
     if (v == 0)
         return true;
@@ -330,7 +330,7 @@ inline bool float_fits(double const v, test::ieee754::binary_format const f)
     return n == std::trunc(n) && std::fabs(n) < std::ldexp(1.0, f.precision);
 }
 
-inline void preferred_float(std::string &out, double const v)
+inline void write_preferred_float(std::string &out, double const v)
 {
     constexpr int bits_per_byte = std::numeric_limits<unsigned char>::digits;
     auto const put = [&](unsigned const info, std::uint64_t const bits, int const bytes) {
@@ -360,7 +360,7 @@ inline void preferred_float(std::string &out, double const v)
     if (std::isinf(v))
         return put(test::rfc8949::two_byte_argument, sign << test::ieee754::binary16_sign_bit | test::ieee754::binary16_exponent_all_ones, sizeof(std::uint16_t));
     double const a = std::fabs(v);
-    if (float_fits(a, test::ieee754::binary16)) {
+    if (float_fits_format(a, test::ieee754::binary16)) {
         std::uint64_t half = 0;
         if (a != 0) {
             int e = 0;
@@ -373,50 +373,50 @@ inline void preferred_float(std::string &out, double const v)
         }
         return put(test::rfc8949::two_byte_argument, sign << test::ieee754::binary16_sign_bit | half, sizeof(std::uint16_t));
     }
-    if (float_fits(a, test::ieee754::binary32))
+    if (float_fits_format(a, test::ieee754::binary32))
         return put(test::rfc8949::four_byte_argument, std::bit_cast<std::uint32_t>(static_cast<float>(v)), sizeof(std::uint32_t));
     put(test::rfc8949::eight_byte_argument, std::bit_cast<std::uint64_t>(v), sizeof(std::uint64_t));
 }
 
-inline void preferred_write(std::string &out, value const &v)
+inline void write_preferred_item(std::string &out, value const &v)
 {
     std::visit(
         [&](auto const &k) {
             using K = std::remove_cvref_t<decltype(k)>;
             if constexpr (std::same_as<K, std::uint64_t>) {
-                preferred_head(out, 0, k);
+                write_preferred_head(out, 0, k);
             } else if constexpr (std::same_as<K, negative>) {
-                preferred_head(out, 1, k.argument);
+                write_preferred_head(out, 1, k.argument);
             } else if constexpr (std::same_as<K, double>) {
-                preferred_float(out, k);
+                write_preferred_float(out, k);
             } else if constexpr (std::same_as<K, simple>) {
-                preferred_head(out, 7, k.v);
+                write_preferred_head(out, 7, k.v);
             } else if constexpr (std::same_as<K, short_text>) {
-                preferred_head(out, 3, k.size);
+                write_preferred_head(out, 3, k.size);
                 out.append(k.view());
             } else if constexpr (std::same_as<K, std::string *>) {
-                preferred_head(out, 3, k->size());
+                write_preferred_head(out, 3, k->size());
                 out.append(*k);
             } else if constexpr (std::same_as<K, bytes *>) {
-                preferred_head(out, 2, k->b.size());
+                write_preferred_head(out, 2, k->b.size());
                 out.append(k->b);
             } else if constexpr (std::same_as<K, bignum *>) {
-                preferred_head(out, 6, k->negative ? 3 : 2);
-                preferred_head(out, 2, k->magnitude.size());
+                write_preferred_head(out, 6, k->negative ? 3 : 2);
+                write_preferred_head(out, 2, k->magnitude.size());
                 out.append(k->magnitude);
             } else if constexpr (std::same_as<K, array *>) {
-                preferred_head(out, 4, k->size());
+                write_preferred_head(out, 4, k->size());
                 for (value const &e : *k)
-                    preferred_write(out, e);
+                    write_preferred_item(out, e);
             } else if constexpr (std::same_as<K, map *>) {
-                preferred_head(out, 5, k->size());
+                write_preferred_head(out, 5, k->size());
                 for (entry const &e : *k) {
-                    preferred_write(out, e.key);
-                    preferred_write(out, e.val);
+                    write_preferred_item(out, e.key);
+                    write_preferred_item(out, e.val);
                 }
             } else {
-                preferred_head(out, 6, k->tag);
-                preferred_write(out, k->content);
+                write_preferred_head(out, 6, k->tag);
+                write_preferred_item(out, k->content);
             }
         },
         v.kind);
@@ -425,12 +425,12 @@ inline void preferred_write(std::string &out, value const &v)
 inline std::string preferred(value const &v)
 {
     std::string out;
-    preferred_write(out, v);
+    write_preferred_item(out, v);
     return out;
 }
 
 // The encoder writes a run-time integer at its native width: the initial byte with eight argument bytes.
-inline std::string native_integer(cbor::major_type const major, std::uint64_t const argument)
+inline std::string write_integer_at_native_width(cbor::major_type const major, std::uint64_t const argument)
 {
     constexpr int bits_per_byte = std::numeric_limits<unsigned char>::digits;
     std::string s(1, static_cast<char>(std::to_underlying(major) << test::rfc8949::additional_information_bits |
@@ -440,9 +440,9 @@ inline std::string native_integer(cbor::major_type const major, std::uint64_t co
     return s;
 }
 
-inline std::string native_unsigned(std::uint64_t const n)
+inline std::string write_unsigned_at_native_width(std::uint64_t const n)
 {
-    return native_integer(cbor::major_type::unsigned_integer, n);
+    return write_integer_at_native_width(cbor::major_type::unsigned_integer, n);
 }
 
 inline std::string repeat(std::string_view part, std::size_t n)
@@ -454,14 +454,14 @@ inline std::string repeat(std::string_view part, std::size_t n)
 }
 
 // The magnitude of a bignum without its leading zero bytes, as RFC 8949 3.4.3 lets a sender add them.
-inline std::string_view magnitude_without_leading_zeros(std::string_view const m)
+inline std::string_view strip_leading_zeros_of_magnitude(std::string_view const m)
 {
     std::size_t const first = m.find_first_not_of('\0');
     return first == std::string_view::npos ? std::string_view{} : m.substr(first);
 }
 
 // RFC 8949 3.4.3: tag 3 holds n for the value -1 - n, so the absolute value is n + 1.
-inline std::string magnitude_plus_one(std::string_view const m)
+inline std::string add_one_to_magnitude(std::string_view const m)
 {
     std::string sum(m);
     for (auto it = sum.rbegin(); it != sum.rend(); ++it) {
@@ -474,7 +474,7 @@ inline std::string magnitude_plus_one(std::string_view const m)
 }
 
 // RFC 8949 3.4.3: tag 3 holds n for the value -1 - n, so n is the absolute value less one.
-inline std::string magnitude_minus_one(std::string_view const m)
+inline std::string subtract_one_from_magnitude(std::string_view const m)
 {
     std::string n(m);
     for (auto it = n.rbegin(); it != n.rend(); ++it) {
@@ -482,7 +482,7 @@ inline std::string magnitude_minus_one(std::string_view const m)
         if (*it != '\xff')
             break;
     }
-    return std::string(magnitude_without_leading_zeros(n));
+    return std::string(strip_leading_zeros_of_magnitude(n));
 }
 
 } // namespace test

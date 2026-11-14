@@ -196,8 +196,8 @@ TEST_CASE("at_path: a record with a wrong tag in a list gives the error of at_pa
     CHECK_EQ(make_of(second), "make1");
 }
 
-// An iterator holds the owner of the bytes. The test exists because the iterator must still read a text of a
-// record after its accessor, the root accessor and the first std::shared_ptr are gone.
+// An iterator holds the owner of the bytes. The test exists for one reason. The iterator must still read a text of a
+// record after its accessor is gone. The root accessor and the first std::shared_ptr are gone too.
 TEST_CASE("at_path: an iterator of a list of records outlives its accessor")
 {
     using A = std::remove_cvref_t<decltype(*std::declval<form<parking_lot>::accessor<> const &>().at_path<"$.cars">())>;

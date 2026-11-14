@@ -30,11 +30,11 @@ constexpr int depth_max = 4;
 constexpr int elements_max = 4;
 constexpr auto keys = std::to_array<std::string_view>({"a", "b", "c", "d"});
 
-// jsoncons::jsonpath reads null, false, [], {} and "" as false where RFC 9535 2.3.5.2.1 asks only whether a
-// node exists, in an existence test and under !, && and ||. A query with an existence test therefore runs
-// over the plain family, whose documents hold none of these five values; every other query runs over the full
-// family too. The members of a map stand in the order of the keys, so equal maps have equal member order:
-// jsoncons compares maps member by member in order, RFC 9535 2.3.5.2.2 by names.
+// jsoncons::jsonpath reads null, false, [], {} and "" as false. RFC 9535 2.3.5.2.1 asks only whether a node exists. This
+// differs in an existence test and under !, && and ||. Therefore a query with an existence test runs over the plain
+// family. The documents of that family hold none of these five values. Every other query runs over the full family too.
+// The members of a map stand in the order of the keys. So equal maps have equal member order. jsoncons compares maps
+// member by member in order. RFC 9535 2.3.5.2.2 compares them by names.
 ojson document_of(std::mt19937 &random, int const depth, bool const plain)
 {
     std::uniform_int_distribution<int> kind(0, depth < depth_max ? 9 : 7);
@@ -172,9 +172,9 @@ tally compare_all(std::vector<ojson> const &documents)
 
 }
 
-// Each path of the full family uses no existence test, so the truthiness of jsoncons cannot change its
-// result: keys, indexes, wildcards, slices, descendants, comparisons of numbers and strings, &&, ||, !,
-// length(), nested and absolute queries.
+// No path of the full family uses an existence test. So the truthiness of jsoncons cannot change its result. The paths
+// use keys, indexes, wildcards, slices, descendants, comparisons of numbers and strings, &&, ||, !, length(), nested
+// queries and absolute queries.
 int main()
 {
     std::vector<ojson> const full = documents_of(false);
@@ -186,9 +186,9 @@ int main()
                     "$[?@.a == 1]", "$[?@.a != 1]", "$[?@.a < 2]", "$..[?@ == 2]", "$[?@.a == 1 || @.b == 2]",
                     "$[?@.a < 3 && @.a > -1]", "$[?!(@ == 1)]", "$[?length(@) == 2]", "$.*[?@ > 0]",
                     "$[?@ == 'é']", "$[?@ < '😀']">(full);
-    // The plain family adds the existence tests, also under !, && and ||, and the comparison of two queries,
-    // of which one may be absent: RFC 9535 2.3.5.2.2 makes an absent operand equal only to another absent
-    // operand, and jsoncons reads an absent operand as null, so the two agree only where no node is null.
+    // The plain family adds the existence tests, also under !, && and ||, and the comparison of two queries, of which
+    // one may be absent: RFC 9535 2.3.5.2.2 makes an absent operand equal only to another absent operand. jsoncons reads
+    // an absent operand as null. So the two agree only where no node is null.
     tally const b =
         compare_all<"$[?@.a]", "$[?!@.a]", "$[?@.a && @.b]", "$[?@.a || @[0]]", "$[?@[?@ > 1]]", "$..[?@.a]",
                     "$[?@.*]", "$[?@.a == @.b]", "$[?$.a]", "$[?@[0] && !@[1]]", "$[?@[0] == $[0]]">(plain);

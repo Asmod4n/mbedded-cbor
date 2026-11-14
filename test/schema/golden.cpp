@@ -99,9 +99,9 @@ std::string golden_expected_line(std::string_view const name)
 
 } // namespace schema_types
 
-// The bytes of every described type of this file, with values that differ in each leaf, as the commit before
-// cbor::packed wrote them (dc787da): the message with the description inside, the data form apart, and the
-// description. A change of the walk that changes one byte fails here.
+// These are the bytes of every described type of this file, with values that differ in each leaf. The commit before
+// cbor::packed wrote them (dc787da). There are three parts: the message with the description inside, the data form
+// apart, and the description. A change of the walk that changes one byte fails here.
 TEST_CASE("golden bytes: every type of this file encodes as before")
 {
     std::string expected(golden_expected);
@@ -119,11 +119,12 @@ TEST_CASE("golden bytes: every type of this file encodes as before")
     CHECK_EQ(golden_report(), expected);
 }
 
-// The bytes of every golden line start as the specifications fix them, whatever the library writes after them.
-// RFC 8949 3.4 writes tag 113 as d8 71, and 3.1 gives the head 82 to an array of two items; draft-ietf-cbor-packed-19
-// defines tag 113 as an array of the table and the rump (refs/draft-ietf-cbor-packed-19.txt:901) and tag 114 as the
-// record function over an array (:1026). The message, with the description inside and with the data apart, starts
-// d8 71 82, and the description starts d8 72 and a head of major type 4.
+// The bytes of every golden line start as the specifications fix them, whatever the library writes after them. RFC 8949
+// 3.4 writes tag 113 as d8 71. RFC 8949 3.1 gives the head 82 to an array of two items. The draft
+// draft-ietf-cbor-packed-19 defines tag 113. Tag 113 is an array of the table and the rump. See
+// refs/draft-ietf-cbor-packed-19.txt:901. It defines tag 114 as the record function over an array (:1026). The message
+// starts d8 71 82. This holds with the description inside and with the data apart. The description starts d8 72 and a
+// head of major type 4.
 TEST_CASE("golden bytes: each line starts as RFC 8949 and Packed CBOR define it")
 {
     constexpr std::string_view packed_message_head = "d87182";
@@ -493,10 +494,10 @@ TEST_CASE("golden bytes: everything encodes as before")
 }
 #endif
 
-// The item of a variant member is the record of the held alternative, as draft-ietf-cbor-packed-19 shares a record as an
-// item: the class tag 1740 (d9 06 cc) or 1741 (d9 06 cd), the straight reference d8 81 or d8 82 to the record function
-// of the alternative. The values in key order. The reference c6 1a 00 00 00 00 of the root names that item. The test
-// exists so that a change of this layout shows.
+// The item of a variant member is the record of the held alternative. draft-ietf-cbor-packed-19 shares a record as an
+// item in the same way. The class tag is 1740 (d9 06 cc) or 1741 (d9 06 cd). The straight reference is d8 81 or d8 82.
+// It names the record function of the alternative. The values in key order. The reference c6 1a 00 00 00 00 of the root
+// names that item. The test exists so that a change of this layout shows.
 TEST_CASE("golden bytes: a variant member encodes as before")
 {
     CHECK_EQ(*form<home>::encode(make_home_with_dog()),

@@ -40,8 +40,8 @@ struct person {
     std::optional<address> home;
 };
 
-// The section "Write a struct and read it back" shows this round trip whole, with the check of each result, because
-// a new user meets two std::expected values and a ref in it.
+// The section "Write a struct and read it back" shows this round trip whole, with the check of each result. A new user
+// meets two std::expected values and a ref in it.
 std::expected<std::string, cbor::error> round_trip()
 {
     auto bytes = cbor::structs<person>::encode(person{"ann", 30, {"admin"}, address{"Graz", "8010"}});
@@ -122,8 +122,8 @@ TEST_CASE("doc structs: keys")
     CHECK_FALSE((*back)->home.has_value());
 }
 
-// The section "Input from other programs" reads input with keys in another order, an unknown key and a missing key,
-// and gives one input for each row of its table.
+// The section "Input from other programs" reads input with keys in another order, an unknown key and a missing key. It
+// gives one input for each row of its table.
 TEST_CASE("doc structs: input from other programs")
 {
     auto const other = cbor::structs<person>::decode(preferred(M("age"s, 30, "name"s, "ann"s, "tags"s, A(), "id"s, 7)));

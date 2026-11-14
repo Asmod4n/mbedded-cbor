@@ -1,8 +1,8 @@
-// An entry of a description names a public non-static data member of the type or of a public base. Every
-// other kind of name must not compile. CBOR_TEST_CASE selects the case: 1 a private member, 2 a member of a
-// protected base, 3 a member function, 4 a static data member, 5 a bit-field, 6 a reference member, 7 a
-// member of another class. Case 8 has no tag, because a description without one would read as untagged on one
-// build and fail on another.
+// An entry of a description names a public non-static data member of the type or of a public base. Every other kind of
+// name must not compile. CBOR_TEST_CASE selects the case. Case 1: a private member. Case 2: a member of a protected
+// base. Case 3: a member function. Case 4: a static data member. Case 5: a bit-field. Case 6: a reference member. Case
+// 7: a member of another class. Case 8 has no tag, because a description without one would read as untagged on one build
+// and fail on another.
 #include <cbor/cbor.hpp>
 
 #include <expected>

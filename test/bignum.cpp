@@ -30,7 +30,7 @@ value big(bool const negative, std::string magnitude)
 
 void check_round_trip(value const &v)
 {
-    auto const r = decoded(encoded(v));
+    auto const r = decode_wire_into_value(encode_value_to_wire(v));
     REQUIRE(r.has_value());
     CHECK(*r == v);
 }
@@ -45,7 +45,7 @@ TEST_CASE("bignum tag 2: positive boundaries")
     check_round_trip(big(false, power_of_256(8, 1)));
     check_round_trip(big(false, power_of_256(25, 0x39)));
     check_round_trip(big(false, power_of_256(4096, 0x15)));
-    auto const r = decoded(encoded(big(false, std::string(8, '\xff'))));
+    auto const r = decode_wire_into_value(encode_value_to_wire(big(false, std::string(8, '\xff'))));
     REQUIRE(r.has_value());
     CHECK(*r == value{~std::uint64_t{0}});
 }
@@ -56,7 +56,7 @@ TEST_CASE("bignum tag 3: negative boundaries")
 {
     check_round_trip(big(true, power_of_256(8, 1)));
     check_round_trip(big(true, power_of_256(25, 0x01)));
-    auto const r = decoded(encoded(big(true, power_of_256(8))));
+    auto const r = decode_wire_into_value(encode_value_to_wire(big(true, power_of_256(8))));
     REQUIRE(r.has_value());
     CHECK(*r == value{negative{~std::uint64_t{0}}});
 }
@@ -66,29 +66,29 @@ TEST_CASE("bignum tag 3: negative boundaries")
 // round-trip through the same code.
 TEST_CASE("bignum: the wire carries the magnitude most significant byte first")
 {
-    CHECK_EQ(encoded(big(false, power_of_256(8))), "\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"sv);
-    CHECK_EQ(encoded(big(false, power_of_256(8, 2))), "\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x02"sv);
-    CHECK_EQ(encoded(big(true, power_of_256(8, 1))), "\xc3\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"sv);
-    CHECK(*decoded("\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"sv) == big(false, power_of_256(8)));
-    CHECK(*decoded("\xc3\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"sv) == big(true, power_of_256(8, 1)));
-    CHECK(*decoded("\xc2\x4a\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00"sv) == big(false, power_of_256(8)));
-    CHECK_EQ(encoded(big(false, std::string(8, '\xff'))), "\x1b\xff\xff\xff\xff\xff\xff\xff\xff"sv);
-    CHECK_EQ(encoded(big(true, power_of_256(8))), "\x3b\xff\xff\xff\xff\xff\xff\xff\xff"sv);
+    CHECK_EQ(encode_value_to_wire(big(false, power_of_256(8))), "\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"sv);
+    CHECK_EQ(encode_value_to_wire(big(false, power_of_256(8, 2))), "\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x02"sv);
+    CHECK_EQ(encode_value_to_wire(big(true, power_of_256(8, 1))), "\xc3\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"sv);
+    CHECK(*decode_wire_into_value("\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"sv) == big(false, power_of_256(8)));
+    CHECK(*decode_wire_into_value("\xc3\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"sv) == big(true, power_of_256(8, 1)));
+    CHECK(*decode_wire_into_value("\xc2\x4a\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00"sv) == big(false, power_of_256(8)));
+    CHECK_EQ(encode_value_to_wire(big(false, std::string(8, '\xff'))), "\x1b\xff\xff\xff\xff\xff\xff\xff\xff"sv);
+    CHECK_EQ(encode_value_to_wire(big(true, power_of_256(8))), "\x3b\xff\xff\xff\xff\xff\xff\xff\xff"sv);
 }
 
 // Ported from test.rb: 'bignum §3.4.3: zero-length payload — tag(2,h'')=0, tag(3,h'')=-1'.
 TEST_CASE("bignum: an empty magnitude is 0 or -1")
 {
-    CHECK(*decoded("\xc2\x40"sv) == value{std::uint64_t{0}});
-    CHECK(*decoded("\xc3\x40"sv) == value{negative{0}});
+    CHECK(*decode_wire_into_value("\xc2\x40"sv) == value{std::uint64_t{0}});
+    CHECK(*decode_wire_into_value("\xc3\x40"sv) == value{negative{0}});
 }
 
 // Ported from test.rb: 'bignum: non-byte-string payload raises TypeError'. The owner decided that a tree decode
 // interprets a tag 2 or 3 only over a byte string. Any other content leaves a tag over that content.
 TEST_CASE("bignum: content that is not a byte string")
 {
-    CHECK(*decoded("\xc2\x05"sv) == value{tagged{2, value{std::uint64_t{5}}}});
-    CHECK(*decoded("\xc3\x05"sv) == value{tagged{3, value{std::uint64_t{5}}}});
+    CHECK(*decode_wire_into_value("\xc2\x05"sv) == value{tagged{2, value{std::uint64_t{5}}}});
+    CHECK(*decode_wire_into_value("\xc3\x05"sv) == value{tagged{3, value{std::uint64_t{5}}}});
     CHECK_EQ(test::make_lazy_from_copy("\xc2\x05"s)->get<std::uint64_t>().error(), error::inadmissible_type_for_tag_content);
 }
 
@@ -109,9 +109,9 @@ TEST_CASE("bignum tag 3: an empty magnitude is refused")
              cbor::error{error::unsupported_value});
 }
 
-// Found by the fuzzer: the decoder reads the content of tag 2 or 3 one level deeper, as the content of every tag. encode
-// of a tree recurses through the same levels. So a deep tagged bignum that decode gives encodes. An input deeper than a
-// small stack holds is refused by decode on a thread with that stack.
+// The fuzzer found this. The decoder reads the content of tag 2 or 3 one level deeper, as it does for the content of
+// every tag. The encode of a tree recurses through the same levels. So a deep tagged bignum that decode gives encodes.
+// An input deeper than a small stack holds is refused by decode on a thread with that stack.
 TEST_CASE("bignum: encode takes a deep tagged bignum that decode gives")
 {
     std::string const bignum = "\xc2\x49"s + std::string(9, '\x01');
@@ -128,8 +128,8 @@ TEST_CASE("bignum: encode takes a deep tagged bignum that decode gives")
 
 // RFC 8949 3.4.3: a bignum is equivalent to the integer of the same numeric value, and leading zeros are allowed. The
 // tree holds values (RFC 8949 2). So a tag 2 or 3 whose magnitude fits in 64 bits is that integer, and lazy type() says
-// the same. The rows cover the empty magnitude (0 and -1), leading zeros past eight bytes, both ends of 64 bits and the
-// first magnitude that does not fit.
+// the same. The rows cover the empty magnitude (0 and -1) and leading zeros past eight bytes. They cover both ends of 64
+// bits. They also cover the first magnitude that does not fit.
 TEST_CASE("bignum: a magnitude that fits 64 bits is an integer in decode and in type()")
 {
     struct row {
@@ -159,7 +159,7 @@ TEST_CASE("bignum: a magnitude that fits 64 bits is an integer in decode and in 
         auto const tree = l->clone();
         REQUIRE(tree.has_value());
         CHECK_EQ((*tree)->type, r.type);
-        CHECK_EQ(argument_of(**tree), r.argument);
+        CHECK_EQ(read_argument_of_item(**tree), r.argument);
     }
     CHECK_EQ(test::make_lazy_from_copy("\xc3\x48"s + max)->get<std::int64_t>().error(), error::number_out_of_range);
     CHECK_EQ(*test::make_lazy_from_copy("\xc2\x40"s)->get<std::int64_t>(), 0);
@@ -169,9 +169,10 @@ TEST_CASE("bignum: a magnitude that fits 64 bits is an integer in decode and in 
     CHECK_EQ(*test::make_lazy_from_copy("\xc3\x40"s)->get<std::int64_t>(), -1);
 }
 
-// A path read as double gives a bignum as the number of its magnitude (RFC 8949 3.4.3), with the errors of
-// lazy::get<double>, in each form of at_path: over bytes, over a lazy with a compiled query, and in the compile mode.
-// The form over bytes once took a second walk for a bignum; the value and the errors must not depend on the form.
+// A path read as double gives a bignum as the number of its magnitude (RFC 8949 3.4.3). The errors are those of
+// lazy::get<double>. This holds in each form of at_path: over bytes, over a lazy with a compiled query, and in the
+// compile mode. The form over bytes once took a second walk for a bignum; the value and the errors must not depend on
+// the form.
 TEST_CASE("bignum: at_path as double reads a bignum in every form")
 {
     auto const query = cbor::path::compile<double>("$.a");
@@ -218,7 +219,7 @@ TEST_CASE("bignum: a wrong content is a tag in decode and in type()")
         auto const tree = l->clone();
         REQUIRE(tree.has_value());
         CHECK_EQ((*tree)->type, r.type);
-        CHECK_EQ(argument_of(**tree), r.wire[0] == '\xc2' ? 2u : 3u);
+        CHECK_EQ(read_argument_of_item(**tree), r.wire[0] == '\xc2' ? 2u : 3u);
     }
     struct failure {
         std::string_view wire;
@@ -243,7 +244,7 @@ TEST_CASE("bignum: tag 28 around a bignum that fits is a tag over the integer")
     REQUIRE(l.has_value());
     auto const tree = l->clone();
     REQUIRE(tree.has_value());
-    auto const elements = children_of(**tree);
+    auto const elements = list_children_of_item(**tree);
     REQUIRE_EQ(elements.size(), 2u);
     auto const mark = elements[0]->get<cbor::type::tag>();
     REQUIRE(mark.has_value());

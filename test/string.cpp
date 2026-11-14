@@ -15,24 +15,24 @@ namespace
 
 std::string encoded_byte_string(std::string_view b)
 {
-    return encoded(value{bytes{std::string(b)}});
+    return encode_value_to_wire(value{bytes{std::string(b)}});
 }
 
 std::string encoded_text_string(std::string_view t)
 {
-    return encoded(value{std::string(t)});
+    return encode_value_to_wire(value{std::string(t)});
 }
 
 std::string decoded_byte_string(std::string_view wire)
 {
-    auto const v = decoded(wire);
+    auto const v = decode_wire_into_value(wire);
     REQUIRE(v.has_value());
     return std::get<bytes *>(v->kind)->b;
 }
 
 std::string decoded_text_string(std::string_view wire)
 {
-    auto const v = decoded(wire);
+    auto const v = decode_wire_into_value(wire);
     REQUIRE(v.has_value());
     return std::string(v->text());
 }
@@ -78,6 +78,6 @@ TEST_CASE("major 3: a text string that is not UTF-8 passes through unchanged")
 // Ported from the 'out of bounds' raises of decode_bytes and decode_text in src/mrb_cbor.c.
 TEST_CASE("major 2 and 3: a length past the end is too_little_data")
 {
-    CHECK_EQ(decode_error("\x45\x01"sv), error::too_little_data);
-    CHECK_EQ(decode_error("\x65\x61"sv), error::too_little_data);
+    CHECK_EQ(read_decode_error_of_wire("\x45\x01"sv), error::too_little_data);
+    CHECK_EQ(read_decode_error_of_wire("\x65\x61"sv), error::too_little_data);
 }

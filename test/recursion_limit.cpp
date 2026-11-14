@@ -15,8 +15,8 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 using cbor::error;
 
-// Each function that recurses reads an item that every stack holds, and refuses an item deeper than a small stack
-// holds with nesting_depth_exceeded, on a thread with that small stack, and does not run past the stack. No depth is
+// Each function that recurses reads an item that every stack holds. It refuses an item deeper than a small stack holds
+// with nesting_depth_exceeded. It does so on a thread with that small stack. It does not run past the stack. No depth is
 // fixed: the end of the stack of the thread decides.
 
 namespace
@@ -167,7 +167,7 @@ TEST_CASE("recursion limit: encode")
     CHECK_EQ(*failure, error::nesting_depth_exceeded);
 }
 
-// A shared value and a reference to it: a lazy at the second element meets the reference and reads the mark at the depth
+// A shared value and a reference to it. A lazy at the second element meets the reference. It reads the mark at the depth
 // of its own position. So the stack holds the frames of both nests.
 TEST_CASE("recursion limit: a shared value read through its reference")
 {
@@ -190,8 +190,8 @@ TEST_CASE("recursion limit: structs")
     refused_on_small_stack([&deep] { return cbor::structs<nest>::decode(std::string(deep)); });
 }
 
-// The sequence reader counts the items that are still to read and does not recurse: it reads an item of any depth,
-// also one that a small stack does not hold, and also when the item arrives in two parts.
+// The sequence reader counts the items that are still to read. It does not recurse. It reads an item of any depth, also
+// one that a small stack does not hold. It does so also when the item arrives in two parts.
 TEST_CASE("recursion limit: sequence_reader reads an item of any depth")
 {
     std::string const deep = std::string(beyond, '\x81') + "\x00"s;

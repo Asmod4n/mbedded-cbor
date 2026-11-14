@@ -21,7 +21,7 @@ namespace fuzz
 
 inline void lazy_channels(std::string_view const input)
 {
-    auto const eager = test::decoded(input);
+    auto const eager = test::decode_wire_into_value(input);
     (void)cbor::item_size(input);
     auto const decoded = test::make_lazy_from_copy(std::string{input});
     if (!decoded)
@@ -33,7 +33,7 @@ inline void lazy_channels(std::string_view const input)
     if (whole) {
         string_writer w;
         if (test::encode(w, *whole)) {
-            auto const again = test::decoded(w.encoded);
+            auto const again = test::decode_wire_into_value(w.encoded);
             require(again.has_value() && same_number(*whole, *again));
         }
     }

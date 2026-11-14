@@ -1,7 +1,7 @@
-// cbor::key has no default constructor, and its text comes only from a literal at compile time (owner 2026-10-09).
-// A key with no text and no number, or with a text that is known only at run time, would name no member and could
-// point at a text that does not live. Each case of this file must not compile; the test that builds it expects the
-// build to fail.
+// cbor::key has no default constructor, and its text comes only from a literal at compile time (owner 2026-10-09). A key
+// with no text and no number would name no member. A key with a text that is known only at run time would do the same.
+// It could also point at a text that does not live. Each case of this file must not compile; the test that builds it
+// expects the build to fail.
 #include <cbor/path.hpp>
 
 int main(int const argc, char const *const argv[])

@@ -162,7 +162,7 @@ TEST_CASE("decode: a struct that holds itself stops where the stack of the threa
              error::nesting_depth_exceeded);
 }
 
-// The record of a variant member is a part that a reference names, as a list is: each link of a chain is two recursive
+// The record of a variant member is a part that a reference names, as a list is. Each link of a chain is two recursive
 // steps. The test exists so that a type that holds itself through a variant stops where the stack ends in encode and in
 // decode alike. A deep chain does not run past the stack of the writer. The chain stays alive on the main thread and
 // ends there in a loop: its destructor recurses through its links.

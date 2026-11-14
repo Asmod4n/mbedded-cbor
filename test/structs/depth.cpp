@@ -88,10 +88,11 @@ void end_nested(optional_node value)
 
 using namespace structs_depth;
 
-// A struct that holds itself nests as deep as its value. 64 steps are a depth that every stack holds: encode writes it
-// and decode reads what encode wrote. A value of as many steps as the small stack has frames of the smallest size is
-// deeper than that stack: encode and decode stop with nesting_depth_exceeded where the stack of the thread ends. The
-// value is made on the main thread and ended there in a loop, because its destructor recurses through its steps.
+// A struct that holds itself nests as deep as its value. A depth of 64 steps is one that every stack holds. encode
+// writes it. decode reads what encode wrote. A value has as many steps as the small stack has frames of the smallest
+// size. It is deeper than that stack. encode and decode stop with nesting_depth_exceeded where the stack of the thread
+// ends. The value is made on the main thread and ended there in a loop, because its destructor recurses through its
+// steps.
 constexpr std::size_t steps_held = 64;
 constexpr std::size_t steps_beyond = test::small_stack_bytes / test::smallest_frame_bytes;
 

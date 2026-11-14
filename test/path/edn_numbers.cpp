@@ -19,8 +19,8 @@ TEST_CASE("path edn numbers: the long decimal floats of RFC 8949 Appendix A")
     }
 }
 
-// IEEE 754 round to nearest: 0.1 is the binary64 3fb999999999999a on both paths, as its digits are exact enough. 25
-// digits that differ from 1 in the 25th round to 1.0, which preferred serialization writes as a half float. 5e-324 and
+// IEEE 754 round to nearest applies. 0.1 is the binary64 3fb999999999999a on both paths. Its digits are exact enough. 25
+// digits that differ from 1 in the 25th round to 1.0. Preferred serialization writes 1.0 as a half float. 5e-324 and
 // 2.5e-324 round to the smallest subnormal binary64.
 TEST_CASE("path edn numbers: decimal floats rounded to the nearest binary64")
 {
@@ -36,9 +36,9 @@ TEST_CASE("path edn numbers: decimal floats rounded to the nearest binary64")
     }
 }
 
-// draft-ietf-cbor-edn-literals-28 5.1: a hexadecimal float is its mantissa times 2 to its exponent, rounded once to the
-// nearest binary64. 0x5p-1077 is 5/8 of the smallest subnormal and rounds to it. A mantissa halved step by step rounds
-// at each step and reaches 0. 0x1p-1074 is the smallest subnormal exactly, and 0x1.8p1023 is exact too.
+// draft-ietf-cbor-edn-literals-28 5.1: a hexadecimal float is its mantissa times 2 to its exponent. It is rounded once
+// to the nearest binary64. 0x5p-1077 is 5/8 of the smallest subnormal and rounds to it. A mantissa halved step by step
+// rounds at each step and reaches 0. 0x1p-1074 is the smallest subnormal exactly, and 0x1.8p1023 is exact too.
 TEST_CASE("path edn numbers: a hexadecimal float with a subnormal result rounds once")
 {
     selects("0x5p-1077", "fb0000000000000001");

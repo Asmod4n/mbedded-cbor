@@ -1606,10 +1606,10 @@ void golden_fill(T &value, unsigned &seed)
 
 
 
-// The bytes of each described type of this file, one test for each type, with values that differ in each
-// leaf, as the commit before cbor::packed wrote them (dc787da): the message with the description inside, the
-// data form apart, and the description. A change of the walk that changes one byte fails here. A part of the
-// build compiles only the types of its own tests. A name that golden_expected does not hold fails too.
+// These are the bytes of each described type of this file, one test for each type. The values differ in each leaf. The
+// commit before cbor::packed wrote them (dc787da). There are three parts: the message with the description inside, the
+// data form apart, and the description. A change of the walk that changes one byte fails here. A part of the build
+// compiles only the types of its own tests. A name that golden_expected does not hold fails too.
 
 
 

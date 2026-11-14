@@ -50,8 +50,8 @@ concept reads = requires(std::string_view const s, Index const... i) {
 template <class A>
 concept reads_name = requires(A &&a) { std::forward<A>(a).template at_path<"$.name">(); };
 
-// The section "Write a message and read one field" shows the first program whole, with the check of the encode,
-// because a new user meets the std::expected of encode first.
+// The section "Write a message and read one field" shows the first program whole, with the check of the encode. A new
+// user meets the std::expected of encode first.
 std::expected<std::pair<std::uint16_t, double>, cbor::error> first_message()
 {
     auto const bytes = cbor::schema<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});

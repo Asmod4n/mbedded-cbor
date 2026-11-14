@@ -18,10 +18,10 @@
 namespace test
 {
 
-// These selectors are invalid in RFC 9535 and are valid EDN (draft-ietf-cbor-edn-literals-28): a number with
-// a plus sign, without an integer digit or without a fractional digit, -0, the escapes \' and \" in either
-// quote, and
-// \u{...}. A path takes an EDN literal in brackets and in a filter, so these cases are counted apart.
+// RFC 9535 declares these selectors invalid. They are valid EDN (draft-ietf-cbor-edn-literals-28). They are a number
+// with a plus sign, a number without an integer digit and a number without a fractional digit. They are also -0, the
+// escapes \' and \" in either quote, and \u{...}. A path takes an EDN literal in brackets and in a filter, so these
+// cases are counted apart.
 inline constexpr auto edn_accepted = std::to_array<std::string_view>(
     {"$[?@.a==+1]", "$[?@.a==.1]", "$[?@.a==-.1]", "$[?@.a==1.]", "$[?@.a==1.e1]", "$[1.0]", "$[+1]", "$[-0]",
      "$[\"\\'\"]", "$[\"\\u{1234}\"]", "$[\"\\u{10ffff}\"]", "$['\\\"']"});
@@ -37,7 +37,7 @@ inline bool function_without_support(std::string_view const selector)
            selector.find("search(") != std::string_view::npos;
 }
 
-inline cbor::lazy suite_of(char const *const file)
+inline cbor::lazy read_suite_of_file(char const *const file)
 {
     std::ifstream in(file, std::ios::binary);
     REQUIRE(in.good());

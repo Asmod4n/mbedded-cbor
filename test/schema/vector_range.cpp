@@ -1,8 +1,8 @@
 #include "types.hpp"
 
-// The accessor of a fixed-size vector gives element accessors at the same places as at_path. The test exists
-// because the fixed-size element has no tag and no text: it compares a number and an enum of each element with
-// at_path, reads the list backwards and by page, and checks every position outside of the list.
+// The accessor of a fixed-size vector gives element accessors at the same places as at_path. The test exists because the
+// fixed-size element has no tag and no text. It compares a number and an enum of each element with at_path. It reads the
+// list backwards and by page. It checks every position outside of the list.
 TEST_CASE("at_path: a fixed-size vector reads each element as at_path does")
 {
     auto const owner = std::make_shared<std::string const>(encode_with_schema(
@@ -80,7 +80,7 @@ TEST_CASE("at_path: a wrong element in a fixed-size vector gives the error of at
 }
 
 // An iterator of a fixed-size vector holds the owner, and a move empties the source. The test exists for the same
-// reasons as for a list of records: the iterator reads after its accessor is gone, the source of a move gives no list.
+// reasons as for a list of records. The iterator reads after its accessor is gone. The source of a move gives no list.
 // The target and a move into itself read.
 TEST_CASE("at_path: a fixed-size vector keeps its bytes in the iterator and moves its list")
 {

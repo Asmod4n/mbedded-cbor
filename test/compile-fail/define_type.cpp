@@ -1,9 +1,9 @@
 // CBOR_DEFINE_TYPE, CBOR_MEMBER and CBOR_DEFINE_TYPE_MEMBERS are macros, so a wrong use shows as an error of the
-// preprocessor or of the specialization they write. CBOR_TEST_CASE selects the case: 1 CBOR_MEMBER with a type
-// whose name holds a comma, 2 CBOR_DEFINE_TYPE inside a namespace, 3 a right use, which compiles.
-// CBOR_DEFINE_TYPE_MEMBERS: 4 a name that is not a member, 5 a type whose name holds a comma, 6 inside a
-// namespace, 7 a right use, which compiles, 8 the largest list that the depth of CBOR_EXPAND takes, which
-// compiles, 9 one name more, which does not compile.
+// preprocessor or of the specialization they write. CBOR_TEST_CASE selects the case: 1 CBOR_MEMBER with a type whose
+// name holds a comma, 2 CBOR_DEFINE_TYPE inside a namespace, 3 a right use, which compiles. CBOR_DEFINE_TYPE_MEMBERS has
+// these cases. Case 4: a name that is not a member. Case 5: a type whose name holds a comma. Case 6: inside a namespace.
+// Case 7: a right use, which compiles. Case 8: the largest list that the depth of CBOR_EXPAND takes, which compiles.
+// Case 9: one name more, which does not compile.
 #include <cbor/cbor.hpp>
 
 #include <cstdint>

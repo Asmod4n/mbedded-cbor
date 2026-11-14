@@ -32,7 +32,7 @@ TEST_CASE("major 4: empty, basic, nested, mixed")
 // The decode keeps room only for the items it has read, so the claim reserves nothing.
 TEST_CASE("major 4: a huge length claim is too_little_data")
 {
-    CHECK_EQ(decode_error("\x9b\xff\xff\xff\xff\xff\xff\xff\xff"sv), error::too_little_data);
+    CHECK_EQ(read_decode_error_of_wire("\x9b\xff\xff\xff\xff\xff\xff\xff\xff"sv), error::too_little_data);
 }
 
 // Ported from test.rb: 'major 5: empty, string, integer, nested keys roundtrip'.
@@ -54,10 +54,10 @@ TEST_CASE("depth: nested arrays and maps past the end of the stack")
 {
     constexpr std::size_t held = test::levels_every_stack_holds;
     constexpr std::size_t beyond = test::levels_beyond_small_stack;
-    CHECK(decoded(std::string(held, '\x81') + '\x00').has_value());
+    CHECK(decode_wire_into_value(std::string(held, '\x81') + '\x00').has_value());
     std::string const arrays = std::string(beyond, '\x81') + '\x00';
-    test::on_small_stack([&arrays] { CHECK_EQ(decode_error(arrays), error::nesting_depth_exceeded); });
-    CHECK(decoded(repeat("\xa1\x61"
+    test::run_on_small_stack([&arrays] { CHECK_EQ(read_decode_error_of_wire(arrays), error::nesting_depth_exceeded); });
+    CHECK(decode_wire_into_value(repeat("\xa1\x61"
                          "a"sv,
                          held) +
                   '\x00')
@@ -66,7 +66,7 @@ TEST_CASE("depth: nested arrays and maps past the end of the stack")
                                     "a"sv,
                                     beyond) +
                              '\x00';
-    test::on_small_stack([&maps] { CHECK_EQ(decode_error(maps), error::nesting_depth_exceeded); });
+    test::run_on_small_stack([&maps] { CHECK_EQ(read_decode_error_of_wire(maps), error::nesting_depth_exceeded); });
 }
 
 // Ported from test.rb: 'safety: all known malformed-input shapes raise cleanly'.
@@ -74,26 +74,26 @@ TEST_CASE("depth: nested arrays and maps past the end of the stack")
 // bignum comes with the tags.
 TEST_CASE("safety: malformed shapes")
 {
-    CHECK_EQ(decode_error("\xa2\x61"
+    CHECK_EQ(read_decode_error_of_wire("\xa2\x61"
                           "a\x01\x61"
                           "b"sv),
              error::too_little_data);
-    CHECK_EQ(decode_error("\x9f\x01\x02\xff"sv), error::indefinite_length);
-    CHECK_EQ(decode_error("\xbf\x61"
+    CHECK_EQ(read_decode_error_of_wire("\x9f\x01\x02\xff"sv), error::indefinite_length);
+    CHECK_EQ(read_decode_error_of_wire("\xbf\x61"
                           "a\x01\xff"sv),
              error::indefinite_length);
-    CHECK_EQ(decode_error("\x7f\x61"
+    CHECK_EQ(read_decode_error_of_wire("\x7f\x61"
                           "a\x61"
                           "b\xff"sv),
              error::indefinite_length);
     for (auto const w : {"\xfc"sv, "\xfd"sv, "\xfe"sv})
-        CHECK_EQ(decode_error(w), error::syntax_error);
+        CHECK_EQ(read_decode_error_of_wire(w), error::syntax_error);
 }
 
 // RFC 8949 Appendix F: major 7 with additional information 24 and a value below 32.
 TEST_CASE("major 7: a one-byte simple value below 32 is syntax_error")
 {
-    CHECK_EQ(decode_error("\xf8\x1f"sv), error::syntax_error);
+    CHECK_EQ(read_decode_error_of_wire("\xf8\x1f"sv), error::syntax_error);
     check_both("\xf8\x20"sv, V(simple{32}));
 }
 
@@ -128,19 +128,19 @@ TEST_CASE("encode: a reserved simple value is an error")
         REQUIRE_FALSE(r.has_value());
         CHECK((r.error() == cbor::error{error::reserved_simple_value}));
     }
-    CHECK_EQ(encoded(V(simple{23})), "\xf7"sv);
-    CHECK_EQ(encoded(V(simple{32})), "\xf8\x20"sv);
+    CHECK_EQ(encode_value_to_wire(V(simple{23})), "\xf7"sv);
+    CHECK_EQ(encode_value_to_wire(V(simple{32})), "\xf8\x20"sv);
 }
 
 // A span target is written in place. The last items of a top-level item lie closer to the end than the widest head. So
-// each kind is checked as the last item of a span of exact size and of one byte less, with the shortest float widths and
-// with every float as a double.
+// each kind is checked as the last item of a span of exact size and of one byte less. It is checked with the shortest
+// float widths and with every float as a double.
 TEST_CASE("encode: a span of exact size holds the top-level item, one byte less is no_buffer_space")
 {
     for (value const &v : {A(1, 24), A(1, 1.5), A(1, 100000.25), A(1, 0.1), A(1, "abc"s),
                            A(1, simple{std::to_underlying(cbor::simple_value::null)}), A(1, value{std::uint64_t{4294967296}})}) {
         {
-            std::string const expected = encoded(v);
+            std::string const expected = encode_value_to_wire(v);
             std::vector<char> exact(expected.size());
             CHECK(test::encode(std::span<char>(exact), v)
                       .has_value());

@@ -34,7 +34,7 @@ namespace
 // test is the value for a singular query and the nodelist for any other.
 std::expected<value, cbor::error> path_read(std::string_view const path, value const &data)
 {
-    std::string const doc = encoded(data);
+    std::string const doc = encode_value_to_wire(data);
     auto const l = *test::make_lazy_from_copy(doc);
     auto const r = test::at_path(path, l);
     if (r || r.error() != error::not_singular_query)
@@ -159,8 +159,8 @@ TEST_CASE("path: a wildcard on a map and missing keys")
 // Ported from test.rb: 'path: compiled path is reusable across different lazies'.
 TEST_CASE("path: one compiled path, two top-level items")
 {
-    std::string const d1 = encoded(M("items"s, A(M("id"s, 1), M("id"s, 2))));
-    std::string const d2 = encoded(M("items"s, A(M("id"s, 9), M("id"s, 8), M("id"s, 7))));
+    std::string const d1 = encode_value_to_wire(M("items"s, A(M("id"s, 1), M("id"s, 2))));
+    std::string const d2 = encode_value_to_wire(M("items"s, A(M("id"s, 9), M("id"s, 8), M("id"s, 7))));
     CHECK(found(compiled_query<"$.items[*].id">(d1)) == A(1, 2));
     CHECK(found(compiled_query<"$.items[*].id">(d2)) == A(9, 8, 7));
 }
@@ -176,10 +176,10 @@ TEST_CASE("path: a wildcard over records with large fields")
     CHECK(at("$.users[*].name", M("users"s, value{users})) == A("u1"s, "u2"s, "u3"s, "u4"s, "u5"s));
 }
 
-// RFC 9535 2.2 to 2.5: blanks before a segment and inside brackets, names in single or double quotes with their escapes,
-// an index without leading zeros in the range of I-JSON. Inside brackets an EDN literal is a key, at run time as at
-// compile time. So an EDN literal on an array is not_indexable; every other form is invalid_path. A query has at most as
-// many segments as the nesting depth.
+// RFC 9535 2.2 to 2.5: blanks before a segment and inside brackets are allowed. Names stand in single or double quotes
+// with their escapes. An index has no leading zeros and stays in the range of I-JSON. Inside brackets an EDN literal is
+// a key, at run time as at compile time. So an EDN literal on an array is not_indexable; every other form is
+// invalid_path. A query has at most as many segments as the nesting depth.
 TEST_CASE("path: the grammar")
 {
     value const doc = M("a"s, M("b c"s, A(1, 2, 3)), "ü'\""s, 4);
@@ -201,7 +201,7 @@ TEST_CASE("path: the grammar")
     constexpr std::size_t depth = test::levels_beyond_small_stack;
     std::string const deep = repeat("\x81", depth) + "\x01"s;
     std::string const path = "$" + repeat("[0]", depth);
-    test::on_small_stack([&deep, &path] { CHECK(test::at_path(path, *test::make_lazy_from_copy(deep)) == V(1)); });
+    test::run_on_small_stack([&deep, &path] { CHECK(test::at_path(path, *test::make_lazy_from_copy(deep)) == V(1)); });
 }
 
 // The compile-time form reads the same grammar and, inside brackets, any literal of CBOR diagnostic notation
@@ -293,10 +293,10 @@ TEST_CASE("path: the diagnostic notation of a key finds the entry")
     CHECK(*test::at_path(runtime_text, *test::make_lazy_from_copy(doc)) == V(14));
 }
 
-// RFC 4648 Table 1 gives each character of the base64 alphabet a value from 0 to 63, and section 5 replaces + and / with
-// - and _. The 64 characters in order decode to the 6-bit groups 0 to 63, which the expected bytes give. Each
-// hexadecimal digit in both cases, each radix prefix of the EDN draft and a surrogate pair in a quoted name reach the
-// same entries. So every named constant of the literal parser is read by one query.
+// RFC 4648 Table 1 gives each character of the base64 alphabet a value from 0 to 63. Section 5 replaces + and / with -
+// and _. The 64 characters in order decode to the 6-bit groups 0 to 63, which the expected bytes give. Each hexadecimal
+// digit in both cases, each radix prefix of the EDN draft and a surrogate pair in a quoted name reach the same entries.
+// So every named constant of the literal parser is read by one query.
 TEST_CASE("path: every base64 and base16 character and every radix in a compile-time query")
 {
     std::string const doc = "\xa4"
@@ -332,9 +332,9 @@ TEST_CASE("path: a nodelist is no longer than the message")
     CHECK(*four == A(0, 0, 0, 0));
 }
 
-// RFC 8949 5.6.1: keys compare by value. A head that is not preferred, a string in chunks, -0.0 against 0.0, a NaN by
-// its significand widened with zeros, an array element by element, a map as a set of pairs whatever their order. A tag
-// by its number and content.
+// RFC 8949 5.6.1: keys compare by value. These forms are compared. A head is not preferred. A string is in chunks. -0.0
+// is compared against 0.0. A NaN is compared by its significand widened with zeros. An array is compared element by
+// element. A map is compared as a set of pairs, whatever their order. A tag by its number and content.
 TEST_CASE("path: a key is found by its value, not by its bytes")
 {
     std::string const doc = "\xaa"
@@ -378,9 +378,9 @@ TEST_CASE("path: a tag 29 inside a key is a plain tag")
     CHECK(found(compiled_at<"$[[1, 29(0)]]">(forward)) == V(1));
 }
 
-// RFC 8949 5.6: a literal with a duplicate key does not compile. A key map of the top-level item with a repeated key is
-// compared with a literal by RFC 8949 5.6.1 and not checked for a repeated key. So it is no match for a literal with
-// other keys.
+// RFC 8949 5.6: a literal with a duplicate key does not compile. A key map of the top-level item has a repeated key. It
+// is compared with a literal by RFC 8949 5.6.1. It is not checked for a repeated key. So it is no match for a literal
+// with other keys.
 TEST_CASE("path: a key map with duplicate keys is no match for other keys")
 {
     std::string const doc = "\xa1\xa2\x61k\x01\x61k\x01\x05"s;
@@ -391,9 +391,10 @@ TEST_CASE("path: a key map with duplicate keys is no match for other keys")
 }
 
 // RFC 8949 5.6 lets a decoder that is not in a deterministic profile keep one entry of a repeated key. Every form of
-// at_path stops at the first key that matches (RFC 8949 5.6.1) and gives its value with no error: the run-time path, the
-// compiled path, the typed read over the bytes, the typed read of a view, an integer key in two widths, a key under tags
-// 28 and 29. A repeated key one level down. A wildcard, a descendant segment and a filter take every entry of the map.
+// at_path stops at the first key that matches (RFC 8949 5.6.1). It gives the value of that key with no error. The forms
+// are the run-time path, the compiled path, the typed read over the bytes and the typed read of a view. Other cases are
+// an integer key in two widths and a key under tags 28 and 29. A repeated key one level down. A wildcard, a descendant
+// segment and a filter take every entry of the map.
 TEST_CASE("path: every form gives the first entry of a repeated key")
 {
     std::string const doc = "\xa2\x61\x61\x01\x61\x61\x02"s;
@@ -419,8 +420,8 @@ TEST_CASE("path: every form gives the first entry of a repeated key")
     CHECK(compiled_at<"$[[1]]">(arrays).has_value());
 }
 
-// RFC 9535 2.5.1.2: a child segment with several selectors gives, for each input node, the nodes of the first
-// selector, then those of the second, in the order of the selectors. A node can occur twice.
+// RFC 9535 2.5.1.2: a child segment with several selectors gives the nodes of each input node. It gives the nodes of the
+// first selector, then those of the second. The order is the order of the selectors. A node can occur twice.
 TEST_CASE("path: several selectors in one segment")
 {
     value const doc = M("a"s, 1, "b"s, 2, "c"s, A(10, 20, 30));
@@ -430,9 +431,9 @@ TEST_CASE("path: several selectors in one segment")
     CHECK(at("$.c[ 1 ,\t-1 ]", doc) == A(20, 30));
 }
 
-// RFC 9535 2.3.4.2.2: the defaults of start and end depend on the sign of step, negative bounds count from the end,
-// bounds out of range are clamped, a negative step walks backwards, and step 0 selects nothing. A slice of a node
-// that is not an array selects nothing.
+// RFC 9535 2.3.4.2.2 states the rules of a slice. The defaults of start and end depend on the sign of step. Negative
+// bounds count from the end. Bounds out of range are clamped. A negative step walks backwards. Step 0 selects nothing. A
+// slice of a node that is not an array selects nothing.
 TEST_CASE("path: the array slice selector")
 {
     value const doc = A(0, 1, 2, 3, 4, 5, 6);
@@ -450,8 +451,9 @@ TEST_CASE("path: the array slice selector")
         CHECK_EQ(path_error(bad, doc), error::invalid_path);
 }
 
-// RFC 9535 2.5.2.2: a descendant segment applies its selectors to the input node and then to every descendant,
-// each node before its descendants and an array in its order. A descendant segment deeper than the stack of the thread holds fails.
+// RFC 9535 2.5.2.2: a descendant segment applies its selectors to the input node and then to every descendant. Each node
+// comes before its descendants. An array stays in its order. A descendant segment deeper than the stack of the thread
+// holds fails.
 TEST_CASE("path: the descendant segment")
 {
     value const doc = M("a"s, M("b"s, 1, "c"s, A(M("b"s, 2))), "b"s, 3);
@@ -466,9 +468,9 @@ TEST_CASE("path: the descendant segment")
              error::nesting_depth_exceeded);
 }
 
-// RFC 9535 2.3.5: a filter keeps the children for which the logical expression is true. A comparison of numbers
-// compares by value, so 1 equals 1.0; < compares only numbers and strings; a side that selects nothing equals only
-// another side that selects nothing. && binds more tightly than ||, ! negates an existence test or a group.
+// RFC 9535 2.3.5: a filter keeps the children for which the logical expression is true. A comparison of numbers compares
+// by value, so 1 equals 1.0. < compares only numbers and strings. A side that selects nothing equals only another side
+// that selects nothing. The operator && binds more tightly than ||. The operator ! negates an existence test or a group.
 TEST_CASE("path: the filter selector")
 {
     value const doc = A(M("a"s, 1), M("a"s, 2.0), M("a"s, "x"s), M("b"s, 1), M("a"s, simple{22}), M("a"s, A(1)));
@@ -515,7 +517,7 @@ TEST_CASE("path: the function extensions")
 // also with single quotes.
 TEST_CASE("path: an EDN literal in a filter")
 {
-    std::string const doc = encoded(A(M("a"s, bytes{"\x01"}), M("a"s, tagged{1000, "x"s}), M("a"s, A(1, 2)),
+    std::string const doc = encode_value_to_wire(A(M("a"s, bytes{"\x01"}), M("a"s, tagged{1000, "x"s}), M("a"s, A(1, 2)),
                                       M("a"s, M("k"s, 1)), M("a"s, "s"s)));
     CHECK(found(compiled_query<"$[?@.a == h'01'].a">(doc)) == A(bytes{"\x01"}));
     CHECK(found(compiled_query<"$[?@.a == 1000(\"x\")].a">(doc)) == A(tagged{1000, "x"s}));
@@ -561,7 +563,7 @@ std::expected<comparable_t<T>, error> lazy_get(std::string const &doc, std::vect
         return std::unexpected(root.error());
     cbor::lazy node = *root;
     for (step const &s : steps) {
-        auto const child = std::holds_alternative<std::int64_t>(s) ? test::select_index(node, std::get<std::int64_t>(s))
+        auto const child = std::holds_alternative<std::int64_t>(s) ? test::select_element_by_index(node, std::get<std::int64_t>(s))
                                                                    : node.at(std::get<std::string_view>(s));
         if (!child)
             return std::unexpected(child.error());
@@ -619,17 +621,17 @@ bool inside(std::string const &doc, void const *const p)
 
 } // namespace
 
-// The three reads of bench/runtime.cpp, on small messages of the same shape: a text deep in a map of arrays, one
-// float of an array of floats, a text in an array of records.
+// These are the three reads of bench/runtime.cpp, on small messages of the same shape. They are a text deep in a map of
+// arrays, one float of an array of floats, and a text in an array of records.
 TEST_CASE("path: a typed read of each shape of the bench")
 {
-    std::string const statuses = encoded(M("statuses"s, A(M("user"s, M("screen_name"s, "ann"s)), M("user"s, M("screen_name"s, "bob"s)),
+    std::string const statuses = encode_value_to_wire(M("statuses"s, A(M("user"s, M("screen_name"s, "ann"s)), M("user"s, M("screen_name"s, "bob"s)),
                                                           M("user"s, M("screen_name"s, "cy"s)))));
     check_path<"$.statuses[2].user.screen_name", std::string_view>(statuses, {"statuses"sv, std::int64_t{2}, "user"sv, "screen_name"sv},
                                                                    "cy"sv);
-    std::string const floats = encoded(A(0.5, 1.5, 2.5));
+    std::string const floats = encode_value_to_wire(A(0.5, 1.5, 2.5));
     check_path<"$[1]", double>(floats, {std::int64_t{1}}, std::bit_cast<std::uint64_t>(1.5));
-    std::string const records = encoded(A(M("id"s, 1, "user"s, M("name"s, "ann"s)), M("id"s, 2, "user"s, M("name"s, "bob"s))));
+    std::string const records = encode_value_to_wire(A(M("id"s, 1, "user"s, M("name"s, "ann"s)), M("id"s, 2, "user"s, M("name"s, "bob"s))));
     check_path<"$[1].user.name", std::string_view>(records, {std::int64_t{1}, "user"sv, "name"sv}, "bob"sv);
 }
 
@@ -700,8 +702,8 @@ TEST_CASE("path: a typed read checks that the owner holds an object")
     CHECK_EQ(**r, "xyz"sv);
 }
 
-// A move gives the owner and the view to the target. The test exists because a source that kept its view after it
-// lost its owner read freed memory once the target and the bytes were gone. The source keeps an empty view.
+// A move gives the owner and the view to the target. The test exists because of an old fault. A source kept its view
+// after it lost its owner. It read freed memory once the target and the bytes were gone. The source keeps an empty view.
 TEST_CASE("path: a moved ref keeps no view")
 {
     auto const read = [] {
@@ -795,7 +797,7 @@ TEST_CASE("path: a typed read refuses indefinite length")
     check_path<"$[0]", std::int64_t>("\x9f\x01\xff"s, {std::int64_t{0}}, std::unexpected(error::indefinite_length));
 }
 
-// RFC 9535 2.3.1.2 and 2.3.3.2: a name selects only from a map and an index from an array or, here, an integer key
+// RFC 9535 2.3.1.2 and 2.3.3.2: a name selects only from a map. An index selects from an array or, here, an integer key
 // of a map. A singular query that selects nothing is an error, and the error says why.
 TEST_CASE("path: a typed read of a path that is not in the message")
 {
@@ -834,7 +836,7 @@ TEST_CASE("path: a typed read with a negative index and with an integer key")
     std::string const keyed = "\xa2\x01\x61x\x21\x61y"s;
     check_path<"$[1]", std::string_view>(keyed, {std::int64_t{1}}, "x"sv);
     check_path<"$[-2]", std::string_view>(keyed, {std::int64_t{-2}}, "y"sv);
-    check_path<"$['a'][-1]['b']", std::string_view>(encoded(M("a"s, A(1, M("b"s, "z"s)))), {"a"sv, std::int64_t{-1}, "b"sv}, "z"sv);
+    check_path<"$['a'][-1]['b']", std::string_view>(encode_value_to_wire(M("a"s, A(1, M("b"s, "z"s)))), {"a"sv, std::int64_t{-1}, "b"sv}, "z"sv);
 }
 
 // Each type of the read takes the CBOR items that RFC 8949 maps to it and refuses every other item as incorrect_type. An
@@ -892,8 +894,8 @@ TEST_CASE("path: a typed read of each type")
     check_path<"$", std::string_view>("\x43\x61\x62\x63"s, {}, std::unexpected(error::incorrect_type));
     check_path<"$", std::span<std::byte const>>("\x43\x01\x02\x03"s, {}, byte_vector("\x01\x02\x03"));
     check_path<"$", std::span<std::byte const>>("\x63\x61\x62\x63"s, {}, std::unexpected(error::incorrect_type));
-    // The bytes of a typed array element are the input bytes in place, as lazy::get gives them, also for a little
-    // endian element and for a float of 128 bits that no other read gives.
+    // The bytes of a typed array element are the input bytes in place, as lazy::get gives them. This holds also for a
+    // little endian element. It holds also for a float of 128 bits that no other read gives.
     check_path<"$[0]", std::span<std::byte const>>("\xd8\x40\x41\x40"s, {std::int64_t{0}}, byte_vector("\x40"));
     check_path<"$[-1]", std::span<std::byte const>>("\xd8\x45\x44\x01\x02\x03\x04"s, {std::int64_t{-1}}, byte_vector("\x03\x04"));
     check_path<"$[0]", std::span<std::byte const>>("\xd8\x53\x50\x3f\xff\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e"s,
@@ -955,8 +957,8 @@ TEST_CASE("path: a typed read through tag 28")
     check_path<"$", std::uint64_t>("\xd8\x1c"s, {}, std::unexpected(error::too_little_data));
 }
 
-// The former advanced path guide, whose facts now stand in tools/doc/groups/path.dox: a path does not resolve a
-// tag 29. The test exists so that a typed read through tag 29 gives the error of a plain tag and never reads the item
+// The former advanced path guide, whose facts now stand in tools/doc/groups/path.dox: a path does not resolve a tag 29.
+// The test exists for one reason. A typed read through tag 29 gives the error of a plain tag. It never reads the item
 // that tag 28 marks.
 TEST_CASE("path: a typed read through tag 29")
 {
@@ -1004,11 +1006,11 @@ TEST_CASE("path: a typed read skips an item of any nesting depth")
 // The typed read compiles only where it is safe. A view is read only with an owner of the bytes. So it cannot outlive
 // them: a std::string, a temporary std::string, a std::string_view and a literal alone are copied into an owner that the
 // result keeps. A temporary std::string is moved into it. A temporary or a moved std::string beside an owner does not
-// compile either, because the owner does not hold it and the view would read freed memory. Owner decision 2026-10-17: a
-// view takes an owner and borrowed bytes, or an owner that is the bytes. Bare bytes and a string as the bytes do not
-// compile. A scalar holds no bytes and is read from any of them. The path is a singular query of RFC 9535 2.3.5.1 with
-// names and indexes only: a wildcard, a descendant segment and a literal key of EDN go to at_path that gives a lazy
-// node. A path with more segments than the default nesting depth does not compile.
+// compile either. The owner does not hold it, and the view would read freed memory. Owner decision 2026-10-17: a view
+// takes an owner and borrowed bytes, or an owner that is the bytes. Bare bytes and a string as the bytes do not compile.
+// A scalar holds no bytes and is read from any of them. The path is a singular query of RFC 9535 2.3.5.1 with names and
+// indexes only. A wildcard, a descendant segment and a literal key of EDN go to at_path. at_path gives a lazy node. A
+// path with more segments than the default nesting depth does not compile.
 TEST_CASE("path: a typed read that is not safe does not compile")
 {
     std::string text = "\xa1\x61\x61\x61x"s;
@@ -1047,11 +1049,11 @@ TEST_CASE("path: a typed read that is not safe does not compile")
 
 // RFC 9535 2.3.5.1: a singular query selects at most one node. at_path reads only such a query and gives the value of
 // the node. A run time path that is not singular is not_singular_query there. A compiled one does not compile (a
-// static_assert in the body). at_path with cbor::nodelist gives the nodelist of any query as an array, also of a
-// singular one.
+// static_assert in the body). at_path with cbor::nodelist gives the nodelist of any query as an array. It does so also
+// for a singular query.
 TEST_CASE("path: at_path reads a singular query, at_path with a nodelist reads any query")
 {
-    std::string const doc = encoded(M("a"s, A(1, 2)));
+    std::string const doc = encode_value_to_wire(M("a"s, A(1, 2)));
     cbor::lazy const l = *test::make_lazy_from_copy(doc);
     CHECK(*test::at_path("$.a[1]", l) == V(2));
     CHECK(*test::query("$.a[1]", l) == A(2));
@@ -1070,12 +1072,12 @@ TEST_CASE("path: at_path reads a singular query, at_path with a nodelist reads a
     CHECK((!cbor::is_singular_query_v<"$.a[*]">));
 }
 
-// A filter with a chain of 50000 operands of || or && overflowed the stack: the parser built a left-deep tree and
-// the test of the filter recursed once for each operand. A chain is now tested in a loop, so the depth of the
-// recursion follows only the nesting of parentheses, which the nesting depth bounds.
+// A filter with a chain of 50000 operands of || or && overflowed the stack. The parser built a left-deep tree. The test
+// of the filter recursed once for each operand. A chain is now tested in a loop, so the depth of the recursion follows
+// only the nesting of parentheses, which the nesting depth bounds.
 TEST_CASE("path: a long chain of || or && in one filter is tested without recursion")
 {
-    std::string const doc = encoded(A(1));
+    std::string const doc = encode_value_to_wire(A(1));
     auto const l = *test::make_lazy_from_copy(doc);
     for (std::string_view const op : {"||"sv, "&&"sv}) {
         std::string path = "$[?@==1";
@@ -1091,9 +1093,9 @@ TEST_CASE("path: a long chain of || or && in one filter is tested without recurs
     CHECK(found(test::query("$[?@==1 && (@==2 || @==1) && !(@==2)]", l)) == A(1));
 }
 
-// A filter that compares with an absolute query evaluated the absolute query again for each child, and $[-1] skips
-// the whole array each time: 40000 elements took seconds. An absolute query does not depend on the child, so
-// cbor::query evaluates it once for the whole query. A test that is quadratic again makes the suite slow.
+// A filter compared with an absolute query. It evaluated the absolute query again for each child. $[-1] skips the whole
+// array each time. 40000 elements took seconds. An absolute query does not depend on the child, so cbor::query evaluates
+// it once for the whole query. A test that is quadratic again makes the suite slow.
 TEST_CASE("path: an absolute query in a filter is evaluated once")
 {
     std::size_t const n = 5000;
@@ -1106,7 +1108,7 @@ TEST_CASE("path: an absolute query in a filter is evaluated once")
     CHECK_EQ(std::get<test::array *>(found(test::query("$[?$[-1]]", l)).kind)->size(), n);
     CHECK_EQ(std::get<test::array *>(found(test::query("$[?count($[*]) == 5000]", l)).kind)->size(), n);
 
-    std::string const small = encoded(M("a"s, A(1, 2, 3), "b"s, 2));
+    std::string const small = encode_value_to_wire(M("a"s, A(1, 2, 3), "b"s, 2));
     auto const s = *test::make_lazy_from_copy(small);
     CHECK(found(test::query("$.a[?@ == $.b]", s)) == A(2));
     CHECK(found(test::query("$.a[?$.a[?@ == $.b]]", s)) == A(1, 2, 3));
@@ -1141,10 +1143,10 @@ TEST_CASE("path: tag 55799 inside the item is skipped")
     CHECK_EQ(test::make_lazy_from_copy(leaf)->at("a")->get<int>(), 7);
 }
 
-// RFC 8949 6.1: a generic decoder passes a tag it does not know and gives its content. The owner decided on
-// 2026-10-10 that a path does the same: it passes every tag other than 2, 3, 24, 29 and the tags of RFC 8746. Each
-// form is checked: the typed read over bytes, the typed read from a lazy, the lazy walk that tag 29 starts, at_path
-// and query. A path that ends at the tag gives the node of the whole tagged item, so the caller reads the tag.
+// RFC 8949 6.1: a generic decoder passes a tag it does not know and gives its content. The owner decided on 2026-10-10
+// that a path does the same. It passes every tag other than 2, 3, 24, 29 and the tags of RFC 8746. Each form is checked:
+// the typed read over bytes, the typed read from a lazy, the lazy walk that tag 29 starts, at_path and query. A path
+// that ends at the tag gives the node of the whole tagged item, so the caller reads the tag.
 TEST_CASE("path: a tag that the path does not know is passed to its content")
 {
     std::string const doc = "\xa2\x61""v\xd9\x03\xe8\x82\x01\x02\x61""m\xd9\x03\xe9\xa1\x61""k\x07"s;
@@ -1173,8 +1175,8 @@ TEST_CASE("path: a tag that the path does not know is passed to its content")
 
 // RFC 8746 2: a typed array holds its elements in a byte string. The tag gives the type, the sign and the byte order of
 // each element. The owner decided on 2026-10-10 that $.v[i] reads one element and that $.v[*] gives all elements. Each
-// tag class is checked against the values that its bytes encode: unsigned and signed integers in both byte orders, the
-// clamped uint8, and floats of 16, 32 and 64 bits.
+// tag class is checked against the values that its bytes encode. The classes are unsigned and signed integers in both
+// byte orders, the clamped uint8, and floats of 16, 32 and 64 bits.
 TEST_CASE("path: an index reads one element of a typed array")
 {
     auto const in = [](std::string const &tagged_array) { return "\xa1\x61""v"s + tagged_array; };
@@ -1262,12 +1264,12 @@ TEST_CASE("at_path: a path from a held lazy")
     CHECK_EQ(**word, "ok");
 }
 
-// A tag literal in a filter is parsed at run time as at compile time. g++-16 -O3 made the recursion over a tag in
-// append_deterministically_encoded loop until memory ran out. So this test runs a tag, two tags and a tag inside an
-// array.
+// A tag literal in a filter is parsed at run time as at compile time. g++-16 -O3 once made the recursion over a tag
+// loop. The function was append_deterministically_encoded. It ran until the memory ended. So this test runs a tag, two
+// tags and a tag inside an array.
 TEST_CASE("path: a tag literal in a run-time filter")
 {
-    auto const doc = *test::make_lazy_from_copy(encoded(A(1, tagged{1000, V(1)}, tagged{1001, V(tagged{1000, V(3)})}, A(tagged{1, V(2)}))));
+    auto const doc = *test::make_lazy_from_copy(encode_value_to_wire(A(1, tagged{1000, V(1)}, tagged{1001, V(tagged{1000, V(3)})}, A(tagged{1, V(2)}))));
     CHECK(*test::query("$[?@ == 1000(1)]", doc) == A(tagged{1000, V(1)}));
     CHECK(*test::query("$[?@ == 1001(1000(3))]", doc) == A(tagged{1001, V(tagged{1000, V(3)})}));
     CHECK(*test::query("$[?@ == [1(2)]]", doc) == A(A(tagged{1, V(2)})));
@@ -1321,7 +1323,7 @@ auto member_at_path(L const &l)
 // so "$" is that item and not the top-level item.
 TEST_CASE("path: the member at_path starts at the item of the lazy")
 {
-    std::string const doc = encoded(M("a"s, M("b"s, A(1, 2, "x"s))));
+    std::string const doc = encode_value_to_wire(M("a"s, M("b"s, A(1, 2, "x"s))));
     cbor::lazy const l = *test::make_lazy_from_copy(doc);
     CHECK(*test::at_path("$", *l.at_path(*cbor::path::compile<cbor::lazy>("$.a.b[1]"))) == V(2));
     CHECK_EQ(cbor::path::compile<cbor::lazy>("$.a.b[").error(), error::invalid_path);
@@ -1352,7 +1354,7 @@ TEST_CASE("path: a typed at_path with a path that is not singular does not compi
 // result.
 TEST_CASE("path: every standalone at_path gives what the member gives")
 {
-    std::string const doc = encoded(M("a"s, A(7, "x"s)));
+    std::string const doc = encode_value_to_wire(M("a"s, A(7, "x"s)));
     cbor::lazy const l = *test::make_lazy_from_copy(doc);
     CHECK_EQ(cbor::at_path<"$.a[0]", int>(std::string_view(doc)), l.at_path<"$.a[0]", int>());
     auto const owner = std::make_shared<std::string const>(doc);
@@ -1386,8 +1388,8 @@ TEST_CASE("path: a std::string or a byte vector is a copy of that value only")
     CHECK_FALSE(inside(*owner, copied.data()));
 }
 
-// A NaN in a typed array keeps its sign and payload (RFC 8949 4.1): the element of a binary16 array h'ffff' reads as
-// the double with the sign, an exponent of all ones and the ten bits of the significand. A fuzz run found a model
+// A NaN in a typed array keeps its sign and payload (RFC 8949 4.1). The element of a binary16 array h'ffff' reads as a
+// double. The double has the sign, an exponent of all ones and the ten bits of the significand. A fuzz run found a model
 // that dropped the payload.
 TEST_CASE("path: a NaN element of a typed array keeps its bits")
 {
@@ -1440,13 +1442,14 @@ void same_in_both_modes(std::span<std::string const> const messages)
 
 } // namespace
 
-// Each kind of selector (key, index, wildcard, slice, filter), the descendant segment, each comparison (==, !=, <, <=, >, >=), each logical operator
-// (&&, ||, !), the existence test, a literal of each major kind and the operands @, @.a and @[0] run in the compile
-// mode and at run time over the same messages. The messages hold an array, a map, nested items, floats, an item that
-// ends too early and a path that selects more nodes than the item has bytes, where the two modes could differ.
-// Embedded queries run in each place where RFC 9535 2.3.5 lets them stand: the existence test of a query that is
-// not singular, a nested filter, count(), value(), length() over value() and over count(), and absolute queries,
-// also inside an absolute query and inside a nested filter.
+// These parts run in the compile mode and at run time over the same messages. They are each kind of selector (key,
+// index, wildcard, slice, filter) and the descendant segment. They are each comparison (==, !=, <, <=, >, >=) and each
+// logical operator (&&, ||, !). They are the existence test and a literal of each major kind. They are the operands @,
+// @.a and @[0]. The messages are those where the two modes could differ. They hold an array, a map, nested items and
+// floats. They hold an item that ends too early. They hold a path that selects more nodes than the item has bytes.
+// Embedded queries run in each place where RFC 9535 2.3.5 lets them stand. These are the existence test of a query that
+// is not singular, a nested filter, count(), value(), and length() over value() and over count(). Absolute queries are
+// also checked, inside an absolute query and inside a nested filter.
 TEST_CASE("path: the compile mode and the run-time mode give the same nodelist or the same error")
 {
     std::array const messages{

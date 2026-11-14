@@ -77,8 +77,8 @@ std::string long_texts_encoded(std::size_t const n)
 
 } // namespace
 
-// The memory of a decode is bounded by the caller with the standard: the target holds a std::pmr allocator over a
-// resource with a budget, every element is made with the allocator of its container. The refusal of the resource reaches
+// The caller bounds the memory of a decode with the standard library. The target holds a std::pmr allocator over a
+// resource with a budget. Every element is made with the allocator of its container. The refusal of the resource reaches
 // the caller of structs as not_enough_memory. A monotonic_buffer_resource over a fixed buffer with null_memory_resource
 // upstream refuses every byte beyond the buffer.
 TEST_CASE("structs: a std::pmr target decodes with its allocator, and the refusal of its resource is "

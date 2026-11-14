@@ -26,7 +26,7 @@ std::expected<value, error> at_path(cbor::lazy const &l)
 }
 
 // The nodelist of a query as an array of the values of its nodes.
-inline std::expected<value, error> values_of(std::expected<std::vector<cbor::lazy>, error> const &nodes)
+inline std::expected<value, error> make_values_from_nodelist(std::expected<std::vector<cbor::lazy>, error> const &nodes)
 {
     if (!nodes)
         return std::unexpected(nodes.error());
@@ -43,13 +43,13 @@ inline std::expected<value, error> values_of(std::expected<std::vector<cbor::laz
 inline std::expected<value, error> query(std::string_view const path, cbor::lazy const &l)
 {
     return cbor::path::compile<cbor::nodelist>(path).and_then(
-        [&l](cbor::path::query<cbor::nodelist> const &e) { return values_of(l.at_path(e)); });
+        [&l](cbor::path::query<cbor::nodelist> const &e) { return make_values_from_nodelist(l.at_path(e)); });
 }
 
 template <cbor::fixed_string Path>
 std::expected<value, error> query(cbor::lazy const &l)
 {
-    return values_of(l.at_path<Path, cbor::nodelist>());
+    return make_values_from_nodelist(l.at_path<Path, cbor::nodelist>());
 }
 
 } // namespace test

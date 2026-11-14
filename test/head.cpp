@@ -21,7 +21,7 @@ namespace
 
 void check_value(std::string_view wire, value const &expected)
 {
-    auto const v = decoded(wire);
+    auto const v = decode_wire_into_value(wire);
     REQUIRE(v.has_value());
     CHECK(*v == expected);
 }
@@ -118,7 +118,7 @@ TEST_CASE("head: a truncated argument is too_little_data")
 {
     for (auto const w :
          {""sv, "\x18"sv, "\x19\x01"sv, "\x1a\x00\x00\x00"sv, "\x1b\x00\x00\x00\x00\x00\x00\x00"sv})
-        CHECK_EQ(decode_error(w), error::too_little_data);
+        CHECK_EQ(read_decode_error_of_wire(w), error::too_little_data);
 }
 
 namespace
@@ -175,17 +175,17 @@ TEST_CASE("array: the head of a count takes the shortest form")
 // carries eight bytes, also for a small value.
 TEST_CASE("major 0 and 1: the encoder writes an integer at its native width")
 {
-    CHECK_EQ(encoded(U(0)), "\x1b\x00\x00\x00\x00\x00\x00\x00\x00"sv);
-    CHECK_EQ(encoded(N(0)), "\x3b\x00\x00\x00\x00\x00\x00\x00\x00"sv);
+    CHECK_EQ(encode_value_to_wire(U(0)), "\x1b\x00\x00\x00\x00\x00\x00\x00\x00"sv);
+    CHECK_EQ(encode_value_to_wire(N(0)), "\x3b\x00\x00\x00\x00\x00\x00\x00\x00"sv);
 }
 
-// Ported from test.rb: 'major 0: all powers of 2 up to 31 bits roundtrip', extended to 63 bits,
-// because the argument is 64 bits wide here.
+// Ported from test.rb: 'major 0: all powers of 2 up to 31 bits roundtrip'. The test goes up to 63 bits, because the
+// argument is 64 bits wide here.
 TEST_CASE("head: every power of 2 survives encode and decode")
 {
     for (int i = 0; i < std::numeric_limits<std::uint64_t>::digits; ++i) {
-        check_value(encoded(U(1ull << i)), U(1ull << i));
-        check_value(encoded(N(1ull << i)), N(1ull << i));
+        check_value(encode_value_to_wire(U(1ull << i)), U(1ull << i));
+        check_value(encode_value_to_wire(N(1ull << i)), N(1ull << i));
     }
 }
 
@@ -208,14 +208,14 @@ struct one_simple_value {
     cbor::simple_value v;
 };
 
-// The initial byte is a finite set of 256 members, and RFC 8949 decides each one. Not well-formed (section 3 and
-// Appendix C): a simple value below 32 in the two-byte form (f8 00 to f8 1f), the additional information 28 to 30 of
-// every major type, the additional information 31 on major types 0, 1 and 6. A break code outside of an
-// indefinite-length item (ff, 3.2.1). Every reader of the library gives syntax_error for each of them, with no other
-// error and no value. The additional information 31 on major types 2 to 5 is an indefinite length, which the library
-// does not read (5.1 allows that): decode and lazy give indefinite_length. Every other initial byte starts a well-formed
-// head, so decode and lazy give neither of the two errors. A rule of a tag content or a repeated key may still give
-// another error.
+// The initial byte is a finite set of 256 members, and RFC 8949 decides each one. These items are not well-formed
+// (section 3 and Appendix C). One is a simple value below 32 in the two-byte form (f8 00 to f8 1f). One is the
+// additional information 28 to 30 of every major type. One is the additional information 31 on major types 0, 1 and 6. A
+// break code outside of an indefinite-length item (ff, 3.2.1). Every reader of the library gives syntax_error for each
+// of them, with no other error and no value. The additional information 31 on major types 2 to 5 is an indefinite length
+// (5.1 allows that). The library does not read it. decode and lazy give indefinite_length. Every other initial byte
+// starts a well-formed head, so decode and lazy give neither of the two errors. A rule of a tag content or a repeated
+// key may still give another error.
 TEST_CASE("head: every initial byte gives the result that RFC 8949 gives it")
 {
     // An argument of eight bytes is the widest (RFC 8949 3). A head with no content to read needs no more; the other

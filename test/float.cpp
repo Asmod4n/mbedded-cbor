@@ -24,7 +24,7 @@ std::uint64_t bits_of(double d)
 
 double float_of(std::string_view wire)
 {
-    auto const v = decoded(wire);
+    auto const v = decode_wire_into_value(wire);
     REQUIRE(v.has_value());
     REQUIRE(std::holds_alternative<double>(v->kind));
     return std::get<double>(v->kind);
@@ -32,17 +32,17 @@ double float_of(std::string_view wire)
 
 std::string encoded_float(double d)
 {
-    return encoded(value{d});
+    return encode_value_to_wire(value{d});
 }
 
-std::string preferred_float(double d)
+std::string write_preferred_float(double d)
 {
     auto const e = cbor::structs<double>::encode(d);
     REQUIRE(e.has_value());
     return *e;
 }
 
-std::string preferred_float(float f)
+std::string write_preferred_float(float f)
 {
     auto const e = cbor::structs<float>::encode(f);
     REQUIRE(e.has_value());
@@ -71,11 +71,11 @@ TEST_CASE("major 7: ±Inf and NaN")
     CHECK_EQ(bits_of(float_of("\xf9\x7e\x00"sv)), 0x7ff8000000000000u);
 }
 
-// RFC 8949 4.1: zero-padding the significand of a shorter NaN at the right gives the same NaN in a longer
-// form, and 2.2 calls two NaNs equal when their zero-extended significands are equal. A decoded binary16 or
-// binary32 NaN keeps its sign and its payload in the double, also a signaling NaN, whose quiet bit a
-// conversion of the processor would set. The cbor-wg test vectors decode f97d1f to the NaN of
-// fb7ff47c0000000000. decode and lazy give the same bits.
+// RFC 8949 4.1: zero-padding the significand of a shorter NaN at the right gives the same NaN in a longer form. RFC 8949
+// 2.2 calls two NaNs equal when their zero-extended significands are equal. A decoded binary16 or binary32 NaN keeps its
+// sign and its payload in the double. This holds also for a signaling NaN. A conversion of the processor would set its
+// quiet bit. The cbor-wg test vectors decode f97d1f to the NaN of fb7ff47c0000000000. decode and lazy give the same
+// bits.
 TEST_CASE("major 7: a NaN keeps its sign and payload when it is decoded")
 {
     struct {
@@ -130,14 +130,14 @@ TEST_CASE("§4.1 float wire: exact bytes for well-known f16 values")
         {INFINITY, "\xf9\x7c\x00"sv}, {-INFINITY, "\xf9\xfc\x00"sv},
     };
     for (auto const &c : cases)
-        CHECK_EQ(preferred_float(c.value), c.wire);
+        CHECK_EQ(write_preferred_float(c.value), c.wire);
 }
 
 // Ported from test.rb: '§4.1 float wire: NaN canonicalizes to f16 0xF97E00'. The quiet NaN with no payload
 // fits binary16.
 TEST_CASE("§4.1 float wire: the quiet NaN is f97e00")
 {
-    CHECK_EQ(preferred_float(NAN), "\xf9\x7e\x00"sv);
+    CHECK_EQ(write_preferred_float(NAN), "\xf9\x7e\x00"sv);
 }
 
 // Ported from test.rb: '§4.1 float width: normals and subnormals select f16 (3 bytes)'.
@@ -145,13 +145,13 @@ TEST_CASE("§4.1 float width: normals and subnormals select f16")
 {
     for (double const v : {0.0, -0.0, 1.0, 1.5, -1.5, 0.5, 0.25, 100.0, 65504.0, double(INFINITY),
                            double(-INFINITY), double(NAN), 1.0 / 16777216.0, 1.0 / 8388608.0, 1.0 / 32768.0})
-        CHECK_EQ(preferred_float(v).size(), 3);
+        CHECK_EQ(write_preferred_float(v).size(), 3);
 }
 
 // Ported from test.rb: '§4.1 float width: subnormal 2^-24 encodes as f16 0xF90001'.
 TEST_CASE("§4.1 float width: subnormal 2^-24 encodes as f16 0xF90001")
 {
-    CHECK_EQ(preferred_float(1.0 / 16777216.0), "\xf9\x00\x01"sv);
+    CHECK_EQ(write_preferred_float(1.0 / 16777216.0), "\xf9\x00\x01"sv);
 }
 
 // Ported from test.rb: '§4.1 float width: subnormal powers of 2 round-trip correctly'.
@@ -162,7 +162,7 @@ TEST_CASE("§4.1 float width: subnormal powers of 2 round-trip correctly")
     constexpr int doublings = 10;
     double v = std::ldexp(1.0, smallest_binary16_exponent);
     for (int i = 0; i < doublings; ++i) {
-        std::string const wire = preferred_float(v);
+        std::string const wire = write_preferred_float(v);
         CHECK_EQ(wire.size(), 3);
         CHECK_EQ(bits_of(float_of(wire)), bits_of(v));
         v *= 2.0;
@@ -173,40 +173,39 @@ TEST_CASE("§4.1 float width: subnormal powers of 2 round-trip correctly")
 TEST_CASE("§4.1 float width: values above f16 range use f32")
 {
     for (double const v : {65505.0, 1.0e10, std::ldexp(1.0, -126)})
-        CHECK_EQ(preferred_float(v).size(), 5);
+        CHECK_EQ(write_preferred_float(v).size(), 5);
 }
 
 // Ported from test.rb: '§4.1 float width: f64-only values use f64 (9 bytes)'.
 TEST_CASE("§4.1 float width: f64-only values use f64")
 {
     for (double const v : {3.14, 1.0 / 3.0, 1.0e300})
-        CHECK_EQ(preferred_float(v).size(), 9);
+        CHECK_EQ(write_preferred_float(v).size(), 9);
 }
 
 // Ported from test.rb: '§4.1 float width: re-encoding wider-wire decoded floats narrows'.
 TEST_CASE("§4.1 float width: re-encoding wider-wire decoded floats narrows")
 {
-    CHECK_EQ(preferred_float(float_of("\xfa\x3f\x80\x00\x00"sv)).size(), 3);
-    CHECK_EQ(preferred_float(float_of("\xfb\x3f\xf0\x00\x00\x00\x00\x00\x00"sv)).size(), 3);
+    CHECK_EQ(write_preferred_float(float_of("\xfa\x3f\x80\x00\x00"sv)).size(), 3);
+    CHECK_EQ(write_preferred_float(float_of("\xfb\x3f\xf0\x00\x00\x00\x00\x00\x00"sv)).size(), 3);
 }
 
 // RFC 8949 4.1: the shortest float that holds the value. A binary32 subnormal, down to 2^-149, is five bytes.
 TEST_CASE("§4.1 float width: binary32 subnormals use f32")
 {
-    CHECK_EQ(preferred_float(std::ldexp(1.0, -149)), "\xfa\x00\x00\x00\x01"sv);
-    CHECK_EQ(preferred_float(std::ldexp(1.0, -127)), "\xfa\x00\x40\x00\x00"sv);
-    CHECK_EQ(preferred_float(std::ldexp(1.0, -150)).size(), 9);
-    CHECK_EQ(preferred_float(std::ldexp(1.0, -149) * 1.5).size(), 9);
+    CHECK_EQ(write_preferred_float(std::ldexp(1.0, -149)), "\xfa\x00\x00\x00\x01"sv);
+    CHECK_EQ(write_preferred_float(std::ldexp(1.0, -127)), "\xfa\x00\x40\x00\x00"sv);
+    CHECK_EQ(write_preferred_float(std::ldexp(1.0, -150)).size(), 9);
+    CHECK_EQ(write_preferred_float(std::ldexp(1.0, -149) * 1.5).size(), 9);
 }
 
 namespace
 {
 
-// RFC 8949 section 4.2.2: structs writes deterministic CBOR, so a float takes the shortest form that
-// keeps its value.
-// IEEE 754: a finite value fits a binary format when it equals n * 2^q with
-// |n| below 2^precision, q at or above the exponent of the least subnormal,
-// and the exponent of the value at most the greatest exponent of the format.
+// RFC 8949 section 4.2.2: structs writes deterministic CBOR, so a float takes the shortest form that keeps its value.
+// IEEE 754: a finite value fits a binary format under three conditions. It equals n * 2^q with |n| below 2^precision.
+// The q is at or above the exponent of the least subnormal. The exponent of the value is at most the greatest exponent
+// of the format.
 bool fits_binary(double v, int precision, int least_exponent, int max_exponent)
 {
     if (v == 0)
@@ -240,7 +239,7 @@ TEST_CASE("major 7: every finite exponent takes the shortest width that keeps th
                                      ~((std::uint64_t{1} << low) - 1));
                 double const v =
                     std::bit_cast<double>(sign << sign_bit | exponent << significand_bits | significand);
-                std::string const wire = preferred_float(v);
+                std::string const wire = write_preferred_float(v);
                 CHECK_EQ(bits_of(float_of(wire)), bits_of(v));
                 std::size_t const expected = fits_binary(v, 11, -24, 16)     ? 3
                                              : fits_binary(v, 24, -149, 128) ? 5
@@ -269,7 +268,7 @@ TEST_CASE("§4.1 float width: a NaN takes the shortest width that keeps its sign
     };
     for (auto const &c : doubles) {
         CAPTURE(c.bits);
-        std::string const wire = preferred_float(std::bit_cast<double>(c.bits));
+        std::string const wire = write_preferred_float(std::bit_cast<double>(c.bits));
         CHECK_EQ(wire, c.wire);
         CHECK_EQ(bits_of(float_of(wire)), c.bits);
         std::string exact(c.wire.size(), '\0');
@@ -286,7 +285,7 @@ TEST_CASE("§4.1 float width: a NaN takes the shortest width that keeps its sign
     };
     for (auto const &c : floats) {
         CAPTURE(c.bits);
-        std::string const wire = preferred_float(std::bit_cast<float>(c.bits));
+        std::string const wire = write_preferred_float(std::bit_cast<float>(c.bits));
         CHECK_EQ(wire, c.wire);
         auto const back = cbor::structs<float>::decode(std::string(wire));
         REQUIRE(back.has_value());

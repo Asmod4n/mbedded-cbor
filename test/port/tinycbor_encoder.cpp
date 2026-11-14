@@ -64,9 +64,9 @@
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 using cbor::error;
-using tinycbor_port::error_text;
+using tinycbor_port::make_error_text;
 using tinycbor_port::no_error;
-using tinycbor_port::outcome;
+using tinycbor_port::make_outcome_text;
 
 namespace tinycbor_encoder
 {
@@ -76,7 +76,7 @@ std::string written_by_structs(T const &value)
 {
     auto const r = cbor::structs<T>::encode(value);
     if (!r)
-        return "error: " + error_text(r.error());
+        return "error: " + make_error_text(r.error());
     return *r;
 }
 
@@ -87,9 +87,9 @@ std::string written_by_encoder(Call const call)
     std::string out;
     cbor::encoder e(out);
     if (auto const r = call(e); !r)
-        return "error: " + error_text(r.error());
+        return "error: " + make_error_text(r.error());
     if (auto const r = e.finish(); !r)
-        return "error: " + error_text(r.error());
+        return "error: " + make_error_text(r.error());
     return out;
 }
 
@@ -103,10 +103,10 @@ std::string encode_again(std::string const &bytes)
 {
     auto const tree = cbor::decode(bytes);
     if (!tree)
-        return "error: decode: " + error_text(tree.error());
+        return "error: decode: " + make_error_text(tree.error());
     std::string out;
     if (auto const r = cbor::encode(**tree, out); !r)
-        return "error: encode: " + error_text(r.error());
+        return "error: encode: " + make_error_text(r.error());
     return out;
 }
 
@@ -495,10 +495,10 @@ TEST_CASE("tinycbor encoder: the rows written again from their tree")
 TEST_CASE("tinycbor encoder: tags, arrays and maps")
 {
     std::map<std::string_view, std::string> const tag24_errors = {
-        {"emptybytestring", "error: decode: " + error_text(error::too_little_data)},
-        {"bytestring5", "error: decode: " + error_text(error::too_little_data)},
-        {"bytestring24", "error: decode: " + error_text(error::syntax_error)},
-        {"bytestring256", "error: decode: " + error_text(error::syntax_error)},
+        {"emptybytestring", "error: decode: " + make_error_text(error::too_little_data)},
+        {"bytestring5", "error: decode: " + make_error_text(error::too_little_data)},
+        {"bytestring24", "error: decode: " + make_error_text(error::syntax_error)},
+        {"bytestring256", "error: decode: " + make_error_text(error::syntax_error)},
     };
     for (row const &r : tags_data()) {
         CAPTURE(r.name);
@@ -594,12 +594,12 @@ TEST_CASE("tinycbor encoder: a writer")
         REQUIRE(tree.has_value());
         std::string out;
         int calls = 0;
-        CHECK_EQ(outcome(cbor::encode(**tree, counting_target{&out, &calls, false})), error_text(no_error));
+        CHECK_EQ(make_outcome_text(cbor::encode(**tree, counting_target{&out, &calls, false})), make_error_text(no_error));
         CHECK_EQ(out, r.output);
         std::string unused;
         int failed_calls = 0;
-        CHECK_EQ(outcome(cbor::encode(**tree, counting_target{&unused, &failed_calls, true})),
-                 error_text(error::io_error));
+        CHECK_EQ(make_outcome_text(cbor::encode(**tree, counting_target{&unused, &failed_calls, true})),
+                 make_error_text(error::io_error));
         CHECK_EQ(failed_calls, 1);
     }
 }
@@ -615,8 +615,8 @@ TEST_CASE("tinycbor encoder: a buffer that is too short")
         std::vector<char> buffer(r.output.size());
         for (std::size_t length = 0; length < r.output.size(); ++length) {
             CAPTURE(length);
-            CHECK_EQ(outcome(cbor::encode(**tree, std::span<char>(buffer).first(length))),
-                     error_text(error::no_buffer_space));
+            CHECK_EQ(make_outcome_text(cbor::encode(**tree, std::span<char>(buffer).first(length))),
+                     make_error_text(error::no_buffer_space));
         }
         CHECK_EQ(cbor::encode(**tree, std::span<char>(buffer)).value_or(0), r.output.size());
     }
@@ -651,10 +651,10 @@ TEST_CASE("tinycbor encoder: a wrong count of items")
         CHECK(opened);
         for (int i = 0; i < r.inputs; ++i)
             CHECK(input(e).has_value());
-        CHECK_EQ(outcome(e.finish()), error_text(no_error));
+        CHECK_EQ(make_outcome_text(e.finish()), make_error_text(no_error));
         auto const size = cbor::item_size(out);
         if (r.too_few)
-            CHECK_EQ(outcome(size), error_text(error::too_little_data));
+            CHECK_EQ(make_outcome_text(size), make_error_text(error::too_little_data));
         else
             CHECK_LT(size.value_or(out.size()), out.size());
     }
@@ -668,6 +668,6 @@ TEST_CASE("tinycbor encoder: reserved simple values")
         CAPTURE(int{n});
         std::string out;
         cbor::encoder e(out);
-        CHECK_EQ(outcome(e.simple_value(cbor::simple_value{n})), error_text(error::reserved_simple_value));
+        CHECK_EQ(make_outcome_text(e.simple_value(cbor::simple_value{n})), make_error_text(error::reserved_simple_value));
     }
 }

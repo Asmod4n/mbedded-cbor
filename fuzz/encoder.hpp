@@ -347,7 +347,7 @@ struct iov_sink {
     {
         auto const r = e->finish();
         require(r.has_value());
-        auto const bytes = test::joined(**r);
+        auto const bytes = test::join_pieces_into_bytes(**r);
         require(bytes.has_value());
         joined += *bytes;
     }
@@ -365,7 +365,7 @@ inline void encoder_target(std::string_view const input)
         require(end.has_value());
         if (item.size)
             require(*end == *item.size);
-        auto const back = test::decoded(rest.substr(0, *end));
+        auto const back = test::decode_wire_into_value(rest.substr(0, *end));
         require(back.has_value() && same(*back, item.value));
         rest.remove_prefix(*end);
     }

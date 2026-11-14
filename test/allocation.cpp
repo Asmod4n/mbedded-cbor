@@ -149,10 +149,10 @@ TEST_CASE("lazy::adopt and at_path give not_enough_memory when the owner cannot 
     CHECK_EQ(view_error, error::not_enough_memory);
 }
 
-// A filter compared each element with its literal, or with the number of length() or count(), through a std::string and
-// a std::shared_ptr, and copied the elements into a std::vector first. So the allocations of one call grew with the
-// elements. The literal is now a lazy over the bytes of the parsed path. The elements are tested in place: an array of
-// 40 elements costs the allocations of an array of 4, in the compile mode and in the run-time mode.
+// A filter compared each element with its literal, or with the number of length() or count(). It used a std::string and
+// a std::shared_ptr. It also copied the elements into a std::vector first. So the allocations of one call grew with the
+// elements. The literal is now a lazy over the bytes of the parsed path. The elements are tested in place. An array of
+// 40 elements costs the allocations of an array of 4. This holds in the compile mode and in the run-time mode.
 TEST_CASE("path: a filter with a literal allocates nothing for each element")
 {
     auto const array_of = [](std::size_t const n) {
@@ -185,10 +185,10 @@ TEST_CASE("path: a filter with a literal allocates nothing for each element")
              counted([&] { return large.at_path<"$[?count(@.a) == 99]", cbor::nodelist>(); }));
 }
 
-// The compile mode walks a query inside a filter (count(), value(), an existence test, a nested filter, a slice) with
-// no list of nodes, and walks an absolute query once for the call. The interpreter builds a std::vector for such a
-// query at each element. Each path selects nothing, so the nodelist does not grow: 40 elements cost the allocations
-// of 4 only when nothing is allocated for each element.
+// The compile mode walks a query inside a filter with no list of nodes. Such queries are count(), value(), an existence
+// test, a nested filter and a slice. It walks an absolute query once for the call. The interpreter builds a std::vector
+// for such a query at each element. Each path selects nothing, so the nodelist does not grow: 40 elements cost the
+// allocations of 4 only when nothing is allocated for each element.
 TEST_CASE("path: a query inside a filter allocates nothing for each element in the compile mode")
 {
     auto const arrays_of = [](std::size_t const n) {
@@ -222,7 +222,7 @@ TEST_CASE("path: a query inside a filter allocates nothing for each element in t
              counted([&] { return large.at_path<"$[?$.a]", cbor::nodelist>(); }));
 }
 
-// The path that succeeds compares a key of the top-level item with a literal by value without an allocation: the
+// The path that succeeds compares a key of the top-level item with a literal by value. It does not allocate, because the
 // top-level item holds no shared value. The literal [1, "x"] is parsed at compile time.
 TEST_CASE("path: a key is compared without an allocation")
 {
@@ -333,21 +333,22 @@ TEST_CASE("decode: a wide array of nested arrays is read whole after the decode"
         bytes += "\x82\x01\x02"s;
     auto r = test::make_lazy_from_copy(std::string(bytes))->clone();
     REQUIRE(r.has_value());
-    auto const outer = children_of(*(*r));
+    auto const outer = list_children_of_item(*(*r));
     REQUIRE_EQ(outer.size(), count);
     std::uint64_t sum = 0;
     for (cbor::item const *const inner : outer)
-        for (cbor::item const *const leaf : children_of(*inner))
-            sum += argument_of(*leaf);
+        for (cbor::item const *const leaf : list_children_of_item(*inner))
+            sum += read_argument_of_item(*leaf);
     CHECK_EQ(sum, 3 * count);
 }
 
-// The typed read of a path walks the bytes of the caller and builds no top-level item: a text with the owner of the
-// caller, an integer from a std::string_view and a value under a mark of tag 28 are read with no allocation.
+// The typed read of a path walks the bytes of the caller. It builds no top-level item. These reads allocate nothing. The
+// first reads a text with the owner of the caller. The second reads an integer from a std::string_view. The third reads
+// a value under a mark of tag 28.
 TEST_CASE("path: a typed read allocates nothing")
 {
     auto const doc = std::make_shared<std::string const>(
-        encoded(M("statuses"s, A(M("user"s, M("screen_name"s, "ann"s)), M("user"s, M("screen_name"s, "bob"s))))));
+        encode_value_to_wire(M("statuses"s, A(M("user"s, M("screen_name"s, "ann"s)), M("user"s, M("screen_name"s, "bob"s))))));
     std::string const numbers = "\x83\x01\x39\x03\xe7\x03"s;
     std::string const marked = "\xa1\x61\x61\xd8\x1c\x82\x01\x02"s;
     std::size_t const before = allocations;
@@ -390,8 +391,8 @@ TEST_CASE("path: a typed read with a key that is not text allocates nothing")
     CHECK_EQ(value, 7);
 }
 
-// The public encoder over a span of the caller writes into that memory only: a whole data item of every kind of
-// head, a string and a float allocates nothing.
+// The public encoder over a span of the caller writes into that memory only. A whole data item of every kind of head, a
+// string and a float allocate nothing.
 TEST_CASE("encoder: the span target allocates nothing")
 {
     std::array<char, 64> buffer{};
@@ -408,10 +409,9 @@ TEST_CASE("encoder: the span target allocates nothing")
     CHECK_EQ(after, before);
 }
 
-// Each tag 24 is decoded by an inner decoder. If each inner decoder took its own block for strings, N small
-// tag 24 items would take N blocks of CBOR_STRING_SAVER_CHUNK_SIZE bytes from an input of a few bytes each.
-// The bytes taken must stay in proportion to the input, so the inner decoders share the one block of the
-// zone.
+// Each tag 24 is decoded by an inner decoder. Assume that each inner decoder took its own block for strings. Then N
+// small tag 24 items would take N blocks of CBOR_STRING_SAVER_CHUNK_SIZE bytes. Each item has an input of a few bytes.
+// The bytes taken must stay in proportion to the input, so the inner decoders share the one block of the zone.
 TEST_CASE("decode: many tag 24 items with a string share one block for their strings")
 {
     constexpr std::size_t count = 1000;
@@ -425,8 +425,8 @@ TEST_CASE("decode: many tag 24 items with a string share one block for their str
     CHECK_LT(after - before, count * CBOR_STRING_SAVER_CHUNK_SIZE / 8);
 }
 
-// A small message must not take a whole block for its strings: the block is bounded by the bytes left of the input,
-// because no later string can be longer than those bytes.
+// A small message must not take a whole block for its strings. The bytes left of the input bound the block. No later
+// string can be longer than those bytes.
 TEST_CASE("decode: the block for the strings of a small message stays in proportion to the message")
 {
     std::string const bytes = "\x82\x61x\x62yz"s;
@@ -437,9 +437,9 @@ TEST_CASE("decode: the block for the strings of a small message stays in proport
     CHECK_LT(after - before, CBOR_STRING_SAVER_CHUNK_SIZE);
 }
 
-// A sequence_reader reads a stream without end. So a feed and a next() on the path that succeeds allocate nothing once
-// the buffer of the reader and its list of pieces have grown to the size that the stream needs. Each piece ends inside
-// an item, so every item is cut and goes through the copy of its tail.
+// A sequence_reader reads a stream without end. So a feed and a next() on the path that succeeds allocate nothing. This
+// holds once the buffer of the reader and its list of pieces have grown to the size that the stream needs. Each piece
+// ends inside an item, so every item is cut and goes through the copy of its tail.
 TEST_CASE("sequence_reader: feed and next() allocate nothing on the path that succeeds")
 {
     constexpr std::size_t warm_up = 16;
@@ -486,7 +486,7 @@ TEST_CASE("sequence_reader: feed and next() allocate nothing on the path that su
     }
 }
 
-// The rvalue form takes the std::string without a copy of its bytes: the reader allocates only the block that
+// The rvalue form takes the std::string without a copy of its bytes. The reader allocates only one block. That block
 // holds the moved std::string and its count of owners.
 TEST_CASE("sequence_reader: an rvalue std::string is taken without a copy")
 {
@@ -501,9 +501,9 @@ TEST_CASE("sequence_reader: an rvalue std::string is taken without a copy")
     CHECK_EQ(r.next()->get<std::uint64_t>().value(), 1u);
 }
 
-// A count in the input reserves nothing (rule): the memory that the reader holds for an array that claims
-// 2^64 - 1 elements grows with the bytes that arrived, not with the count. A std::string that grows by
-// doubling takes less than twice its size over all its blocks, so eight times the bytes leaves room.
+// A count in the input reserves nothing (rule). An array can claim 2^64 - 1 elements. The memory that the reader holds
+// for it grows with the bytes that arrived, not with the count. A std::string that grows by doubling takes less than
+// twice its size over all its blocks, so eight times the bytes leaves room.
 TEST_CASE("sequence_reader: a claimed count of 2^64 - 1 reserves nothing")
 {
     constexpr std::size_t pieces = 64;

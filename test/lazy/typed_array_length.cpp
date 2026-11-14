@@ -18,8 +18,8 @@ namespace lazy_typed_array_length
 namespace
 {
 
-// A typed array whose byte string head claims 2^32 + 4 bytes and holds 4: on a target with a 32-bit size_t the length
-// does not fit a size_t. Its value modulo 2^32 is the 4 bytes that follow.
+// A typed array has a byte string head that claims 2^32 + 4 bytes. It holds 4 bytes. On a target with a 32-bit size_t
+// the length does not fit a size_t. Its value modulo 2^32 is the 4 bytes that follow.
 std::string typed_array_claiming_more(char const tag)
 {
     return "\xd8"s + tag + "\x5b\x00\x00\x00\x01\x00\x00\x00\x04\x01\x02\x03\x04"s;
@@ -66,8 +66,8 @@ using namespace lazy_typed_array_length;
 
 // A regression check for 32-bit targets. RFC 8949 3: the argument of a byte string is its length, here more than the
 // input holds. RFC 8746 2: the length is a whole number of elements. The check of the elements takes the full 64-bit
-// length. So every target gives the error of the full length: for tag 64 (uint8, one byte) the length is a whole number
-// of elements and the bytes are too few. For tag 86 (float64 little endian, eight bytes) 2^32 + 4 is no whole number of
+// length. So every target gives the error of the full length. For tag 64 (uint8, one byte) the length is a whole number
+// of elements. The bytes are too few. For tag 86 (float64 little endian, eight bytes) 2^32 + 4 is no whole number of
 // elements.
 TEST_CASE("lazy typed array length: a length past the input that a 32-bit size_t does not hold")
 {

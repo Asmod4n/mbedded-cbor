@@ -177,8 +177,8 @@ TEST_CASE("doc advanced structs: the item of each type")
     CHECK_EQ((cbor::structs<std::array<double, 2>>::decode(preferred(A(1.5, 2.5))).error()), error::incorrect_type);
 }
 
-// The section "Every type" says that encode throws for a date that does not exist, because the value is a wrong use
-// and no CBOR item stands for it.
+// The section "Every type" says that encode throws for a date that does not exist. The value is a wrong use. No CBOR
+// item stands for it.
 TEST_CASE("doc advanced structs: encode of an invalid date throws")
 {
     using namespace std::chrono;
@@ -222,8 +222,8 @@ TEST_CASE("doc advanced structs: the key of a member")
     CHECK_EQ(cbor::diagnostic_notation(*cbor::structs<senml>::encode(senml{"t", 1.5})), R"({0: "t", 2: 1.5})");
 }
 
-// The section "Structs and keys" says what decode does with an unknown key, a repeated key, a missing key and a key
-// that is no text and no integer.
+// The section "Structs and keys" says what decode does in four cases. The cases are an unknown key, a repeated key and a
+// missing key. The last is a key that is no text and no integer.
 TEST_CASE("doc advanced structs: unknown, repeated and missing keys")
 {
     auto const extra = cbor::structs<person>::decode(preferred(M("name"s, "x"s, "age"s, 1, "z"s, 2)));
