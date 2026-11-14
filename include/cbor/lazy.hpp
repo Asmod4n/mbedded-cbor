@@ -107,7 +107,7 @@ inline constexpr bool is_path_query_v = false;
  *
  * It holds no decoded value.
  * Each member function reads the bytes at the offset when it is called.
- * cbor::lazy::view() and cbor::lazy::adopt() set the data members.
+ * cbor::lazy::view() and cbor::lazy::adopt() make a lazy; a program cannot set its position.
  * A copy of a lazy is a second position in the same bytes.
  * Several threads read one lazy at the same time.
  * A `nodelist` is the result of a path that selects many nodes.
@@ -135,10 +135,29 @@ private:
         std::string_view encoded;
     };
 
-public:
     top_level_item top_level;
-    std::size_t offset;
+    std::size_t offset{};
     std::uint64_t typed_array_tag{};
+
+    lazy(top_level_item t, std::size_t const o, std::uint64_t const tag = {})
+        : top_level(std::move(t)), offset(o), typed_array_tag(tag)
+    {
+    }
+
+public:
+    lazy() = default;
+
+    /**
+     * @brief Gives the bytes from the position of the lazy to the end of its top-level bytes.
+     *
+     * For a lazy of a top-level item, these are the bytes of the item.
+     * The bytes stay alive as long as the lazy lives.
+     * A lazy that holds no top-level item gives an empty view.
+     */
+    std::string_view encoded() const
+    {
+        return top_level.encoded.substr(std::min(offset, top_level.encoded.size()));
+    }
 
     /**
      * @brief Makes the lazy of the top-level item in the bytes, in place.
@@ -949,7 +968,7 @@ detail::validity::intern_key(canonical_ids &ids, Message const &message, offset 
         std::array<std::uint64_t, 1> const item{content->first};
         return std::pair{ids.id_of(kind::tag, h->argument, item), content->second};
     }
-    case major_type::simple_float:
+    case major_type::simple:
         break;
     }
     if (!detail::heads::is_floating_point(h->major, h->info)) {
@@ -957,9 +976,9 @@ detail::validity::intern_key(canonical_ids &ids, Message const &message, offset 
             return std::unexpected(c);
         return scalar(kind::simple, h->argument, {}, h->at);
     }
-    detail::heads::float_key const p = detail::heads::float_key_of(h->info, h->argument);
+    detail::ieee754::float_key const p = detail::ieee754::float_key_of(h->info, h->argument);
     if (p.nan) {
-        constexpr std::uint64_t significand = (std::uint64_t{1} << detail::heads::double_precision.significand_bits) - 1u;
+        constexpr std::uint64_t significand = (std::uint64_t{1} << detail::ieee754::double_precision.significand_bits) - 1u;
         return scalar(kind::nan, p.widened & significand, {}, h->at);
     }
     return scalar(kind::floating, std::bit_cast<std::uint64_t>(p.value == 0.0 ? 0.0 : p.value), {}, h->at);
@@ -1081,7 +1100,7 @@ std::expected<bool, error> detail::validity::keys_equivalent(First const &first,
         if (h->argument != k->argument)
             return false;
         return keys_equivalent(first, h->at, second, k->at);
-    case major_type::simple_float:
+    case major_type::simple:
         break;
     }
     bool const h_float = detail::heads::is_floating_point(h->major, h->info);
@@ -1090,11 +1109,11 @@ std::expected<bool, error> detail::validity::keys_equivalent(First const &first,
         return false;
     if (!h_float)
         return h->argument == k->argument;
-    detail::heads::float_key const p = detail::heads::float_key_of(h->info, h->argument);
-    detail::heads::float_key const q = detail::heads::float_key_of(k->info, k->argument);
+    detail::ieee754::float_key const p = detail::ieee754::float_key_of(h->info, h->argument);
+    detail::ieee754::float_key const q = detail::ieee754::float_key_of(k->info, k->argument);
     if (p.nan || q.nan) {
         constexpr std::uint64_t significand =
-            (std::uint64_t{1} << detail::heads::double_precision.significand_bits) - 1u;
+            (std::uint64_t{1} << detail::ieee754::double_precision.significand_bits) - 1u;
         return p.nan && q.nan && (p.widened & significand) == (q.widened & significand);
     }
     return p.value == q.value;

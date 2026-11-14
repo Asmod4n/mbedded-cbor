@@ -37,15 +37,15 @@ TEST_CASE("doc advanced runtime: lazy::adopt and lazy::view in every form")
     std::string const kept = bytes;
     auto const a = cbor::lazy::adopt(std::move(bytes));
     REQUIRE(a.has_value());
-    CHECK_EQ(a->top_level.encoded.data(), data);
+    CHECK_EQ(a->encoded().data(), data);
     auto const b = test::lazy_of_copy(std::string_view{kept});
     auto const held = std::make_shared<std::string const>(preferred(A(1, 2)));
     auto const c = cbor::lazy::view(held);
     REQUIRE(b.has_value());
-    CHECK_NE(b->top_level.encoded.data(), kept.data());
+    CHECK_NE(b->encoded().data(), kept.data());
     REQUIRE(c.has_value());
     CHECK_EQ(c->at(1)->get<std::int64_t>(), 2);
-    CHECK_EQ(c->top_level.encoded.data(), held->data());
+    CHECK_EQ(c->encoded().data(), held->data());
     auto const cut = test::lazy_of_copy("\x82\x01"s);
     REQUIRE(cut.has_value());
     CHECK_EQ(cut->at(1).error(), error::too_little_data);

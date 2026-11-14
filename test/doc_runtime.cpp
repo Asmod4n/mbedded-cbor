@@ -76,10 +76,10 @@ TEST_CASE("doc runtime: read step by step")
     auto const owner = std::make_shared<std::string const>(preferred(M("cars"s, A(M("hp"s, 5)))));
     auto const viewed = cbor::lazy::view(owner);
     REQUIRE(viewed.has_value());
-    CHECK_EQ(viewed->top_level.encoded.data(), owner->data());
+    CHECK_EQ(viewed->encoded().data(), owner->data());
     auto const part = cbor::lazy::view(owner, std::string_view(*owner).substr(1));
     REQUIRE(part.has_value());
-    CHECK_EQ(part->top_level.encoded.data(), std::span(*owner).subspan(1).data());
+    CHECK_EQ(part->encoded().data(), std::span(*owner).subspan(1).data());
     auto const key = part->get<std::string_view>();
     REQUIRE(key.has_value());
     CHECK_EQ(**key, "cars"sv);
@@ -171,7 +171,7 @@ TEST_CASE("doc runtime: read items from a socket")
 {
     std::vector<std::string> handled;
     auto const handle = [&handled](cbor::lazy const &item) {
-        handled.push_back(cbor::diagnostic_notation(item.top_level.encoded).value());
+        handled.push_back(cbor::diagnostic_notation(item.encoded()).value());
     };
     cbor::sequence_reader r;
     for (std::string chunk : {"\x82\x01"s, "\x02\x63"

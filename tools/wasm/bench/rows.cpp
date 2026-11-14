@@ -16,8 +16,7 @@ std::vector<std::uint32_t> row_offsets;
 
 cbor::lazy row(std::uint32_t const i)
 {
-    auto const root = cbor::lazy::view(loaded);
-    return cbor::lazy{root->top_level, static_cast<decltype(cbor::lazy::offset)>(row_offsets[i])};
+    return *cbor::lazy::view(loaded, std::string_view(*loaded).substr(row_offsets[i]));
 }
 
 std::uint64_t packed(std::string_view const s)

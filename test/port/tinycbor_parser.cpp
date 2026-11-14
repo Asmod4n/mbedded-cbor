@@ -742,7 +742,7 @@ TEST_CASE("tinycbor parser: an item through cbor::sequence_reader")
             continue;
         }
         REQUIRE_EQ(outcome(item), error_text(no_error));
-        CHECK_EQ(printed(item->top_level.encoded.substr(item->offset)), e.text);
+        CHECK_EQ(printed(item->encoded()), e.text);
         CHECK(reader.empty());
     }
 }
@@ -764,7 +764,7 @@ TEST_CASE("tinycbor parser: an item that arrives one byte at a time")
         reader.feed(e.data.substr(e.data.size() - 1));
         auto const item = reader.next();
         REQUIRE_EQ(outcome(item), error_text(no_error));
-        CHECK_EQ(printed(item->top_level.encoded.substr(item->offset)), e.text);
+        CHECK_EQ(printed(item->encoded()), e.text);
         CHECK(reader.empty());
     }
 }

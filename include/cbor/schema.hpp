@@ -360,7 +360,7 @@ class reflection
     template <class E>
     static constexpr bool is_typed_array_float = requires {
         requires std::is_floating_point_v<E> && std::numeric_limits<E>::is_iec559;
-        requires(sizeof(E) == sizeof(std::uint16_t) && std::numeric_limits<E>::digits == detail::heads::half_precision.significand_bits + 1) ||
+        requires(sizeof(E) == sizeof(std::uint16_t) && std::numeric_limits<E>::digits == detail::ieee754::half_precision.significand_bits + 1) ||
                     (sizeof(E) == sizeof(float) && std::numeric_limits<E>::digits == std::numeric_limits<float>::digits) ||
                     (sizeof(E) == sizeof(double) &&
                      std::numeric_limits<E>::digits == std::numeric_limits<double>::digits);
@@ -1337,7 +1337,7 @@ class reflection
     {
         using U = std::remove_cv_t<T>;
         if constexpr (std::same_as<U, bool>) {
-            detail::heads::append_head(encoded, major_type::simple_float, std::to_underlying(simple_value::false_value));
+            detail::heads::append_head(encoded, major_type::simple, std::to_underlying(simple_value::false_value));
         } else if constexpr (std::is_enum_v<U>) {
             encode_zero_initialized<Root, std::underlying_type_t<U>>(encoded);
 #ifdef CBOR_HAS_INT128
@@ -1353,7 +1353,7 @@ class reflection
             constexpr int digits = std::numeric_limits<U>::digits;
 #if defined(__STDCPP_FLOAT16_T__)
             if constexpr (digits == std::numeric_limits<std::float16_t>::digits)
-                encode_fixed_width_head(encoded, major_type::simple_float, sizeof(std::float16_t));
+                encode_fixed_width_head(encoded, major_type::simple, sizeof(std::float16_t));
             else
 #endif
             if constexpr (
@@ -1361,9 +1361,9 @@ class reflection
                 digits == std::numeric_limits<std::bfloat16_t>::digits ||
 #endif
                 digits == std::numeric_limits<float>::digits)
-                encode_fixed_width_head(encoded, major_type::simple_float, sizeof(float));
+                encode_fixed_width_head(encoded, major_type::simple, sizeof(float));
             else if constexpr (digits == std::numeric_limits<double>::digits)
-                encode_fixed_width_head(encoded, major_type::simple_float, sizeof(double));
+                encode_fixed_width_head(encoded, major_type::simple, sizeof(double));
             else {
                 detail::heads::append_head(encoded, major_type::tag,
                                    std::to_underlying(rfc8746::tag_number::float128_big_endian));
@@ -1393,7 +1393,7 @@ class reflection
             for_each_field<U>([&](auto i) { encode_zero_initialized<Root, describe::member_t<U, decltype(i)::value>>(encoded); });
         } else if constexpr (is_inline_optional<U>) {
             detail::heads::append_head(encoded, major_type::array, inline_optional_elements);
-            detail::heads::append_head(encoded, major_type::simple_float, std::to_underlying(simple_value::false_value));
+            detail::heads::append_head(encoded, major_type::simple, std::to_underlying(simple_value::false_value));
             encode_zero_initialized<Root, typename U::value_type>(encoded);
         } else {
             detail::heads::append_head(encoded, major_type::tag, std::to_underlying(packed_cbor::tag_number::reference));
@@ -1496,7 +1496,7 @@ class reflection
             detail::heads::append_head(encoded, major_type::array, fixed_array_elements);
             std::size_t const j = std::tuple_size_v<packing_table_of<Root>> + index_in<S>(description_types_of<Root>{});
             if (j < shared_first) {
-                detail::heads::append_head(encoded, major_type::simple_float, j);
+                detail::heads::append_head(encoded, major_type::simple, j);
             } else {
                 std::size_t const m = j - shared_first;
                 detail::heads::append_head(encoded, major_type::tag, std::to_underlying(packed_cbor::tag_number::reference));
@@ -1896,7 +1896,7 @@ class reflection
     {
         using U = std::remove_cv_t<T>;
         if constexpr (std::same_as<U, bool>) {
-            field.front() = detail::heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::false_value) + value);
+            field.front() = detail::heads::initial_byte(major_type::simple, std::to_underlying(simple_value::false_value) + value);
         } else if constexpr (std::is_enum_v<U>) {
             position = encode_value<Root, std::underlying_type_t<U>, Exact, D>(out, field, std::to_underlying(value), position);
 #ifdef CBOR_HAS_INT128
@@ -1961,7 +1961,7 @@ class reflection
             if (value.has_value()) {
                 using E = typename U::value_type;
                 field.template subspan<1, 1>().front() =
-                    detail::heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::true_value));
+                    detail::heads::initial_byte(major_type::simple, std::to_underlying(simple_value::true_value));
                 position = encode_value<Root, E, Exact, D>(out, field.template subspan<inline_optional_head, fixed_size<E, Root>()>(), *value,
                                            position);
             }
@@ -2052,7 +2052,7 @@ class reflection
                 return static_cast<U>(std::bit_cast<F>(bits));
 #else
                 if constexpr (sizeof(B) == sizeof(std::uint16_t))
-                    return static_cast<U>(detail::heads::float_decode_binary16(bits));
+                    return static_cast<U>(detail::ieee754::float_decode_binary16(bits));
                 else
                     return static_cast<U>(
                         std::bit_cast<std::conditional_t<sizeof(B) == sizeof(std::uint32_t), float,
@@ -2388,7 +2388,7 @@ class reflection
             return std::unexpected(fits.error());
         static constexpr auto undefined = [] {
             std::array<char, fillers> a{};
-            a.fill(static_cast<char>(detail::heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::undefined))));
+            a.fill(static_cast<char>(detail::heads::initial_byte(major_type::simple, std::to_underlying(simple_value::undefined))));
             return a;
         }();
         if constexpr (Verified)
@@ -2644,7 +2644,7 @@ class reflection
                 using E = typename U::value_type;
                 using X = typename decltype(path_result<Root, E, Path, At, Verified>())::type;
                 if (field.template subspan<1, 1>().front() !=
-                    detail::heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::true_value)))
+                    detail::heads::initial_byte(major_type::simple, std::to_underlying(simple_value::true_value)))
                     return std::optional<X>{};
                 auto const x = walk_path<Root, E, Path, At, Verified>(
                     encoded, field.template subspan<inline_optional_head, fixed_size<E, Root>()>(), floor,
@@ -2984,7 +2984,7 @@ class reflection
             } else if constexpr (is_inline_optional<U>) {
                 using E = typename U::value_type;
                 if (field.template subspan<1, 1>().front() !=
-                    detail::heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::true_value))) {
+                    detail::heads::initial_byte(major_type::simple, std::to_underlying(simple_value::true_value))) {
                     out.reset();
                     return {};
                 }
@@ -3297,7 +3297,7 @@ class reflection
         detail::heads::write_item_head(encoded, prefix.size(), major_type::byte_string, sizeof(std::uint32_t) * second.items);
         std::size_t const data = directory_at<T, D>() + sizeof(std::uint32_t) * second.items;
         std::ranges::fill(encoded.subspan(data, fillers),
-                          detail::heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::undefined)));
+                          detail::heads::initial_byte(major_type::simple, std::to_underlying(simple_value::undefined)));
         auto const root = encoded.subspan(size - fixed_size<T, T>()).template first<fixed_size<T, T>()>();
         copy_zero_initialized<T, T>(root);
         if (encode_value<T, T, Exact, D>(encoded, root, value, encode_cursor{data + fillers, 0}).depth != 0) [[unlikely]]

@@ -660,7 +660,7 @@ struct detail::encoding::binary_writer {
     std::expected<void, std::errc> encode_fixed_width_float(T value)
     {
         return encode_fixed_width_head(
-            major_type::simple_float,
+            major_type::simple,
             std::bit_cast<
                 std::conditional_t<sizeof(T) == sizeof(std::uint32_t), std::uint32_t, std::uint64_t>>(value));
     }
@@ -1218,7 +1218,7 @@ public:
         std::uint8_t const info = detail::heads::preferred_argument_info(std::to_underlying(value));
         if (!detail::validity::check_simple_value(info, std::to_underlying(value))) [[unlikely]]
             return refused(error::reserved_simple_value);
-        return written(out.encode_head(major_type::simple_float, info, std::to_underlying(value)));
+        return written(out.encode_head(major_type::simple, info, std::to_underlying(value)));
     }
 
     /**
@@ -1254,12 +1254,12 @@ public:
         requires(std::numeric_limits<T>::is_iec559 &&
                  (sizeof(T) == sizeof(std::uint32_t) || sizeof(T) == sizeof(std::uint64_t) ||
                   (sizeof(T) == sizeof(std::uint16_t) &&
-                   std::numeric_limits<T>::digits == detail::heads::half_precision.significand_bits + 1)))
+                   std::numeric_limits<T>::digits == detail::ieee754::half_precision.significand_bits + 1)))
     std::expected<void, error> floating_point(T const value)
     {
         throw_logic_error_if_unusable();
         if constexpr (sizeof(T) == sizeof(std::uint16_t))
-            return written(out.encode_fixed_width_head(major_type::simple_float, std::bit_cast<std::uint16_t>(value)));
+            return written(out.encode_fixed_width_head(major_type::simple, std::bit_cast<std::uint16_t>(value)));
         else
             return written(out.encode_fixed_width_float(value));
     }
@@ -1409,16 +1409,16 @@ inline detail::encoding::head_parts detail::encoding::head_of(item const &node)
         head.argument = std::to_underlying(node.via.simple_value);
         break;
     case cbor::type::half_float:
-        head.info = std::to_underlying(rfc8949::simple_float_information::half_precision_float);
-        head.argument = detail::heads::encode_float(rfc8949::simple_float_information::half_precision_float, node.via.f64);
+        head.info = std::to_underlying(rfc8949::simple_information::half_precision_float);
+        head.argument = detail::ieee754::encode_float(rfc8949::simple_information::half_precision_float, node.via.f64);
         break;
     case cbor::type::single_float:
-        head.info = std::to_underlying(rfc8949::simple_float_information::single_precision_float);
-        head.argument = detail::heads::encode_float(rfc8949::simple_float_information::single_precision_float, node.via.f64);
+        head.info = std::to_underlying(rfc8949::simple_information::single_precision_float);
+        head.argument = detail::ieee754::encode_float(rfc8949::simple_information::single_precision_float, node.via.f64);
         break;
     case cbor::type::double_float:
-        head.info = std::to_underlying(rfc8949::simple_float_information::double_precision_float);
-        head.argument = detail::heads::encode_float(rfc8949::simple_float_information::double_precision_float, node.via.f64);
+        head.info = std::to_underlying(rfc8949::simple_information::double_precision_float);
+        head.argument = detail::ieee754::encode_float(rfc8949::simple_information::double_precision_float, node.via.f64);
         break;
     case cbor::type::unsigned_integer:
     case cbor::type::negative_integer:
@@ -1439,7 +1439,7 @@ inline std::span<item const> detail::encoding::children_of(item const &node, maj
     case major_type::negative_integer:
     case major_type::byte_string:
     case major_type::text_string:
-    case major_type::simple_float:
+    case major_type::simple:
         return {};
     }
     return {};

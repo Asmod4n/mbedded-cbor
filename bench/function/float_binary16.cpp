@@ -1,4 +1,4 @@
-// The bench of the binary16 encoder (head.hpp, detail::heads::float_encode_binary16), reached through cbor::encoder.
+// The bench of the binary16 encoder (ieee754.hpp, detail::ieee754::float_encode_binary16), reached through cbor::encoder.
 // float_binary16_encode: cbor::encoder writes 4096 doubles that binary16 holds exactly (subnormal and normal) into a
 // std::string, so each value takes the half-precision path.
 // --output_file=PATH writes the encoding of every binary16 value (all 65536 bit patterns, read as float) and of the

@@ -46,7 +46,7 @@ inline sequence_outcome sequence_outcome_of(std::string_view const bytes)
             out.last = l.error();
             return out;
         }
-        out.items.emplace_back(l->top_level.encoded);
+        out.items.emplace_back(l->encoded());
     }
     return out;
 }
@@ -108,7 +108,7 @@ inline sequence_outcome reader_outcome_of(std::string_view const bytes, std::spa
                 out.last = item.error();
                 break;
             }
-            out.items.emplace_back(item->top_level.encoded);
+            out.items.emplace_back(item->encoded());
         }
         if (out.last != cbor::error::too_little_data)
             return out;

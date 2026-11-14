@@ -22,6 +22,7 @@ class encoding;
 class extended_diagnostic_notation;
 class generic;
 class heads;
+class ieee754;
 class reflection;
 class well_formedness;
 class validity;
@@ -39,7 +40,7 @@ enum class major_type : std::uint8_t {
     array,
     map,
     tag,
-    simple_float
+    simple
 };
 
 enum class simple_value : std::uint8_t { false_value = 20, true_value, null, undefined };
@@ -114,7 +115,7 @@ class rfc8949
         indefinite_length = 31
     };
 
-    enum class simple_float_information : std::uint8_t {
+    enum class simple_information : std::uint8_t {
         simple_value_follows = 24,
         half_precision_float,
         single_precision_float,
@@ -138,6 +139,8 @@ class rfc8949
     friend class detail::validity;
 
     friend class detail::heads;
+
+    friend class detail::ieee754;
 
     friend class sequence_reader;
 
