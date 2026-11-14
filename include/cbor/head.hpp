@@ -528,7 +528,9 @@ class heads
                                                   1u << (h.significand_bits - 1));
             return static_cast<std::uint16_t>(sign | h.exponent_max << h.significand_bits);
         }
-        if (exp32 == 0)
+        constexpr std::uint32_t subnormal_exponent_min =
+            f.exponent_bias - (h.exponent_bias - 1) - h.significand_bits;
+        if (exp32 < subnormal_exponent_min)
             return static_cast<std::uint16_t>(sign);
         if (exp32 > static_cast<std::uint32_t>(f.exponent_bias - h.exponent_bias))
             return static_cast<std::uint16_t>(
