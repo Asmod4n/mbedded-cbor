@@ -46,7 +46,7 @@ std::vector<std::uint64_t> bits_of_all(std::vector<E> const &values)
 // as std::vector::at gives std::out_of_range; operator[] with that index is a wrong use and throws std::logic_error.
 TEST_CASE("view: every typed array gives its elements back, and an index past the end is an error value")
 {
-    std::string const bytes = schema_bytes(sample_numbers);
+    std::string const bytes = encode_with_schema(sample_numbers);
     auto check = [&]<cbor::fixed_string Path>(std::uint64_t const expected) {
         auto const v = view_of<Path>(bytes);
         REQUIRE(v.has_value());
@@ -77,7 +77,7 @@ TEST_CASE("view: every typed array gives its elements back, and an index past th
 // A view of an empty typed array has size 0, and index 0 is already out of bounds.
 TEST_CASE("view: an empty typed array has no element")
 {
-    auto const root = form<doubles>::path(schema_bytes(doubles{}));
+    auto const root = form<doubles>::path(encode_with_schema(doubles{}));
     REQUIRE(root.has_value());
     auto const v = root->view<"$.v">();
     REQUIRE(v.has_value());
@@ -90,7 +90,7 @@ TEST_CASE("view: an empty typed array has no element")
 // size. Tag 82 is binary64 in big endian and tag 85 is binary32 (RFC 8746). The errors are the same as at_path gives.
 TEST_CASE("view: a typed array with a wrong tag or a wrong length gives no view")
 {
-    std::string const bytes = schema_bytes(doubles{{1.0, 2.0}});
+    std::string const bytes = encode_with_schema(doubles{{1.0, 2.0}});
     std::size_t const at = bytes.find("\xd8\x56\x5a\x00\x00\x00\x10"sv);
     REQUIRE_NE(at, std::string::npos);
     auto refused = [](std::string const &wrong) {
@@ -143,7 +143,7 @@ TEST_CASE("view: the iterator and the view model the standard concepts")
 // the values makes the maximum the middle element and the minimum the last one for the signed types.
 TEST_CASE("view: range-for, the iterator and std::ranges algorithms read every element type")
 {
-    std::string const bytes = schema_bytes(three_numbers);
+    std::string const bytes = encode_with_schema(three_numbers);
     auto check = [&]<cbor::fixed_string Path, class E>(std::vector<E> const &source) {
         auto const v = view_of<Path>(bytes);
         REQUIRE(v.has_value());
@@ -199,7 +199,7 @@ TEST_CASE("view: range-for, the iterator and std::ranges algorithms read every e
 // whole view; n one past it is index_out_of_bounds as an error value, where std::span would have undefined behaviour.
 TEST_CASE("view: front, back, first and last")
 {
-    auto const root = form<doubles>::path(schema_bytes(doubles{{1.0, 2.0, 4.0}}));
+    auto const root = form<doubles>::path(encode_with_schema(doubles{{1.0, 2.0, 4.0}}));
     REQUIRE(root.has_value());
     auto const v = root->view<"$.v">();
     REQUIRE(v.has_value());
@@ -239,7 +239,7 @@ TEST_CASE("view: crend meets the requirements of a reversible container")
 {
     using V = cbor::typed_array_view<double>;
     CHECK((std::same_as<decltype(std::declval<V const &>().crend()), std::reverse_iterator<V::iterator>>));
-    auto const root = form<doubles>::path(schema_bytes(doubles{{1.0, 2.0, 4.0}}));
+    auto const root = form<doubles>::path(encode_with_schema(doubles{{1.0, 2.0, 4.0}}));
     REQUIRE(root.has_value());
     auto const v = root->view<"$.v">();
     REQUIRE(v.has_value());
@@ -252,7 +252,7 @@ TEST_CASE("view: crend meets the requirements of a reversible container")
     for (auto i = v->crend(); i != v->crbegin();)
         forwards.push_back(std::bit_cast<std::uint64_t>(*--i));
     CHECK(forwards == std::vector<std::uint64_t>{0x3ff0000000000000u, 0x4000000000000000u, 0x4010000000000000u});
-    auto const empty_root = form<doubles>::path(schema_bytes(doubles{}));
+    auto const empty_root = form<doubles>::path(encode_with_schema(doubles{}));
     REQUIRE(empty_root.has_value());
     auto const e = empty_root->view<"$.v">();
     REQUIRE(e.has_value());
@@ -265,7 +265,7 @@ TEST_CASE("view: crend meets the requirements of a reversible container")
 // are empty views, and first(1) is out of bounds.
 TEST_CASE("view: an empty view has no front, no back and no element")
 {
-    auto const root = form<doubles>::path(schema_bytes(doubles{}));
+    auto const root = form<doubles>::path(encode_with_schema(doubles{}));
     REQUIRE(root.has_value());
     auto const v = root->view<"$.v">();
     REQUIRE(v.has_value());

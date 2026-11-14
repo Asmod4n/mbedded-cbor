@@ -22,7 +22,7 @@ C chain_of(std::uint8_t const v)
 // and 2.0 are 3ff0000000000000 and 4000000000000000 in binary64 (IEEE 754).
 TEST_CASE("schema::at: one number of a typed array, with every check of path")
 {
-    std::string const bytes = schema_bytes(doubles{{1.0, 2.0}});
+    std::string const bytes = encode_with_schema(doubles{{1.0, 2.0}});
     using S = form<doubles>;
     CHECK_EQ(std::bit_cast<std::uint64_t>(*S::at_path<"$.v[0]">(bytes)), 0x3ff0000000000000u);
     CHECK_EQ(std::bit_cast<std::uint64_t>(*S::at_path<"$.v[]">(bytes, 1uz)), 0x4000000000000000u);
@@ -71,7 +71,7 @@ TEST_CASE("schema::at: a path to a text or a list does not compile")
 // 9 of the sample is written over with 7, the other key, and decode keeps the first entry with no error.
 TEST_CASE("schema: decode keeps the first entry of a repeated key")
 {
-    std::string bytes = schema_bytes(sample_garage);
+    std::string bytes = encode_with_schema(sample_garage);
     std::string const nine = "\x19\x00\x09"s;
     auto const at = bytes.find(nine);
     REQUIRE(at != std::string::npos);
@@ -80,7 +80,7 @@ TEST_CASE("schema: decode keeps the first entry of a repeated key")
     auto const read = form<garage>::decode(std::string(bytes));
     REQUIRE(read.has_value());
     CHECK_EQ((*read)->owners, (std::map<std::uint16_t, std::string>{{7, "seven"}}));
-    CHECK(form<garage>::decode(schema_bytes(sample_garage)).has_value());
+    CHECK(form<garage>::decode(encode_with_schema(sample_garage)).has_value());
 }
 
 // The key that the description gives takes the place of the member name in the table. The expectation is
@@ -234,7 +234,7 @@ TEST_CASE("schema: a forged class tag of a nested record is incorrect_type")
 // does not see a moved-from accessor.
 TEST_CASE("schema: an accessor inside an optional reads its fields")
 {
-    auto const root = form<everything>::path(schema_bytes(sample_everything));
+    auto const root = form<everything>::path(encode_with_schema(sample_everything));
     REQUIRE(root.has_value());
     auto const inner = root->at_path<"$.inner">();
     REQUIRE(inner.has_value());
@@ -247,7 +247,7 @@ TEST_CASE("schema: an accessor inside an optional reads its fields")
 // control block and holds a null pointer is still an owner; an owner with no control block is empty.
 TEST_CASE("schema: an owner is empty only when it has no control block")
 {
-    std::string const bytes = schema_bytes(sample_everything);
+    std::string const bytes = encode_with_schema(sample_everything);
     auto const held = std::make_shared<std::string const>(bytes);
     auto const alias = std::shared_ptr<void const>(held, nullptr);
     auto root = form<everything>::path(alias, std::string_view(*held));

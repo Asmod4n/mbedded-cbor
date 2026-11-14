@@ -122,7 +122,7 @@ struct cbor::describe_members<pmr_station> {
 // decode and path read every element type back from its typed array. The floats are compared by their bits.
 TEST_CASE("decode and at_path: every typed array gives its elements back")
 {
-    std::string const bytes = schema_bytes(sample_numbers);
+    std::string const bytes = encode_with_schema(sample_numbers);
     auto const back = form<numbers>::decode(std::string(bytes));
     REQUIRE(back.has_value());
     numbers const &n = **back;
@@ -165,7 +165,7 @@ TEST_CASE("decode and at_path: every typed array gives its elements back")
 // as an error value by decode and by path. Tag 82 is binary64 in big endian and tag 85 is binary32 (RFC 8746).
 TEST_CASE("decode and at_path: a typed array with a wrong tag or a wrong length is refused")
 {
-    std::string const bytes = schema_bytes(doubles{{1.0, 2.0}});
+    std::string const bytes = encode_with_schema(doubles{{1.0, 2.0}});
     std::size_t const at = bytes.find("\xd8\x56\x5a\x00\x00\x00\x10"sv);
     REQUIRE_NE(at, std::string::npos);
     REQUIRE(form<doubles>::decode(std::string(bytes)).has_value());
@@ -192,7 +192,7 @@ TEST_CASE("decode and at_path: a typed array with a wrong tag or a wrong length 
 TEST_CASE("decode: a plain struct in a std::pmr::vector takes the resource of the vector for its members")
 {
     std::string const long_name(40, 'n');
-    std::string const bytes = schema_bytes(pmr_people{{{std::pmr::string(long_name)}, {std::pmr::string(long_name)}}});
+    std::string const bytes = encode_with_schema(pmr_people{{{std::pmr::string(long_name)}, {std::pmr::string(long_name)}}});
     counting_resource fallback;
     counting_resource target;
     auto const owner = std::make_shared<std::string const>(bytes);
@@ -228,7 +228,7 @@ TEST_CASE("decode: an error is read as a value")
 // the caller would read freed memory, and the address sanitizer reports that read.
 TEST_CASE("decode: the views of the result outlive the bytes of the caller")
 {
-    std::expected<cbor::ref<ticket>, cbor::error> const t = form<ticket>::decode(ticket_bytes());
+    std::expected<cbor::ref<ticket>, cbor::error> const t = form<ticket>::decode(build_ticket_message());
     REQUIRE(t.has_value());
     CHECK_EQ((*t)->holder, sample_ticket.holder);
     REQUIRE_EQ((*t)->seats.size(), 2u);
@@ -241,7 +241,7 @@ TEST_CASE("decode: the views of the result outlive the bytes of the caller")
 // it reads. The test exists because the result alone must keep the bytes alive.
 TEST_CASE("decode: the result keeps the owner after the caller releases it")
 {
-    auto owner = std::make_shared<std::string const>(ticket_bytes());
+    auto owner = std::make_shared<std::string const>(build_ticket_message());
     auto const t = form<ticket>::decode(std::move(owner));
     REQUIRE(t.has_value());
     CHECK_EQ((*t)->holder, sample_ticket.holder);
@@ -254,14 +254,14 @@ TEST_CASE("decode: the result keeps the owner after the caller releases it")
 // only the path checked them, so a forged head gave incorrect_type to a path and a value to decode.
 TEST_CASE("decode: the head of a fixed string and of a std::array is checked")
 {
-    std::string const bytes = schema_bytes(sample_vehicle);
+    std::string const bytes = encode_with_schema(sample_vehicle);
     std::size_t const code = bytes.find("\x64" "ABCD"s);
     REQUIRE_NE(code, std::string::npos);
     std::string text_head = bytes;
     text_head[code] = '\x44';
     CHECK_EQ(at_path<vehicle, "$.code">(text_head).error(), error::incorrect_type);
     CHECK_EQ(form<vehicle>::decode(std::string(text_head)).error(), error::incorrect_type);
-    std::string const spare = schema_bytes(sample_everything);
+    std::string const spare = encode_with_schema(sample_everything);
     std::size_t const engines = spare.find("\x82\xd9\x05\xdd"s);
     REQUIRE_NE(engines, std::string::npos);
     std::string array_head = spare;
@@ -276,8 +276,8 @@ TEST_CASE("decode: the head of a fixed string and of a std::array is checked")
 // value) differs from the order of the description, so a mix-up of the two orders shows here.
 TEST_CASE("decode: a class with a constructor takes its described members in the order of the description")
 {
-    std::string const bytes = schema_bytes(reading{7, "kg"});
-    CHECK_EQ(bytes, schema_bytes(reading_plain{7, "kg"}));
+    std::string const bytes = encode_with_schema(reading{7, "kg"});
+    CHECK_EQ(bytes, encode_with_schema(reading_plain{7, "kg"}));
     auto const back = form<reading>::decode(std::string(bytes));
     REQUIRE(back.has_value());
     CHECK_EQ((**back).value, 7u);
@@ -293,7 +293,7 @@ TEST_CASE("decode: a class with a constructor takes its described members in the
 TEST_CASE("decode: a class with a constructor in a vector, an optional and a map")
 {
     station const full{{reading{1, "a"}, reading{2, "bb"}}, reading{3, "ccc"}, {{9, reading{4, "dddd"}}}};
-    std::string const bytes = schema_bytes(full);
+    std::string const bytes = encode_with_schema(full);
     auto const back = form<station>::decode(std::string(bytes));
     REQUIRE(back.has_value());
     REQUIRE_EQ((**back).readings.size(), 2u);
@@ -304,8 +304,8 @@ TEST_CASE("decode: a class with a constructor in a vector, an optional and a map
     REQUIRE_EQ((**back).by_hour.size(), 1u);
     CHECK_EQ((**back).by_hour.at(9).unit, "dddd");
     CHECK_EQ(at_path<station, "$.readings[1].unit">(bytes), "bb");
-    CHECK_EQ(reencoded(form<station>::decode(std::string(bytes))), bytes);
-    auto const empty = form<station>::decode(schema_bytes(station{{}, std::nullopt, {}}));
+    CHECK_EQ(encode_again(form<station>::decode(std::string(bytes))), bytes);
+    auto const empty = form<station>::decode(encode_with_schema(station{{}, std::nullopt, {}}));
     REQUIRE(empty.has_value());
     CHECK((**empty).readings.empty());
     CHECK_FALSE((**empty).first.has_value());
@@ -319,7 +319,7 @@ TEST_CASE("decode: a class with a constructor in a std::pmr::vector takes the re
     pmr_station value;
     value.readings.emplace_back(std::pmr::string(long_unit));
     value.readings.emplace_back(std::pmr::string(long_unit));
-    std::string const bytes = schema_bytes(value);
+    std::string const bytes = encode_with_schema(value);
     counting_resource fallback;
     counting_resource target;
     auto const owner = std::make_shared<std::string const>(bytes);
@@ -343,9 +343,9 @@ TEST_CASE("decode: a class with a constructor in a std::pmr::vector takes the re
 // are not the root. Every verified entry gives too_little_data for each length that cuts the message.
 TEST_CASE("a message cut at any length is too_little_data")
 {
-    std::string const bytes = schema_bytes(reading{7, "kg"});
-    std::string const apart_bytes = *form<byte_fields>::template encode<cbor::description_place::apart>(byte_fields_value());
-    std::string const whole = *form<byte_fields>::encode(byte_fields_value());
+    std::string const bytes = encode_with_schema(reading{7, "kg"});
+    std::string const encode_data_apart = *form<byte_fields>::template encode<cbor::description_place::apart>(make_byte_fields());
+    std::string const whole = *form<byte_fields>::encode(make_byte_fields());
     for (std::size_t n = 0; n < whole.size(); ++n) {
         CAPTURE(n);
         std::string const cut = whole.substr(0, n);
@@ -359,9 +359,9 @@ TEST_CASE("a message cut at any length is too_little_data")
         CAPTURE(n);
         CHECK_EQ(form<reading>::decode(bytes.substr(0, n)).error(), error::too_little_data);
     }
-    for (std::size_t n = 0; n < apart_bytes.size(); ++n) {
+    for (std::size_t n = 0; n < encode_data_apart.size(); ++n) {
         CAPTURE(n);
-        std::string const cut = apart_bytes.substr(0, n);
+        std::string const cut = encode_data_apart.substr(0, n);
         CHECK_EQ(form<byte_fields>::template decode<cbor::description_place::apart>(std::string(cut)).error(), error::too_little_data);
         CHECK_EQ(form<byte_fields>::template at_path<"$.list[1]", cbor::description_place::apart>(cut).error(), error::too_little_data);
     }
@@ -371,7 +371,7 @@ TEST_CASE("a message cut at any length is too_little_data")
 // text that is not CBOR keep their error.
 TEST_CASE("a whole message of another type keeps its error")
 {
-    std::string const whole = *form<byte_fields>::encode(byte_fields_value());
+    std::string const whole = *form<byte_fields>::encode(make_byte_fields());
     CHECK_EQ(form<reading>::decode(std::string(whole)).error(), error::incorrect_type);
     CHECK_EQ(form<byte_fields>::decode(whole + "\x01").error(), error::incorrect_type);
     std::string const text(whole.size(), '{');
@@ -382,13 +382,13 @@ TEST_CASE("a whole message of another type keeps its error")
 // values of its own members and of its base class.
 TEST_CASE("decode: a variant member holds the alternative that the tag of its record names")
 {
-    auto const with_dog = form<home>::decode(*form<home>::encode(home_with_dog()));
+    auto const with_dog = form<home>::decode(*form<home>::encode(make_home_with_dog()));
     REQUIRE(with_dog);
     REQUIRE(std::holds_alternative<dog>((*with_dog)->pet));
     CHECK_EQ(std::get<dog>((*with_dog)->pet).name, "rex");
     CHECK_EQ(std::get<dog>((*with_dog)->pet).bark, 3);
     CHECK_EQ((*with_dog)->street, "elm");
-    auto const with_cat = form<home>::decode(*form<home>::encode(home_with_cat()));
+    auto const with_cat = form<home>::decode(*form<home>::encode(make_home_with_cat()));
     REQUIRE(with_cat);
     REQUIRE(std::holds_alternative<cat>((*with_cat)->pet));
     CHECK_EQ(std::get<cat>((*with_cat)->pet).name, "tom");
@@ -412,8 +412,8 @@ TEST_CASE("decode: an alternative with no default constructor is built through i
 // decode with a target replaces the alternative that the target holds with the one of the message.
 TEST_CASE("decode: a target that holds another alternative gets the alternative of the message")
 {
-    auto const bytes = std::make_shared<std::string const>(*form<home>::encode(home_with_cat()));
-    auto const back = form<home>::decode(bytes, home_with_dog());
+    auto const bytes = std::make_shared<std::string const>(*form<home>::encode(make_home_with_cat()));
+    auto const back = form<home>::decode(bytes, make_home_with_dog());
     REQUIRE(back);
     REQUIRE(std::holds_alternative<cat>((*back)->pet));
     CHECK_EQ(std::get<cat>((*back)->pet).toys.size(), 2u);
@@ -423,7 +423,7 @@ TEST_CASE("decode: a target that holds another alternative gets the alternative 
 // text, a byte string, an empty text as the last item, and a class next to a number and a text.
 TEST_CASE("decode: value, text and class alternatives of a variant member")
 {
-    for (setting const &s : sample_settings()) {
+    for (setting const &s : make_sample_settings()) {
         auto const bytes = *form<setting>::encode(s);
         for (auto const &back : {form<setting>::decode(std::string(bytes)), form<setting>::unverified_decode(std::string(bytes))}) {
             REQUIRE(back.has_value());

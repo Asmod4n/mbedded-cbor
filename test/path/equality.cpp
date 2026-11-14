@@ -23,7 +23,7 @@ namespace
 // the encoding of each side.
 std::expected<bool, error> values_equal(std::string const &x, std::string const &y)
 {
-    auto const l = test::lazy_of_copy("\x81\x82"s + x + y);
+    auto const l = test::make_lazy_from_copy("\x81\x82"s + x + y);
     if (!l)
         return std::unexpected(l.error());
     auto const q = cbor::path::compile<cbor::nodelist>("$[?@[0] == @[1]]");
@@ -37,7 +37,7 @@ std::expected<bool, error> values_equal(std::string const &x, std::string const 
 
 std::expected<bool, error> value_less(std::string const &x, std::string const &y)
 {
-    auto const l = test::lazy_of_copy("\x81\x82"s + x + y);
+    auto const l = test::make_lazy_from_copy("\x81\x82"s + x + y);
     if (!l)
         return std::unexpected(l.error());
     auto const q = cbor::path::compile<cbor::nodelist>("$[?@[0] < @[1]]");
@@ -53,7 +53,7 @@ std::expected<bool, error> value_less(std::string const &x, std::string const &y
 // (RFC 8949 5.6.1: the key of the path and the key of the map are equivalent or not).
 std::expected<bool, error> key_found(std::string const &key, std::string_view const path)
 {
-    auto const l = test::lazy_of_copy("\xa1"s + key + "\x01"s);
+    auto const l = test::make_lazy_from_copy("\xa1"s + key + "\x01"s);
     if (!l)
         return std::unexpected(l.error());
     auto const q = cbor::path::compile<cbor::lazy>(path);
@@ -255,7 +255,7 @@ TEST_CASE("path equality: a bignum in an order comparison of a filter")
 {
     std::string const items = "\x83\xc2\x41\x01\xc2\x42\x00\x01\xc3\x41\x00"s;
     auto const count = [&](std::string_view const path) {
-        auto const l = test::lazy_of_copy(items);
+        auto const l = test::make_lazy_from_copy(items);
         REQUIRE(l.has_value());
         auto const q = cbor::path::compile<cbor::nodelist>(path);
         REQUIRE(q.has_value());
@@ -274,7 +274,7 @@ TEST_CASE("path equality: a bignum in an order comparison of a filter")
 // An element of a typed array (RFC 8746) is a number in a filter, compared with a number of the path.
 TEST_CASE("path equality: an element of a typed array in a filter")
 {
-    auto const l = test::lazy_of_copy("\x81\xd8\x40\x42\x01\x02"s);
+    auto const l = test::make_lazy_from_copy("\x81\xd8\x40\x42\x01\x02"s);
     REQUIRE(l.has_value());
     auto const q = cbor::path::compile<cbor::nodelist>("$[0][?@ == 2]");
     REQUIRE(q.has_value());

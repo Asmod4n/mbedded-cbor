@@ -63,18 +63,18 @@ std::string nests_around(std::size_t const n)
 // The decode of the item tree recurses once for each array.
 TEST_CASE("recursion limit: decode of the item tree")
 {
-    CHECK(test::value_of(*test::lazy_of_copy(arrays_around(held, "\x00"sv))).has_value());
+    CHECK(test::make_value_from_item(*test::make_lazy_from_copy(arrays_around(held, "\x00"sv))).has_value());
     std::string const deep = arrays_around(beyond, "\x00"sv);
-    refused_on_small_stack([&deep] { return test::value_of(*test::lazy_of_copy(deep)); });
+    refused_on_small_stack([&deep] { return test::make_value_from_item(*test::make_lazy_from_copy(deep)); });
 }
 
 // lazy::clone decodes the item tree. It recurses once for each tag.
 TEST_CASE("recursion limit: lazy::clone")
 {
-    auto const read = test::lazy_of_copy(repeat("\xd8\x64"sv, held) + '\x00');
+    auto const read = test::make_lazy_from_copy(repeat("\xd8\x64"sv, held) + '\x00');
     REQUIRE(read.has_value());
     CHECK(read->clone().has_value());
-    auto const deep = test::lazy_of_copy(repeat("\xd8\x64"sv, beyond) + '\x00');
+    auto const deep = test::make_lazy_from_copy(repeat("\xd8\x64"sv, beyond) + '\x00');
     REQUIRE(deep.has_value());
     refused_on_small_stack([&deep] { return deep->clone(); });
 }
@@ -90,7 +90,7 @@ TEST_CASE("recursion limit: a key literal of a path")
         return cbor::path::compile<cbor::lazy>("$[" + std::string(n, '[') + "1" + std::string(n, ']') + "]");
     };
     auto const document = [](std::size_t const n) {
-        return test::lazy_of_copy("\xa1"s + arrays_around(n, "\x00"sv) + "\x01"s);
+        return test::make_lazy_from_copy("\xa1"s + arrays_around(n, "\x00"sv) + "\x01"s);
     };
     auto const q = compiled(held);
     REQUIRE(q.has_value());
@@ -122,7 +122,7 @@ TEST_CASE("recursion limit: a comparison in a filter")
                                 arrays_around(n, "\x00"sv) +
                                 "\x61"
                                 "c\x01"s;
-        return test::query("$[?@.a == @.b].c", *test::lazy_of_copy(doc));
+        return test::query("$[?@.a == @.b].c", *test::make_lazy_from_copy(doc));
     };
     CHECK(found(held).has_value());
     refused_on_small_stack([&found] { return found(beyond); });
@@ -131,9 +131,9 @@ TEST_CASE("recursion limit: a comparison in a filter")
 // path::apply_segment recurses once for each level that a descendant segment enters.
 TEST_CASE("recursion limit: a descendant segment")
 {
-    CHECK(test::query("$..[0]", *test::lazy_of_copy(arrays_around(held, "\x00"sv))).has_value());
+    CHECK(test::query("$..[0]", *test::make_lazy_from_copy(arrays_around(held, "\x00"sv))).has_value());
     std::string const deep = arrays_around(beyond, "\x00"sv);
-    refused_on_small_stack([&deep] { return test::query("$..[0]", *test::lazy_of_copy(deep)); });
+    refused_on_small_stack([&deep] { return test::query("$..[0]", *test::make_lazy_from_copy(deep)); });
 }
 
 // detail::extended_diagnostic_notation::write_diagnostic recurses once for each array.
@@ -148,11 +148,11 @@ TEST_CASE("recursion limit: diagnostic_notation")
 // its encode on the small stack stops where that stack ends.
 TEST_CASE("recursion limit: encode")
 {
-    auto const read = test::lazy_of_copy(preferred(arrays_around_zero(held)))->clone();
+    auto const read = test::make_lazy_from_copy(preferred(arrays_around_zero(held)))->clone();
     REQUIRE(read.has_value());
     std::string out;
     CHECK(cbor::encode(**read, out).has_value());
-    auto const deep = test::lazy_of_copy(arrays_around(test::levels_main_thread_holds, "\x00"sv))->clone();
+    auto const deep = test::make_lazy_from_copy(arrays_around(test::levels_main_thread_holds, "\x00"sv))->clone();
     if constexpr (!test::main_thread_holds_deep_input) {
         if (!deep) {
             CHECK_EQ(deep.error(), error::nesting_depth_exceeded);
@@ -174,7 +174,7 @@ TEST_CASE("recursion limit: a shared value read through its reference")
 {
     std::string const shared = "\x82\xd8\x1c"s + std::string(held, '\x81') + '\x00' + std::string(held, '\x81') +
                                "\xd8\x1d\x00"s;
-    auto const whole = test::lazy_of_copy(shared);
+    auto const whole = test::make_lazy_from_copy(shared);
     REQUIRE(whole.has_value());
     CHECK(whole->clone().has_value());
     auto const second = whole->at(1);
@@ -198,6 +198,6 @@ TEST_CASE("recursion limit: sequence_reader reads an item of any depth")
     std::string const deep = std::string(beyond, '\x81') + "\x00"s;
     for (test::feed_form const form : test::feed_forms) {
         CAPTURE(static_cast<int>(form));
-        CHECK_EQ(test::reader_outcome_split_at(deep, beyond / 2, form).items.size(), 1u);
+        CHECK_EQ(test::read_reader_outcome_split_at(deep, beyond / 2, form).items.size(), 1u);
     }
 }

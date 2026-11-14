@@ -114,7 +114,7 @@ std::string nodes_around_empty(std::size_t const steps)
 
 std::expected<std::vector<cbor::lazy>, error> query(std::string const &message, std::string const &path)
 {
-    auto const l = test::lazy_of_copy(message);
+    auto const l = test::make_lazy_from_copy(message);
     auto const q = cbor::path::compile<cbor::nodelist>(path);
     CHECK(l.has_value());
     CHECK(q.has_value());
@@ -151,7 +151,7 @@ read_values every_reader(std::size_t const levels, holder const &chain, outcome 
     read_values kept;
     std::string const deep = arrays_around_one(levels);
     reads(cbor::decode(std::string(deep)), expected);
-    auto const l = test::lazy_of_copy(deep);
+    auto const l = test::make_lazy_from_copy(deep);
     CHECK(l.has_value());
     if (l)
         reads(l->clone(), expected);
@@ -228,7 +228,7 @@ TEST_CASE("stack: a deep tree of the library ends and encodes on a small stack")
     }
     REQUIRE(decoded.has_value());
     std::optional<cbor::owning<cbor::item>> tree(std::move(*decoded));
-    auto const l = test::lazy_of_copy(arrays_around_one(tree_levels));
+    auto const l = test::make_lazy_from_copy(arrays_around_one(tree_levels));
     REQUIRE(l.has_value());
     auto cloned = l->clone();
     REQUIRE(cloned.has_value());

@@ -42,7 +42,7 @@ inline cbor::lazy suite_of(char const *const file)
     std::ifstream in(file, std::ios::binary);
     REQUIRE(in.good());
     std::string const suite{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
-    auto const root = lazy_of_copy(suite);
+    auto const root = make_lazy_from_copy(suite);
     REQUIRE(root.has_value());
     return *root;
 }
@@ -59,7 +59,7 @@ void check_valid_cases(
     for (auto const &[index, selector, query_of] : entries) {
         CAPTURE(index);
         CAPTURE(selector);
-        auto const c = value_of(*suite.at(index));
+        auto const c = make_value_from_item(*suite.at(index));
         REQUIRE(c.has_value());
         array const &fields = *get_if<array>(*c);
         REQUIRE_EQ(fields.size(), 4u);
@@ -83,7 +83,7 @@ void check_validity(cbor::lazy const &suite,
     for (auto const &[index, selector, valid] : entries) {
         CAPTURE(index);
         CAPTURE(selector);
-        auto const c = value_of(*suite.at(index));
+        auto const c = make_value_from_item(*suite.at(index));
         REQUIRE(c.has_value());
         array const &fields = *get_if<array>(*c);
         CHECK_EQ(fields.at(1).text(), selector);

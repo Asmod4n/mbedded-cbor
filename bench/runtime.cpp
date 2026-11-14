@@ -1034,7 +1034,7 @@ static void setup()
     }
 #endif
 #if defined(ARM_S) || defined(ARM_S_TREE) || defined(ARM_VG_RAW) || defined(ARM_MP) || defined(ARM_FB)
-    auto t = bench::value_of(*test::lazy_of_copy(std::string_view(doc)));
+    auto t = bench::value_of(*test::make_lazy_from_copy(std::string_view(doc)));
     if (!t)
         std::abort();
     tree = std::move(*t);
@@ -1429,7 +1429,7 @@ int main(int argc, char **argv)
     in = **held;
 #if defined(ARM_MB_DECODE)
     {
-        auto const r = bench::value_of(*test::lazy_of_copy(doc));
+        auto const r = bench::value_of(*test::make_lazy_from_copy(doc));
         benchmark::AddCustomContext("check", std::to_string(value_sum(*r)));
     }
 #elif defined(ARM_LC_DECODE)

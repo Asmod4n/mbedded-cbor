@@ -105,7 +105,7 @@ place target(tree const &t)
 
 tree decoded_ref(std::string_view const wire)
 {
-    auto const l = test::lazy_of_copy(wire);
+    auto const l = test::make_lazy_from_copy(wire);
     REQUIRE(l.has_value());
     auto t = l->clone();
     REQUIRE(t.has_value());
@@ -653,7 +653,7 @@ TEST_CASE("lazy: a shared value keeps its identity")
 {
     auto const a = arr({u(1), u(2)});
     std::string const doc = encoded_shared(arr({a, a}), marks::repeats_marked);
-    auto const r = test::lazy_of_copy(doc)->clone();
+    auto const r = test::make_lazy_from_copy(doc)->clone();
     REQUIRE(r.has_value());
     CHECK(same(element(*r, 0), element(*r, 1)));
 }
@@ -662,7 +662,7 @@ TEST_CASE("lazy: a shared value keeps its identity")
 TEST_CASE("lazy: a cyclic array")
 {
     std::string const doc = "\xd8\x1c\x81\xd8\x1d\x00"s;
-    auto const r = test::lazy_of_copy(doc)->clone();
+    auto const r = test::make_lazy_from_copy(doc)->clone();
     REQUIRE(r.has_value());
     CHECK(same(*r, element(*r, 0)));
 }
@@ -691,7 +691,7 @@ TEST_CASE("lazy: a value shared by two map values keeps its identity")
 {
     auto const v = arr({u(1), u(2), u(3)});
     std::string const doc = encoded_shared(obj({{s("a"), v}, {s("b"), v}}), marks::repeats_marked);
-    auto const r = test::lazy_of_copy(doc)->clone();
+    auto const r = test::make_lazy_from_copy(doc)->clone();
     REQUIRE(r.has_value());
     CHECK(same(at(*r, "a"), at(*r, "b")));
 }
@@ -739,7 +739,7 @@ TEST_CASE("lazy: a registered object keeps its identity")
 {
     auto const l = object_of(5003, arr({u(99)}));
     std::string const doc = encoded_shared(obj({{s("a"), l}, {s("b"), l}}), marks::repeats_marked);
-    auto const r = test::lazy_of_copy(doc)->clone();
+    auto const r = test::make_lazy_from_copy(doc)->clone();
     REQUIRE(r.has_value());
     CHECK(same(at(*r, "a"), at(*r, "b")));
 }
@@ -781,7 +781,7 @@ TEST_CASE("value sharing: lazy, at_path, decode and diagnostic notation read tag
         CAPTURE(bytes);
         std::string const doc = "\x83"s + head_of(6, 28, bytes) + "\x05"s + head_of(6, 29, bytes) +
                                 head_of(0, 0, bytes) + head_of(6, 29, bytes) + head_of(0, 7, bytes);
-        auto const l = *test::lazy_of_copy(doc);
+        auto const l = *test::make_lazy_from_copy(doc);
         CHECK_EQ(l.at(0)->type(), cbor::type::tag);
         CHECK_EQ(l.at(1)->type(), cbor::type::tag);
         CHECK_EQ(l.at(0)->get<std::uint64_t>(), 5u);
@@ -946,7 +946,7 @@ TEST_CASE("value sharing: cbor::decode reads a long chain of marks and a tag 24 
 // cbor::decode resolves them.
 TEST_CASE("value sharing: lazy::clone keeps tags 28 and 29")
 {
-    auto const top_level = test::lazy_of_copy("\xd8\x1c\x81\xd8\x1d\x00"s);
+    auto const top_level = test::make_lazy_from_copy("\xd8\x1c\x81\xd8\x1d\x00"s);
     REQUIRE(top_level.has_value());
     auto const tree = top_level->clone();
     REQUIRE(tree.has_value());
@@ -984,12 +984,12 @@ TEST_CASE("value sharing: cbor::decode marks every kind of node and resolves ins
 // resolves tags 28 and 29, and a tag 55799 inside an item stays a tag (owner decisions).
 TEST_CASE("value sharing: clone at an inner offset keeps tags 28, 29 and 55799")
 {
-    auto const top_level = test::lazy_of_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
+    auto const top_level = test::make_lazy_from_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
     REQUIRE(top_level.has_value());
     auto const reference = top_level->at(1).and_then([](cbor::lazy const &l) { return l.clone(); });
     REQUIRE(reference.has_value());
     CHECK_EQ((*reference)->get<cbor::type::tag>().value().first, 29u);
-    auto const marked = test::lazy_of_copy("\x81\xd9\xd9\xf7\x01"s);
+    auto const marked = test::make_lazy_from_copy("\x81\xd9\xd9\xf7\x01"s);
     REQUIRE(marked.has_value());
     auto const inner = marked->at(0).and_then([](cbor::lazy const &l) { return l.clone(); });
     REQUIRE(inner.has_value());

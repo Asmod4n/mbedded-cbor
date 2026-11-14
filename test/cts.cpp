@@ -37,9 +37,9 @@ TEST_CASE("path: the JSONPath Compliance Test Suite")
     std::ifstream in(JSONPATH_CTS "/cts.cbor", std::ios::binary);
     REQUIRE(in.good());
     std::string const suite{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
-    auto const root = test::lazy_of_copy(suite);
+    auto const root = test::make_lazy_from_copy(suite);
     REQUIRE(root.has_value());
-    auto const all = test::value_of(*root);
+    auto const all = test::make_value_from_item(*root);
     REQUIRE(all.has_value());
     array const *const suite_cases = get_if<array>(*all);
     REQUIRE(suite_cases != nullptr);
@@ -57,14 +57,14 @@ TEST_CASE("path: the JSONPath Compliance Test Suite")
         CAPTURE(name);
         CAPTURE(selector);
         if (c.size() == 2 && test::edn_extension(selector)) {
-            auto const r = test::query(selector, *test::lazy_of_copy(std::string_view("\xf6")));
+            auto const r = test::query(selector, *test::make_lazy_from_copy(std::string_view("\xf6")));
             CHECK(r.has_value());
             extended += r.has_value() ? 1uz : 0uz;
             continue;
         }
         if (c.size() == 2 || test::function_without_support(selector)) {
             auto const document =
-                c.size() == 2 ? test::lazy_of_copy(std::string_view("\xf6")) : root->at(i)->at(2);
+                c.size() == 2 ? test::make_lazy_from_copy(std::string_view("\xf6")) : root->at(i)->at(2);
             REQUIRE(document.has_value());
             auto const r = test::query(selector, *document);
             bool const invalid = !r && r.error() == error::invalid_path;

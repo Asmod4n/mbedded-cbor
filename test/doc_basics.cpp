@@ -59,7 +59,7 @@ TEST_CASE("doc basics: the errors that a program meets most often")
     CHECK_EQ(cbor::at_path<"$[1]", int>(pair.substr(0, pair.size() - 1)).error(), error::too_little_data);
     CHECK_EQ(cbor::at_path<"$", int>("\xff"s).error(), error::syntax_error);
     CHECK_EQ(cbor::at_path<"$[0]", int>("\x9f\x01\xff"s).error(), error::indefinite_length);
-    CHECK_EQ(test::at_path("$.a[", *test::lazy_of_copy(preferred(M("a"s, 1)))).error(), error::invalid_path);
+    CHECK_EQ(test::at_path("$.a[", *test::make_lazy_from_copy(preferred(M("a"s, 1)))).error(), error::invalid_path);
 }
 
 // The section "Errors" says that a wrong use that the compiler cannot see throws std::logic_error.
@@ -168,6 +168,6 @@ TEST_CASE("doc basics: limits")
 TEST_CASE("doc basics: the error at the end of the stack")
 {
     std::string const deep = test::repeat("\x81"sv, test::levels_beyond_small_stack) + '\x01';
-    CHECK_EQ(test::error_on_small_stack([&deep] { return test::lazy_of_copy(deep)->clone(); }),
+    CHECK_EQ(test::error_on_small_stack([&deep] { return test::make_lazy_from_copy(deep)->clone(); }),
              error::nesting_depth_exceeded);
 }

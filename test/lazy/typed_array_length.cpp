@@ -27,7 +27,7 @@ std::string typed_array_claiming_more(char const tag)
 
 void refuses(char const tag, error const expected)
 {
-    auto const l = test::lazy_of_copy(typed_array_claiming_more(tag));
+    auto const l = test::make_lazy_from_copy(typed_array_claiming_more(tag));
     REQUIRE(l.has_value());
     CHECK_EQ(l->elements().error(), expected);
     CHECK_EQ(l->at(std::size_t{0}).error(), expected);
@@ -90,7 +90,7 @@ TEST_CASE("lazy typed array length: the element size of each tag and every lengt
             CAPTURE(tag);
             CAPTURE(length);
             std::string const bytes = tagged_byte_string(tag, length);
-            auto const l = test::lazy_of_copy(bytes);
+            auto const l = test::make_lazy_from_copy(bytes);
             REQUIRE(l.has_value());
             auto const elements = l->elements();
             auto const tree = cbor::decode(bytes);

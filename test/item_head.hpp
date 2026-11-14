@@ -102,7 +102,7 @@ inline std::vector<cbor::item const *> children_of(cbor::item const &container)
 
 // RFC 8949 3.1: the major type of each member of cbor::type. Tags 2, 3 and the typed arrays of RFC 8746 are major
 // type 6; false, true, null, undefined, the other simple values and the floats are major type 7.
-inline cbor::major_type major_of(cbor::type const t)
+inline cbor::major_type find_major_type_of(cbor::type const t)
 {
     switch (t) {
     case cbor::type::unsigned_integer:
@@ -183,8 +183,8 @@ inline bool item_values_equal(cbor::item const &a, cbor::item const &b)
 // Decodes both byte strings into trees and compares their values.
 inline bool same_value(std::string_view const a, std::string_view const b)
 {
-    auto const x = test::lazy_of_copy(std::string(a));
-    auto const y = test::lazy_of_copy(std::string(b));
+    auto const x = test::make_lazy_from_copy(std::string(a));
+    auto const y = test::make_lazy_from_copy(std::string(b));
     REQUIRE(x.has_value());
     REQUIRE(y.has_value());
     auto const p = x->clone();

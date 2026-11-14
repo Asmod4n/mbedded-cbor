@@ -310,7 +310,7 @@ TEST_CASE("attack: overlapping items are an error")
     CHECK_FALSE(at_path<probe, "$.maybe">(next).has_value());
     CHECK_FALSE(at_path<probe, "$.tires[0].diameter">(next).has_value());
 
-    std::string const one = schema_bytes(login{5, true, "ab"});
+    std::string const one = encode_with_schema(login{5, true, "ab"});
     std::size_t const text = one.find("\x7a\x00\x00\x00\x02" "ab"s);
     REQUIRE_NE(text, std::string::npos);
     std::string into_root = one;
@@ -329,7 +329,7 @@ TEST_CASE("attack: an item head that does not fit before the root is too_little_
         return std::string{static_cast<char>(x >> 24), static_cast<char>(x >> 16), static_cast<char>(x >> 8),
                            static_cast<char>(x)};
     };
-    std::string const array = schema_bytes(doubles{{1.0, 2.0}});
+    std::string const array = encode_with_schema(doubles{{1.0, 2.0}});
     std::size_t const head = array.find("\xd8\x56\x5a\x00\x00\x00\x10"sv);
     REQUIRE_NE(head, std::string::npos);
     std::size_t const entry = array.find(big_endian(head));
@@ -338,7 +338,7 @@ TEST_CASE("attack: an item head that does not fit before the root is too_little_
     cut_array.replace(entry, 4, big_endian(array.size() - form<doubles>::fixed_size() - 3));
     CHECK_EQ(at_path<doubles, "$.v[0]">(cut_array).error(), error::too_little_data);
 
-    std::string const text = schema_bytes(login{5, true, "ab"});
+    std::string const text = encode_with_schema(login{5, true, "ab"});
     std::size_t const name = text.find("\x7a\x00\x00\x00\x02" "ab"sv);
     REQUIRE_NE(name, std::string::npos);
     std::size_t const name_entry = text.find(big_endian(name));
@@ -357,7 +357,7 @@ TEST_CASE("attack: a directory longer than the message is too_little_data")
         return std::string{static_cast<char>(x >> 24), static_cast<char>(x >> 16), static_cast<char>(x >> 8),
                            static_cast<char>(x)};
     };
-    std::string const bytes = schema_bytes(login{5, true, "ab"});
+    std::string const bytes = encode_with_schema(login{5, true, "ab"});
     std::size_t const directory = bytes.find("\x5a\x00\x00\x00\x04"sv, 8);
     REQUIRE_NE(directory, std::string::npos);
     std::size_t const forged_length = 0x00fffff0;
@@ -397,7 +397,7 @@ TEST_CASE("attack: a forged reference of a fixed-size vector is incorrect_type")
 // car. The test exists because an accessor that trusted a list it read once would read a later item past the end.
 TEST_CASE("attack: an accessor reads nothing outside a cut or forged message of several cars")
 {
-    std::string const bytes = schema_bytes(sample_lot());
+    std::string const bytes = encode_with_schema(make_sample_lot());
     std::size_t differ = 0;
     auto const other = [](auto const &a, auto const &b) { return a.has_value() != b.has_value() || (a && *a != *b); };
     auto const read = [&differ, other](std::string_view const m) {
@@ -464,7 +464,7 @@ std::size_t read_pet(std::string_view const bytes)
 // and UBSan of this build show such a read.
 TEST_CASE("attack: a variant member under a cut or a changed byte")
 {
-    for (home const &h : {home_with_dog(), home_with_cat()}) {
+    for (home const &h : {make_home_with_dog(), make_home_with_cat()}) {
         std::string const bytes = *form<home>::encode(h);
         CHECK_EQ(read_pet(bytes), 4u);
         std::size_t values = 0;
@@ -484,7 +484,7 @@ TEST_CASE("attack: a variant member under a cut or a changed byte")
 // and decode, which reads the items in their order, finds the entry off its place.
 TEST_CASE("attack: an unknown tag, a cut record and a wrong directory entry of a variant member")
 {
-    std::string const bytes = *form<home>::encode(home_with_dog());
+    std::string const bytes = *form<home>::encode(make_home_with_dog());
     auto const at = bytes.find("\xd9\x06\xcc"sv);
     REQUIRE_NE(at, std::string::npos);
     std::string unknown = bytes;
@@ -517,7 +517,7 @@ TEST_CASE("attack: an unknown tag, a cut record and a wrong directory entry of a
 // too_little_data.
 TEST_CASE("attack: value and text alternatives of a variant member")
 {
-    for (setting const &s : sample_settings()) {
+    for (setting const &s : make_sample_settings()) {
         std::string const bytes = *form<setting>::encode(s);
         for (std::size_t size = 0; size < bytes.size(); ++size) {
             CHECK_FALSE(form<setting>::decode(bytes.substr(0, size)).has_value());

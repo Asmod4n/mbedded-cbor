@@ -64,7 +64,7 @@ TEST_CASE("self-described CBOR: a tag 55799 with no tag content gives too_little
 TEST_CASE("self-described CBOR: lazy reads through a leading tag 55799")
 {
     std::string const document = "\xd9\xd9\xf7\xa1\x61\x61\x82\x05\x06"s;
-    auto const l = test::lazy_of_copy(document);
+    auto const l = test::make_lazy_from_copy(document);
     REQUIRE(l.has_value());
     auto const a = l->at("a"sv);
     REQUIRE(a.has_value());
@@ -187,7 +187,7 @@ TEST_CASE("self-described CBOR: at_path reads through a leading tag 55799")
     auto const text = cbor::at_path<"$.a", std::string_view>(owner);
     REQUIRE(text.has_value());
     CHECK_EQ(**text, "hi"sv);
-    auto const l = test::lazy_of_copy(document);
+    auto const l = test::make_lazy_from_copy(document);
     REQUIRE(l.has_value());
     auto const v = test::at_path("$.a"sv, *l);
     REQUIRE(v.has_value());

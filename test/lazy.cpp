@@ -39,14 +39,14 @@ namespace
 
 cbor::lazy lazy_of(std::string const &document)
 {
-    auto const l = test::lazy_of_copy(document);
+    auto const l = test::make_lazy_from_copy(document);
     REQUIRE(l.has_value());
     return *l;
 }
 
 value value_at(cbor::lazy const &l)
 {
-    auto const v = test::value_of(l);
+    auto const v = test::make_value_from_item(l);
     REQUIRE(v.has_value());
     return *v;
 }
@@ -239,7 +239,7 @@ TEST_CASE("lazy: a reference inside its own mark is a plain tag")
 {
     std::string const doc = "\xd8\x1c\xd8\x1d\x00"s;
     CHECK_EQ(lazy_of(doc).at(0).error(), error::not_indexable);
-    CHECK(test::value_of(lazy_of(doc)) == V(tagged{28, V(tagged{29, V(0)})}));
+    CHECK(test::make_value_from_item(lazy_of(doc)) == V(tagged{28, V(tagged{29, V(0)})}));
 }
 
 // Found by the fuzz corpus: a map that claims about 7.7 * 10^18 pairs. The count is larger than the bytes left, so
@@ -821,7 +821,7 @@ TEST_CASE("lazy: a reference forward to a mark is a plain tag")
     CHECK_EQ(*second->get<std::uint64_t>(), 5u);
     auto const first = root.at(0);
     REQUIRE(first.has_value());
-    CHECK(test::value_of(*first) == V(tagged{29, V(0)}));
+    CHECK(test::make_value_from_item(*first) == V(tagged{29, V(0)}));
 }
 
 namespace
@@ -1015,7 +1015,7 @@ TEST_CASE("lazy: every member refuses a lazy that holds no top-level item")
     CHECK_THROWS_AS((void)none.elements(), std::logic_error);
     CHECK_THROWS_AS((void)none.entries(), std::logic_error);
     CHECK_THROWS_AS((void)none.clone(), std::logic_error);
-    CHECK_THROWS_AS((void)test::value_of(none), std::logic_error);
+    CHECK_THROWS_AS((void)test::make_value_from_item(none), std::logic_error);
 }
 
 // A tag 29 in the content of a bignum or a typed array is no byte string, so the get that interprets the tag
@@ -1049,7 +1049,7 @@ TEST_CASE("lazy: copy moves an rvalue string and copies everything else")
     CHECK_EQ(text_of(*moved->at("k")), text);
 
     std::string lvalue = message;
-    auto const copied = test::lazy_of_copy(lvalue);
+    auto const copied = test::make_lazy_from_copy(lvalue);
     REQUIRE(copied.has_value());
     CHECK_NE(static_cast<void const *>(copied->encoded().data()), static_cast<void const *>(lvalue.data()));
     CHECK_EQ(lvalue, message);
@@ -1060,13 +1060,13 @@ TEST_CASE("lazy: copy moves an rvalue string and copies everything else")
     char const *const again_data = again.data();
     auto const from_moved = cbor::lazy::adopt(std::move(again));
     CHECK_EQ(static_cast<void const *>(from_moved->encoded().data()), static_cast<void const *>(again_data));
-    auto const from_lvalue = test::lazy_of_copy(message);
+    auto const from_lvalue = test::make_lazy_from_copy(message);
     CHECK_NE(static_cast<void const *>(from_lvalue->encoded().data()), static_cast<void const *>(message.data()));
 
-    CHECK_EQ(text_of(*test::lazy_of_copy("\x63" "abc")), "abc");
+    CHECK_EQ(text_of(*test::make_lazy_from_copy("\x63" "abc")), "abc");
     char const *const pointer = "\x62" "ab";
-    CHECK_EQ(text_of(*test::lazy_of_copy(pointer)), "ab");
-    CHECK_EQ(text_of(*test::lazy_of_copy("\x61" "a"sv)), "a");
+    CHECK_EQ(text_of(*test::make_lazy_from_copy(pointer)), "ab");
+    CHECK_EQ(text_of(*test::make_lazy_from_copy("\x61" "a"sv)), "a");
 }
 
 // RFC 8949 5.6 lets a decoder that is not in a deterministic profile keep one entry of a repeated key. Every
@@ -1083,8 +1083,8 @@ TEST_CASE("lazy: a repeated key gives the first entry with no error")
     CHECK(lazy_of(twice).entries().has_value());
     cbor::lazy const top = lazy_of(twice);
     CHECK(top.clone().has_value());
-    CHECK(test::value_of(lazy_of(twice)).has_value());
-    CHECK(test::value_of(lazy_of("\x81\xa2\x01\x00\x18\x01\x00"s)).has_value());
+    CHECK(test::make_value_from_item(lazy_of(twice)).has_value());
+    CHECK(test::make_value_from_item(lazy_of("\x81\xa2\x01\x00\x18\x01\x00"s)).has_value());
 }
 
 // A repeated key at depth 3 and a repeated key of the outer map after a nested map are read with no error.
@@ -1093,8 +1093,8 @@ TEST_CASE("lazy: a repeated key at depth 3 is read with no error")
 {
     std::string const inner = "\xa1\x61\x61\xa1\x61\x62\xa3\x61\x63\x01\x61\x64\x02\x61\x64\x03"s;
     std::string const outer = "\xa2\x61\x61\xa1\x61\x62\xa1\x61\x63\x01\x61\x61\x00"s;
-    CHECK(test::value_of(lazy_of(inner)).has_value());
-    CHECK(test::value_of(lazy_of(outer)).has_value());
+    CHECK(test::make_value_from_item(lazy_of(inner)).has_value());
+    CHECK(test::make_value_from_item(lazy_of(outer)).has_value());
     CHECK_EQ(*lazy_of(inner).at("a")->at("b")->at("d")->get<std::uint64_t>(), 2u);
     CHECK(lazy_of(outer).at("a")->at("b").has_value());
     CHECK_EQ(*(cbor::at_path<"$.a.b.d", int>(inner)), 2);
@@ -1114,7 +1114,7 @@ TEST_CASE("lazy: an array of the same map many times is read with no error")
         doc += "\xa2\x61\x61\x01\x61\x62\x02"s;
     cbor::lazy const top = lazy_of(doc);
     CHECK(top.clone().has_value());
-    CHECK(test::value_of(lazy_of(doc)).has_value());
+    CHECK(test::make_value_from_item(lazy_of(doc)).has_value());
     CHECK(test::query("$..*", lazy_of(doc)).has_value());
     CHECK(test::query("$[*].a", lazy_of(doc)).has_value());
     CHECK_EQ(*(cbor::at_path<"$[63].b", int>(doc)), 2);
@@ -1204,7 +1204,7 @@ TEST_CASE("lazy: two threads read one root lazy" * doctest::skip(!test::threads_
 {
     constexpr std::size_t threads = 2;
     std::string const s("\x84\xd8\x1c\x65hello\xd8\x1d\x00\xa1\x61k\xd8\x1d\x00\xd8\x40\x42\x01\x02", 23);
-    cbor::lazy const l = *test::lazy_of_copy(s);
+    cbor::lazy const l = *test::make_lazy_from_copy(s);
     std::array<std::array<bool, 6>, threads> right{};
     {
         std::vector<std::thread> workers;
@@ -1252,11 +1252,11 @@ TEST_CASE("lazy: two threads read one root lazy" * doctest::skip(!test::threads_
 TEST_CASE("lazy: a tag 28 that holds a tag 29 reads the index")
 {
     std::string const small("\x83\xd8\x1c\x01\xd8\x1c\xd8\x1d\x00\xd8\x1d\x01", 12);
-    auto const l = *test::lazy_of_copy(small);
+    auto const l = *test::make_lazy_from_copy(small);
     std::array<std::int64_t, 3> const expected{1, 0, 1};
     for (std::size_t i = 0; i < expected.size(); ++i)
         CHECK_EQ(*l.at(i).and_then([](cbor::lazy const &e) { return e.get<std::int64_t>(); }), expected[i]);
-    CHECK_EQ(test::lazy_of_copy(std::string("\xd8\x1c\xd8\x1d\x00", 5))->get<std::int64_t>(), 0);
+    CHECK_EQ(test::make_lazy_from_copy(std::string("\xd8\x1c\xd8\x1d\x00", 5))->get<std::int64_t>(), 0);
 
     constexpr std::size_t n = 20000;
     std::string chain("\x9a", 1);
@@ -1268,7 +1268,7 @@ TEST_CASE("lazy: a tag 28 that holds a tag 29 reads the index")
         for (int b = 3; b >= 0; --b)
             chain += static_cast<char>(((k - 1) >> (8 * b)) & 0xff);
     }
-    auto const all = test::lazy_of_copy(chain)->elements();
+    auto const all = test::make_lazy_from_copy(chain)->elements();
     REQUIRE(all.has_value());
     std::size_t right = 0;
     std::int64_t k = 0;
@@ -1285,10 +1285,10 @@ TEST_CASE("lazy: a tag 28 that holds a tag 29 reads the index")
 // step now reads the head of its target and gives too_little_data.
 TEST_CASE("lazy: a step to an element past the end of the input fails at once")
 {
-    CHECK_EQ(test::lazy_of_copy(std::string("\x82\x01", 2))->at(std::size_t{1}).error(), error::too_little_data);
-    CHECK_EQ(test::lazy_of_copy(std::string("\xa1\x61k", 3))->at("k").error(), error::too_little_data);
-    CHECK_EQ(test::lazy_of_copy(std::string("\xa1\x01", 2))->at(cbor::key{1}).error(), error::too_little_data);
-    CHECK_EQ(test::lazy_of_copy(std::string("\x82\x01\x19\x01", 4))->at(std::size_t{1}).error(), error::too_little_data);
+    CHECK_EQ(test::make_lazy_from_copy(std::string("\x82\x01", 2))->at(std::size_t{1}).error(), error::too_little_data);
+    CHECK_EQ(test::make_lazy_from_copy(std::string("\xa1\x61k", 3))->at("k").error(), error::too_little_data);
+    CHECK_EQ(test::make_lazy_from_copy(std::string("\xa1\x01", 2))->at(cbor::key{1}).error(), error::too_little_data);
+    CHECK_EQ(test::make_lazy_from_copy(std::string("\x82\x01\x19\x01", 4))->at(std::size_t{1}).error(), error::too_little_data);
 }
 
 // size() returned the count of the head, also when the bytes after the
@@ -1300,11 +1300,11 @@ TEST_CASE("lazy size refuses a count that the bytes cannot hold")
     using namespace std::string_literals;
     for (std::string const &bytes : {"\x82\x01"s, "\x98\xff"s, "\x9b\x7f\xff\xff\xff\xff\xff\xff\xff\x01"s, "\xa1\x01"s,
                                     "\xbb\xff\xff\xff\xff\xff\xff\xff\xff"s}) {
-        auto const doc = test::lazy_of_copy(bytes);
+        auto const doc = test::make_lazy_from_copy(bytes);
         REQUIRE(doc.has_value());
         CHECK_EQ(doc->size().error(), cbor::error::too_little_data);
     }
-    auto const pair = test::lazy_of_copy("\x82\x01\x02"s);
+    auto const pair = test::make_lazy_from_copy("\x82\x01\x02"s);
     REQUIRE(pair.has_value());
     CHECK_EQ(pair->size().value(), 2);
 }
@@ -1356,7 +1356,7 @@ char const *text_data(std::expected<cbor::lazy, error> const &l)
 TEST_CASE("lazy::copy: an lvalue std::string is copied")
 {
     std::string const bytes = two_forms::long_text();
-    auto const l = test::lazy_of_copy(bytes);
+    auto const l = test::make_lazy_from_copy(bytes);
     REQUIRE(l.has_value());
     CHECK_NE(two_forms::text_data(l), std::span(bytes).subspan(2).data());
     CHECK_EQ(bytes, two_forms::long_text());
@@ -1734,8 +1734,8 @@ TEST_CASE("lazy: one query applies to many documents")
     std::string const two = encoded(M("a"s, A(3, 4, 5)));
     auto const all = *cbor::path::compile<cbor::nodelist>("$.a[*]");
     auto const first = *cbor::path::compile<int>("$.a[0]");
-    cbor::lazy const l1 = *test::lazy_of_copy(one);
-    cbor::lazy const l2 = *test::lazy_of_copy(two);
+    cbor::lazy const l1 = *test::make_lazy_from_copy(one);
+    cbor::lazy const l2 = *test::make_lazy_from_copy(two);
     CHECK_EQ(l1.at_path(all)->size(), 2u);
     CHECK_EQ(l2.at_path(all)->size(), 3u);
     CHECK(*test::values_of(l1.at_path(all)) == *test::values_of(l1.at_path(all)));
@@ -1748,14 +1748,14 @@ TEST_CASE("lazy: one query applies to many documents")
     CHECK_EQ(cbor::at_path(shared, all)->size(), 3u);
     CHECK_EQ(cbor::at_path(std::string(two), all)->size(), 3u);
     auto const node = cbor::at_path(shared, *cbor::path::compile<cbor::lazy>("$.a[2]"));
-    CHECK(test::value_of(node) == V(5));
+    CHECK(test::make_value_from_item(node) == V(5));
     std::string const text = encoded(M("s"s, "x"s));
     auto const s = *cbor::path::compile<std::string_view>("$.s");
     auto const from_view = cbor::at_path(std::string(text), s);
     CHECK_EQ(**from_view, "x"sv);
     auto const from_string = cbor::at_path(std::string(text), s);
     CHECK_EQ(**from_string, "x"sv);
-    auto const from_lazy = test::lazy_of_copy(text)->at_path(s);
+    auto const from_lazy = test::make_lazy_from_copy(text)->at_path(s);
     CHECK_EQ(**from_lazy, "x"sv);
 }
 
@@ -1775,7 +1775,7 @@ TEST_CASE("lazy: a copy of a query outlives the original")
 TEST_CASE("lazy: a moved-from query is a wrong use")
 {
     std::string const doc = encoded(M("a"s, "x"s));
-    cbor::lazy const l = *test::lazy_of_copy(doc);
+    cbor::lazy const l = *test::make_lazy_from_copy(doc);
     auto number = *cbor::path::compile<int>("$.a");
     auto const moved_number = std::move(number);
     CHECK_THROWS_AS((void)cbor::at_path(doc, number), std::logic_error);
@@ -1798,7 +1798,7 @@ TEST_CASE("lazy: a moved-from query is a wrong use")
 TEST_CASE("lazy: the compile of a query stops where the stack of the thread ends")
 {
     std::string const doc = encoded(A(1));
-    cbor::lazy const l = *test::lazy_of_copy(doc);
+    cbor::lazy const l = *test::make_lazy_from_copy(doc);
     constexpr std::size_t depth = test::levels_beyond_small_stack;
     std::string const deep = "$" + test::repeat("[?@", depth) + ".a" + std::string(depth, ']');
     CHECK_EQ(test::error_on_small_stack([&deep] { return cbor::path::compile<cbor::nodelist>(deep); }),
@@ -1812,7 +1812,7 @@ TEST_CASE("lazy: the compile of a query stops where the stack of the thread ends
 TEST_CASE("lazy: threads apply one query at once" * doctest::skip(!test::threads_available))
 {
     std::string const doc = encoded(M("a"s, A(1, 2, 3)));
-    cbor::lazy const l = *test::lazy_of_copy(doc);
+    cbor::lazy const l = *test::make_lazy_from_copy(doc);
     auto const e = *cbor::path::compile<cbor::nodelist>("$.a[?@ > 1]");
     std::array<std::size_t, 4> found{};
     {
@@ -1832,15 +1832,15 @@ TEST_CASE("lazy: a decode checks a container count that does not fit 32 bits")
 {
     std::string const array_count = "\x82\x9b\x00\x00\x00\x01\x00\x00\x00\x00\x01"s;
     std::string const map_count = "\x82\xbb\x00\x00\x00\x00\x80\x00\x00\x00\x01"s;
-    CHECK_EQ(test::lazy_of_copy(array_count)->clone().error(), error::too_little_data);
-    CHECK_EQ(test::lazy_of_copy(map_count)->clone().error(), error::too_little_data);
+    CHECK_EQ(test::make_lazy_from_copy(array_count)->clone().error(), error::too_little_data);
+    CHECK_EQ(test::make_lazy_from_copy(map_count)->clone().error(), error::too_little_data);
 }
 
 // A lazy over empty input holds no data item. Its clone must give the error that cbor::decode gives for the same
 // input, and must not stop the process.
 TEST_CASE("lazy: the clone of empty input gives the error of decode")
 {
-    auto const empty = test::lazy_of_copy(""s);
+    auto const empty = test::make_lazy_from_copy(""s);
     REQUIRE(empty.has_value());
     CHECK_EQ(empty->clone().error(), error::too_little_data);
     CHECK_EQ(empty->clone().error(), cbor::decode(std::string_view{}).error());

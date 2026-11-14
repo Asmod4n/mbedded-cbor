@@ -16,13 +16,13 @@ namespace test
 inline std::expected<value, error> at_path(std::string_view const path, cbor::lazy const &l)
 {
     return cbor::path::compile<cbor::lazy>(path).and_then(
-        [&l](cbor::path::query<cbor::lazy> const &e) { return value_of(l.at_path(e)); });
+        [&l](cbor::path::query<cbor::lazy> const &e) { return make_value_from_item(l.at_path(e)); });
 }
 
 template <cbor::fixed_string Path>
 std::expected<value, error> at_path(cbor::lazy const &l)
 {
-    return value_of(l.at_path<Path>());
+    return make_value_from_item(l.at_path<Path>());
 }
 
 // The nodelist of a query as an array of the values of its nodes.
@@ -32,7 +32,7 @@ inline std::expected<value, error> values_of(std::expected<std::vector<cbor::laz
         return std::unexpected(nodes.error());
     array a;
     for (cbor::lazy const &n : *nodes) {
-        auto v = value_of(n);
+        auto v = make_value_from_item(n);
         if (!v)
             return std::unexpected(v.error());
         a.push_back(std::move(*v));

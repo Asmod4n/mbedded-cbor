@@ -161,7 +161,7 @@ TEST_CASE("path: a filter with a literal allocates nothing for each element")
         bytes.push_back(static_cast<char>(n));
         for (std::size_t i = 0; i < n; ++i)
             bytes.push_back(static_cast<char>(i % 0x18));
-        return *test::lazy_of_copy(std::move(bytes));
+        return *test::make_lazy_from_copy(std::move(bytes));
     };
     constexpr std::size_t few = 4;
     constexpr std::size_t many = 40;
@@ -197,7 +197,7 @@ TEST_CASE("path: a query inside a filter allocates nothing for each element in t
         bytes.push_back(static_cast<char>(n));
         for (std::size_t i = 0; i < n; ++i)
             bytes.append("\x82\x00\x01"sv);
-        return *test::lazy_of_copy(std::move(bytes));
+        return *test::make_lazy_from_copy(std::move(bytes));
     };
     constexpr std::size_t few = 4;
     constexpr std::size_t many = 40;
@@ -228,7 +228,7 @@ TEST_CASE("path: a query inside a filter allocates nothing for each element in t
 TEST_CASE("path: a key is compared without an allocation")
 {
     std::string const bytes = "\x82\x61x\xa1\x82\x01\x61x\x01"s;
-    auto const root = *test::lazy_of_copy(std::string(bytes));
+    auto const root = *test::make_lazy_from_copy(std::string(bytes));
     auto const map = *root.at(1);
     REQUIRE(map.at_path<"$[[1, \"x\"]]">().has_value());
     std::size_t const before = allocations;
@@ -247,7 +247,7 @@ TEST_CASE("decode: the room kept for the elements of an array is bounded by the 
 {
     std::string bytes = "\x99\x10\x00\xff"s;
     bytes.resize(4099);
-    auto const root = *test::lazy_of_copy(std::string(bytes));
+    auto const root = *test::make_lazy_from_copy(std::string(bytes));
     std::size_t const before = allocated_bytes;
     auto const r = root.clone();
     std::size_t const after = allocated_bytes;
@@ -261,7 +261,7 @@ TEST_CASE("decode: the room kept for the elements of an array is bounded by the 
 TEST_CASE("decode: a claimed count of 2^63 with one byte left allocates in proportion to the input")
 {
     std::string const bytes = "\x9b\x80\x00\x00\x00\x00\x00\x00\x00\x01"s;
-    auto const root = *test::lazy_of_copy(std::string(bytes));
+    auto const root = *test::make_lazy_from_copy(std::string(bytes));
     std::size_t const before = allocated_bytes;
     auto const r = root.clone();
     std::size_t const after = allocated_bytes;
@@ -284,7 +284,7 @@ std::string array_of_ones(std::size_t const count)
 
 std::size_t decode_allocations(std::string const &bytes)
 {
-    auto const root = *test::lazy_of_copy(std::string(bytes));
+    auto const root = *test::make_lazy_from_copy(std::string(bytes));
     std::size_t const before = allocations;
     auto const r = root.clone();
     std::size_t const after = allocations;
@@ -314,7 +314,7 @@ TEST_CASE("decode: nested arrays that each claim a large count do not multiply t
     for (int i = 0; i < heads; ++i)
         bytes += "\x99\x10\x00"s;
     bytes.append(4200, '\x01');
-    auto const root = *test::lazy_of_copy(std::string(bytes));
+    auto const root = *test::make_lazy_from_copy(std::string(bytes));
     std::size_t const before = allocated_bytes;
     auto const r = root.clone();
     std::size_t const after = allocated_bytes;
@@ -333,7 +333,7 @@ TEST_CASE("decode: a wide array of nested arrays is read whole after the decode"
     bytes += static_cast<char>(count & 0xff);
     for (std::size_t i = 0; i < count; ++i)
         bytes += "\x82\x01\x02"s;
-    auto r = test::lazy_of_copy(std::string(bytes))->clone();
+    auto r = test::make_lazy_from_copy(std::string(bytes))->clone();
     REQUIRE(r.has_value());
     auto const outer = children_of(*(*r));
     REQUIRE_EQ(outer.size(), count);
@@ -370,7 +370,7 @@ TEST_CASE("path: a typed read allocates nothing")
 TEST_CASE("path: a typed read through tag 24 allocates nothing")
 {
     std::string const doc = "\xa1\x61\x61\xd8\x18\x43\x82\x01\x02"s;
-    auto const root = *test::lazy_of_copy(std::string(doc));
+    auto const root = *test::make_lazy_from_copy(std::string(doc));
     std::size_t const before = allocations;
     auto const from_bytes = cbor::at_path<"$.a[1]", int>(std::string_view(doc));
     auto const from_lazy = root.at_path<"$.a[1]", int>();

@@ -68,7 +68,7 @@ TEST_CASE("limits sizes 2: string_length on each string head")
         for (std::string const &encoded :
              {text_of_length(n), bytes_of_length(n), "\x82"s + text_of_length(n) + "\x00"s}) {
             auto const size = cbor::item_size(encoded);
-            auto const decoded = test::value_of(*test::lazy_of_copy(encoded));
+            auto const decoded = test::make_value_from_item(*test::make_lazy_from_copy(encoded));
             auto const notation = cbor::diagnostic_notation(encoded);
             CHECK_EQ(size.has_value(), passes);
             CHECK_EQ(decoded.has_value(), passes);
@@ -79,7 +79,7 @@ TEST_CASE("limits sizes 2: string_length on each string head")
                 CHECK_EQ(notation.error(), error::string_length_exceeded);
             }
         }
-        CHECK_EQ(test::lazy_of_copy(text_of_length(n))->get<std::string_view>().has_value(), passes);
+        CHECK_EQ(test::make_lazy_from_copy(text_of_length(n))->get<std::string_view>().has_value(), passes);
     }
 }
 
@@ -91,7 +91,7 @@ TEST_CASE("limits sizes 2: container_elements on each array and map head")
         bool const passes = n <= limit;
         for (std::string const &encoded : {array_of(n), map_of(n), "\x81"s + array_of(n)}) {
             auto const size = cbor::item_size(encoded);
-            auto const decoded = test::value_of(*test::lazy_of_copy(encoded));
+            auto const decoded = test::make_value_from_item(*test::make_lazy_from_copy(encoded));
             auto const notation = cbor::diagnostic_notation(encoded);
             CHECK_EQ(size.has_value(), passes);
             CHECK_EQ(decoded.has_value(), passes);
@@ -102,8 +102,8 @@ TEST_CASE("limits sizes 2: container_elements on each array and map head")
                 CHECK_EQ(notation.error(), error::container_elements_exceeded);
             }
         }
-        CHECK_EQ(test::lazy_of_copy(array_of(n))->elements().has_value(), passes);
-        CHECK_EQ(test::lazy_of_copy(map_of(n))->entries().has_value(), passes);
+        CHECK_EQ(test::make_lazy_from_copy(array_of(n))->elements().has_value(), passes);
+        CHECK_EQ(test::make_lazy_from_copy(map_of(n))->entries().has_value(), passes);
     }
 }
 
@@ -126,9 +126,9 @@ TEST_CASE("limits sizes 2: the stack is checked beside the size limits")
 {
     std::string const held = test::repeat("\xd8\x64"sv, test::levels_every_stack_holds) + '\x00';
     std::string const deep = test::repeat("\xd8\x64"sv, test::levels_beyond_small_stack) + '\x00';
-    CHECK(test::lazy_of_copy(held)->clone().has_value());
+    CHECK(test::make_lazy_from_copy(held)->clone().has_value());
     CHECK(cbor::diagnostic_notation(held).has_value());
-    CHECK_EQ(test::error_on_small_stack([&deep] { return test::lazy_of_copy(deep)->clone(); }),
+    CHECK_EQ(test::error_on_small_stack([&deep] { return test::make_lazy_from_copy(deep)->clone(); }),
              error::nesting_depth_exceeded);
     CHECK_EQ(test::error_on_small_stack([&deep] { return cbor::diagnostic_notation(deep); }),
              error::nesting_depth_exceeded);
@@ -143,8 +143,8 @@ TEST_CASE("limits sizes 2: the iterators of elements() and entries() skip withou
                                 "abc\x01"s;
     std::string const map = "\xa2\x63"
                             "abc\x01\x02\x03"s;
-    auto const l = test::lazy_of_copy(encoded);
-    auto const m = test::lazy_of_copy(map);
+    auto const l = test::make_lazy_from_copy(encoded);
+    auto const m = test::make_lazy_from_copy(map);
     REQUIRE(l.has_value());
     REQUIRE(m.has_value());
     auto const elements = l->elements();
@@ -180,17 +180,17 @@ TEST_CASE(
                                "n\x01"s;
     for (auto const &[doc, wanted] : {std::tuple{strings, error::string_length_exceeded},
                                       std::tuple{arrays, error::container_elements_exceeded}}) {
-        auto const l = *test::lazy_of_copy(doc);
+        auto const l = *test::make_lazy_from_copy(doc);
         CHECK_EQ(cbor::at_path<"$.n", int>(doc), 1);
         CHECK_EQ(l.at_path<"$.n", int>(), 1);
         CHECK_EQ(l.at("n")->get<int>(), 1);
         CHECK(test::at_path("$.n", l) == V(1));
         CHECK(test::query("$.n", l) == A(1));
         CHECK_EQ(test::at_path("$.a", l).error(), wanted);
-        CHECK_EQ(test::value_of(*l.at("a")).error(), wanted);
+        CHECK_EQ(test::make_value_from_item(*l.at("a")).error(), wanted);
     }
     std::string const two = "\x82\x63xyz\x83\x01\x02\x03"s;
-    auto const l = *test::lazy_of_copy("\x82\x82\x63xyz\x83\x01\x02\x03\x05"s);
+    auto const l = *test::make_lazy_from_copy("\x82\x82\x63xyz\x83\x01\x02\x03\x05"s);
     CHECK_EQ(l.at_path<"$[1]", int>(), 5);
     CHECK_EQ(l.at(1)->get<int>(), 5);
     CHECK_EQ(l.at_path<"$[0][1]", int>().error(), error::container_elements_exceeded);
@@ -202,10 +202,10 @@ TEST_CASE(
 // the error of each size limit.
 TEST_CASE("doc basics: the error of each size limit")
 {
-    CHECK_EQ(test::lazy_of_copy(preferred(V("xyz"s)))->get<std::string_view>().error(),
+    CHECK_EQ(test::make_lazy_from_copy(preferred(V("xyz"s)))->get<std::string_view>().error(),
              error::string_length_exceeded);
     std::string const three = preferred(A(1, 2, 3));
-    CHECK_EQ(test::lazy_of_copy(three)->size().error(), error::container_elements_exceeded);
+    CHECK_EQ(test::make_lazy_from_copy(three)->size().error(), error::container_elements_exceeded);
     CHECK_EQ(cbor::at_path<"$[0]", int>(three).error(), error::container_elements_exceeded);
 }
 
@@ -214,10 +214,10 @@ TEST_CASE("doc basics: the error of each size limit")
 // string_length_exceeded at get, not at lazy::copy. A user expected it at lazy::copy.
 TEST_CASE("doc advanced basics: a string limit is checked at get")
 {
-    auto const l = test::lazy_of_copy(preferred(V("xyz"s)));
+    auto const l = test::make_lazy_from_copy(preferred(V("xyz"s)));
     REQUIRE(l.has_value());
     CHECK_EQ(l->get<std::string_view>().error(), error::string_length_exceeded);
-    CHECK_EQ(test::lazy_of_copy(array_of(3))->size().error(), error::container_elements_exceeded);
+    CHECK_EQ(test::make_lazy_from_copy(array_of(3))->size().error(), error::container_elements_exceeded);
 }
 
 // The former advanced basics guide, section "Limits", whose facts now stand in tools/doc/groups/errors.dox: the
@@ -225,11 +225,11 @@ TEST_CASE("doc advanced basics: a string limit is checked at get")
 TEST_CASE("doc advanced basics: a skip does not count")
 {
     std::string const bytes = preferred(M("a"s, "xyz"s, "n"s, 1));
-    CHECK_EQ(test::lazy_of_copy(bytes)->at("n")->get<std::int64_t>(), 1);
-    CHECK_EQ(test::lazy_of_copy(bytes)->at("a")->get<std::string_view>().error(),
+    CHECK_EQ(test::make_lazy_from_copy(bytes)->at("n")->get<std::int64_t>(), 1);
+    CHECK_EQ(test::make_lazy_from_copy(bytes)->at("a")->get<std::string_view>().error(),
              error::string_length_exceeded);
     CHECK_EQ(cbor::item_size(bytes).error(), error::string_length_exceeded);
-    CHECK_EQ(test::value_of(*test::lazy_of_copy(bytes)).error(), error::string_length_exceeded);
+    CHECK_EQ(test::make_value_from_item(*test::make_lazy_from_copy(bytes)).error(), error::string_length_exceeded);
 }
 
 // The former advanced path guide, section "Limits", whose facts now stand in tools/doc/groups/path.dox: a string
@@ -302,10 +302,10 @@ TEST_CASE("limits sizes 2: sequence_reader gives an item above a size limit, and
     for (test::feed_form const form : test::feed_forms) {
         CAPTURE(static_cast<int>(form));
         cbor::sequence_reader r;
-        r = test::piece_fed(std::move(r), "\x63"
+        r = test::feed_piece_to_reader(std::move(r), "\x63"
                             "ab"sv, form, 0);
-        r = test::piece_fed(std::move(r), "c\x83\x01\x02"sv, form, 1);
-        r = test::piece_fed(std::move(r), "\x03"sv, form, 2);
+        r = test::feed_piece_to_reader(std::move(r), "c\x83\x01\x02"sv, form, 1);
+        r = test::feed_piece_to_reader(std::move(r), "\x03"sv, form, 2);
         auto const text = r.next();
         auto const array = r.next();
         REQUIRE(text.has_value());

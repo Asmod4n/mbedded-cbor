@@ -162,7 +162,7 @@ TEST_CASE("doc advanced basics: a std::pmr target")
 // The section "Threads" states that a lazy holds only its bytes and its offset, so several threads read one lazy.
 TEST_CASE("doc advanced basics: threads" * doctest::skip(!test::threads_available))
 {
-    cbor::lazy const l = *test::lazy_of_copy(preferred(A(1, 2)));
+    cbor::lazy const l = *test::make_lazy_from_copy(preferred(A(1, 2)));
     std::int64_t first = 0;
     std::int64_t second = 0;
     {
@@ -183,11 +183,11 @@ TEST_CASE("doc advanced basics: a lazy moved out of the expected to another thre
     std::int64_t read = 0;
     std::thread([&read](cbor::lazy const &v) { read = *v.at(1)->get<std::int64_t>(); }, std::move(*l)).join();
     CHECK_EQ(read, 2);
-    auto const plain = *test::lazy_of_copy(preferred(M("a"s, 1)));
+    auto const plain = *test::make_lazy_from_copy(preferred(M("a"s, 1)));
     std::int64_t other = 0;
     std::thread([&] { other = *plain.at("a")->get<std::int64_t>(); }).join();
     CHECK_EQ(other, 1);
-    auto const tagged = *test::lazy_of_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
+    auto const tagged = *test::make_lazy_from_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
     std::int64_t content = -1;
     std::thread([&] { content = *tagged.at(1)->get<std::int64_t>(); }).join();
     CHECK_EQ(content, 0);
@@ -209,7 +209,7 @@ TEST_CASE("doc advanced basics: a lazy holds the owner")
 // aliasing constructor of std::shared_ptr makes an owner from an object that holds the bytes.
 TEST_CASE("doc advanced basics: owners")
 {
-    auto const name = test::lazy_of_copy(preferred(M("a"s, "xyz"s)))->at("a")->get<std::string_view>();
+    auto const name = test::make_lazy_from_copy(preferred(M("a"s, "xyz"s)))->at("a")->get<std::string_view>();
     REQUIRE(name.has_value());
     CHECK_EQ(**name, "xyz"sv);
     CHECK_EQ((*name)->size(), 3u);
@@ -220,7 +220,7 @@ TEST_CASE("doc advanced basics: owners")
     CHECK(std::is_same_v<decltype(**name), std::string_view>);
     std::string const own = name->clone();
     CHECK_EQ(own, "xyz");
-    auto const array = test::lazy_of_copy("\xd8\x45\x44\x07\x00\x08\x00"s)->get<cbor::typed_array>();
+    auto const array = test::make_lazy_from_copy("\xd8\x45\x44\x07\x00\x08\x00"s)->get<cbor::typed_array>();
     REQUIRE(array.has_value());
     cbor::owning<cbor::typed_array> const held = array->clone();
     CHECK_EQ(held->bytes.size(), 4u);

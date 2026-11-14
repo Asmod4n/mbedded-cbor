@@ -45,7 +45,7 @@ std::string make_of(auto const &car)
 // distance from begin to end is the size, and operator[] gives the element at its index.
 TEST_CASE("at_path: a list of records is a range of its elements")
 {
-    auto const owner = std::make_shared<std::string const>(schema_bytes(sample_lot()));
+    auto const owner = std::make_shared<std::string const>(encode_with_schema(make_sample_lot()));
     auto const root = form<parking_lot>::path(owner);
     REQUIRE(root.has_value());
     auto const cars = root->at_path<"$.cars">();
@@ -77,7 +77,7 @@ TEST_CASE("at_path: a list of records is a range of its elements")
 // way, and each must reach the same elements as the index.
 TEST_CASE("at_path: a list of records reads backwards and by page")
 {
-    auto const root = form<parking_lot>::path(schema_bytes(sample_lot()));
+    auto const root = form<parking_lot>::path(encode_with_schema(make_sample_lot()));
     REQUIRE(root.has_value());
     auto const cars = root->at_path<"$.cars">();
     REQUIRE(cars.has_value());
@@ -102,7 +102,7 @@ TEST_CASE("at_path: a list of records reads backwards and by page")
 // is outside of the list.
 TEST_CASE("at_path: an empty list of records has no element")
 {
-    auto const root = form<parking_lot>::path(schema_bytes(parking_lot{}));
+    auto const root = form<parking_lot>::path(encode_with_schema(parking_lot{}));
     REQUIRE(root.has_value());
     auto const cars = root->at_path<"$.cars">();
     REQUIRE(cars.has_value());
@@ -117,7 +117,7 @@ TEST_CASE("at_path: an empty list of records has no element")
 // form of its accessor, and the element function of the unverified form must cut each element at the same place.
 TEST_CASE("unverified_path: a list of records is a range of its elements")
 {
-    auto const owner = std::make_shared<std::string const>(schema_bytes(sample_lot()));
+    auto const owner = std::make_shared<std::string const>(encode_with_schema(make_sample_lot()));
     auto const root = form<parking_lot>::unverified_path(owner);
     REQUIRE(root.has_value());
     auto const cars = root->at_path<"$.cars">();
@@ -137,7 +137,7 @@ TEST_CASE("unverified_path: a list of records is a range of its elements")
 // two indexes.
 TEST_CASE("at_path: a list inside a record from the iterator is a range")
 {
-    auto const root = form<parking_lot>::path(schema_bytes(sample_lot()));
+    auto const root = form<parking_lot>::path(encode_with_schema(make_sample_lot()));
     REQUIRE(root.has_value());
     auto const cars = root->at_path<"$.cars">();
     REQUIRE(cars.has_value());
@@ -159,7 +159,7 @@ TEST_CASE("at_path: a list inside a record from the iterator is a range")
 TEST_CASE("at_path: a list of const elements is a range of its elements")
 {
     std::vector<named> const source{{"a"}, {"bc"}, {"def"}};
-    auto const root = form<people_view>::path(schema_bytes(people_view{source}));
+    auto const root = form<people_view>::path(encode_with_schema(people_view{source}));
     REQUIRE(root.has_value());
     auto const people = root->at_path<"$.people">();
     REQUIRE(people.has_value());
@@ -168,7 +168,7 @@ TEST_CASE("at_path: a list of const elements is a range of its elements")
         names.emplace_back(*person.at_path<"@.n">());
     CHECK(names == std::vector<std::string>{"a", "bc", "def"});
     std::vector<point> const points{{1.0f, 2.0f}, {3.0f, 4.0f}};
-    auto const cloud_root = form<cloud_view>::path(schema_bytes(cloud_view{points}));
+    auto const cloud_root = form<cloud_view>::path(encode_with_schema(cloud_view{points}));
     REQUIRE(cloud_root.has_value());
     auto const list = cloud_root->at_path<"$.points">();
     REQUIRE(list.has_value());
@@ -182,7 +182,7 @@ TEST_CASE("at_path: a list of const elements is a range of its elements")
 // same error as at_path with the index, and the other elements must still read.
 TEST_CASE("at_path: a record with a wrong tag in a list gives the error of at_path")
 {
-    std::string bytes = schema_bytes(sample_lot());
+    std::string bytes = encode_with_schema(make_sample_lot());
     std::size_t const tag = bytes.find("\xd9\x05\xf6"s);
     REQUIRE_NE(tag, std::string::npos);
     bytes[tag + 2] = '\x00';
@@ -204,7 +204,7 @@ TEST_CASE("at_path: an iterator of a list of records outlives its accessor")
     using A = std::remove_cvref_t<decltype(*std::declval<form<parking_lot>::accessor<> const &>().at_path<"$.cars">())>;
     A::iterator kept;
     {
-        auto owner = std::make_shared<std::string const>(schema_bytes(sample_lot()));
+        auto owner = std::make_shared<std::string const>(encode_with_schema(make_sample_lot()));
         auto const root = form<parking_lot>::path(owner);
         REQUIRE(root.has_value());
         auto const cars = root->at_path<"$.cars">();
@@ -224,7 +224,7 @@ TEST_CASE("at_path: a moved list of records keeps no list in the source")
     using A = std::remove_cvref_t<decltype(*std::declval<form<parking_lot>::accessor<> const &>().at_path<"$.cars">())>;
     std::optional<A> target;
     {
-        auto const root = form<parking_lot>::path(schema_bytes(sample_lot()));
+        auto const root = form<parking_lot>::path(encode_with_schema(make_sample_lot()));
         REQUIRE(root.has_value());
         std::optional<A> source(*root->at_path<"$.cars">());
         target.emplace(std::move(*source));

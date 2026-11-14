@@ -19,14 +19,14 @@ std::string value_dump(jsoncons::ojson const &j)
         return tag + (j.as<bool>() ? "s(21)" : "s(20)");
     case jsoncons::json_type::int64_value: {
         auto const v = j.as<std::int64_t>();
-        return tag + (v < 0 ? interop::negative_dump(static_cast<std::uint64_t>(-(v + 1)))
-                            : interop::unsigned_dump(static_cast<std::uint64_t>(v)));
+        return tag + (v < 0 ? interop::dump_negative_integer(static_cast<std::uint64_t>(-(v + 1)))
+                            : interop::dump_unsigned_integer(static_cast<std::uint64_t>(v)));
     }
     case jsoncons::json_type::uint64_value:
-        return tag + interop::unsigned_dump(j.as<std::uint64_t>());
+        return tag + interop::dump_unsigned_integer(j.as<std::uint64_t>());
     case jsoncons::json_type::half_value:
     case jsoncons::json_type::double_value:
-        return tag + interop::float_dump(j.as<double>());
+        return tag + interop::dump_float(j.as<double>());
     case jsoncons::json_type::string_value:
         return tag + "t'" + test::hexlify(j.as_string_view()) + "'";
     case jsoncons::json_type::byte_string_value: {
@@ -37,13 +37,13 @@ std::string value_dump(jsoncons::ojson const &j)
         std::vector<std::string> parts;
         for (auto const &e : j.array_range())
             parts.push_back(value_dump(e));
-        return tag + interop::array_dump(parts);
+        return tag + interop::dump_array(parts);
     }
     case jsoncons::json_type::object_value: {
         std::vector<std::string> parts;
         for (auto const &m : j.object_range())
             parts.push_back("t'" + test::hexlify(m.key()) + "':" + value_dump(m.value()));
-        return tag + interop::map_dump(parts);
+        return tag + interop::dump_sorted_map(parts);
     }
     default:
         return tag + "?";

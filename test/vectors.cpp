@@ -118,7 +118,7 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
     for (vector_case const &c : cases) {
         CAPTURE(c.hex);
         std::string const wire = test::unhexlify(c.hex);
-        auto const top_level = test::lazy_of_copy(wire);
+        auto const top_level = test::make_lazy_from_copy(wire);
         REQUIRE(top_level.has_value());
         auto const decoded_item = top_level->clone();
         auto const initial = static_cast<std::uint8_t>(wire.front());
@@ -238,7 +238,7 @@ std::string member_bytes(cbor::lazy const &object, std::string_view const key)
 std::vector<wg_vector> wg_vectors_of(std::string const &path)
 {
     std::string const file = file_read(path);
-    auto const top = test::lazy_of_copy(std::string_view(file));
+    auto const top = test::make_lazy_from_copy(std::string_view(file));
     REQUIRE(top.has_value());
     bool const file_fail = member_bool(*top, "fail", false);
     auto const tests = top->at("tests");
@@ -361,7 +361,7 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
     if (!decoded_item)
         return std::unexpected(decoded_item.error());
     cbor::item const &it = **decoded_item;
-    switch (major_of(it.type)) {
+    switch (find_major_type_of(it.type)) {
     case cbor::major_type::unsigned_integer:
         return value{argument_of(it)};
     case cbor::major_type::negative_integer:
@@ -412,7 +412,7 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
         // RFC 8949 3: the content follows the head, whose argument takes 1 << (ai - 24) bytes from ai 24 on.
         std::size_t const argument_bytes =
             it.additional_information < 24 ? 0 : std::size_t{1} << (it.additional_information - 24);
-        auto const content_lazy = test::lazy_of_copy(std::string(l.encoded().substr(1 + argument_bytes)));
+        auto const content_lazy = test::make_lazy_from_copy(std::string(l.encoded().substr(1 + argument_bytes)));
         if (!content_lazy)
             return std::unexpected(content_lazy.error());
         auto content = lazy_value(*content_lazy);
@@ -434,7 +434,7 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
 
 std::expected<value, error> lazy_value_of(std::string_view const wire)
 {
-    auto const top = test::lazy_of_copy(wire);
+    auto const top = test::make_lazy_from_copy(wire);
     REQUIRE(top.has_value());
     return lazy_value(*top);
 }
@@ -517,7 +517,7 @@ wg_count wg_good_check(wg_vector const &v)
     // encode of the decoded tree writes the library's own form: the same value (RFC 8949 2), and the own form is a
     // fixed point, so a second decode and encode gives the same bytes. The bytes of the vector itself are checked
     // only where it is in the own form, which the test of RFC 8949 Appendix A does.
-    auto const top_level = test::lazy_of_copy(std::string(v.encoded));
+    auto const top_level = test::make_lazy_from_copy(std::string(v.encoded));
     REQUIRE(top_level.has_value());
     auto const tree = top_level->clone();
     REQUIRE(tree.has_value());
@@ -525,7 +525,7 @@ wg_count wg_good_check(wg_vector const &v)
     REQUIRE(cbor::encode(**tree, again).has_value());
     CHECK(same_value(again, v.encoded));
     std::string twice;
-    auto const again_lazy = test::lazy_of_copy(again);
+    auto const again_lazy = test::make_lazy_from_copy(again);
     auto const again_tree = again_lazy->clone();
     REQUIRE(cbor::encode(**again_tree, twice).has_value());
     CHECK_EQ(twice, again);
@@ -614,7 +614,7 @@ TEST_CASE("cbor-wg test vectors: every bad vector fails")
 TEST_CASE("cbor-wg test vectors: indefinite length is refused")
 {
     std::string const file = file_read(CBOR_TEST_VECTORS "/tests/rfc8949-appendixA/streaming.cbor");
-    auto const top = test::lazy_of_copy(std::string_view(file));
+    auto const top = test::make_lazy_from_copy(std::string_view(file));
     REQUIRE(top.has_value());
     auto const tests = top->at("tests");
     REQUIRE(tests.has_value());
@@ -672,16 +672,16 @@ namespace
 // nesting_depth_exceeded.
 void sequence_reader_check(std::string_view const wire)
 {
-    test::sequence_outcome const whole = test::sequence_outcome_of(wire);
+    test::sequence_outcome const whole = test::read_sequence_outcome_of_bytes(wire);
     for (test::feed_form const form : test::feed_forms) {
         CAPTURE(static_cast<int>(form));
-        CHECK_EQ(test::reader_outcome_byte_by_byte(wire, form), whole);
+        CHECK_EQ(test::read_reader_outcome_byte_by_byte(wire, form), whole);
     }
     CHECK_NE(whole.last, error::nesting_depth_exceeded);
     if (whole.last != error::too_little_data)
         return;
     for (std::size_t cut = 0; cut < wire.size(); ++cut) {
-        test::sequence_outcome const prefix = test::reader_outcome_split_at(wire.substr(0, cut), 0);
+        test::sequence_outcome const prefix = test::read_reader_outcome_split_at(wire.substr(0, cut), 0);
         CHECK(prefix.items.empty());
         CHECK_EQ(prefix.last, error::too_little_data);
     }
@@ -697,10 +697,10 @@ TEST_CASE("sequence_reader: RFC 8949 Appendix A fed byte by byte")
         CAPTURE(c.hex);
         std::string const wire = test::unhexlify(c.hex);
         sequence_reader_check(wire);
-        if (test::sequence_outcome_of(wire).last == error::too_little_data)
+        if (test::read_sequence_outcome_of_bytes(wire).last == error::too_little_data)
             all += wire;
     }
-    CHECK_EQ(test::reader_outcome_byte_by_byte(all), test::sequence_outcome_of(all));
+    CHECK_EQ(test::read_reader_outcome_byte_by_byte(all), test::read_sequence_outcome_of_bytes(all));
 }
 
 // The good vectors of the CBOR working group, each on its own and each file as one sequence.
@@ -718,7 +718,7 @@ TEST_CASE("sequence_reader: cbor-wg vectors fed byte by byte")
             sequence_reader_check(v.encoded);
             all += v.encoded;
         }
-        CHECK_EQ(test::reader_outcome_byte_by_byte(all), test::sequence_outcome_of(all));
+        CHECK_EQ(test::read_reader_outcome_byte_by_byte(all), test::read_sequence_outcome_of_bytes(all));
     }
 }
 
@@ -730,17 +730,17 @@ namespace
 // both (owner, 2026-10-12). Neither recurses, so neither gives nesting_depth_exceeded.
 void sequence_reader_malformed_check(std::string_view const wire)
 {
-    test::sequence_outcome const whole = test::sequence_outcome_of(wire);
-    test::sequence_outcome const read = test::reader_outcome_split_at(wire, 0);
+    test::sequence_outcome const whole = test::read_sequence_outcome_of_bytes(wire);
+    test::sequence_outcome const read = test::read_reader_outcome_split_at(wire, 0);
     CHECK_NE(read.last, error::nesting_depth_exceeded);
     CHECK_EQ(read, whole);
     for (test::feed_form const form : test::feed_forms) {
         CAPTURE(static_cast<int>(form));
         for (std::size_t at = 1; at <= wire.size(); ++at) {
             CAPTURE(at);
-            CHECK_EQ(test::reader_outcome_split_at(wire, at, form), read);
+            CHECK_EQ(test::read_reader_outcome_split_at(wire, at, form), read);
         }
-        CHECK_EQ(test::reader_outcome_byte_by_byte(wire, form), read);
+        CHECK_EQ(test::read_reader_outcome_byte_by_byte(wire, form), read);
     }
 }
 

@@ -151,7 +151,7 @@ std::expected<void, cbor::error> item_walk(cbor::encoder<Target> &e, cbor::item 
 // with one call per head. The input bytes are the expectation of both.
 void reencode(std::string_view const name, std::string_view const section, std::string const &input)
 {
-    auto const doc = test::lazy_of_copy(std::string_view(input));
+    auto const doc = test::make_lazy_from_copy(std::string_view(input));
     auto const item = doc.and_then([](cbor::lazy const &d) { return d.clone(); });
     if (!item) {
         case_print(std::string("decode/") + std::string(name), section, message_of(item.error()), test::hexlify(input));
@@ -194,7 +194,7 @@ void cbor_wg(std::filesystem::path const &root)
     std::ranges::sort(files);
     for (auto const &path : files) {
         std::string const file = file_read(path);
-        auto const top = test::lazy_of_copy(std::string_view(file));
+        auto const top = test::make_lazy_from_copy(std::string_view(file));
         if (!top)
             continue;
         auto const file_fail = top->at("fail").and_then([](cbor::lazy const &l) { return l.get<bool>(); });

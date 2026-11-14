@@ -67,7 +67,7 @@ concept temporary_car_reads = requires(D const &d) { (*d.template at_path<"$.car
 // change to either side shows here.
 TEST_CASE("path: a message shorter than the least size is too_little_data, a foreign key is incorrect_type")
 {
-    std::string const bytes = schema_bytes(login{5, true, "ab"});
+    std::string const bytes = encode_with_schema(login{5, true, "ab"});
     CHECK_EQ(at_path<login, "$.id">(bytes), 5u);
     CHECK_EQ(at_path<login, "$.id">(std::string_view(bytes).substr(0, 20)).error(), error::too_little_data);
     std::string other = bytes;
@@ -116,7 +116,7 @@ TEST_CASE("path: a path compiles where it names a part of the type")
 // several steps gives the same value as the same steps through named accessors.
 TEST_CASE("path: an accessor reads relative to the part it names")
 {
-    std::string const bytes = schema_bytes(sample_garage);
+    std::string const bytes = encode_with_schema(sample_garage);
     auto const opened = form<garage>::path(std::string(bytes));
     REQUIRE(opened.has_value());
     auto const &root = *opened;
@@ -148,7 +148,7 @@ TEST_CASE("path: an accessor reads relative to the part it names")
 // address sanitizer reports that read.
 TEST_CASE("path: the copying form outlives the message of the caller")
 {
-    auto const opened = form<ticket>::path(ticket_bytes());
+    auto const opened = form<ticket>::path(build_ticket_message());
     REQUIRE(opened.has_value());
     auto const &root = *opened;
     CHECK_EQ(root.at_path<"$.holder">(), sample_ticket.holder);
@@ -159,7 +159,7 @@ TEST_CASE("path: the copying form outlives the message of the caller")
 // reads. The test exists because the root alone must keep the bytes alive.
 TEST_CASE("path: the root keeps the owner after the caller releases it")
 {
-    auto owner = std::make_shared<std::string const>(ticket_bytes());
+    auto owner = std::make_shared<std::string const>(build_ticket_message());
     auto const opened = form<ticket>::path(std::move(owner));
     REQUIRE(opened.has_value());
     auto const &root = *opened;
@@ -175,7 +175,7 @@ TEST_CASE("path: the root keeps the owner after the caller releases it")
 // a shuffled order. The test exists because a read that goes back must not take a value of another car.
 TEST_CASE("path: an accessor gives the values of decode in every order")
 {
-    std::string const bytes = schema_bytes(sample_lot());
+    std::string const bytes = encode_with_schema(make_sample_lot());
     auto const decoded = *form<parking_lot>::decode(std::string(bytes));
     parking_lot const &back = *decoded;
     auto lot = *form<parking_lot>::path(std::string(bytes));
@@ -216,7 +216,7 @@ TEST_CASE("path: an accessor is not read through a temporary")
 // root lives.
 TEST_CASE("path: the copying form keeps its copy after the caller frees the message")
 {
-    auto bytes = std::make_unique<std::string>(schema_bytes(sample_lot()));
+    auto bytes = std::make_unique<std::string>(encode_with_schema(make_sample_lot()));
     auto lot = *form<parking_lot>::path(std::string(*bytes));
     auto const make = *lot.at_path<"$.cars[].make">(3uz);
     auto const car = *lot.at_path<"$.cars[]">(4uz);
@@ -232,7 +232,7 @@ TEST_CASE("path: the copying form keeps its copy after the caller frees the mess
 TEST_CASE("decode and path: an rvalue string is moved, everything else is copied")
 {
     std::string const name(40, 'n');
-    std::string const message = schema_bytes(login{7, true, name});
+    std::string const message = encode_with_schema(login{7, true, name});
     auto range = [](std::string_view const inner, std::span<char const> const outer) {
         return std::less_equal<>{}(outer.data(), inner.data()) &&
                std::less_equal<>{}(std::to_address(inner.end()), std::to_address(outer.end()));

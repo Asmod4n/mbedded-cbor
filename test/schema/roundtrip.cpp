@@ -7,7 +7,7 @@
 TEST_CASE("encode and decode: the key order holds in an inner struct")
 {
     sorted_outer const value{5, {2, 1}, 4};
-    std::string const bytes = schema_bytes(value);
+    std::string const bytes = encode_with_schema(value);
     check_one_item(bytes);
     CHECK_NE(bytes.find("\xd8\x72\x83\x61" "B\x61" "a\x61z"s), std::string::npos);
     CHECK_NE(bytes.find("\xd8\x72\x82\x61x\x61y"s), std::string::npos);
@@ -20,7 +20,7 @@ TEST_CASE("encode and decode: the key order holds in an inner struct")
     CHECK_EQ((*back)->a.y, 2);
     CHECK_EQ((*back)->a.x, 1);
     CHECK_EQ((*back)->B, 4);
-    auto const unsorted_back = form<unsorted>::decode(schema_bytes(unsorted{3, 1, 2}));
+    auto const unsorted_back = form<unsorted>::decode(encode_with_schema(unsorted{3, 1, 2}));
     REQUIRE(unsorted_back.has_value());
     CHECK_EQ((*unsorted_back)->zz, 3);
     CHECK_EQ((*unsorted_back)->b, 1);
@@ -62,7 +62,7 @@ TEST_CASE("encode and decode: a fixed-size vector round trip")
             value.g.push_back({i % 2 == 0, i % 2 == 0 ? color::black : color::white,
                                {static_cast<std::int8_t>(-static_cast<int>(i)), static_cast<std::int8_t>(i)},
                                {static_cast<std::uint16_t>(i), static_cast<std::uint16_t>(i * 300)}});
-        std::string const bytes = schema_bytes(value);
+        std::string const bytes = encode_with_schema(value);
         check_one_item(bytes);
         auto const back = form<gauges>::decode(std::string(bytes));
         REQUIRE(back.has_value());
@@ -80,7 +80,7 @@ TEST_CASE("encode and decode: the reference to a description at every table inde
     fifteen_entries fifteen{};
     fifteen.p = {{1.0f, 2.0f}};
     fifteen.e1.v = 9;
-    std::string const a = schema_bytes(fifteen);
+    std::string const a = encode_with_schema(fifteen);
     check_one_item(a);
     CHECK_NE(a.find("\xd9\x80\x69\x82\xee\x5a"s), std::string::npos);
     CHECK_EQ(a.find('\xf7'), std::string::npos);
@@ -93,7 +93,7 @@ TEST_CASE("encode and decode: the reference to a description at every table inde
     eighteen_entries eighteen{};
     eighteen.p = {{3.0f, 4.0f}};
     eighteen.e4.v = -3;
-    std::string const b = schema_bytes(eighteen);
+    std::string const b = encode_with_schema(eighteen);
     check_one_item(b);
     CHECK_NE(b.find("\xd9\x80\x69\x82\xc6\x20\x5a"s), std::string::npos);
     auto const b_back = form<eighteen_entries>::decode(std::string(b));
