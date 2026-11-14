@@ -119,6 +119,39 @@ TEST_CASE("golden bytes: every type of this file encodes as before")
     CHECK_EQ(golden_report(), expected);
 }
 
+// The bytes of every golden line start as the specifications fix them, whatever the library writes after them.
+// RFC 8949 3.4 writes tag 113 as d8 71, and 3.1 gives the head 82 to an array of two items; draft-ietf-cbor-packed-19
+// defines tag 113 as an array of the table and the rump (refs/draft-ietf-cbor-packed-19.txt:901) and tag 114 as the
+// record function over an array (:1026). The message, with the description inside and with the data apart, starts
+// d8 71 82, and the description starts d8 72 and a head of major type 4.
+TEST_CASE("golden bytes: each line starts as RFC 8949 and Packed CBOR define it")
+{
+    constexpr std::string_view packed_message_head = "d87182";
+    constexpr std::string_view packed_record_tag = "d872";
+    constexpr std::size_t hex_digits_of_two_bytes = 4;
+    constexpr char array_major_type_first_hex_digit_low = '8';
+    constexpr char array_major_type_first_hex_digit_high = '9';
+    std::string_view all = golden_expected;
+    while (!all.empty()) {
+        std::size_t const end = all.find('\n');
+        std::string_view const line = all.substr(0, end);
+        all.remove_prefix(end == std::string_view::npos ? all.size() : end + 1);
+        std::size_t const first_space = line.find(' ');
+        std::size_t const second_space = line.find(' ', first_space + 1);
+        std::size_t const third_space = line.find(' ', second_space + 1);
+        REQUIRE_NE(third_space, std::string_view::npos);
+        CAPTURE(line.substr(0, first_space));
+        CHECK(line.substr(first_space + 1).starts_with(packed_message_head));
+        CHECK(line.substr(second_space + 1).starts_with(packed_message_head));
+        std::string_view const description = line.substr(third_space + 1);
+        REQUIRE(description.starts_with(packed_record_tag));
+        REQUIRE_GT(description.size(), hex_digits_of_two_bytes + 1);
+        char const head_digit = description[hex_digits_of_two_bytes];
+        CHECK_GE(head_digit, array_major_type_first_hex_digit_low);
+        CHECK_LE(head_digit, array_major_type_first_hex_digit_high);
+    }
+}
+
 // Each case below checks one type alone. The test above fails for all types at once; these name the type whose bytes
 // changed.
 TEST_CASE("golden bytes: wheel encodes as before")
