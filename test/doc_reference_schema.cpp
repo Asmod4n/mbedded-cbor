@@ -70,7 +70,7 @@ TEST_CASE("doc reference schema: the example of the group schema")
     CHECK_EQ(make, "Volvo");
     CHECK_EQ((*back)->tires.size(), 2u);
     CHECK_EQ((*back)->tires[1].diameter, 18);
-    CHECK_EQ((*back)->track[2], 3.0);
+    CHECK_EQ(std::bit_cast<std::uint64_t>((*back)->track[2]), 0x4008000000000000u);
 }
 
 // schema.hpp, snippet encode: the first form returns a new string, the second appends to a std::string and returns
