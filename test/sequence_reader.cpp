@@ -36,8 +36,8 @@ concept feedable = requires(cbor::sequence_reader r, Piece p) { r.feed(std::forw
 bool view_of(cbor::lazy const &item, std::string const &piece)
 {
     std::less_equal<char const *> const not_after;
-    return not_after(piece.data(), item.top_level.encoded.data()) &&
-           not_after(std::to_address(item.top_level.encoded.end()), std::to_address(piece.end()));
+    return not_after(piece.data(), item.encoded().data()) &&
+           not_after(std::to_address(item.encoded().end()), std::to_address(piece.end()));
 }
 
 } // namespace
@@ -120,7 +120,7 @@ TEST_CASE("sequence_reader: an empty sequence and empty pieces")
         r = test::piece_fed(std::move(r), "\x01\x02"sv, form, 2);
         auto const item = r.next();
         REQUIRE(item.has_value());
-        CHECK_EQ(item->top_level.encoded, "\x82\x01\x02"sv);
+        CHECK_EQ(item->encoded(), "\x82\x01\x02"sv);
         CHECK(r.empty());
     }
 }
@@ -157,7 +157,7 @@ TEST_CASE("sequence_reader: several pieces before one next()")
         r = test::piece_fed(std::move(r), "\x05"sv, form, 3);
         std::vector<std::string> got;
         while (auto item = r.next())
-            got.emplace_back(item->top_level.encoded);
+            got.emplace_back(item->encoded());
         CHECK_EQ(got, std::vector<std::string>{"\x01"s, "\x02"s, "\x83\x01\x02\x03"s, "\x04"s, "\x05"s});
     }
 }
@@ -205,11 +205,11 @@ TEST_CASE("sequence_reader: an item whole in a shared piece is a view, a cut ite
     REQUIRE(c.has_value());
     REQUIRE(d.has_value());
     CHECK(view_of(*a, *one));
-    CHECK_EQ(b->top_level.encoded, "\x82\x01\x02"sv);
+    CHECK_EQ(b->encoded(), "\x82\x01\x02"sv);
     CHECK_FALSE(view_of(*b, *one));
     CHECK_FALSE(view_of(*b, *two));
     CHECK(view_of(*c, *two));
-    CHECK_EQ(d->top_level.encoded, "\x83\x04\x05\x06"sv);
+    CHECK_EQ(d->encoded(), "\x83\x04\x05\x06"sv);
     CHECK_FALSE(view_of(*d, *three));
     auto const e = r.next();
     REQUIRE(e.has_value());
@@ -229,7 +229,7 @@ TEST_CASE("sequence_reader: an item over a copied piece and held pieces")
     r.feed(last);
     auto const item = r.next();
     REQUIRE(item.has_value());
-    CHECK_EQ(item->top_level.encoded, "\x84\x01\x02\x03\x04"sv);
+    CHECK_EQ(item->encoded(), "\x84\x01\x02\x03\x04"sv);
     auto const after = r.next();
     REQUIRE(after.has_value());
     CHECK(view_of(*after, *last));

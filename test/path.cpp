@@ -1437,8 +1437,7 @@ void same_in_both_modes(std::span<std::string const> const messages)
         }
         REQUIRE_EQ(compiled->size(), run_time->size());
         for (std::size_t i = 0; i < compiled->size(); ++i) {
-            CHECK_EQ((*compiled)[i].top_level.encoded.data(), (*run_time)[i].top_level.encoded.data());
-            CHECK_EQ((*compiled)[i].offset, (*run_time)[i].offset);
+            CHECK_EQ((*compiled)[i].encoded().data(), (*run_time)[i].encoded().data());
         }
     }
 }

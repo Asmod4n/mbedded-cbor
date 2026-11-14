@@ -103,7 +103,7 @@ ojson nodes_of(std::expected<cbor::nodelist, cbor::error> const &r)
         return ojson("error " + std::error_code{r.error()}.message());
     ojson a(jsoncons::json_array_arg);
     for (cbor::lazy const &node : *r) {
-        std::string_view const rest = node.top_level.encoded.substr(node.offset);
+        std::string_view const rest = node.encoded();
         auto const size = cbor::item_size(rest);
         if (!size)
             return ojson("error " + std::error_code{size.error()}.message());
