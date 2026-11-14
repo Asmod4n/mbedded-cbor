@@ -107,7 +107,7 @@ inline constexpr bool is_path_query_v = false;
  *
  * It holds no decoded value.
  * Each member function reads the bytes at the offset when it is called.
- * cbor::lazy::view() and cbor::lazy::adopt() set the data members.
+ * cbor::lazy::view() and cbor::lazy::adopt() make a lazy; a program cannot set its position.
  * A copy of a lazy is a second position in the same bytes.
  * Several threads read one lazy at the same time.
  * A `nodelist` is the result of a path that selects many nodes.
@@ -135,10 +135,29 @@ private:
         std::string_view encoded;
     };
 
-public:
     top_level_item top_level;
-    std::size_t offset;
+    std::size_t offset{};
     std::uint64_t typed_array_tag{};
+
+    lazy(top_level_item t, std::size_t const o, std::uint64_t const tag = {})
+        : top_level(std::move(t)), offset(o), typed_array_tag(tag)
+    {
+    }
+
+public:
+    lazy() = default;
+
+    /**
+     * @brief Gives the bytes from the position of the lazy to the end of its top-level bytes.
+     *
+     * For a lazy of a top-level item, these are the bytes of the item.
+     * The bytes stay alive as long as the lazy lives.
+     * A lazy that holds no top-level item gives an empty view.
+     */
+    std::string_view encoded() const
+    {
+        return top_level.encoded.substr(std::min(offset, top_level.encoded.size()));
+    }
 
     /**
      * @brief Makes the lazy of the top-level item in the bytes, in place.
