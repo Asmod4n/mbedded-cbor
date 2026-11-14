@@ -14,7 +14,7 @@ using namespace std::string_literals;
 using cbor::error;
 
 
-// A chain that every stack holds is read and written; a chain deeper than a small stack holds is refused with
+// A chain that every stack holds is read and written. A chain deeper than a small stack holds is refused with
 // nesting_depth_exceeded on a thread with that small stack. No depth is fixed: the end of the stack decides.
 
 namespace
@@ -81,8 +81,8 @@ void u32_append(std::string &out, std::uint32_t const value)
         out += static_cast<char>(value >> shift);
 }
 
-// draft-ietf-cbor-packed-19 2.2: item j sits at table index 16 + j. An even j is 6(j / 2), an odd j is
-// 6(-(j + 1) / 2), so its argument is (j - 1) / 2 under major type 1.
+// draft-ietf-cbor-packed-19 2.2: item j sits at table index 16 + j. An even j is 6(j / 2), an odd j is 6(-(j + 1) / 2).
+// So its argument is (j - 1) / 2 under major type 1.
 void reference_append(std::string &out, std::uint32_t const item)
 {
     out += '\xc6';
@@ -90,10 +90,9 @@ void reference_append(std::string &out, std::uint32_t const item)
     u32_append(out, item / 2);
 }
 
-// A chain of nodes, each with one child, as an attacker writes it by hand. Item k is the list of children of
-// the node at depth k: one node that refers to item k + 1, and the last item is empty. Each record carries
-// the class tag 1515 = d9 05 eb of node. The encoder of this library cannot write it, because gcc does not
-// inline a recursive encoder.
+// A chain of nodes, each with one child, as an attacker writes it by hand. Item k is the list of children of the node at
+// depth k: one node that refers to item k + 1. The last item is empty. Each record carries the class tag 1515 = d9 05 eb
+// of node. The encoder of this library cannot write it, because gcc does not inline a recursive encoder.
 std::string node_chain(std::size_t const levels)
 {
     auto const items = static_cast<std::uint32_t>(levels + 1);
@@ -123,9 +122,9 @@ std::string node_chain(std::size_t const levels)
     return out;
 }
 
-// The destructor of a holder recurses once for each link, and a chain deeper than the small stack overflows the main
-// thread of a Windows debug build there. The test takes the chain apart from its top in a loop, so that each link
-// ends with no link below it.
+// The destructor of a holder recurses once for each link. A chain deeper than the small stack overflows the main thread
+// of a Windows debug build there. The test takes the chain apart from its top in a loop, so that each link ends with no
+// link below it.
 void end_chain(holder chain)
 {
     while (auto *const f = std::get_if<limb>(&chain.held)) {
@@ -163,10 +162,10 @@ TEST_CASE("decode: a struct that holds itself stops where the stack of the threa
              error::nesting_depth_exceeded);
 }
 
-// The record of a variant member is a part that a reference names, as a list is: each link of a chain is two
-// recursive steps. The test exists so that a type that holds itself through a variant stops where the stack ends in
-// encode and in decode alike, and a deep chain does not run past the stack of the writer. The chain stays alive on
-// the main thread and ends there in a loop: its destructor recurses through its links.
+// The record of a variant member is a part that a reference names, as a list is: each link of a chain is two recursive
+// steps. The test exists so that a type that holds itself through a variant stops where the stack ends in encode and in
+// decode alike. A deep chain does not run past the stack of the writer. The chain stays alive on the main thread and
+// ends there in a loop: its destructor recurses through its links.
 TEST_CASE("encode and decode: a variant record is one recursive step")
 {
     constexpr std::size_t steps_per_link = 2;

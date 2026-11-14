@@ -14,9 +14,9 @@
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 
-// Each test in this file is one example of a reference page of the path group; the comments of query.hpp,
-// path.hpp and lazy.hpp take the examples through the snippet markers. The tests exist so that every example
-// compiles and gives the result that its page states.
+// Each test in this file is one example of a reference page of the path group. The comments of query.hpp, path.hpp and
+// lazy.hpp take the examples through the snippet markers. The tests exist so that every example compiles and gives the
+// result that its page states.
 
 // tools/doc/groups/path.dox, snippet path group: the EXAMPLES section of the man page of the group path uses a path
 // at compile time, a nodelist, a descendant segment and a filter together, on a store with books. The
@@ -61,8 +61,8 @@ TEST_CASE("doc reference path: the example of the group path")
     CHECK(none->empty());
 }
 
-// query.hpp, snippet at_path: a number reads from a std::string in place, a text needs an owner, and a run-time
-// query reads the same value as the compile-time path.
+// query.hpp, snippet at_path: a number reads from a std::string in place, a text needs an owner. A run-time query reads
+// the same value as the compile-time path.
 TEST_CASE("doc reference path: at_path")
 {
     std::string bytes = test::preferred(test::M("user"s, test::M("id"s, 42, "name"s, "ann"s)));
@@ -136,7 +136,7 @@ TEST_CASE("doc reference path: query")
     CHECK((std::is_same_v<cbor::path::query<int>::result_type, int>));
 }
 
-// lazy.hpp, snippet nodelist: a path with a wildcard gives every match as a lazy in a nodelist; no match is an empty
+// lazy.hpp, snippet nodelist: a path with a wildcard gives every match as a lazy in a nodelist. No match is an empty
 // nodelist and no error.
 TEST_CASE("doc reference path: nodelist")
 {

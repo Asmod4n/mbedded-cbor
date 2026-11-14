@@ -71,8 +71,8 @@ TEST_CASE("error: an error converts to std::error_code")
     CHECK(std::error_code(error::key_not_found) != std::errc::no_buffer_space);
 }
 
-// A log that shows the message of an error must tell each error apart, and no member may fall through to the text
-// of an unknown value.
+// A log that shows the message of an error must tell each error apart. No member may fall through to the text of an
+// unknown value.
 TEST_CASE("error: every error has its own message")
 {
     std::set<std::string> messages;

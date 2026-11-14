@@ -184,11 +184,11 @@ TEST_CASE("diagnostic_notation: encoding indicators of the EDN draft")
     CHECK_EQ(inspected("6a0a0d09085c2f0c011f7f"), "\"\\n\\r\\t\\b\\\\/\\f\\u0001\\u001f\x7f\"");
 }
 
-// draft-ietf-cbor-edn-literals-28 2.3.1 takes the escapes of JSON for text strings: U+0000 to U+001F are
-// escaped, U+0020 is not, and its grammar lists %x5D-7F as unescaped, so U+007F stands as it is. b, t, n, f
-// and r have their short escapes; the others take \u and four hex digits, in lower case as the library writes
-// base 16. The bound of the escape is the named constant unescaped_first, so every member of the set from
-// U+0000 to U+0020 is checked, and U+007F beside it.
+// draft-ietf-cbor-edn-literals-28 2.3.1 takes the escapes of JSON for text strings: U+0000 to U+001F are escaped, U+0020
+// is not, and its grammar lists %x5D-7F as unescaped. So U+007F stands as it is. b, t, n, f and r have their short
+// escapes. The others take \u and four hex digits, in lower case as the library writes base 16. The bound of the escape
+// is the named constant unescaped_first. So every member of the set from U+0000 to U+0020 is checked, and U+007F beside
+// it.
 TEST_CASE("diagnostic_notation: U+0000 to U+0020 and U+007F are written as the EDN draft says")
 {
     constexpr unsigned space = 0x20;
@@ -302,8 +302,8 @@ TEST_CASE("diagnostic_notation: tags 28 and 29 are plain tags")
     CHECK_EQ(inspected("c26474657874"), "2(\"text\")");
 }
 
-// A content check of a tag once followed every sharedref of a chain 28(29(k)) back to the first shareable, so a chain
-// of n items cost n^2 steps: 180 KB took seconds. A test that is quadratic again makes the suite slow.
+// A content check of a tag once followed every sharedref of a chain 28(29(k)) back to the first shareable. So a chain of
+// n items cost n^2 steps: 180 KB took seconds. A test that is quadratic again makes the suite slow.
 TEST_CASE("diagnostic_notation: a chain of shareables that refer to each other is read in linear time")
 {
     std::size_t const n = 5000;
@@ -321,9 +321,9 @@ TEST_CASE("diagnostic_notation: a chain of shareables that refer to each other i
     CHECK(r->ends_with("28(29(4999_2))]"));
 }
 
-// The content check of a tag read the head of its content with the decoder of definite lengths, so every tag over
-// an indefinite-length item was an error. RFC 8949 section 3.2 lets an indefinite-length item stand wherever its
-// major type stands, so the check reads the head with the indefinite length.
+// The content check of a tag read the head of its content with the decoder of definite lengths. So every tag over an
+// indefinite-length item was an error. RFC 8949 section 3.2 lets an indefinite-length item stand wherever its major type
+// stands, so the check reads the head with the indefinite length.
 TEST_CASE("diagnostic_notation: a tag encloses an indefinite-length item")
 {
     CHECK_EQ(inspected("c69fff"), "6([_ ])");

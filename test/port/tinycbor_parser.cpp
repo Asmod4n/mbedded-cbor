@@ -38,6 +38,7 @@
 // diagnostic_notation prints it."). Where upstream reads an indefinite-length item with another function, the port
 // expects indefinite_length. RFC 8949 section 5.1 lets a protocol leave out indefinite length.
 
+#include "../ieee754.hpp"
 #include "../small_stack.hpp"
 #include "tinycbor.hpp"
 
@@ -489,7 +490,8 @@ TEST_CASE("tinycbor parser: half floats")
         CHECK_EQ((*tree)->type, cbor::type::half_float);
         double const value = (*tree)->get<cbor::type::half_float>().value_or(0);
         if (std::isnan(r.value))
-            CHECK(std::isnan(value));
+            CHECK_EQ(std::bit_cast<std::uint64_t>(value), test::ieee754::bits_of_half_nan_widened_to_double(
+                                                              static_cast<std::uint16_t>(r.raw)));
         else
             CHECK_EQ(std::bit_cast<std::uint64_t>(value), std::bit_cast<std::uint64_t>(r.value));
         std::string out;
@@ -513,9 +515,7 @@ TEST_CASE("tinycbor parser: floats")
             value = (*tree)->get<cbor::type::single_float>().value_or(0);
         else
             value = (*tree)->get<cbor::type::double_float>().value_or(0);
-        CHECK_EQ(std::isnan(value), std::isnan(r.value));
-        if (!std::isnan(r.value))
-            CHECK_EQ(std::bit_cast<std::uint64_t>(value), std::bit_cast<std::uint64_t>(r.value));
+        CHECK_EQ(std::bit_cast<std::uint64_t>(value), std::bit_cast<std::uint64_t>(r.value));
     }
 }
 

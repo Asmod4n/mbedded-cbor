@@ -73,7 +73,7 @@ inline void encode_targets(cbor::item const &root, std::string const &out)
 // The own form is a fixed point of decode and encode, and the iov target gives the same bytes.
 inline void tree_encode(std::string_view const input)
 {
-    auto const top_level = test::lazy_of_copy(input);
+    auto const top_level = test::make_lazy_from_copy(input);
     if (!top_level)
         return;
     auto const tree = top_level->clone();
@@ -91,7 +91,7 @@ inline void tree_encode(std::string_view const input)
         require(same(*value, *again));
     else
         require(value.error() == again.error());
-    auto const top_again = test::lazy_of_copy(out);
+    auto const top_again = test::make_lazy_from_copy(out);
     require(top_again.has_value());
     auto const tree_again = top_again->clone();
     require(tree_again.has_value());
@@ -143,7 +143,7 @@ inline void resolving_decode(std::string_view const input)
     auto const resolved = cbor::decode(input);
     if (!resolved)
         return;
-    auto const top_level = test::lazy_of_copy(input);
+    auto const top_level = test::make_lazy_from_copy(input);
     require(top_level.has_value());
     auto const plain = top_level->clone();
     require(plain.has_value());

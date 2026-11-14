@@ -18,8 +18,8 @@ using cbor::error;
 namespace
 {
 
-// RFC 8949 3.3: a simple value 0 to 23 is the additional information of a one-byte head, and a simple value
-// 24 to 255 follows 0xf8 in one byte.
+// RFC 8949 3.3: a simple value 0 to 23 is the additional information of a one-byte head. A simple value 24 to 255
+// follows 0xf8 in one byte.
 std::string wire_of(std::uint8_t const v)
 {
     if (v < 24)
@@ -51,14 +51,14 @@ std::string edn_of(std::uint8_t const v)
 
 } // namespace
 
-// The input is the finite set 0 to 255, so the test takes every member. lazy::get gives a simple value as
+// The input is the finite set 0 to 255. So the test takes every member. lazy::get gives a simple value as
 // cbor::simple_value, also one that has no name in Table 4.
 TEST_CASE("simple value: lazy::get gives every simple value 0 to 255")
 {
     for (unsigned i = 0; i < test::rfc8949::one_byte_values; ++i) {
         auto const v = static_cast<std::uint8_t>(i);
         CAPTURE(i);
-        auto const top_level = test::lazy_of_copy(wire_of(v));
+        auto const top_level = test::make_lazy_from_copy(wire_of(v));
         if (reserved(v)) {
             if (top_level.has_value())
                 CHECK_EQ(top_level->get<cbor::simple_value>().error(), error::syntax_error);
@@ -79,7 +79,7 @@ TEST_CASE("simple value: lazy::get refuses a float and an integer")
 {
     for (auto const &wire : {"\xf9\x3c\x00"s, "\xfa\x47\xc3\x50\x00"s,
                              "\xfb\x3f\xf1\x99\x99\x99\x99\x99\x9a"s, "\x01"s, "\x14"s}) {
-        auto const top_level = test::lazy_of_copy(wire);
+        auto const top_level = test::make_lazy_from_copy(wire);
         REQUIRE(top_level.has_value());
         CHECK_EQ(top_level->get<cbor::simple_value>().error(), error::incorrect_type);
     }
@@ -110,7 +110,7 @@ TEST_CASE("simple value: lazy::clone gives every simple value 0 to 255 as its co
     for (unsigned i = 0; i < test::rfc8949::one_byte_values; ++i) {
         auto const v = static_cast<std::uint8_t>(i);
         CAPTURE(i);
-        auto const top_level = test::lazy_of_copy(wire_of(v));
+        auto const top_level = test::make_lazy_from_copy(wire_of(v));
         if (reserved(v)) {
             if (top_level.has_value())
                 CHECK_EQ(top_level->clone().error(), error::syntax_error);
@@ -122,7 +122,7 @@ TEST_CASE("simple value: lazy::clone gives every simple value 0 to 255 as its co
         auto const r = top_level->clone();
         REQUIRE(r.has_value());
         cbor::item const &it = **r;
-        CHECK_EQ(major_of(it.type), cbor::major_type::simple);
+        CHECK_EQ(find_major_type_of(it.type), cbor::major_type::simple);
         CHECK_EQ(it.additional_information, v < 24 ? v : 24);
         CHECK_EQ(argument_of(it), v);
     }

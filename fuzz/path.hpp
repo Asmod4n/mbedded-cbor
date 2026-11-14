@@ -343,7 +343,7 @@ void typed_read_check(std::string const &document, std::vector<step> const &step
         else
             return cbor::at_path<Path, T>(std::string_view(*owner));
     }();
-    auto const root = test::lazy_of_copy(std::string(document));
+    auto const root = test::make_lazy_from_copy(std::string(document));
     require(root.has_value());
     std::expected<cbor::lazy, cbor::error> node = *root;
     for (step const &s : steps)
@@ -402,13 +402,13 @@ void path_forms_check(std::string const &document)
         require_same_read<T>(reference, cbor::at_path<Path, T>(std::string(document)));
         require_same_read<T>(reference, cbor::at_path(bytes, std::span<char const>(*bytes), copied));
         require_same_read<T>(reference, cbor::at_path(bytes, std::span<char const>(*bytes), taken));
-        if (auto const root = test::lazy_of_copy(document))
+        if (auto const root = test::make_lazy_from_copy(document))
             require_same_read<T>(reference, root->template at_path<Path, T>());
     } else {
         auto const reference = cbor::at_path<Path, T>(std::string_view(document));
         require_same_read<T>(reference, cbor::at_path(std::string_view(document), copied));
         require_same_read<T>(reference, cbor::at_path(std::string_view(document), taken));
-        if (auto const root = test::lazy_of_copy(document))
+        if (auto const root = test::make_lazy_from_copy(document))
             require_same_read<T>(reference, root->template at_path<Path, T>());
     }
 }
@@ -445,7 +445,7 @@ inline void path_target(std::string_view const input)
     typed_reads_check<"$[1][0]">(whole, {std::int64_t{1}, std::int64_t{0}});
     typed_reads_check<"$['a'][-1]['b']">(whole, {"a", std::int64_t{-1}, "b"});
 
-    if (auto const any = test::lazy_of_copy(std::string(1, '\0'))) {
+    if (auto const any = test::make_lazy_from_copy(std::string(1, '\0'))) {
         (void)test::at_path(input, *any);
         (void)test::query(input, *any);
     }
@@ -462,7 +462,7 @@ inline void path_target(std::string_view const input)
     text_keys(*eager, keys, 0);
     source pin{path_bytes};
     query const q = query_from(pin, keys);
-    auto const root = test::lazy_of_copy(std::string{document});
+    auto const root = test::make_lazy_from_copy(std::string{document});
     require(root.has_value());
     auto found = test::at_path(q.text, *root);
     if (!found && found.error() == cbor::error::not_singular_query)

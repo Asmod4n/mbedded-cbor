@@ -37,8 +37,8 @@ void check_round_trip(value const &v)
 
 } // namespace
 
-// Ported from test.rb: 'bignum tag 2: positive bignum boundaries (uint64, +1, deep)'. 2^64 - 1 fits
-// major type 0, so it comes back as an integer, not as a bignum.
+// Ported from test.rb: 'bignum tag 2: positive bignum boundaries (uint64, +1, deep)'. 2^64 - 1 fits major type 0. So it
+// comes back as an integer, not as a bignum.
 TEST_CASE("bignum tag 2: positive boundaries")
 {
     check_round_trip(big(false, power_of_256(8)));
@@ -84,12 +84,12 @@ TEST_CASE("bignum: an empty magnitude is 0 or -1")
 }
 
 // Ported from test.rb: 'bignum: non-byte-string payload raises TypeError'. The owner decided that a tree decode
-// interprets a tag 2 or 3 only over a byte string; any other content leaves a tag over that content.
+// interprets a tag 2 or 3 only over a byte string. Any other content leaves a tag over that content.
 TEST_CASE("bignum: content that is not a byte string")
 {
     CHECK(*decoded("\xc2\x05"sv) == value{tagged{2, value{std::uint64_t{5}}}});
     CHECK(*decoded("\xc3\x05"sv) == value{tagged{3, value{std::uint64_t{5}}}});
-    CHECK_EQ(test::lazy_of_copy("\xc2\x05"s)->get<std::uint64_t>().error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(test::make_lazy_from_copy("\xc2\x05"s)->get<std::uint64_t>().error(), error::inadmissible_type_for_tag_content);
 }
 
 // Ported from test.rb: 'bignum: mixed with normal integers in array'.
@@ -109,27 +109,27 @@ TEST_CASE("bignum tag 3: an empty magnitude is refused")
              cbor::error{error::unsupported_value});
 }
 
-// Found by the fuzzer: the decoder reads the content of tag 2 or 3 one level deeper, as the content of every tag.
-// encode of a tree recurses through the same levels, so a deep tagged bignum that decode gives encodes, and an input
-// deeper than a small stack holds is refused by decode on a thread with that stack.
+// Found by the fuzzer: the decoder reads the content of tag 2 or 3 one level deeper, as the content of every tag. encode
+// of a tree recurses through the same levels. So a deep tagged bignum that decode gives encodes. An input deeper than a
+// small stack holds is refused by decode on a thread with that stack.
 TEST_CASE("bignum: encode takes a deep tagged bignum that decode gives")
 {
     std::string const bignum = "\xc2\x49"s + std::string(9, '\x01');
     std::string const deep = std::string(test::levels_beyond_small_stack, '\x81') + bignum;
     std::string const shallow = std::string(test::levels_every_stack_holds, '\x81') + bignum;
-    CHECK_EQ(test::error_on_small_stack([&deep] { return test::lazy_of_copy(deep)->clone(); }),
+    CHECK_EQ(test::error_on_small_stack([&deep] { return test::make_lazy_from_copy(deep)->clone(); }),
              error::nesting_depth_exceeded);
-    auto const ok = test::lazy_of_copy(shallow)->clone();
+    auto const ok = test::make_lazy_from_copy(shallow)->clone();
     REQUIRE(ok.has_value());
     std::string again;
     REQUIRE(cbor::encode(**ok, again).has_value());
     CHECK_EQ(again, shallow);
 }
 
-// RFC 8949 3.4.3: a bignum is equivalent to the integer of the same numeric value, and leading zeros are allowed.
-// The tree holds values (RFC 8949 2), so a tag 2 or 3 whose magnitude fits in 64 bits is that integer, and lazy
-// type() says the same. The rows cover the empty magnitude (0 and -1), leading zeros past eight bytes, both ends of
-// 64 bits and the first magnitude that does not fit.
+// RFC 8949 3.4.3: a bignum is equivalent to the integer of the same numeric value, and leading zeros are allowed. The
+// tree holds values (RFC 8949 2). So a tag 2 or 3 whose magnitude fits in 64 bits is that integer, and lazy type() says
+// the same. The rows cover the empty magnitude (0 and -1), leading zeros past eight bytes, both ends of 64 bits and the
+// first magnitude that does not fit.
 TEST_CASE("bignum: a magnitude that fits 64 bits is an integer in decode and in type()")
 {
     struct row {
@@ -151,7 +151,7 @@ TEST_CASE("bignum: a magnitude that fits 64 bits is an integer in decode and in 
     };
     for (row const &r : rows) {
         CAPTURE(r.wire);
-        auto const l = test::lazy_of_copy(r.wire);
+        auto const l = test::make_lazy_from_copy(r.wire);
         REQUIRE(l.has_value());
         auto const t = l->type();
         REQUIRE(t.has_value());
@@ -161,12 +161,12 @@ TEST_CASE("bignum: a magnitude that fits 64 bits is an integer in decode and in 
         CHECK_EQ((*tree)->type, r.type);
         CHECK_EQ(argument_of(**tree), r.argument);
     }
-    CHECK_EQ(test::lazy_of_copy("\xc3\x48"s + max)->get<std::int64_t>().error(), error::number_out_of_range);
-    CHECK_EQ(*test::lazy_of_copy("\xc2\x40"s)->get<std::int64_t>(), 0);
-    CHECK_EQ(*test::lazy_of_copy("\xc2\x41\x05"s)->get<double>(), 5.0);
-    CHECK_EQ(*test::lazy_of_copy("\xc3\x41\x05"s)->get<double>(), -6.0);
-    CHECK_EQ(test::lazy_of_copy("\xc2\x41\x05"s)->get<std::span<std::byte const>>().error(), error::incorrect_type);
-    CHECK_EQ(*test::lazy_of_copy("\xc3\x40"s)->get<std::int64_t>(), -1);
+    CHECK_EQ(test::make_lazy_from_copy("\xc3\x48"s + max)->get<std::int64_t>().error(), error::number_out_of_range);
+    CHECK_EQ(*test::make_lazy_from_copy("\xc2\x40"s)->get<std::int64_t>(), 0);
+    CHECK_EQ(*test::make_lazy_from_copy("\xc2\x41\x05"s)->get<double>(), 5.0);
+    CHECK_EQ(*test::make_lazy_from_copy("\xc3\x41\x05"s)->get<double>(), -6.0);
+    CHECK_EQ(test::make_lazy_from_copy("\xc2\x41\x05"s)->get<std::span<std::byte const>>().error(), error::incorrect_type);
+    CHECK_EQ(*test::make_lazy_from_copy("\xc3\x40"s)->get<std::int64_t>(), -1);
 }
 
 // A path read as double gives a bignum as the number of its magnitude (RFC 8949 3.4.3), with the errors of
@@ -178,7 +178,7 @@ TEST_CASE("bignum: at_path as double reads a bignum in every form")
     REQUIRE(query.has_value());
     auto const read = [&](std::string const &encoded) {
         auto const bytes = cbor::at_path(std::string_view(encoded), *query);
-        auto const doc = test::lazy_of_copy(encoded);
+        auto const doc = test::make_lazy_from_copy(encoded);
         REQUIRE(doc.has_value());
         auto const run_time = doc->at_path(*query);
         auto const compiled = doc->at_path<"$.a", double>();
@@ -212,7 +212,7 @@ TEST_CASE("bignum: a wrong content is a tag in decode and in type()")
     for (row const r : {row{"\xc2\x61\x61"sv, cbor::type::unsigned_bignum}, row{"\xc2\x80"sv, cbor::type::unsigned_bignum},
                         row{"\xc2\x01"sv, cbor::type::unsigned_bignum}, row{"\xc3\x61\x61"sv, cbor::type::negative_bignum}}) {
         CAPTURE(r.wire);
-        auto const l = test::lazy_of_copy(std::string(r.wire));
+        auto const l = test::make_lazy_from_copy(std::string(r.wire));
         REQUIRE(l.has_value());
         CHECK_EQ(l->type(), r.type);
         auto const tree = l->clone();
@@ -228,7 +228,7 @@ TEST_CASE("bignum: a wrong content is a tag in decode and in type()")
                             failure{"\xc2\x5f"sv, error::indefinite_length}, failure{"\xc2"sv, error::too_little_data},
                             failure{"\xc2\x41"sv, error::too_little_data}, failure{"\xc2\x49\x01"sv, error::too_little_data}}) {
         CAPTURE(f.wire);
-        auto const l = test::lazy_of_copy(std::string(f.wire));
+        auto const l = test::make_lazy_from_copy(std::string(f.wire));
         REQUIRE(l.has_value());
         CHECK_EQ(l->clone().error(), f.expected);
     }
@@ -239,7 +239,7 @@ TEST_CASE("bignum: a wrong content is a tag in decode and in type()")
 TEST_CASE("bignum: tag 28 around a bignum that fits is a tag over the integer")
 {
     std::string const wire = "\x82\xd8\x1c\xc2\x41\x01\xd8\x1d\x00"s;
-    auto const l = test::lazy_of_copy(wire);
+    auto const l = test::make_lazy_from_copy(wire);
     REQUIRE(l.has_value());
     auto const tree = l->clone();
     REQUIRE(tree.has_value());
@@ -261,13 +261,13 @@ TEST_CASE("bignum: tag 28 around a bignum that fits is a tag over the integer")
 // refuses a tag 2 whose content is not a byte string.
 TEST_CASE("bignum: a key that fits 64 bits is the same key as the integer")
 {
-    CHECK_EQ(test::lazy_of_copy("\xa2\xc2\x41\x01\x00\x01\x01"s)->at(cbor::key{1})->get<int>(), 0);
-    CHECK_EQ(test::lazy_of_copy("\xa2\xc3\x41\x00\x00\x20\x01"s)->at(cbor::key{-1})->get<int>(), 0);
-    CHECK_EQ(test::lazy_of_copy("\xa1\xc2\x41\x01\x61\x61"s)->at(cbor::key{1})->get<std::string_view>().has_value(), true);
-    CHECK_EQ(test::lazy_of_copy("\xa1\xc2\x41\x01\x61\x61"s)->at(cbor::key{-2}).error(), error::key_not_found);
-    CHECK_EQ(test::lazy_of_copy("\xa1\xc2\x61\x61\x61\x61"s)->at(cbor::key{1}).error(), error::inadmissible_type_for_tag_content);
-    CHECK(test::query("$[1]", *test::lazy_of_copy("\xa1\xc2\x41\x01\x61\x61"s)) ==
-          test::query("$[1]", *test::lazy_of_copy("\xa1\x01\x61\x61"s)));
-    CHECK(test::query("$[-1]", *test::lazy_of_copy("\xa1\xc3\x40\x61\x61"s)) ==
-          test::query("$[-1]", *test::lazy_of_copy("\xa1\x20\x61\x61"s)));
+    CHECK_EQ(test::make_lazy_from_copy("\xa2\xc2\x41\x01\x00\x01\x01"s)->at(cbor::key{1})->get<int>(), 0);
+    CHECK_EQ(test::make_lazy_from_copy("\xa2\xc3\x41\x00\x00\x20\x01"s)->at(cbor::key{-1})->get<int>(), 0);
+    CHECK_EQ(test::make_lazy_from_copy("\xa1\xc2\x41\x01\x61\x61"s)->at(cbor::key{1})->get<std::string_view>().has_value(), true);
+    CHECK_EQ(test::make_lazy_from_copy("\xa1\xc2\x41\x01\x61\x61"s)->at(cbor::key{-2}).error(), error::key_not_found);
+    CHECK_EQ(test::make_lazy_from_copy("\xa1\xc2\x61\x61\x61\x61"s)->at(cbor::key{1}).error(), error::inadmissible_type_for_tag_content);
+    CHECK(test::query("$[1]", *test::make_lazy_from_copy("\xa1\xc2\x41\x01\x61\x61"s)) ==
+          test::query("$[1]", *test::make_lazy_from_copy("\xa1\x01\x61\x61"s)));
+    CHECK(test::query("$[-1]", *test::make_lazy_from_copy("\xa1\xc3\x40\x61\x61"s)) ==
+          test::query("$[-1]", *test::make_lazy_from_copy("\xa1\x20\x61\x61"s)));
 }

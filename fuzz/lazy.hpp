@@ -23,7 +23,7 @@ inline void lazy_channels(std::string_view const input)
 {
     auto const eager = test::decoded(input);
     (void)cbor::item_size(input);
-    auto const decoded = test::lazy_of_copy(std::string{input});
+    auto const decoded = test::make_lazy_from_copy(std::string{input});
     if (!decoded)
         return;
     cbor::lazy const &root = *decoded;

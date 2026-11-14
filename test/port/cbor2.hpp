@@ -28,7 +28,7 @@ inline std::expected<test::value, cbor::error> loads(std::string_view const payl
     auto const tree = cbor::decode(payload);
     if (!tree)
         return std::unexpected(tree.error());
-    return test::value_of(**tree);
+    return test::make_value_from_item(**tree);
 }
 
 // cbor2.dumps: the bytes that cbor::structs writes for a C++ value, as hex.

@@ -28,7 +28,7 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 using cbor::error;
 
-// Each test in this file is one example of a reference page of the schema group; the comments of schema.hpp and
+// Each test in this file is one example of a reference page of the schema group. The comments of schema.hpp and
 // rfc8949.hpp take the examples through the snippet markers. The tests exist so that every example compiles and gives
 // the result that its page states.
 
@@ -54,8 +54,8 @@ unsigned char byte_at(std::string_view const bytes, std::size_t const i)
 using namespace doc_reference_schema;
 
 // tools/doc/groups/schema.dox, snippet schema group: the EXAMPLES section of the man page of the group schema writes one
-// car, reads one field at its offset and reads the whole car, so a reader sees one round trip. The test checks each value
-// that the comments of the example state.
+// car, reads one field at its offset and reads the whole car. So a reader sees one round trip. The test checks each
+// value that the comments of the example state.
 TEST_CASE("doc reference schema: the example of the group schema")
 {
     // [schema group]
@@ -70,12 +70,11 @@ TEST_CASE("doc reference schema: the example of the group schema")
     CHECK_EQ(make, "Volvo");
     CHECK_EQ((*back)->tires.size(), 2u);
     CHECK_EQ((*back)->tires[1].diameter, 18);
-    CHECK_EQ((*back)->track[2], 3.0);
+    CHECK_EQ(std::bit_cast<std::uint64_t>((*back)->track[2]), 0x4008000000000000u);
 }
 
-// schema.hpp, snippet encode: the first form returns a new string, the second appends to a std::string and returns
-// the count it
-// appended, and a span that is too small gives no_buffer_space.
+// schema.hpp, snippet encode: the first form returns a new string, the second appends to a std::string and returns the
+// count it appended. A span that is too small gives no_buffer_space.
 TEST_CASE("doc reference schema: encode")
 {
     // [encode]
@@ -93,9 +92,8 @@ TEST_CASE("doc reference schema: encode")
     CHECK_EQ(cbor::schema<tire>::encode(tire{17, 2.5f}, std::span<char>(small)).error(), error::no_buffer_space);
 }
 
-// schema.hpp, snippet decode: a moved string gives the whole struct; a message of another struct gives
-// incorrect_type, a message
-// that is too short gives too_little_data, and an empty owner throws std::logic_error.
+// schema.hpp, snippet decode: a moved string gives the whole struct. A message of another struct gives incorrect_type, a
+// message that is too short gives too_little_data, and an empty owner throws std::logic_error.
 TEST_CASE("doc reference schema: decode")
 {
     std::string bytes = sample_bytes();
@@ -157,9 +155,8 @@ TEST_CASE("doc reference schema: static at_path")
     CHECK_EQ(cbor::schema<car>::at_path<"$.seats">(bytes.substr(0, 3)).error(), error::too_little_data);
 }
 
-// schema.hpp, snippet unverified: the unverified forms give the values of the verified forms and still check an
-// index against its
-// count; an unverified accessor gives an unverified accessor.
+// schema.hpp, snippet unverified: the unverified forms give the values of the verified forms and still check an index
+// against its count. An unverified accessor gives an unverified accessor.
 TEST_CASE("doc reference schema: unverified")
 {
     std::string const bytes = sample_bytes();
@@ -183,8 +180,7 @@ TEST_CASE("doc reference schema: unverified")
 }
 
 // schema.hpp, snippet description: the data form and the description together have the size of the message, the data
-// form reads
-// with apart, and a read without apart refuses it.
+// form reads with apart. A read without apart refuses it.
 TEST_CASE("doc reference schema: description")
 {
     // [description]
@@ -199,8 +195,8 @@ TEST_CASE("doc reference schema: description")
     CHECK_EQ(seats, 5);
     CHECK_EQ(data->size() + description.size(), sample_bytes().size());
     CHECK_EQ((cbor::schema<car>::at_path<"$.seats", apart>(*data)), 5);
-    // The data form holds no description, so at_path with the description inside reads a message that is shorter
-    // than its table: the doc of schema::path gives too_little_data for that.
+    // The data form holds no description. So at_path with the description inside reads a message that is shorter than
+    // its table: the doc of schema::path gives too_little_data for that.
     auto const refused = cbor::schema<car>::at_path<"$.seats">(*data).error();
     CHECK_EQ(refused, error::too_little_data);
     auto const root = cbor::schema<car>::path<apart>(std::string(*data));
@@ -229,9 +225,8 @@ TEST_CASE("doc reference schema: fixed_size")
     CHECK_EQ(byte_at(*bytes, root), 0xd9);
 }
 
-// schema.hpp, snippet member_offset: the values follow the key order of RFC 8949 4.2.1. "diameter" and "pressure"
-// have the same
-// length and "d" sorts first, so diameter is at 10 and pressure behind its 3 bytes at 13. 0xfa is the head of a
+// schema.hpp, snippet member_offset: the values follow the key order of RFC 8949 4.2.1. "diameter" and "pressure" have
+// the same length and "d" sorts first. So diameter is at 10 and pressure behind its 3 bytes at 13. 0xfa is the head of a
 // binary32.
 TEST_CASE("doc reference schema: member_offset")
 {
@@ -249,9 +244,8 @@ TEST_CASE("doc reference schema: member_offset")
     CHECK_EQ(byte_at(*bytes, root + cbor::schema<tire>::member_offset<&tire::pressure>()), 0xfa);
 }
 
-// schema.hpp, snippet accessor: @ starts at the part that the accessor names and $ at the root; size() counts a
-// list; a vector of
-// fixed-size structs is a range of element accessors; view gives a list of numbers.
+// schema.hpp, snippet accessor: @ starts at the part that the accessor names and $ at the root. Size() counts a list; a
+// vector of fixed-size structs is a range of element accessors; view gives a list of numbers.
 TEST_CASE("doc reference schema: accessor")
 {
     std::string bytes = sample_bytes();
@@ -311,8 +305,7 @@ TEST_CASE("doc reference schema: accessor of a variant member")
 }
 
 // schema.hpp, the comment of accessor: a variant member of values gives the index of the held value and the value
-// itself; the other
-// alternative is incorrect_type.
+// itself. The other alternative is incorrect_type.
 TEST_CASE("doc reference schema: accessor of a variant member of values")
 {
     auto const bytes = cbor::schema<property>::encode(property{"width", std::int64_t{240}});
@@ -353,9 +346,8 @@ TEST_CASE("doc reference schema: fixed_element")
     CHECK_EQ(second->at_path<"$.seats">(), 5);
 }
 
-// schema.hpp, snippet typed_array_view: the view is a random access range of values; at, first and last give an
-// error as a value,
-// operator[] outside the view throws.
+// schema.hpp, snippet typed_array_view: the view is a random access range of values. At, first and last give an error as
+// a value, operator[] outside the view throws.
 TEST_CASE("doc reference schema: typed_array_view")
 {
     std::string bytes = sample_bytes();
@@ -400,10 +392,9 @@ TEST_CASE("doc reference schema: tag")
     CHECK_EQ(byte_at(*bytes, root + 2), 0x0a);
 }
 
-// schema/wire.md: the message starts with tag 113 on an array of two and a table with a four-byte count, the first
-// entry
+// schema/wire.md: the message starts with tag 113 on an array of two and a table with a four-byte count, the first entry
 // of the table is a tag 114. The vector of tires is tag 32873 (d9 80 69), the list of double is RFC 8746 tag 86
-// (binary64, little endian, d8 56), and the text is a reference 6(N) with a four-byte N (c6 1a).
+// (binary64, little endian, d8 56). The text is a reference 6(N) with a four-byte N (c6 1a).
 TEST_CASE("doc reference schema: wire")
 {
     std::string const bytes = sample_bytes();

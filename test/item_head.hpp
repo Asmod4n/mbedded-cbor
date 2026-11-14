@@ -15,8 +15,8 @@
 
 #include <doctest/doctest.h>
 
-// The argument of the head of an item, as the encoder writes it; a float is read back from its encoding, so that a test compares an item with the bytes of
-// its head without a case for each type.
+// The argument of the head of an item, as the encoder writes it; a float is read back from its encoding. So that a test
+// compares an item with the bytes of its head without a case for each type.
 inline std::uint64_t argument_of(cbor::item const &node)
 {
     switch (node.type) {
@@ -66,8 +66,8 @@ inline std::uint64_t argument_of(cbor::item const &node)
     std::unreachable();
 }
 
-// The tag content of an item of any of the four tag types, so that a test reads the content of a tag whose type
-// comes from the wire.
+// The tag content of an item of any of the four tag types. So that a test reads the content of a tag whose type comes
+// from the wire.
 inline cbor::item const *tag_content_of(cbor::item const &node)
 {
     switch (node.type) {
@@ -100,9 +100,9 @@ inline std::vector<cbor::item const *> children_of(cbor::item const &container)
 }
 
 
-// RFC 8949 3.1: the major type of each member of cbor::type. Tags 2, 3 and the typed arrays of RFC 8746 are major
-// type 6; false, true, null, undefined, the other simple values and the floats are major type 7.
-inline cbor::major_type major_of(cbor::type const t)
+// RFC 8949 3.1: the major type of each member of cbor::type. Tags 2, 3 and the typed arrays of RFC 8746 are major type
+// 6. False, true, null, undefined, the other simple values and the floats are major type 7.
+inline cbor::major_type find_major_type_of(cbor::type const t)
 {
     switch (t) {
     case cbor::type::unsigned_integer:
@@ -128,10 +128,10 @@ inline cbor::major_type major_of(cbor::type const t)
     }
 }
 
-// RFC 8949 2 defines the data model. Two items are the same value when their types and values agree; a float
-// is compared by its width and its bits, so a NaN keeps its payload; a bignum is compared by its magnitude
-// without leading zeros (RFC 8949 3.4.3). The tests compare encode(item) with its input by this, and not by the
-// bytes, because the encoder writes its own form.
+// RFC 8949 2 defines the data model. Two items are the same value when their types and values agree; a float is compared
+// by its width and its bits. So a NaN keeps its payload; a bignum is compared by its magnitude without leading zeros
+// (RFC 8949 3.4.3). The tests compare encode(item) with its input by this, and not by the bytes, because the encoder
+// writes its own form.
 inline bool item_values_equal(cbor::item const &a, cbor::item const &b);
 
 template <cbor::type K>
@@ -183,8 +183,8 @@ inline bool item_values_equal(cbor::item const &a, cbor::item const &b)
 // Decodes both byte strings into trees and compares their values.
 inline bool same_value(std::string_view const a, std::string_view const b)
 {
-    auto const x = test::lazy_of_copy(std::string(a));
-    auto const y = test::lazy_of_copy(std::string(b));
+    auto const x = test::make_lazy_from_copy(std::string(a));
+    auto const y = test::make_lazy_from_copy(std::string(b));
     REQUIRE(x.has_value());
     REQUIRE(y.has_value());
     auto const p = x->clone();

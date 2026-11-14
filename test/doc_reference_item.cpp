@@ -24,9 +24,9 @@
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 
-// Each test in this file is one example of a reference page of the item group; the comments of item.hpp, decode.hpp
-// and encode.hpp take the examples through the snippet markers. The tests exist so that every example compiles and
-// gives the result that its page states.
+// Each test in this file is one example of a reference page of the item group. The comments of item.hpp, decode.hpp and
+// encode.hpp take the examples through the snippet markers. The tests exist so that every example compiles and gives the
+// result that its page states.
 
 namespace
 {
@@ -100,9 +100,9 @@ TEST_CASE("doc reference item: item::get")
     CHECK_EQ(other.error(), cbor::error::incorrect_type);
 }
 
-// tools/doc/groups/decode.dox, snippet decode group: the EXAMPLES section of the man page of the group decode uses
-// the encoder, decode and encode together, so a reader sees one round trip. The test checks each value that the
-// comments of the example state.
+// tools/doc/groups/decode.dox, snippet decode group: the EXAMPLES section of the man page of the group decode uses the
+// encoder, decode and encode together. So a reader sees one round trip. The test checks each value that the comments of
+// the example state.
 TEST_CASE("doc reference item: the example of the group decode")
 {
     // [decode group]

@@ -34,9 +34,9 @@ std::string joined(pieces const &p)
     return *bytes;
 }
 
-std::size_t sum_of(pieces const &p)
+std::size_t sum_piece_lengths(pieces const &p)
 {
-    return test::sum_of(*p);
+    return test::sum_piece_lengths(*p);
 }
 
 bool points_into(pieces const &p, void const *const data)
@@ -86,7 +86,7 @@ TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form"
             REQUIRE(finished.has_value());
             pieces const p = std::move(*finished);
             CHECK_EQ(joined(p), expected);
-            CHECK_EQ(sum_of(p), expected.size());
+            CHECK_EQ(sum_piece_lengths(p), expected.size());
         }
         {
             cbor::iov_writer w;
@@ -96,7 +96,7 @@ TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form"
             REQUIRE(finished.has_value());
             pieces const p = std::move(*finished);
             CHECK_EQ(joined(p), expected);
-            CHECK_EQ(sum_of(p), expected.size());
+            CHECK_EQ(sum_piece_lengths(p), expected.size());
             if (size > cbor::detail::encoding::copybreak)
                 CHECK(std::ranges::any_of(*p, [&](iovec const &piece) { return piece.iov_len == text.size(); }));
         }
@@ -109,11 +109,11 @@ TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form"
             REQUIRE(finished.has_value());
             pieces const p = std::move(*finished);
             CHECK_EQ(joined(p), expected);
-            CHECK_EQ(sum_of(p), expected.size());
+            CHECK_EQ(sum_piece_lengths(p), expected.size());
             CHECK_EQ(points_into(p, owner->data()), size > cbor::detail::encoding::copybreak && size > 0);
         }
         {
-            auto const read = test::lazy_of_copy(expected)->get<std::string_view>();
+            auto const read = test::make_lazy_from_copy(expected)->get<std::string_view>();
             REQUIRE(read.has_value());
             cbor::iov_writer w;
             iov_encoder e{w};
@@ -122,7 +122,7 @@ TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form"
             REQUIRE(finished.has_value());
             pieces const p = std::move(*finished);
             CHECK_EQ(joined(p), expected);
-            CHECK_EQ(sum_of(p), expected.size());
+            CHECK_EQ(sum_piece_lengths(p), expected.size());
             CHECK_EQ(points_into(p, (**read).data()), size > cbor::detail::encoding::copybreak && size > 0);
         }
     }
@@ -144,7 +144,7 @@ TEST_CASE("encode_iov: every form of a byte string gives the bytes of the copyin
             REQUIRE(finished.has_value());
             pieces const p = std::move(*finished);
             CHECK_EQ(joined(p), expected);
-            CHECK_EQ(sum_of(p), expected.size());
+            CHECK_EQ(sum_piece_lengths(p), expected.size());
         }
         {
             auto const owner = std::make_shared<std::vector<std::byte> const>(bytes);
@@ -158,7 +158,7 @@ TEST_CASE("encode_iov: every form of a byte string gives the bytes of the copyin
             CHECK_EQ(points_into(p, owner->data()), size > cbor::detail::encoding::copybreak && size > 0);
         }
         {
-            auto const read = test::lazy_of_copy(expected)->get<std::span<std::byte const>>();
+            auto const read = test::make_lazy_from_copy(expected)->get<std::span<std::byte const>>();
             REQUIRE(read.has_value());
             cbor::iov_writer w;
             iov_encoder e{w};
@@ -172,8 +172,8 @@ TEST_CASE("encode_iov: every form of a byte string gives the bytes of the copyin
     }
 }
 
-// The result must keep every owner alive by itself. The caller drops its own pointer before it reads;
-// a sanitizer build reports a read of freed memory if the result does not hold the owner.
+// The result must keep every owner alive by itself. The caller drops its own pointer before it reads. A sanitizer build
+// reports a read of freed memory if the result does not hold the owner.
 TEST_CASE("encode_iov: the pieces outlive the caller's owner")
 {
     std::string const text(100, 'z');
@@ -239,7 +239,7 @@ TEST_CASE("encode_iov: a head and a float at each offset before the end of a blo
             REQUIRE(finished.has_value());
             pieces const p = std::move(*finished);
             CHECK_EQ(joined(p), expected);
-            CHECK_EQ(sum_of(p), expected.size());
+            CHECK_EQ(sum_piece_lengths(p), expected.size());
         }
     }
 }
@@ -265,7 +265,7 @@ TEST_CASE("encode_iov: texts at the free space of a block")
         REQUIRE(finished.has_value());
         pieces const p = std::move(*finished);
         CHECK_EQ(joined(p), expected);
-        CHECK_EQ(sum_of(p), expected.size());
+        CHECK_EQ(sum_piece_lengths(p), expected.size());
     }
 }
 
@@ -294,7 +294,7 @@ TEST_CASE("encode_iov: the order of blocks and references")
     REQUIRE(finished.has_value());
     pieces const p = std::move(*finished);
     CHECK_EQ(joined(p), expected);
-    CHECK_EQ(sum_of(p), expected.size());
+    CHECK_EQ(sum_piece_lengths(p), expected.size());
 }
 
 // finish must hand over the open part of the block, so the last item is not lost. Nothing written gives
@@ -379,8 +379,8 @@ TEST_CASE("encode: a float is a double unless preferred serialization is on")
     CHECK_EQ(p.encoded, "\xfb\x3f\xf0\x00\x00\x00\x00\x00\x00"sv);
 }
 
-// writev takes at most IOV_MAX pieces in one call. An encoding with more pieces is read back in turns by
-// test::joined, the one place that splits; 1100 long strings with owners give more than the 1024 of Linux.
+// writev takes at most IOV_MAX pieces in one call. An encoding with more pieces is read back in turns by test::joined,
+// the one place that splits. 1100 long strings with owners give more than the 1024 of Linux.
 TEST_CASE("encode_iov: more pieces than IOV_MAX are written in turns")
 {
     constexpr std::size_t strings = 1100;

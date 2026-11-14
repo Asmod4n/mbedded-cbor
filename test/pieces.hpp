@@ -37,12 +37,12 @@ std::expected<T, std::errc> count_of(std::size_t const n)
     return static_cast<T>(n);
 }
 
-inline std::size_t sum_of(std::span<iovec const> const pieces)
+inline std::size_t sum_piece_lengths(std::span<iovec const> const pieces)
 {
     return std::ranges::fold_left(pieces | std::views::transform(&iovec::iov_len), std::size_t{0}, std::plus<>{});
 }
 
-inline std::errc errno_code()
+inline std::errc read_errno_as_errc()
 {
     return static_cast<std::errc>(errno);
 }
@@ -51,10 +51,10 @@ inline std::expected<std::string, std::errc> joined(std::span<iovec const> const
 {
     long const iov_max = sysconf(_SC_IOV_MAX);
     if (iov_max <= 0)
-        return std::unexpected(errno_code());
+        return std::unexpected(read_errno_as_errc());
     std::unique_ptr<std::FILE, int (*)(std::FILE *)> const file(std::tmpfile(), &std::fclose);
     if (!file)
-        return std::unexpected(errno_code());
+        return std::unexpected(read_errno_as_errc());
     int const fd = fileno(file.get());
     std::size_t const step = static_cast<std::size_t>(iov_max);
     for (std::size_t at = 0; at < pieces.size(); at += step) {
@@ -64,18 +64,18 @@ inline std::expected<std::string, std::errc> joined(std::span<iovec const> const
             return std::unexpected(count.error());
         ssize_t const sent = writev(fd, part.data(), *count);
         if (sent < 0)
-            return std::unexpected(errno_code());
-        if (static_cast<std::size_t>(sent) != sum_of(part))
+            return std::unexpected(read_errno_as_errc());
+        if (static_cast<std::size_t>(sent) != sum_piece_lengths(part))
             return std::unexpected(std::errc::io_error);
     }
     if (lseek(fd, 0, SEEK_SET) != 0)
-        return std::unexpected(errno_code());
-    std::string out(sum_of(pieces), '\0');
+        return std::unexpected(read_errno_as_errc());
+    std::string out(sum_piece_lengths(pieces), '\0');
     std::span<char> rest(out);
     while (!rest.empty()) {
         ssize_t const got = read(fd, rest.data(), rest.size());
         if (got < 0)
-            return std::unexpected(errno_code());
+            return std::unexpected(read_errno_as_errc());
         if (got == 0)
             return std::unexpected(std::errc::io_error);
         rest = rest.subspan(static_cast<std::size_t>(got));
