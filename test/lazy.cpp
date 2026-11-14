@@ -139,10 +139,9 @@ TEST_CASE("lazy: deep nesting and a wide map")
     CHECK(value_at(at(lazy_of(w), "key_99")) == V(99));
 }
 
-// Ported from test.rb: 'lazy: dig — missing keys return nil, negative array indices work'. dig maps
-// to a chain of at; a miss is an error value, and the application makes nil of it. at takes a std::size_t, as
-// std::vector::at does, so an application counts a negative index from size(). A path keeps the negative index of
-// RFC 9535.
+// Ported from test.rb: 'lazy: dig — missing keys return nil, negative array indices work'. dig maps to a chain of at. A
+// miss is an error value. The application makes nil of it. at takes a std::size_t, as std::vector::at does, so an
+// application counts a negative index from size(). A path keeps the negative index of RFC 9535.
 TEST_CASE("lazy: negative indices and misses")
 {
     std::string const h = encoded(M("a"s, 1, "b"s, M("c"s, 42)));
@@ -157,10 +156,10 @@ TEST_CASE("lazy: negative indices and misses")
     CHECK_EQ(cbor::at_path<"$[-99]", std::uint64_t>(a).error(), error::index_out_of_bounds);
 }
 
-// RFC 9535 2.3.3.2: an index i selects the element Normalize(i, len), and only an index in 0 to len - 1 after
-// the normalization selects an element. lazy::at counts from 0 as std::vector::at does, and a path also takes
-// a negative index. Both are checked for each index around each small length, and at the ends of the index
-// range of I-JSON (RFC 9535 2.1), so that no index selects an element outside the array.
+// RFC 9535 2.3.3.2: an index i selects the element Normalize(i, len), and only an index in 0 to len - 1 after the
+// normalization selects an element. lazy::at counts from 0 as std::vector::at does. A path also takes a negative index.
+// Both are checked for each index around each small length, and at the ends of the index range of I-JSON (RFC 9535 2.1).
+// So that no index selects an element outside the array.
 TEST_CASE("lazy: at and a path index select the element that Normalize of RFC 9535 gives")
 {
     constexpr std::int64_t largest_index = (std::int64_t{1} << 53) - 1;
@@ -314,9 +313,9 @@ TEST_CASE("lazy: elements and entries of the wrong kind")
     CHECK_EQ(lazy_of(encoded(V(1))).elements().error(), error::not_indexable);
 }
 
-// The standard algorithms and views take entries and elements as they take any standard view. Each
-// concept that the two types claim is checked here at compile time: the iterators are forward
-// iterators, the ranges are views, sized ranges and borrowed ranges, and an iterator outlives the range.
+// The standard algorithms and views take entries and elements as they take any standard view. Each concept that the two
+// types claim is checked here at compile time: the iterators are forward iterators, the ranges are views, sized ranges
+// and borrowed ranges. An iterator outlives the range.
 TEST_CASE("lazy: entries and elements model the standard concepts they claim")
 {
     CHECK((std::forward_iterator<cbor::lazy_entries::iterator>));
@@ -343,8 +342,8 @@ concept front_reads = requires(R const &r) { r.front(); };
 
 } // namespace
 
-// size and empty come from the count in the head, and read no element. front is not there: on an
-// empty range it would read the byte after the array.
+// size and empty come from the count in the head. Read no element. front is not there: on an empty range it would read
+// the byte after the array.
 TEST_CASE("lazy: size and empty of entries and elements")
 {
     auto const entries = lazy_of(encoded(M("a"s, 1, "b"s, 2))).entries();
@@ -363,8 +362,8 @@ TEST_CASE("lazy: size and empty of entries and elements")
     CHECK((!front_reads<cbor::lazy_entries>));
 }
 
-// std::views::take and std::views::drop work on elements and entries as on any forward view, and an
-// iterator that std::ranges::find_if gives stays valid after the range is gone (borrowed_range).
+// std::views::take and std::views::drop work on elements and entries as on any forward view. An iterator that
+// std::ranges::find_if gives stays valid after the range is gone (borrowed_range).
 TEST_CASE("lazy: std::views::take, std::views::drop and find_if over entries and elements")
 {
     auto const elements = lazy_of(encoded(A(1, 2, 3, 4))).elements();
@@ -469,8 +468,8 @@ TEST_CASE("lazy: at in a truncated map gives the error")
     CHECK(value_at(at(l, "a")) == V(1));
 }
 
-// An element iterator holds its position too. std::ranges::next with the end as bound steps n elements
-// from it and stops at the end; std::ranges::find_if over [begin, from) searches the part before it.
+// An element iterator holds its position too. std::ranges::next with the end as bound steps n elements from it and stops
+// at the end. Std::ranges::find_if over [begin, from) searches the part before it.
 TEST_CASE("lazy: an element iterator steps on and searches back with std::ranges")
 {
     auto const elements = lazy_of(encoded(A(1, 2, 3, 4))).elements();
@@ -552,9 +551,9 @@ TEST_CASE("lazy: get refuses an integer it cannot hold")
 }
 
 // Floats of the three widths of Appendix A. An integer is a double where the double holds it exactly (owner,
-// 2026-10-10): IEEE 754 binary64 has 53 bits of significand, so an integer whose bits from the highest set bit to the
-// lowest set bit fit in 53 bits is exact. -2^63 and -2^64 are exact. 2^53 + 1 and -2^63 + 1 need 54 and 63 bits.
-// -(2^53 + 2) is exact, and its argument 2^53 + 1 is not, so the conversion must not round the argument first.
+// 2026-10-10): IEEE 754 binary64 has 53 bits of significand. So an integer whose bits from the highest set bit to the
+// lowest set bit fit in 53 bits is exact. -2^63 and -2^64 are exact. 2^53 + 1 and -2^63 + 1 need 54 and 63 bits. -(2^53
+// + 2) is exact. Its argument 2^53 + 1 is not, so the conversion must not round the argument first.
 TEST_CASE("lazy: get reads a float")
 {
     CHECK_EQ(*get<double>("\xf9\x3c\x00"s), 1.0);
@@ -652,8 +651,8 @@ TEST_CASE("encode: a typed array is a tag and a byte string")
     CHECK(std::ranges::equal((*back)->bytes, std::as_bytes(std::span("\x00\x01\x00\x02"sv))));
 }
 
-// A tag outside 64 to 87, or the reserved 76, is no typed array; a length that is not a multiple of the
-// element size is inadmissible content.
+// A tag outside 64 to 87, or the reserved 76, is no typed array. A length that is not a multiple of the element size is
+// inadmissible content.
 TEST_CASE("encode: a typed array with a wrong tag or length")
 {
     CHECK((typed_encoded(76, "\x00"sv).error() == cbor::error{cbor::error::unsupported_value}));
@@ -661,9 +660,8 @@ TEST_CASE("encode: a typed array with a wrong tag or length")
     CHECK((typed_encoded(66, "\x00\x01\x02"sv).error() == cbor::error{cbor::error::inadmissible_type_for_tag_content}));
 }
 
-// RFC 8949 3.4.5.1: tag 24 carries an encoded data item in a byte string. The library never writes tag 24 by
-// itself, so the application writes the tag and the bytes of the embedded item, and a view passes through the tag
-// into it.
+// RFC 8949 3.4.5.1: tag 24 carries an encoded data item in a byte string. The library never writes tag 24 by itself. So
+// the application writes the tag and the bytes of the embedded item, and a view passes through the tag into it.
 TEST_CASE("tag 24: an embedded item written by the application is read through")
 {
     std::string const embedded = test::encoded(A(2, 3));
@@ -700,9 +698,8 @@ TEST_CASE("tag 24: a tag 29 inside an embedded data item is a plain tag")
 namespace
 {
 
-// RFC 8949 3.1: an unsigned integer has the value of its argument, and a negative integer has the value -1
-// minus its argument. get<T> gives that value exactly when it lies in the range of T, and number_out_of_range
-// otherwise.
+// RFC 8949 3.1: an unsigned integer has the value of its argument. A negative integer has the value -1 minus its
+// argument. get<T> gives that value exactly when it lies in the range of T, and number_out_of_range otherwise.
 template <class T>
 void get_is_exact_at_the_edges_of()
 {
@@ -728,9 +725,8 @@ void get_is_exact_at_the_edges_of()
 
 } // namespace
 
-// The standard integer widths and signednesses are a finite set, so each member is checked at both ends of
-// its range and at both ends of the 64-bit argument: a range check that one width misses would change a value
-// without an error.
+// The standard integer widths and signednesses are a finite set. So each member is checked at both ends of its range and
+// at both ends of the 64-bit argument: a range check that one width misses would change a value without an error.
 TEST_CASE("lazy: get reads every integer width up to its edge")
 {
     get_is_exact_at_the_edges_of<std::int8_t>();
@@ -744,14 +740,13 @@ TEST_CASE("lazy: get reads every integer width up to its edge")
 }
 #endif
 
-// RFC 8949 3.4.3: the content of tags 2 and 3 is a byte string. RFC 8949 3.4.5.1: the content of tag 24 is a
-// byte string. RFC 8746 2: the content of tags 64 to 87 is a byte string; tag 76 is reserved, and the library
-// reads it as a tag that it does not interpret. The registration of tag 29 (value-sharing) makes its content
-// an unsigned integer. The rule table holds a row only for a tag that the library interprets (owner,
-// 2026-10-13), so every other tag takes every major type. A lazy reads the content of tags 2, 3 and 24 when
-// it reads the value; cbor::decode reads the content of the other tags. This test exists so that no content
-// that these sections forbid passes a reader that interprets the tag, and so that no reader refuses a tag
-// that the library does not interpret.
+// RFC 8949 3.4.3: the content of tags 2 and 3 is a byte string. RFC 8949 3.4.5.1: the content of tag 24 is a byte
+// string. RFC 8746 2: the content of tags 64 to 87 is a byte string. Tag 76 is reserved, and the library reads it as a
+// tag that it does not interpret. The registration of tag 29 (value-sharing) makes its content an unsigned integer. The
+// rule table holds a row only for a tag that the library interprets (owner, 2026-10-13), so every other tag takes every
+// major type. A lazy reads the content of tags 2, 3 and 24 when it reads the value; cbor::decode reads the content of
+// the other tags. This test exists so that no content that these sections forbid passes a reader that interprets the
+// tag, and so that no reader refuses a tag that the library does not interpret.
 TEST_CASE("lazy: the content of each tag for every major type")
 {
     std::vector<std::uint64_t> tags;
@@ -892,8 +887,8 @@ TEST_CASE("lazy: copy, at and get as a chain")
     CHECK_EQ(count, 2u);
 }
 
-// The owner decided that a lazy reads tags 28 and 29 as plain tags. A key under either tag is a tag and matches no
-// text key and no integer key; a tag 55799 before a key is still passed.
+// The owner decided that a lazy reads tags 28 and 29 as plain tags. A key under either tag is a tag and matches no text
+// key and no integer key. A tag 55799 before a key is still passed.
 TEST_CASE("lazy: a key under tag 28 or tag 29 is a tag")
 {
     CHECK_EQ(lazy_of("\xa1\xd8\x1c\x61\x61\x01"s).at("a").error(), error::key_not_found);
@@ -912,7 +907,7 @@ concept read_from_temporary = requires(R &&r) { *std::move(*r); };
 
 } // namespace
 
-// A view that get gives holds the bytes of the top-level item: it outlives the lazy and the owner that made it, and it
+// A view that get gives holds the bytes of the top-level item: it outlives the lazy and the owner that made it. It
 // cannot be read through a temporary.
 TEST_CASE("lazy: a view holds the top-level item")
 {
@@ -933,13 +928,12 @@ TEST_CASE("lazy: a view holds the top-level item")
     CHECK_FALSE(read_from_temporary<std::expected<cbor::ref<std::string_view>, cbor::error>>);
 }
 
-// [util.smartptr.shared] gives a std::shared_ptr four states: it owns an object or not (empty means it owns
-// none), and it stores a pointer or not (null). Each state is built with a constructor of the standard. An
-// owner that owns no object keeps nothing alive, so view with an owner and its bytes refuses exactly the two
-// empty owners. view with an owner alone reads through the stored pointer, so it also refuses the owner that
-// stores null. A string alone, owned or not, does not compile with view. Owner decision: no form takes bytes
-// that nothing keeps alive. The test exists because each of these let a view outlive its bytes, and a check
-// of the stored pointer refused an owner that holds the bytes.
+// [util.smartptr.shared] gives a std::shared_ptr four states: it owns an object or not (empty means it owns none), and
+// it stores a pointer or not (null). Each state is built with a constructor of the standard. An owner that owns no
+// object keeps nothing alive. So view with an owner and its bytes refuses exactly the two empty owners. view with an
+// owner alone reads through the stored pointer. So it also refuses the owner that stores null. A string alone, owned or
+// not, does not compile with view. Owner decision: no form takes bytes that nothing keeps alive. The test exists because
+// each of these let a view outlive its bytes. A check of the stored pointer refused an owner that holds the bytes.
 TEST_CASE("lazy: view checks that the owner holds an object")
 {
     auto const bytes = std::make_shared<std::string const>("\xa1\x61\x61\x63xyz"s);
@@ -1018,8 +1012,7 @@ TEST_CASE("lazy: every member refuses a lazy that holds no top-level item")
     CHECK_THROWS_AS((void)test::value_of(none), std::logic_error);
 }
 
-// A tag 29 in the content of a bignum or a typed array is no byte string, so the get that interprets the tag
-// refuses it.
+// A tag 29 in the content of a bignum or a typed array is no byte string. So the get that interprets the tag refuses it.
 TEST_CASE("lazy: get does not follow a tag 29 in the content of a tag")
 {
     auto const root = lazy_of("\x83\xd8\x1c\x41\x05\xc2\xd8\x1d\x00\xd8\x40\xd8\x1d\x00"s);
@@ -1196,10 +1189,10 @@ TEST_CASE("lazy: elements and entries refuse indefinite length")
     CHECK_EQ(lazy_of("\xbf\x61" "a\x01\xff"s).entries().error(), error::indefinite_length);
 }
 
-// The owner decided on 2026-10-13 that a lazy holds only its bytes and its offset, so several threads read one
-// lazy at the same time. Two threads read one root lazy through every reader; a thread sanitizer build reports
-// any state that they share. The document holds tags 28 and 29, which a lazy reads as plain tags, and a typed
-// array, whose element is a lazy of its own kind.
+// The owner decided on 2026-10-13 that a lazy holds only its bytes and its offset, so several threads read one lazy at
+// the same time. Two threads read one root lazy through every reader; a thread sanitizer build reports any state that
+// they share. The document holds tags 28 and 29, which a lazy reads as plain tags. A typed array, whose element is a
+// lazy of its own kind.
 TEST_CASE("lazy: two threads read one root lazy" * doctest::skip(!test::threads_available))
 {
     constexpr std::size_t threads = 2;
@@ -1279,10 +1272,9 @@ TEST_CASE("lazy: a tag 28 that holds a tag 29 reads the index")
     CHECK_EQ(right, n);
 }
 
-// A step into an element that is not in the input gave a lazy with no
-// error, and the error came only from the next read. A caller that
-// checked only the step went on with a value that does not exist. The
-// step now reads the head of its target and gives too_little_data.
+// A step into an element that is not in the input gave a lazy with no error. The error came only from the next read. A
+// caller that checked only the step went on with a value that does not exist. The step now reads the head of its target
+// and gives too_little_data.
 TEST_CASE("lazy: a step to an element past the end of the input fails at once")
 {
     CHECK_EQ(test::lazy_of_copy(std::string("\x82\x01", 2))->at(std::size_t{1}).error(), error::too_little_data);
@@ -1309,10 +1301,10 @@ TEST_CASE("lazy size refuses a count that the bytes cannot hold")
     CHECK_EQ(pair->size().value(), 2);
 }
 
-// Found by fuzz-path on the input d0. RFC 8949 3.4: a tag is followed by its content, so d0 alone ends before
-// its content and is not well-formed. A step of a lazy gave not_indexable, and the typed read gave
-// too_little_data. A step now passes a tag that it does not read, as the typed read and lazy::get do (RFC 8949
-// 6.1), so both read the missing content and give too_little_data.
+// Found by fuzz-path on the input d0. RFC 8949 3.4: a tag is followed by its content, so d0 alone ends before its
+// content and is not well-formed. A step of a lazy gave not_indexable, and the typed read gave too_little_data. A step
+// now passes a tag that it does not read, as the typed read and lazy::get do (RFC 8949 6.1). So both read the missing
+// content and give too_little_data.
 TEST_CASE("lazy: a step over a tag with no content gives too_little_data")
 {
     std::string const doc = "\xd0"s;
@@ -1590,9 +1582,9 @@ TEST_CASE("lazy: an element of a float128 typed array")
 #endif
 }
 
-// at_path gives a float128 element with the same value as lazy::get, both from the encoded bytes and from a
-// lazy. The walk over the encoded bytes reads no element of 128 bits, so this test exists to show that the
-// value still comes back and that every other item stays incorrect_type.
+// at_path gives a float128 element with the same value as lazy::get, both from the encoded bytes and from a lazy. The
+// walk over the encoded bytes reads no element of 128 bits. So this test exists to show that the value still comes back
+// and that every other item stays incorrect_type.
 TEST_CASE("path: at_path reads an element of a float128 typed array")
 {
 #ifdef __STDCPP_FLOAT128_T__
@@ -1616,8 +1608,8 @@ TEST_CASE("path: at_path reads an element of a float128 typed array")
 #endif
 }
 
-// A typed array whose byte string claims more bytes than the input holds is too_little_data at the step; a length
-// that is not a multiple of the element size is refused as RFC 8746 2 requires.
+// A typed array whose byte string claims more bytes than the input holds is too_little_data at the step. A length that
+// is not a multiple of the element size is refused as RFC 8746 2 requires.
 TEST_CASE("lazy: a cut typed array is too_little_data")
 {
     auto const cut = lazy_of("\xd8\x41\x44\x00\x01"s);
@@ -1710,8 +1702,8 @@ constexpr bool bytes_at_path_compiles = requires(
     std::string_view const encoded, cbor::path::query<T> const &e) { cbor::at_path(encoded, e); };
 }
 
-// A lazy or a nodelist over a bare string_view would read the buffer of the caller with no owner, so that form does
-// not compile; a scalar is copied out, and a view gets a ref with a copy of the bytes.
+// A lazy or a nodelist over a bare string_view would read the buffer of the caller with no owner. So that form does not
+// compile; a scalar is copied out, and a view gets a ref with a copy of the bytes.
 TEST_CASE("lazy: at_path over bare bytes compiles for a scalar only")
 {
     CHECK(bytes_at_path_compiles<int>);
@@ -1793,7 +1785,7 @@ TEST_CASE("lazy: a moved-from query is a wrong use")
     CHECK_EQ(l.at_path(moved_nodes)->size(), 1u);
 }
 
-// The parse of a query recurses into each filter, so a query with one filter in another more often than a small stack
+// The parse of a query recurses into each filter. So a query with one filter in another more often than a small stack
 // holds does not compile on a thread with that stack, and one filter does.
 TEST_CASE("lazy: the compile of a query stops where the stack of the thread ends")
 {
@@ -1892,8 +1884,8 @@ TEST_CASE("lazy: a read through a temporary lazy keeps the bytes alive")
     CHECK_EQ((*copy)->get<cbor::type::array>()->size(), 2u);
 }
 
-// A map or an array whose count claims more items than its bytes can hold gives too_little_data before any item is
-// read, so a key that stands before the end of a short map is not found, and the elements end at the first step.
+// A map or an array whose count claims more items than its bytes can hold gives too_little_data before any item is read.
+// So a key that stands before the end of a short map is not found, and the elements end at the first step.
 TEST_CASE("lazy: a count longer than the bytes is too_little_data before the first item")
 {
     auto const map = cbor::lazy::adopt("\xa2\x61\x6b\x01"s);

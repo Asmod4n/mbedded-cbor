@@ -76,9 +76,9 @@ holder holder_chain(std::size_t const links)
     return h;
 }
 
-// The destructor of a holder recurses once for each link, and a chain deeper than the main thread holds would overflow
-// there in a debug build with a sanitizer. The test takes the chain apart from its top in a loop, so that each link
-// ends with no link below it.
+// The destructor of a holder recurses once for each link. A chain deeper than the main thread holds would overflow there
+// in a debug build with a sanitizer. The test takes the chain apart from its top in a loop, so that each link ends with
+// no link below it.
 void end_chain(holder chain)
 {
     while (auto *const f = std::get_if<limb>(&chain.held)) {
@@ -138,8 +138,8 @@ void reads(R const &r, outcome const expected)
     }
 }
 
-// Every value that decode makes stays alive outside the reader: the destructor of a chain recurses through its links,
-// and the test shrinks the stack of the reader, not of whoever ends the value. The caller moves the values out.
+// Every value that decode makes stays alive outside the reader: the destructor of a chain recurses through its links.
+// The test shrinks the stack of the reader, not of whoever ends the value. The caller moves the values out.
 struct read_values {
     std::optional<std::expected<cbor::ref<holder>, error>> decoded;
     std::optional<std::expected<cbor::ref<node>, error>> nodes;
@@ -182,7 +182,7 @@ read_values every_reader(std::size_t const levels, holder const &chain, outcome 
 using namespace limits_stack;
 
 // Every reader that walks nested items reads a depth on the main thread and gives its value: the depth that the main
-// thread holds where it holds it, so that a reader that stops too early fails there.
+// thread holds where it holds it. So that a reader that stops too early fails there.
 TEST_CASE("stack: every recursive reader reads a depth that the main thread holds")
 {
     holder chain = holder_chain((test::levels_main_thread_reads - 1) / links_per_level);
@@ -198,7 +198,7 @@ TEST_CASE("stack: every recursive reader on a small stack refuses an input deepe
     for (std::size_t const bytes : {test::small_stack_bytes, larger_stack_bytes}) {
         CAPTURE(bytes);
         // Without threads the main thread is the small stack. A chain deeper than that stack would overflow in its own
-        // destructor, because a user type ends by its own recursion; there the chain stays shallow and gives values.
+        // destructor, because a user type ends by its own recursion. There the chain stays shallow and gives values.
         std::size_t const links = test::threads_available ? bytes / test::smallest_frame_bytes / links_per_level
                                                           : (test::levels_every_stack_holds - 1) / links_per_level;
         constexpr outcome chain_expected = test::threads_available ? outcome::refused : outcome::value;
@@ -217,6 +217,7 @@ TEST_CASE("stack: every recursive reader on a small stack refuses an input deepe
 // there is no tree to end.
 constexpr std::size_t tree_levels = test::levels_main_thread_holds;
 
+// A deep tree must not overflow a small stack when it ends or when it is encoded. The test fails if a recursion enters either step.
 TEST_CASE("stack: a deep tree of the library ends and encodes on a small stack")
 {
     auto decoded = cbor::decode(arrays_around_one(tree_levels));

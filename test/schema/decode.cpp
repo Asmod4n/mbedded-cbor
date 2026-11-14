@@ -185,10 +185,10 @@ TEST_CASE("decode and at_path: a typed array with a wrong tag or a wrong length 
     CHECK_EQ(at_path<doubles, "$.v[0]">(longer).error(), error::too_little_data);
 }
 
-// A plain struct has no allocator, so a std::pmr::vector cannot give its resource to it, but it can give it to each
-// member that takes an allocator, as uses-allocator construction ([allocator.uses.construction]) does for one
-// object. The test puts a counting resource as the default resource, so that a member that took the default
-// resource shows as a count above zero. Each name is longer than any short string buffer, so each one allocates.
+// A plain struct has no allocator, so a std::pmr::vector cannot give its resource to it. But it can give it to each
+// member that takes an allocator, as uses-allocator construction ([allocator.uses.construction]) does for one object.
+// The test puts a counting resource as the default resource, so that a member that took the default resource shows as a
+// count above zero. Each name is longer than any short string buffer, so each one allocates.
 TEST_CASE("decode: a plain struct in a std::pmr::vector takes the resource of the vector for its members")
 {
     std::string const long_name(40, 'n');
@@ -205,8 +205,8 @@ TEST_CASE("decode: a plain struct in a std::pmr::vector takes the resource of th
         CHECK_EQ(p.n, long_name);
         CHECK_EQ(p.n.get_allocator().resource(), &target);
     }
-    // A debug build of the C++ library of MSVC gives each container a proxy object from its allocator, so a
-    // temporary container with the default resource takes blocks there; the count holds without that proxy.
+    // A debug build of the C++ library of MSVC gives each container a proxy object from its allocator. So a temporary
+    // container with the default resource takes blocks there; the count holds without that proxy.
 #if !defined(_ITERATOR_DEBUG_LEVEL) || _ITERATOR_DEBUG_LEVEL == 0
     CHECK_EQ(fallback.allocations, 0u);
 #endif
@@ -312,7 +312,7 @@ TEST_CASE("decode: a class with a constructor in a vector, an optional and a map
 }
 
 // The arguments of the constructor are made with the allocator of the vector (std::tuple with std::allocator_arg,
-// [tuple.cnstr]), so a std::pmr member keeps the resource of the vector through the move into the class.
+// [tuple.cnstr]). So a std::pmr member keeps the resource of the vector through the move into the class.
 TEST_CASE("decode: a class with a constructor in a std::pmr::vector takes the resource of the vector")
 {
     std::string const long_unit(40, 'u');
@@ -332,8 +332,8 @@ TEST_CASE("decode: a class with a constructor in a std::pmr::vector takes the re
         CHECK_EQ(r.unit, long_unit);
         CHECK_EQ(r.unit.get_allocator().resource(), &target);
     }
-    // A debug build of the C++ library of MSVC gives each container a proxy object from its allocator, so a
-    // temporary container with the default resource takes blocks there; the count holds without that proxy.
+    // A debug build of the C++ library of MSVC gives each container a proxy object from its allocator. So a temporary
+    // container with the default resource takes blocks there; the count holds without that proxy.
 #if !defined(_ITERATOR_DEBUG_LEVEL) || _ITERATOR_DEBUG_LEVEL == 0
     CHECK_EQ(fallback.allocations, 0u);
 #endif
@@ -419,8 +419,8 @@ TEST_CASE("decode: a target that holds another alternative gets the alternative 
     CHECK_EQ(std::get<cat>((*back)->pet).toys.size(), 2u);
 }
 
-// Each kind of alternative comes back from decode and from the unverified decode: bool, a number, a float, a
-// text, a byte string, an empty text as the last item, and a class next to a number and a text.
+// Each kind of alternative comes back from decode and from the unverified decode: bool, a number, a float, a text, a
+// byte string, an empty text as the last item. A class next to a number and a text.
 TEST_CASE("decode: value, text and class alternatives of a variant member")
 {
     for (setting const &s : sample_settings()) {
@@ -443,8 +443,8 @@ TEST_CASE("decode: value, text and class alternatives of a variant member")
     }
 }
 
-// A class alternative after a text item: the items of the record follow the item of the variant in the order of
-// the writer, so decode, which checks that order, reads both.
+// A class alternative after a text item: the items of the record follow the item of the variant in the order of the
+// writer. So decode, which checks that order, reads both.
 TEST_CASE("decode: a text item before the record of a class alternative")
 {
     std::vector<shelter> const all{shelter{std::string("first"), "x"}, shelter{dog{{"rex"}, 3}, "y"}};

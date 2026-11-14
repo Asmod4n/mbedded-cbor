@@ -62,10 +62,9 @@ TEST_CASE("a tag holds its number and points to its content")
     CHECK(epoch.get<cbor::type::unsigned_integer>().value() == 1363896240u);
 }
 
-// RFC 8949 3.3 Table 3: major type 7 says by its additional information
-// what the item is. A float keeps the width it had on the wire in the
-// additional information and in its type, and its value widened to a double,
-// which holds every value of the narrower widths.
+// RFC 8949 3.3 Table 3: major type 7 says by its additional information what the item is. A float keeps the width it had
+// on the wire in the additional information and in its type. Its value widened to a double, which holds every value of
+// the narrower widths.
 TEST_CASE("a float keeps its width in the additional information and its value as a double")
 {
     auto const tree = cbor::decode("\x83\xf9\x3e\x00\xfa\x47\xc3\x50\x00\xfb\x3f\xf1\x99\x99\x99\x99\x99\x9a"sv);
@@ -95,11 +94,9 @@ TEST_CASE("null and undefined are two items")
     CHECK(null.additional_information != undefined.additional_information);
 }
 
-// An item owns no memory, so a cache of many items costs only their own
-// size. Each member of the union is an immediate value or a view, and the
-// item takes 24 bytes: one byte of type, one of additional information,
-// and a union of 16 bytes. It is no aggregate, because only a decode
-// builds one.
+// An item owns no memory, so a cache of many items costs only their own size. Each member of the union is an immediate
+// value or a view. The item takes 24 bytes: one byte of type, one of additional information, and a union of 16 bytes. It
+// is no aggregate, because only a decode builds one.
 TEST_CASE("an item owns no memory")
 {
     CHECK(std::is_trivially_destructible_v<cbor::item>);
@@ -178,8 +175,8 @@ TEST_CASE("decode: empty input is too_little_data")
     CHECK_EQ(cbor::decode(""s).error(), cbor::error::too_little_data);
 }
 
-// Owner decision 2026-10-20: cbor::decode reads the first data item and no byte after it, as a lazy does, so a
-// CBOR sequence (RFC 8742) can be decoded item by item. The bytes 01 02 are the sequence 1, 2.
+// Owner decision 2026-10-20: cbor::decode reads the first data item and no byte after it, as a lazy does. So a CBOR
+// sequence (RFC 8742) can be decoded item by item. The bytes 01 02 are the sequence 1, 2.
 TEST_CASE("decode: bytes after the data item are not read")
 {
     auto const first = cbor::decode("\x01\x02"s);
@@ -224,8 +221,8 @@ TEST_CASE("decode: a child decoded through two paths has one content")
     CHECK_EQ(argument_of(*children_of(*by_key)[1]), argument_of(*children_of(*by_entry)[1]));
 }
 
-// RFC 8949 3.1: an array is its count and its data items. A map holds each pair as key and value, one after
-// the other, so a map of n pairs shows 2n items in the order of the wire.
+// RFC 8949 3.1: an array is its count and its data items. A map holds each pair as key and value, one after the other.
+// So a map of n pairs shows 2n items in the order of the wire.
 TEST_CASE("decode: an array and a map hold their data items in the order of the wire")
 {
     auto const top_level = test::lazy_of_copy(std::string("\x82\x01\xa2\x61k\x62hi\x02\x80"sv));
@@ -271,8 +268,8 @@ TEST_CASE("decode: nested arrays and maps each show their own children")
     CHECK_EQ(argument_of(*outer[3]), 6u);
 }
 
-// A count in the input reserves nothing: an array that claims 2^63 elements with one byte after its head is
-// refused before any element is read, and the decode allocates in proportion to the input only.
+// A count in the input reserves nothing: an array that claims 2^63 elements with one byte after its head is refused
+// before any element is read. The decode allocates in proportion to the input only.
 TEST_CASE("decode: an array that claims more elements than bytes is refused")
 {
     auto const top_level = test::lazy_of_copy(std::string("\x9b\x80\x00\x00\x00\x00\x00\x00\x00\x01"sv));
@@ -379,8 +376,8 @@ TEST_CASE("decode: a map of 65536 keys is read with a repeated key")
     CHECK(twice->clone().has_value());
 }
 
-// A fuzzer held one core for more than 10 s with one map of 65535 integer keys, because integer keys were
-// compared pair by pair. decode compares no keys, so the map reads in one walk with a repeated key or not.
+// A fuzzer held one core for more than 10 s with one map of 65535 integer keys, because integer keys were compared pair
+// by pair. decode compares no keys. So the map reads in one walk with a repeated key or not.
 TEST_CASE("decode: a map of 65535 integer keys is read with a repeated key")
 {
     constexpr std::size_t count = 65535;
@@ -486,13 +483,11 @@ TEST_CASE("decode: a forward tag 29 is a plain tag")
     auto const inner = item_of(element->clone());
     CHECK_EQ(inner->get<cbor::type::tag>().value().first, 29u);
 }
-// Fault 21: in [28(0), 28(29(0)), 28(29(1)), ...] each element refers to the
-// one before it. The decode of the last element walked the chain once for
-// each step and recursed once for each step at the same depth, so a long chain
-// took time in the square of its length and overflowed the stack. The decode
-// now only stores the tag 29. The mark lies before the decoded element, so
-// shared_value_resolve gives it as a lazy, and the lazy follows the chain in
-// one loop to the integer at its start.
+// Fault 21: in [28(0), 28(29(0)), 28(29(1)), ...] each element refers to the one before it. The decode of the last
+// element walked the chain once for each step and recursed once for each step at the same depth. So a long chain took
+// time in the square of its length and overflowed the stack. The decode now only stores the tag 29. The mark lies before
+// the decoded element, so shared_value_resolve gives it as a lazy. The lazy follows the chain in one loop to the integer
+// at its start.
 TEST_CASE("decode: a long chain of shared references is read without recursion")
 {
     constexpr std::uint16_t chain_length = 50000;
@@ -638,10 +633,10 @@ TEST_CASE("type: an empty lazy throws")
 namespace item_test
 {
 
-// The tree keeps the additional information of each head, so encode writes each length, tag number and integer
-// at the width it had on the wire. A head that is not in preferred form comes back in the same form. 28([29(0)])
-// is an array that holds itself; encode writes the head of tag 29 and its index and does not follow the pointer.
-// The index of tag 29 is an integer like any other and keeps its width.
+// The tree keeps the additional information of each head. So encode writes each length, tag number and integer at the
+// width it had on the wire. A head that is not in preferred form comes back in the same form. 28([29(0)]) is an array
+// that holds itself. Encode writes the head of tag 29 and its index and does not follow the pointer. The index of tag 29
+// is an integer like any other and keeps its width.
 TEST_CASE("encode: a tree is written with the head widths of its input, also with a cycle through tag 29")
 {
     struct row {
@@ -706,9 +701,9 @@ TEST_CASE("decode: a reference before its mark is a plain tag")
     auto const root = item_of(top_level->clone());
     CHECK_EQ(root->get<cbor::type::array>().value()[0].get<cbor::type::tag>().value().first, 29u);
 }
-// RFC 8949 3.4.5.1: tag 24 holds a byte string with one encoded CBOR data item. The decode gives both the byte
-// string as written and the embedded item as a tree, so a reader takes the item without a second decode, and
-// encode writes the byte string again bit for bit.
+// RFC 8949 3.4.5.1: tag 24 holds a byte string with one encoded CBOR data item. The decode gives both the byte string as
+// written and the embedded item as a tree. So a reader takes the item without a second decode, and encode writes the
+// byte string again bit for bit.
 TEST_CASE("decode: tag 24 gives the byte string and the embedded item")
 {
     std::string const wire = "\xd8\x18\x45\x64IETF"s;
@@ -746,8 +741,8 @@ TEST_CASE("decode: a tag 24 inside a tag 24 is decoded at each level")
     CHECK_EQ(again, wire);
 }
 
-// The tree of a tag 24 lives in the memory of the decode result. The result must keep it, its bytes and their
-// owner alive after the lazy and the caller's string are gone, so the address sanitizer sees every read here.
+// The tree of a tag 24 lives in the memory of the decode result. The result must keep it, its bytes and their owner
+// alive after the lazy and the caller's string are gone. So the address sanitizer sees every read here.
 TEST_CASE("decode: the embedded item of a tag 24 lives as long as the result")
 {
     std::optional<cbor::owning<cbor::item>> root;
@@ -791,8 +786,8 @@ TEST_CASE("decode: a shared reference inside tag 24 refers to a mark inside the 
     CHECK_EQ(elements[1]->get<cbor::type::tag>().value().first, 29u);
 }
 
-// The other direction of the same decision: a mark outside is not visible inside, so 29(0) inside the embedded
-// item has no mark to refer to.
+// The other direction of the same decision: a mark outside is not visible inside. So 29(0) inside the embedded item has
+// no mark to refer to.
 TEST_CASE("decode: a shared reference inside tag 24 does not see a mark outside")
 {
     auto const top_level = test::lazy_of_copy(std::string("\x82\xd8\x1c\x61\x61\xd8\x18\x43\xd8\x1d\x00"sv));
@@ -812,8 +807,8 @@ TEST_CASE("decode: a mark inside tag 24 does not count outside")
     CHECK_EQ(root->get<cbor::type::array>().value()[1].get<cbor::type::tag>().value().first, 29u);
 }
 
-// The embedded bytes are read with the same checks as the outer bytes, so malformed embedded bytes give the
-// error that the same bytes give at the top level.
+// The embedded bytes are read with the same checks as the outer bytes. So malformed embedded bytes give the error that
+// the same bytes give at the top level.
 TEST_CASE("decode: malformed bytes inside tag 24 give their own error")
 {
     auto const short_head = test::lazy_of_copy(std::string("\xd8\x18\x41\x18"sv));
@@ -845,9 +840,9 @@ TEST_CASE("decode: the stack check goes on inside tag 24")
     CHECK_EQ(test::error_on_small_stack([&deep] { return deep->clone(); }), cbor::error::nesting_depth_exceeded);
 }
 
-// RFC 8949 3.4.5.1: the byte string of tag 24 holds one encoded data item. decode reads everything and refuses
-// bytes after that item with syntax_error; the owner decided on this error.
-// A lazy step and a typed read read only up to their target, by owner decision, so they do not see those bytes.
+// RFC 8949 3.4.5.1: the byte string of tag 24 holds one encoded data item. decode reads everything and refuses bytes
+// after that item with syntax_error. The owner decided on this error. A lazy step and a typed read read only up to their
+// target, by owner decision, so they do not see those bytes.
 TEST_CASE("tag 24 with bytes after its data item is refused by decode and not seen by a step")
 {
     std::string const wire = "\xd8\x18\x42\x01\x02"s;
@@ -868,10 +863,10 @@ TEST_CASE("tag 24 with bytes after its data item is refused by decode and not se
 namespace item_test
 {
 
-// RFC 8949 3.3: a float of 16 or 32 bits is held as a double, and encode narrows it back to the width of its
-// additional information. A conversion of the processor sets the quiet bit of a signalling NaN, so a NaN is
-// widened and narrowed by its bits. Each width is checked with a signalling NaN, a quiet NaN with a payload,
-// negative zero and the smallest subnormal, which must all come back byte for byte.
+// RFC 8949 3.3: a float of 16 or 32 bits is held as a double. Encode narrows it back to the width of its additional
+// information. A conversion of the processor sets the quiet bit of a signalling NaN, so a NaN is widened and narrowed by
+// its bits. Each width is checked with a signalling NaN, a quiet NaN with a payload, negative zero and the smallest
+// subnormal, which must all come back byte for byte.
 TEST_CASE("encode: a float of each width comes back byte for byte")
 {
     struct row {
@@ -906,13 +901,13 @@ TEST_CASE("encode: a float of each width comes back byte for byte")
     }
 }
 
-// RFC 8949 3.1 and 3.3 give the type of an item by its major type and its additional information. The input is a
-// finite set, so every pair of major type 0 to 7 and additional information 0 to 27 is checked. A head that is not
-// in preferred form is well-formed, so an argument of 1 stands in every width; a simple value in one extra byte
-// needs 32 or more. Each tag takes a content that RFC 8949 3.4 admits; tag 29 needs a mark and has its own tests.
-// The expected type is written from the tables of RFC 8949 3.1 and 3.3. A tag 2 or 3 over h'05' fits a basic
-// integer and is that integer (RFC 8949 3.4.3). encode writes each head at its input width, a folded bignum in the shortest head, and a float
-// at its width, which also checks the major type that encode takes from the type.
+// RFC 8949 3.1 and 3.3 give the type of an item by its major type and its additional information. The input is a finite
+// set, so every pair of major type 0 to 7 and additional information 0 to 27 is checked. A head that is not in preferred
+// form is well-formed, so an argument of 1 stands in every width. A simple value in one extra byte needs 32 or more.
+// Each tag takes a content that RFC 8949 3.4 admits; tag 29 needs a mark and has its own tests. The expected type is
+// written from the tables of RFC 8949 3.1 and 3.3. A tag 2 or 3 over h'05' fits a basic integer and is that integer (RFC
+// 8949 3.4.3). encode writes each head at its input width, a folded bignum in the shortest head. A float at its width,
+// which also checks the major type that encode takes from the type.
 TEST_CASE("decode: every major type and additional information gives the type of RFC 8949")
 {
     for (unsigned major = 0; major < test::rfc8949::major_types; ++major) {
@@ -1029,8 +1024,8 @@ TEST_CASE("encoded_cbor_data_item: an item that is not a tag 24 of the tree thro
     // A tree that no decode made cannot be built: owning<item> has no public constructor.
     CHECK_FALSE((std::is_constructible_v<cbor::owning<cbor::item>, std::shared_ptr<cbor::item const>>));
 }
-// Owner decision 2026-10-17: an item is a result of a decode only. No caller builds one, so no item holds a wrong
-// count or a type that its content does not match, and every read of the content checks the type.
+// Owner decision 2026-10-17: an item is a result of a decode only. No caller builds one, so no item holds a wrong count
+// or a type that its content does not match. Every read of the content checks the type.
 TEST_CASE("item: no caller builds an item")
 {
     CHECK_FALSE((std::is_constructible_v<cbor::item, cbor::type, std::uint8_t>));
@@ -1041,7 +1036,7 @@ TEST_CASE("item: no caller builds an item")
 }
 
 // RFC 8949 3: each data item has at least its initial byte. decode refuses a count larger than the bytes left with
-// too_little_data before it reads an element, by owner decision; the malformed element after the head is not reached.
+// too_little_data before it reads an element, by owner decision. The malformed element after the head is not reached.
 TEST_CASE("decode: a count larger than the bytes left is too_little_data before the elements")
 {
     for (std::string const &wire : {"\x8c\xff"s, "\x95\xf8\x04"s, "\x95\xbf"s, "\x88\x00\x7f"s, "\x87\xd8\x1c\x1f"s,
@@ -1065,9 +1060,9 @@ TEST_CASE("decode: an empty text string and an empty byte string read as empty")
     CHECK(children[1].get<cbor::type::byte_string>().value().empty());
 }
 
-// The strings of a decode are copied into blocks of CBOR_STRING_SAVER_CHUNK_SIZE bytes. A string of exactly
-// that size fills a block, and a string one byte longer needs a block of its own; both must keep every byte,
-// and the tree must outlive the input.
+// The strings of a decode are copied into blocks of CBOR_STRING_SAVER_CHUNK_SIZE bytes. A string of exactly that size
+// fills a block, and a string one byte longer needs a block of its own. Both must keep every byte, and the tree must
+// outlive the input.
 TEST_CASE("decode: strings at the size of a block and one byte over keep every byte after the input is freed")
 {
     constexpr std::size_t block = CBOR_STRING_SAVER_CHUNK_SIZE;
@@ -1117,7 +1112,7 @@ struct sample {
 };
 
 // One encoded item for each member of cbor::type, written from RFC 8949 Appendix A, RFC 8746 and the value-sharing
-// registration. A tag 29 needs a tag 28 before it, so the shared_reference stands as the second element of [28(1),
+// registration. A tag 29 needs a tag 28 before it. So the shared_reference stands as the second element of [28(1),
 // 29(0)], and the test reads that element.
 constexpr std::array<sample, 19> samples{{
     {cbor::type::unsigned_integer, "\x18\x64"sv},
@@ -1203,10 +1198,10 @@ TEST_CASE("item get<K>: the values of the head")
     CHECK_EQ(*(*yes)->get<cbor::type::true_value>(), cbor::simple_value{21});
 }
 
-// RFC 8949 5.3.2 and 5.4: a tag passes its content as it is, unless the decoder turns it into a native form. The
-// owner decided that a tree decode turns a tag 2 or 3 into an integer only over a byte string, and decodes the content
-// of a tag 24 only when it is a byte string; any other content stays under the tag. The type of a tag 2 or 3 item is
-// the kind of that tag (tools/doc/groups/lazy.dox). So decode accepts each of these tags over an item of each major type (the
+// RFC 8949 5.3.2 and 5.4: a tag passes its content as it is, unless the decoder turns it into a native form. The owner
+// decided that a tree decode turns a tag 2 or 3 into an integer only over a byte string, and decodes the content of a
+// tag 24 only when it is a byte string. Any other content stays under the tag. The type of a tag 2 or 3 item is the kind
+// of that tag (tools/doc/groups/lazy.dox). So decode accepts each of these tags over an item of each major type (the
 // finite set), and the documentation of decode says so.
 TEST_CASE("decode: tags 0 to 5, 21 to 24 and 32 to 36 over every major type stay tags or give their integer")
 {

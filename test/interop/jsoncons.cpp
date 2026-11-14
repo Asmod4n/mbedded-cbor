@@ -1,6 +1,6 @@
-// jsoncons: the canonical dump of one top-level item, read with decode_cbor into an ojson. jsoncons maps a
-// tag that it knows to a semantic_tag and drops the number of a tag that it does not know; the dump prints the
-// semantic_tag. Map keys that are not text become text in jsoncons.
+// jsoncons: the canonical dump of one top-level item, read with decode_cbor into an ojson. jsoncons maps a tag that it
+// knows to a semantic_tag and drops the number of a tag that it does not know. The dump prints the semantic_tag. Map
+// keys that are not text become text in jsoncons.
 #include "dump.hpp"
 
 #include <jsoncons/json.hpp>

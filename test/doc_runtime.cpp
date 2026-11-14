@@ -165,8 +165,8 @@ TEST_CASE("doc runtime: write CBOR")
     CHECK_EQ(cbor::diagnostic_notation(out), "{\"a\": 5_0}");
 }
 
-// The section "Read items from a socket": the bytes of [1, 2] and of "abc" arrive in three pieces, and each piece
-// ends in the middle of an item. Each piece is a std::string that the reader takes without a copy.
+// The section "Read items from a socket": the bytes of [1, 2] and of "abc" arrive in three pieces. Each piece ends in
+// the middle of an item. Each piece is a std::string that the reader takes without a copy.
 TEST_CASE("doc runtime: read items from a socket")
 {
     std::vector<std::string> handled;

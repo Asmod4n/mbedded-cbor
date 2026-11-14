@@ -13,15 +13,15 @@
 
 using namespace std::string_literals;
 
-// Each test in this file is one example of a reference page of the ref group; the comment of the header gives the
-// example through the snippet markers. The tests exist so that every example compiles and gives the result that the
-// page states.
+// Each test in this file is one example of a reference page of the ref group. The comment of the header gives the
+// example through the snippet markers. The tests exist so that every example compiles and gives the result that the page
+// states.
 
 using reference_ref::person;
 
 // tools/doc/groups/ref.dox, snippet ref group: the EXAMPLES section of the man page of the group ref shows that a ref
-// keeps the bytes after the lazy that read them ends, and that clone copies the bytes. The test checks each value that
-// the comments of the example state, and the bytes against the encoding of RFC 8949.
+// keeps the bytes after the lazy that read them ends. That clone copies the bytes. The test checks each value that the
+// comments of the example state, and the bytes against the encoding of RFC 8949.
 TEST_CASE("doc reference ref: the example of the group ref")
 {
     std::string bytes = test::preferred(test::M("name"s, "ann"s));
@@ -43,8 +43,8 @@ TEST_CASE("doc reference ref: the example of the group ref")
     CHECK_NE(copy.data(), (**kept).data());
 }
 
-// ref.hpp, the comment of ref: *, -> and == read the value; a copy shares the owner, so a view stays valid after
-// the first ref ends.
+// ref.hpp, the comment of ref: *, -> and == read the value. A copy shares the owner, so a view stays valid after the
+// first ref ends.
 TEST_CASE("doc reference ref: cbor::ref")
 {
     std::optional<cbor::ref<person>> keep;
@@ -120,8 +120,8 @@ TEST_CASE("doc reference ref: move")
     CHECK_EQ(*s, "abc");
 }
 
-// ref.hpp, the comments of ref and owning: clone of a text view gives a std::string; clone of a struct with a view
-// gives an owning that holds its own copy of the bytes of each view.
+// ref.hpp, the comments of ref and owning: clone of a text view gives a std::string. Clone of a struct with a view gives
+// an owning that holds its own copy of the bytes of each view.
 TEST_CASE("doc reference ref: clone")
 {
     auto const text = cbor::structs<std::string_view>::decode(test::preferred(test::V("abc"s))).value();

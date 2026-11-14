@@ -116,7 +116,7 @@ struct device {
 } // namespace reference_structs
 
 // The descriptions below are the examples of the reference pages of describe_members, member, CBOR_MEMBER and
-// CBOR_DEFINE_TYPE_MEMBERS; the comments of describe.hpp take them through the snippet markers.
+// CBOR_DEFINE_TYPE_MEMBERS. The comments of describe.hpp take them through the snippet markers.
 
 // [describe_members]
 template <>

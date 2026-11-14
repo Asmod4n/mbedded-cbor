@@ -68,8 +68,8 @@ TEST_CASE("doc basics: a wrong use throws std::logic_error")
     CHECK_THROWS_AS((void)cbor::lazy{}.at(0), std::logic_error);
 }
 
-// The section "Results that point into the bytes" states the two forms in which bytes go into the library: a copy
-// form, where an rvalue std::string is moved, and a view form over a std::shared_ptr<std::string const>.
+// The section "Results that point into the bytes" states the two forms in which bytes go into the library: a copy form.
+// Here an rvalue std::string is moved, and a view form over a std::shared_ptr<std::string const>.
 TEST_CASE("doc basics: bytes go in as a copy or as a view")
 {
     std::string const kept = preferred(M("name"s, std::string(40, 'a')));
@@ -94,8 +94,8 @@ TEST_CASE("doc basics: bytes go in as a copy or as a view")
     }(kept)));
 }
 
-// The section "Results that point into the bytes" says that std::string as the type copies the text of the value
-// into the result, so that a user who wants a copy of their own finds the form.
+// The section "Results that point into the bytes" says that std::string as the type copies the text of the value into
+// the result. So that a user who wants a copy of their own finds the form.
 TEST_CASE("doc basics: std::string as the type copies the text")
 {
     std::string const bytes = preferred(M("name"s, std::string(40, 'a')));

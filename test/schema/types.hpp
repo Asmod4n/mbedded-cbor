@@ -1127,8 +1127,8 @@ std::string ticket_bytes()
 // message.
 
 
-// A platform without int128 (32-bit targets, the C++ library of MSVC) holds an int64 in its place, so that every
-// other member of probe and everything keeps its position; the int128 checks run where the platform has it.
+// A platform without int128 (32-bit targets, the C++ library of MSVC) holds an int64 in its place. So that every other
+// member of probe and everything keeps its position; the int128 checks run where the platform has it.
 #ifdef CBOR_HAS_INT128
 using wide_integer = cbor::int128;
 #else
@@ -1838,8 +1838,8 @@ std::vector<setting> sample_settings()
             {"empty", std::string()}};
 }
 
-// The item of a variant member is the last item before the root record, so it starts this many bytes before the
-// root: the size of the item.
+// The item of a variant member is the last item before the root record. So it starts this many bytes before the root:
+// the size of the item.
 template <class T>
 std::string_view variant_item_of(std::string_view const message, std::size_t const item_size)
 {

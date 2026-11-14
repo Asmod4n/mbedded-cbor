@@ -73,9 +73,8 @@ TEST_CASE("at_path: a fixed byte array is read inline")
     CHECK_EQ(at_path<badge, "$.mac">(zeros), "\x00\x00\x00\x00"s);
 }
 
-// RFC 8949 3.1 major type 4: a list is an array. Each element has a fixed size, so element i lies at i times
-// that size behind the data, and a path reads it without walking the ones before. A list of lists takes one
-// index for each level.
+// RFC 8949 3.1 major type 4: a list is an array. Each element has a fixed size, so element i lies at i times that size
+// behind the data. A path reads it without walking the ones before. A list of lists takes one index for each level.
 TEST_CASE("at_path: a list of structs, strings and lists, by index")
 {
     std::string const bytes = schema_bytes(sample_garage);
@@ -172,7 +171,7 @@ TEST_CASE("at_path and decode: a broken fixed-size vector is an error")
     CHECK_EQ(form<gauges>::decode(std::string(two)).error(), error::incorrect_type);
 }
 
-// The accessor of a fixed-size vector is a random access range of element accessors, so a loop, a page through
+// The accessor of a fixed-size vector is a random access range of element accessors. So a loop, a page through
 // std::views::drop and std::views::take, and a count work as with any std range. A page reads only its elements.
 TEST_CASE("at_path: a fixed-size vector is a range of its elements")
 {
@@ -295,8 +294,8 @@ TEST_CASE("at_path: a variant accessor owns the message and refuses a use after 
     CHECK_THROWS_AS((void)pet.get<cat>(), std::logic_error);
 }
 
-// get gives a value alternative by value, a text or byte string alternative as a view into the message, and a
-// class alternative as an accessor; any other alternative is incorrect_type.
+// get gives a value alternative by value, a text or byte string alternative as a view into the message. A class
+// alternative as an accessor; any other alternative is incorrect_type.
 TEST_CASE("at_path: get of a value, a text and a byte string alternative")
 {
     for (setting const &s : sample_settings()) {

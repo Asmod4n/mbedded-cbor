@@ -44,8 +44,8 @@ TEST_CASE("doc internals: encoded builds the input that a comment shows")
     CHECK_EQ(cbor::diagnostic_notation(preferred(A(1, 2.5, "a"s, simple{21}))), R"([1, 2.5, "a", true])");
 }
 
-// The section "A lazy reads heads" states that lazy::adopt and lazy::view read no head but a leading tag
-// 55799, and that a step reads the head of its target.
+// The section "A lazy reads heads" states that lazy::adopt and lazy::view read no head but a leading tag 55799. That a
+// step reads the head of its target.
 TEST_CASE("doc internals: a lazy reads heads when a step needs them")
 {
     auto const described = test::lazy_of_copy("\xd9\xd9\xf7\x01"s);
@@ -60,9 +60,9 @@ TEST_CASE("doc internals: a lazy reads heads when a step needs them")
     CHECK_EQ(cut->at(1).error(), error::too_little_data);
 }
 
-// The section "A skip keeps a count" states that the nesting depth does not bound a skip, and that a skip stops
-// where the bytes end. A skip reads heads only and jumps over the content of a string. It keeps one count of the items
-// that are still to skip, and no stack. item_size uses the same skip.
+// The section "A skip keeps a count" states that the nesting depth does not bound a skip. That a skip stops where the
+// bytes end. A skip reads heads only and jumps over the content of a string. It keeps one count of the items that are
+// still to skip, and no stack. item_size uses the same skip.
 TEST_CASE("doc internals: a skip keeps a count")
 {
     // {"a": [[...[1]...]], "b": 2}, written as bytes: the value model of the tests recurses, and the skip does not.
@@ -75,8 +75,8 @@ TEST_CASE("doc internals: a skip keeps a count")
     CHECK_EQ(cbor::at_path<"$[1]", int>("\x82\x82\x01"s).error(), error::too_little_data);
 }
 
-// The section "Tags 28 and 29" states that a lazy keeps no marks of tag 28 and reads a tag 29 as a tag over its index,
-// so a read changes nothing in the lazy and needs no lock.
+// The section "Tags 28 and 29" states that a lazy keeps no marks of tag 28 and reads a tag 29 as a tag over its index.
+// So a read changes nothing in the lazy and needs no lock.
 TEST_CASE("doc internals: two references to one mark")
 {
     auto const l = *test::lazy_of_copy("\x83\xd8\x1c\x01\xd8\x1d\x00\xd8\x1d\x00"s);
@@ -86,7 +86,7 @@ TEST_CASE("doc internals: two references to one mark")
 }
 
 // The section "The item tree" states that clone builds the items in a std::pmr::monotonic_buffer_resource that the
-// result owns, and that a text of the tree is copied into that resource.
+// result owns. That a text of the tree is copied into that resource.
 TEST_CASE("doc internals: a text of the item tree is a copy")
 {
     std::string const bytes = preferred(V(std::string(40, 'a')));

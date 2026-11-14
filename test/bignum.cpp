@@ -37,8 +37,8 @@ void check_round_trip(value const &v)
 
 } // namespace
 
-// Ported from test.rb: 'bignum tag 2: positive bignum boundaries (uint64, +1, deep)'. 2^64 - 1 fits
-// major type 0, so it comes back as an integer, not as a bignum.
+// Ported from test.rb: 'bignum tag 2: positive bignum boundaries (uint64, +1, deep)'. 2^64 - 1 fits major type 0. So it
+// comes back as an integer, not as a bignum.
 TEST_CASE("bignum tag 2: positive boundaries")
 {
     check_round_trip(big(false, power_of_256(8)));
@@ -84,7 +84,7 @@ TEST_CASE("bignum: an empty magnitude is 0 or -1")
 }
 
 // Ported from test.rb: 'bignum: non-byte-string payload raises TypeError'. The owner decided that a tree decode
-// interprets a tag 2 or 3 only over a byte string; any other content leaves a tag over that content.
+// interprets a tag 2 or 3 only over a byte string. Any other content leaves a tag over that content.
 TEST_CASE("bignum: content that is not a byte string")
 {
     CHECK(*decoded("\xc2\x05"sv) == value{tagged{2, value{std::uint64_t{5}}}});
@@ -109,9 +109,9 @@ TEST_CASE("bignum tag 3: an empty magnitude is refused")
              cbor::error{error::unsupported_value});
 }
 
-// Found by the fuzzer: the decoder reads the content of tag 2 or 3 one level deeper, as the content of every tag.
-// encode of a tree recurses through the same levels, so a deep tagged bignum that decode gives encodes, and an input
-// deeper than a small stack holds is refused by decode on a thread with that stack.
+// Found by the fuzzer: the decoder reads the content of tag 2 or 3 one level deeper, as the content of every tag. encode
+// of a tree recurses through the same levels. So a deep tagged bignum that decode gives encodes. An input deeper than a
+// small stack holds is refused by decode on a thread with that stack.
 TEST_CASE("bignum: encode takes a deep tagged bignum that decode gives")
 {
     std::string const bignum = "\xc2\x49"s + std::string(9, '\x01');
@@ -126,10 +126,10 @@ TEST_CASE("bignum: encode takes a deep tagged bignum that decode gives")
     CHECK_EQ(again, shallow);
 }
 
-// RFC 8949 3.4.3: a bignum is equivalent to the integer of the same numeric value, and leading zeros are allowed.
-// The tree holds values (RFC 8949 2), so a tag 2 or 3 whose magnitude fits in 64 bits is that integer, and lazy
-// type() says the same. The rows cover the empty magnitude (0 and -1), leading zeros past eight bytes, both ends of
-// 64 bits and the first magnitude that does not fit.
+// RFC 8949 3.4.3: a bignum is equivalent to the integer of the same numeric value, and leading zeros are allowed. The
+// tree holds values (RFC 8949 2). So a tag 2 or 3 whose magnitude fits in 64 bits is that integer, and lazy type() says
+// the same. The rows cover the empty magnitude (0 and -1), leading zeros past eight bytes, both ends of 64 bits and the
+// first magnitude that does not fit.
 TEST_CASE("bignum: a magnitude that fits 64 bits is an integer in decode and in type()")
 {
     struct row {

@@ -18,8 +18,8 @@ using cbor::error;
 namespace
 {
 
-// RFC 8949 3.3: a simple value 0 to 23 is the additional information of a one-byte head, and a simple value
-// 24 to 255 follows 0xf8 in one byte.
+// RFC 8949 3.3: a simple value 0 to 23 is the additional information of a one-byte head. A simple value 24 to 255
+// follows 0xf8 in one byte.
 std::string wire_of(std::uint8_t const v)
 {
     if (v < 24)
@@ -51,7 +51,7 @@ std::string edn_of(std::uint8_t const v)
 
 } // namespace
 
-// The input is the finite set 0 to 255, so the test takes every member. lazy::get gives a simple value as
+// The input is the finite set 0 to 255. So the test takes every member. lazy::get gives a simple value as
 // cbor::simple_value, also one that has no name in Table 4.
 TEST_CASE("simple value: lazy::get gives every simple value 0 to 255")
 {

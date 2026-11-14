@@ -105,12 +105,12 @@ TEST_CASE("test vectors: not well-formed items fail")
     }
 }
 
-// RFC 8949 section 3: the head of every example gives the major type in the high 3 bits, the additional information
-// in the low 5 bits and the argument after it. The item of each example keeps these fields from the wire, and its
-// content follows section 3.1: a string is the bytes after the head, an array and a map hold as many members as the
-// argument says, a tag points to its content, a float holds the bits of the argument in the width of the additional
-// information. Indefinite lengths are refused, as cbor::decode refuses them. Every example is in preferred form,
-// which is the own form of encode(item), so encode gives the bytes of the example.
+// RFC 8949 section 3: the head of every example gives the major type in the high 3 bits, the additional information in
+// the low 5 bits and the argument after it. The item of each example keeps these fields from the wire. Its content
+// follows section 3.1: a string is the bytes after the head, an array and a map hold as many members as the argument
+// says, a tag points to its content, a float holds the bits of the argument in the width of the additional information.
+// Indefinite lengths are refused, as cbor::decode refuses them. Every example is in preferred form, which is the own
+// form of encode(item), so encode gives the bytes of the example.
 TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fields of the wire")
 {
     auto const cases = cases_of(TEST_VECTORS "/appendix_a.json");
@@ -514,9 +514,9 @@ wg_count wg_good_check(wg_vector const &v)
     REQUIRE(l.has_value());
     CHECK(equivalent(*l, *expected));
 
-    // encode of the decoded tree writes the library's own form: the same value (RFC 8949 2), and the own form is a
-    // fixed point, so a second decode and encode gives the same bytes. The bytes of the vector itself are checked
-    // only where it is in the own form, which the test of RFC 8949 Appendix A does.
+    // encode of the decoded tree writes the library's own form: the same value (RFC 8949 2). The own form is a fixed
+    // point, so a second decode and encode gives the same bytes. The bytes of the vector itself are checked only where
+    // it is in the own form, which the test of RFC 8949 Appendix A does.
     auto const top_level = test::lazy_of_copy(std::string(v.encoded));
     REQUIRE(top_level.has_value());
     auto const tree = top_level->clone();
@@ -534,9 +534,9 @@ wg_count wg_good_check(wg_vector const &v)
     REQUIRE(text.has_value());
     auto const expected_text = cbor::diagnostic_notation(v.decoded);
     REQUIRE(expected_text.has_value());
-    // diagnostic_notation writes the basic generic data model. A bignum is its tag and the byte string of the wire, so a
-    // vector that makes it an integer or drops its leading zeros (RFC 8949 3.4.3) has another text. A NaN
-    // with a payload is float'' of its bits on the wire (EDN draft 3.7), so its shorter form is another text.
+    // diagnostic_notation writes the basic generic data model. A bignum is its tag and the byte string of the wire. So a
+    // vector that makes it an integer or drops its leading zeros (RFC 8949 3.4.3) has another text. A NaN with a payload
+    // is float'' of its bits on the wire (EDN draft 3.7), so its shorter form is another text.
     bool const bignum_tag = text->starts_with("2(") || text->starts_with("3(");
     if (!bignum_tag && !text->starts_with("float'"))
         CHECK_EQ(without_encoding_indicators(*text), without_encoding_indicators(*expected_text));
@@ -666,10 +666,9 @@ TEST_CASE("tags 0 and 1: decode, lazy and diagnostic_notation pass every content
 namespace
 {
 
-// A reader of a CBOR Sequence (RFC 8742) that gets the bytes one at a time gives the same items, and the same error,
-// as cbor::sequence over the whole buffer, in each form of feed. Every cut of a well-formed item is a prefix that
-// waits for more bytes, so it gives too_little_data. The reader does not recurse, so it never gives
-// nesting_depth_exceeded.
+// A reader of a CBOR Sequence (RFC 8742) that gets the bytes one at a time gives the same items. The same error, as
+// cbor::sequence over the whole buffer, in each form of feed. Every cut of a well-formed item is a prefix that waits for
+// more bytes, so it gives too_little_data. The reader does not recurse, so it never gives nesting_depth_exceeded.
 void sequence_reader_check(std::string_view const wire)
 {
     test::sequence_outcome const whole = test::sequence_outcome_of(wire);
@@ -725,9 +724,9 @@ TEST_CASE("sequence_reader: cbor-wg vectors fed byte by byte")
 namespace
 {
 
-// A reader gives one outcome for an item at every split and in every form of feed, and it is the outcome of cbor::sequence over the whole
-// buffer. An array or a map that announces more items than bytes follow gives too_little_data before its elements in
-// both (owner, 2026-10-12). Neither recurses, so neither gives nesting_depth_exceeded.
+// A reader gives one outcome for an item at every split and in every form of feed. It is the outcome of cbor::sequence
+// over the whole buffer. An array or a map that announces more items than bytes follow gives too_little_data before its
+// elements in both (owner, 2026-10-12). Neither recurses, so neither gives nesting_depth_exceeded.
 void sequence_reader_malformed_check(std::string_view const wire)
 {
     test::sequence_outcome const whole = test::sequence_outcome_of(wire);
@@ -759,9 +758,9 @@ TEST_CASE("sequence_reader: not well-formed items give one error at every split"
     }
 }
 
-// Every test that reads hex digits goes through test::unhexlify, so a wrong literal must fail the test and not
-// become other bytes. binascii.unhexlify of Python takes both cases and refuses an odd count and a character that
-// is not a hex digit; test::hexlify writes lower case, as binascii.hexlify does.
+// Every test that reads hex digits goes through test::unhexlify. So a wrong literal must fail the test and not become
+// other bytes. binascii.unhexlify of Python takes both cases and refuses an odd count and a character that is not a hex
+// digit. Test::hexlify writes lower case, as binascii.hexlify does.
 TEST_CASE("hex: unhexlify and hexlify of the tests read and write as binascii of Python")
 {
     CHECK_EQ(test::unhexlify(""), "");

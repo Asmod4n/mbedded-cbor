@@ -172,8 +172,8 @@ TEST_CASE("encode_iov: every form of a byte string gives the bytes of the copyin
     }
 }
 
-// The result must keep every owner alive by itself. The caller drops its own pointer before it reads;
-// a sanitizer build reports a read of freed memory if the result does not hold the owner.
+// The result must keep every owner alive by itself. The caller drops its own pointer before it reads. A sanitizer build
+// reports a read of freed memory if the result does not hold the owner.
 TEST_CASE("encode_iov: the pieces outlive the caller's owner")
 {
     std::string const text(100, 'z');
@@ -379,8 +379,8 @@ TEST_CASE("encode: a float is a double unless preferred serialization is on")
     CHECK_EQ(p.encoded, "\xfb\x3f\xf0\x00\x00\x00\x00\x00\x00"sv);
 }
 
-// writev takes at most IOV_MAX pieces in one call. An encoding with more pieces is read back in turns by
-// test::joined, the one place that splits; 1100 long strings with owners give more than the 1024 of Linux.
+// writev takes at most IOV_MAX pieces in one call. An encoding with more pieces is read back in turns by test::joined,
+// the one place that splits. 1100 long strings with owners give more than the 1024 of Linux.
 TEST_CASE("encode_iov: more pieces than IOV_MAX are written in turns")
 {
     constexpr std::size_t strings = 1100;

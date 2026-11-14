@@ -128,8 +128,8 @@ TEST_CASE("unverified: a bound is checked as in the verified forms")
     CHECK_EQ(form<everything>::unverified_at_path<"$.tires[0].diameter">(longer).error(), error::too_little_data);
 }
 
-// Every accessor that an unverified accessor gives is unverified, and every accessor that a verified accessor
-// gives is verified, so a read never changes its form in the middle of a path.
+// Every accessor that an unverified accessor gives is unverified, and every accessor that a verified accessor gives is
+// verified. So a read never changes its form in the middle of a path.
 TEST_CASE("unverified: the form of an accessor passes to its parts")
 {
     using unverified = unverified_root<everything>;
@@ -145,8 +145,8 @@ TEST_CASE("unverified: the form of an accessor passes to its parts")
                        form<everything>::accessor<cbor::fixed_element<gauge>>>);
 }
 
-// The unverified forms read where the data says, so the test changes every byte of a message that holds every kind
-// of part, and cuts it at every length. Each call must return; in the build with AddressSanitizer and
+// The unverified forms read where the data says. So the test changes every byte of a message that holds every kind of
+// part, and cuts it at every length. Each call must return; in the build with AddressSanitizer and
 // UndefinedBehaviorSanitizer no read leaves the input.
 TEST_CASE("unverified: every changed byte and every cut stays inside the input")
 {
@@ -192,8 +192,8 @@ TEST_CASE("unverified: a bool byte 2 reads true")
     CHECK((*back)->g[0].on);
 }
 
-// The unverified forms skip the checks of type bytes. The tag of a variant record still chooses the
-// alternative, so the unverified forms compare it too, and an unknown tag is incorrect_type in both forms.
+// The unverified forms skip the checks of type bytes. The tag of a variant record still chooses the alternative. So the
+// unverified forms compare it too, and an unknown tag is incorrect_type in both forms.
 TEST_CASE("unverified: a variant member reads as in the verified forms")
 {
     auto const bytes = *form<home>::encode(home_with_cat());
@@ -216,8 +216,8 @@ TEST_CASE("unverified: a variant member reads as in the verified forms")
     CHECK_EQ(forged_doc->at_path<"$.pet">().error(), error::incorrect_type);
 }
 
-// The unverified forms choose the alternative by the same head compare, so a head of no alternative is
-// incorrect_type there too, and get gives the same values.
+// The unverified forms choose the alternative by the same head compare. So a head of no alternative is incorrect_type
+// there too, and get gives the same values.
 TEST_CASE("unverified: value and text alternatives read as in the verified forms")
 {
     for (setting const &s : sample_settings()) {

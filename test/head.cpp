@@ -144,9 +144,9 @@ std::string array_head_of(std::uint64_t const count)
 
 } // namespace
 
-// Lengths and tag numbers take the shortest head of RFC 8949 4.1. The encoder writes an integer at a fixed
-// width, tested below, so the shortest form is tested through the tag number and the count of an array.
-// Ported from test.rb: the major 0 roundtrip tests, here as the exact bytes of RFC 8949 4.1 under major type 6.
+// Lengths and tag numbers take the shortest head of RFC 8949 4.1. The encoder writes an integer at a fixed width, tested
+// below. So the shortest form is tested through the tag number and the count of an array. Ported from test.rb: the major
+// 0 roundtrip tests, here as the exact bytes of RFC 8949 4.1 under major type 6.
 TEST_CASE("tag: the head of a tag number takes the shortest form")
 {
     CHECK_EQ(tag_head_of(0), "\xc0"sv);
@@ -208,18 +208,18 @@ struct one_simple_value {
     cbor::simple_value v;
 };
 
-// The initial byte is a finite set of 256 members, and RFC 8949 decides each one. Not well-formed (section 3
-// and Appendix C): a simple value below 32 in the two-byte form (f8 00 to f8 1f), the additional information
-// 28 to 30 of every major type, the additional information 31 on major types 0, 1 and 6, and a break code
-// outside of an indefinite-length item (ff, 3.2.1). Every reader of the library gives syntax_error for each
-// of them, with no other error and no value. The additional information 31 on major types 2 to 5 is an
-// indefinite length, which the library does not read (5.1 allows that): decode and lazy give
-// indefinite_length. Every other initial byte starts a well-formed head, so decode and lazy give neither of
-// the two errors; a rule of a tag content or a repeated key may still give another error.
+// The initial byte is a finite set of 256 members, and RFC 8949 decides each one. Not well-formed (section 3 and
+// Appendix C): a simple value below 32 in the two-byte form (f8 00 to f8 1f), the additional information 28 to 30 of
+// every major type, the additional information 31 on major types 0, 1 and 6. A break code outside of an
+// indefinite-length item (ff, 3.2.1). Every reader of the library gives syntax_error for each of them, with no other
+// error and no value. The additional information 31 on major types 2 to 5 is an indefinite length, which the library
+// does not read (5.1 allows that): decode and lazy give indefinite_length. Every other initial byte starts a well-formed
+// head, so decode and lazy give neither of the two errors. A rule of a tag content or a repeated key may still give
+// another error.
 TEST_CASE("head: every initial byte gives the result that RFC 8949 gives it")
 {
-    // An argument of eight bytes is the widest (RFC 8949 3), and a head with no content to read needs no more; the
-    // other initial bytes get room for a short content.
+    // An argument of eight bytes is the widest (RFC 8949 3). A head with no content to read needs no more; the other
+    // initial bytes get room for a short content.
     constexpr std::size_t widest_argument_bytes = 8;
     constexpr std::size_t room_after_head = 64;
     std::string const after(room_after_head, '\0');

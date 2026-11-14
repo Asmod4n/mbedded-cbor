@@ -80,8 +80,8 @@ TEST_CASE("at_path: a wrong element in a fixed-size vector gives the error of at
 }
 
 // An iterator of a fixed-size vector holds the owner, and a move empties the source. The test exists for the same
-// reasons as for a list of records: the iterator reads after its accessor is gone, the source of a move gives no
-// list, and the target and a move into itself read.
+// reasons as for a list of records: the iterator reads after its accessor is gone, the source of a move gives no list.
+// The target and a move into itself read.
 TEST_CASE("at_path: a fixed-size vector keeps its bytes in the iterator and moves its list")
 {
     using A = std::remove_cvref_t<decltype(*std::declval<form<gauges>::accessor<> const &>().at_path<"$.g">())>;
@@ -130,8 +130,8 @@ TEST_CASE("view: the iterator refuses each position outside of the view")
     check_positions_outside(*e);
 }
 
-// A move leaves an empty view in the source. The test exists because begin equals end in the source after the move,
-// and an iterator taken before the move still reads, because it holds the owner.
+// A move leaves an empty view in the source. The test exists because begin equals end in the source after the move. An
+// iterator taken before the move still reads, because it holds the owner.
 TEST_CASE("view: a moved view has begin equal to end")
 {
     auto const root = form<doubles>::path(schema_bytes(doubles{{1.0, 2.0, 4.0}}));

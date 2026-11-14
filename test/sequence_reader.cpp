@@ -146,6 +146,7 @@ TEST_CASE("sequence_reader: next() with no piece left")
     CHECK(r.empty());
 }
 
+// Items can span the pieces that were fed before one next(). The test fails if a piece is lost or if an item is cut at a piece border.
 TEST_CASE("sequence_reader: several pieces before one next()")
 {
     for (test::feed_form const form : test::feed_forms) {
@@ -162,9 +163,9 @@ TEST_CASE("sequence_reader: several pieces before one next()")
     }
 }
 
-// Every split of a sequence into three pieces gives the items of cbor::sequence over the whole buffer, in
-// each form of feed. The sequence holds a string, a map, a tag, a float and an array, so that a cut falls into
-// a head, an argument, the content of a string and the elements of a container.
+// Every split of a sequence into three pieces gives the items of cbor::sequence over the whole buffer, in each form of
+// feed. The sequence holds a string, a map, a tag, a float and an array. So that a cut falls into a head, an argument,
+// the content of a string and the elements of a container.
 TEST_CASE("sequence_reader: every two cuts in every form give the same items")
 {
     std::string const all = "\x01\x82\x01\x02\x63"
@@ -217,8 +218,8 @@ TEST_CASE("sequence_reader: an item whole in a shared piece is a view, a cut ite
     CHECK(r.empty());
 }
 
-// One item can start in bytes that the reader copied and end in a piece that it holds, and it can run over
-// more than two held pieces. The reader copies only the bytes of the cut item, so the item after it is a view.
+// One item can start in bytes that the reader copied and end in a piece that it holds. It can run over more than two
+// held pieces. The reader copies only the bytes of the cut item, so the item after it is a view.
 TEST_CASE("sequence_reader: an item over a copied piece and held pieces")
 {
     cbor::sequence_reader r;
@@ -256,9 +257,9 @@ TEST_CASE("sequence_reader: a leading tag 55799 on each item")
     }
 }
 
-// A lazy that the reader gave owns its bytes. Later feeds move the unread bytes into a new buffer or compact
-// the buffer; neither may change or free the bytes of an item that is still held. The sanitizer build reads
-// freed memory as an error.
+// A lazy that the reader gave owns its bytes. Later feeds move the unread bytes into a new buffer or compact the buffer.
+// Neither may change or free the bytes of an item that is still held. The sanitizer build reads freed memory as an
+// error.
 TEST_CASE("sequence_reader: an item stays valid after later feeds and after the reader is gone")
 {
     for (test::feed_form const form : test::feed_forms) {
@@ -298,9 +299,9 @@ TEST_CASE("sequence_reader: an item stays valid after the caller releases the pi
     CHECK_EQ(r.next()->get<std::uint64_t>().value(), 1u);
 }
 
-// RFC 8949 3: the initial byte alone decides that additional information 28 to 30 is not well-formed, and
-// that 31 is an indefinite length (a break for major type 7). Appendix F names these errors. The reader gives
-// the error as soon as the byte is there, at every split and in every form, and never too_little_data.
+// RFC 8949 3: the initial byte alone decides that additional information 28 to 30 is not well-formed. That 31 is an
+// indefinite length (a break for major type 7). Appendix F names these errors. The reader gives the error as soon as the
+// byte is there, at every split and in every form, and never too_little_data.
 TEST_CASE("sequence_reader: a malformed item gives its error at every split")
 {
     struct malformed {
@@ -356,8 +357,8 @@ TEST_CASE("sequence_reader: after an error every call gives the error and feed k
     }
 }
 
-// A count in the input reserves nothing (rule): an array that claims 2^64 - 1 elements, and a string that
-// claims 2^64 - 1 bytes, wait for bytes like any other item.
+// A count in the input reserves nothing (rule): an array that claims 2^64 - 1 elements. A string that claims 2^64 - 1
+// bytes, wait for bytes like any other item.
 TEST_CASE("sequence_reader: a large count waits for bytes")
 {
     for (std::string const &bytes :
