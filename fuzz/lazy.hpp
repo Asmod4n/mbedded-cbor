@@ -27,7 +27,7 @@ inline void lazy_channels(std::string_view const input)
     if (!decoded)
         return;
     cbor::lazy const &root = *decoded;
-    auto const whole = test::value_of(root);
+    auto const whole = test::make_value_from_item(root);
     if (eager && whole)
         require(same(*eager, *whole));
     if (whole) {
@@ -44,10 +44,10 @@ inline void lazy_channels(std::string_view const input)
                 for (auto const e : *elements) {
                     if (!e || i >= a->size())
                         break;
-                    if (auto const d = test::value_of(*e))
+                    if (auto const d = test::make_value_from_item(*e))
                         require(same(*d, a->at(i)));
                     if (auto const at = root.at(i))
-                        if (auto const d = test::value_of(*at))
+                        if (auto const d = test::make_value_from_item(*at))
                             require(same(*d, a->at(i)));
                     ++i;
                 }
@@ -59,9 +59,9 @@ inline void lazy_channels(std::string_view const input)
                 for (auto const e : *entries) {
                     if (!e || i >= m->size())
                         break;
-                    if (auto const k = test::value_of(e->first))
+                    if (auto const k = test::make_value_from_item(e->first))
                         require(same(*k, m->at(i).key));
-                    if (auto const v = test::value_of(e->second))
+                    if (auto const v = test::make_value_from_item(e->second))
                         require(same(*v, m->at(i).val));
                     ++i;
                 }
