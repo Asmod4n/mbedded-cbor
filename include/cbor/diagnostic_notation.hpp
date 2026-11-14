@@ -483,26 +483,26 @@ class extended_diagnostic_notation
     {
         bool const nan = value != value;
         bool const infinite = !nan && (value > std::numeric_limits<double>::max() || value < -std::numeric_limits<double>::max());
-        rfc8949::simple_float_information const preferred = ieee754::preferred_float_info(value);
+        rfc8949::simple_information const preferred = ieee754::preferred_float_info(value);
         int info;
         if (indicator == no_indicator)
             info = std::to_underlying(preferred);
-        else if (indicator >= std::to_underlying(rfc8949::simple_float_information::half_precision_float) &&
-                 indicator <= std::to_underlying(rfc8949::simple_float_information::double_precision_float))
+        else if (indicator >= std::to_underlying(rfc8949::simple_information::half_precision_float) &&
+                 indicator <= std::to_underlying(rfc8949::simple_information::double_precision_float))
             info = indicator;
         else [[unlikely]]
             return std::unexpected(error::invalid_path);
         bool const exact =
             nan || infinite || info >= std::to_underlying(preferred) ||
-            (info == std::to_underlying(rfc8949::simple_float_information::single_precision_float) &&
+            (info == std::to_underlying(rfc8949::simple_information::single_precision_float) &&
              static_cast<double>(static_cast<float>(value)) == value);
         if (!exact) [[unlikely]]
             return std::unexpected(error::invalid_path);
         std::uint64_t const argument =
             nan ? quiet_nan[static_cast<std::size_t>(
-                      info - std::to_underlying(rfc8949::simple_float_information::half_precision_float))]
-                : ieee754::encode_float(static_cast<rfc8949::simple_float_information>(info), value);
-        return append_head(out, major_type::simple_float, argument, info);
+                      info - std::to_underlying(rfc8949::simple_information::half_precision_float))]
+                : ieee754::encode_float(static_cast<rfc8949::simple_information>(info), value);
+        return append_head(out, major_type::simple, argument, info);
     }
 
     static constexpr std::expected<double, error> decimal_exact_value(std::uint64_t mantissa, int exponent, bool const overflow)
@@ -866,7 +866,7 @@ class extended_diagnostic_notation
         constexpr auto names = std::to_array<std::string_view>({"false", "true", "null", "undefined"});
         for (std::size_t i = 0; i < names.size(); ++i)
             if (rest.starts_with(names[i])) {
-                out.push_back(heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::false_value) + i));
+                out.push_back(heads::initial_byte(major_type::simple, std::to_underlying(simple_value::false_value) + i));
                 return at + names[i].size();
             }
         if (rest.starts_with("simple(")) {
@@ -890,7 +890,7 @@ class extended_diagnostic_notation
                 !detail::validity::check_simple_value(heads::preferred_argument_info(value), value))
                 [[unlikely]]
                 return std::unexpected(error::invalid_path);
-            if (auto const r = append_head(out, major_type::simple_float, value, no_indicator); !r) [[unlikely]]
+            if (auto const r = append_head(out, major_type::simple, value, no_indicator); !r) [[unlikely]]
                 return std::unexpected(r.error());
             return next + 1;
         }
@@ -1020,14 +1020,14 @@ class extended_diagnostic_notation
             break;
         }
         constexpr std::uint8_t half_precision_float =
-            std::to_underlying(rfc8949::simple_float_information::half_precision_float);
+            std::to_underlying(rfc8949::simple_information::half_precision_float);
         constexpr std::uint8_t double_precision_float =
-            std::to_underlying(rfc8949::simple_float_information::double_precision_float);
+            std::to_underlying(rfc8949::simple_information::double_precision_float);
         if (h->info < half_precision_float) {
             if (error const r = detail::validity::check_simple_value(h->info, h->argument).error_or(error{});
                 r != error{}) [[unlikely]]
                 return std::unexpected(r);
-            if (auto const r = append_head(out, major_type::simple_float, h->argument, no_indicator); !r) [[unlikely]]
+            if (auto const r = append_head(out, major_type::simple, h->argument, no_indicator); !r) [[unlikely]]
                 return std::unexpected(r.error());
             return next;
         }
@@ -1035,7 +1035,7 @@ class extended_diagnostic_notation
             return std::unexpected(error::syntax_error);
         ieee754::float_key const key = ieee754::float_key_of(h->info, h->argument);
         if (key.nan) {
-            if (auto const r = append_head(out, major_type::simple_float,
+            if (auto const r = append_head(out, major_type::simple,
                                            key.widened | std::uint64_t{ieee754::double_precision.exponent_max}
                                                              << ieee754::double_precision.significand_bits,
                                            double_precision_float);
@@ -1143,7 +1143,7 @@ class extended_diagnostic_notation
     static std::string float_of(std::uint8_t const info, std::uint64_t const argument)
     {
         std::size_t const width =
-            info - std::to_underlying(rfc8949::simple_float_information::half_precision_float);
+            info - std::to_underlying(rfc8949::simple_information::half_precision_float);
         double const value = ieee754::decode_float(info, argument);
         std::string const indicator =
             width == 0 ? std::string{} : std::string{'_', static_cast<char>('1' + width)};
@@ -1158,7 +1158,7 @@ class extended_diagnostic_notation
         }
         std::size_t const preferred =
             std::to_underlying(ieee754::preferred_float_info(value)) -
-            std::to_underlying(rfc8949::simple_float_information::half_precision_float);
+            std::to_underlying(rfc8949::simple_information::half_precision_float);
         return number_of(value) + (width == preferred ? std::string{} : indicator);
     }
 
@@ -1166,8 +1166,8 @@ class extended_diagnostic_notation
     {
         if (!detail::validity::bytes_fit(heads::initial_byte_size, d.encoded.size()) ||
             d.encoded.front() !=
-                heads::initial_byte(major_type::simple_float,
-                                    std::to_underlying(rfc8949::simple_float_information::break_stop_code)))
+                heads::initial_byte(major_type::simple,
+                                    std::to_underlying(rfc8949::simple_information::break_stop_code)))
             return false;
         d.encoded.remove_prefix(1);
         return true;
@@ -1278,15 +1278,15 @@ class extended_diagnostic_notation
         case std::to_underlying(simple_value::undefined):
             out += "undefined";
             return {};
-        case std::to_underlying(rfc8949::simple_float_information::simple_value_follows):
+        case std::to_underlying(rfc8949::simple_information::simple_value_follows):
             if (error const r = detail::validity::check_simple_value(h->info, h->argument).error_or(error{});
                 r != error{}) [[unlikely]]
                 return std::unexpected(r);
             out += "simple(" + std::to_string(h->argument) + ")";
             return {};
-        case std::to_underlying(rfc8949::simple_float_information::half_precision_float):
-        case std::to_underlying(rfc8949::simple_float_information::single_precision_float):
-        case std::to_underlying(rfc8949::simple_float_information::double_precision_float):
+        case std::to_underlying(rfc8949::simple_information::half_precision_float):
+        case std::to_underlying(rfc8949::simple_information::single_precision_float):
+        case std::to_underlying(rfc8949::simple_information::double_precision_float):
             out += float_of(h->info, h->argument);
             return {};
         [[unlikely]] case std::to_underlying(rfc8949::additional_information::indefinite_length):

@@ -169,11 +169,11 @@ std::expected<void, error> tree_decoder<Resolve>::decode_scalar(item &node, head
             node.via.bin = std::as_bytes(std::span(own));
         return {};
     }
-    case major_type::simple_float:
-        switch (static_cast<rfc8949::simple_float_information>(h.info)) {
-        case rfc8949::simple_float_information::half_precision_float:
-        case rfc8949::simple_float_information::single_precision_float:
-        case rfc8949::simple_float_information::double_precision_float:
+    case major_type::simple:
+        switch (static_cast<rfc8949::simple_information>(h.info)) {
+        case rfc8949::simple_information::half_precision_float:
+        case rfc8949::simple_information::single_precision_float:
+        case rfc8949::simple_information::double_precision_float:
             node.via.f64 = ieee754::decode_float(h.info, h.argument);
             return {};
         default:
@@ -253,7 +253,7 @@ std::expected<void, error> tree_decoder<Resolve>::decode_content(std::pmr::vecto
         return {};
     case major_type::byte_string:
     case major_type::text_string:
-    case major_type::simple_float:
+    case major_type::simple:
         return decode_scalar(node, head);
     case major_type::array:
     case major_type::map: {

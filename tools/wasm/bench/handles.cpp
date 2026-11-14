@@ -50,8 +50,7 @@ std::string_view bytes_of(std::uint32_t const doc)
 
 cbor::lazy lazy_at(std::uint32_t const doc, std::uint32_t const offset)
 {
-    auto const root = cbor::lazy::view(documents[doc].bytes);
-    return cbor::lazy{root->top_level, static_cast<decltype(cbor::lazy::offset)>(offset)};
+    return *cbor::lazy::view(documents[doc].bytes, std::string_view(*documents[doc].bytes).substr(offset));
 }
 
 std::uint32_t handle_new(std::uint32_t const doc, std::uint32_t const offset)
@@ -108,7 +107,8 @@ __attribute__((export_name("doc_release"))) void doc_release(std::uint32_t const
 __attribute__((export_name("arr_first"))) std::uint32_t arr_first(std::uint32_t const doc)
 {
     auto const root = cbor::lazy::view(documents[doc].bytes);
-    return static_cast<std::uint32_t>((*root->elements()->begin())->offset);
+    auto const first = *root->elements()->begin();
+    return static_cast<std::uint32_t>(root->encoded().size() - first->encoded().size());
 }
 
 __attribute__((export_name("arr_next"))) std::uint32_t arr_next(std::uint32_t const doc, std::uint32_t const offset)

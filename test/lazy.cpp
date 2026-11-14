@@ -777,7 +777,7 @@ TEST_CASE("lazy: the content of each tag for every major type")
             {cbor::major_type::array, "\x80"s},
             {cbor::major_type::map, "\xa0"s},
             {cbor::major_type::tag, "\xc0\x00"s},
-            {cbor::major_type::simple_float, "\xf6"s},
+            {cbor::major_type::simple, "\xf6"s},
         }};
         for (auto const &[major, content] : contents) {
             CAPTURE(tag);
@@ -876,7 +876,7 @@ TEST_CASE("lazy: copy, at and get as a chain")
                           .and_then([](cbor::lazy const &n) { return n.get<std::string_view>(); });
     REQUIRE(name.has_value());
     CHECK_EQ(**name, "bob"sv);
-    CHECK_EQ(static_cast<void const *>(doc.top_level.encoded.data()), static_cast<void const *>(data.data()));
+    CHECK_EQ(static_cast<void const *>(doc.encoded().data()), static_cast<void const *>(data.data()));
     auto const missing = doc.at("statuses")
                              .and_then([](cbor::lazy const &s) { return s.at(5); })
                              .and_then([](cbor::lazy const &s) { return s.at("user"); })
@@ -980,13 +980,6 @@ TEST_CASE("lazy: view checks that the owner holds an object")
     CHECK_EQ(**name, "xyz"sv);
 }
 
-// The public member lazy::offset is the position type of std::string_view, so no type of cbor::detail stands
-// in a public signature.
-TEST_CASE("lazy: lazy::offset is the position type of std::string_view")
-{
-    CHECK(std::same_as<decltype(cbor::lazy::offset), std::string_view::size_type>);
-}
-
 // take moves a range that owns its bytes into the lazy, so nothing is copied. A range that the caller still names, a
 // const range and a range that owns nothing do not compile, because each would either copy or dangle.
 TEST_CASE("lazy::take: only an owning rvalue range compiles")
@@ -1005,7 +998,7 @@ TEST_CASE("lazy::take: only an owning rvalue range compiles")
     std::span<char const> const data(named);
     auto const l = cbor::lazy::adopt(std::move(named));
     REQUIRE(l.has_value());
-    CHECK_EQ(l->top_level.encoded.data(), data.data());
+    CHECK_EQ(l->encoded().data(), data.data());
 }
 
 // cbor::lazy is an aggregate, so cbor::lazy{} holds no top-level item, and so does the lazy inside a cache
@@ -1050,7 +1043,7 @@ TEST_CASE("lazy: copy moves an rvalue string and copies everything else")
     std::span<char const> const data(*buffer);
     auto const moved = cbor::lazy::adopt(std::move(*buffer));
     REQUIRE(moved.has_value());
-    CHECK_EQ(static_cast<void const *>(moved->top_level.encoded.data()), static_cast<void const *>(data.data()));
+    CHECK_EQ(static_cast<void const *>(moved->encoded().data()), static_cast<void const *>(data.data()));
     buffer->assign(message.size(), '\0');
     buffer.reset();
     CHECK_EQ(text_of(*moved->at("k")), text);
@@ -1058,7 +1051,7 @@ TEST_CASE("lazy: copy moves an rvalue string and copies everything else")
     std::string lvalue = message;
     auto const copied = test::lazy_of_copy(lvalue);
     REQUIRE(copied.has_value());
-    CHECK_NE(static_cast<void const *>(copied->top_level.encoded.data()), static_cast<void const *>(lvalue.data()));
+    CHECK_NE(static_cast<void const *>(copied->encoded().data()), static_cast<void const *>(lvalue.data()));
     CHECK_EQ(lvalue, message);
     lvalue.assign(message.size(), '\0');
     CHECK_EQ(text_of(*copied->at("k")), text);
@@ -1066,9 +1059,9 @@ TEST_CASE("lazy: copy moves an rvalue string and copies everything else")
     std::string again = message;
     char const *const again_data = again.data();
     auto const from_moved = cbor::lazy::adopt(std::move(again));
-    CHECK_EQ(static_cast<void const *>(from_moved->top_level.encoded.data()), static_cast<void const *>(again_data));
+    CHECK_EQ(static_cast<void const *>(from_moved->encoded().data()), static_cast<void const *>(again_data));
     auto const from_lvalue = test::lazy_of_copy(message);
-    CHECK_NE(static_cast<void const *>(from_lvalue->top_level.encoded.data()), static_cast<void const *>(message.data()));
+    CHECK_NE(static_cast<void const *>(from_lvalue->encoded().data()), static_cast<void const *>(message.data()));
 
     CHECK_EQ(text_of(*test::lazy_of_copy("\x63" "abc")), "abc");
     char const *const pointer = "\x62" "ab";
@@ -1546,7 +1539,7 @@ TEST_CASE("lazy: an element of each typed array gives its raw bytes")
         std::span<std::byte const> const view = **raw;
         CHECK_EQ(view.size(), size);
         CHECK(std::ranges::equal(view, std::as_bytes(std::span(bytes).subspan(size))));
-        auto const &encoded = l.top_level.encoded;
+        auto const &encoded = l.encoded();
         CHECK(std::ranges::distance(std::as_bytes(std::span(encoded)).data(), view.data()) >= 0);
         CHECK(std::ranges::distance(view.data(), std::to_address(std::as_bytes(std::span(encoded)).end())) >= 0);
     }

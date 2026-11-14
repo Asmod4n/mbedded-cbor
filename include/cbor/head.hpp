@@ -282,7 +282,7 @@ class heads
             if (error const r = detail::validity::check_argument<Checked>(major, argument).error_or(error{});
                 r != error{}) [[unlikely]]
                 return std::unexpected(r);
-            if (major == major_type::simple_float)
+            if (major == major_type::simple)
                 if (error const r = detail::validity::check_simple_value(info, argument).error_or(error{});
                     r != error{}) [[unlikely]]
                     return std::unexpected(r);
@@ -300,7 +300,7 @@ class heads
             if (detail::validity::bytes_fit(initial_byte_size + sizeof(std::uint64_t), encoded.size()) &&
                 info <= std::to_underlying(rfc8949::additional_information::eight_byte_argument) &&
                 major != major_type::tag &&
-                (major != major_type::simple_float ||
+                (major != major_type::simple ||
                  info != std::to_underlying(rfc8949::additional_information::one_byte_argument))) [[likely]] {
                 bool const immediate =
                     info < std::to_underlying(rfc8949::additional_information::one_byte_argument);
@@ -403,12 +403,12 @@ class heads
                     return -static_cast<double>(
                         h.argument == std::numeric_limits<std::uint64_t>::max() ? h.argument : h.argument + 1);
                 }
-                if (h.major != major_type::simple_float) [[unlikely]]
+                if (h.major != major_type::simple) [[unlikely]]
                     return std::unexpected(error::incorrect_type);
-                switch (static_cast<rfc8949::simple_float_information>(h.info)) {
-                case rfc8949::simple_float_information::half_precision_float:
-                case rfc8949::simple_float_information::single_precision_float:
-                case rfc8949::simple_float_information::double_precision_float:
+                switch (static_cast<rfc8949::simple_information>(h.info)) {
+                case rfc8949::simple_information::half_precision_float:
+                case rfc8949::simple_information::single_precision_float:
+                case rfc8949::simple_information::double_precision_float:
                     return ieee754::decode_float(h.info, h.argument);
                 [[unlikely]] default:
                     return std::unexpected(error::incorrect_type);
@@ -450,9 +450,9 @@ class heads
 
     static constexpr bool is_floating_point(major_type const major, std::uint8_t const info)
     {
-        return major == major_type::simple_float &&
-               info >= std::to_underlying(rfc8949::simple_float_information::half_precision_float) &&
-               info <= std::to_underlying(rfc8949::simple_float_information::double_precision_float);
+        return major == major_type::simple &&
+               info >= std::to_underlying(rfc8949::simple_information::half_precision_float) &&
+               info <= std::to_underlying(rfc8949::simple_information::double_precision_float);
     }
 
     static constexpr bool is_bignum(major_type const major, std::uint64_t const argument)
@@ -464,19 +464,19 @@ class heads
 
     static constexpr bool is_boolean(head const &h)
     {
-        return h.major == major_type::simple_float &&
+        return h.major == major_type::simple &&
                (h.info == std::to_underlying(simple_value::false_value) || h.info == std::to_underlying(simple_value::true_value));
     }
 
     static constexpr bool is_simple_value(head const &h)
     {
-        return h.major == major_type::simple_float &&
-               h.info <= std::to_underlying(rfc8949::simple_float_information::simple_value_follows);
+        return h.major == major_type::simple &&
+               h.info <= std::to_underlying(rfc8949::simple_information::simple_value_follows);
     }
 
     static constexpr bool is_null(head const &h)
     {
-        return h.major == major_type::simple_float && h.info == std::to_underlying(simple_value::null);
+        return h.major == major_type::simple && h.info == std::to_underlying(simple_value::null);
     }
 
     static constexpr cbor::type type_of(major_type const major, std::uint8_t const info, std::uint64_t const argument)
@@ -504,7 +504,7 @@ class heads
                 argument != std::to_underlying(rfc8746::tag_number::typed_array_reserved))
                 return cbor::type::typed_array;
             return cbor::type::tag;
-        case major_type::simple_float:
+        case major_type::simple:
             break;
         }
         switch (info) {
@@ -516,11 +516,11 @@ class heads
             return cbor::type::null;
         case std::to_underlying(simple_value::undefined):
             return cbor::type::undefined;
-        case std::to_underlying(rfc8949::simple_float_information::half_precision_float):
+        case std::to_underlying(rfc8949::simple_information::half_precision_float):
             return cbor::type::half_float;
-        case std::to_underlying(rfc8949::simple_float_information::single_precision_float):
+        case std::to_underlying(rfc8949::simple_information::single_precision_float):
             return cbor::type::single_float;
-        case std::to_underlying(rfc8949::simple_float_information::double_precision_float):
+        case std::to_underlying(rfc8949::simple_information::double_precision_float):
             return cbor::type::double_float;
         default:
             return cbor::type::simple_value;
@@ -556,7 +556,7 @@ class heads
         case cbor::type::half_float:
         case cbor::type::single_float:
         case cbor::type::double_float:
-            return major_type::simple_float;
+            return major_type::simple;
         }
         detail::validity::throw_logic_error("cbor::item: the type is not a member of cbor::type");
     }
@@ -586,11 +586,11 @@ class heads
                    static_cast<std::uint8_t>(element[little_endian ? size - 1 - i : i]);
         if (floating) {
             auto const info = size == sizeof(std::uint16_t)
-                                  ? rfc8949::simple_float_information::half_precision_float
+                                  ? rfc8949::simple_information::half_precision_float
                               : size == sizeof(std::uint32_t)
-                                  ? rfc8949::simple_float_information::single_precision_float
-                                  : rfc8949::simple_float_information::double_precision_float;
-            return head{major_type::simple_float, std::to_underlying(info), bits};
+                                  ? rfc8949::simple_information::single_precision_float
+                                  : rfc8949::simple_information::double_precision_float;
+            return head{major_type::simple, std::to_underlying(info), bits};
         }
         std::uint64_t const sign = std::uint64_t{1} << (size * std::numeric_limits<std::uint8_t>::digits - 1);
         if (signed_integer && (bits & sign) != 0) {
@@ -653,7 +653,7 @@ class heads
         if (error const r = detail::validity::check_argument<Checked>(major, argument).error_or(error{});
             r != error{}) [[unlikely]]
             return std::unexpected(r);
-        if (major == major_type::simple_float)
+        if (major == major_type::simple)
             if (error const r = detail::validity::check_simple_value(info, argument).error_or(error{});
                 r != error{}) [[unlikely]]
                 return std::unexpected(r);

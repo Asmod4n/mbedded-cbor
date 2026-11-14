@@ -529,10 +529,10 @@ class generic
             if constexpr (std::same_as<U, double>) {
                 out = ieee754::decode_float(h->info, h->argument);
             } else if (h->info ==
-                       std::to_underlying(rfc8949::simple_float_information::half_precision_float)) {
+                       std::to_underlying(rfc8949::simple_information::half_precision_float)) {
                 out = ieee754::float_decode_binary16(static_cast<std::uint16_t>(h->argument));
             } else if (h->info ==
-                       std::to_underlying(rfc8949::simple_float_information::single_precision_float)) {
+                       std::to_underlying(rfc8949::simple_information::single_precision_float)) {
                 out = std::bit_cast<float>(static_cast<std::uint32_t>(h->argument));
             } else {
                 double const value = std::bit_cast<double>(h->argument);
@@ -541,10 +541,10 @@ class generic
                 if (ieee754::is_nan(ieee754::double_precision, h->argument)
                         ? (h->argument & ((std::uint64_t{1} << narrow) - 1u)) != 0
                         : ieee754::preferred_float_info(value) ==
-                              rfc8949::simple_float_information::double_precision_float) [[unlikely]]
+                              rfc8949::simple_information::double_precision_float) [[unlikely]]
                     return std::unexpected(error::number_out_of_range);
                 out = std::bit_cast<float>(static_cast<std::uint32_t>(
-                    ieee754::encode_float(rfc8949::simple_float_information::single_precision_float, value)));
+                    ieee754::encode_float(rfc8949::simple_information::single_precision_float, value)));
             }
             return {};
         } else if constexpr (std::same_as<U, std::nullptr_t>) {
@@ -589,7 +589,7 @@ class generic
         } else if constexpr (reflection::is_optional<U>) {
             if (detail::validity::bytes_fit(heads::initial_byte_size, d.encoded.size()) &&
                 d.encoded.front() ==
-                    heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::null))) {
+                    heads::initial_byte(major_type::simple, std::to_underlying(simple_value::null))) {
                 d.encoded.remove_prefix(1);
                 out.reset();
                 return {};
@@ -724,7 +724,7 @@ class generic
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
         rep seconds = 0;
-        if (h->major == major_type::simple_float) {
+        if (h->major == major_type::simple) {
             if (!head_accepted<double>(*h)) [[unlikely]]
                 return std::unexpected(error::inadmissible_type_for_tag_content);
             d.encoded = look.encoded;
@@ -972,9 +972,9 @@ class generic
     static std::size_t float_size(F const value)
     {
         switch (ieee754::preferred_float_info(value)) {
-        case rfc8949::simple_float_information::half_precision_float:
+        case rfc8949::simple_information::half_precision_float:
             return heads::initial_byte_size + sizeof(std::uint16_t);
-        case rfc8949::simple_float_information::single_precision_float:
+        case rfc8949::simple_information::single_precision_float:
             return heads::initial_byte_size + sizeof(std::uint32_t);
         default:
             return heads::initial_byte_size + sizeof(std::uint64_t);
@@ -1199,14 +1199,14 @@ class generic
                 return std::unexpected(r.error());
         if constexpr (std::same_as<U, bool>) {
             out.subspan(at).front() =
-                heads::initial_byte(major_type::simple_float, value ? std::to_underlying(simple_value::true_value)
+                heads::initial_byte(major_type::simple, value ? std::to_underlying(simple_value::true_value)
                                                                     : std::to_underlying(simple_value::false_value));
             return at + heads::initial_byte_size;
         } else if constexpr (std::same_as<U, std::nullptr_t>) {
-            out.subspan(at).front() = heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::null));
+            out.subspan(at).front() = heads::initial_byte(major_type::simple, std::to_underlying(simple_value::null));
             return at + heads::initial_byte_size;
         } else if constexpr (std::same_as<U, simple_value>) {
-            return at + heads::write_head(out, at, major_type::simple_float, std::to_underlying(value));
+            return at + heads::write_head(out, at, major_type::simple, std::to_underlying(value));
 #ifdef CBOR_HAS_INT128
         } else if constexpr (reflection::is_wide_integer<U>) {
             bool negative = false;
@@ -1240,8 +1240,8 @@ class generic
             }
             return at + heads::write_head(out, at, major_type::unsigned_integer, static_cast<std::uint64_t>(value));
         } else if constexpr (std::is_floating_point_v<U>) {
-            rfc8949::simple_float_information const info = ieee754::preferred_float_info(value);
-            return at + heads::write_head(out, at, major_type::simple_float, std::to_underlying(info), ieee754::encode_float(info, value));
+            rfc8949::simple_information const info = ieee754::preferred_float_info(value);
+            return at + heads::write_head(out, at, major_type::simple, std::to_underlying(info), ieee754::encode_float(info, value));
         } else if constexpr (is_basic_string<U> || std::same_as<U, std::string_view>) {
             at += heads::write_head(out, at, major_type::text_string, value.size());
             return write_bytes(out, at, value);
@@ -1254,7 +1254,7 @@ class generic
             return write_tag_content(out, at, value);
         } else if constexpr (reflection::is_optional<U>) {
             if (!value) {
-                out.subspan(at).front() = heads::initial_byte(major_type::simple_float, std::to_underlying(simple_value::null));
+                out.subspan(at).front() = heads::initial_byte(major_type::simple, std::to_underlying(simple_value::null));
                 return at + heads::initial_byte_size;
             }
             return write_generic(out, at, *value);
