@@ -29,6 +29,7 @@
 // IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 // CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+#include "../ieee754.hpp"
 #include "../small_stack.hpp"
 #include "cbor2.hpp"
 
@@ -755,12 +756,8 @@ TEST_CASE("cbor2 decoder: test_complex")
         REQUIRE_EQ(parts->size(), 2u);
         double const real = std::get<double>(parts->front().kind);
         double const imag = std::get<double>(parts->back().kind);
-        CHECK_EQ(std::isnan(real), r.real_nan);
-        CHECK_EQ(std::isnan(imag), r.imag_nan);
-        if (!r.real_nan)
-            CHECK_EQ(std::bit_cast<std::uint64_t>(real), 0x0000000000000000u);
-        if (!r.imag_nan)
-            CHECK_EQ(std::bit_cast<std::uint64_t>(imag), 0x0000000000000000u);
+        CHECK_EQ(std::bit_cast<std::uint64_t>(real), r.real_nan ? test::ieee754::binary64_quiet_nan_bits : 0u);
+        CHECK_EQ(std::bit_cast<std::uint64_t>(imag), r.imag_nan ? test::ieee754::binary64_quiet_nan_bits : 0u);
     }
 }
 

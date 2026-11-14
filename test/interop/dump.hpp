@@ -24,7 +24,7 @@ namespace interop
 
 // The value of a float, independent of the width on the wire: the bits of the binary64 that holds it. All
 // NaNs are one, because RFC 8949 4.2.2 lets a decoder keep or drop the payload.
-inline std::string float_dump(double const d)
+inline std::string dump_float(double const d)
 {
     if (std::isnan(d))
         return "nan";
@@ -33,7 +33,7 @@ inline std::string float_dump(double const d)
     return buf;
 }
 
-inline std::string unsigned_dump(unsigned __int128 v)
+inline std::string dump_unsigned_integer(unsigned __int128 v)
 {
     std::string s;
     do {
@@ -44,13 +44,13 @@ inline std::string unsigned_dump(unsigned __int128 v)
 }
 
 // -1 - n of RFC 8949 3.1, major type 1.
-inline std::string negative_dump(std::uint64_t const n)
+inline std::string dump_negative_integer(std::uint64_t const n)
 {
-    return "-" + unsigned_dump(static_cast<unsigned __int128>(n) + 1);
+    return "-" + dump_unsigned_integer(static_cast<unsigned __int128>(n) + 1);
 }
 
 // RFC 8949 5.6: the order of the pairs of a map carries no meaning, so the dump sorts them.
-inline std::string map_dump(std::vector<std::string> pairs)
+inline std::string dump_sorted_map(std::vector<std::string> pairs)
 {
     std::ranges::sort(pairs);
     std::string out = "{";
@@ -59,7 +59,7 @@ inline std::string map_dump(std::vector<std::string> pairs)
     return out + "}";
 }
 
-inline std::string array_dump(std::vector<std::string> const &elements)
+inline std::string dump_array(std::vector<std::string> const &elements)
 {
     std::string out = "[";
     for (std::size_t i = 0; i < elements.size(); ++i)

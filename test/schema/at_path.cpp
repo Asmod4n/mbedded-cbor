@@ -14,7 +14,7 @@ concept message_path_reads = requires(std::string_view const s, Index const... i
 // outlive the bytes it came from.
 TEST_CASE("at_path: fixed fields give the value")
 {
-    std::string const bytes = schema_bytes(sample_vehicle);
+    std::string const bytes = encode_with_schema(sample_vehicle);
     CHECK_EQ(at_path<vehicle, "$.balance">(bytes), -7);
     CHECK_EQ(at_path<vehicle, "$.motor.cc">(bytes), 1800u);
     CHECK_EQ(at_path<vehicle, "$.motor.horsepower">(bytes), 300u);
@@ -29,7 +29,7 @@ TEST_CASE("at_path: fixed fields give the value")
 // its index from the arguments, in the order of the path.
 TEST_CASE("at_path: parts of variable size")
 {
-    std::string const bytes = schema_bytes(sample_vehicle);
+    std::string const bytes = encode_with_schema(sample_vehicle);
     CHECK_EQ(at_path<vehicle, "$.make">(bytes), "Tesla"s);
     CHECK_EQ(at_path<vehicle, "$.wheels[2].diameter">(bytes), 19u);
     CHECK_EQ(at_path<vehicle, "$.wheels[1].airPressure">(bytes), 3.0f);
@@ -44,7 +44,7 @@ TEST_CASE("at_path: parts of variable size")
 // item, is refused and reads nothing. The directory of vehicle starts behind the prefix and its head 5a.
 TEST_CASE("at_path: a broken offset is an error")
 {
-    std::string const bytes = schema_bytes(sample_vehicle);
+    std::string const bytes = encode_with_schema(sample_vehicle);
     std::size_t const head = bytes.find("\x5a"s);
     REQUIRE_NE(head, std::string::npos);
     std::string backward = bytes;
@@ -64,7 +64,7 @@ TEST_CASE("at_path: a broken offset is an error")
 TEST_CASE("at_path: a fixed byte array is read inline")
 {
     badge const b{{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}}, shade::light, "x"};
-    std::string const bytes = schema_bytes(b);
+    std::string const bytes = encode_with_schema(b);
     CHECK_EQ(at_path<badge, "$.mac">(bytes), "\x01\x02\x03\x04"s);
     CHECK_EQ(at_path<badge, "$.tone">(bytes), shade::light);
     std::string zeros = bytes;
@@ -73,12 +73,11 @@ TEST_CASE("at_path: a fixed byte array is read inline")
     CHECK_EQ(at_path<badge, "$.mac">(zeros), "\x00\x00\x00\x00"s);
 }
 
-// RFC 8949 3.1 major type 4: a list is an array. Each element has a fixed size, so element i lies at i times
-// that size behind the data, and a path reads it without walking the ones before. A list of lists takes one
-// index for each level.
+// RFC 8949 3.1 major type 4: a list is an array. Each element has a fixed size, so element i lies at i times that size
+// behind the data. A path reads it without walking the ones before. A list of lists takes one index for each level.
 TEST_CASE("at_path: a list of structs, strings and lists, by index")
 {
-    std::string const bytes = schema_bytes(sample_garage);
+    std::string const bytes = encode_with_schema(sample_garage);
     std::uint32_t sum = 0;
     for (std::size_t i = 0;; ++i) {
         auto const d = at_path<garage, "$.tires[].diameter">(bytes, i);
@@ -100,7 +99,7 @@ TEST_CASE("at_path: a list of structs, strings and lists, by index")
 // A path reads one leaf of one element at an offset the compiler knows, after the vector was checked once.
 TEST_CASE("at_path: a leaf of one element of a fixed-size vector")
 {
-    std::string const bytes = schema_bytes(gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}, {false, color::black, {5, -6}, {7, 8}}}});
+    std::string const bytes = encode_with_schema(gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}, {false, color::black, {5, -6}, {7, 8}}}});
     CHECK_EQ(at_path<gauges, "$.g[0].on">(bytes), true);
     CHECK_EQ(at_path<gauges, "$.g[1].on">(bytes), false);
     CHECK_EQ(at_path<gauges, "$.g[0].shade">(bytes), color::white);
@@ -110,10 +109,10 @@ TEST_CASE("at_path: a leaf of one element of a fixed-size vector")
     CHECK_EQ(at_path<gauges, "$.g[].range[]">(bytes, 1uz, 0uz), 7u);
     CHECK_EQ(at_path<gauges, "$.g[2].on">(bytes).error(), error::index_out_of_bounds);
     CHECK_EQ(at_path<gauges, "$.g[].range[]">(bytes, 0uz, 2uz).error(), error::index_out_of_bounds);
-    std::string const points = schema_bytes(cloud{{{1.0f, 0.5f}, {2.0f, -1.0f}}});
+    std::string const points = encode_with_schema(cloud{{{1.0f, 0.5f}, {2.0f, -1.0f}}});
     CHECK_EQ(at_path<cloud, "$.points[1].y">(points), -1.0f);
     CHECK_EQ(at_path<cloud, "$.points[0].x">(points), 1.0f);
-    CHECK_EQ(at_path<cloud, "$.points[0].x">(schema_bytes(cloud{})).error(), error::index_out_of_bounds);
+    CHECK_EQ(at_path<cloud, "$.points[0].x">(encode_with_schema(cloud{})).error(), error::index_out_of_bounds);
 }
 
 // An accessor of the vector gives its size; an accessor of one element or of its inner struct reads the leaves
@@ -121,7 +120,7 @@ TEST_CASE("at_path: a leaf of one element of a fixed-size vector")
 TEST_CASE("at_path: an accessor of a fixed-size vector and of one element")
 {
     auto const owner = std::make_shared<std::string const>(
-        schema_bytes(gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}, {false, color::black, {5, -6}, {7, 8}}}}));
+        encode_with_schema(gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}, {false, color::black, {5, -6}, {7, 8}}}}));
     auto const root = form<gauges>::path(owner);
     REQUIRE(root.has_value());
     auto const g = root->at_path<"$.g">();
@@ -143,7 +142,7 @@ TEST_CASE("at_path: an accessor of a fixed-size vector and of one element")
 // of the byte string and every bool are checked before a value is read.
 TEST_CASE("at_path and decode: a broken fixed-size vector is an error")
 {
-    std::string const bytes = schema_bytes(cloud{{{1.0f, 0.5f}, {2.0f, -1.0f}}});
+    std::string const bytes = encode_with_schema(cloud{{{1.0f, 0.5f}, {2.0f, -1.0f}}});
     std::size_t const head = bytes.find("\xd9\x80\x69\x82\xe2\x5a"s);
     REQUIRE_NE(head, std::string::npos);
     std::string reference = bytes;
@@ -162,7 +161,7 @@ TEST_CASE("at_path and decode: a broken fixed-size vector is an error")
     longer[head + 9] = '\x18';
     CHECK_EQ(at_path<cloud, "$.points[0].x">(longer).error(), error::too_little_data);
     CHECK_EQ(form<cloud>::decode(std::string(longer)).error(), error::too_little_data);
-    std::string const flags = schema_bytes(gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}}});
+    std::string const flags = encode_with_schema(gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}}});
     std::size_t const element = flags.find("\x03\xfe\x01\x01\x00"s);
     REQUIRE_NE(element, std::string::npos);
     std::string two = flags;
@@ -172,11 +171,11 @@ TEST_CASE("at_path and decode: a broken fixed-size vector is an error")
     CHECK_EQ(form<gauges>::decode(std::string(two)).error(), error::incorrect_type);
 }
 
-// The accessor of a fixed-size vector is a random access range of element accessors, so a loop, a page through
+// The accessor of a fixed-size vector is a random access range of element accessors. So a loop, a page through
 // std::views::drop and std::views::take, and a count work as with any std range. A page reads only its elements.
 TEST_CASE("at_path: a fixed-size vector is a range of its elements")
 {
-    auto const owner = std::make_shared<std::string const>(schema_bytes(
+    auto const owner = std::make_shared<std::string const>(encode_with_schema(
         gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}, {false, color::black, {5, -6}, {7, 8}}, {true, color::black, {0, 9}, {0, 0}}}}));
     auto const root = form<gauges>::path(owner);
     REQUIRE(root.has_value());
@@ -195,7 +194,7 @@ TEST_CASE("at_path: a fixed-size vector is a range of its elements")
     CHECK_EQ(first.at_path<"@.range[1]">(), 8u);
     auto const third = g->begin()[2];
     CHECK_EQ(third.at_path<"@.on">(), true);
-    std::string const empty = schema_bytes(gauges{});
+    std::string const empty = encode_with_schema(gauges{});
     auto const none = form<gauges>::path(std::string(empty));
     REQUIRE(none.has_value());
     auto const nothing = none->at_path<"$.g">();
@@ -207,7 +206,7 @@ TEST_CASE("at_path: a fixed-size vector is a range of its elements")
 // the message: inline in the root for a fixed size, a part for a vector. The byte is the end of the path.
 TEST_CASE("at_path: [n] reads one byte of a byte string")
 {
-    std::string const bytes = *form<byte_fields>::encode(byte_fields_value());
+    std::string const bytes = *form<byte_fields>::encode(make_byte_fields());
     CHECK_EQ(form<byte_fields>::at_path<"$.fixed[2]">(bytes), std::uint8_t{3});
     CHECK_EQ(form<byte_fields>::at_path<"$.plain[1]">(bytes), std::uint8_t{5});
     CHECK_EQ(form<byte_fields>::at_path<"$.bytes[1]">(bytes), std::byte{7});
@@ -248,7 +247,7 @@ TEST_CASE("at_path: [n] into a byte string does not compile past its end or into
 // A verified read checks the head of a byte string before it reads a byte of it.
 TEST_CASE("at_path: [n] into a byte string with a wrong head is incorrect_type")
 {
-    std::string bytes = *form<byte_fields>::encode(byte_fields_value());
+    std::string bytes = *form<byte_fields>::encode(make_byte_fields());
     std::size_t const head = bytes.find("\x43\x01\x02\x03"sv);
     REQUIRE_NE(head, std::string::npos);
     bytes[head] = '\x63';
@@ -263,7 +262,7 @@ concept accessor_path_reads = requires(typename form<T>::template accessor<> con
 // has no single type.
 TEST_CASE("at_path: a variant member gives its index and an accessor of the held alternative")
 {
-    auto const doc = form<home>::path(*form<home>::encode(home_with_dog()));
+    auto const doc = form<home>::path(*form<home>::encode(make_home_with_dog()));
     REQUIRE(doc);
     auto const pet = doc->at_path<"$.pet">();
     REQUIRE(pet);
@@ -284,7 +283,7 @@ TEST_CASE("at_path: a variant member gives its index and an accessor of the held
 TEST_CASE("at_path: a variant accessor owns the message and refuses a use after a move")
 {
     auto pet = [] {
-        auto const doc = form<home>::path(*form<home>::encode(home_with_cat()));
+        auto const doc = form<home>::path(*form<home>::encode(make_home_with_cat()));
         return *doc->at_path<"$.pet">();
     }();
     CHECK_EQ(pet.index(), 1u);
@@ -295,11 +294,11 @@ TEST_CASE("at_path: a variant accessor owns the message and refuses a use after 
     CHECK_THROWS_AS((void)pet.get<cat>(), std::logic_error);
 }
 
-// get gives a value alternative by value, a text or byte string alternative as a view into the message, and a
-// class alternative as an accessor; any other alternative is incorrect_type.
+// get gives a value alternative by value, a text or byte string alternative as a view into the message. A class
+// alternative as an accessor; any other alternative is incorrect_type.
 TEST_CASE("at_path: get of a value, a text and a byte string alternative")
 {
-    for (setting const &s : sample_settings()) {
+    for (setting const &s : make_sample_settings()) {
         auto const doc = form<setting>::path(*form<setting>::encode(s));
         REQUIRE(doc.has_value());
         auto const v = doc->at_path<"$.value">();

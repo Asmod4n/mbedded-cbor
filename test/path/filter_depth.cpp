@@ -20,7 +20,7 @@ TEST_CASE("path filter depth: 100 nested negations over 100 nested arrays")
     for (std::size_t i = 0; i < depth; ++i)
         filter = "!(" + filter + ")";
     std::string const document = std::string(depth - 1, '\x81') + "\x82\x01\x02"s;
-    auto const l = test::lazy_of_copy(document);
+    auto const l = test::make_lazy_from_copy(document);
     REQUIRE(l.has_value());
     auto const nodes = test::query("$..[?" + filter + "]", *l);
     REQUIRE(nodes.has_value());

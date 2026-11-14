@@ -12,11 +12,11 @@
 namespace test
 {
 
-// Compares two trees as theories/Writer.v unfold does: a shared_reference stands for the item it names. encode and
-// then decode give other indices and write a value without a cycle twice, so a comparison of the nodes does not
-// compare such trees. A pair that is already under comparison counts as equal, so a cycle ends (theories/Keys.v
-// compares two graphs by the same bisimilarity). An item with no children compares by the bytes that encode writes
-// for it. The fuzz targets use it too, so it needs no test framework.
+// Compares two trees as theories/Writer.v unfold does: a shared_reference stands for the item it names. encode and then
+// decode give other indices and write a value without a cycle twice. So a comparison of the nodes does not compare such
+// trees. A pair that is already under comparison counts as equal, so a cycle ends (theories/Keys.v compares two graphs
+// by the same bisimilarity). An item with no children compares by the bytes that encode writes for it. The fuzz targets
+// use it too, so it needs no test framework.
 class bisimilarity
 {
     std::set<std::pair<cbor::item const *, cbor::item const *>> assumed;

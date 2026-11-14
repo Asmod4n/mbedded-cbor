@@ -154,90 +154,105 @@ TEST_CASE("golden bytes: each line starts as RFC 8949 and Packed CBOR define it"
 
 // Each case below checks one type alone. The test above fails for all types at once; these name the type whose bytes
 // changed.
+// The report above fails for all types at once. This case fails alone when the bytes of wheel change.
 TEST_CASE("golden bytes: wheel encodes as before")
 {
     CHECK_FALSE(golden_expected_line("wheel").empty());
     CHECK_EQ(golden_line<wheel>("wheel"), golden_expected_line("wheel"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of engine change.
 TEST_CASE("golden bytes: engine encodes as before")
 {
     CHECK_FALSE(golden_expected_line("engine").empty());
     CHECK_EQ(golden_line<engine>("engine"), golden_expected_line("engine"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of car change.
 TEST_CASE("golden bytes: car encodes as before")
 {
     CHECK_FALSE(golden_expected_line("car").empty());
     CHECK_EQ(golden_line<car>("car"), golden_expected_line("car"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of empty change.
 TEST_CASE("golden bytes: empty encodes as before")
 {
     CHECK_FALSE(golden_expected_line("empty").empty());
     CHECK_EQ(golden_line<empty>("empty"), golden_expected_line("empty"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of thirty change.
 TEST_CASE("golden bytes: thirty encodes as before")
 {
     CHECK_FALSE(golden_expected_line("thirty").empty());
     CHECK_EQ(golden_line<thirty>("thirty"), golden_expected_line("thirty"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of long_name change.
 TEST_CASE("golden bytes: long_name encodes as before")
 {
     CHECK_FALSE(golden_expected_line("long_name").empty());
     CHECK_EQ(golden_line<long_name>("long_name"), golden_expected_line("long_name"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of utf8_key change.
 TEST_CASE("golden bytes: utf8_key encodes as before")
 {
     CHECK_FALSE(golden_expected_line("utf8_key").empty());
     CHECK_EQ(golden_line<utf8_key>("utf8_key"), golden_expected_line("utf8_key"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of login change.
 TEST_CASE("golden bytes: login encodes as before")
 {
     CHECK_FALSE(golden_expected_line("login").empty());
     CHECK_EQ(golden_line<login>("login"), golden_expected_line("login"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of measures change.
 TEST_CASE("golden bytes: measures encodes as before")
 {
     CHECK_FALSE(golden_expected_line("measures").empty());
     CHECK_EQ(golden_line<measures>("measures"), golden_expected_line("measures"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of named change.
 TEST_CASE("golden bytes: named encodes as before")
 {
     CHECK_FALSE(golden_expected_line("named").empty());
     CHECK_EQ(golden_line<named>("named"), golden_expected_line("named"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of people change.
 TEST_CASE("golden bytes: people encodes as before")
 {
     CHECK_FALSE(golden_expected_line("people").empty());
     CHECK_EQ(golden_line<people>("people"), golden_expected_line("people"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of pmr_named change.
 TEST_CASE("golden bytes: pmr_named encodes as before")
 {
     CHECK_FALSE(golden_expected_line("pmr_named").empty());
     CHECK_EQ(golden_line<pmr_named>("pmr_named"), golden_expected_line("pmr_named"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of pmr_people change.
 TEST_CASE("golden bytes: pmr_people encodes as before")
 {
     CHECK_FALSE(golden_expected_line("pmr_people").empty());
     CHECK_EQ(golden_line<pmr_people>("pmr_people"), golden_expected_line("pmr_people"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of unsorted change.
 TEST_CASE("golden bytes: unsorted encodes as before")
 {
     CHECK_FALSE(golden_expected_line("unsorted").empty());
     CHECK_EQ(golden_line<unsorted>("unsorted"), golden_expected_line("unsorted"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of unsorted_other_order change.
 TEST_CASE("golden bytes: unsorted_other_order encodes as before")
 {
     CHECK_FALSE(golden_expected_line("unsorted_other_order").empty());
@@ -245,12 +260,14 @@ TEST_CASE("golden bytes: unsorted_other_order encodes as before")
              golden_expected_line("unsorted_other_order"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of renamed change.
 TEST_CASE("golden bytes: renamed encodes as before")
 {
     CHECK_FALSE(golden_expected_line("renamed").empty());
     CHECK_EQ(golden_line<renamed>("renamed"), golden_expected_line("renamed"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of listed_other_order change.
 TEST_CASE("golden bytes: listed_other_order encodes as before")
 {
     CHECK_FALSE(golden_expected_line("listed_other_order").empty());
@@ -258,30 +275,35 @@ TEST_CASE("golden bytes: listed_other_order encodes as before")
              golden_expected_line("listed_other_order"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of sorted_inner change.
 TEST_CASE("golden bytes: sorted_inner encodes as before")
 {
     CHECK_FALSE(golden_expected_line("sorted_inner").empty());
     CHECK_EQ(golden_line<sorted_inner>("sorted_inner"), golden_expected_line("sorted_inner"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of sorted_outer change.
 TEST_CASE("golden bytes: sorted_outer encodes as before")
 {
     CHECK_FALSE(golden_expected_line("sorted_outer").empty());
     CHECK_EQ(golden_line<sorted_outer>("sorted_outer"), golden_expected_line("sorted_outer"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of tire change.
 TEST_CASE("golden bytes: tire encodes as before")
 {
     CHECK_FALSE(golden_expected_line("tire").empty());
     CHECK_EQ(golden_line<tire>("tire"), golden_expected_line("tire"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of vehicle change.
 TEST_CASE("golden bytes: vehicle encodes as before")
 {
     CHECK_FALSE(golden_expected_line("vehicle").empty());
     CHECK_EQ(golden_line<vehicle>("vehicle"), golden_expected_line("vehicle"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of badge change.
 TEST_CASE("golden bytes: badge encodes as before")
 {
     CHECK_FALSE(golden_expected_line("badge").empty());
@@ -289,6 +311,7 @@ TEST_CASE("golden bytes: badge encodes as before")
 }
 
 #if defined(__STDCPP_FLOAT16_T__)
+// The report above fails for all types at once. This case fails alone when the bytes of numbers change.
 TEST_CASE("golden bytes: numbers encodes as before")
 {
     CHECK_FALSE(golden_expected_line("numbers").empty());
@@ -296,66 +319,77 @@ TEST_CASE("golden bytes: numbers encodes as before")
 }
 #endif
 
+// The report above fails for all types at once. This case fails alone when the bytes of doubles change.
 TEST_CASE("golden bytes: doubles encodes as before")
 {
     CHECK_FALSE(golden_expected_line("doubles").empty());
     CHECK_EQ(golden_line<doubles>("doubles"), golden_expected_line("doubles"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of garage change.
 TEST_CASE("golden bytes: garage encodes as before")
 {
     CHECK_FALSE(golden_expected_line("garage").empty());
     CHECK_EQ(golden_line<garage>("garage"), golden_expected_line("garage"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of keyed change.
 TEST_CASE("golden bytes: keyed encodes as before")
 {
     CHECK_FALSE(golden_expected_line("keyed").empty());
     CHECK_EQ(golden_line<keyed>("keyed"), golden_expected_line("keyed"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of passkey_user change.
 TEST_CASE("golden bytes: passkey_user encodes as before")
 {
     CHECK_FALSE(golden_expected_line("passkey_user").empty());
     CHECK_EQ(golden_line<passkey_user>("passkey_user"), golden_expected_line("passkey_user"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of passkey_login change.
 TEST_CASE("golden bytes: passkey_login encodes as before")
 {
     CHECK_FALSE(golden_expected_line("passkey_login").empty());
     CHECK_EQ(golden_line<passkey_login>("passkey_login"), golden_expected_line("passkey_login"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of chain19 change.
 TEST_CASE("golden bytes: chain19 encodes as before")
 {
     CHECK_FALSE(golden_expected_line("chain19").empty());
     CHECK_EQ(golden_line<chain19>("chain19"), golden_expected_line("chain19"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of chain10 change.
 TEST_CASE("golden bytes: chain10 encodes as before")
 {
     CHECK_FALSE(golden_expected_line("chain10").empty());
     CHECK_EQ(golden_line<chain10>("chain10"), golden_expected_line("chain10"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of chain0 change.
 TEST_CASE("golden bytes: chain0 encodes as before")
 {
     CHECK_FALSE(golden_expected_line("chain0").empty());
     CHECK_EQ(golden_line<chain0>("chain0"), golden_expected_line("chain0"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of point_a change.
 TEST_CASE("golden bytes: point_a encodes as before")
 {
     CHECK_FALSE(golden_expected_line("point_a").empty());
     CHECK_EQ(golden_line<point_a>("point_a"), golden_expected_line("point_a"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of point_b change.
 TEST_CASE("golden bytes: point_b encodes as before")
 {
     CHECK_FALSE(golden_expected_line("point_b").empty());
     CHECK_EQ(golden_line<point_b>("point_b"), golden_expected_line("point_b"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of ticket change.
 TEST_CASE("golden bytes: ticket encodes as before")
 {
     CHECK_FALSE(golden_expected_line("ticket").empty());
@@ -364,6 +398,7 @@ TEST_CASE("golden bytes: ticket encodes as before")
 
 // The golden bytes of this type hold an int128 member; a platform without int128 writes an int64 there.
 #ifdef CBOR_HAS_INT128
+// The report above fails for all types at once. This case fails alone when the bytes of probe change.
 TEST_CASE("golden bytes: probe encodes as before")
 {
     CHECK_FALSE(golden_expected_line("probe").empty());
@@ -371,66 +406,77 @@ TEST_CASE("golden bytes: probe encodes as before")
 }
 #endif
 
+// The report above fails for all types at once. This case fails alone when the bytes of lot_wheel change.
 TEST_CASE("golden bytes: lot_wheel encodes as before")
 {
     CHECK_FALSE(golden_expected_line("lot_wheel").empty());
     CHECK_EQ(golden_line<lot_wheel>("lot_wheel"), golden_expected_line("lot_wheel"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of lot_engine change.
 TEST_CASE("golden bytes: lot_engine encodes as before")
 {
     CHECK_FALSE(golden_expected_line("lot_engine").empty());
     CHECK_EQ(golden_line<lot_engine>("lot_engine"), golden_expected_line("lot_engine"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of lot_car change.
 TEST_CASE("golden bytes: lot_car encodes as before")
 {
     CHECK_FALSE(golden_expected_line("lot_car").empty());
     CHECK_EQ(golden_line<lot_car>("lot_car"), golden_expected_line("lot_car"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of parking_lot change.
 TEST_CASE("golden bytes: parking_lot encodes as before")
 {
     CHECK_FALSE(golden_expected_line("parking_lot").empty());
     CHECK_EQ(golden_line<parking_lot>("parking_lot"), golden_expected_line("parking_lot"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of point change.
 TEST_CASE("golden bytes: point encodes as before")
 {
     CHECK_FALSE(golden_expected_line("point").empty());
     CHECK_EQ(golden_line<point>("point"), golden_expected_line("point"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of cloud change.
 TEST_CASE("golden bytes: cloud encodes as before")
 {
     CHECK_FALSE(golden_expected_line("cloud").empty());
     CHECK_EQ(golden_line<cloud>("cloud"), golden_expected_line("cloud"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of gauge change.
 TEST_CASE("golden bytes: gauge encodes as before")
 {
     CHECK_FALSE(golden_expected_line("gauge").empty());
     CHECK_EQ(golden_line<gauge>("gauge"), golden_expected_line("gauge"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of gauges change.
 TEST_CASE("golden bytes: gauges encodes as before")
 {
     CHECK_FALSE(golden_expected_line("gauges").empty());
     CHECK_EQ(golden_line<gauges>("gauges"), golden_expected_line("gauges"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of filler_type<3> change.
 TEST_CASE("golden bytes: filler_type<3> encodes as before")
 {
     CHECK_FALSE(golden_expected_line("filler_type<3>").empty());
     CHECK_EQ(golden_line<filler_type<3>>("filler_type<3>"), golden_expected_line("filler_type<3>"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of fifteen_entries change.
 TEST_CASE("golden bytes: fifteen_entries encodes as before")
 {
     CHECK_FALSE(golden_expected_line("fifteen_entries").empty());
     CHECK_EQ(golden_line<fifteen_entries>("fifteen_entries"), golden_expected_line("fifteen_entries"));
 }
 
+// The report above fails for all types at once. This case fails alone when the bytes of eighteen_entries change.
 TEST_CASE("golden bytes: eighteen_entries encodes as before")
 {
     CHECK_FALSE(golden_expected_line("eighteen_entries").empty());
@@ -439,6 +485,7 @@ TEST_CASE("golden bytes: eighteen_entries encodes as before")
 
 // The golden bytes of this type hold an int128 member; a platform without int128 writes an int64 there.
 #ifdef CBOR_HAS_INT128
+// The report above fails for all types at once. This case fails alone when the bytes of everything change.
 TEST_CASE("golden bytes: everything encodes as before")
 {
     CHECK_FALSE(golden_expected_line("everything").empty());
@@ -446,20 +493,20 @@ TEST_CASE("golden bytes: everything encodes as before")
 }
 #endif
 
-// The item of a variant member is the record of the held alternative, as draft-ietf-cbor-packed-19 shares a
-// record as an item: the class tag 1740 (d9 06 cc) or 1741 (d9 06 cd), the straight reference d8 81 or d8 82 to
-// the record function of the alternative, and the values in key order. The reference c6 1a 00 00 00 00 of the root
-// names that item. The test exists so that a change of this layout shows.
+// The item of a variant member is the record of the held alternative, as draft-ietf-cbor-packed-19 shares a record as an
+// item: the class tag 1740 (d9 06 cc) or 1741 (d9 06 cd), the straight reference d8 81 or d8 82 to the record function
+// of the alternative. The values in key order. The reference c6 1a 00 00 00 00 of the root names that item. The test
+// exists so that a change of this layout shows.
 TEST_CASE("golden bytes: a variant member encodes as before")
 {
-    CHECK_EQ(*form<home>::encode(home_with_dog()),
+    CHECK_EQ(*form<home>::encode(make_home_with_dog()),
              "\xd8\x71\x82\x9a\x00\x00\x00\x13\xd8\x72\x82\x63\x70\x65\x74\x66\x73\x74\x72\x65\x65\x74\xd8\x72\x82\x64"
              "\x62\x61\x72\x6b\x64\x6e\x61\x6d\x65\xd8\x72\x82\x64\x6e\x61\x6d\x65\x64\x74\x6f\x79\x73\x5a\x00\x00\x00"
              "\x0c\x00\x00\x00\x4d\x00\x00\x00\x62\x00\x00\x00\x6a\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xd9"
              "\x06\xcc\xd8\x81\x9a\x00\x00\x00\x02\x1a\x00\x00\x00\x03\xc6\x3a\x00\x00\x00\x00\x7a\x00\x00\x00\x03\x72"
              "\x65\x78\x7a\x00\x00\x00\x03\x65\x6c\x6d\xd9\x06\xce\xd8\x80\x9a\x00\x00\x00\x02\xc6\x1a\x00\x00\x00\x00"
              "\xc6\x1a\x00\x00\x00\x01"s);
-    CHECK_EQ(*form<home>::encode(home_with_cat()),
+    CHECK_EQ(*form<home>::encode(make_home_with_cat()),
              "\xd8\x71\x82\x9a\x00\x00\x00\x16\xd8\x72\x82\x63\x70\x65\x74\x66\x73\x74\x72\x65\x65\x74\xd8\x72\x82\x64"
              "\x62\x61\x72\x6b\x64\x6e\x61\x6d\x65\xd8\x72\x82\x64\x6e\x61\x6d\x65\x64\x74\x6f\x79\x73\x5a\x00\x00\x00"
              "\x18\x00\x00\x00\x59\x00\x00\x00\x6f\x00\x00\x00\x77\x00\x00\x00\x88\x00\x00\x00\x91\x00\x00\x00\x9b\xf7"

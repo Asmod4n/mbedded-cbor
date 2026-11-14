@@ -32,7 +32,7 @@ inline std::expected<cbor::lazy, cbor::error> select_index(cbor::lazy const &l, 
     return l.at(static_cast<std::size_t>(*size - back));
 }
 
-inline std::expected<value, error> value_of(cbor::item const &it);
+inline std::expected<value, error> make_value_from_item(cbor::item const &it);
 
 template <cbor::type K>
 std::expected<value, error> tag_value(cbor::item const &it)
@@ -53,7 +53,7 @@ std::expected<value, error> tag_value(cbor::item const &it)
         }
         return value{bignum{negative_value, negative_value ? magnitude_plus_one(m) : std::string(m)}};
     }
-    auto c = value_of(inner);
+    auto c = make_value_from_item(inner);
     if (!c)
         return std::unexpected(c.error());
     return value{tagged{number, std::move(*c)}};
@@ -62,7 +62,7 @@ std::expected<value, error> tag_value(cbor::item const &it)
 // The reference model of a decoded item tree. Tags 28 and 29 are plain tags over their content, as RFC 8949
 // 3.4 lets a reader that does not know a tag pass it on. A bignum that fits 64 bits is an integer. Tag 24 is a tag
 // over its byte string.
-inline std::expected<value, error> value_of(cbor::item const &it)
+inline std::expected<value, error> make_value_from_item(cbor::item const &it)
 {
     switch (it.type) {
     case cbor::type::text_string:
@@ -95,7 +95,7 @@ inline std::expected<value, error> value_of(cbor::item const &it)
         array a;
         auto const children = it.get<cbor::type::array>().value();
         for (cbor::item const &child : children) {
-            auto e = value_of(child);
+            auto e = make_value_from_item(child);
             if (!e)
                 return std::unexpected(e.error());
             a.push_back(std::move(*e));
@@ -106,10 +106,10 @@ inline std::expected<value, error> value_of(cbor::item const &it)
         std::span<cbor::item const> const children = it.get<cbor::type::map>().value();
         map m;
         for (std::size_t i = 0; i + 1 < children.size(); i += 2) {
-            auto k = value_of(children[i]);
+            auto k = make_value_from_item(children[i]);
             if (!k)
                 return std::unexpected(k.error());
-            auto v = value_of(children[i + 1]);
+            auto v = make_value_from_item(children[i + 1]);
             if (!v)
                 return std::unexpected(v.error());
             m.push_back(entry{std::move(*k), std::move(*v)});
@@ -131,28 +131,28 @@ inline std::expected<value, error> value_of(cbor::item const &it)
     std::unreachable();
 }
 
-inline std::expected<value, error> value_of(cbor::lazy const &l)
+inline std::expected<value, error> make_value_from_item(cbor::lazy const &l)
 {
     auto const tree = l.clone();
     if (!tree)
         return std::unexpected(tree.error());
-    return value_of(**tree);
+    return make_value_from_item(**tree);
 }
 
 template <class E>
-inline std::expected<value, error> value_of(std::expected<cbor::lazy, E> const &l)
+inline std::expected<value, error> make_value_from_item(std::expected<cbor::lazy, E> const &l)
 {
     if (!l)
         return std::unexpected(l.error());
-    return value_of(*l);
+    return make_value_from_item(*l);
 }
 
 inline std::expected<value, error> decoded(std::string_view const wire)
 {
-    auto const l = test::lazy_of_copy(wire);
+    auto const l = test::make_lazy_from_copy(wire);
     if (!l)
         return std::unexpected(l.error());
-    return value_of(*l);
+    return make_value_from_item(*l);
 }
 
 inline error decode_error(std::string_view const wire)

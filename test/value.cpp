@@ -47,9 +47,9 @@ TEST_CASE("major 5: empty, string, integer, nested keys")
     check_both("\xa1\x65outer\xa1\x65inner\x18\x2a"sv, M("outer"s, M("inner"s, 42)));
 }
 
-// Ported from test.rb: 'depth: deeply-nested arrays / maps / encoding all raise RuntimeError'.
-// The end of the stack of the thread bounds the depth: a depth that every stack holds passes, and an input deeper
-// than a small stack holds fails on a thread with that stack.
+// Ported from test.rb: 'depth: deeply-nested arrays / maps / encoding all raise RuntimeError'. The end of the stack of
+// the thread bounds the depth: a depth that every stack holds passes. An input deeper than a small stack holds fails on
+// a thread with that stack.
 TEST_CASE("depth: nested arrays and maps past the end of the stack")
 {
     constexpr std::size_t held = test::levels_every_stack_holds;
@@ -104,14 +104,14 @@ TEST_CASE("major 6: a tag keeps its number and its content")
     check_both("\xc1\x1a\x51\x4b\x67\xb0"sv, value{t});
 }
 
-// Ported from test.rb: 'depth: deeply-nested arrays / maps / encoding all raise RuntimeError',
-// the encode part. encode of a tree recurses as decode does, so a deep tree that decode gives encodes.
+// Ported from test.rb: 'depth: deeply-nested arrays / maps / encoding all raise RuntimeError', the encode part. encode
+// of a tree recurses as decode does. So a deep tree that decode gives encodes.
 TEST_CASE("depth: encode of a deep tree")
 {
     value deep = V(0);
     for (std::size_t i = 0; i < test::levels_every_stack_holds; ++i)
         deep = A(deep);
-    auto const fits = test::lazy_of_copy(preferred(deep))->clone();
+    auto const fits = test::make_lazy_from_copy(preferred(deep))->clone();
     REQUIRE(fits.has_value());
     std::string w;
     CHECK(cbor::encode(**fits, w).has_value());
@@ -132,9 +132,9 @@ TEST_CASE("encode: a reserved simple value is an error")
     CHECK_EQ(encoded(V(simple{32})), "\xf8\x20"sv);
 }
 
-// A span target is written in place. The last items of a top-level item lie closer to the end than the
-// widest head, so each kind is checked as the last item of a span of exact size and of one byte less,
-// with the shortest float widths and with every float as a double.
+// A span target is written in place. The last items of a top-level item lie closer to the end than the widest head. So
+// each kind is checked as the last item of a span of exact size and of one byte less, with the shortest float widths and
+// with every float as a double.
 TEST_CASE("encode: a span of exact size holds the top-level item, one byte less is no_buffer_space")
 {
     for (value const &v : {A(1, 24), A(1, 1.5), A(1, 100000.25), A(1, 0.1), A(1, "abc"s),

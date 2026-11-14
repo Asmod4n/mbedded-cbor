@@ -55,9 +55,9 @@ std::size_t probe_paths_read(std::string_view const message)
 
 constexpr std::size_t probe_paths = 6 + 2 + 2 + 3 * 2 + 3;
 
-// Reads every leaf path of probe through one root accessor, first in order and then in the reverse order, and the
-// tires through an accessor of each tire. Gives the count of paths that gave a value in the first pass. Each value of
-// a later pass is the value of the first pass.
+// Reads every leaf path of probe through one root accessor, first in order and then in the reverse order. The tires
+// through an accessor of each tire. Gives the count of paths that gave a value in the first pass. Each value of a later
+// pass is the value of the first pass.
 template <class = void>
 std::size_t probe_lot_read(std::string_view const message)
 {
@@ -171,10 +171,10 @@ TEST_CASE("attack: no text result outlives its bytes")
     CHECK_THROWS_AS((void)form<probe>::decode(std::shared_ptr<std::string const>{}), std::logic_error);
 }
 
-// An owner is empty when it holds no object, whatever pointer it stores. An owner beside borrowed bytes compiles
-// (owner decision 2026-10-17: an LMDB read transaction keeps the bytes of its value alive); an owner beside a string
-// does not, because the string may die first. The test exists because each of these let a view outlive its bytes,
-// and a check of the stored pointer refused an owner that holds the bytes.
+// An owner is empty when it holds no object, whatever pointer it stores. An owner beside borrowed bytes compiles (owner
+// decision 2026-10-17: an LMDB read transaction keeps the bytes of its value alive). An owner beside a string does not,
+// because the string may die first. The test exists because each of these let a view outlive its bytes. A check of the
+// stored pointer refused an owner that holds the bytes.
 TEST_CASE("attack: path and decode check that the owner holds an object")
 {
     auto const bytes = std::make_shared<std::string const>(*form<probe>::encode(sample_probe));
@@ -310,7 +310,7 @@ TEST_CASE("attack: overlapping items are an error")
     CHECK_FALSE(at_path<probe, "$.maybe">(next).has_value());
     CHECK_FALSE(at_path<probe, "$.tires[0].diameter">(next).has_value());
 
-    std::string const one = schema_bytes(login{5, true, "ab"});
+    std::string const one = encode_with_schema(login{5, true, "ab"});
     std::size_t const text = one.find("\x7a\x00\x00\x00\x02" "ab"s);
     REQUIRE_NE(text, std::string::npos);
     std::string into_root = one;
@@ -329,7 +329,7 @@ TEST_CASE("attack: an item head that does not fit before the root is too_little_
         return std::string{static_cast<char>(x >> 24), static_cast<char>(x >> 16), static_cast<char>(x >> 8),
                            static_cast<char>(x)};
     };
-    std::string const array = schema_bytes(doubles{{1.0, 2.0}});
+    std::string const array = encode_with_schema(doubles{{1.0, 2.0}});
     std::size_t const head = array.find("\xd8\x56\x5a\x00\x00\x00\x10"sv);
     REQUIRE_NE(head, std::string::npos);
     std::size_t const entry = array.find(big_endian(head));
@@ -338,7 +338,7 @@ TEST_CASE("attack: an item head that does not fit before the root is too_little_
     cut_array.replace(entry, 4, big_endian(array.size() - form<doubles>::fixed_size() - 3));
     CHECK_EQ(at_path<doubles, "$.v[0]">(cut_array).error(), error::too_little_data);
 
-    std::string const text = schema_bytes(login{5, true, "ab"});
+    std::string const text = encode_with_schema(login{5, true, "ab"});
     std::size_t const name = text.find("\x7a\x00\x00\x00\x02" "ab"sv);
     REQUIRE_NE(name, std::string::npos);
     std::size_t const name_entry = text.find(big_endian(name));
@@ -357,7 +357,7 @@ TEST_CASE("attack: a directory longer than the message is too_little_data")
         return std::string{static_cast<char>(x >> 24), static_cast<char>(x >> 16), static_cast<char>(x >> 8),
                            static_cast<char>(x)};
     };
-    std::string const bytes = schema_bytes(login{5, true, "ab"});
+    std::string const bytes = encode_with_schema(login{5, true, "ab"});
     std::size_t const directory = bytes.find("\x5a\x00\x00\x00\x04"sv, 8);
     REQUIRE_NE(directory, std::string::npos);
     std::size_t const forged_length = 0x00fffff0;
@@ -397,7 +397,7 @@ TEST_CASE("attack: a forged reference of a fixed-size vector is incorrect_type")
 // car. The test exists because an accessor that trusted a list it read once would read a later item past the end.
 TEST_CASE("attack: an accessor reads nothing outside a cut or forged message of several cars")
 {
-    std::string const bytes = schema_bytes(sample_lot());
+    std::string const bytes = encode_with_schema(make_sample_lot());
     std::size_t differ = 0;
     auto const other = [](auto const &a, auto const &b) { return a.has_value() != b.has_value() || (a && *a != *b); };
     auto const read = [&differ, other](std::string_view const m) {
@@ -464,7 +464,7 @@ std::size_t read_pet(std::string_view const bytes)
 // and UBSan of this build show such a read.
 TEST_CASE("attack: a variant member under a cut or a changed byte")
 {
-    for (home const &h : {home_with_dog(), home_with_cat()}) {
+    for (home const &h : {make_home_with_dog(), make_home_with_cat()}) {
         std::string const bytes = *form<home>::encode(h);
         CHECK_EQ(read_pet(bytes), 4u);
         std::size_t values = 0;
@@ -480,11 +480,11 @@ TEST_CASE("attack: a variant member under a cut or a changed byte")
 }
 
 // A tag that names no alternative is incorrect_type. A record whose tag head fits but whose values do not is
-// too_little_data. A directory entry that points one byte into the record finds no tag of an alternative there,
-// and decode, which reads the items in their order, finds the entry off its place.
+// too_little_data. A directory entry that points one byte into the record finds no tag of an alternative there. Decode,
+// which reads the items in their order, finds the entry off its place.
 TEST_CASE("attack: an unknown tag, a cut record and a wrong directory entry of a variant member")
 {
-    std::string const bytes = *form<home>::encode(home_with_dog());
+    std::string const bytes = *form<home>::encode(make_home_with_dog());
     auto const at = bytes.find("\xd9\x06\xcc"sv);
     REQUIRE_NE(at, std::string::npos);
     std::string unknown = bytes;
@@ -510,14 +510,13 @@ TEST_CASE("attack: an unknown tag, a cut record and a wrong directory entry of a
     CHECK_EQ(form<home>::decode(std::string(moved)).error(), error::syntax_error);
 }
 
-// A value variant under every cut and every changed byte reads no memory outside the message (ASan, UBSan). A
-// string length past its item: the verified decode checks the order of the items and gives syntax_error while
-// the length ends inside the items, too_little_data past the root; the unverified decode keeps the check of the
-// end of the items and gives the same; the path form reads to the next directory entry and gives
-// too_little_data.
+// A value variant under every cut and every changed byte reads no memory outside the message (ASan, UBSan). A string
+// length past its item: the verified decode checks the order of the items and gives syntax_error while the length ends
+// inside the items, too_little_data past the root. The unverified decode keeps the check of the end of the items and
+// gives the same. The path form reads to the next directory entry and gives too_little_data.
 TEST_CASE("attack: value and text alternatives of a variant member")
 {
-    for (setting const &s : sample_settings()) {
+    for (setting const &s : make_sample_settings()) {
         std::string const bytes = *form<setting>::encode(s);
         for (std::size_t size = 0; size < bytes.size(); ++size) {
             CHECK_FALSE(form<setting>::decode(bytes.substr(0, size)).has_value());
@@ -536,9 +535,9 @@ TEST_CASE("attack: value and text alternatives of a variant member")
                 }
         }
     }
-    // The text "ab" of pet is the first item; note holds the bytes of an empty text and "y". The length of pet
-    // grows from 2 to 7 and swallows the head of note, so the next read starts at the empty text and ends before
-    // the root, at "y".
+    // The text "ab" of pet is the first item; note holds the bytes of an empty text and "y". The length of pet grows
+    // from 2 to 7 and swallows the head of note. So the next read starts at the empty text and ends before the root, at
+    // "y".
     std::string const swallowed = *form<shelter>::encode(shelter{std::string("ab"), "\x7a\x00\x00\x00\x00y"s});
     std::size_t const pet = swallowed.find("\x7a\x00\x00\x00\x02" "ab"sv);
     REQUIRE_NE(pet, std::string::npos);

@@ -33,7 +33,7 @@ inline constexpr bool from_chars_reads_double = false;
 // A map with one entry: the key given in hex, the value the text "found".
 inline cbor::lazy keyed(std::string_view const key_hex)
 {
-    auto const l = test::lazy_of_copy("\xa1"s + test::unhexlify(key_hex) + "\x65" "found"s);
+    auto const l = test::make_lazy_from_copy("\xa1"s + test::unhexlify(key_hex) + "\x65" "found"s);
     REQUIRE(l.has_value());
     return *l;
 }

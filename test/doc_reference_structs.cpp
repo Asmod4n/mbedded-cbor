@@ -20,10 +20,10 @@
 
 using namespace std::string_literals;
 
-// Each test in this file is one example of a reference page of the structs group; the comments of structs.hpp and
-// describe.hpp take the examples through the snippet markers. The tests exist so that every example compiles and
-// gives the result that the page states. The input of each example is built with preferred() from the text in the
-// comment of the page.
+// Each test in this file is one example of a reference page of the structs group. The comments of structs.hpp and
+// describe.hpp take the examples through the snippet markers. The tests exist so that every example compiles and gives
+// the result that the page states. The input of each example is built with preferred() from the text in the comment of
+// the page.
 
 using reference_structs::device;
 using reference_structs::account;
@@ -33,10 +33,10 @@ using reference_structs::reading;
 using reference_structs::senml;
 using reference_structs::trailer;
 
-// tools/doc/groups/structs.dox, snippet structs group: the EXAMPLES section of the man page of the group structs
-// writes a struct and reads it back, so a reader sees one round trip. The expected bytes are the ones that RFC 8949
-// gives for the map, a text and an integer, and not the output of the library. The test checks each value that the
-// comments of the example state.
+// tools/doc/groups/structs.dox, snippet structs group: the EXAMPLES section of the man page of the group structs writes
+// a struct and reads it back. So a reader sees one round trip. The expected bytes are the ones that RFC 8949 gives for
+// the map, a text and an integer, and not the output of the library. The test checks each value that the comments of the
+// example state.
 TEST_CASE("doc reference structs: the example of the group structs")
 {
     // [structs group]

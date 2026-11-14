@@ -49,7 +49,7 @@ void unverified_reads(std::string const &bytes)
 // forms give.
 TEST_CASE("unverified: the same results as the verified forms on a message that the encoder wrote")
 {
-    std::string const bytes = schema_bytes(sample_everything);
+    std::string const bytes = encode_with_schema(sample_everything);
     CHECK_EQ(form<everything>::unverified_at_path<"$.big">(bytes), at_path<everything, "$.big">(bytes));
     CHECK_EQ(form<everything>::unverified_at_path<"$.engines[1].cc">(bytes), 1200u);
     CHECK_EQ(form<everything>::unverified_at_path<"$.gauges[].at.x">(bytes, 1uz), -6);
@@ -73,16 +73,16 @@ TEST_CASE("unverified: the same results as the verified forms on a message that 
     for (auto const g : *gauges)
         xs.push_back(*g.at_path<"@.at.x">());
     CHECK_EQ(xs, (std::vector<int>{3, -6}));
-    CHECK_EQ(reencoded(form<everything>::unverified_decode(std::string(bytes))), bytes);
-    auto const owner = std::make_shared<std::string const>(schema_bytes(sample_vehicle));
-    CHECK_EQ(reencoded(form<vehicle>::unverified_decode(owner)), *owner);
+    CHECK_EQ(encode_again(form<everything>::unverified_decode(std::string(bytes))), bytes);
+    auto const owner = std::make_shared<std::string const>(encode_with_schema(sample_vehicle));
+    CHECK_EQ(encode_again(form<vehicle>::unverified_decode(owner)), *owner);
 }
 
 // The unverified forms skip the checks of the data: a forged class tag, a forged head of a number, a forged tag of
 // a typed array and a forged head of a fixed-size vector give a value where the verified forms give incorrect_type.
 TEST_CASE("unverified: a forged type byte gives a value, not an error")
 {
-    std::string const bytes = schema_bytes(sample_everything);
+    std::string const bytes = encode_with_schema(sample_everything);
     auto const forged = [&bytes](std::string const &find, std::size_t const at, char const to) {
         std::size_t const where = bytes.rfind(find);
         REQUIRE_NE(where, std::string::npos);
@@ -110,7 +110,7 @@ TEST_CASE("unverified: a forged type byte gives a value, not an error")
 // end give the same error in both forms.
 TEST_CASE("unverified: a bound is checked as in the verified forms")
 {
-    std::string const bytes = schema_bytes(sample_everything);
+    std::string const bytes = encode_with_schema(sample_everything);
     CHECK_EQ(form<everything>::unverified_path(bytes.substr(0, 20)).error(), error::too_little_data);
     CHECK_EQ(form<everything>::unverified_decode(bytes.substr(0, 20)).error(), error::too_little_data);
     CHECK_EQ(form<everything>::unverified_at_path<"$.gauges[].at.x">(bytes, 2uz).error(),
@@ -128,8 +128,8 @@ TEST_CASE("unverified: a bound is checked as in the verified forms")
     CHECK_EQ(form<everything>::unverified_at_path<"$.tires[0].diameter">(longer).error(), error::too_little_data);
 }
 
-// Every accessor that an unverified accessor gives is unverified, and every accessor that a verified accessor
-// gives is verified, so a read never changes its form in the middle of a path.
+// Every accessor that an unverified accessor gives is unverified, and every accessor that a verified accessor gives is
+// verified. So a read never changes its form in the middle of a path.
 TEST_CASE("unverified: the form of an accessor passes to its parts")
 {
     using unverified = unverified_root<everything>;
@@ -145,12 +145,12 @@ TEST_CASE("unverified: the form of an accessor passes to its parts")
                        form<everything>::accessor<cbor::fixed_element<gauge>>>);
 }
 
-// The unverified forms read where the data says, so the test changes every byte of a message that holds every kind
-// of part, and cuts it at every length. Each call must return; in the build with AddressSanitizer and
+// The unverified forms read where the data says. So the test changes every byte of a message that holds every kind of
+// part, and cuts it at every length. Each call must return; in the build with AddressSanitizer and
 // UndefinedBehaviorSanitizer no read leaves the input.
 TEST_CASE("unverified: every changed byte and every cut stays inside the input")
 {
-    std::string const bytes = schema_bytes(sample_everything);
+    std::string const bytes = encode_with_schema(sample_everything);
     for (std::size_t i = 0; i < bytes.size(); ++i)
         for (char const to : {'\x00', '\xff', static_cast<char>(~bytes[i]), '\x7f', '\x80'}) {
             std::string changed = bytes;
@@ -180,7 +180,7 @@ TEST_CASE("unverified: every changed byte and every cut stays inside the input")
 // form reads any byte other than 0 as true.
 TEST_CASE("unverified: a bool byte 2 reads true")
 {
-    std::string const flags = schema_bytes(gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}}});
+    std::string const flags = encode_with_schema(gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}}});
     std::size_t const element = flags.find("\x03\xfe\x01\x01\x00"s);
     REQUIRE_NE(element, std::string::npos);
     std::string two = flags;
@@ -192,11 +192,11 @@ TEST_CASE("unverified: a bool byte 2 reads true")
     CHECK((*back)->g[0].on);
 }
 
-// The unverified forms skip the checks of type bytes. The tag of a variant record still chooses the
-// alternative, so the unverified forms compare it too, and an unknown tag is incorrect_type in both forms.
+// The unverified forms skip the checks of type bytes. The tag of a variant record still chooses the alternative. So the
+// unverified forms compare it too, and an unknown tag is incorrect_type in both forms.
 TEST_CASE("unverified: a variant member reads as in the verified forms")
 {
-    auto const bytes = *form<home>::encode(home_with_cat());
+    auto const bytes = *form<home>::encode(make_home_with_cat());
     auto const back = form<home>::unverified_decode(std::string(bytes));
     REQUIRE(back);
     CHECK_EQ(std::get<cat>((*back)->pet).toys, std::vector<std::string>{"ball", "mouse"});
@@ -216,11 +216,11 @@ TEST_CASE("unverified: a variant member reads as in the verified forms")
     CHECK_EQ(forged_doc->at_path<"$.pet">().error(), error::incorrect_type);
 }
 
-// The unverified forms choose the alternative by the same head compare, so a head of no alternative is
-// incorrect_type there too, and get gives the same values.
+// The unverified forms choose the alternative by the same head compare. So a head of no alternative is incorrect_type
+// there too, and get gives the same values.
 TEST_CASE("unverified: value and text alternatives read as in the verified forms")
 {
-    for (setting const &s : sample_settings()) {
+    for (setting const &s : make_sample_settings()) {
         auto const bytes = *form<setting>::encode(s);
         auto const doc = form<setting>::unverified_path(std::string(bytes));
         REQUIRE(doc.has_value());

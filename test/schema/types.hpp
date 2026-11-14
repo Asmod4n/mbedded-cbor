@@ -297,7 +297,7 @@ namespace schema_types
 {
 
 
-inline std::string schema_bytes(auto const &value)
+inline std::string encode_with_schema(auto const &value)
 {
     string_writer w;
     REQUIRE(form<std::remove_cvref_t<decltype(value)>>::encode(value, w).has_value());
@@ -1109,7 +1109,7 @@ namespace schema_types
 ticket const sample_ticket{"a holder name longer than the small string buffer", {"seat one of the long list", "seat two"}, 12};
 
 template <class = void>
-std::string ticket_bytes()
+std::string build_ticket_message()
 {
     return *form<ticket>::encode(sample_ticket);
 }
@@ -1127,8 +1127,8 @@ std::string ticket_bytes()
 // message.
 
 
-// A platform without int128 (32-bit targets, the C++ library of MSVC) holds an int64 in its place, so that every
-// other member of probe and everything keeps its position; the int128 checks run where the platform has it.
+// A platform without int128 (32-bit targets, the C++ library of MSVC) holds an int64 in its place. So that every other
+// member of probe and everything keeps its position; the int128 checks run where the platform has it.
 #ifdef CBOR_HAS_INT128
 using wide_integer = cbor::int128;
 #else
@@ -1279,7 +1279,7 @@ namespace schema_types
 
 
 template <class = void>
-parking_lot sample_lot()
+parking_lot make_sample_lot()
 {
     parking_lot l;
     for (std::uint16_t i = 0; i < 5; ++i) {
@@ -1527,10 +1527,10 @@ everything const sample_everything{true,
                                    {{true, color::white, {-2, 3}, {1, 2}}, {false, color::black, {5, -6}, {7, 8}}},
                                    {{17, 1.5f}, {18, 3.0f}}};
 
-inline std::string reencoded(auto const &decoded)
+inline std::string encode_again(auto const &decoded)
 {
     REQUIRE(decoded.has_value());
-    return schema_bytes(**decoded);
+    return encode_with_schema(**decoded);
 }
 
 
@@ -1548,7 +1548,7 @@ inline std::string reencoded(auto const &decoded)
 constexpr auto apart = cbor::description_place::apart;
 
 template <class T>
-std::string apart_bytes(T const &value)
+std::string encode_data_apart(T const &value)
 {
     auto const bytes = form<T>::template encode<apart>(value);
     REQUIRE(bytes.has_value());
@@ -1691,7 +1691,7 @@ namespace schema_types
 
 
 template <class = void>
-byte_fields byte_fields_value()
+byte_fields make_byte_fields()
 {
     return byte_fields{{1, 2, 3}, {4, 5}, {std::byte{6}, std::byte{7}}, {8, 9}, {std::byte{10}}, {}};
 }
@@ -1773,13 +1773,13 @@ namespace schema_types
 {
 
 template <class = void>
-home home_with_cat()
+home make_home_with_cat()
 {
     return home{cat{{"tom"}, {"ball", "mouse"}}, "elm"};
 }
 
 template <class = void>
-home home_with_dog()
+home make_home_with_dog()
 {
     return home{dog{{"rex"}, 3}, "elm"};
 }
@@ -1828,7 +1828,7 @@ namespace schema_types
 {
 
 template <class = void>
-std::vector<setting> sample_settings()
+std::vector<setting> make_sample_settings()
 {
     return {{"visible", true},
             {"width", std::int32_t{-240}},
@@ -1838,10 +1838,10 @@ std::vector<setting> sample_settings()
             {"empty", std::string()}};
 }
 
-// The item of a variant member is the last item before the root record, so it starts this many bytes before the
-// root: the size of the item.
+// The item of a variant member is the last item before the root record. So it starts this many bytes before the root:
+// the size of the item.
 template <class T>
-std::string_view variant_item_of(std::string_view const message, std::size_t const item_size)
+std::string_view find_variant_item_in(std::string_view const message, std::size_t const item_size)
 {
     return message.substr(message.size() - form<T>::fixed_size() - item_size, item_size);
 }

@@ -243,9 +243,9 @@ TEST_CASE("encoder: the iov target gives the bytes of the string target in piece
     CHECK_EQ(*joined, "\x82\x78\x28"s + *text + "\x18\x07"s);
 }
 
-// RFC 8742: a program writes a CBOR sequence item after item into one buffer of its own and keeps the bytes
-// behind each item. The encoder over a span and cbor::encode into a span change no byte behind the item, also
-// where the item ends in a head of one byte, and they write the bytes of the std::string form.
+// RFC 8742: a program writes a CBOR sequence item after item into one buffer of its own and keeps the bytes behind each
+// item. The encoder over a span and cbor::encode into a span change no byte behind the item, also where the item ends in
+// a head of one byte. They write the bytes of the std::string form.
 TEST_CASE("encoder: a span keeps every byte behind the item")
 {
     constexpr char sentinel = 'Z';

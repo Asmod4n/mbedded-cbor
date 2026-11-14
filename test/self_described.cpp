@@ -64,7 +64,7 @@ TEST_CASE("self-described CBOR: a tag 55799 with no tag content gives too_little
 TEST_CASE("self-described CBOR: lazy reads through a leading tag 55799")
 {
     std::string const document = "\xd9\xd9\xf7\xa1\x61\x61\x82\x05\x06"s;
-    auto const l = test::lazy_of_copy(document);
+    auto const l = test::make_lazy_from_copy(document);
     REQUIRE(l.has_value());
     auto const a = l->at("a"sv);
     REQUIRE(a.has_value());
@@ -76,11 +76,11 @@ TEST_CASE("self-described CBOR: lazy reads through a leading tag 55799")
     CHECK_EQ(owned->at("a"sv)->at(0)->get<std::uint64_t>().value(), 5u);
 }
 
-// tools/doc/groups/lazy.dox, from the former runtime guide: lazy::view and lazy::adopt read one leading tag 55799 as
-// its content, and a second tag 55799 or a tag 55799 inside an item stays a tag. type() gives the kind of the item there, so it gives tag,
-// as decode and clone do, in each width of the argument. get, a key and a path pass the tag (lazy.dox, path.dox), so
-// they still give the content. A tag 55799 inside the item of a tag 24 is passed by a step and a path as well. The
-// content of a tag 2, tag 3 or typed array is the exception; the next test covers it.
+// tools/doc/groups/lazy.dox, from the former runtime guide: lazy::view and lazy::adopt read one leading tag 55799 as its
+// content. A second tag 55799 or a tag 55799 inside an item stays a tag. type() gives the kind of the item there. So it
+// gives tag, as decode and clone do, in each width of the argument. get, a key and a path pass the tag (lazy.dox,
+// path.dox). So they still give the content. A tag 55799 inside the item of a tag 24 is passed by a step and a path as
+// well. The content of a tag 2, tag 3 or typed array is the exception; the next test covers it.
 TEST_CASE("self-described CBOR: type() of a second tag 55799 and of a tag 55799 inside an item is tag")
 {
     for (std::string const &head : {"\xd9\xd9\xf7"s, "\xda\x00\x00\xd9\xf7"s, "\xdb\x00\x00\x00\x00\x00\x00\xd9\xf7"s}) {
@@ -115,8 +115,8 @@ TEST_CASE("self-described CBOR: type() of a second tag 55799 and of a tag 55799 
     }
 }
 
-// The owner decided that a tag 55799 inside an item stays a tag. The content of a tag 2, tag 3 or typed array is then
-// a tag and not a byte string, so every reader gives for 2(55799(h'01')) what it gives for 2("a"), and for
+// The owner decided that a tag 55799 inside an item stays a tag. The content of a tag 2, tag 3 or typed array is then a
+// tag and not a byte string. So every reader gives for 2(55799(h'01')) what it gives for 2("a"), and for
 // 64(55799(h'0102')) what it gives for 64("a"): the same type, value or error. Each width of the 55799 head is read.
 TEST_CASE("self-described CBOR: a tag 55799 in the content of a bignum or a typed array stays a tag")
 {
@@ -187,7 +187,7 @@ TEST_CASE("self-described CBOR: at_path reads through a leading tag 55799")
     auto const text = cbor::at_path<"$.a", std::string_view>(owner);
     REQUIRE(text.has_value());
     CHECK_EQ(**text, "hi"sv);
-    auto const l = test::lazy_of_copy(document);
+    auto const l = test::make_lazy_from_copy(document);
     REQUIRE(l.has_value());
     auto const v = test::at_path("$.a"sv, *l);
     REQUIRE(v.has_value());
@@ -229,8 +229,8 @@ TEST_CASE("RFC 9277: the label of a Labeled CBOR Sequence is the first element a
     CHECK_EQ(elements[3], "\x0f"sv);
 }
 
-// RFC 9277 Appendix D: the header of CBOR-Labeled Non-CBOR Data is 12 bytes, and the Non-CBOR data follows it
-// directly. item_size gives the end of the header, and decode keeps tag 55801.
+// RFC 9277 Appendix D: the header of CBOR-Labeled Non-CBOR Data is 12 bytes. The Non-CBOR data follows it directly.
+// item_size gives the end of the header, and decode keeps tag 55801.
 TEST_CASE("RFC 9277: the header of CBOR-Labeled Non-CBOR Data ends after 12 bytes")
 {
     std::string const header = "\xd9\xd9\xf9\xda\x63\x74\x01\x01\x43\x42\x4f\x52"s;

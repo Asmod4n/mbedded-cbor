@@ -13,7 +13,7 @@
 
 #if defined(_WIN64)
 #include <process.h>
-// windows.h defines macros such as small, min and max that change the names of the tests that include this header; the
+// windows.h defines macros such as small, min and max that change the names of the tests that include this header. The
 // test declares the two functions of the Windows API that it calls.
 extern "C" __declspec(dllimport) unsigned long __stdcall WaitForSingleObject(void *, unsigned long);
 extern "C" __declspec(dllimport) int __stdcall CloseHandle(void *);
@@ -24,21 +24,20 @@ extern "C" __declspec(dllimport) int __stdcall CloseHandle(void *);
 namespace test
 {
 
-// A recursive reader stops with nesting_depth_exceeded where the stack of its thread ends. The tests run the
-// deep reads on a thread with a small stack, because the stack of the main thread is as large as the platform
-// gives it, and a test does not make it larger (owner, 2026-11-07). A test may make a stack smaller to test the
-// bound.
+// A recursive reader stops with nesting_depth_exceeded where the stack of its thread ends. The tests run the deep reads
+// on a thread with a small stack, because the stack of the main thread is as large as the platform gives it. A test does
+// not make it larger (owner, 2026-11-07). A test may make a stack smaller to test the bound.
 inline constexpr std::size_t small_stack_bytes = 64 * 1024;
 
-// Each level of a recursion takes at least one call frame, and a call frame takes at least 16 bytes on the listed
-// targets (the alignment of the stack). An input with as many levels as the small stack has bytes is deeper than that
-// stack holds for every reader.
+// Each level of a recursion takes at least one call frame. A call frame takes at least 16 bytes on the listed targets
+// (the alignment of the stack). An input with as many levels as the small stack has bytes is deeper than that stack
+// holds for every reader.
 inline constexpr std::size_t smallest_frame_bytes = 16;
 inline constexpr std::size_t levels_beyond_small_stack = small_stack_bytes;
 
-// A depth that the stack of the main thread holds for a decode in a debug build with a sanitizer on Linux and macOS,
-// and that is deeper than the small stack holds for the frames of a release build. The main thread of a Windows debug
-// build does not hold it: there decode stops with nesting_depth_exceeded.
+// A depth that the stack of the main thread holds for a decode in a debug build with a sanitizer on Linux and macOS.
+// That is deeper than the small stack holds for the frames of a release build. The main thread of a Windows debug build
+// does not hold it: there decode stops with nesting_depth_exceeded.
 inline constexpr std::size_t levels_main_thread_holds = 1024;
 
 // A depth that the stack of every thread of every build holds: a read of it gives its value.
@@ -91,9 +90,9 @@ inline void *run(void *const work)
 
 } // namespace small_stack_detail
 
-// Runs the work on a thread with a stack of the given size. std::thread takes no stack size; _beginthreadex and the
-// attributes of POSIX threads do. A target without threads runs the work on the calling thread: there the stack of
-// the program is the small stack (WebAssembly gives 64 KiB unless the link sets another).
+// Runs the work on a thread with a stack of the given size. std::thread takes no stack size. _beginthreadex and the
+// attributes of POSIX threads do. A target without threads runs the work on the calling thread: there the stack of the
+// program is the small stack (WebAssembly gives 64 KiB unless the link sets another).
 inline void on_stack_of(std::size_t const bytes, std::function<void()> work)
 {
     if constexpr (!threads_available) {

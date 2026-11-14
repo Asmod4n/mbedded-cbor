@@ -100,8 +100,8 @@ TEST_CASE("path edn literals: a tag number above 2^64 - 1")
     refused("18446744073709551620(1)");
 }
 
-// 2.6: simple(n) is major type 7 with value n, so simple(20) is false; the grammar has no value from 24 to 31,
-// none above 255 and no leading zero.
+// 2.6: simple(n) is major type 7 with value n, so simple(20) is false. The grammar has no value from 24 to 31, none
+// above 255 and no leading zero.
 TEST_CASE("path edn literals: the simple values of 2.6 of the EDN draft")
 {
     selects("simple(42)", "f82a");
@@ -112,8 +112,8 @@ TEST_CASE("path edn literals: the simple values of 2.6 of the EDN draft")
         refused(l);
 }
 
-// 3.1: h and b64 give a byte string in base16 or in base64 or base64url without padding, with blank space ignored;
-// the examples of the section stand for the same bytes.
+// 3.1: h and b64 give a byte string in base16 or in base64 or base64url without padding, with blank space ignored. The
+// examples of the section stand for the same bytes.
 TEST_CASE("path edn literals: the base-encoded byte strings of 3.1 of the EDN draft")
 {
     selects("h'12345678'", "4412345678");
@@ -124,9 +124,9 @@ TEST_CASE("path edn literals: the base-encoded byte strings of 3.1 of the EDN dr
     selects("h'FDB6AC 7BAE27A2D69CA2699E9EDFDBBADA2779FA25 968C2C'", "58" "18" "FDB6AC7BAE27A2D69CA2699E9EDFDBBADA2779FA25968C2C");
 }
 
-// 5.2.2, Figure 4: base64 may end in one or two padding characters that complete the last group; two digits take
-// two pads or none, three digits one pad or none. One digit alone, a pad that does not complete the group, or a
-// character outside both alphabets is no base64.
+// 5.2.2, Figure 4: base64 may end in one or two padding characters that complete the last group. Two digits take two
+// pads or none, three digits one pad or none. One digit alone, a pad that does not complete the group, or a character
+// outside both alphabets is no base64.
 TEST_CASE("path edn literals: the padding of b64 of the EDN draft")
 {
     selects("b64'AQ'", "4101");
@@ -255,12 +255,11 @@ TEST_CASE("path edn literals: the diagnostic notation of each example of RFC 894
         }
 }
 
-// The parser writes each container and each embedded item with a placeholder for its head and fills it at the
-// close, then closes the gaps in one pass, so a literal is parsed in linear time. These literals check a head at
-// every level, a tag before a container, empty containers, an embedded item that holds containers, the
-// encoding indicators of a head (a key selects by value, so in preferred serialization), and a map as the key of
-// a map. The bytes are written from RFC 8949 3, 3.4.5.1
-// and 4.2.1 (key order) and from draft-ietf-cbor-edn-literals-28 2.4 to 4.1.
+// The parser writes each container and each embedded item with a placeholder for its head and fills it at the close,
+// then closes the gaps in one pass. So a literal is parsed in linear time. These literals check a head at every level, a
+// tag before a container, empty containers, an embedded item that holds containers, the encoding indicators of a head (a
+// key selects by value, so in preferred serialization). A map as the key of a map. The bytes are written from RFC 8949
+// 3, 3.4.5.1 and 4.2.1 (key order) and from draft-ietf-cbor-edn-literals-28 2.4 to 4.1.
 TEST_CASE("path edn literals: nested and embedded literals give the bytes of their heads")
 {
     for (std::size_t const levels : {std::size_t{64}, test::levels_main_thread_reads}) {

@@ -37,6 +37,7 @@
 #include <doctest/doctest.h>
 
 #include "../hex.hpp"
+#include "../ieee754.hpp"
 #include "../reference/value.hpp"
 
 #include <bit>
@@ -213,10 +214,7 @@ TEST_CASE("qcbor FloatValuesTests: doubles encode in preferred and 64-bit form, 
         for (std::string const &in : {c.preferred, c.not_preferred}) {
             auto const d = double_of(in);
             REQUIRE(d.has_value());
-            if (std::isnan(c.number))
-                CHECK(std::isnan(*d));
-            else
-                CHECK_EQ(std::bit_cast<std::uint64_t>(*d), std::bit_cast<std::uint64_t>(c.number));
+            CHECK_EQ(std::bit_cast<std::uint64_t>(*d), std::bit_cast<std::uint64_t>(c.number));
         }
     }
 }
@@ -254,7 +252,7 @@ TEST_CASE("qcbor HalfPrecisionAgainstRFCCodeTest: every half-precision float dec
         REQUIRE(d.has_value());
         double const expected = decode_half(half);
         if (std::isnan(expected))
-            CHECK(std::isnan(*d));
+            CHECK_EQ(std::bit_cast<std::uint64_t>(*d), test::ieee754::bits_of_half_nan_widened_to_double(half));
         else
             CHECK_EQ(std::bit_cast<std::uint64_t>(*d), std::bit_cast<std::uint64_t>(expected));
     }
@@ -340,12 +338,12 @@ TEST_CASE("qcbor GeneralFloatDecodeTests: floats of each width decode to double"
     CHECK_EQ(std::bit_cast<std::uint64_t>(at(0)), std::bit_cast<std::uint64_t>(0.0));
     CHECK_EQ(std::bit_cast<std::uint64_t>(at(1)), std::bit_cast<std::uint64_t>(3.14));
     CHECK_EQ(std::bit_cast<std::uint64_t>(at(2)), std::bit_cast<std::uint64_t>(0.0));
-    CHECK(std::isnan(at(3)));
+    CHECK_EQ(std::bit_cast<std::uint64_t>(at(3)), test::ieee754::binary64_quiet_nan_bits);
     CHECK_EQ(std::bit_cast<std::uint64_t>(at(4)), std::bit_cast<std::uint64_t>(std::numeric_limits<double>::infinity()));
     CHECK_EQ(std::bit_cast<std::uint64_t>(at(5)), std::bit_cast<std::uint64_t>(0.0));
     CHECK_EQ(std::bit_cast<std::uint64_t>(at(6)), std::bit_cast<std::uint64_t>(3.1400001049041748));
     CHECK_EQ(std::bit_cast<std::uint64_t>(at(7)), std::bit_cast<std::uint64_t>(0.0));
-    CHECK(std::isnan(at(8)));
+    CHECK_EQ(std::bit_cast<std::uint64_t>(at(8)), test::ieee754::binary64_quiet_nan_bits);
     CHECK_EQ(std::bit_cast<std::uint64_t>(at(9)), std::bit_cast<std::uint64_t>(std::numeric_limits<double>::infinity()));
 
     auto const tree = cbor::decode(expected_floats);

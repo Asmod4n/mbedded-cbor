@@ -21,7 +21,7 @@ using namespace std::string_view_literals;
 using cbor::error;
 
 // A build that sets no limit has no size limit; the end of the stack of the thread bounds the depth. The builds with
-// limits set are in test/limits/, one binary for each set of flags, so each limit is tested by a build that the limit
+// limits set are in test/limits/, one binary for each set of flags. So each limit is tested by a build that the limit
 // holds.
 TEST_CASE("limits: the defaults")
 {
@@ -29,9 +29,8 @@ TEST_CASE("limits: the defaults")
     CHECK_EQ(cbor::limits::container_elements, std::numeric_limits<std::size_t>::max());
 }
 
-// With no size limit, no check of a size exists. A head that claims 2^64 - 1 bytes or elements over no
-// content is read and finds too little data, where test/limits/sizes_2.cpp refuses the same heads at the
-// head.
+// With no size limit, no check of a size exists. A head that claims 2^64 - 1 bytes or elements over no content is read
+// and finds too little data. Here test/limits/sizes_2.cpp refuses the same heads at the head.
 TEST_CASE("limits: with no size limit a head of 2^64 - 1 finds too little data")
 {
     std::string const text = "\x7b\xff\xff\xff\xff\xff\xff\xff\xff"s;
@@ -78,10 +77,10 @@ std::string long_texts_encoded(std::size_t const n)
 
 } // namespace
 
-// The memory of a decode is bounded by the caller with the standard: the target holds a std::pmr allocator
-// over a resource with a budget, every element is made with the allocator of its container, and the refusal
-// of the resource reaches the caller of structs as not_enough_memory. A monotonic_buffer_resource over a
-// fixed buffer with null_memory_resource upstream refuses every byte beyond the buffer.
+// The memory of a decode is bounded by the caller with the standard: the target holds a std::pmr allocator over a
+// resource with a budget, every element is made with the allocator of its container. The refusal of the resource reaches
+// the caller of structs as not_enough_memory. A monotonic_buffer_resource over a fixed buffer with null_memory_resource
+// upstream refuses every byte beyond the buffer.
 TEST_CASE("structs: a std::pmr target decodes with its allocator, and the refusal of its resource is "
           "not_enough_memory")
 {
@@ -102,7 +101,7 @@ TEST_CASE("structs: a std::pmr target decodes with its allocator, and the refusa
         }
     }
     // A debug build of the C++ library of MSVC takes a proxy object from the allocator in the noexcept constructor of
-    // each container, so an empty container over a refusing resource ends the program before the decode runs; the
+    // each container. So an empty container over a refusing resource ends the program before the decode runs; the
     // refusal is tested where containers take no such proxy.
 #if !defined(_ITERATOR_DEBUG_LEVEL) || _ITERATOR_DEBUG_LEVEL == 0
     // The buffer holds the vector of three strings but not the characters of all three.
@@ -143,12 +142,12 @@ TEST_CASE("schema: a target with std::pmr members decodes with their allocators"
 }
 
 
-// A debug build of the C++ library of MSVC takes a proxy object from the allocator in the noexcept constructor of
-// each container, so an empty container over a refusing resource ends the program before the decode runs; the
-// refusal is tested where containers take no such proxy.
+// A debug build of the C++ library of MSVC takes a proxy object from the allocator in the noexcept constructor of each
+// container. So an empty container over a refusing resource ends the program before the decode runs; the refusal is
+// tested where containers take no such proxy.
 #if !defined(_ITERATOR_DEBUG_LEVEL) || _ITERATOR_DEBUG_LEVEL == 0
-// schema reads into the members of the target as structs does, so the refusal of their resource reaches the caller
-// of schema as not_enough_memory, and std::bad_alloc does not leave the call.
+// schema reads into the members of the target as structs does. So the refusal of their resource reaches the caller of
+// schema as not_enough_memory, and std::bad_alloc does not leave the call.
 TEST_CASE("schema: the refusal of the resource of a std::pmr member is not_enough_memory")
 {
     auto const encoded = cbor::schema<pmr_names>::encode(

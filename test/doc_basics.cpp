@@ -59,7 +59,7 @@ TEST_CASE("doc basics: the errors that a program meets most often")
     CHECK_EQ(cbor::at_path<"$[1]", int>(pair.substr(0, pair.size() - 1)).error(), error::too_little_data);
     CHECK_EQ(cbor::at_path<"$", int>("\xff"s).error(), error::syntax_error);
     CHECK_EQ(cbor::at_path<"$[0]", int>("\x9f\x01\xff"s).error(), error::indefinite_length);
-    CHECK_EQ(test::at_path("$.a[", *test::lazy_of_copy(preferred(M("a"s, 1)))).error(), error::invalid_path);
+    CHECK_EQ(test::at_path("$.a[", *test::make_lazy_from_copy(preferred(M("a"s, 1)))).error(), error::invalid_path);
 }
 
 // The section "Errors" says that a wrong use that the compiler cannot see throws std::logic_error.
@@ -68,8 +68,8 @@ TEST_CASE("doc basics: a wrong use throws std::logic_error")
     CHECK_THROWS_AS((void)cbor::lazy{}.at(0), std::logic_error);
 }
 
-// The section "Results that point into the bytes" states the two forms in which bytes go into the library: a copy
-// form, where an rvalue std::string is moved, and a view form over a std::shared_ptr<std::string const>.
+// The section "Results that point into the bytes" states the two forms in which bytes go into the library: a copy form.
+// Here an rvalue std::string is moved, and a view form over a std::shared_ptr<std::string const>.
 TEST_CASE("doc basics: bytes go in as a copy or as a view")
 {
     std::string const kept = preferred(M("name"s, std::string(40, 'a')));
@@ -94,8 +94,8 @@ TEST_CASE("doc basics: bytes go in as a copy or as a view")
     }(kept)));
 }
 
-// The section "Results that point into the bytes" says that std::string as the type copies the text of the value
-// into the result, so that a user who wants a copy of their own finds the form.
+// The section "Results that point into the bytes" says that std::string as the type copies the text of the value into
+// the result. So that a user who wants a copy of their own finds the form.
 TEST_CASE("doc basics: std::string as the type copies the text")
 {
     std::string const bytes = preferred(M("name"s, std::string(40, 'a')));
@@ -168,6 +168,6 @@ TEST_CASE("doc basics: limits")
 TEST_CASE("doc basics: the error at the end of the stack")
 {
     std::string const deep = test::repeat("\x81"sv, test::levels_beyond_small_stack) + '\x01';
-    CHECK_EQ(test::error_on_small_stack([&deep] { return test::lazy_of_copy(deep)->clone(); }),
+    CHECK_EQ(test::error_on_small_stack([&deep] { return test::make_lazy_from_copy(deep)->clone(); }),
              error::nesting_depth_exceeded);
 }

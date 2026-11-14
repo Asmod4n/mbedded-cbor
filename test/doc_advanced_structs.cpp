@@ -213,8 +213,8 @@ TEST_CASE("doc advanced structs: a NaN keeps its bits")
              error::number_out_of_range);
 }
 
-// The section "Structs and keys" shows a description of a class with a private member and an integer key, and
-// a description with cbor::untagged that gives integer keys and no tag.
+// The section "Structs and keys" shows a description of a class with a private member and an integer key. A description
+// with cbor::untagged that gives integer keys and no tag.
 TEST_CASE("doc advanced structs: the key of a member")
 {
     CHECK_EQ(cbor::diagnostic_notation(*cbor::structs<account>::encode(account{"ann", 2, "secret"})),
@@ -240,7 +240,7 @@ TEST_CASE("doc advanced structs: unknown, repeated and missing keys")
     }
 }
 
-// The section "Tags" states that a struct carries the tag of its description, and that cbor::tagged_item puts a tag on
+// The section "Tags" states that a struct carries the tag of its description. That cbor::tagged_item puts a tag on
 // content that is not a struct, here COSE_Sign1 of RFC 9052 4.2: tag 18 on an array.
 TEST_CASE("doc advanced structs: the tag of a struct")
 {
@@ -272,8 +272,8 @@ TEST_CASE("doc advanced structs: a variant takes the first alternative that acce
     CHECK_EQ(std::get<std::uint8_t>(**back), 42u);
 }
 
-// The section "Shared values" says that decode accepts a tag 28 on any member, and a tag 29 only where a member can
-// share a value; a plain member gives incorrect_type.
+// The section "Shared values" says that decode accepts a tag 28 on any member. A tag 29 only where a member can share a
+// value; a plain member gives incorrect_type.
 TEST_CASE("doc advanced structs: a tag 29 into a plain member is incorrect_type")
 {
     auto const marked = cbor::structs<std::vector<std::string>>::decode("\x82\xd8\x1c\x61x\x61y"s);
