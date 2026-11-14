@@ -104,7 +104,9 @@ std::expected< void, \fBerror\fP > \fBtext_string\fP (S &&text)
 .br
 requires (std::numeric_limits<T>::is_iec559 && (sizeof(T) == sizeof(std::uint32_t) || sizeof(T) == sizeof(std::uint64_t) ||
 .br
- (sizeof(T) == sizeof(std::uint16_t) && std::numeric_limits<T>::digits == heads::half_precision\&.significand_bits + 1)))
+ (sizeof(T) == sizeof(std::uint16_t) && std::numeric_limits<T>::digits 
+.br
+== detail::ieee754::half_precision\&.significand_bits + 1)))
 .br
 std::expected< void, \fBerror\fP > \fBfloating_point\fP (T const value)
 .br

@@ -13,7 +13,7 @@ cbor::schema::accessor \- Reads the part \fRU\fP of a message of \fRT\fP\&.
 
 .in +1c
 .ti -1c
-.RI "using \fBiterator\fP = typename decltype(reflection::list_iterator_result<T, U, Verified>())::type"
+.RI "using \fBiterator\fP = typename decltype(detail::reflection::list_iterator_result<T, U, Verified>())::type"
 .br
 .in -1c
 .SS "Public Member Functions"
@@ -34,9 +34,9 @@ cbor::schema::accessor \- Reads the part \fRU\fP of a message of \fRT\fP\&.
 .ti -1c
 .RI "template<\fBfixed_string\fP Path, class Self, std::convertible_to< std::size_t >\&.\&.\&. Index>"
 .br
-requires (((Path\&.view()\&.starts_with('@') && reflection::path_valid<U, Path, 1>()) || (Path\&.view()\&.starts_with('$') &&
+requires (((Path\&.view()\&.starts_with('@') && detail::reflection::path_valid<U, Path, 1>()) || (Path\&.view()\&.starts_with('$') &&
 .br
- reflection::path_valid<T, Path, 1>())) && sizeof\&.\&.\&.(Index) == reflection::index_arguments<Path>() &&
+ detail::reflection::path_valid<T, Path, 1>())) && sizeof\&.\&.\&.(Index) == detail::reflection::index_arguments<Path>() &&
 .br
  std::is_lvalue_reference_v<Self>)
 .br
@@ -45,9 +45,9 @@ auto \fBat_path\fP (this Self &&self, Index const \&.\&.\&. indexes)
 .ti -1c
 .RI "template<\fBfixed_string\fP Path, class Self, std::convertible_to< std::size_t >\&.\&.\&. Index>"
 .br
-requires (std::same_as<U, T> && Path\&.view()\&.starts_with('$') && reflection::path_valid<T, Path, 1>() && sizeof\&.\&.\&.(Index) 
+requires (std::same_as<U, T> && Path\&.view()\&.starts_with('$') && detail::reflection::path_valid<T, Path, 1>() && sizeof\&.\&.\&.(Index) 
 .br
-== reflection::index_arguments<Path>())
+== detail::reflection::index_arguments<Path>())
 .br
 auto \fBview\fP (this Self &&self, Index const \&.\&.\&. indexes)
 .br
@@ -57,56 +57,56 @@ auto \fBview\fP (this Self &&self, Index const \&.\&.\&. indexes)
 .ti -1c
 .RI "template<class Self>"
 .br
-requires (std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
+requires (std::is_lvalue_reference_v<Self> && (detail::reflection::is_fixed_vector<U> || detail::reflection::is_record_list<U>))
 .br
 iterator \fBbegin\fP (this Self &&self)
 .br
 .ti -1c
 .RI "template<class Self>"
 .br
-requires (std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
+requires (std::is_lvalue_reference_v<Self> && (detail::reflection::is_fixed_vector<U> || detail::reflection::is_record_list<U>))
 .br
 iterator \fBend\fP (this Self &&self)
 .br
 .ti -1c
 .RI "template<class Self>"
 .br
-requires (std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
+requires (std::is_lvalue_reference_v<Self> && (detail::reflection::is_fixed_vector<U> || detail::reflection::is_record_list<U>))
 .br
 iterator \fBcbegin\fP (this Self &&self)
 .br
 .ti -1c
 .RI "template<class Self>"
 .br
-requires (std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
+requires (std::is_lvalue_reference_v<Self> && (detail::reflection::is_fixed_vector<U> || detail::reflection::is_record_list<U>))
 .br
 iterator \fBcend\fP (this Self &&self)
 .br
 .ti -1c
 .RI "template<class Self>"
 .br
-requires (std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
+requires (std::is_lvalue_reference_v<Self> && (detail::reflection::is_fixed_vector<U> || detail::reflection::is_record_list<U>))
 .br
 std::reverse_iterator< iterator > \fBrbegin\fP (this Self &&self)
 .br
 .ti -1c
 .RI "template<class Self>"
 .br
-requires (std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
+requires (std::is_lvalue_reference_v<Self> && (detail::reflection::is_fixed_vector<U> || detail::reflection::is_record_list<U>))
 .br
 std::reverse_iterator< iterator > \fBrend\fP (this Self &&self)
 .br
 .ti -1c
 .RI "template<class Self>"
 .br
-requires (std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
+requires (std::is_lvalue_reference_v<Self> && (detail::reflection::is_fixed_vector<U> || detail::reflection::is_record_list<U>))
 .br
 std::reverse_iterator< iterator > \fBcrbegin\fP (this Self &&self)
 .br
 .ti -1c
 .RI "template<class Self>"
 .br
-requires (std::is_lvalue_reference_v<Self> && (reflection::is_fixed_vector<U> || reflection::is_record_list<U>))
+requires (std::is_lvalue_reference_v<Self> && (detail::reflection::is_fixed_vector<U> || detail::reflection::is_record_list<U>))
 .br
 std::reverse_iterator< iterator > \fBcrend\fP (this Self &&self)
 .br

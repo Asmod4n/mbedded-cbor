@@ -13,31 +13,35 @@ cbor::lazy \- A position in one top-level item: the owner of the bytes, the byte
 
 .in +1c
 .ti -1c
-.RI "std::expected< \fBlazy\fP, \fBerror\fP > \fBat\fP (std::string_view key) const"
+.RI "std::string_view \fBencoded\fP () const"
+.br
+.RI "Gives the bytes from the position of the lazy to the end of its top-level bytes\&. "
+.ti -1c
+.RI "std::expected< lazy, \fBerror\fP > \fBat\fP (std::string_view key) const"
 .br
 .RI "Gives the lazy of one child\&. "
 .ti -1c
-.RI "std::expected< \fBlazy\fP, \fBerror\fP > \fBat\fP (key k) const"
+.RI "std::expected< lazy, \fBerror\fP > \fBat\fP (key k) const"
 .br
 .ti -1c
-.RI "std::expected< \fBlazy\fP, \fBerror\fP > \fBat\fP (std::size_t index) const"
+.RI "std::expected< lazy, \fBerror\fP > \fBat\fP (std::size_t index) const"
 .br
 .ti -1c
-.RI "std::expected< \fBlazy\fP, \fBerror\fP > \fBoperator[]\fP (std::string_view key) const"
+.RI "std::expected< lazy, \fBerror\fP > \fBoperator[]\fP (std::string_view key) const"
 .br
 .RI "Gives the same result as \fBcbor::lazy::at()\fP with the same argument\&. "
 .ti -1c
-.RI "std::expected< \fBlazy\fP, \fBerror\fP > \fBoperator[]\fP (key k) const"
+.RI "std::expected< lazy, \fBerror\fP > \fBoperator[]\fP (key k) const"
 .br
 .ti -1c
-.RI "std::expected< \fBlazy\fP, \fBerror\fP > \fBoperator[]\fP (std::size_t index) const"
+.RI "std::expected< lazy, \fBerror\fP > \fBoperator[]\fP (std::size_t index) const"
 .br
 .ti -1c
 .RI "template<\fBfixed_string\fP Path>"
 .br
 requires \fBis_valid_path_v\fP<Path>
 .br
-std::expected< \fBlazy\fP, \fBerror\fP > \fBat_path\fP () const
+std::expected< lazy, \fBerror\fP > \fBat_path\fP () const
 .br
 .RI "Reads the JSONPath (RFC 9535) \fRPath\fP from this lazy as the root \fR$\fP\&. "
 .ti -1c
@@ -105,36 +109,23 @@ std::expected< std::conditional_t< view_result< T >, \fBref\fP< T >, T >, \fBerr
 
 .in +1c
 .ti -1c
-.RI "template<borrowed_range_of_chars Encoded> static std::expected< \fBlazy\fP, \fBerror\fP > \fBview\fP (std::shared_ptr< void const > owner, Encoded const &encoded)"
+.RI "template<borrowed_range_of_chars Encoded> static std::expected< lazy, \fBerror\fP > \fBview\fP (std::shared_ptr< void const > owner, Encoded const &encoded)"
 .br
 .RI "Makes the lazy of the top-level item in the bytes, in place\&. "
 .ti -1c
-.RI "template<owning_range_of_chars Encoded> static std::expected< \fBlazy\fP, \fBerror\fP > \fBview\fP (std::shared_ptr< Encoded const > owner)"
+.RI "template<owning_range_of_chars Encoded> static std::expected< lazy, \fBerror\fP > \fBview\fP (std::shared_ptr< Encoded const > owner)"
 .br
 .RI "Makes the lazy of the top-level item in \fR*owner\fP, in place\&. "
 .ti -1c
-.RI "template<owning_range_of_chars Encoded> static std::expected< \fBlazy\fP, \fBerror\fP > \fBadopt\fP (Encoded &&encoded)"
+.RI "template<owning_range_of_chars Encoded> static std::expected< lazy, \fBerror\fP > \fBadopt\fP (Encoded &&encoded)"
 .br
 .RI "Makes the lazy of the top-level item in \fRencoded\fP, and moves the bytes into a new owner\&. "
-.in -1c
-.SS "Public Attributes"
-
-.in +1c
-.ti -1c
-.RI "top_level_item \fBtop_level\fP"
-.br
-.ti -1c
-.RI "std::size_t \fBoffset\fP"
-.br
-.ti -1c
-.RI "std::uint64_t \fBtyped_array_tag\fP {}"
-.br
 .in -1c
 .SH "DESCRIPTION"
 .PP 
 A position in one top-level item: the owner of the bytes, the bytes and an offset\&. 
 
-It holds no decoded value\&. Each member function reads the bytes at the offset when it is called\&. \fBcbor::lazy::view()\fP and \fBcbor::lazy::adopt()\fP set the data members\&. A copy of a lazy is a second position in the same bytes\&. Several threads read one lazy at the same time\&. A \fR\fBnodelist\fP\fP is the result of a path that selects many nodes\&. A lazy made with \fR\fBcbor::lazy\fP{}\fP holds no top-level item; each member function then throws \fRstd::logic_error\fP\&.
+It holds no decoded value\&. Each member function reads the bytes at the offset when it is called\&. \fBcbor::lazy::view()\fP and \fBcbor::lazy::adopt()\fP make a lazy; a program cannot set its position\&. A copy of a lazy is a second position in the same bytes\&. Several threads read one lazy at the same time\&. A \fR\fBnodelist\fP\fP is the result of a path that selects many nodes\&. A lazy made with \fR\fBcbor::lazy\fP{}\fP holds no top-level item; each member function then throws \fRstd::logic_error\fP\&.
 
 .PP
 .PP

@@ -13,7 +13,7 @@ cbor::typed_array_view \- A random access, sized range over an RFC 8746 typed ar
 
 .in +1c
 .ti -1c
-.RI "using \fBiterator\fP = detail::indexing_iterator<E, std::monostate, &reflection::typed_array_element_at<E>>"
+.RI "using \fBiterator\fP = detail::indexing_iterator<E, std::monostate, &detail::reflection::typed_array_element_at<E>>"
 .br
 .in -1c
 .SS "Public Member Functions"
