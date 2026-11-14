@@ -68,12 +68,12 @@ concept temporary_car_reads = requires(D const &d) { (*d.template at_path<"$.car
 TEST_CASE("path: a message shorter than the least size is too_little_data, a foreign key is incorrect_type")
 {
     std::string const bytes = encode_with_schema(login{5, true, "ab"});
-    CHECK_EQ(at_path<login, "$.id">(bytes), 5u);
-    CHECK_EQ(at_path<login, "$.id">(std::string_view(bytes).substr(0, 20)).error(), error::too_little_data);
+    CHECK_EQ(read_leaf_with_copying_path<login, "$.id">(bytes), 5u);
+    CHECK_EQ(read_leaf_with_copying_path<login, "$.id">(std::string_view(bytes).substr(0, 20)).error(), error::too_little_data);
     std::string other = bytes;
     other.replace(8, 2, "ID");
     CHECK_EQ(form<login>::decode(std::string(other)).error(), error::incorrect_type);
-    CHECK_EQ(at_path<login, "$.id">(other).error(), error::incorrect_type);
+    CHECK_EQ(read_leaf_with_copying_path<login, "$.id">(other).error(), error::incorrect_type);
 }
 
 // A path that ends at a leaf gives the value. A path that ends at a struct, a list, a fixed array or a map gives an
@@ -194,8 +194,8 @@ TEST_CASE("path: an accessor gives the values of decode in every order")
     CHECK_EQ(lot.at_path<"$.rows[][]">(2uz, 0uz), 3u);
     CHECK_EQ(lot.at_path<"$.rows[][]">(0uz, 1uz), 2u);
     CHECK_EQ(lot.at_path<"$.rows[][]">(1uz, 0uz).error(), error::index_out_of_bounds);
-    CHECK_EQ(at_path<parking_lot, "$.cars[].wheels[].diameter">(bytes, 3uz, 0uz), back.cars[3].wheels[0].diameter);
-    CHECK_EQ(at_path<parking_lot, "$.cars[].model">(bytes, 3uz), "mmm"s);
+    CHECK_EQ(read_leaf_with_copying_path<parking_lot, "$.cars[].wheels[].diameter">(bytes, 3uz, 0uz), back.cars[3].wheels[0].diameter);
+    CHECK_EQ(read_leaf_with_copying_path<parking_lot, "$.cars[].model">(bytes, 3uz), "mmm"s);
 }
 
 // An accessor is read through an lvalue. The test exists because a text and a nested accessor borrow the bytes of the

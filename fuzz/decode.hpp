@@ -88,7 +88,7 @@ inline void tree_encode(std::string_view const input)
     auto const again = test::decode_wire_into_value(out);
     require(value.has_value() == again.has_value());
     if (value)
-        require(same(*value, *again));
+        require(values_are_the_same(*value, *again));
     else
         require(value.error() == again.error());
     auto const top_again = test::make_lazy_from_copy(out);

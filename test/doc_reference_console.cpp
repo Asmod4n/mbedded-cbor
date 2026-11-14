@@ -17,7 +17,7 @@ namespace {
 
 std::string user_message()
 {
-    return test::preferred(test::M("user"s, test::M("id"s, 42, "name"s, "ann"s)));
+    return test::encode_in_preferred_form(test::M("user"s, test::M("id"s, 42, "name"s, "ann"s)));
 }
 
 }
@@ -34,7 +34,7 @@ TEST_CASE("doc reference console: a field by its key")
 // Read an element by its index: the index counts from 0.
 TEST_CASE("doc reference console: an element by its index")
 {
-    auto const doc = cbor::lazy::adopt(test::preferred(test::M("tags"s, test::A("a"s, "b"s, "c"s))));
+    auto const doc = cbor::lazy::adopt(test::encode_in_preferred_form(test::M("tags"s, test::A("a"s, "b"s, "c"s))));
     auto const tag = doc->at("tags")->at(1)->get<std::string_view>();
     REQUIRE(tag);
     CHECK_EQ(**tag, "b"sv);
@@ -51,7 +51,7 @@ TEST_CASE("doc reference console: one value by its path")
 TEST_CASE("doc reference console: all values of a path")
 {
     auto const doc = cbor::lazy::adopt(
-        test::preferred(test::M("users"s, test::A(test::M("name"s, "ann"s), test::M("name"s, "bob"s)))));
+        test::encode_in_preferred_form(test::M("users"s, test::A(test::M("name"s, "ann"s), test::M("name"s, "bob"s)))));
     CHECK_EQ(doc->at_path<"$.users[*].name", cbor::nodelist>()->size(), 2u);
 }
 

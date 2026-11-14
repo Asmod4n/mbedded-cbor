@@ -23,7 +23,7 @@ using namespace std::string_view_literals;
 // and a filter. The test checks each value that the comments of the example state.
 TEST_CASE("doc reference path: the example of the group path")
 {
-    std::string bytes = test::preferred(test::M(
+    std::string bytes = test::encode_in_preferred_form(test::M(
         "store"s, test::M("book"s,
                           test::A(test::M("title"s, "A"s, "price"s, 8), test::M("title"s, "B"s, "price"s, 12),
                                   test::M("title"s, "C"s, "price"s, 9)),
@@ -65,7 +65,7 @@ TEST_CASE("doc reference path: the example of the group path")
 // the same value as the compile-time path.
 TEST_CASE("doc reference path: at_path")
 {
-    std::string bytes = test::preferred(test::M("user"s, test::M("id"s, 42, "name"s, "ann"s)));
+    std::string bytes = test::encode_in_preferred_form(test::M("user"s, test::M("id"s, 42, "name"s, "ann"s)));
     std::int64_t run_time = 0;
     // [at_path]
     // bytes: a std::string with {"user": {"id": 42, "name": "ann"}}
@@ -86,7 +86,7 @@ TEST_CASE("doc reference path: at_path")
 // query.hpp, the comment of at_path: a moved-from query is a wrong use and throws std::logic_error.
 TEST_CASE("doc reference path: at_path with a moved-from query throws")
 {
-    std::string const bytes = test::preferred(test::M("id"s, 42));
+    std::string const bytes = test::encode_in_preferred_form(test::M("id"s, 42));
     auto q = cbor::path::compile<std::int64_t>("$.id").value();
     auto const kept = std::move(q);
     CHECK_THROWS_AS((void)cbor::at_path(bytes, q), std::logic_error);
@@ -96,14 +96,14 @@ TEST_CASE("doc reference path: at_path with a moved-from query throws")
 // query.hpp, the comment of at_path: T std::string copies the text out of the bytes, so it takes a std::string_view.
 TEST_CASE("doc reference path: at_path with a copied value")
 {
-    std::string const bytes = test::preferred(test::M("name"s, "ann"s));
+    std::string const bytes = test::encode_in_preferred_form(test::M("name"s, "ann"s));
     CHECK_EQ(cbor::at_path<"$.name", std::string>(bytes), "ann"s);
 }
 
 // query.hpp, snippet compile: compile parses a path at run time; a path with many results needs nodelist.
 TEST_CASE("doc reference path: compile")
 {
-    auto const owner = std::make_shared<std::string const>(test::preferred(test::M("a"s, test::A(1, 2, 3))));
+    auto const owner = std::make_shared<std::string const>(test::encode_in_preferred_form(test::M("a"s, test::A(1, 2, 3))));
     std::size_t found = 0;
     // [compile]
     // owner: a std::shared_ptr<std::string const> with {"a": [1, 2, 3]}
@@ -122,8 +122,8 @@ TEST_CASE("doc reference path: compile")
 // query.hpp, snippet query: one compiled query reads many items.
 TEST_CASE("doc reference path: query")
 {
-    std::string const first = test::preferred(test::M("id"s, 1));
-    std::string const second = test::preferred(test::M("id"s, 2, "x"s, 0));
+    std::string const first = test::encode_in_preferred_form(test::M("id"s, 1));
+    std::string const second = test::encode_in_preferred_form(test::M("id"s, 2, "x"s, 0));
     // [query]
     // first: {"id": 1}, second: {"id": 2, "x": 0}
     auto const q = cbor::path::compile<std::int64_t>("$.id").value();
@@ -140,7 +140,7 @@ TEST_CASE("doc reference path: query")
 // nodelist and no error.
 TEST_CASE("doc reference path: nodelist")
 {
-    std::string bytes = test::preferred(test::M("a"s, test::A(1, 2, 3)));
+    std::string bytes = test::encode_in_preferred_form(test::M("a"s, test::A(1, 2, 3)));
     // [nodelist]
     // bytes: a std::string with {"a": [1, 2, 3]}
     auto const doc = cbor::lazy::adopt(std::move(bytes)).value();
@@ -170,7 +170,7 @@ std::int64_t read_or_zero(std::string_view const bytes)
 // path.hpp, snippet fixed_string: a template of the program passes a path on as a fixed_string.
 TEST_CASE("doc reference path: fixed_string")
 {
-    std::string const bytes = test::preferred(test::M("id"s, 42));
+    std::string const bytes = test::encode_in_preferred_form(test::M("id"s, 42));
     // [fixed_string use]
     // bytes: {"id": 42}
     auto const id = read_or_zero<"$.id">(bytes);    // 42

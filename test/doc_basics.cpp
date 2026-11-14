@@ -21,13 +21,13 @@ using cbor::error;
 // Each test in this file is one example of the former basics guide, whose facts now stand in
 // tools/doc/groups/errors.dox, ref.dox, mbedded-cbor.dox and structs.dox. The tests exist so that every example
 // compiles and gives the result that the text states. Where an example writes a comment with the input as text, the
-// test builds the same input with preferred().
+// test builds the same input with encode_in_preferred_form().
 
 // The section "Errors" shows how a program reads a std::expected and the text of its error, because a new user
 // reaches for an exception first.
 TEST_CASE("doc basics: errors")
 {
-    std::string const bytes = preferred(M("user"s, M("id"s, 42)));
+    std::string const bytes = encode_in_preferred_form(M("user"s, M("id"s, 42)));
     std::int64_t used = 0;
     std::string reported;
     auto const use = [&used](std::int64_t const v) { used = v; };
@@ -50,16 +50,16 @@ TEST_CASE("doc basics: errors")
 // user who meets an error looks up its cause there.
 TEST_CASE("doc basics: the errors that a program meets most often")
 {
-    CHECK_EQ(cbor::at_path<"$.b", int>(preferred(M("a"s, 1))).error(), error::key_not_found);
-    CHECK_EQ(cbor::at_path<"$[2]", int>(preferred(A(1, 2))).error(), error::index_out_of_bounds);
-    CHECK_EQ(cbor::at_path<"$.a.b", int>(preferred(M("a"s, 1))).error(), error::not_indexable);
-    CHECK_EQ(cbor::at_path<"$", int>(preferred(V("a"s))).error(), error::incorrect_type);
-    CHECK_EQ(cbor::at_path<"$", std::uint8_t>(preferred(V(256))).error(), error::number_out_of_range);
-    std::string const pair = preferred(A(1, 2));
+    CHECK_EQ(cbor::at_path<"$.b", int>(encode_in_preferred_form(M("a"s, 1))).error(), error::key_not_found);
+    CHECK_EQ(cbor::at_path<"$[2]", int>(encode_in_preferred_form(A(1, 2))).error(), error::index_out_of_bounds);
+    CHECK_EQ(cbor::at_path<"$.a.b", int>(encode_in_preferred_form(M("a"s, 1))).error(), error::not_indexable);
+    CHECK_EQ(cbor::at_path<"$", int>(encode_in_preferred_form(V("a"s))).error(), error::incorrect_type);
+    CHECK_EQ(cbor::at_path<"$", std::uint8_t>(encode_in_preferred_form(V(256))).error(), error::number_out_of_range);
+    std::string const pair = encode_in_preferred_form(A(1, 2));
     CHECK_EQ(cbor::at_path<"$[1]", int>(pair.substr(0, pair.size() - 1)).error(), error::too_little_data);
     CHECK_EQ(cbor::at_path<"$", int>("\xff"s).error(), error::syntax_error);
     CHECK_EQ(cbor::at_path<"$[0]", int>("\x9f\x01\xff"s).error(), error::indefinite_length);
-    CHECK_EQ(test::at_path("$.a[", *test::make_lazy_from_copy(preferred(M("a"s, 1)))).error(), error::invalid_path);
+    CHECK_EQ(test::read_value_at_path("$.a[", *test::make_lazy_from_copy(encode_in_preferred_form(M("a"s, 1)))).error(), error::invalid_path);
 }
 
 // The section "Errors" says that a wrong use that the compiler cannot see throws std::logic_error.
@@ -72,7 +72,7 @@ TEST_CASE("doc basics: a wrong use throws std::logic_error")
 // Here an rvalue std::string is moved, and a view form over a std::shared_ptr<std::string const>.
 TEST_CASE("doc basics: bytes go in as a copy or as a view")
 {
-    std::string const kept = preferred(M("name"s, std::string(40, 'a')));
+    std::string const kept = encode_in_preferred_form(M("name"s, std::string(40, 'a')));
     auto const copied = cbor::at_path<"$.name", std::string_view>(std::string(kept));
     REQUIRE(copied.has_value());
     CHECK_NE((**copied).data(), std::span(kept).subspan(8).data());
@@ -98,12 +98,12 @@ TEST_CASE("doc basics: bytes go in as a copy or as a view")
 // the result. So that a user who wants a copy of their own finds the form.
 TEST_CASE("doc basics: std::string as the type copies the text")
 {
-    std::string const bytes = preferred(M("name"s, std::string(40, 'a')));
+    std::string const bytes = encode_in_preferred_form(M("name"s, std::string(40, 'a')));
     auto const name = cbor::at_path<"$.name", std::string>(bytes);
     REQUIRE(name.has_value());
     CHECK_EQ(*name, std::string(40, 'a'));
     CHECK_NE(name->data(), std::span(bytes).subspan(8).data());
-    auto const raw = cbor::at_path<"$.key", std::vector<std::byte>>(preferred(M("key"s, test::bytes{"\x01\x02"})));
+    auto const raw = cbor::at_path<"$.key", std::vector<std::byte>>(encode_in_preferred_form(M("key"s, test::bytes{"\x01\x02"})));
     REQUIRE(raw.has_value());
     CHECK_EQ(*raw, std::vector{std::byte{1}, std::byte{2}});
 }
@@ -112,7 +112,7 @@ TEST_CASE("doc basics: std::string as the type copies the text")
 // caller ends. The ref holds the bytes.
 TEST_CASE("doc basics: results that point into the bytes")
 {
-    std::string bytes = preferred(M("name"s, "ann"s));
+    std::string bytes = encode_in_preferred_form(M("name"s, "ann"s));
     std::string_view text;
     std::string copy;
     std::optional<std::expected<cbor::ref<std::string_view>, cbor::error>> kept;
@@ -138,7 +138,7 @@ TEST_CASE("doc basics: results that point into the bytes")
 // lazy of its own.
 TEST_CASE("doc basics: threads" * doctest::skip(!test::threads_available))
 {
-    auto const owner = std::make_shared<std::string const>(preferred(M("id"s, 42)));
+    auto const owner = std::make_shared<std::string const>(encode_in_preferred_form(M("id"s, 42)));
     std::int64_t first_read = 0;
     std::int64_t second_read = 0;
     {

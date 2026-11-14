@@ -129,7 +129,7 @@ inline double widened(float const f)
                                  std::uint64_t{bits & 0x7fffff} << 29);
 }
 
-inline bool same(test::value const &a, test::value const &b)
+inline bool values_are_the_same(test::value const &a, test::value const &b)
 {
     if (a.kind.index() != b.kind.index())
         return false;
@@ -140,7 +140,7 @@ inline bool same(test::value const &a, test::value const &b)
         if ((*x)->size() != y.size())
             return false;
         for (std::size_t i = 0; i < y.size(); ++i)
-            if (!same((*x)->at(i), y.at(i)))
+            if (!values_are_the_same((*x)->at(i), y.at(i)))
                 return false;
         return true;
     }
@@ -149,20 +149,20 @@ inline bool same(test::value const &a, test::value const &b)
         if ((*x)->size() != y.size())
             return false;
         for (std::size_t i = 0; i < y.size(); ++i)
-            if (!same((*x)->at(i).key, y.at(i).key) || !same((*x)->at(i).val, y.at(i).val))
+            if (!values_are_the_same((*x)->at(i).key, y.at(i).key) || !values_are_the_same((*x)->at(i).val, y.at(i).val))
                 return false;
         return true;
     }
     if (auto const *x = std::get_if<test::tagged *>(&a.kind)) {
         auto const &y = *std::get<test::tagged *>(b.kind);
-        return (*x)->tag == y.tag && same(test::value{(*x)->content}, test::value{y.content});
+        return (*x)->tag == y.tag && values_are_the_same(test::value{(*x)->content}, test::value{y.content});
     }
     return a == b;
 }
 
 inline bool same_number(test::value const &a, test::value const &b)
 {
-    return same(canonical(a), canonical(b));
+    return values_are_the_same(canonical(a), canonical(b));
 }
 
 // The bytes of the input, taken from the front. When they run out every read gives zero.

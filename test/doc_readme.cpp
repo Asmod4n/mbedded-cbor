@@ -22,7 +22,7 @@ using namespace std::string_literals;
 // "Read a message" moves the bytes into the lazy and loops over the elements of an array.
 TEST_CASE("doc readme: read a message")
 {
-    std::string bytes = test::preferred(test::M("sensor"s, "t1"s, "value"s, 21.5, "samples"s, test::A(3, 4, 5)));
+    std::string bytes = test::encode_in_preferred_form(test::M("sensor"s, "t1"s, "value"s, 21.5, "samples"s, test::A(3, 4, 5)));
     auto const doc = cbor::lazy::adopt(std::move(bytes)).value();
 
     int sum = 0;
@@ -40,7 +40,7 @@ TEST_CASE("doc readme: read a message")
 TEST_CASE("doc readme: read one value by its path")
 {
     auto const owner =
-        std::make_shared<std::string const>(test::preferred(test::M("user"s, test::M("id"s, 42, "name"s, "ann"s))));
+        std::make_shared<std::string const>(test::encode_in_preferred_form(test::M("user"s, test::M("id"s, 42, "name"s, "ann"s))));
     auto const doc = cbor::lazy::view(owner).value();
 
     auto const id = doc.at_path<"$.user.id", std::int64_t>();

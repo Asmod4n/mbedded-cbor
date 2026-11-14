@@ -24,7 +24,7 @@ using namespace std::string_view_literals;
 TEST_CASE("doc reference tools: the example of the group tools")
 {
     auto const owner =
-        std::make_shared<std::string const>(test::preferred(test::A(1, 2)) + test::preferred(test::V(7)));
+        std::make_shared<std::string const>(test::encode_in_preferred_form(test::A(1, 2)) + test::encode_in_preferred_form(test::V(7)));
     // [tools group]
     // owner: the bytes 82 01 02 07, the sequence [1, 2] then 7
     auto const first = cbor::item_size(*owner);   // 3, the bytes of [1, 2]
@@ -47,7 +47,7 @@ TEST_CASE("doc reference tools: the example of the group tools")
 // too_little_data.
 TEST_CASE("doc reference tools: item_size")
 {
-    std::string const bytes = test::preferred(test::A(1, 2)) + test::preferred(test::V(7));
+    std::string const bytes = test::encode_in_preferred_form(test::A(1, 2)) + test::encode_in_preferred_form(test::V(7));
     // [item_size]
     // bytes: [1, 2] followed by 7, 4 bytes
     auto const size = cbor::item_size(bytes);                              // 3
@@ -64,7 +64,7 @@ TEST_CASE("doc reference tools: item_size")
 TEST_CASE("doc reference tools: sequence")
 {
     auto const owner = std::make_shared<std::string const>(
-        test::preferred(test::V(1)) + test::preferred(test::V(2)) + test::preferred(test::V(3)));
+        test::encode_in_preferred_form(test::V(1)) + test::encode_in_preferred_form(test::V(2)) + test::encode_in_preferred_form(test::V(3)));
     // use stands for the code of the reader; here it checks the sum.
     auto const use = [](std::int64_t const s) { CHECK_EQ(s, 6); };
     // [sequence]
@@ -135,7 +135,7 @@ TEST_CASE("doc reference tools: sequence_reader errors")
 // item is syntax_error.
 TEST_CASE("doc reference tools: diagnostic_notation")
 {
-    std::string const bytes = test::preferred(test::M("a"s, test::A(1, 2.5, test::bytes{"\x01"s})));
+    std::string const bytes = test::encode_in_preferred_form(test::M("a"s, test::A(1, 2.5, test::bytes{"\x01"s})));
     // [diagnostic_notation]
     // bytes: {"a": [1, 2.5, h'01']}
     auto const text = cbor::diagnostic_notation(bytes);   // "{\"a\": [1, 2.5, h'01']}"

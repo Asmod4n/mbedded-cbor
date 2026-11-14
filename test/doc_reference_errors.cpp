@@ -21,7 +21,7 @@ using namespace std::string_literals;
 // of the example state.
 TEST_CASE("doc reference errors: the example of the group errors")
 {
-    std::string bytes = test::preferred(test::M("a"s, 1));
+    std::string bytes = test::encode_in_preferred_form(test::M("a"s, 1));
     // [errors group]
     // bytes: a std::string with {"a": 1}
     auto const doc = cbor::lazy::adopt(std::move(bytes));
@@ -38,7 +38,7 @@ TEST_CASE("doc reference errors: the example of the group errors")
 // std::error_code.
 TEST_CASE("doc reference errors: error")
 {
-    std::string const bytes = test::preferred(test::M("user"s, test::M("id"s, 42)));
+    std::string const bytes = test::encode_in_preferred_form(test::M("user"s, test::M("id"s, 42)));
     // [error]
     // bytes: {"user": {"id": 42}}
     auto const age = cbor::at_path<"$.user.age", std::int64_t>(bytes);

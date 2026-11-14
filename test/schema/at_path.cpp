@@ -15,14 +15,14 @@ concept message_path_reads = requires(std::string_view const s, Index const... i
 TEST_CASE("at_path: fixed fields give the value")
 {
     std::string const bytes = encode_with_schema(sample_vehicle);
-    CHECK_EQ(at_path<vehicle, "$.balance">(bytes), -7);
-    CHECK_EQ(at_path<vehicle, "$.motor.cc">(bytes), 1800u);
-    CHECK_EQ(at_path<vehicle, "$.motor.horsepower">(bytes), 300u);
-    CHECK_EQ(at_path<vehicle, "$.spare[1].diameter">(bytes), 16u);
-    CHECK_EQ(at_path<vehicle, "$.spare[0].airPressure">(bytes), 2.5f);
-    CHECK_EQ(at_path<vehicle, "$.spare[].diameter">(bytes, 1uz), 16u);
-    CHECK_EQ(at_path<vehicle, "$.spare[].diameter">(bytes, 2uz).error(), error::index_out_of_bounds);
-    CHECK_EQ(at_path<vehicle, "$.code">(bytes), "ABCD"s);
+    CHECK_EQ(read_leaf_with_copying_path<vehicle, "$.balance">(bytes), -7);
+    CHECK_EQ(read_leaf_with_copying_path<vehicle, "$.motor.cc">(bytes), 1800u);
+    CHECK_EQ(read_leaf_with_copying_path<vehicle, "$.motor.horsepower">(bytes), 300u);
+    CHECK_EQ(read_leaf_with_copying_path<vehicle, "$.spare[1].diameter">(bytes), 16u);
+    CHECK_EQ(read_leaf_with_copying_path<vehicle, "$.spare[0].airPressure">(bytes), 2.5f);
+    CHECK_EQ(read_leaf_with_copying_path<vehicle, "$.spare[].diameter">(bytes, 1uz), 16u);
+    CHECK_EQ(read_leaf_with_copying_path<vehicle, "$.spare[].diameter">(bytes, 2uz).error(), error::index_out_of_bounds);
+    CHECK_EQ(read_leaf_with_copying_path<vehicle, "$.code">(bytes), "ABCD"s);
 }
 
 // A step over a part of variable size reads an offset and a length from the wire. An empty pair of brackets takes
@@ -30,14 +30,14 @@ TEST_CASE("at_path: fixed fields give the value")
 TEST_CASE("at_path: parts of variable size")
 {
     std::string const bytes = encode_with_schema(sample_vehicle);
-    CHECK_EQ(at_path<vehicle, "$.make">(bytes), "Tesla"s);
-    CHECK_EQ(at_path<vehicle, "$.wheels[2].diameter">(bytes), 19u);
-    CHECK_EQ(at_path<vehicle, "$.wheels[1].airPressure">(bytes), 3.0f);
-    CHECK_EQ(at_path<vehicle, "$.wheels[].airPressure">(bytes, 1uz), 3.0f);
-    CHECK_EQ(at_path<vehicle, "$.wheels[3].diameter">(bytes).error(), error::index_out_of_bounds);
-    CHECK_EQ(at_path<vehicle, "$.wheels[].diameter">(bytes, 3uz).error(), error::index_out_of_bounds);
-    CHECK_EQ(*at_path<vehicle, "$.owner">(bytes), std::optional<std::uint8_t>{9});
-    CHECK_FALSE(at_path<vehicle, "$.none">(bytes)->has_value());
+    CHECK_EQ(read_leaf_with_copying_path<vehicle, "$.make">(bytes), "Tesla"s);
+    CHECK_EQ(read_leaf_with_copying_path<vehicle, "$.wheels[2].diameter">(bytes), 19u);
+    CHECK_EQ(read_leaf_with_copying_path<vehicle, "$.wheels[1].airPressure">(bytes), 3.0f);
+    CHECK_EQ(read_leaf_with_copying_path<vehicle, "$.wheels[].airPressure">(bytes, 1uz), 3.0f);
+    CHECK_EQ(read_leaf_with_copying_path<vehicle, "$.wheels[3].diameter">(bytes).error(), error::index_out_of_bounds);
+    CHECK_EQ(read_leaf_with_copying_path<vehicle, "$.wheels[].diameter">(bytes, 3uz).error(), error::index_out_of_bounds);
+    CHECK_EQ(*read_leaf_with_copying_path<vehicle, "$.owner">(bytes), std::optional<std::uint8_t>{9});
+    CHECK_FALSE(read_leaf_with_copying_path<vehicle, "$.none">(bytes)->has_value());
 }
 
 // A directory offset from the wire can point at bytes of another kind. A length can reach past the start of the next
@@ -49,12 +49,12 @@ TEST_CASE("at_path: a broken offset is an error")
     REQUIRE_NE(head, std::string::npos);
     std::string backward = bytes;
     backward.replace(head + 5, 4, "\x00\x00\x00\x01"s);
-    CHECK_FALSE(at_path<vehicle, "$.make">(backward).has_value());
+    CHECK_FALSE(read_leaf_with_copying_path<vehicle, "$.make">(backward).has_value());
     std::size_t const make = bytes.find("\x7a\x00\x00\x00\x05Tesla"s);
     REQUIRE_NE(make, std::string::npos);
     std::string past = bytes;
     past.replace(make + 1, 4, "\x00\x00\xff\xff"s);
-    CHECK_FALSE(at_path<vehicle, "$.make">(past).has_value());
+    CHECK_FALSE(read_leaf_with_copying_path<vehicle, "$.make">(past).has_value());
     CHECK_FALSE(form<vehicle>::decode(std::string(backward)).has_value());
     CHECK_FALSE(form<vehicle>::decode(std::string(past)).has_value());
 }
@@ -65,12 +65,12 @@ TEST_CASE("at_path: a fixed byte array is read inline")
 {
     badge const b{{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}}, shade::light, "x"};
     std::string const bytes = encode_with_schema(b);
-    CHECK_EQ(at_path<badge, "$.mac">(bytes), "\x01\x02\x03\x04"s);
-    CHECK_EQ(at_path<badge, "$.tone">(bytes), shade::light);
+    CHECK_EQ(read_leaf_with_copying_path<badge, "$.mac">(bytes), "\x01\x02\x03\x04"s);
+    CHECK_EQ(read_leaf_with_copying_path<badge, "$.tone">(bytes), shade::light);
     std::string zeros = bytes;
     std::size_t const mac = bytes.size() - form<badge>::fixed_size() + form<badge>::member_offset<&badge::mac>();
     zeros.replace(mac + 1, 4, "\x00\x00\x00\x00"s);
-    CHECK_EQ(at_path<badge, "$.mac">(zeros), "\x00\x00\x00\x00"s);
+    CHECK_EQ(read_leaf_with_copying_path<badge, "$.mac">(zeros), "\x00\x00\x00\x00"s);
 }
 
 // RFC 8949 3.1 major type 4: a list is an array. Each element has a fixed size, so element i lies at i times that size
@@ -80,7 +80,7 @@ TEST_CASE("at_path: a list of structs, strings and lists, by index")
     std::string const bytes = encode_with_schema(sample_garage);
     std::uint32_t sum = 0;
     for (std::size_t i = 0;; ++i) {
-        auto const d = at_path<garage, "$.tires[].diameter">(bytes, i);
+        auto const d = read_leaf_with_copying_path<garage, "$.tires[].diameter">(bytes, i);
         if (!d) {
             CHECK_EQ(d.error(), error::index_out_of_bounds);
             CHECK_EQ(i, 3u);
@@ -89,30 +89,30 @@ TEST_CASE("at_path: a list of structs, strings and lists, by index")
         sum += *d;
     }
     CHECK_EQ(sum, 17u + 18u + 19u);
-    CHECK_EQ(at_path<garage, "$.tires[1].airPressure">(bytes), 3.0f);
-    CHECK_EQ(at_path<garage, "$.names[1]">(bytes), "bc"s);
-    CHECK_EQ(at_path<garage, "$.rows[][]">(bytes, 2uz, 0uz), 3u);
-    CHECK_EQ(at_path<garage, "$.rows[][]">(bytes, 0uz, 1uz), 2u);
-    CHECK_EQ(at_path<garage, "$.rows[1][0]">(bytes).error(), error::index_out_of_bounds);
+    CHECK_EQ(read_leaf_with_copying_path<garage, "$.tires[1].airPressure">(bytes), 3.0f);
+    CHECK_EQ(read_leaf_with_copying_path<garage, "$.names[1]">(bytes), "bc"s);
+    CHECK_EQ(read_leaf_with_copying_path<garage, "$.rows[][]">(bytes, 2uz, 0uz), 3u);
+    CHECK_EQ(read_leaf_with_copying_path<garage, "$.rows[][]">(bytes, 0uz, 1uz), 2u);
+    CHECK_EQ(read_leaf_with_copying_path<garage, "$.rows[1][0]">(bytes).error(), error::index_out_of_bounds);
 }
 
 // A path reads one leaf of one element at an offset the compiler knows, after the vector was checked once.
 TEST_CASE("at_path: a leaf of one element of a fixed-size vector")
 {
     std::string const bytes = encode_with_schema(gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}, {false, color::black, {5, -6}, {7, 8}}}});
-    CHECK_EQ(at_path<gauges, "$.g[0].on">(bytes), true);
-    CHECK_EQ(at_path<gauges, "$.g[1].on">(bytes), false);
-    CHECK_EQ(at_path<gauges, "$.g[0].shade">(bytes), color::white);
-    CHECK_EQ(at_path<gauges, "$.g[0].at.x">(bytes), 3);
-    CHECK_EQ(at_path<gauges, "$.g[1].at.y">(bytes), 5);
-    CHECK_EQ(at_path<gauges, "$.g[0].range[1]">(bytes), 0x0203u);
-    CHECK_EQ(at_path<gauges, "$.g[].range[]">(bytes, 1uz, 0uz), 7u);
-    CHECK_EQ(at_path<gauges, "$.g[2].on">(bytes).error(), error::index_out_of_bounds);
-    CHECK_EQ(at_path<gauges, "$.g[].range[]">(bytes, 0uz, 2uz).error(), error::index_out_of_bounds);
+    CHECK_EQ(read_leaf_with_copying_path<gauges, "$.g[0].on">(bytes), true);
+    CHECK_EQ(read_leaf_with_copying_path<gauges, "$.g[1].on">(bytes), false);
+    CHECK_EQ(read_leaf_with_copying_path<gauges, "$.g[0].shade">(bytes), color::white);
+    CHECK_EQ(read_leaf_with_copying_path<gauges, "$.g[0].at.x">(bytes), 3);
+    CHECK_EQ(read_leaf_with_copying_path<gauges, "$.g[1].at.y">(bytes), 5);
+    CHECK_EQ(read_leaf_with_copying_path<gauges, "$.g[0].range[1]">(bytes), 0x0203u);
+    CHECK_EQ(read_leaf_with_copying_path<gauges, "$.g[].range[]">(bytes, 1uz, 0uz), 7u);
+    CHECK_EQ(read_leaf_with_copying_path<gauges, "$.g[2].on">(bytes).error(), error::index_out_of_bounds);
+    CHECK_EQ(read_leaf_with_copying_path<gauges, "$.g[].range[]">(bytes, 0uz, 2uz).error(), error::index_out_of_bounds);
     std::string const points = encode_with_schema(cloud{{{1.0f, 0.5f}, {2.0f, -1.0f}}});
-    CHECK_EQ(at_path<cloud, "$.points[1].y">(points), -1.0f);
-    CHECK_EQ(at_path<cloud, "$.points[0].x">(points), 1.0f);
-    CHECK_EQ(at_path<cloud, "$.points[0].x">(encode_with_schema(cloud{})).error(), error::index_out_of_bounds);
+    CHECK_EQ(read_leaf_with_copying_path<cloud, "$.points[1].y">(points), -1.0f);
+    CHECK_EQ(read_leaf_with_copying_path<cloud, "$.points[0].x">(points), 1.0f);
+    CHECK_EQ(read_leaf_with_copying_path<cloud, "$.points[0].x">(encode_with_schema(cloud{})).error(), error::index_out_of_bounds);
 }
 
 // An accessor of the vector gives its size; an accessor of one element or of its inner struct reads the leaves
@@ -147,7 +147,7 @@ TEST_CASE("at_path and decode: a broken fixed-size vector is an error")
     REQUIRE_NE(head, std::string::npos);
     std::string reference = bytes;
     reference[head + 4] = '\xe3';
-    CHECK_EQ(at_path<cloud, "$.points[0].x">(reference).error(), error::incorrect_type);
+    CHECK_EQ(read_leaf_with_copying_path<cloud, "$.points[0].x">(reference).error(), error::incorrect_type);
     CHECK_EQ(form<cloud>::decode(std::string(reference)).error(), error::incorrect_type);
     std::string description = bytes;
     description[description.find("\x18\x55"s) + 1] = '\x56';
@@ -155,19 +155,19 @@ TEST_CASE("at_path and decode: a broken fixed-size vector is an error")
     CHECK_EQ(form<cloud>::decode(std::string(description)).error(), error::incorrect_type);
     std::string partial = bytes;
     partial[head + 9] = '\x0f';
-    CHECK_EQ(at_path<cloud, "$.points[0].x">(partial).error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(read_leaf_with_copying_path<cloud, "$.points[0].x">(partial).error(), error::inadmissible_type_for_tag_content);
     CHECK_EQ(form<cloud>::decode(std::string(partial)).error(), error::inadmissible_type_for_tag_content);
     std::string longer = bytes;
     longer[head + 9] = '\x18';
-    CHECK_EQ(at_path<cloud, "$.points[0].x">(longer).error(), error::too_little_data);
+    CHECK_EQ(read_leaf_with_copying_path<cloud, "$.points[0].x">(longer).error(), error::too_little_data);
     CHECK_EQ(form<cloud>::decode(std::string(longer)).error(), error::too_little_data);
     std::string const flags = encode_with_schema(gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}}});
     std::size_t const element = flags.find("\x03\xfe\x01\x01\x00"s);
     REQUIRE_NE(element, std::string::npos);
     std::string two = flags;
     two[element + 2] = '\x02';
-    CHECK_EQ(at_path<gauges, "$.g[0].on">(two).error(), error::incorrect_type);
-    CHECK_EQ(at_path<gauges, "$.g[0].shade">(two), color::white);
+    CHECK_EQ(read_leaf_with_copying_path<gauges, "$.g[0].on">(two).error(), error::incorrect_type);
+    CHECK_EQ(read_leaf_with_copying_path<gauges, "$.g[0].shade">(two), color::white);
     CHECK_EQ(form<gauges>::decode(std::string(two)).error(), error::incorrect_type);
 }
 

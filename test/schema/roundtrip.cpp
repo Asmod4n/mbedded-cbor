@@ -11,9 +11,9 @@ TEST_CASE("encode and decode: the key order holds in an inner struct")
     check_one_item(bytes);
     CHECK_NE(bytes.find("\xd8\x72\x83\x61" "B\x61" "a\x61z"s), std::string::npos);
     CHECK_NE(bytes.find("\xd8\x72\x82\x61x\x61y"s), std::string::npos);
-    CHECK_EQ(at_path<sorted_outer, "$.a.y">(bytes), 2);
-    CHECK_EQ(at_path<sorted_outer, "$.a.x">(bytes), 1);
-    CHECK_EQ(at_path<sorted_outer, "$.B">(bytes), 4);
+    CHECK_EQ(read_leaf_with_copying_path<sorted_outer, "$.a.y">(bytes), 2);
+    CHECK_EQ(read_leaf_with_copying_path<sorted_outer, "$.a.x">(bytes), 1);
+    CHECK_EQ(read_leaf_with_copying_path<sorted_outer, "$.B">(bytes), 4);
     auto const back = form<sorted_outer>::decode(std::string(bytes));
     REQUIRE(back.has_value());
     CHECK_EQ((*back)->z, 5);
@@ -68,7 +68,7 @@ TEST_CASE("encode and decode: a fixed-size vector round trip")
         REQUIRE(back.has_value());
         REQUIRE_EQ((*back)->g.size(), n);
         for (std::size_t i = 0; i < n; ++i)
-            CHECK(same((*back)->g[i], value.g[i]));
+            CHECK(gauges_are_the_same((*back)->g[i], value.g[i]));
     }
 }
 
@@ -89,7 +89,7 @@ TEST_CASE("encode and decode: the reference to a description at every table inde
     REQUIRE_EQ((*a_back)->p.size(), 1u);
     CHECK_EQ(std::bit_cast<std::uint32_t>((*a_back)->p[0].y), 0x40000000u);
     CHECK_EQ((*a_back)->e1.v, 9);
-    CHECK_EQ(at_path<fifteen_entries, "$.p[0].x">(a), 1.0f);
+    CHECK_EQ(read_leaf_with_copying_path<fifteen_entries, "$.p[0].x">(a), 1.0f);
     eighteen_entries eighteen{};
     eighteen.p = {{3.0f, 4.0f}};
     eighteen.e4.v = -3;
@@ -100,5 +100,5 @@ TEST_CASE("encode and decode: the reference to a description at every table inde
     REQUIRE(b_back.has_value());
     CHECK_EQ(std::bit_cast<std::uint32_t>((*b_back)->p[0].y), 0x40800000u);
     CHECK_EQ((*b_back)->e4.v, -3);
-    CHECK_EQ(at_path<eighteen_entries, "$.p[0].y">(b), 4.0f);
+    CHECK_EQ(read_leaf_with_copying_path<eighteen_entries, "$.p[0].y">(b), 4.0f);
 }

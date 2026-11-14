@@ -25,7 +25,7 @@ inline void item_size_target(std::string_view const input)
         require(*end >= 1 && *end <= rest.size());
         auto const framed = test::decode_wire_into_value(rest.substr(0, *end));
         if (value)
-            require(framed.has_value() && same(*framed, *value));
+            require(framed.has_value() && values_are_the_same(*framed, *value));
         // RFC 8949 3.4.5.1 and 5.3.2: the byte string of tag 24 is well-formed when its head and bytes are, and the
         // data item in it is a top-level item of its own. decode reads that item, so a fault in it is too_little_data
         // or syntax_error of the embedded item, while item_size frames the outer item. Such an error is the same with

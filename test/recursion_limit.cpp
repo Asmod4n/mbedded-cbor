@@ -147,7 +147,7 @@ TEST_CASE("recursion limit: diagnostic_notation")
 // its encode on the small stack stops where that stack ends.
 TEST_CASE("recursion limit: encode")
 {
-    auto const read = test::make_lazy_from_copy(preferred(arrays_around_zero(held)))->clone();
+    auto const read = test::make_lazy_from_copy(encode_in_preferred_form(arrays_around_zero(held)))->clone();
     REQUIRE(read.has_value());
     std::string out;
     CHECK(cbor::encode(**read, out).has_value());

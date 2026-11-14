@@ -111,11 +111,11 @@ TEST_CASE("depth: encode of a deep tree")
     value deep = V(0);
     for (std::size_t i = 0; i < test::levels_every_stack_holds; ++i)
         deep = A(deep);
-    auto const fits = test::make_lazy_from_copy(preferred(deep))->clone();
+    auto const fits = test::make_lazy_from_copy(encode_in_preferred_form(deep))->clone();
     REQUIRE(fits.has_value());
     std::string w;
     CHECK(cbor::encode(**fits, w).has_value());
-    CHECK_EQ(w, preferred(deep));
+    CHECK_EQ(w, encode_in_preferred_form(deep));
 }
 
 // RFC 8949 Table 4: the simple values 24 to 31 are reserved; Appendix F: f8 with a value below 32 is

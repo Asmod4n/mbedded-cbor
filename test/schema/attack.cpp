@@ -30,26 +30,26 @@ std::size_t probe_paths_read(std::string_view const message)
         if (!r)
             return;
         ++n;
-        CHECK(lies_inside(*r, bytes));
+        CHECK(part_lies_inside_message(*r, bytes));
     };
-    count(at_path<probe, "$.flag">(bytes));
-    count(at_path<probe, "$.i16">(bytes));
-    count(at_path<probe, "$.u64">(bytes));
-    count(at_path<probe, "$.f64">(bytes));
-    count(at_path<probe, "$.f32">(bytes));
-    count(at_path<probe, "$.i128">(bytes));
-    count(at_path<probe, "$.code">(bytes));
-    owned(at_path<probe, "$.code">(block));
-    count(at_path<probe, "$.text">(bytes));
-    owned(at_path<probe, "$.text">(block));
+    count(read_leaf_with_copying_path<probe, "$.flag">(bytes));
+    count(read_leaf_with_copying_path<probe, "$.i16">(bytes));
+    count(read_leaf_with_copying_path<probe, "$.u64">(bytes));
+    count(read_leaf_with_copying_path<probe, "$.f64">(bytes));
+    count(read_leaf_with_copying_path<probe, "$.f32">(bytes));
+    count(read_leaf_with_copying_path<probe, "$.i128">(bytes));
+    count(read_leaf_with_copying_path<probe, "$.code">(bytes));
+    owned(read_leaf_with_copying_path<probe, "$.code">(block));
+    count(read_leaf_with_copying_path<probe, "$.text">(bytes));
+    owned(read_leaf_with_copying_path<probe, "$.text">(block));
     for (std::size_t i = 0; i < tire_reads; ++i) {
-        count(at_path<probe, "$.tires[].diameter">(bytes, i));
-        count(at_path<probe, "$.tires[].airPressure">(bytes, i));
-        count(at_path<probe, "$.pair[]">(bytes, i));
+        count(read_leaf_with_copying_path<probe, "$.tires[].diameter">(bytes, i));
+        count(read_leaf_with_copying_path<probe, "$.tires[].airPressure">(bytes, i));
+        count(read_leaf_with_copying_path<probe, "$.pair[]">(bytes, i));
     }
-    count(at_path<probe, "$.maybe">(bytes));
-    count(at_path<probe, "$.motor.horsepower">(bytes));
-    count(at_path<probe, "$.motor.cc">(bytes));
+    count(read_leaf_with_copying_path<probe, "$.maybe">(bytes));
+    count(read_leaf_with_copying_path<probe, "$.motor.horsepower">(bytes));
+    count(read_leaf_with_copying_path<probe, "$.motor.cc">(bytes));
     return n;
 }
 
@@ -83,7 +83,7 @@ std::size_t probe_lot_read(std::string_view const message)
     auto const text = [bytes](auto const &r) -> std::optional<double> {
         if (!r)
             return std::nullopt;
-        CHECK(lies_inside(*r, bytes));
+        CHECK(part_lies_inside_message(*r, bytes));
         return static_cast<double>(r->size());
     };
     auto const all = [&] {
@@ -146,11 +146,11 @@ TEST_CASE("attack: the sample message reads every path")
     std::string const bytes = *form<probe>::encode(sample_probe);
     CHECK_EQ(probe_paths_read(bytes), probe_paths);
     CHECK_EQ(probe_lot_read(bytes), probe_lot_paths);
-    CHECK_EQ(at_path<probe, "$.i16">(bytes), -300);
-    CHECK((*at_path<probe, "$.i128">(bytes) == wide_integer{-5}));
-    CHECK_EQ(at_path<probe, "$.f64">(bytes), 2.5);
-    CHECK_EQ(at_path<probe, "$.pair[]">(bytes, 1uz), 8u);
-    CHECK_EQ(at_path<probe, "$.maybe">(bytes).value(), std::optional<std::int32_t>{-9});
+    CHECK_EQ(read_leaf_with_copying_path<probe, "$.i16">(bytes), -300);
+    CHECK((*read_leaf_with_copying_path<probe, "$.i128">(bytes) == wide_integer{-5}));
+    CHECK_EQ(read_leaf_with_copying_path<probe, "$.f64">(bytes), 2.5);
+    CHECK_EQ(read_leaf_with_copying_path<probe, "$.pair[]">(bytes, 1uz), 8u);
+    CHECK_EQ(read_leaf_with_copying_path<probe, "$.maybe">(bytes).value(), std::optional<std::int32_t>{-9});
 }
 
 // A text is a view into the bytes that the root holds. An accessor is read through an lvalue only, so each accessor
@@ -212,8 +212,8 @@ TEST_CASE("attack: every prefix of a message is an error for every path")
 TEST_CASE("attack: a shifted root is incorrect_type")
 {
     std::string const bytes = *form<probe>::encode(sample_probe);
-    CHECK_EQ(at_path<probe, "$.i16">("\x00"s + bytes).error(), error::incorrect_type);
-    CHECK_EQ(at_path<probe, "$.i16">(bytes + "\x00"s).error(), error::incorrect_type);
+    CHECK_EQ(read_leaf_with_copying_path<probe, "$.i16">("\x00"s + bytes).error(), error::incorrect_type);
+    CHECK_EQ(read_leaf_with_copying_path<probe, "$.i16">(bytes + "\x00"s).error(), error::incorrect_type);
     CHECK_EQ(probe_paths_read("\x00"s + bytes), 0u);
     CHECK_EQ(probe_paths_read(bytes + "\x00"s), 0u);
     CHECK_EQ(probe_lot_read("\x00"s + bytes), 0u);
@@ -236,18 +236,18 @@ TEST_CASE("attack: every forged head of a fixed field is incorrect_type")
     using S = form<probe>;
     for (unsigned head = 0; head < test::rfc8949::initial_byte_values; ++head) {
         CAPTURE(head);
-        CHECK_EQ(at_path<probe, "$.flag">(forged(S::member_offset<&probe::flag>(), head)).has_value(), head == 0xf4 || head == 0xf5);
-        CHECK_EQ(at_path<probe, "$.i16">(forged(S::member_offset<&probe::i16>(), head)).has_value(), head == 0x19 || head == 0x39);
-        CHECK_EQ(at_path<probe, "$.u64">(forged(S::member_offset<&probe::u64>(), head)).has_value(), head == 0x1b);
-        CHECK_EQ(at_path<probe, "$.f64">(forged(S::member_offset<&probe::f64>(), head)).has_value(), head == 0xfb);
-        CHECK_EQ(at_path<probe, "$.f32">(forged(S::member_offset<&probe::f32>(), head)).has_value(), head == 0xfa);
+        CHECK_EQ(read_leaf_with_copying_path<probe, "$.flag">(forged(S::member_offset<&probe::flag>(), head)).has_value(), head == 0xf4 || head == 0xf5);
+        CHECK_EQ(read_leaf_with_copying_path<probe, "$.i16">(forged(S::member_offset<&probe::i16>(), head)).has_value(), head == 0x19 || head == 0x39);
+        CHECK_EQ(read_leaf_with_copying_path<probe, "$.u64">(forged(S::member_offset<&probe::u64>(), head)).has_value(), head == 0x1b);
+        CHECK_EQ(read_leaf_with_copying_path<probe, "$.f64">(forged(S::member_offset<&probe::f64>(), head)).has_value(), head == 0xfb);
+        CHECK_EQ(read_leaf_with_copying_path<probe, "$.f32">(forged(S::member_offset<&probe::f32>(), head)).has_value(), head == 0xfa);
 #ifdef CBOR_HAS_INT128
-        CHECK_EQ(at_path<probe, "$.i128">(forged(S::member_offset<&probe::i128>(), head)).has_value(), head == 0xc2 || head == 0xc3);
+        CHECK_EQ(read_leaf_with_copying_path<probe, "$.i128">(forged(S::member_offset<&probe::i128>(), head)).has_value(), head == 0xc2 || head == 0xc3);
 #else
-        CHECK_EQ(at_path<probe, "$.i128">(forged(S::member_offset<&probe::i128>(), head)).has_value(), head == 0x1b || head == 0x3b);
+        CHECK_EQ(read_leaf_with_copying_path<probe, "$.i128">(forged(S::member_offset<&probe::i128>(), head)).has_value(), head == 0x1b || head == 0x3b);
 #endif
-        CHECK_EQ(at_path<probe, "$.code">(forged(S::member_offset<&probe::code>(), head)).has_value(), head == 0x63);
-        CHECK_EQ(at_path<probe, "$.pair[1]">(forged(S::member_offset<&probe::pair>(), head)).has_value(), head == 0x82);
+        CHECK_EQ(read_leaf_with_copying_path<probe, "$.code">(forged(S::member_offset<&probe::code>(), head)).has_value(), head == 0x63);
+        CHECK_EQ(read_leaf_with_copying_path<probe, "$.pair[1]">(forged(S::member_offset<&probe::pair>(), head)).has_value(), head == 0x82);
     }
 }
 
@@ -303,20 +303,20 @@ TEST_CASE("attack: overlapping items are an error")
     REQUIRE_NE(head, std::string::npos);
     std::string same = bytes;
     same.replace(head + 9, 4, bytes.substr(head + 5, 4));
-    CHECK_FALSE(at_path<probe, "$.text">(same).has_value());
-    CHECK_FALSE(at_path<probe, "$.maybe">(same).has_value());
+    CHECK_FALSE(read_leaf_with_copying_path<probe, "$.text">(same).has_value());
+    CHECK_FALSE(read_leaf_with_copying_path<probe, "$.maybe">(same).has_value());
     std::string next = bytes;
     next.replace(head + 13, 4, bytes.substr(head + 9, 4));
-    CHECK_FALSE(at_path<probe, "$.maybe">(next).has_value());
-    CHECK_FALSE(at_path<probe, "$.tires[0].diameter">(next).has_value());
+    CHECK_FALSE(read_leaf_with_copying_path<probe, "$.maybe">(next).has_value());
+    CHECK_FALSE(read_leaf_with_copying_path<probe, "$.tires[0].diameter">(next).has_value());
 
     std::string const one = encode_with_schema(login{5, true, "ab"});
     std::size_t const text = one.find("\x7a\x00\x00\x00\x02" "ab"s);
     REQUIRE_NE(text, std::string::npos);
     std::string into_root = one;
     into_root.replace(text + 1, 4, std::string{'\x00', '\x00', '\x00', static_cast<char>(2 + form<login>::fixed_size())});
-    CHECK_EQ(at_path<login, "$.name">(into_root).error(), error::too_little_data);
-    CHECK_EQ(at_path<login, "$.id">(into_root), 5u);
+    CHECK_EQ(read_leaf_with_copying_path<login, "$.name">(into_root).error(), error::too_little_data);
+    CHECK_EQ(read_leaf_with_copying_path<login, "$.id">(into_root), 5u);
 }
 
 // Each item of a packed message starts with an RFC 8949 head. A typed array has the tag head d8 56 and the head 5a of
@@ -336,7 +336,7 @@ TEST_CASE("attack: an item head that does not fit before the root is too_little_
     REQUIRE_LT(entry, head);
     std::string cut_array = array;
     cut_array.replace(entry, 4, big_endian(array.size() - form<doubles>::fixed_size() - 3));
-    CHECK_EQ(at_path<doubles, "$.v[0]">(cut_array).error(), error::too_little_data);
+    CHECK_EQ(read_leaf_with_copying_path<doubles, "$.v[0]">(cut_array).error(), error::too_little_data);
 
     std::string const text = encode_with_schema(login{5, true, "ab"});
     std::size_t const name = text.find("\x7a\x00\x00\x00\x02" "ab"sv);
@@ -345,7 +345,7 @@ TEST_CASE("attack: an item head that does not fit before the root is too_little_
     REQUIRE_LT(name_entry, name);
     std::string cut_text = text;
     cut_text.replace(name_entry, 4, big_endian(text.size() - form<login>::fixed_size() - 3));
-    CHECK_EQ(at_path<login, "$.name">(cut_text).error(), error::too_little_data);
+    CHECK_EQ(read_leaf_with_copying_path<login, "$.name">(cut_text).error(), error::too_little_data);
 }
 
 // The directory is a byte string with a four-byte argument (RFC 8949 Section 3.1, major type 2). Its length is
@@ -382,8 +382,8 @@ TEST_CASE("attack: a forged reference of a fixed-size vector is incorrect_type")
     REQUIRE_NE(head, std::string::npos);
     std::string forged = bytes;
     forged.at(head + 4) = static_cast<char>(forged.at(head + 4) + 1);
-    CHECK_EQ(at_path<probe, "$.tires[1].diameter">(forged).error(), error::incorrect_type);
-    CHECK_EQ(at_path<probe, "$.text">(forged), at_path<probe, "$.text">(bytes));
+    CHECK_EQ(read_leaf_with_copying_path<probe, "$.tires[1].diameter">(forged).error(), error::incorrect_type);
+    CHECK_EQ(read_leaf_with_copying_path<probe, "$.text">(forged), read_leaf_with_copying_path<probe, "$.text">(bytes));
     auto lot = *form<probe>::path(std::string(forged));
     constexpr int passes = 2;
     for (int pass = 0; pass < passes; ++pass) {

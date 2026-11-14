@@ -58,14 +58,14 @@ TEST_CASE("doc advanced path: an index on a byte string")
     using doc_advanced_path::frame;
     std::string const message = *cbor::schema<frame>::encode(frame{{7, 9}});
     CHECK_EQ(cbor::schema<frame>::at_path<"$.mac[1]">(message), std::uint8_t{9});
-    CHECK_EQ(cbor::at_path<"$.mac[1]", int>(preferred(M("mac"s, test::bytes{"\x07\x09"}))).error(),
+    CHECK_EQ(cbor::at_path<"$.mac[1]", int>(encode_in_preferred_form(M("mac"s, test::bytes{"\x07\x09"}))).error(),
              error::not_indexable);
 }
 
 // The section "The forms" shows the form that reads one number from bytes the caller holds.
 TEST_CASE("doc advanced path: a scalar from bytes")
 {
-    std::string const bytes = preferred(M("user"s, M("id"s, 42, "score"s, 2.5, "admin"s, simple{21})));
+    std::string const bytes = encode_in_preferred_form(M("user"s, M("id"s, 42, "score"s, 2.5, "admin"s, simple{21})));
     CHECK_EQ(cbor::at_path<"$.user.id", std::int64_t>(bytes), 42);
     CHECK_EQ(cbor::at_path<"$.user.score", double>(bytes), 2.5);
     CHECK_EQ(cbor::at_path<"$.user.admin", bool>(bytes), true);
@@ -74,8 +74,8 @@ TEST_CASE("doc advanced path: a scalar from bytes")
 // A user did not know that encoded is a std::string_view, so an element of a cbor::sequence goes in directly.
 TEST_CASE("doc advanced path: encoded is a string_view")
 {
-    auto const bytes = std::make_shared<std::string const>(preferred(M("n"s, 1)) + preferred(M("n"s, 2)) +
-                                                           preferred(M("n"s, 3)));
+    auto const bytes = std::make_shared<std::string const>(encode_in_preferred_form(M("n"s, 1)) + encode_in_preferred_form(M("n"s, 2)) +
+                                                           encode_in_preferred_form(M("n"s, 3)));
     std::int64_t sum = 0;
     for (auto const e : cbor::sequence{bytes})
         sum += *cbor::at_path<"$.n", std::int64_t>(*e);
@@ -87,7 +87,7 @@ TEST_CASE("doc advanced path: encoded is a string_view")
 // points into the bytes of that owner.
 TEST_CASE("doc advanced path: a view with its owner")
 {
-    auto const owner = std::make_shared<std::string const>(preferred(M("name"s, "ann"s, "key"s, bytes{"\x01\x02"})));
+    auto const owner = std::make_shared<std::string const>(encode_in_preferred_form(M("name"s, "ann"s, "key"s, bytes{"\x01\x02"})));
     auto const name = cbor::at_path<"$.name", std::string_view>(owner);
     REQUIRE(name.has_value());
     CHECK_EQ(**name, "ann"sv);
@@ -109,7 +109,7 @@ TEST_CASE("doc advanced path: a view with its owner")
 // std::string. It also names the run-time forms over bytes. A user who reads the table calls each of them.
 TEST_CASE("doc advanced path: every form of the table")
 {
-    std::string encoded = preferred(M("name"s, std::string(40, 'a'), "key"s, bytes{"\x01\x02"}, "n"s, 7));
+    std::string encoded = encode_in_preferred_form(M("name"s, std::string(40, 'a'), "key"s, bytes{"\x01\x02"}, "n"s, 7));
     CHECK_EQ(cbor::at_path<"$.name", std::string>(encoded), std::string(40, 'a'));
     CHECK_EQ(cbor::at_path<"$.key", std::vector<std::byte>>(encoded), std::vector{std::byte{1}, std::byte{2}});
     auto const owner = std::make_shared<std::string const>(encoded);
@@ -158,7 +158,7 @@ TEST_CASE("doc advanced path: no free form takes a lazy")
 // The section "Any item as a node" names clone() as a way to read a node on.
 TEST_CASE("doc advanced path: clone of a node")
 {
-    auto const l = *test::make_lazy_from_copy(preferred(M("a"s, A(1, 2, 3))));
+    auto const l = *test::make_lazy_from_copy(encode_in_preferred_form(M("a"s, A(1, 2, 3))));
     auto const node = l.at_path<"$.a">();
     REQUIRE(node.has_value());
     CHECK(node->clone().has_value());
@@ -167,7 +167,7 @@ TEST_CASE("doc advanced path: clone of a node")
 // The section "The forms" shows that a lazy is a start point for every typed form.
 TEST_CASE("doc advanced path: a typed read from a lazy")
 {
-    std::string const bytes = preferred(M("cars"s, A(M("hp"s, 5), M("hp"s, 7, "make"s, "kia"s))));
+    std::string const bytes = encode_in_preferred_form(M("cars"s, A(M("hp"s, 5), M("hp"s, 7, "make"s, "kia"s))));
     auto const cars = test::make_lazy_from_copy(bytes)->at("cars");
     REQUIRE(cars.has_value());
     CHECK_EQ(cars->at_path<"$[1].hp", std::int64_t>(), 7);
@@ -180,11 +180,11 @@ TEST_CASE("doc advanced path: a typed read from a lazy")
 // query that compile parses once at run time.
 TEST_CASE("doc advanced path: a node at compile time and at run time")
 {
-    std::string const bytes = preferred(M("a"s, A(1, 2, 3)));
+    std::string const bytes = encode_in_preferred_form(M("a"s, A(1, 2, 3)));
     auto const l = *test::make_lazy_from_copy(bytes);
-    CHECK(*test::at_path<"$.a">(l) == A(1, 2, 3));
+    CHECK(*test::read_value_at_path<"$.a">(l) == A(1, 2, 3));
     std::string const path = "$.a[2]";
-    CHECK(*test::at_path(path, l) == V(3));
+    CHECK(*test::read_value_at_path(path, l) == V(3));
     CHECK(*test::query<"$.a[*]">(l) == A(1, 2, 3));
     CHECK(*test::query("$.a[?@ > 1]", l) == A(2, 3));
     CHECK(*test::query("$.b", l) == A());
@@ -199,18 +199,18 @@ TEST_CASE("doc advanced path: a node at compile time and at run time")
 // the types that do not compile.
 TEST_CASE("doc advanced path: the types of a typed read")
 {
-    CHECK_EQ(cbor::at_path<"$", std::uint8_t>(preferred(V(255))), std::uint8_t{255});
-    CHECK_EQ(cbor::at_path<"$", std::uint8_t>(preferred(V(256))).error(), error::number_out_of_range);
-    CHECK_EQ(cbor::at_path<"$", unsigned>(preferred(V(-1))).error(), error::number_out_of_range);
-    CHECK_EQ(cbor::at_path<"$", double>(preferred(V(1))), 1.0);
+    CHECK_EQ(cbor::at_path<"$", std::uint8_t>(encode_in_preferred_form(V(255))), std::uint8_t{255});
+    CHECK_EQ(cbor::at_path<"$", std::uint8_t>(encode_in_preferred_form(V(256))).error(), error::number_out_of_range);
+    CHECK_EQ(cbor::at_path<"$", unsigned>(encode_in_preferred_form(V(-1))).error(), error::number_out_of_range);
+    CHECK_EQ(cbor::at_path<"$", double>(encode_in_preferred_form(V(1))), 1.0);
     CHECK_EQ(cbor::at_path<"$", double>("\x1b\x00\x20\x00\x00\x00\x00\x00\x01"s).error(), error::number_out_of_range);
-    CHECK_EQ(cbor::at_path<"$", std::int64_t>(preferred(V(1.0))).error(), error::incorrect_type);
+    CHECK_EQ(cbor::at_path<"$", std::int64_t>(encode_in_preferred_form(V(1.0))).error(), error::incorrect_type);
     CHECK_EQ(cbor::at_path<"$", std::uint64_t>("\xc2\x42\x01\x00"s), 256u);
-    CHECK_EQ(cbor::at_path<"$", std::nullptr_t>(preferred(V(simple{22}))), nullptr);
+    CHECK_EQ(cbor::at_path<"$", std::nullptr_t>(encode_in_preferred_form(V(simple{22}))), nullptr);
     CHECK_EQ(cbor::at_path<"$", cbor::simple_value>("\xf8\x63"s), cbor::simple_value{99});
     CHECK_EQ(cbor::at_path<"$", cbor::simple_value>("\xf5"s), cbor::simple_value{21});
     CHECK_EQ(cbor::at_path<"$", cbor::simple_value>("\xf6"s), cbor::simple_value{22});
-    CHECK_EQ(cbor::at_path<"$", char>(preferred(V(65))), 'A');
+    CHECK_EQ(cbor::at_path<"$", char>(encode_in_preferred_form(V(65))), 'A');
     CHECK_EQ(cbor::at_path<"$", int>("\xc3\x41\x01"s), -2);
     CHECK_EQ(cbor::at_path<"$", int>("\xc1\x05"s), 5);
     CHECK(*test::make_lazy_from_copy("\xd8\x20\x61x"s)->at_path<"$", std::string_view>() == "x"sv);
@@ -225,7 +225,7 @@ TEST_CASE("doc advanced path: the selectors and segments")
     value const doc = M("store"s, M("book"s, A(M("title"s, "A"s, "price"s, 8), M("title"s, "B"s, "price"s, 12),
                                               M("title"s, "C"s, "price"s, 9, "isbn"s, "x"s)),
                                     "bicycle"s, M("price"s, 20)));
-    auto const l = *test::make_lazy_from_copy(preferred(doc));
+    auto const l = *test::make_lazy_from_copy(encode_in_preferred_form(doc));
     CHECK(*test::query("$", l) == A(doc));
     CHECK(*test::query("$.store.bicycle.price", l) == A(20));
     CHECK(*test::query("$['store']['bicycle']['price']", l) == A(20));
@@ -246,7 +246,7 @@ TEST_CASE("doc advanced path: the selectors and segments")
 // The section "Functions" shows length, count and value, and that match and search are refused.
 TEST_CASE("doc advanced path: the functions")
 {
-    auto const l = *test::make_lazy_from_copy(preferred(A(M("t"s, "abc"s), M("t"s, A(1, 2)), M("t"s, 5))));
+    auto const l = *test::make_lazy_from_copy(encode_in_preferred_form(A(M("t"s, "abc"s), M("t"s, A(1, 2)), M("t"s, 5))));
     CHECK(*test::query("$[?length(@.t) == 3].t", l) == A("abc"s));
     CHECK(*test::query("$[?count(@.t[*]) == 2].t", l) == A(A(1, 2)));
     CHECK(*test::query("$[?value(@..t) == 5].t", l) == A(5));
@@ -263,15 +263,15 @@ TEST_CASE("doc advanced path: keys that are not text")
 {
     std::string const keyed = "\xa4\x01\x61x\x21\x61y\x41\x01\x61z\x82\x01\x02\x61w"s;
     auto const l = *test::make_lazy_from_copy(keyed);
-    CHECK(*test::at_path<"$[1]">(l) == V("x"s));
-    CHECK(*test::at_path<"$[-2]">(l) == V("y"s));
-    CHECK(*test::at_path<"$[h'01']">(l) == V("z"s));
-    CHECK(*test::at_path<"$[[1, 2]]">(l) == V("w"s));
-    CHECK(*test::at_path("$[1]", l) == V("x"s));
-    CHECK(*test::at_path("$[h'01']", l) == V("z"s));
-    CHECK(*test::at_path("$[[1, 2]]", l) == V("w"s));
-    CHECK(*test::query<"$[?@ == h'01']">(*test::make_lazy_from_copy(preferred(A(bytes{"\x01"}, 1)))) == A(bytes{"\x01"}));
-    CHECK(*test::query("$[?@ == h'01']", *test::make_lazy_from_copy(preferred(A(bytes{"\x01"}, 1)))) == A(bytes{"\x01"}));
+    CHECK(*test::read_value_at_path<"$[1]">(l) == V("x"s));
+    CHECK(*test::read_value_at_path<"$[-2]">(l) == V("y"s));
+    CHECK(*test::read_value_at_path<"$[h'01']">(l) == V("z"s));
+    CHECK(*test::read_value_at_path<"$[[1, 2]]">(l) == V("w"s));
+    CHECK(*test::read_value_at_path("$[1]", l) == V("x"s));
+    CHECK(*test::read_value_at_path("$[h'01']", l) == V("z"s));
+    CHECK(*test::read_value_at_path("$[[1, 2]]", l) == V("w"s));
+    CHECK(*test::query<"$[?@ == h'01']">(*test::make_lazy_from_copy(encode_in_preferred_form(A(bytes{"\x01"}, 1)))) == A(bytes{"\x01"}));
+    CHECK(*test::query("$[?@ == h'01']", *test::make_lazy_from_copy(encode_in_preferred_form(A(bytes{"\x01"}, 1)))) == A(bytes{"\x01"}));
     CHECK(advanced_lazy_path_compiles<"$[h'01']">);
     CHECK((advanced_typed_path_compiles<"$[h'01']", int>));
     auto const z = l.at_path<"$[h'01']", std::string_view>();
@@ -288,7 +288,7 @@ TEST_CASE("doc advanced path: a typed read of an empty lazy throws")
 {
     CHECK_THROWS_AS(((void)(cbor::lazy{}).at_path<"$.a", int>()), std::logic_error);
     CHECK_THROWS_AS(((void)(cbor::lazy{}).at_path<"$.a", std::string_view>()), std::logic_error);
-    CHECK_THROWS_AS((void)test::at_path<"$.a">(cbor::lazy{}), std::logic_error);
+    CHECK_THROWS_AS((void)test::read_value_at_path<"$.a">(cbor::lazy{}), std::logic_error);
 }
 
 // The section "Tags on the way" shows that tags 24, 28, 29 and 55799 are passed. That a tag the path does not know is
@@ -299,10 +299,10 @@ TEST_CASE("doc advanced path: tags on the way")
     CHECK_EQ(cbor::at_path<"$[0].k", int>("\x82\xd8\x1c\xa1\x61k\x07\xd8\x1d\x00"s), 7);
     CHECK_EQ(cbor::at_path<"$[1]", int>("\x82\xd8\x1c\xa1\x61k\x07\xd8\x1d\x00"s), 0);
     CHECK_EQ(cbor::at_path<"$.a", int>("\xd9\xd9\xf7\xa1\x61\x61\x05"s), 5);
-    std::string const other = preferred(M("v"s, tagged{1000, A(1, 2)}));
+    std::string const other = encode_in_preferred_form(M("v"s, tagged{1000, A(1, 2)}));
     CHECK_EQ(cbor::at_path<"$.v[1]", int>(other), 2);
     CHECK(*test::query("$.v[*]", *test::make_lazy_from_copy(other)) == A(1, 2));
-    CHECK(*test::at_path("$.v", *test::make_lazy_from_copy(other)) == V(tagged{1000, A(1, 2)}));
+    CHECK(*test::read_value_at_path("$.v", *test::make_lazy_from_copy(other)) == V(tagged{1000, A(1, 2)}));
 }
 
 // The section "Typed arrays" shows that an index reads one element, that a wildcard gives every element. That a path
@@ -329,21 +329,21 @@ TEST_CASE("doc advanced path: a singular query")
     CHECK((cbor::is_valid_path_v<"$..a">));
     CHECK((!cbor::is_valid_path_v<"$.a[">));
     CHECK_FALSE((advanced_typed_path_compiles<"$.a[*]", int>));
-    CHECK_EQ(test::at_path("$.a[*]", *test::make_lazy_from_copy(preferred(M("a"s, A(1))))).error(), error::not_singular_query);
+    CHECK_EQ(test::read_value_at_path("$.a[*]", *test::make_lazy_from_copy(encode_in_preferred_form(M("a"s, A(1))))).error(), error::not_singular_query);
 }
 
 // The section "Errors" shows each error that a path gives and the input that gives it.
 TEST_CASE("doc advanced path: the errors")
 {
-    std::string const bytes = preferred(M("a"s, A(1, 2), "s"s, "x"s));
+    std::string const bytes = encode_in_preferred_form(M("a"s, A(1, 2), "s"s, "x"s));
     auto const l = *test::make_lazy_from_copy(bytes);
-    CHECK_EQ(test::at_path("$.a[", l).error(), error::invalid_path);
+    CHECK_EQ(test::read_value_at_path("$.a[", l).error(), error::invalid_path);
     CHECK_EQ(cbor::at_path<"$.b", int>(bytes).error(), error::key_not_found);
     CHECK_EQ(cbor::at_path<"$.a[2]", int>(bytes).error(), error::index_out_of_bounds);
     CHECK_EQ(cbor::at_path<"$.s[0]", int>(bytes).error(), error::not_indexable);
     CHECK_EQ(cbor::at_path<"$.s", int>(bytes).error(), error::incorrect_type);
     CHECK_EQ(cbor::at_path<"$.a[1]", int>(bytes.substr(0, 5)).error(), error::too_little_data);
-    CHECK_THROWS_AS((void)test::at_path("$", cbor::lazy{}), std::logic_error);
+    CHECK_THROWS_AS((void)test::read_value_at_path("$", cbor::lazy{}), std::logic_error);
 }
 
 // The section "Limits" shows what bounds a path. The end of the stack of the thread bounds a descendant segment, which
@@ -354,14 +354,14 @@ TEST_CASE("doc advanced path: the limits")
     std::string const deep = test::repeat("\x81"sv, test::levels_beyond_small_stack) + '\x01';
     CHECK_EQ(test::error_on_small_stack([&deep] { return test::query("$..[0]", *test::make_lazy_from_copy(deep)); }),
              error::nesting_depth_exceeded);
-    CHECK(test::at_path("$" + test::repeat("[0]"sv, test::levels_beyond_small_stack), *test::make_lazy_from_copy(deep)) ==
+    CHECK(test::read_value_at_path("$" + test::repeat("[0]"sv, test::levels_beyond_small_stack), *test::make_lazy_from_copy(deep)) ==
           test::V(1));
 }
 
 // The section "Threads" shows that a lazy is read from another thread, and that a tag 29 is a plain tag there too.
 TEST_CASE("doc advanced path: a lazy in another thread" * doctest::skip(!test::threads_available))
 {
-    auto const l = *test::make_lazy_from_copy(preferred(A(1, 2)));
+    auto const l = *test::make_lazy_from_copy(encode_in_preferred_form(A(1, 2)));
     std::int64_t read = 0;
     std::thread([&read, &l] { read = *l.at_path<"$[1]", std::int64_t>(); }).join();
     CHECK_EQ(read, 2);
@@ -388,27 +388,27 @@ TEST_CASE("doc advanced path: the forms in detail")
 // none. The singular operand of a comparison.
 TEST_CASE("doc advanced path: the syntax in detail")
 {
-    auto const sh = *test::make_lazy_from_copy(preferred(M("a"s, M("b"s, 1), "c"s, A(2))));
+    auto const sh = *test::make_lazy_from_copy(encode_in_preferred_form(M("a"s, M("b"s, 1), "c"s, A(2))));
     CHECK(*test::query("$.*", sh) == A(M("b"s, 1), A(2)));
     CHECK(*test::query("$..*", sh) == A(M("b"s, 1), A(2), 1, 2));
     CHECK(*test::query("$..[0]", sh) == A(2));
     CHECK_EQ(test::query("$[?@.* == 1]", sh).error(), error::invalid_path);
-    auto const array = *test::make_lazy_from_copy(preferred(A(1)));
-    CHECK_EQ(test::at_path("$[9007199254740992]", array).error(), error::invalid_path);
-    CHECK_EQ(test::at_path("$[01]", array).error(), error::invalid_path);
-    CHECK_EQ(test::at_path("$[99999999999999999]", array).error(), error::not_indexable);
-    CHECK(*test::at_path("$[99999999999999999]", *test::make_lazy_from_copy("\xa1\x1b\x01\x63\x45\x78\x5d\x89\xff\xff\x01"s)) == V(1));
-    CHECK_EQ(test::at_path("$[-0]", array).error(), error::not_indexable);
-    CHECK(*test::at_path("$[-0]", *test::make_lazy_from_copy(preferred(M(0, "a"s)))) == V("a"s));
+    auto const array = *test::make_lazy_from_copy(encode_in_preferred_form(A(1)));
+    CHECK_EQ(test::read_value_at_path("$[9007199254740992]", array).error(), error::invalid_path);
+    CHECK_EQ(test::read_value_at_path("$[01]", array).error(), error::invalid_path);
+    CHECK_EQ(test::read_value_at_path("$[99999999999999999]", array).error(), error::not_indexable);
+    CHECK(*test::read_value_at_path("$[99999999999999999]", *test::make_lazy_from_copy("\xa1\x1b\x01\x63\x45\x78\x5d\x89\xff\xff\x01"s)) == V(1));
+    CHECK_EQ(test::read_value_at_path("$[-0]", array).error(), error::not_indexable);
+    CHECK(*test::read_value_at_path("$[-0]", *test::make_lazy_from_copy(encode_in_preferred_form(M(0, "a"s)))) == V("a"s));
     CHECK(*test::query("$[0:3:0]", array) == A());
-    CHECK(*test::query("$[0:1]", *test::make_lazy_from_copy(preferred(M("a"s, 1)))) == A());
+    CHECK(*test::query("$[0:1]", *test::make_lazy_from_copy(encode_in_preferred_form(M("a"s, 1)))) == A());
     CHECK(*test::query("$[?@ == 1.]", array) == A(1));
 }
 
 // The section "Comparisons" states how == and < treat each kind of value, and an empty side.
 TEST_CASE("doc advanced path: comparisons")
 {
-    auto const eqs = *test::make_lazy_from_copy(preferred(A(A(1, 2), A(2, 1), M("a"s, 1), bytes{"\x01"}, tagged{1000, V(1)}, 1, 1.0, "x"s,
+    auto const eqs = *test::make_lazy_from_copy(encode_in_preferred_form(A(A(1, 2), A(2, 1), M("a"s, 1), bytes{"\x01"}, tagged{1000, V(1)}, 1, 1.0, "x"s,
                                                  tagged{2, bytes{"\x01"}})));
     CHECK(*test::query("$[?@ == [1, 2]]", eqs) == A(A(1, 2)));
     CHECK(*test::query("$[?@ == {\"a\": 1}]", eqs) == A(M("a"s, 1)));
@@ -418,7 +418,7 @@ TEST_CASE("doc advanced path: comparisons")
     CHECK(*test::query("$[?@ < 2]", eqs) == A(1, 1.0, 1));
     CHECK(*test::query("$[?@ < [3]]", eqs) == A());
     CHECK(*test::query("$[?@ >= 'x']", eqs) == A("x"s));
-    auto const one = *test::make_lazy_from_copy(preferred(A(1)));
+    auto const one = *test::make_lazy_from_copy(encode_in_preferred_form(A(1)));
     CHECK(*test::query("$[?@.x == @.y]", one) == A(1));
     CHECK(*test::query("$[?@.x <= @.y]", one) == A(1));
     CHECK(*test::query("$[?@.x < @.y]", one) == A());
@@ -428,7 +428,7 @@ TEST_CASE("doc advanced path: comparisons")
 // length of a byte string is Nothing, which equals only Nothing.
 TEST_CASE("doc advanced path: length in detail")
 {
-    auto const l = *test::make_lazy_from_copy(preferred(A(bytes{"\x01\x02"}, "ab"s, "\xc3\xbc"s)));
+    auto const l = *test::make_lazy_from_copy(encode_in_preferred_form(A(bytes{"\x01\x02"}, "ab"s, "\xc3\xbc"s)));
     CHECK(*test::query("$[?length(@) == 2]", l) == A("ab"s));
     CHECK(*test::query("$[?length(@) == 1]", l) == A("\xc3\xbc"s));
     CHECK(*test::query("$[?length(@) == length(@.x)]", l) == A(bytes{"\x01\x02"}));
@@ -439,23 +439,23 @@ TEST_CASE("doc advanced path: keys compare by value")
 {
     std::string const keyed = "\xa4\x01\x61x\x21\x61y\x41\x01\x61z\x82\x01\x02\x61w"s;
     auto const l = *test::make_lazy_from_copy(keyed);
-    CHECK(*test::at_path<"$[b64'AQ']">(l) == V("z"s));
-    CHECK(*test::at_path<"$[h'01']">(*test::make_lazy_from_copy("\xa1\x58\x01\x01\x61q"s)) == V("q"s));
-    CHECK(*test::at_path<"$[1]">(*test::make_lazy_from_copy("\xa1\x18\x01\x61q"s)) == V("q"s));
-    CHECK_EQ(test::at_path<"$[1.0]">(l).error(), error::key_not_found);
-    CHECK_EQ(test::at_path("$[1.0]", l).error(), error::key_not_found);
-    std::string const odd = preferred(M(1.5, 1, simple{21}, 2, tagged{1000, "x"s}, 3, M("a"s, 1), 4));
+    CHECK(*test::read_value_at_path<"$[b64'AQ']">(l) == V("z"s));
+    CHECK(*test::read_value_at_path<"$[h'01']">(*test::make_lazy_from_copy("\xa1\x58\x01\x01\x61q"s)) == V("q"s));
+    CHECK(*test::read_value_at_path<"$[1]">(*test::make_lazy_from_copy("\xa1\x18\x01\x61q"s)) == V("q"s));
+    CHECK_EQ(test::read_value_at_path<"$[1.0]">(l).error(), error::key_not_found);
+    CHECK_EQ(test::read_value_at_path("$[1.0]", l).error(), error::key_not_found);
+    std::string const odd = encode_in_preferred_form(M(1.5, 1, simple{21}, 2, tagged{1000, "x"s}, 3, M("a"s, 1), 4));
     auto const o = *test::make_lazy_from_copy(odd);
-    CHECK(*test::at_path<"$[1.5]">(o) == V(1));
-    CHECK(*test::at_path<"$[true]">(o) == V(2));
-    CHECK(*test::at_path<"$[1000(\"x\")]">(o) == V(3));
-    CHECK(*test::at_path<"$[{\"a\": 1}]">(o) == V(4));
-    CHECK(*test::at_path("$[{\"a\": 1}]", o) == V(4));
+    CHECK(*test::read_value_at_path<"$[1.5]">(o) == V(1));
+    CHECK(*test::read_value_at_path<"$[true]">(o) == V(2));
+    CHECK(*test::read_value_at_path<"$[1000(\"x\")]">(o) == V(3));
+    CHECK(*test::read_value_at_path<"$[{\"a\": 1}]">(o) == V(4));
+    CHECK(*test::read_value_at_path("$[{\"a\": 1}]", o) == V(4));
     std::string const dup = "\xa2\x61\x61\x01\x61\x61\x02"s;
     auto const d = *test::make_lazy_from_copy(dup);
     CHECK_EQ(cbor::at_path<"$.a", int>(dup), 1);
-    CHECK(*test::at_path<"$.a">(d) == V(1));
-    CHECK(*test::at_path("$.a", d) == V(1));
+    CHECK(*test::read_value_at_path<"$.a">(d) == V(1));
+    CHECK(*test::read_value_at_path("$.a", d) == V(1));
     CHECK(*test::query("$.*", d) == A(1, 2));
     CHECK(*test::query("$..*", d) == A(1, 2));
     CHECK(*test::query("$[?@ > 0]", d) == A(1, 2));
@@ -467,10 +467,10 @@ TEST_CASE("doc advanced path: tags in detail")
 {
     CHECK_EQ(cbor::at_path<"$.k", int>("\xa1\xd8\x1c\x61k\x01"s).error(), error::key_not_found);
     CHECK_EQ(cbor::at_path<"$.k", int>("\xa1\xd9\xd9\xf7\x61k\x01"s), 1);
-    CHECK_EQ(test::at_path<"$.k">(*test::make_lazy_from_copy("\xa1\xd8\x1c\x61k\x01"s)).error(), error::key_not_found);
+    CHECK_EQ(test::read_value_at_path<"$.k">(*test::make_lazy_from_copy("\xa1\xd8\x1c\x61k\x01"s)).error(), error::key_not_found);
     std::string const inside = "\xa1\x61\x61\xd8\x18\x46\xd9\xd9\xf7\x82\x01\x02"s;
     CHECK_EQ(cbor::at_path<"$.a[1]", int>(inside), 2);
-    CHECK(*test::at_path("$.a[1]", *test::make_lazy_from_copy(inside)) == V(2));
+    CHECK(*test::read_value_at_path("$.a[1]", *test::make_lazy_from_copy(inside)) == V(2));
     CHECK_EQ(cbor::at_path<"$.a", int>("\xa1\x61\x61\xd8\x18\x05"s).error(), error::inadmissible_type_for_tag_content);
     CHECK(test::make_lazy_from_copy("\xd8\x1c\x81\xd8\x1d\x00"s)
               ->at_path(*cbor::path::compile<cbor::lazy>("$[0]"))

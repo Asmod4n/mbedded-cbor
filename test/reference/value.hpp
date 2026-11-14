@@ -422,7 +422,7 @@ inline void write_preferred_item(std::string &out, value const &v)
         v.kind);
 }
 
-inline std::string preferred(value const &v)
+inline std::string encode_in_preferred_form(value const &v)
 {
     std::string out;
     write_preferred_item(out, v);

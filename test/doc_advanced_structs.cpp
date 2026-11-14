@@ -121,7 +121,7 @@ TEST_CASE("doc advanced structs: encode appends to a target")
 // bytes of the owner.
 TEST_CASE("doc advanced structs: the forms of decode")
 {
-    std::string bytes = preferred(V("abc"s));
+    std::string bytes = encode_in_preferred_form(V("abc"s));
     auto const copied = cbor::structs<std::string_view>::decode(std::string(bytes));
     REQUIRE(copied.has_value());
     CHECK_EQ(**copied, "abc"sv);
@@ -173,8 +173,8 @@ TEST_CASE("doc advanced structs: the item of each type")
                  std::chrono::sys_seconds{std::chrono::seconds{1700000000}})),
              "1(1700000000)");
     CHECK_EQ(cbor::structs<float>::decode("\xfb\x3f\xb9\x99\x99\x99\x99\x99\x9a"s).error(), error::number_out_of_range);
-    CHECK_EQ(cbor::structs<std::vector<std::uint16_t>>::decode(preferred(A(1, 2))).error(), error::incorrect_type);
-    CHECK_EQ((cbor::structs<std::array<double, 2>>::decode(preferred(A(1.5, 2.5))).error()), error::incorrect_type);
+    CHECK_EQ(cbor::structs<std::vector<std::uint16_t>>::decode(encode_in_preferred_form(A(1, 2))).error(), error::incorrect_type);
+    CHECK_EQ((cbor::structs<std::array<double, 2>>::decode(encode_in_preferred_form(A(1.5, 2.5))).error()), error::incorrect_type);
 }
 
 // The section "Every type" says that encode throws for a date that does not exist. The value is a wrong use. No CBOR
@@ -226,14 +226,14 @@ TEST_CASE("doc advanced structs: the key of a member")
 // missing key. The last is a key that is no text and no integer.
 TEST_CASE("doc advanced structs: unknown, repeated and missing keys")
 {
-    auto const extra = cbor::structs<person>::decode(preferred(M("name"s, "x"s, "age"s, 1, "z"s, 2)));
+    auto const extra = cbor::structs<person>::decode(encode_in_preferred_form(M("name"s, "x"s, "age"s, 1, "z"s, 2)));
     REQUIRE(extra.has_value());
     CHECK_EQ((*extra)->name, "x");
-    CHECK_EQ(cbor::structs<person>::decode(preferred(M("name"s, "x"s, "age"s, 1, "age"s, 2))).error(),
+    CHECK_EQ(cbor::structs<person>::decode(encode_in_preferred_form(M("name"s, "x"s, "age"s, 1, "age"s, 2))).error(),
              error::duplicate_key);
-    CHECK_EQ(cbor::structs<person>::decode(preferred(M("name"s, "x"s))).error(), error::key_not_found);
+    CHECK_EQ(cbor::structs<person>::decode(encode_in_preferred_form(M("name"s, "x"s))).error(), error::key_not_found);
     for (value const &key : {A(), M(), value{tagged{1000, V(1)}}, A(1, M("a"s, A())), value{tagged{28, V(1)}}}) {
-        auto const skipped = cbor::structs<person>::decode(preferred(M("name"s, "x"s, key, 0, "age"s, 1)));
+        auto const skipped = cbor::structs<person>::decode(encode_in_preferred_form(M("name"s, "x"s, key, 0, "age"s, 1)));
         REQUIRE(skipped.has_value());
         CHECK_EQ((*skipped)->name, "x");
         CHECK_EQ((*skipped)->age, 1);
@@ -262,12 +262,12 @@ TEST_CASE("doc advanced structs: a variant takes the first alternative that acce
         auto const r = cbor::structs<id>::decode(std::move(encoded));
         return r ? (**r).index() : std::variant_npos;
     };
-    CHECK_EQ(index(preferred(V(42))), 0u);
+    CHECK_EQ(index(encode_in_preferred_form(V(42))), 0u);
     CHECK_EQ(index("\x20"s), 1u);
-    CHECK_EQ(index(preferred(V(256))), 1u);
-    CHECK_EQ(index(preferred(V("x"s))), 2u);
-    CHECK_EQ(cbor::structs<id>::decode(preferred(V(simple{21}))).error(), error::incorrect_type);
-    auto const back = cbor::structs<id>::decode(preferred(V(42)));
+    CHECK_EQ(index(encode_in_preferred_form(V(256))), 1u);
+    CHECK_EQ(index(encode_in_preferred_form(V("x"s))), 2u);
+    CHECK_EQ(cbor::structs<id>::decode(encode_in_preferred_form(V(simple{21}))).error(), error::incorrect_type);
+    auto const back = cbor::structs<id>::decode(encode_in_preferred_form(V(42)));
     REQUIRE(back.has_value());
     CHECK_EQ(std::get<std::uint8_t>(**back), 42u);
 }
@@ -308,10 +308,10 @@ TEST_CASE("doc advanced structs: a std::pmr target")
 // The section "Errors" gives one input for each error that structs gives.
 TEST_CASE("doc advanced structs: errors")
 {
-    CHECK_EQ(cbor::structs<std::uint8_t>::decode(preferred(V(256))).error(), error::number_out_of_range);
-    CHECK_EQ(cbor::structs<std::string>::decode(preferred(V(1))).error(), error::incorrect_type);
-    CHECK_EQ((cbor::structs<std::tuple<int, int>>::decode(preferred(A(1))).error()), error::incorrect_type);
-    CHECK_EQ(cbor::structs<std::variant<int, std::string>>::decode(preferred(A())).error(), error::incorrect_type);
+    CHECK_EQ(cbor::structs<std::uint8_t>::decode(encode_in_preferred_form(V(256))).error(), error::number_out_of_range);
+    CHECK_EQ(cbor::structs<std::string>::decode(encode_in_preferred_form(V(1))).error(), error::incorrect_type);
+    CHECK_EQ((cbor::structs<std::tuple<int, int>>::decode(encode_in_preferred_form(A(1))).error()), error::incorrect_type);
+    CHECK_EQ(cbor::structs<std::variant<int, std::string>>::decode(encode_in_preferred_form(A())).error(), error::incorrect_type);
     CHECK_EQ(cbor::structs<std::string>::decode("\x63" "ab"s).error(), error::too_little_data);
     auto const first = cbor::structs<std::uint8_t>::decode("\x01\x02"s);
     REQUIRE(first.has_value());

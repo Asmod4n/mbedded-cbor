@@ -183,9 +183,9 @@ TEST_CASE(
         CHECK_EQ(cbor::at_path<"$.n", int>(doc), 1);
         CHECK_EQ(l.at_path<"$.n", int>(), 1);
         CHECK_EQ(l.at("n")->get<int>(), 1);
-        CHECK(test::at_path("$.n", l) == V(1));
+        CHECK(test::read_value_at_path("$.n", l) == V(1));
         CHECK(test::query("$.n", l) == A(1));
-        CHECK_EQ(test::at_path("$.a", l).error(), wanted);
+        CHECK_EQ(test::read_value_at_path("$.a", l).error(), wanted);
         CHECK_EQ(test::make_value_from_item(*l.at("a")).error(), wanted);
     }
     std::string const two = "\x82\x63xyz\x83\x01\x02\x03"s;
@@ -201,9 +201,9 @@ TEST_CASE(
 // the error of each size limit.
 TEST_CASE("doc basics: the error of each size limit")
 {
-    CHECK_EQ(test::make_lazy_from_copy(preferred(V("xyz"s)))->get<std::string_view>().error(),
+    CHECK_EQ(test::make_lazy_from_copy(encode_in_preferred_form(V("xyz"s)))->get<std::string_view>().error(),
              error::string_length_exceeded);
-    std::string const three = preferred(A(1, 2, 3));
+    std::string const three = encode_in_preferred_form(A(1, 2, 3));
     CHECK_EQ(test::make_lazy_from_copy(three)->size().error(), error::container_elements_exceeded);
     CHECK_EQ(cbor::at_path<"$[0]", int>(three).error(), error::container_elements_exceeded);
 }
@@ -213,7 +213,7 @@ TEST_CASE("doc basics: the error of each size limit")
 // string_length_exceeded at get, not at lazy::copy. A user expected it at lazy::copy.
 TEST_CASE("doc advanced basics: a string limit is checked at get")
 {
-    auto const l = test::make_lazy_from_copy(preferred(V("xyz"s)));
+    auto const l = test::make_lazy_from_copy(encode_in_preferred_form(V("xyz"s)));
     REQUIRE(l.has_value());
     CHECK_EQ(l->get<std::string_view>().error(), error::string_length_exceeded);
     CHECK_EQ(test::make_lazy_from_copy(array_of(3))->size().error(), error::container_elements_exceeded);
@@ -223,7 +223,7 @@ TEST_CASE("doc advanced basics: a string limit is checked at get")
 // count what a call reads. A skip does not count.
 TEST_CASE("doc advanced basics: a skip does not count")
 {
-    std::string const bytes = preferred(M("a"s, "xyz"s, "n"s, 1));
+    std::string const bytes = encode_in_preferred_form(M("a"s, "xyz"s, "n"s, 1));
     CHECK_EQ(test::make_lazy_from_copy(bytes)->at("n")->get<std::int64_t>(), 1);
     CHECK_EQ(test::make_lazy_from_copy(bytes)->at("a")->get<std::string_view>().error(),
              error::string_length_exceeded);
@@ -236,13 +236,13 @@ TEST_CASE("doc advanced basics: a skip does not count")
 // counts.
 TEST_CASE("doc advanced path: the size limits")
 {
-    std::string const bytes = preferred(M("long"s, "xyz"s, "n"s, 1));
+    std::string const bytes = encode_in_preferred_form(M("long"s, "xyz"s, "n"s, 1));
     CHECK_EQ(cbor::at_path<"$.n", int>(bytes).error(), error::string_length_exceeded);
-    std::string const skipped = preferred(M("a"s, "xyz"s, "n"s, 1));
+    std::string const skipped = encode_in_preferred_form(M("a"s, "xyz"s, "n"s, 1));
     CHECK_EQ(cbor::at_path<"$.n", int>(skipped), 1);
     CHECK_EQ(cbor::at_path<"$.a", std::string_view>(std::string(skipped)).error(),
              error::string_length_exceeded);
-    std::string const three = preferred(M("a"s, 1, "b"s, 2, "n"s, 3));
+    std::string const three = encode_in_preferred_form(M("a"s, 1, "b"s, 2, "n"s, 3));
     CHECK_EQ(cbor::at_path<"$.n", int>(three).error(), error::container_elements_exceeded);
 }
 

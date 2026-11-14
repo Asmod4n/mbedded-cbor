@@ -67,18 +67,18 @@ TEST_CASE("doc advanced basics: a wrong use throws std::logic_error")
 TEST_CASE("doc advanced basics: the error values")
 {
     auto const owner_of = [](std::string bytes) { return std::make_shared<std::string const>(std::move(bytes)); };
-    std::string const pair = preferred(A(1, 2));
+    std::string const pair = encode_in_preferred_form(A(1, 2));
     auto owner = owner_of(pair.substr(0, pair.size() - 1));
     CHECK_EQ(cbor::lazy::view(owner)->at(1).error(), error::too_little_data);
     owner = owner_of("\x9f\x01\xff"s);
     CHECK_EQ(cbor::lazy::view(owner)->at(0).error(), error::indefinite_length);
-    owner = owner_of(preferred(M("a"s, 1)));
+    owner = owner_of(encode_in_preferred_form(M("a"s, 1)));
     CHECK_EQ(cbor::lazy::view(owner)->at("b").error(), error::key_not_found);
-    owner = owner_of(preferred(V(1)));
+    owner = owner_of(encode_in_preferred_form(V(1)));
     CHECK_EQ(cbor::lazy::view(owner)->at(0).error(), error::not_indexable);
-    owner = owner_of(preferred(V("a"s)));
+    owner = owner_of(encode_in_preferred_form(V("a"s)));
     CHECK_EQ(cbor::lazy::view(owner)->get<std::int64_t>().error(), error::incorrect_type);
-    owner = owner_of(preferred(V(256)));
+    owner = owner_of(encode_in_preferred_form(V(256)));
     CHECK_EQ(cbor::lazy::view(owner)->get<std::uint8_t>().error(), error::number_out_of_range);
 }
 
@@ -118,7 +118,7 @@ TEST_CASE("doc advanced basics: not_singular_query")
 TEST_CASE("doc advanced basics: the errors of structs")
 {
     CHECK(cbor::structs<std::uint8_t>::decode("\x01\x02"s).has_value());
-    CHECK(cbor::structs<std::map<std::string, int>>::decode(preferred(M("a"s, 1)) + "\x00"s).has_value());
+    CHECK(cbor::structs<std::map<std::string, int>>::decode(encode_in_preferred_form(M("a"s, 1)) + "\x00"s).has_value());
     CHECK_EQ(cbor::structs<std::uint8_t>::decode("\x1c"s).error(), error::syntax_error);
     CHECK_EQ(cbor::diagnostic_notation("\x9f\x01\xff"sv), "[_ 1]");
 }
@@ -162,7 +162,7 @@ TEST_CASE("doc advanced basics: a std::pmr target")
 // The section "Threads" states that a lazy holds only its bytes and its offset, so several threads read one lazy.
 TEST_CASE("doc advanced basics: threads" * doctest::skip(!test::threads_available))
 {
-    cbor::lazy const l = *test::make_lazy_from_copy(preferred(A(1, 2)));
+    cbor::lazy const l = *test::make_lazy_from_copy(encode_in_preferred_form(A(1, 2)));
     std::int64_t first = 0;
     std::int64_t second = 0;
     {
@@ -178,12 +178,12 @@ TEST_CASE("doc advanced basics: threads" * doctest::skip(!test::threads_availabl
 // A user moved a lazy out of the std::expected of lazy::adopt. The section "Threads" shows the move.
 TEST_CASE("doc advanced basics: a lazy moved out of the expected to another thread" * doctest::skip(!test::threads_available))
 {
-    std::string bytes = preferred(A(1, 2));
+    std::string bytes = encode_in_preferred_form(A(1, 2));
     auto l = cbor::lazy::adopt(std::move(bytes));
     std::int64_t read = 0;
     std::thread([&read](cbor::lazy const &v) { read = *v.at(1)->get<std::int64_t>(); }, std::move(*l)).join();
     CHECK_EQ(read, 2);
-    auto const plain = *test::make_lazy_from_copy(preferred(M("a"s, 1)));
+    auto const plain = *test::make_lazy_from_copy(encode_in_preferred_form(M("a"s, 1)));
     std::int64_t other = 0;
     std::thread([&] { other = *plain.at("a")->get<std::int64_t>(); }).join();
     CHECK_EQ(other, 1);
@@ -196,7 +196,7 @@ TEST_CASE("doc advanced basics: a lazy moved out of the expected to another thre
 // A user did not know that a lazy from a step holds the bytes after the string and the first lazy end.
 TEST_CASE("doc advanced basics: a lazy holds the owner")
 {
-    auto const message = [] { return preferred(M("tags"s, A("a"s, "b"s))); };
+    auto const message = [] { return encode_in_preferred_form(M("tags"s, A("a"s, "b"s))); };
     std::optional<cbor::lazy> keep;
     {
         std::string bytes = message();
@@ -209,7 +209,7 @@ TEST_CASE("doc advanced basics: a lazy holds the owner")
 // constructor of std::shared_ptr makes an owner from an object that holds the bytes.
 TEST_CASE("doc advanced basics: owners")
 {
-    auto const name = test::make_lazy_from_copy(preferred(M("a"s, "xyz"s)))->at("a")->get<std::string_view>();
+    auto const name = test::make_lazy_from_copy(encode_in_preferred_form(M("a"s, "xyz"s)))->at("a")->get<std::string_view>();
     REQUIRE(name.has_value());
     CHECK_EQ(**name, "xyz"sv);
     CHECK_EQ((*name)->size(), 3u);
@@ -229,7 +229,7 @@ TEST_CASE("doc advanced basics: owners")
     struct page {
         std::string bytes;
     };
-    auto const message = [] { return preferred(V("xyz"s)); };
+    auto const message = [] { return encode_in_preferred_form(V("xyz"s)); };
     auto const p = std::make_shared<page const>(message());
     std::shared_ptr<std::string const> const owner(p, &p->bytes);
     auto const aliased = cbor::lazy::view(owner)->get<std::string_view>();
@@ -259,7 +259,7 @@ TEST_CASE("doc advanced basics: the forms of cbor::sequence")
 // or an rvalue reads the bytes with no copy.
 TEST_CASE("doc advanced basics: no form copies the bytes")
 {
-    auto const message = [] { return preferred(V("xyz"s)); };
+    auto const message = [] { return encode_in_preferred_form(V("xyz"s)); };
     CHECK_FALSE(([]<class S>(S &s) { return requires { cbor::lazy::adopt(s); }; }(*std::make_unique<std::string>())));
     CHECK_FALSE(([]<class S>(S const &s) { return requires { cbor::lazy::view(s); }; }(std::string_view())));
 
@@ -268,7 +268,7 @@ TEST_CASE("doc advanced basics: no form copies the bytes")
     auto const va = a.get<std::string_view>().value();
     CHECK_EQ((*va).data(), std::span(*shared).subspan(1).data());
 
-    std::string bytes = preferred(V(std::string(40, 'x')));
+    std::string bytes = encode_in_preferred_form(V(std::string(40, 'x')));
     std::span<char const> const data(bytes);
     auto const b = cbor::lazy::adopt(std::move(bytes)).value();
     auto const vb = b.get<std::string_view>().value();

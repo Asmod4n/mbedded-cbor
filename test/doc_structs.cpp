@@ -23,7 +23,7 @@ using cbor::error;
 
 // Each test in this file is one example of the former structs guide, whose facts now stand in
 // tools/doc/groups/structs.dox. The tests exist so that every example compiles and gives the result that the text
-// states. Where an example writes a comment with the input as text, the test builds the same input with preferred().
+// states. Where an example writes a comment with the input as text, the test builds the same input with encode_in_preferred_form().
 
 namespace doc_structs
 {
@@ -112,7 +112,7 @@ TEST_CASE("doc structs: keys")
     auto const bytes = cbor::structs<header>::encode(header{"text/plain"});
     REQUIRE(bytes.has_value());
     CHECK_EQ(cbor::diagnostic_notation(*bytes), R"(160060({"content-type": "text/plain"}))");
-    CHECK_EQ(cbor::structs<header>::decode(preferred(M("content-type"s, "text/plain"s))).error(),
+    CHECK_EQ(cbor::structs<header>::decode(encode_in_preferred_form(M("content-type"s, "text/plain"s))).error(),
              error::incorrect_type);
     auto const none = cbor::structs<person>::encode(person{"bob", 40, {}, std::nullopt});
     REQUIRE(none.has_value());
@@ -126,20 +126,20 @@ TEST_CASE("doc structs: keys")
 // gives one input for each row of its table.
 TEST_CASE("doc structs: input from other programs")
 {
-    auto const other = cbor::structs<person>::decode(preferred(M("age"s, 30, "name"s, "ann"s, "tags"s, A(), "id"s, 7)));
+    auto const other = cbor::structs<person>::decode(encode_in_preferred_form(M("age"s, 30, "name"s, "ann"s, "tags"s, A(), "id"s, 7)));
     REQUIRE(other.has_value());
     CHECK_EQ((*other)->name, "ann");
     CHECK_EQ((*other)->age, 30);
     CHECK_FALSE((*other)->home.has_value());
-    CHECK_EQ(cbor::structs<person>::decode(preferred(M("name"s, "ann"s))).error(), error::key_not_found);
-    CHECK_EQ(cbor::structs<int>::decode(preferred(V("a"s))).error(), error::incorrect_type);
-    CHECK_EQ(cbor::structs<std::uint8_t>::decode(preferred(V(256))).error(), error::number_out_of_range);
-    CHECK_EQ((cbor::structs<std::array<int, 2>>::decode(preferred(A(1))).error()), error::incorrect_type);
+    CHECK_EQ(cbor::structs<person>::decode(encode_in_preferred_form(M("name"s, "ann"s))).error(), error::key_not_found);
+    CHECK_EQ(cbor::structs<int>::decode(encode_in_preferred_form(V("a"s))).error(), error::incorrect_type);
+    CHECK_EQ(cbor::structs<std::uint8_t>::decode(encode_in_preferred_form(V(256))).error(), error::number_out_of_range);
+    CHECK_EQ((cbor::structs<std::array<int, 2>>::decode(encode_in_preferred_form(A(1))).error()), error::incorrect_type);
     // The row "bytes after the value" states that decode does not read past the first value.
-    auto const first = cbor::structs<int>::decode(preferred(V(1)) + preferred(V(2)));
+    auto const first = cbor::structs<int>::decode(encode_in_preferred_form(V(1)) + encode_in_preferred_form(V(2)));
     REQUIRE(first.has_value());
     CHECK_EQ(**first, 1);
-    std::string const cut = preferred(V("abc"s));
+    std::string const cut = encode_in_preferred_form(V("abc"s));
     CHECK_EQ(cbor::structs<std::string>::decode(cut.substr(0, cut.size() - 1)).error(), error::too_little_data);
 }
 
@@ -147,8 +147,8 @@ TEST_CASE("doc structs: input from other programs")
 // section "Input from other programs" state that it reads only its typed array.
 TEST_CASE("doc structs: a vector of numbers reads only a typed array")
 {
-    CHECK_EQ(cbor::structs<std::vector<int>>::decode(preferred(A(1, 2))).error(), error::incorrect_type);
-    CHECK_EQ((cbor::structs<std::array<std::uint16_t, 2>>::decode(preferred(A(1, 2))).error()), error::incorrect_type);
+    CHECK_EQ(cbor::structs<std::vector<int>>::decode(encode_in_preferred_form(A(1, 2))).error(), error::incorrect_type);
+    CHECK_EQ((cbor::structs<std::array<std::uint16_t, 2>>::decode(encode_in_preferred_form(A(1, 2))).error()), error::incorrect_type);
 }
 
 } // namespace doc_structs

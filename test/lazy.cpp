@@ -1094,7 +1094,7 @@ TEST_CASE("lazy: a repeated key at depth 3 is read with no error")
     CHECK(lazy_of(outer).at("a")->at("b").has_value());
     CHECK_EQ(*(cbor::at_path<"$.a.b.d", int>(inner)), 2);
     CHECK(test::query("$..*", lazy_of(inner)).has_value());
-    CHECK(test::at_path("$.a.b.d", lazy_of(inner)).has_value());
+    CHECK(test::read_value_at_path("$.a.b.d", lazy_of(inner)).has_value());
     CHECK(lazy_of(inner).at("a")->at("b")->clone().has_value());
 }
 

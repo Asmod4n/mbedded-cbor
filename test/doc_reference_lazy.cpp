@@ -38,7 +38,7 @@ concept front_callable = requires(V const &v) { v.front(); };
 // on the helpers alone.
 TEST_CASE("doc reference lazy: the example of the group lazy")
 {
-    std::string bytes = test::preferred(test::M("name"s, "ann"s, "scores"s, test::A(4, 5, 6)));
+    std::string bytes = test::encode_in_preferred_form(test::M("name"s, "ann"s, "scores"s, test::A(4, 5, 6)));
     CHECK_EQ(bytes, "\xa2\x64\x6e\x61\x6d\x65\x63\x61\x6e\x6e\x66\x73\x63\x6f\x72\x65\x73\x83\x04\x05\x06"s);
     // [lazy group]
     // bytes: a std::string with {"name": "ann", "scores": [4, 5, 6]}
@@ -61,7 +61,7 @@ TEST_CASE("doc reference lazy: the example of the group lazy")
 // lazy.hpp, snippet adopt: the bytes move into the lazy; an lvalue, a view and a literal do not compile.
 TEST_CASE("doc reference lazy: adopt")
 {
-    std::string bytes = test::preferred(test::M("id"s, 42));
+    std::string bytes = test::encode_in_preferred_form(test::M("id"s, 42));
     std::int64_t id = 0;
     // [adopt]
     // bytes: a std::string with {"id": 42}
@@ -81,7 +81,7 @@ TEST_CASE("doc reference lazy: adopt")
 // lazy.hpp, snippet view: both forms read the bytes in place; a null or an empty owner is a wrong use.
 TEST_CASE("doc reference lazy: view")
 {
-    auto const owner = std::make_shared<std::string const>(test::preferred(test::M("id"s, 42)));
+    auto const owner = std::make_shared<std::string const>(test::encode_in_preferred_form(test::M("id"s, 42)));
     // [view]
     // owner: a std::shared_ptr<std::string const> with {"id": 42}
     auto const doc = cbor::lazy::view(owner);
@@ -100,7 +100,7 @@ TEST_CASE("doc reference lazy: view")
 // use.
 TEST_CASE("doc reference lazy: lazy")
 {
-    std::string bytes = test::preferred(test::A(1, 2));
+    std::string bytes = test::encode_in_preferred_form(test::A(1, 2));
     // [lazy]
     // bytes: a std::string with [1, 2]
     auto const doc = cbor::lazy::adopt(std::move(bytes));
@@ -118,7 +118,7 @@ TEST_CASE("doc reference lazy: lazy")
 TEST_CASE("doc reference lazy: at")
 {
     std::string bytes =
-        test::preferred(test::M("cars"s, test::A(test::M("hp"s, 5), test::M("hp"s, 7)), 7, "seven"s));
+        test::encode_in_preferred_form(test::M("cars"s, test::A(test::M("hp"s, 5), test::M("hp"s, 7)), 7, "seven"s));
     // [at]
     // bytes: a std::string with {"cars": [{"hp": 5}, {"hp": 7}], 7: "seven"}
     auto const doc = cbor::lazy::adopt(std::move(bytes));
@@ -137,7 +137,7 @@ TEST_CASE("doc reference lazy: at")
 // lazy.hpp, snippet operator_subscript: operator[] gives the result of at and does not throw.
 TEST_CASE("doc reference lazy: operator[]")
 {
-    std::string bytes = test::preferred(test::M("cars"s, test::A(5, 7)));
+    std::string bytes = test::encode_in_preferred_form(test::M("cars"s, test::A(5, 7)));
     // [operator_subscript]
     // bytes: a std::string with {"cars": [5, 7]}
     auto const doc = cbor::lazy::adopt(std::move(bytes));
@@ -152,7 +152,7 @@ TEST_CASE("doc reference lazy: operator[]")
 // at run time.
 TEST_CASE("doc reference lazy: at_path")
 {
-    std::string bytes = test::preferred(test::M("user"s, test::M("id"s, 42, "tags"s, test::A("a"s, "b"s))));
+    std::string bytes = test::encode_in_preferred_form(test::M("user"s, test::M("id"s, 42, "tags"s, test::A("a"s, "b"s))));
     // [at_path]
     // bytes: a std::string with {"user": {"id": 42, "tags": ["a", "b"]}}
     auto const doc = cbor::lazy::adopt(std::move(bytes));
@@ -173,7 +173,7 @@ TEST_CASE("doc reference lazy: at_path")
 // lazy.hpp, snippet size: the count of the pairs of a map; a value that is not a container has no size.
 TEST_CASE("doc reference lazy: size")
 {
-    std::string bytes = test::preferred(test::M("a"s, 1, "b"s, 2));
+    std::string bytes = test::encode_in_preferred_form(test::M("a"s, 1, "b"s, 2));
     // [size]
     // bytes: a std::string with {"a": 1, "b": 2}
     auto const map = cbor::lazy::adopt(std::move(bytes));
@@ -187,7 +187,7 @@ TEST_CASE("doc reference lazy: size")
 // lazy.hpp, snippet empty: an empty and a full array.
 TEST_CASE("doc reference lazy: empty")
 {
-    std::string bytes = test::preferred(test::M("a"s, test::A(), "b"s, test::A(1)));
+    std::string bytes = test::encode_in_preferred_form(test::M("a"s, test::A(), "b"s, test::A(1)));
     // [empty]
     // bytes: a std::string with {"a": [], "b": [1]}
     auto const doc = cbor::lazy::adopt(std::move(bytes));
@@ -219,7 +219,7 @@ TEST_CASE("doc reference lazy: type")
 // lazy.hpp, snippet get: a text as a ref, an integer, and the two errors of the example.
 TEST_CASE("doc reference lazy: get")
 {
-    std::string bytes = test::preferred(test::M("name"s, "ann"s, "age"s, 300));
+    std::string bytes = test::encode_in_preferred_form(test::M("name"s, "ann"s, "age"s, 300));
     // [get]
     // bytes: a std::string with {"name": "ann", "age": 300}
     auto const doc = cbor::lazy::adopt(std::move(bytes));
@@ -237,7 +237,7 @@ TEST_CASE("doc reference lazy: get")
 // lazy.hpp, snippet elements: a loop over an array, and an array of indefinite length.
 TEST_CASE("doc reference lazy: elements")
 {
-    std::string bytes = test::preferred(test::A(1, 2, 3));
+    std::string bytes = test::encode_in_preferred_form(test::A(1, 2, 3));
     // [elements]
     // bytes: a std::string with [1, 2, 3]
     auto const array = cbor::lazy::adopt(std::move(bytes));
@@ -255,7 +255,7 @@ TEST_CASE("doc reference lazy: elements")
 // lazy.hpp, snippet entries: the pairs of a map in the order of the bytes.
 TEST_CASE("doc reference lazy: entries")
 {
-    std::string bytes = test::preferred(test::M("a"s, 1, "b"s, 2));
+    std::string bytes = test::encode_in_preferred_form(test::M("a"s, 1, "b"s, 2));
     std::string keys;
     int values = 0;
     // [entries]
@@ -277,7 +277,7 @@ TEST_CASE("doc reference lazy: entries")
 TEST_CASE("doc reference lazy: clone")
 {
     auto const tree = [] {
-        std::string bytes = test::preferred(test::M("a"s, test::A(1, "x"s)));
+        std::string bytes = test::encode_in_preferred_form(test::M("a"s, test::A(1, "x"s)));
         // [clone]
         // bytes: a std::string with {"a": [1, "x"]}
         auto const doc = cbor::lazy::adopt(std::move(bytes));
@@ -299,7 +299,7 @@ TEST_CASE("doc reference lazy: lazy_elements")
     CHECK(std::ranges::sized_range<cbor::lazy_elements>);
     CHECK(std::ranges::borrowed_range<cbor::lazy_elements>);
     CHECK_FALSE(front_callable<cbor::lazy_elements>);
-    std::string bytes = test::preferred(test::A(test::M("age"s, 31), test::M("age"s, 20), test::M("age"s, 40)));
+    std::string bytes = test::encode_in_preferred_form(test::A(test::M("age"s, 31), test::M("age"s, 20), test::M("age"s, 40)));
     // [lazy_elements]
     // bytes: a std::string with [{"age": 31}, {"age": 20}, {"age": 40}]
     auto const people = cbor::lazy::adopt(std::move(bytes));
@@ -326,7 +326,7 @@ TEST_CASE("doc reference lazy: lazy_entries")
     CHECK(std::ranges::sized_range<cbor::lazy_entries>);
     CHECK(std::ranges::borrowed_range<cbor::lazy_entries>);
     CHECK_FALSE(front_callable<cbor::lazy_entries>);
-    std::string bytes = test::preferred(test::M("a"s, 1, "b"s, 2, "c"s, 3));
+    std::string bytes = test::encode_in_preferred_form(test::M("a"s, 1, "b"s, 2, "c"s, 3));
     // [lazy_entries]
     // bytes: a std::string with {"a": 1, "b": 2, "c": 3}
     auto const map = cbor::lazy::adopt(std::move(bytes));

@@ -13,14 +13,14 @@ namespace test
 {
 
 // The value of the node that a singular query selects.
-inline std::expected<value, error> at_path(std::string_view const path, cbor::lazy const &l)
+inline std::expected<value, error> read_value_at_path(std::string_view const path, cbor::lazy const &l)
 {
     return cbor::path::compile<cbor::lazy>(path).and_then(
         [&l](cbor::path::query<cbor::lazy> const &e) { return make_value_from_item(l.at_path(e)); });
 }
 
 template <cbor::fixed_string Path>
-std::expected<value, error> at_path(cbor::lazy const &l)
+std::expected<value, error> read_value_at_path(cbor::lazy const &l)
 {
     return make_value_from_item(l.at_path<Path>());
 }

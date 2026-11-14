@@ -26,7 +26,7 @@ using cbor::error;
 // README.md leaves to auto.
 TEST_CASE("doc advanced comparison: read one field by path")
 {
-    std::string const bytes = preferred(M("user"s, M("id"s, 42)));
+    std::string const bytes = encode_in_preferred_form(M("user"s, M("id"s, 42)));
     // begin path
     std::expected<std::int64_t, cbor::error> const id = cbor::at_path<"$.user.id", std::int64_t>(bytes);
     // end path
@@ -36,7 +36,7 @@ TEST_CASE("doc advanced comparison: read one field by path")
 // The section "Iterate an array" sums the elements of an array through a lazy.
 TEST_CASE("doc advanced comparison: iterate an array")
 {
-    std::string bytes = preferred(A(1, 2, 3));
+    std::string bytes = encode_in_preferred_form(A(1, 2, 3));
     // begin iterate
     auto const doc = cbor::lazy::adopt(std::move(bytes)); // [1, 2, 3]
     std::int64_t sum = 0;

@@ -366,7 +366,7 @@ inline void encoder_target(std::string_view const input)
         if (item.size)
             require(*end == *item.size);
         auto const back = test::decode_wire_into_value(rest.substr(0, *end));
-        require(back.has_value() && same(*back, item.value));
+        require(back.has_value() && values_are_the_same(*back, item.value));
         rest.remove_prefix(*end);
     }
     require(rest.empty());

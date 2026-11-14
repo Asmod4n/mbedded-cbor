@@ -31,7 +31,7 @@ inline constexpr bool from_chars_reads_double = false;
 #endif
 
 // A map with one entry: the key given in hex, the value the text "found".
-inline cbor::lazy keyed(std::string_view const key_hex)
+inline cbor::lazy make_lazy_of_key_hex(std::string_view const key_hex)
 {
     auto const l = test::make_lazy_from_copy("\xa1"s + test::unhexlify(key_hex) + "\x65" "found"s);
     REQUIRE(l.has_value());
@@ -39,16 +39,16 @@ inline cbor::lazy keyed(std::string_view const key_hex)
 }
 
 // The literal, compiled at run time as the key of a name selector, selects the entry whose key has its value.
-inline void selects(std::string_view const literal, std::string_view const key_hex)
+inline void check_literal_selects_key(std::string_view const literal, std::string_view const key_hex)
 {
     CAPTURE(literal);
     CAPTURE(key_hex);
-    auto const v = test::at_path("$[" + std::string(literal) + "]", keyed(key_hex));
+    auto const v = test::read_value_at_path("$[" + std::string(literal) + "]", make_lazy_of_key_hex(key_hex));
     REQUIRE(v.has_value());
     CHECK(*v == V("found"s));
 }
 
-inline void refused(std::string_view const literal)
+inline void check_literal_is_refused(std::string_view const literal)
 {
     CAPTURE(literal);
     auto const q = cbor::path::compile<cbor::lazy>("$[" + std::string(literal) + "]");

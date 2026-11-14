@@ -46,12 +46,12 @@ TEST_CASE("schema::at: one number of a typed array, with every check of path")
         std::string defined = bytes;
         defined[j] = '\xf6';
         CHECK_EQ(S::at_path<"$.v[0]">(defined).error(), error::incorrect_type);
-        CHECK_EQ(at_path<doubles, "$.v[0]">(defined).error(), error::incorrect_type);
+        CHECK_EQ(read_leaf_with_copying_path<doubles, "$.v[0]">(defined).error(), error::incorrect_type);
     }
     std::string root = bytes;
     root[root.size() - S::fixed_size() + 2] = '\xfc';
     CHECK_EQ(S::at_path<"$.v[0]">(root).error(), error::incorrect_type);
-    CHECK_EQ(at_path<doubles, "$.v[0]">(root).error(), error::incorrect_type);
+    CHECK_EQ(read_leaf_with_copying_path<doubles, "$.v[0]">(root).error(), error::incorrect_type);
 }
 
 // schema::at gives only a value that holds no reference into the message, because no owner keeps the message alive.
@@ -103,7 +103,7 @@ TEST_CASE("schema: the description gives the key of a member")
     keyed const &back = *decoded_back;
     CHECK_EQ(back.m0, 7u);
     CHECK(back.m1);
-    CHECK_EQ(at_path<keyed, "$.EOF">(bytes), true);
+    CHECK_EQ(read_leaf_with_copying_path<keyed, "$.EOF">(bytes), true);
 }
 
 // CTAP 2.1 6.2.2 lets the user of a getAssertion response be absent. An optional struct lies in the fixed item as an
@@ -113,7 +113,7 @@ TEST_CASE("schema: an optional struct and an optional string, present and absent
 {
     passkey_login const full{{std::byte{1}, std::byte{2}}, passkey_user{{std::byte{9}}, "alice"}, "hello"};
     std::string const bytes = *form<passkey_login>::encode(full);
-    CHECK_EQ(at_path<passkey_login, "$.note">(bytes).value(), std::optional<std::string>{"hello"});
+    CHECK_EQ(read_leaf_with_copying_path<passkey_login, "$.note">(bytes).value(), std::optional<std::string>{"hello"});
     auto const decoded_back = *form<passkey_login>::decode(std::string(bytes));
     passkey_login const &back = *decoded_back;
     REQUIRE(back.user.has_value());
@@ -122,7 +122,7 @@ TEST_CASE("schema: an optional struct and an optional string, present and absent
 
     passkey_login const empty{{std::byte{1}}, std::nullopt, std::nullopt};
     std::string const none = *form<passkey_login>::encode(empty);
-    auto const absent = at_path<passkey_login, "$.note">(none);
+    auto const absent = read_leaf_with_copying_path<passkey_login, "$.note">(none);
     REQUIRE(absent.has_value());
     CHECK_FALSE(absent->has_value());
     for (std::string_view message : {std::string_view(bytes), std::string_view(none)}) {
@@ -165,13 +165,13 @@ TEST_CASE("schema: a root with 20 struct types reaches indexes 8 and more with t
     CHECK_EQ(*form<chain0>::encode(back), bytes);
     CHECK_EQ(back.next.next.next.next.next.next.next.next.next.v, 9u);
 
-    CHECK_EQ(at_path<chain0, "$.next.next.next.next.next.next.next.next.next.v">(bytes), 9u);
-    CHECK_EQ(at_path<chain0, "$.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.v">(bytes),
+    CHECK_EQ(read_leaf_with_copying_path<chain0, "$.next.next.next.next.next.next.next.next.next.v">(bytes), 9u);
+    CHECK_EQ(read_leaf_with_copying_path<chain0, "$.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.v">(bytes),
              19u);
-    CHECK_EQ(at_path<chain0, "$.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.text">(
+    CHECK_EQ(read_leaf_with_copying_path<chain0, "$.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.text">(
                  bytes),
              "ab"s);
-    CHECK_EQ(at_path<chain0, "$.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.words[1]">(
+    CHECK_EQ(read_leaf_with_copying_path<chain0, "$.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.words[1]">(
                  bytes),
              "yz"s);
 }
@@ -191,12 +191,12 @@ TEST_CASE("schema: a root with 17 struct types starts its shared items at index 
     auto const decoded_back = *form<chain3>::decode(std::string(bytes));
     chain3 const &back = *decoded_back;
     CHECK_EQ(*form<chain3>::encode(back), bytes);
-    CHECK_EQ(at_path<chain3, "$.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.text">(bytes), "ab"s);
+    CHECK_EQ(read_leaf_with_copying_path<chain3, "$.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.text">(bytes), "ab"s);
 
     std::string broken = bytes;
     broken.at(broken.size() - 7) = '\x00';
     CHECK_EQ(form<chain3>::decode(std::string(broken)).error(), error::unpopulated_table_index);
-    CHECK_EQ(at_path<chain3, "$.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.text">(broken).error(),
+    CHECK_EQ(read_leaf_with_copying_path<chain3, "$.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.text">(broken).error(),
              error::unpopulated_table_index);
 }
 
@@ -210,8 +210,8 @@ TEST_CASE("schema: a root of another class tag is incorrect_type")
     auto const point = *form<point_a>::decode(std::string(bytes));
     CHECK_EQ(point->x, 7u);
     CHECK_EQ(form<point_b>::decode(std::string(bytes)).error(), error::incorrect_type);
-    CHECK_EQ(at_path<point_b, "$.x">(bytes).error(), error::incorrect_type);
-    CHECK_EQ(at_path<point_a, "$.x">(bytes), 7u);
+    CHECK_EQ(read_leaf_with_copying_path<point_b, "$.x">(bytes).error(), error::incorrect_type);
+    CHECK_EQ(read_leaf_with_copying_path<point_a, "$.x">(bytes), 7u);
 }
 
 // The class tag of a nested record is a fixed head like any other. car holds the engine record at offset 12. The low
@@ -225,9 +225,9 @@ TEST_CASE("schema: a forged class tag of a nested record is incorrect_type")
     std::string forged = bytes;
     forged.at(motor + 2) = '\xde';
     CHECK_EQ(form<car>::decode(std::string(forged)).error(), error::incorrect_type);
-    CHECK_EQ(at_path<car, "$.seats">(forged), 4u);
-    CHECK_EQ(at_path<car, "$.motor.cc">(forged).error(), error::incorrect_type);
-    CHECK_EQ(at_path<car, "$.motor.cc">(bytes), 1800u);
+    CHECK_EQ(read_leaf_with_copying_path<car, "$.seats">(forged), 4u);
+    CHECK_EQ(read_leaf_with_copying_path<car, "$.motor.cc">(forged).error(), error::incorrect_type);
+    CHECK_EQ(read_leaf_with_copying_path<car, "$.motor.cc">(bytes), 1800u);
 }
 
 // An accessor inside an optional shares the owner of the message like every other accessor. So a read through it does

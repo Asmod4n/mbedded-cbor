@@ -22,7 +22,7 @@ using namespace std::string_literals;
 
 // Each test in this file is one example of a reference page of the structs group. The comments of structs.hpp and
 // describe.hpp take the examples through the snippet markers. The tests exist so that every example compiles and gives
-// the result that the page states. The input of each example is built with preferred() from the text in the comment of
+// the result that the page states. The input of each example is built with encode_in_preferred_form() from the text in the comment of
 // the page.
 
 using reference_structs::device;
@@ -64,7 +64,7 @@ TEST_CASE("doc reference structs: encode a value")
     auto const bytes = cbor::structs<person>::encode(person{"ann", 30});  // {"age": 30, "name": "ann"}
     // [encode]
     REQUIRE(bytes.has_value());
-    CHECK_EQ(*bytes, test::preferred(test::M("age"s, 30, "name"s, "ann"s)));
+    CHECK_EQ(*bytes, test::encode_in_preferred_form(test::M("age"s, 30, "name"s, "ann"s)));
 }
 
 // structs.hpp, the comment of encode: encode(value, target) appends to the target and returns the count of bytes
@@ -90,7 +90,7 @@ TEST_CASE("doc reference structs: encode into a span that is too small")
 // structs.hpp, snippet decode: the example moves the string in, and the result holds the value.
 TEST_CASE("doc reference structs: decode a moved string")
 {
-    std::string bytes = test::preferred(test::M("name"s, "ann"s, "age"s, 30));
+    std::string bytes = test::encode_in_preferred_form(test::M("name"s, "ann"s, "age"s, 30));
     int age = 0;
     // [decode]
     // bytes: a std::string with {"name": "ann", "age": 30}
@@ -108,7 +108,7 @@ TEST_CASE("doc reference structs: decode a moved string")
 // into the owner.
 TEST_CASE("doc reference structs: decode with an owner")
 {
-    auto const owner = std::make_shared<std::string const>(test::preferred(test::V("abc"s)));
+    auto const owner = std::make_shared<std::string const>(test::encode_in_preferred_form(test::V("abc"s)));
     auto const shared = cbor::structs<std::string_view>::decode(owner);
     REQUIRE(shared.has_value());
     CHECK_EQ(**shared, "abc");
@@ -120,27 +120,27 @@ TEST_CASE("doc reference structs: decode with an owner")
     CHECK_EQ(**viewed, "abc");
 
     auto const into = cbor::structs<std::vector<std::string>>::decode(
-        std::make_shared<std::string const>(test::preferred(test::A("a"s, "b"s))), std::vector<std::string>{"z"});
+        std::make_shared<std::string const>(test::encode_in_preferred_form(test::A("a"s, "b"s))), std::vector<std::string>{"z"});
     REQUIRE(into.has_value());
     CHECK_EQ(**into, std::vector<std::string>{"a", "b"});
 
-    CHECK_EQ(cbor::structs<std::vector<int>>::decode(test::preferred(test::A(1, 2))).error(),
+    CHECK_EQ(cbor::structs<std::vector<int>>::decode(test::encode_in_preferred_form(test::A(1, 2))).error(),
              cbor::error::incorrect_type);
 }
 
 // structs.hpp, the comment of decode: a missing key, bytes after the item, and an input that ends early.
 TEST_CASE("doc reference structs: decode errors")
 {
-    CHECK_EQ(cbor::structs<person>::decode(test::preferred(test::M("name"s, "ann"s))).error(),
+    CHECK_EQ(cbor::structs<person>::decode(test::encode_in_preferred_form(test::M("name"s, "ann"s))).error(),
              cbor::error::key_not_found);
-    auto const first = cbor::structs<int>::decode(test::preferred(test::V(1)) + "\x01"s);
+    auto const first = cbor::structs<int>::decode(test::encode_in_preferred_form(test::V(1)) + "\x01"s);
     REQUIRE(first.has_value());
     CHECK_EQ(**first, 1);
     CHECK_EQ(cbor::structs<std::string>::decode("\x63" "ab"s).error(), cbor::error::too_little_data);
-    CHECK_EQ(cbor::structs<int>::decode(test::preferred(test::V("x"s))).error(), cbor::error::incorrect_type);
-    CHECK_EQ(cbor::structs<std::uint8_t>::decode(test::preferred(test::V(256))).error(),
+    CHECK_EQ(cbor::structs<int>::decode(test::encode_in_preferred_form(test::V("x"s))).error(), cbor::error::incorrect_type);
+    CHECK_EQ(cbor::structs<std::uint8_t>::decode(test::encode_in_preferred_form(test::V(256))).error(),
              cbor::error::number_out_of_range);
-    CHECK_EQ(cbor::structs<person>::decode(test::preferred(test::M("age"s, 1, "age"s, 2, "name"s, "a"s))).error(),
+    CHECK_EQ(cbor::structs<person>::decode(test::encode_in_preferred_form(test::M("age"s, 1, "age"s, 2, "name"s, "a"s))).error(),
              cbor::error::duplicate_key);
 }
 
@@ -159,8 +159,8 @@ TEST_CASE("doc reference structs: cbor::describe_members")
     auto const bytes = cbor::structs<header>::encode(header{"text/plain"});  // 160060({"content-type": "text/plain"})
     // [describe_members use]
     REQUIRE(bytes.has_value());
-    CHECK_EQ(*bytes, test::preferred(test::value{test::tagged{160060, test::M("content-type"s, "text/plain"s)}}));
-    CHECK_EQ(cbor::structs<header>::decode(test::preferred(test::M("content-type"s, "x"s))).error(),
+    CHECK_EQ(*bytes, test::encode_in_preferred_form(test::value{test::tagged{160060, test::M("content-type"s, "text/plain"s)}}));
+    CHECK_EQ(cbor::structs<header>::decode(test::encode_in_preferred_form(test::M("content-type"s, "x"s))).error(),
              cbor::error::incorrect_type);
 }
 
@@ -171,7 +171,7 @@ TEST_CASE("doc reference structs: cbor::member with integer keys")
     auto const bytes = cbor::structs<senml>::encode(senml{"t", 1.5});  // {0: "t", 2: 1.5}
     // [member use]
     REQUIRE(bytes.has_value());
-    CHECK_EQ(*bytes, test::preferred(test::M(0, "t"s, 2, 1.5)));
+    CHECK_EQ(*bytes, test::encode_in_preferred_form(test::M(0, "t"s, 2, 1.5)));
 }
 
 // describe.hpp, the comment of CBOR_MEMBER: the macro takes the name of the member as its key.
@@ -181,7 +181,7 @@ TEST_CASE("doc reference structs: CBOR_MEMBER")
     auto const bytes = cbor::structs<account>::encode(account{"ann", 2});  // {"user": "ann", "level": 2}
     // [CBOR_MEMBER use]
     REQUIRE(bytes.has_value());
-    CHECK_EQ(*bytes, test::preferred(test::M("user"s, "ann"s, "level"s, 2)));
+    CHECK_EQ(*bytes, test::encode_in_preferred_form(test::M("user"s, "ann"s, "level"s, 2)));
 }
 
 // describe.hpp, the comment of CBOR_DEFINE_TYPE_MEMBERS: the macro takes the names of the members, and each name is
@@ -192,7 +192,7 @@ TEST_CASE("doc reference structs: CBOR_DEFINE_TYPE_MEMBERS")
     auto const bytes = cbor::structs<device>::encode(device{"lamp", 3});  // {"name": "lamp", "port": 3}
     // [CBOR_DEFINE_TYPE_MEMBERS use]
     REQUIRE(bytes.has_value());
-    CHECK_EQ(*bytes, test::preferred(test::M("name"s, "lamp"s, "port"s, 3)));
+    CHECK_EQ(*bytes, test::encode_in_preferred_form(test::M("name"s, "lamp"s, "port"s, 3)));
 }
 
 // structs.hpp, the comment of structs: one row of each kind that the table shows with a tag, and an empty optional
@@ -204,16 +204,16 @@ TEST_CASE("doc reference structs: member types")
     auto const one = cbor::structs<reading>::encode(reading{4, std::nullopt});    // {"id": 4}
     auto const set = cbor::structs<std::set<std::uint8_t>>::encode({3, 1});        // 258([1, 3])
     // [structs]
-    CHECK_EQ(*one, test::preferred(test::M("id"s, 4)));
-    CHECK_EQ(*set, test::preferred(test::value{test::tagged{258, test::A(1, 3)}}));
+    CHECK_EQ(*one, test::encode_in_preferred_form(test::M("id"s, 4)));
+    CHECK_EQ(*set, test::encode_in_preferred_form(test::value{test::tagged{258, test::A(1, 3)}}));
     CHECK_EQ(*cbor::structs<std::set<std::uint8_t>>::encode({3, 1}),
-             test::preferred(test::value{test::tagged{258, test::A(1, 3)}}));
+             test::encode_in_preferred_form(test::value{test::tagged{258, test::A(1, 3)}}));
     CHECK_EQ(*cbor::structs<std::array<std::byte, 2>>::encode({std::byte{1}, std::byte{2}}),
-             test::preferred(test::value{test::tagged{64, test::value{test::bytes{"\x01\x02"s}}}}));
+             test::encode_in_preferred_form(test::value{test::tagged{64, test::value{test::bytes{"\x01\x02"s}}}}));
     CHECK_EQ(*cbor::structs<std::chrono::sys_seconds>::encode(std::chrono::sys_seconds{std::chrono::seconds{1700000000}}),
-             test::preferred(test::value{test::tagged{1, test::value{std::uint64_t{1700000000}}}}));
-    CHECK_EQ(*cbor::structs<reading>::encode(reading{4, std::nullopt}), test::preferred(test::M("id"s, 4)));
-    auto const back = cbor::structs<reading>::decode(test::preferred(test::M("id"s, 4)));
+             test::encode_in_preferred_form(test::value{test::tagged{1, test::value{std::uint64_t{1700000000}}}}));
+    CHECK_EQ(*cbor::structs<reading>::encode(reading{4, std::nullopt}), test::encode_in_preferred_form(test::M("id"s, 4)));
+    auto const back = cbor::structs<reading>::decode(test::encode_in_preferred_form(test::M("id"s, 4)));
     REQUIRE(back.has_value());
     CHECK_FALSE((*back)->unit.has_value());
 }

@@ -36,7 +36,7 @@ std::expected<value, cbor::error> path_read(std::string_view const path, value c
 {
     std::string const doc = encode_value_to_wire(data);
     auto const l = *test::make_lazy_from_copy(doc);
-    auto const r = test::at_path(path, l);
+    auto const r = test::read_value_at_path(path, l);
     if (r || r.error() != error::not_singular_query)
         return r;
     return test::query(path, l);
@@ -59,7 +59,7 @@ error path_error(std::string_view const path, value const &data)
 template <cbor::fixed_string Path>
 std::expected<value, cbor::error> compiled_at(std::string const &doc)
 {
-    return test::at_path<Path>(*test::make_lazy_from_copy(doc));
+    return test::read_value_at_path<Path>(*test::make_lazy_from_copy(doc));
 }
 
 template <cbor::fixed_string Path>
@@ -201,7 +201,7 @@ TEST_CASE("path: the grammar")
     constexpr std::size_t depth = test::levels_beyond_small_stack;
     std::string const deep = repeat("\x81", depth) + "\x01"s;
     std::string const path = "$" + repeat("[0]", depth);
-    test::run_on_small_stack([&deep, &path] { CHECK(test::at_path(path, *test::make_lazy_from_copy(deep)) == V(1)); });
+    test::run_on_small_stack([&deep, &path] { CHECK(test::read_value_at_path(path, *test::make_lazy_from_copy(deep)) == V(1)); });
 }
 
 // The compile-time form reads the same grammar and, inside brackets, any literal of CBOR diagnostic notation
@@ -290,7 +290,7 @@ TEST_CASE("path: the diagnostic notation of a key finds the entry")
     CHECK_FALSE(cbor::is_valid_path_v<"$[[_ 1, 2]]">);
     CHECK_EQ(compiled_at<"$[1.0]">(doc).error(), error::key_not_found);
     std::string runtime_text = "$[16]";
-    CHECK(*test::at_path(runtime_text, *test::make_lazy_from_copy(doc)) == V(14));
+    CHECK(*test::read_value_at_path(runtime_text, *test::make_lazy_from_copy(doc)) == V(14));
 }
 
 // RFC 4648 Table 1 gives each character of the base64 alphabet a value from 0 to 63. Section 5 replaces + and / with -
@@ -398,7 +398,7 @@ TEST_CASE("path: a key map with duplicate keys is no match for other keys")
 TEST_CASE("path: every form gives the first entry of a repeated key")
 {
     std::string const doc = "\xa2\x61\x61\x01\x61\x61\x02"s;
-    CHECK(test::at_path("$.a", *test::make_lazy_from_copy(doc)).has_value());
+    CHECK(test::read_value_at_path("$.a", *test::make_lazy_from_copy(doc)).has_value());
     CHECK(compiled_at<"$.a">(doc).has_value());
     CHECK_EQ((cbor::at_path<"$.a", int>(doc)), 1);
     auto const owner = std::make_shared<std::string const>("\xa2\x61\x61\x61x\x61\x61\x61y"s);
@@ -1055,15 +1055,15 @@ TEST_CASE("path: at_path reads a singular query, at_path with a nodelist reads a
 {
     std::string const doc = encode_value_to_wire(M("a"s, A(1, 2)));
     cbor::lazy const l = *test::make_lazy_from_copy(doc);
-    CHECK(*test::at_path("$.a[1]", l) == V(2));
+    CHECK(*test::read_value_at_path("$.a[1]", l) == V(2));
     CHECK(*test::query("$.a[1]", l) == A(2));
     CHECK(*test::query("$.a[*]", l) == A(1, 2));
     CHECK(*test::query("$.b", l) == A());
-    CHECK_EQ(test::at_path("$.a[*]", l).error(), error::not_singular_query);
-    CHECK_EQ(test::at_path("$..a", l).error(), error::not_singular_query);
-    CHECK_EQ(test::at_path("$.b", l).error(), error::key_not_found);
+    CHECK_EQ(test::read_value_at_path("$.a[*]", l).error(), error::not_singular_query);
+    CHECK_EQ(test::read_value_at_path("$..a", l).error(), error::not_singular_query);
+    CHECK_EQ(test::read_value_at_path("$.b", l).error(), error::key_not_found);
     CHECK_EQ(test::query("a", l).error(), error::invalid_path);
-    CHECK(*test::at_path<"$.a[0]">(l) == V(1));
+    CHECK(*test::read_value_at_path<"$.a[0]">(l) == V(1));
     CHECK(*test::query<"$.a[0]">(l) == A(1));
     CHECK(*test::query<"$..[1]">(l) == A(2));
     CHECK((cbor::is_valid_path_v<"$..a">));
@@ -1165,12 +1165,12 @@ TEST_CASE("path: a tag that the path does not know is passed to its content")
     CHECK_EQ(cbor::at_path<"$", std::int64_t>("\xc1\x1a\x5f\x5e\x10\x00"s), 1600000000);
     CHECK_EQ(cbor::at_path<"$[0]", int>("\xc2\x41\x01"s).error(), error::not_indexable);
     CHECK_EQ(cbor::at_path<"$.k", int>("\xa1\xd9\x03\xe8\x61""k\x07"s).error(), error::key_not_found);
-    CHECK(found(test::at_path("$.v[1]", l)) == V(2));
-    CHECK(found(test::at_path("$.m.k", l)) == V(7));
+    CHECK(found(test::read_value_at_path("$.v[1]", l)) == V(2));
+    CHECK(found(test::read_value_at_path("$.m.k", l)) == V(7));
     CHECK(found(test::query("$.v[*]", l)) == A(1, 2));
     CHECK(found(test::query("$..k", l)) == A(7));
     CHECK(found(test::query("$.v[?@ > 1]", l)) == A(2));
-    CHECK(found(test::at_path("$.v", l)) == V(tagged{1000, A(1, 2)}));
+    CHECK(found(test::read_value_at_path("$.v", l)) == V(tagged{1000, A(1, 2)}));
 }
 
 // RFC 8746 2: a typed array holds its elements in a byte string. The tag gives the type, the sign and the byte order of
@@ -1218,12 +1218,12 @@ TEST_CASE("path: an index reads one element of a typed array")
     CHECK_EQ(test::make_lazy_from_copy(shared)->at_path<"$[0][-2]", double>(), 7.0);
     CHECK_EQ(cbor::at_path<"$[0][2]", int>(shared).error(), error::index_out_of_bounds);
     CHECK_EQ(cbor::at_path<"$[0][0][0]", int>(shared).error(), error::not_indexable);
-    CHECK(found(test::at_path("$.v[1]", l)) == V(0x108));
-    CHECK(found(test::at_path("$[0][0]", *test::make_lazy_from_copy(shared))) == V(7));
+    CHECK(found(test::read_value_at_path("$.v[1]", l)) == V(0x108));
+    CHECK(found(test::read_value_at_path("$[0][0]", *test::make_lazy_from_copy(shared))) == V(7));
     CHECK(found(test::query("$.v[*]", l)) == A(7, 0x108));
     CHECK(found(test::query("$.v[1:]", l)) == A(0x108));
     CHECK(found(test::query("$.v[?@ > 7]", l)) == A(0x108));
-    CHECK(found(test::query("$..*", l)) == A(found(test::at_path("$.v", l)), 7, 0x108));
+    CHECK(found(test::query("$..*", l)) == A(found(test::read_value_at_path("$.v", l)), 7, 0x108));
     CHECK(found(test::query<"$.v[*]">(l)) == A(7, 0x108));
     auto const floats = *test::make_lazy_from_copy(in("\xd8\x50\x44\x00\x00\x3c\x00"s));
     CHECK(found(test::query("$.v[*]", floats)) == A(0.0, 1.0));
@@ -1241,7 +1241,7 @@ TEST_CASE("path: a wildcard over a typed array whose content is no byte string")
     auto const l = *test::make_lazy_from_copy("\xd8\x1c\xd8\x51\x81\x00"s);
     CHECK_EQ(test::query("$[*]", l).error(), error::inadmissible_type_for_tag_content);
     CHECK_EQ(test::query("$[*].*", l).error(), error::inadmissible_type_for_tag_content);
-    CHECK_EQ(test::at_path("$[0]", l).error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(test::read_value_at_path("$[0]", l).error(), error::inadmissible_type_for_tag_content);
     CHECK(found(test::query("$[*]", *test::make_lazy_from_copy("\xd8\x1c\xd8\x51\x44\x3f\xc0\x00\x00"s))) == A(1.5));
 }
 
@@ -1325,7 +1325,7 @@ TEST_CASE("path: the member at_path starts at the item of the lazy")
 {
     std::string const doc = encode_value_to_wire(M("a"s, M("b"s, A(1, 2, "x"s))));
     cbor::lazy const l = *test::make_lazy_from_copy(doc);
-    CHECK(*test::at_path("$", *l.at_path(*cbor::path::compile<cbor::lazy>("$.a.b[1]"))) == V(2));
+    CHECK(*test::read_value_at_path("$", *l.at_path(*cbor::path::compile<cbor::lazy>("$.a.b[1]"))) == V(2));
     CHECK_EQ(cbor::path::compile<cbor::lazy>("$.a.b[").error(), error::invalid_path);
     CHECK_EQ(cbor::path::compile<cbor::lazy>("$..b").error(), error::not_singular_query);
     CHECK_EQ(l.at_path(*cbor::path::compile<cbor::lazy>("$.a.c")).error(), error::key_not_found);
@@ -1333,8 +1333,8 @@ TEST_CASE("path: the member at_path starts at the item of the lazy")
     CHECK_EQ(inner.at_path<"$.b[0]", int>(), 1);
     auto const text = inner.at_path<"$.b[2]", std::string_view>();
     CHECK_EQ(**text, "x"sv);
-    CHECK(*test::at_path("$", *inner.at_path<"$.b">()) == A(1, 2, "x"s));
-    CHECK(*test::at_path("$", *member_at_path<"$.b[1]">(inner)) == V(2));
+    CHECK(*test::read_value_at_path("$", *inner.at_path<"$.b">()) == A(1, 2, "x"s));
+    CHECK(*test::read_value_at_path("$", *member_at_path<"$.b[1]">(inner)) == V(2));
     CHECK_EQ(inner.at_path(*cbor::path::compile<cbor::nodelist>("$.b[*]"))->size(), 3u);
     CHECK_EQ((inner.at_path<"$..*", cbor::nodelist>()->size()), 4u);
 }

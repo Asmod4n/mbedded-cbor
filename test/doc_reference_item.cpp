@@ -67,7 +67,7 @@ struct writer_target {
 // item.hpp, snippet item: the kind of the root and the count of its elements; only a decode makes an item.
 TEST_CASE("doc reference item: item")
 {
-    std::string const bytes = test::preferred(test::A(1, test::M("a"s, 2)));
+    std::string const bytes = test::encode_in_preferred_form(test::A(1, test::M("a"s, 2)));
     // [item]
     // bytes: a std::string with [1, {"a": 2}]
     auto const tree = cbor::decode(bytes);
@@ -84,7 +84,7 @@ TEST_CASE("doc reference item: item")
 // item.hpp, snippet get: a text key, the argument of a negative integer, and a wrong kind.
 TEST_CASE("doc reference item: item::get")
 {
-    std::string const bytes = test::preferred(test::M("a"s, test::negative{2}));
+    std::string const bytes = test::encode_in_preferred_form(test::M("a"s, test::negative{2}));
     // [get]
     // bytes: a std::string with {"a": -3}
     auto const tree = cbor::decode(bytes);
@@ -130,7 +130,7 @@ TEST_CASE("doc reference item: the example of the group decode")
 // outlives its input.
 TEST_CASE("doc reference item: decode")
 {
-    std::string const bytes = test::preferred(test::A("hi"s, 1));
+    std::string const bytes = test::encode_in_preferred_form(test::A("hi"s, 1));
     // [decode]
     // bytes: a std::string with ["hi", 1]
     auto const tree = cbor::decode(bytes);
@@ -186,7 +186,7 @@ TEST_CASE("doc reference item: encoded_cbor_data_item")
 // encode.hpp, snippet encode: a container target gives the input again; a short span and a writer of the program.
 TEST_CASE("doc reference item: encode")
 {
-    std::string const bytes = test::preferred(test::A(1, "a"s));
+    std::string const bytes = test::encode_in_preferred_form(test::A(1, "a"s));
     // [encode]
     // bytes: a std::string with [1, "a"]
     auto const tree = cbor::decode(bytes);
@@ -212,7 +212,7 @@ TEST_CASE("doc reference item: encode")
 // the page.
 TEST_CASE("doc reference item: encode_iov")
 {
-    std::string const bytes = test::preferred(test::A(1, "a"s));
+    std::string const bytes = test::encode_in_preferred_form(test::A(1, "a"s));
     // [encode_iov]
     // bytes: a std::string with [1, "a"]
     auto const tree = cbor::decode(bytes);

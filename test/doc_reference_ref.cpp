@@ -24,7 +24,7 @@ using reference_ref::person;
 // that the comments of the example state, and the bytes against the encoding of RFC 8949.
 TEST_CASE("doc reference ref: the example of the group ref")
 {
-    std::string bytes = test::preferred(test::M("name"s, "ann"s));
+    std::string bytes = test::encode_in_preferred_form(test::M("name"s, "ann"s));
     CHECK_EQ(bytes, "\xa1\x64\x6e\x61\x6d\x65\x63\x61\x6e\x6e"s);
     std::optional<cbor::ref<std::string_view>> kept;
     // [ref group]
@@ -49,7 +49,7 @@ TEST_CASE("doc reference ref: cbor::ref")
 {
     std::optional<cbor::ref<person>> keep;
     {
-        std::string bytes = test::preferred(test::M("name"s, "ann"s, "age"s, 30));
+        std::string bytes = test::encode_in_preferred_form(test::M("name"s, "ann"s, "age"s, 30));
         auto const p = cbor::structs<person>::decode(std::move(bytes));
         REQUIRE(p.has_value());
         keep = *p;
@@ -57,7 +57,7 @@ TEST_CASE("doc reference ref: cbor::ref")
     CHECK_EQ(keep->operator->()->name, "ann");
     CHECK_EQ((**keep).age, 30);
 
-    auto const age = cbor::structs<int>::decode(test::preferred(test::V(30)));
+    auto const age = cbor::structs<int>::decode(test::encode_in_preferred_form(test::V(30)));
     REQUIRE(age.has_value());
     CHECK(*age == 30);
     CHECK_EQ(**age, 30);
@@ -67,7 +67,7 @@ TEST_CASE("doc reference ref: cbor::ref")
 // lives.
 TEST_CASE("doc reference ref: a view by value")
 {
-    auto const owner = std::make_shared<std::string const>(test::preferred(test::V("abc"s)));
+    auto const owner = std::make_shared<std::string const>(test::encode_in_preferred_form(test::V("abc"s)));
     auto const r = cbor::structs<std::string_view>::decode(owner);
     REQUIRE(r.has_value());
     std::string_view const v = **r;
@@ -79,7 +79,7 @@ TEST_CASE("doc reference ref: a view by value")
 // ref.hpp, snippet ref: the rvalue form of decode gives a ref that views the moved bytes.
 TEST_CASE("doc reference ref: the example of ref")
 {
-    std::string bytes = test::preferred(test::V("abc"s));
+    std::string bytes = test::encode_in_preferred_form(test::V("abc"s));
     std::string_view v;
     bool same = false;
     // [ref]
@@ -100,7 +100,7 @@ TEST_CASE("doc reference ref: the example of owning")
 {
     std::optional<cbor::owning<person>> kept;
     {
-        auto const p = cbor::structs<person>::decode(test::preferred(test::M("name"s, "ann"s, "age"s, 30))).value();
+        auto const p = cbor::structs<person>::decode(test::encode_in_preferred_form(test::M("name"s, "ann"s, "age"s, 30))).value();
         // [owning]
         // p: the cbor::ref<person> of {"name": "ann", "age": 30}
         auto const own = p.clone();
@@ -115,7 +115,7 @@ TEST_CASE("doc reference ref: the example of owning")
 // ref.hpp, the comment of ref: a moved-from ref holds a value-initialized T.
 TEST_CASE("doc reference ref: move")
 {
-    auto r = cbor::structs<std::string_view>::decode(test::preferred(test::V("abc"s))).value();
+    auto r = cbor::structs<std::string_view>::decode(test::encode_in_preferred_form(test::V("abc"s))).value();
     auto const s = std::move(r);
     CHECK_EQ(*s, "abc");
 }
@@ -124,14 +124,14 @@ TEST_CASE("doc reference ref: move")
 // an owning that holds its own copy of the bytes of each view.
 TEST_CASE("doc reference ref: clone")
 {
-    auto const text = cbor::structs<std::string_view>::decode(test::preferred(test::V("abc"s))).value();
+    auto const text = cbor::structs<std::string_view>::decode(test::encode_in_preferred_form(test::V("abc"s))).value();
     std::string const copy = text.clone();
     CHECK_EQ(copy, "abc");
 
     std::optional<cbor::owning<person>> own;
     std::string_view seen;
     {
-        auto const owner = std::make_shared<std::string const>(test::preferred(test::M("name"s, "ann"s, "age"s, 30)));
+        auto const owner = std::make_shared<std::string const>(test::encode_in_preferred_form(test::M("name"s, "ann"s, "age"s, 30)));
         auto const p = cbor::structs<person>::decode(owner).value();
         own = p.clone();
         seen = (*own)->name;

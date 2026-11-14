@@ -18,7 +18,7 @@ using cbor::error;
 
 // Each test in this file is one example of the former path guide, whose facts now stand in
 // tools/doc/groups/path.dox. The tests exist so that every example compiles and gives the result that the text
-// states. Where an example writes a comment with the input as text, the test builds the same input with preferred().
+// states. Where an example writes a comment with the input as text, the test builds the same input with encode_in_preferred_form().
 
 namespace
 {
@@ -32,7 +32,7 @@ concept doc_path_compiles = requires(std::string_view const s) { cbor::at_path<P
 TEST_CASE("doc path: read one value")
 {
     std::string const bytes =
-        preferred(M("user"s, M("id"s, 42, "score"s, 2.5, "admin"s, simple{21}, "name"s, "ann"s)));
+        encode_in_preferred_form(M("user"s, M("id"s, 42, "score"s, 2.5, "admin"s, simple{21}, "name"s, "ann"s)));
     std::int64_t used = 0;
     auto const use = [&used](std::int64_t const v) { used = v; };
     auto const id = cbor::at_path<"$.user.id", std::int64_t>(bytes);
@@ -48,9 +48,9 @@ TEST_CASE("doc path: read one value")
 // The section "Read one value" names the types of T, the one conversion, and the types that do not compile.
 TEST_CASE("doc path: the types of a number")
 {
-    CHECK_EQ(cbor::at_path<"$", double>(preferred(V(1))), 1.0);
-    CHECK_EQ(cbor::at_path<"$", std::int64_t>(preferred(V("a"s))).error(), error::incorrect_type);
-    CHECK_EQ(cbor::at_path<"$", std::uint8_t>(preferred(V(256))).error(), error::number_out_of_range);
+    CHECK_EQ(cbor::at_path<"$", double>(encode_in_preferred_form(V(1))), 1.0);
+    CHECK_EQ(cbor::at_path<"$", std::int64_t>(encode_in_preferred_form(V("a"s))).error(), error::incorrect_type);
+    CHECK_EQ(cbor::at_path<"$", std::uint8_t>(encode_in_preferred_form(V(256))).error(), error::number_out_of_range);
     CHECK_FALSE((doc_path_compiles<"$", float>));
     CHECK((doc_path_compiles<"$", std::string>));
     CHECK_FALSE((doc_path_compiles<"$.a[", int>));
@@ -59,7 +59,7 @@ TEST_CASE("doc path: the types of a number")
 // The section "Read one value" shows that std::string as T copies the text into a result that needs no owner.
 TEST_CASE("doc path: std::string as T copies the text")
 {
-    std::string const bytes = preferred(M("user"s, M("name"s, "ann"s)));
+    std::string const bytes = encode_in_preferred_form(M("user"s, M("name"s, "ann"s)));
     auto const name = cbor::at_path<"$.user.name", std::string>(bytes);
     CHECK_EQ(name, "ann"s);
     CHECK(std::is_same_v<decltype(name), std::expected<std::string, error> const>);
@@ -69,7 +69,7 @@ TEST_CASE("doc path: std::string as T copies the text")
 // owner.
 TEST_CASE("doc path: read a text")
 {
-    std::string bytes = preferred(M("user"s, M("name"s, "ann"s, "key"s, test::bytes{"\x01\x02"})));
+    std::string bytes = encode_in_preferred_form(M("user"s, M("name"s, "ann"s, "key"s, test::bytes{"\x01\x02"})));
     std::string_view used;
     auto const use = [&used](std::string_view const v) { used = v; };
     auto const owner = std::make_shared<std::string const>(std::move(bytes));
@@ -88,7 +88,7 @@ TEST_CASE("doc path: read a text")
 // The section "Start at a lazy" shows that $ is the value of the lazy and that a text needs no separate owner there.
 TEST_CASE("doc path: start at a lazy")
 {
-    std::string bytes = preferred(M("cars"s, A(M("hp"s, 5), M("hp"s, 7, "make"s, "kia"s))));
+    std::string bytes = encode_in_preferred_form(M("cars"s, A(M("hp"s, 5), M("hp"s, 7, "make"s, "kia"s))));
     auto const cars = cbor::lazy::adopt(std::move(bytes)).and_then([](cbor::lazy const &doc) { return doc.at("cars"); });
     REQUIRE(cars.has_value());
     if (cars) {
@@ -106,7 +106,7 @@ TEST_CASE("doc path: path syntax")
     value const doc = M("store"s, M("book"s, A(M("title"s, "A"s, "price"s, 8), M("title"s, "B"s, "price"s, 12),
                                               M("title"s, "C"s, "price"s, 9, "isbn"s, "x"s)),
                                     "bicycle"s, M("price"s, 20)));
-    std::string const bytes = preferred(doc);
+    std::string const bytes = encode_in_preferred_form(doc);
     auto const l = *test::make_lazy_from_copy(bytes);
     CHECK(*test::query("$", l) == A(doc));
     CHECK_EQ(cbor::at_path<"$.store.bicycle.price", int>(bytes), 20);
@@ -123,7 +123,7 @@ TEST_CASE("doc path: path syntax")
     CHECK(*test::query("$.store.book[?@.price != 8 && @.title >= 'B' || !@.price].title", l) == A("B"s, "C"s));
     CHECK(*test::query("$.store.book[?length(@.title) == 1 && count(@.*) == 3 && value(@.price) == 9].title",
                        l) == A("C"s));
-    CHECK_EQ(cbor::at_path<"$[1]", std::int64_t>(preferred(M(1, 7))), 7);
+    CHECK_EQ(cbor::at_path<"$[1]", std::int64_t>(encode_in_preferred_form(M(1, 7))), 7);
 }
 
 // The section "Errors" tells a missing field from broken input with a switch on the error.
@@ -146,8 +146,8 @@ TEST_CASE("doc path: tell a missing field from broken input")
         }
         return std::pair{used, rejected};
     };
-    CHECK(read(preferred(M("user"s, M("name"s, "ann"s)))) == std::pair{std::int64_t{0}, std::optional<error>{}});
-    std::string const whole = preferred(M("user"s, M("id"s, 42)));
+    CHECK(read(encode_in_preferred_form(M("user"s, M("name"s, "ann"s)))) == std::pair{std::int64_t{0}, std::optional<error>{}});
+    std::string const whole = encode_in_preferred_form(M("user"s, M("id"s, 42)));
     CHECK(read(whole.substr(0, 5)) == std::pair{std::int64_t{-1}, std::optional<error>{error::too_little_data}});
 }
 
@@ -159,14 +159,14 @@ TEST_CASE("doc path: a path does not read past its value")
     CHECK_EQ(cbor::at_path<"$[0]", int>(cut).error(), error::too_little_data);
     CHECK_EQ(cbor::at_path<"$[0]", int>("\x82\x01\xff"s), 1);
     CHECK_EQ(cbor::item_size(cut).error(), error::too_little_data);
-    std::string const whole = preferred(A(1, 2));
+    std::string const whole = encode_in_preferred_form(A(1, 2));
     CHECK_EQ(cbor::item_size(whole), whole.size());
 }
 
 // The section "What is not supported" names match and search, which a user of other JSONPath libraries tries.
 TEST_CASE("doc path: what is not supported")
 {
-    auto const l = *test::make_lazy_from_copy(preferred(A("abc"s)));
+    auto const l = *test::make_lazy_from_copy(encode_in_preferred_form(A("abc"s)));
     CHECK_EQ(test::query("$[?match(@, 'a.c')]", l).error(), error::invalid_path);
     CHECK_EQ(test::query("$[?search(@, 'b')]", l).error(), error::invalid_path);
     CHECK_EQ(test::query("$[?foo(@)]", l).error(), error::invalid_path);

@@ -134,7 +134,7 @@ std::string text(std::string_view const t)
 }
 
 template <class T>
-std::string preferred(T const &value)
+std::string encode_in_preferred_form(T const &value)
 {
     auto const out = cbor::structs<T>::encode(value);
     REQUIRE(out.has_value());
@@ -215,10 +215,10 @@ std::vector<integer> const encoded_int_values = {
 // "std::variant<E...> | the item of the alternative").
 TEST_CASE("qcbor IntegerValuesTest1: integers encode with the shortest head")
 {
-    CHECK_EQ(test::hexlify(preferred(encoded_int_values)), test::hexlify(expected_encoded_ints));
+    CHECK_EQ(test::hexlify(encode_in_preferred_form(encoded_int_values)), test::hexlify(expected_encoded_ints));
     std::string pieces = array_head(encoded_int_values.size());
     for (integer const &v : encoded_int_values)
-        pieces += std::visit([](auto const n) { return preferred(n); }, v);
+        pieces += std::visit([](auto const n) { return encode_in_preferred_form(n); }, v);
     CHECK_EQ(test::hexlify(pieces), test::hexlify(expected_encoded_ints));
 }
 
@@ -247,14 +247,14 @@ TEST_CASE("qcbor EncodeLengthThirtyoneTest: a count of 31 takes a one-byte argum
     constexpr std::int64_t elements = 31;
     std::string out = map_head(5) + text("arr") + array_head(elements);
     for (std::int64_t ix = 0; ix < elements; ++ix)
-        out += preferred(ix);
+        out += encode_in_preferred_form(ix);
     out += text("map") + map_head(elements);
     for (std::int64_t ix = 0; ix < elements; ++ix) {
         char const c = ix < 26 ? static_cast<char>('a' + ix) : static_cast<char>('A' + (ix - 26));
-        out += text(std::string(1, c)) + preferred(ix);
+        out += text(std::string(1, c)) + encode_in_preferred_form(ix);
     }
-    out += text("min31") + preferred(std::int64_t{-31});
-    out += text("plus31") + preferred(std::int64_t{31});
+    out += text("min31") + encode_in_preferred_form(std::int64_t{-31});
+    out += text("plus31") + encode_in_preferred_form(std::int64_t{31});
     out += text("str") + text("testtesttesttesttesttestqcbor11");
     std::string const expected = as_string({
         0xa5, 0x63, 0x61, 0x72, 0x72, 0x98, 0x1f, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a,
@@ -283,27 +283,27 @@ TEST_CASE("qcbor EncodeLengthThirtyoneTest: a count of 31 takes a one-byte argum
 TEST_CASE("qcbor EncodeDateTest: date strings, epoch dates and days encode under their tags")
 {
     using namespace std::chrono;
-    std::string const epoch = preferred(sys_seconds{seconds{1363896240}});
+    std::string const epoch = encode_in_preferred_form(sys_seconds{seconds{1363896240}});
     CHECK_EQ(test::hexlify(epoch), test::hexlify(as_string({0xc1, 0x1a, 0x51, 0x4b, 0x67, 0xb0})));
-    std::string const days = preferred(year_month_day{year{1940}, month{10}, day{9}});
+    std::string const days = encode_in_preferred_form(year_month_day{year{1940}, month{10}, day{9}});
     CHECK_EQ(test::hexlify(days), test::hexlify(as_string({0xd8, 0x64, 0x39, 0x29, 0xb3})));
 
     std::string out = array_head(9);
     out += text("2013-03-21T20:04:00Z");
     out += tag_head(0) + text("2013-03-21T20:04:00Z");
-    out += preferred(std::int64_t{1363896240});
+    out += encode_in_preferred_form(std::int64_t{1363896240});
     out += epoch;
     out += days;
-    out += preferred(std::int64_t{3994});
+    out += encode_in_preferred_form(std::int64_t{3994});
     out += tag_head(1004) + text("1940-10-09");
     out += text("1980-12-08");
     out += map_head(6);
     out += text("Sample Date from RFC 3339") + tag_head(0) + text("1985-04-12T23:20:50.52Z");
-    out += text("SD") + preferred(sys_seconds{seconds{999}});
+    out += text("SD") + encode_in_preferred_form(sys_seconds{seconds{999}});
     out += text("Sample Date from RFC 8943") + text("1985-04-12");
-    out += preferred(std::int64_t{42}) + tag_head(1004) + text("1985-04-12T23:20:50.52Z");
+    out += encode_in_preferred_form(std::int64_t{42}) + tag_head(1004) + text("1985-04-12T23:20:50.52Z");
     out += text("SY") + days;
-    out += preferred(std::int64_t{45}) + preferred(std::int64_t{3994});
+    out += encode_in_preferred_form(std::int64_t{45}) + encode_in_preferred_form(std::int64_t{3994});
     std::string const expected = as_string({
         0x89, 0x74, 0x32, 0x30, 0x31, 0x33, 0x2d, 0x30, 0x33, 0x2d, 0x32, 0x31, 0x54, 0x32, 0x30, 0x3a, 0x30, 0x34,
         0x3a, 0x30, 0x30, 0x5a, 0xc0, 0x74, 0x32, 0x30, 0x31, 0x33, 0x2d, 0x30, 0x33, 0x2d, 0x32, 0x31, 0x54, 0x32,
@@ -398,8 +398,8 @@ TEST_CASE("qcbor BasicEncodeTest: a map with one boolean, inserted twice into an
     REQUIRE(one.has_value());
     CHECK(one->at(cbor::key{66}).and_then([](cbor::lazy const &l) { return l.get<bool>(); }) == true);
 
-    std::string const second = array_head(3) + preferred(std::uint64_t{451}) + first + map_head(1) +
-                               preferred(std::int64_t{-70000}) + first;
+    std::string const second = array_head(3) + encode_in_preferred_form(std::uint64_t{451}) + first + map_head(1) +
+                               encode_in_preferred_form(std::int64_t{-70000}) + first;
     CHECK_EQ(test::hexlify(second), test::hexlify(as_string({0x83, 0x19, 0x01, 0xc3, 0xa1, 0x18, 0x42, 0xf5, 0xa1, 0x3a, 0x00,
                                                0x01, 0x11, 0x6f, 0xa1, 0x18, 0x42, 0xf5})));
     auto const two = cbor::lazy::adopt(std::string(second));
@@ -424,14 +424,14 @@ TEST_CASE("qcbor example.c: the car engine encodes and decodes back")
     std::vector<double> const cylinders = {9.0, 9.2, 8.9, 8.9, 9.1, 9.0};
     std::string out = map_head(7);
     out += text("Manufacturer") + text("Porsche");
-    out += text("NumCylinders") + preferred(std::int64_t{6});
-    out += text("Displacement") + preferred(std::int64_t{3296});
-    out += text("Horsepower") + preferred(std::int64_t{210});
-    out += text("DesignedCompression") + preferred(9.1);
+    out += text("NumCylinders") + encode_in_preferred_form(std::int64_t{6});
+    out += text("Displacement") + encode_in_preferred_form(std::int64_t{3296});
+    out += text("Horsepower") + encode_in_preferred_form(std::int64_t{210});
+    out += text("DesignedCompression") + encode_in_preferred_form(9.1);
     out += text("Cylinders") + array_head(cylinders.size());
     for (double const c : cylinders)
-        out += preferred(c);
-    out += text("Turbo") + preferred(false);
+        out += encode_in_preferred_form(c);
+    out += text("Turbo") + encode_in_preferred_form(false);
 
     auto const engine = cbor::lazy::adopt(std::move(out));
     REQUIRE(engine.has_value());

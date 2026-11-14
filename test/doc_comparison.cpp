@@ -18,7 +18,7 @@ using cbor::error;
 // The section "Read one field" reads a number two maps deep without a decode of the whole item.
 TEST_CASE("doc comparison: read one field")
 {
-    std::string const bytes = preferred(M("user"s, M("id"s, 42)));
+    std::string const bytes = encode_in_preferred_form(M("user"s, M("id"s, 42)));
     // begin path
     auto const id = cbor::at_path<"$.user.id", std::int64_t>(bytes); // *id == 42
     // end path
@@ -28,7 +28,7 @@ TEST_CASE("doc comparison: read one field")
 // The section "Broken input" gives the error of an array that the input cuts off.
 TEST_CASE("doc comparison: broken input")
 {
-    std::string const whole = preferred(A(1, 2));
+    std::string const whole = encode_in_preferred_form(A(1, 2));
     std::string const bytes = whole.substr(0, whole.size() - 1);
     // begin errors
     auto const r = cbor::at_path<"$[1]", std::int64_t>(bytes);

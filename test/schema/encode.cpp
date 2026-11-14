@@ -28,9 +28,9 @@ TEST_CASE("encode: members stand in the key order of RFC 8949 4.2.1, not in the 
     std::string const bytes = encode_with_schema(unsorted{3, 1, 2});
     CHECK_NE(bytes.find("\xd8\x72\x83\x61" "b\x62" "aa\x62zz"s), std::string::npos);
     CHECK_NE(bytes.find("\xd9\x06\x54\xd8\x80\x9a\x00\x00\x00\x03\x18\x01\x18\x02\x18\x03"s), std::string::npos);
-    CHECK_EQ(at_path<unsorted, "$.zz">(bytes), 3);
-    CHECK_EQ(at_path<unsorted, "$.b">(bytes), 1);
-    CHECK_EQ(at_path<unsorted, "$.aa">(bytes), 2);
+    CHECK_EQ(read_leaf_with_copying_path<unsorted, "$.zz">(bytes), 3);
+    CHECK_EQ(read_leaf_with_copying_path<unsorted, "$.b">(bytes), 1);
+    CHECK_EQ(read_leaf_with_copying_path<unsorted, "$.aa">(bytes), 2);
 }
 
 // The description lists aa, zz, b: neither the order of declaration (zz, b, aa) nor the key order (b, aa, zz).
@@ -38,7 +38,7 @@ TEST_CASE("encode: members stand in the key order of RFC 8949 4.2.1, not in the 
 TEST_CASE("encode: the order of the description does not change the bytes")
 {
     CHECK_EQ(encode_with_schema(listed_other_order{3, 1, 2}), encode_with_schema(unsorted{3, 1, 2}));
-    CHECK_EQ(at_path<listed_other_order, "$.zz">(encode_with_schema(listed_other_order{3, 1, 2})), 3);
+    CHECK_EQ(read_leaf_with_copying_path<listed_other_order, "$.zz">(encode_with_schema(listed_other_order{3, 1, 2})), 3);
 }
 
 // The same members declared in another order give the same bytes, so a peer gets one encoding for one value.
@@ -52,8 +52,8 @@ TEST_CASE("encode: a key given in cbor::describe_members is sorted by that key")
 {
     std::string const bytes = encode_with_schema(renamed{7, 9});
     CHECK_NE(bytes.find("\xd8\x72\x82\x61" "a\x65" "first"s), std::string::npos);
-    CHECK_EQ(at_path<renamed, "$.a">(bytes), 7);
-    CHECK_EQ(at_path<renamed, "$.first">(bytes), 9);
+    CHECK_EQ(read_leaf_with_copying_path<renamed, "$.a">(bytes), 7);
+    CHECK_EQ(read_leaf_with_copying_path<renamed, "$.first">(bytes), 9);
     auto const back = form<renamed>::decode(std::string(bytes));
     REQUIRE(back.has_value());
     CHECK_EQ((*back)->last, 7);

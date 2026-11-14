@@ -23,7 +23,7 @@ using cbor::error;
 // documents are tested. Every example of a former guide is a doctest case. The cases of the guide <name> are in
 // test/doc_<name>.cpp, and their names start with "doc <name>:". The cases of the advanced guide <name> are in
 // test/doc_advanced_<name>.cpp, and their names start with "doc advanced <name>:". The cases of this file start with
-// "doc internals:". A test builds the input that a comment of the document shows as text with preferred() of
+// "doc internals:". A test builds the input that a comment of the document shows as text with encode_in_preferred_form() of
 // test/reference.hpp. The examples of the reference pages of a group come from test/doc_reference_<group>.cpp. The
 // snippet markers that the comments of the headers name select them. The names of those cases start with "doc reference
 // <group>:". A claim about allocations has its test in test/allocation.cpp. test/cts.cpp runs the JSONPath Compliance
@@ -32,13 +32,13 @@ using cbor::error;
 // in the library compiled to WebAssembly. The build of the site runs each example and compares its result with the page.
 // With CBOR_FUZZ, CMake builds one fuzz target for each public entry of the directory fuzz.
 
-// The section "How the documents are tested" states that preferred() builds the input that a comment shows as text.
+// The section "How the documents are tested" states that encode_in_preferred_form() builds the input that a comment shows as text.
 // The test exists because every document test depends on that.
 TEST_CASE("doc internals: encoded builds the input that a comment shows")
 {
-    CHECK_EQ(cbor::diagnostic_notation(preferred(M("user"s, M("id"s, 42, "name"s, "ann"s)))),
+    CHECK_EQ(cbor::diagnostic_notation(encode_in_preferred_form(M("user"s, M("id"s, 42, "name"s, "ann"s)))),
              R"({"user": {"id": 42, "name": "ann"}})");
-    CHECK_EQ(cbor::diagnostic_notation(preferred(A(1, 2.5, "a"s, simple{21}))), R"([1, 2.5, "a", true])");
+    CHECK_EQ(cbor::diagnostic_notation(encode_in_preferred_form(A(1, 2.5, "a"s, simple{21}))), R"([1, 2.5, "a", true])");
 }
 
 // The section "A lazy reads heads" states that lazy::adopt and lazy::view read no head but a leading tag 55799. That a
@@ -86,7 +86,7 @@ TEST_CASE("doc internals: two references to one mark")
 // result owns. That a text of the tree is copied into that resource.
 TEST_CASE("doc internals: a text of the item tree is a copy")
 {
-    std::string const bytes = preferred(V(std::string(40, 'a')));
+    std::string const bytes = encode_in_preferred_form(V(std::string(40, 'a')));
     auto const owner = std::make_shared<std::string const>(bytes);
     auto const tree = cbor::lazy::view(owner)->clone();
     REQUIRE(tree.has_value());

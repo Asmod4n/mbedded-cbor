@@ -50,7 +50,7 @@ void unverified_reads(std::string const &bytes)
 TEST_CASE("unverified: the same results as the verified forms on a message that the encoder wrote")
 {
     std::string const bytes = encode_with_schema(sample_everything);
-    CHECK_EQ(form<everything>::unverified_at_path<"$.big">(bytes), at_path<everything, "$.big">(bytes));
+    CHECK_EQ(form<everything>::unverified_at_path<"$.big">(bytes), read_leaf_with_copying_path<everything, "$.big">(bytes));
     CHECK_EQ(form<everything>::unverified_at_path<"$.engines[1].cc">(bytes), 1200u);
     CHECK_EQ(form<everything>::unverified_at_path<"$.gauges[].at.x">(bytes, 1uz), -6);
     CHECK_EQ(form<everything>::unverified_at_path<"$.tires[].airPressure">(bytes, 1uz), 3.0f);
@@ -91,7 +91,7 @@ TEST_CASE("unverified: a forged type byte gives a value, not an error")
         return out;
     };
     std::string const root_tag = forged("\xd9\x06\x7c"s, 2, '\x7d');
-    CHECK_EQ(at_path<everything, "$.flag">(root_tag).error(), error::incorrect_type);
+    CHECK_EQ(read_leaf_with_copying_path<everything, "$.flag">(root_tag).error(), error::incorrect_type);
     CHECK_EQ(form<everything>::unverified_at_path<"$.flag">(root_tag), true);
     CHECK(form<everything>::unverified_decode(std::string(root_tag)).has_value());
     std::string const track_tag = forged("\xd8\x56\x5a"s, 1, '\x55');
@@ -102,7 +102,7 @@ TEST_CASE("unverified: a forged type byte gives a value, not an error")
     REQUIRE(unverified.has_value());
     CHECK_EQ(unverified->view<"$.track">()->at(0), 1.0);
     std::string const vector_head = forged("\xd9\x80\x69"s, 1, '\x81');
-    CHECK_EQ(at_path<everything, "$.gauges[1].on">(vector_head).error(), error::incorrect_type);
+    CHECK_EQ(read_leaf_with_copying_path<everything, "$.gauges[1].on">(vector_head).error(), error::incorrect_type);
     CHECK_EQ(form<everything>::unverified_at_path<"$.gauges[1].on">(vector_head), false);
 }
 
@@ -185,7 +185,7 @@ TEST_CASE("unverified: a bool byte 2 reads true")
     REQUIRE_NE(element, std::string::npos);
     std::string two = flags;
     two[element + 2] = '\x02';
-    CHECK_EQ(at_path<gauges, "$.g[0].on">(two).error(), error::incorrect_type);
+    CHECK_EQ(read_leaf_with_copying_path<gauges, "$.g[0].on">(two).error(), error::incorrect_type);
     CHECK_EQ(form<gauges>::unverified_at_path<"$.g[0].on">(two), true);
     auto const back = form<gauges>::unverified_decode(std::string(two));
     REQUIRE(back.has_value());

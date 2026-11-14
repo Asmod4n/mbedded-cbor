@@ -14,7 +14,7 @@ using namespace std::string_view_literals;
 // compiles and gives the results that its comments state.
 TEST_CASE("doc reference index: the example")
 {
-    std::string bytes = test::preferred(test::M("user"s, test::M("id"s, 42, "name"s, "ann"s)));
+    std::string bytes = test::encode_in_preferred_form(test::M("user"s, test::M("id"s, 42, "name"s, "ann"s)));
     auto const id = cbor::at_path<"$.user.id", int>(bytes);
     CHECK_EQ(id.value(), 42);
     auto const age = cbor::at_path<"$.user.age", int>(bytes);

@@ -136,22 +136,22 @@ TEST_CASE("decode and at_path: every typed array gives its elements back")
 #if defined(__STDCPP_FLOAT16_T__)
     REQUIRE_EQ(n.f16.size(), 1u);
     CHECK_EQ(std::bit_cast<std::uint16_t>(n.f16[0]), 0x3c00u);
-    CHECK_EQ(std::bit_cast<std::uint16_t>(*at_path<numbers, "$.f16[0]">(bytes)), 0x3c00u);
+    CHECK_EQ(std::bit_cast<std::uint16_t>(*read_leaf_with_copying_path<numbers, "$.f16[0]">(bytes)), 0x3c00u);
 #endif
     REQUIRE_EQ(n.f32.size(), 1u);
     CHECK_EQ(std::bit_cast<std::uint32_t>(n.f32[0]), 0x3f800000u);
     REQUIRE_EQ(n.f64.size(), 1u);
     CHECK_EQ(std::bit_cast<std::uint64_t>(n.f64[0]), 0x3ff0000000000000u);
-    CHECK_EQ(at_path<numbers, "$.u16[0]">(bytes), 0x0102u);
-    CHECK_EQ(at_path<numbers, "$.u32[]">(bytes, 0uz), 0x01020304u);
-    CHECK_EQ(at_path<numbers, "$.u64[0]">(bytes), 0x0102030405060708u);
-    CHECK_EQ(at_path<numbers, "$.s8[0]">(bytes), std::int8_t{-2});
-    CHECK_EQ(at_path<numbers, "$.s16[0]">(bytes), std::int16_t{-2});
-    CHECK_EQ(at_path<numbers, "$.s32[0]">(bytes), -2);
-    CHECK_EQ(at_path<numbers, "$.s64[]">(bytes, 0uz), std::int64_t{-2});
-    CHECK_EQ(std::bit_cast<std::uint32_t>(*at_path<numbers, "$.f32[0]">(bytes)), 0x3f800000u);
-    CHECK_EQ(std::bit_cast<std::uint64_t>(*at_path<numbers, "$.f64[0]">(bytes)), 0x3ff0000000000000u);
-    CHECK_EQ(at_path<numbers, "$.f64[1]">(bytes).error(), error::index_out_of_bounds);
+    CHECK_EQ(read_leaf_with_copying_path<numbers, "$.u16[0]">(bytes), 0x0102u);
+    CHECK_EQ(read_leaf_with_copying_path<numbers, "$.u32[]">(bytes, 0uz), 0x01020304u);
+    CHECK_EQ(read_leaf_with_copying_path<numbers, "$.u64[0]">(bytes), 0x0102030405060708u);
+    CHECK_EQ(read_leaf_with_copying_path<numbers, "$.s8[0]">(bytes), std::int8_t{-2});
+    CHECK_EQ(read_leaf_with_copying_path<numbers, "$.s16[0]">(bytes), std::int16_t{-2});
+    CHECK_EQ(read_leaf_with_copying_path<numbers, "$.s32[0]">(bytes), -2);
+    CHECK_EQ(read_leaf_with_copying_path<numbers, "$.s64[]">(bytes, 0uz), std::int64_t{-2});
+    CHECK_EQ(std::bit_cast<std::uint32_t>(*read_leaf_with_copying_path<numbers, "$.f32[0]">(bytes)), 0x3f800000u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*read_leaf_with_copying_path<numbers, "$.f64[0]">(bytes)), 0x3ff0000000000000u);
+    CHECK_EQ(read_leaf_with_copying_path<numbers, "$.f64[1]">(bytes).error(), error::index_out_of_bounds);
     auto const root = form<numbers>::path(std::string(bytes));
     REQUIRE(root.has_value());
     auto const list = root->at_path<"$.u32">();
@@ -173,16 +173,16 @@ TEST_CASE("decode and at_path: a typed array with a wrong tag or a wrong length 
         std::string wrong = bytes;
         wrong[at + 1] = tag;
         CHECK_EQ(form<doubles>::decode(std::string(wrong)).error(), error::incorrect_type);
-        CHECK_EQ(at_path<doubles, "$.v[0]">(wrong).error(), error::incorrect_type);
+        CHECK_EQ(read_leaf_with_copying_path<doubles, "$.v[0]">(wrong).error(), error::incorrect_type);
     }
     std::string odd = bytes;
     odd[at + 6] = '\x0f';
     CHECK_EQ(form<doubles>::decode(std::string(odd)).error(), error::inadmissible_type_for_tag_content);
-    CHECK_EQ(at_path<doubles, "$.v[0]">(odd).error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(read_leaf_with_copying_path<doubles, "$.v[0]">(odd).error(), error::inadmissible_type_for_tag_content);
     std::string longer = bytes;
     longer[at + 6] = '\x18';
     CHECK_EQ(form<doubles>::decode(std::string(longer)).error(), error::too_little_data);
-    CHECK_EQ(at_path<doubles, "$.v[0]">(longer).error(), error::too_little_data);
+    CHECK_EQ(read_leaf_with_copying_path<doubles, "$.v[0]">(longer).error(), error::too_little_data);
 }
 
 // A plain struct has no allocator, so a std::pmr::vector cannot give its resource to it. But it can give it to each
@@ -259,14 +259,14 @@ TEST_CASE("decode: the head of a fixed string and of a std::array is checked")
     REQUIRE_NE(code, std::string::npos);
     std::string text_head = bytes;
     text_head[code] = '\x44';
-    CHECK_EQ(at_path<vehicle, "$.code">(text_head).error(), error::incorrect_type);
+    CHECK_EQ(read_leaf_with_copying_path<vehicle, "$.code">(text_head).error(), error::incorrect_type);
     CHECK_EQ(form<vehicle>::decode(std::string(text_head)).error(), error::incorrect_type);
     std::string const spare = encode_with_schema(sample_everything);
     std::size_t const engines = spare.find("\x82\xd9\x05\xdd"s);
     REQUIRE_NE(engines, std::string::npos);
     std::string array_head = spare;
     array_head[engines] = '\x83';
-    CHECK_EQ(at_path<everything, "$.engines[1].cc">(array_head).error(), error::incorrect_type);
+    CHECK_EQ(read_leaf_with_copying_path<everything, "$.engines[1].cc">(array_head).error(), error::incorrect_type);
     CHECK_EQ(form<everything>::decode(std::string(array_head)).error(), error::incorrect_type);
 }
 
@@ -285,7 +285,7 @@ TEST_CASE("decode: a class with a constructor takes its described members in the
     auto const unverified = form<reading>::unverified_decode(std::make_shared<std::string const>(bytes));
     REQUIRE(unverified.has_value());
     CHECK_EQ((**unverified).unit, "kg");
-    CHECK_EQ(at_path<reading, "$.unit">(bytes), "kg");
+    CHECK_EQ(read_leaf_with_copying_path<reading, "$.unit">(bytes), "kg");
 }
 
 // Each place that makes an element builds a class with a constructor the same way. The places are an element of a
@@ -303,7 +303,7 @@ TEST_CASE("decode: a class with a constructor in a vector, an optional and a map
     CHECK_EQ((**back).first->unit, "ccc");
     REQUIRE_EQ((**back).by_hour.size(), 1u);
     CHECK_EQ((**back).by_hour.at(9).unit, "dddd");
-    CHECK_EQ(at_path<station, "$.readings[1].unit">(bytes), "bb");
+    CHECK_EQ(read_leaf_with_copying_path<station, "$.readings[1].unit">(bytes), "bb");
     CHECK_EQ(encode_again(form<station>::decode(std::string(bytes))), bytes);
     auto const empty = form<station>::decode(encode_with_schema(station{{}, std::nullopt, {}}));
     REQUIRE(empty.has_value());

@@ -120,7 +120,7 @@ TEST_CASE("self-described CBOR: type() of a second tag 55799 and of a tag 55799 
 // 64(55799(h'0102')) what it gives for 64("a"): the same type, value or error. Each width of the 55799 head is read.
 TEST_CASE("self-described CBOR: a tag 55799 in the content of a bignum or a typed array stays a tag")
 {
-    auto const same = [](auto const &a, auto const &b) {
+    auto const check_both_give_the_same = [](auto const &a, auto const &b) {
         REQUIRE_EQ(a.has_value(), b.has_value());
         if (a.has_value())
             CHECK_EQ(*a, *b);
@@ -136,11 +136,11 @@ TEST_CASE("self-described CBOR: a tag 55799 in the content of a bignum or a type
             auto const t = cbor::lazy::adopt(std::string(text));
             REQUIRE(l.has_value());
             REQUIRE(t.has_value());
-            same(l->type(), t->type());
-            same(l->get<std::int64_t>(), t->get<std::int64_t>());
-            same(l->get<double>(), t->get<double>());
-            same((cbor::at_path<"$", std::int64_t>(tagged)), (cbor::at_path<"$", std::int64_t>(text)));
-            same((cbor::at_path<"$", double>(tagged)), (cbor::at_path<"$", double>(text)));
+            check_both_give_the_same(l->type(), t->type());
+            check_both_give_the_same(l->get<std::int64_t>(), t->get<std::int64_t>());
+            check_both_give_the_same(l->get<double>(), t->get<double>());
+            check_both_give_the_same((cbor::at_path<"$", std::int64_t>(tagged)), (cbor::at_path<"$", std::int64_t>(text)));
+            check_both_give_the_same((cbor::at_path<"$", double>(tagged)), (cbor::at_path<"$", double>(text)));
             auto const tree = cbor::decode(tagged);
             REQUIRE(tree.has_value());
             CHECK_EQ((*tree)->type, l->type().value());
@@ -150,9 +150,9 @@ TEST_CASE("self-described CBOR: a tag 55799 in the content of a bignum or a type
             std::string const map_tagged = "\xa1" + tagged + "\x05";
             std::string const map_text = "\xa1" + text + "\x05";
             if (bignum == '\xc2')
-                same((cbor::at_path<"$[1]", std::int64_t>(map_tagged)), (cbor::at_path<"$[1]", std::int64_t>(map_text)));
+                check_both_give_the_same((cbor::at_path<"$[1]", std::int64_t>(map_tagged)), (cbor::at_path<"$[1]", std::int64_t>(map_text)));
             else
-                same((cbor::at_path<"$[-2]", std::int64_t>(map_tagged)), (cbor::at_path<"$[-2]", std::int64_t>(map_text)));
+                check_both_give_the_same((cbor::at_path<"$[-2]", std::int64_t>(map_tagged)), (cbor::at_path<"$[-2]", std::int64_t>(map_text)));
             std::string const array_tagged = "\x81" + tagged;
             std::string const array_text = "\x81" + text;
             auto const fa = cbor::lazy::adopt(std::string(array_tagged))->at_path<"$[?@ == 1]", cbor::nodelist>();
@@ -189,7 +189,7 @@ TEST_CASE("self-described CBOR: at_path reads through a leading tag 55799")
     CHECK_EQ(**text, "hi"sv);
     auto const l = test::make_lazy_from_copy(document);
     REQUIRE(l.has_value());
-    auto const v = test::at_path("$.a"sv, *l);
+    auto const v = test::read_value_at_path("$.a"sv, *l);
     REQUIRE(v.has_value());
     CHECK(*v == A(5, 6));
 }

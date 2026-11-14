@@ -18,7 +18,7 @@ TEST_CASE("doc readme: set limits")
     constexpr int one_above_the_limit = 101;
     for (int i = 0; i < one_above_the_limit; ++i)
         a.push_back(test::V(i));
-    std::string const bytes = test::preferred(test::value{std::move(a)});
+    std::string const bytes = test::encode_in_preferred_form(test::value{std::move(a)});
     auto const n = test::make_lazy_from_copy(bytes).value().size();
     CHECK_EQ(n.error(), cbor::error::container_elements_exceeded);
 }

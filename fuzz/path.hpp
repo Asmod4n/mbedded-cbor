@@ -446,7 +446,7 @@ inline void path_target(std::string_view const input)
     typed_reads_check<"$['a'][-1]['b']">(whole, {"a", std::int64_t{-1}, "b"});
 
     if (auto const any = test::make_lazy_from_copy(std::string(1, '\0'))) {
-        (void)test::at_path(input, *any);
+        (void)test::read_value_at_path(input, *any);
         (void)test::query(input, *any);
     }
 
@@ -464,7 +464,7 @@ inline void path_target(std::string_view const input)
     query const q = query_from(pin, keys);
     auto const root = test::make_lazy_from_copy(std::string{document});
     require(root.has_value());
-    auto found = test::at_path(q.text, *root);
+    auto found = test::read_value_at_path(q.text, *root);
     if (!found && found.error() == cbor::error::not_singular_query)
         found = test::query(q.text, *root);
     if (!q.valid)
@@ -477,7 +477,7 @@ inline void path_target(std::string_view const input)
     }
     require(found.has_value() == expected.has_value());
     if (found)
-        require(same(*found, *expected));
+        require(values_are_the_same(*found, *expected));
 }
 
 } // namespace fuzz

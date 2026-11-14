@@ -9,13 +9,13 @@
 TEST_CASE("path edn numbers: the long decimal floats of RFC 8949 Appendix A")
 {
     if (from_chars_reads_double) {
-        selects("3.4028234663852886e+38", "fa7f7fffff");
-        selects("1.0e+300", "fb7e37e43c8800759c");
-        selects("5.960464477539063e-8", "f90001");
+        check_literal_selects_key("3.4028234663852886e+38", "fa7f7fffff");
+        check_literal_selects_key("1.0e+300", "fb7e37e43c8800759c");
+        check_literal_selects_key("5.960464477539063e-8", "f90001");
     } else {
-        refused("3.4028234663852886e+38");
-        refused("1.0e+300");
-        refused("5.960464477539063e-8");
+        check_literal_is_refused("3.4028234663852886e+38");
+        check_literal_is_refused("1.0e+300");
+        check_literal_is_refused("5.960464477539063e-8");
     }
 }
 
@@ -24,15 +24,15 @@ TEST_CASE("path edn numbers: the long decimal floats of RFC 8949 Appendix A")
 // 2.5e-324 round to the smallest subnormal binary64.
 TEST_CASE("path edn numbers: decimal floats rounded to the nearest binary64")
 {
-    selects("0.1", "fb3fb999999999999a");
+    check_literal_selects_key("0.1", "fb3fb999999999999a");
     if (from_chars_reads_double) {
-        selects("1.000000000000000000000001", "f93c00");
-        selects("5e-324", "fb0000000000000001");
-        selects("2.5e-324", "fb0000000000000001");
+        check_literal_selects_key("1.000000000000000000000001", "f93c00");
+        check_literal_selects_key("5e-324", "fb0000000000000001");
+        check_literal_selects_key("2.5e-324", "fb0000000000000001");
     } else {
-        refused("1.000000000000000000000001");
-        refused("5e-324");
-        refused("2.5e-324");
+        check_literal_is_refused("1.000000000000000000000001");
+        check_literal_is_refused("5e-324");
+        check_literal_is_refused("2.5e-324");
     }
 }
 
@@ -41,10 +41,10 @@ TEST_CASE("path edn numbers: decimal floats rounded to the nearest binary64")
 // rounds at each step and reaches 0. 0x1p-1074 is the smallest subnormal exactly, and 0x1.8p1023 is exact too.
 TEST_CASE("path edn numbers: a hexadecimal float with a subnormal result rounds once")
 {
-    selects("0x5p-1077", "fb0000000000000001");
-    selects("0x1p-1074", "fb0000000000000001");
-    selects("0x3p-1076", "fb0000000000000001");
-    selects("0x1.8p1023", "fb7fe8000000000000");
+    check_literal_selects_key("0x5p-1077", "fb0000000000000001");
+    check_literal_selects_key("0x1p-1074", "fb0000000000000001");
+    check_literal_selects_key("0x3p-1076", "fb0000000000000001");
+    check_literal_selects_key("0x1.8p1023", "fb7fe8000000000000");
 }
 
 // 5.1, note on decnumber: the range needs to fit a binary64. A value beyond the largest finite binary64, or below
@@ -52,5 +52,5 @@ TEST_CASE("path edn numbers: a hexadecimal float with a subnormal result rounds 
 TEST_CASE("path edn numbers: decimal floats outside the range of a binary64")
 {
     for (std::string_view const l : {"1e400"sv, "-1e400"sv, "2e-324"sv, "1e-400"sv})
-        refused(l);
+        check_literal_is_refused(l);
 }

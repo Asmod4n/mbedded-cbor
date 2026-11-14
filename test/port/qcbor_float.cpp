@@ -75,7 +75,7 @@ std::string not_preferred(T const value)
 }
 
 template <class T>
-std::string preferred(T const value)
+std::string encode_in_preferred_form(T const value)
 {
     auto const out = cbor::structs<T>::encode(value);
     REQUIRE(out.has_value());
@@ -95,7 +95,7 @@ struct double_test_case {
     std::string not_preferred;
 };
 
-// DoubleTestCases: each double with its preferred and its not-preferred (64-bit) encoding. The CDE and dCBOR columns
+// DoubleTestCases: each double with its preferred and its not-encode_in_preferred_form (64-bit) encoding. The CDE and dCBOR columns
 // of upstream are not ported: upstream calls them a guess, and mbedded-cbor has no encoder for them.
 std::vector<double_test_case> const double_test_cases = {
     {0.0, as_string({0xf9, 0x00, 0x00}), as_string({0xfb, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})},
@@ -209,7 +209,7 @@ TEST_CASE("qcbor FloatValuesTests: doubles encode in preferred and 64-bit form, 
     for (auto const &c : double_test_cases) {
         double const number = c.number;
         CAPTURE(number);
-        CHECK_EQ(test::hexlify(preferred(c.number)), test::hexlify(c.preferred));
+        CHECK_EQ(test::hexlify(encode_in_preferred_form(c.number)), test::hexlify(c.preferred));
         CHECK_EQ(test::hexlify(not_preferred(c.number)), test::hexlify(c.not_preferred));
         for (std::string const &in : {c.preferred, c.not_preferred}) {
             auto const d = double_of(in);
@@ -227,7 +227,7 @@ TEST_CASE("qcbor FloatValuesTests: NaNs keep their payload in preferred and 64-b
         std::uint64_t const bits = c.bits;
         CAPTURE(bits);
         double const nan = std::bit_cast<double>(c.bits);
-        CHECK_EQ(test::hexlify(preferred(nan)), test::hexlify(c.preferred));
+        CHECK_EQ(test::hexlify(encode_in_preferred_form(nan)), test::hexlify(c.preferred));
         CHECK_EQ(test::hexlify(not_preferred(nan)), test::hexlify(c.not_preferred));
         for (std::string const &in : {c.preferred, c.not_preferred}) {
             auto const d = double_of(in);
@@ -302,24 +302,24 @@ TEST_CASE("qcbor GeneralFloatEncodeTests: floats in preferred and full width for
         return written([t](cbor::encoder<std::string> &e) { REQUIRE(e.text_string(t).has_value()); });
     };
     std::string out = written([](cbor::encoder<std::string> &e) { REQUIRE(e.array(11).has_value()); });
-    out += preferred(0.0);
-    out += preferred(3.14);
+    out += encode_in_preferred_form(0.0);
+    out += encode_in_preferred_form(3.14);
     out += not_preferred(0.0);
     out += not_preferred(std::bit_cast<double>(std::uint64_t{0x7ff8000000000000}));
     out += not_preferred(limits::infinity());
-    out += preferred(0.0f);
-    out += preferred(3.14f);
+    out += encode_in_preferred_form(0.0f);
+    out += encode_in_preferred_form(3.14f);
     out += not_preferred(0.0f);
     out += not_preferred(std::bit_cast<float>(std::uint32_t{0x7fc00000}));
     out += not_preferred(limits_f::infinity());
     out += written([](cbor::encoder<std::string> &e) { REQUIRE(e.map(8).has_value()); });
-    out += key(100) + preferred(0.0);
-    out += key(101) + preferred(3.1415926);
-    out += text("euler") + preferred(2.71828182845904523536);
+    out += key(100) + encode_in_preferred_form(0.0);
+    out += key(101) + encode_in_preferred_form(3.1415926);
+    out += text("euler") + encode_in_preferred_form(2.71828182845904523536);
     out += key(105) + not_preferred(0.0);
-    out += key(102) + preferred(0.0f);
-    out += key(103) + preferred(3.1415926f);
-    out += text("euler2") + preferred(2.71828182845904523536f);
+    out += key(102) + encode_in_preferred_form(0.0f);
+    out += key(103) + encode_in_preferred_form(3.1415926f);
+    out += text("euler2") + encode_in_preferred_form(2.71828182845904523536f);
     out += key(106) + not_preferred(0.0f);
     CHECK_EQ(test::hexlify(out), test::hexlify(expected_floats));
 }

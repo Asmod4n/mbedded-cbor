@@ -39,7 +39,7 @@ TEST_CASE("doc advanced runtime: lazy::adopt and lazy::view in every form")
     REQUIRE(a.has_value());
     CHECK_EQ(a->encoded().data(), data);
     auto const b = test::make_lazy_from_copy(std::string_view{kept});
-    auto const held = std::make_shared<std::string const>(preferred(A(1, 2)));
+    auto const held = std::make_shared<std::string const>(encode_in_preferred_form(A(1, 2)));
     auto const c = cbor::lazy::view(held);
     REQUIRE(b.has_value());
     CHECK_NE(b->encoded().data(), kept.data());
@@ -56,7 +56,7 @@ TEST_CASE("doc advanced runtime: lazy::adopt and lazy::view in every form")
 // The section "Steps and searches in a map or an array" shows each step and each search.
 TEST_CASE("doc advanced runtime: steps and searches")
 {
-    auto const doc = *test::make_lazy_from_copy(preferred(M("cars"s, A(M("hp"s, 5), M("hp"s, 7)), 7, "seven"s)));
+    auto const doc = *test::make_lazy_from_copy(encode_in_preferred_form(M("cars"s, A(M("hp"s, 5), M("hp"s, 7)), 7, "seven"s)));
     auto const seven = doc.at(cbor::key{7})->get<std::string_view>();
     CHECK_EQ(**seven, "seven"sv);
     CHECK_EQ(*doc.size(), 2u);
@@ -83,7 +83,7 @@ TEST_CASE("doc advanced runtime: keys")
 // The section "elements and entries" shows both views with a loop and with a standard view.
 TEST_CASE("doc advanced runtime: elements and entries")
 {
-    auto const l = *test::make_lazy_from_copy(preferred(A(1, "a"s, A(2))));
+    auto const l = *test::make_lazy_from_copy(encode_in_preferred_form(A(1, "a"s, A(2))));
     std::vector<std::expected<std::int64_t, error>> read;
     for (auto const e : *l.elements())
         read.push_back(e->get<std::int64_t>());
@@ -92,7 +92,7 @@ TEST_CASE("doc advanced runtime: elements and entries")
     CHECK_EQ(read[1].error(), error::incorrect_type);
     CHECK_EQ(read[2].error(), error::incorrect_type);
     CHECK_EQ(l.elements()->size(), 3u);
-    auto const m = *test::make_lazy_from_copy(preferred(M("a"s, 1, 2, "b"s)));
+    auto const m = *test::make_lazy_from_copy(encode_in_preferred_form(M("a"s, 1, 2, "b"s)));
     std::vector<value> keys;
     for (auto const p : *m.entries())
         keys.push_back(*test::make_value_from_item(p->first));
@@ -126,7 +126,7 @@ TEST_CASE("doc advanced runtime: an error repeats at each later position")
 // A user did not know that an algorithm takes the view directly and that -> works on each element.
 TEST_CASE("doc advanced runtime: an algorithm over elements")
 {
-    auto const people = *test::make_lazy_from_copy(preferred(A(M("age"s, 31), M("age"s, 20), M("age"s, 40))));
+    auto const people = *test::make_lazy_from_copy(encode_in_preferred_form(A(M("age"s, 31), M("age"s, 20), M("age"s, 40))));
     CHECK_EQ(std::ranges::count_if(*people.elements(), [](std::expected<cbor::lazy, cbor::error> const &e) {
                  auto const age = e->at("age");
                  return age && age->get<std::int64_t>().value_or(0) > 30;
@@ -161,7 +161,7 @@ TEST_CASE("doc advanced runtime: get")
 // The section "clone and decode" shows the item of an array, its children, an error, and type().
 TEST_CASE("doc advanced runtime: clone and decode")
 {
-    auto const owner = std::make_shared<std::string const>(preferred(A(1, M("a"s, 2))));
+    auto const owner = std::make_shared<std::string const>(encode_in_preferred_form(A(1, M("a"s, 2))));
     auto const tree = cbor::lazy::view(owner)->clone();
     REQUIRE(tree.has_value());
     CHECK_EQ((*tree)->type, cbor::type::array);
@@ -273,7 +273,7 @@ TEST_CASE("doc advanced runtime: a NaN keeps its bits")
 // sequence for each element.
 TEST_CASE("doc advanced runtime: cbor::sequence")
 {
-    std::string const bytes = preferred(V(1)) + preferred(V("a"s)) + preferred(A(1, 2));
+    std::string const bytes = encode_in_preferred_form(V(1)) + encode_in_preferred_form(V("a"s)) + encode_in_preferred_form(A(1, 2));
     auto const owner = std::make_shared<std::string const>(bytes);
     std::vector<std::string_view> items;
     for (auto const e : cbor::sequence{owner})

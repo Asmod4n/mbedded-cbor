@@ -307,7 +307,7 @@ inline std::string encode_with_schema(auto const &value)
 // The tests of one path open the message with the copying form of path and read one leaf. A text is copied into a
 // std::string, because the copy that path made ends with this function.
 template <class T, cbor::fixed_string Path, class... Index>
-auto at_path(std::string_view const bytes, Index const... indexes)
+auto read_leaf_with_copying_path(std::string_view const bytes, Index const... indexes)
 {
     using X = std::remove_cvref_t<decltype(*std::declval<typename form<T>::template accessor<> const &>().template at_path<Path>(indexes...))>;
     using Y = std::conditional_t<std::same_as<X, std::string_view>, std::string,
@@ -326,7 +326,7 @@ auto at_path(std::string_view const bytes, Index const... indexes)
 
 // The view form: the caller keeps the owner alive, so a text stays a view into the message.
 template <class T, cbor::fixed_string Path, class... Index>
-auto at_path(std::shared_ptr<std::string const> const &owner, Index const... indexes)
+auto read_leaf_with_copying_path(std::shared_ptr<std::string const> const &owner, Index const... indexes)
     -> decltype(std::declval<typename form<T>::template accessor<> const &>().template at_path<Path>(indexes...))
 {
     auto const root = form<T>::path(owner);
@@ -1180,7 +1180,7 @@ probe const sample_probe{true, -300, 1ull << 40, 2.5, -1.5f, wide_integer{-5}, {
                          {{17, 1.5f}, {18, 2.0f}}, -9, {300, 1800}, {{7, 8}}};
 
 template <class = void>
-bool lies_inside(std::string_view const part, std::string_view const message)
+bool part_lies_inside_message(std::string_view const part, std::string_view const message)
 {
     std::less<char const *> const before;
     return part.empty() || (!before(part.data(), message.data()) &&
@@ -1457,7 +1457,7 @@ namespace schema_types
 
 
 template <class = void>
-bool same(gauge const &a, gauge const &b)
+bool gauges_are_the_same(gauge const &a, gauge const &b)
 {
     return a.on == b.on && a.shade == b.shade && a.at.x == b.at.x && a.at.y == b.at.y && a.range == b.range;
 }
