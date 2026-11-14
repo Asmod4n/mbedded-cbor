@@ -1310,7 +1310,7 @@ inline path::exact_number path::number_of(heads::head const &n)
         return {false, true, false, n.argument, 0.0};
     if (n.major == major_type::negative_integer)
         return {false, true, true, n.argument, 0.0};
-    double const d = heads::decode_float(n.info, n.argument);
+    double const d = ieee754::decode_float(n.info, n.argument);
     if (std::isnan(d))
         return {true, false, false, 0, d};
     if (std::trunc(d) != d || d >= two_to_the_64 || d < -two_to_the_64)

@@ -1249,7 +1249,7 @@ public:
         requires(std::numeric_limits<T>::is_iec559 &&
                  (sizeof(T) == sizeof(std::uint32_t) || sizeof(T) == sizeof(std::uint64_t) ||
                   (sizeof(T) == sizeof(std::uint16_t) &&
-                   std::numeric_limits<T>::digits == heads::half_precision.significand_bits + 1)))
+                   std::numeric_limits<T>::digits == ieee754::half_precision.significand_bits + 1)))
     std::expected<void, error> floating_point(T const value)
     {
         throw_logic_error_if_unusable();
@@ -1405,15 +1405,15 @@ inline encoding::head_parts encoding::head_of(item const &node)
         break;
     case cbor::type::half_float:
         head.info = std::to_underlying(rfc8949::simple_float_information::half_precision_float);
-        head.argument = heads::encode_float(rfc8949::simple_float_information::half_precision_float, node.via.f64);
+        head.argument = ieee754::encode_float(rfc8949::simple_float_information::half_precision_float, node.via.f64);
         break;
     case cbor::type::single_float:
         head.info = std::to_underlying(rfc8949::simple_float_information::single_precision_float);
-        head.argument = heads::encode_float(rfc8949::simple_float_information::single_precision_float, node.via.f64);
+        head.argument = ieee754::encode_float(rfc8949::simple_float_information::single_precision_float, node.via.f64);
         break;
     case cbor::type::double_float:
         head.info = std::to_underlying(rfc8949::simple_float_information::double_precision_float);
-        head.argument = heads::encode_float(rfc8949::simple_float_information::double_precision_float, node.via.f64);
+        head.argument = ieee754::encode_float(rfc8949::simple_float_information::double_precision_float, node.via.f64);
         break;
     case cbor::type::unsigned_integer:
     case cbor::type::negative_integer:

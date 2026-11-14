@@ -174,7 +174,7 @@ std::expected<void, error> tree_decoder<Resolve>::decode_scalar(item &node, head
         case rfc8949::simple_float_information::half_precision_float:
         case rfc8949::simple_float_information::single_precision_float:
         case rfc8949::simple_float_information::double_precision_float:
-            node.via.f64 = heads::decode_float(h.info, h.argument);
+            node.via.f64 = ieee754::decode_float(h.info, h.argument);
             return {};
         default:
             node.via.simple_value = static_cast<simple_value>(h.argument);

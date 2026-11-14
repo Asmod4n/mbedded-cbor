@@ -483,7 +483,7 @@ class extended_diagnostic_notation
     {
         bool const nan = value != value;
         bool const infinite = !nan && (value > std::numeric_limits<double>::max() || value < -std::numeric_limits<double>::max());
-        rfc8949::simple_float_information const preferred = heads::preferred_float_info(value);
+        rfc8949::simple_float_information const preferred = ieee754::preferred_float_info(value);
         int info;
         if (indicator == no_indicator)
             info = std::to_underlying(preferred);
@@ -501,7 +501,7 @@ class extended_diagnostic_notation
         std::uint64_t const argument =
             nan ? quiet_nan[static_cast<std::size_t>(
                       info - std::to_underlying(rfc8949::simple_float_information::half_precision_float))]
-                : heads::encode_float(static_cast<rfc8949::simple_float_information>(info), value);
+                : ieee754::encode_float(static_cast<rfc8949::simple_float_information>(info), value);
         return append_head(out, major_type::simple_float, argument, info);
     }
 
@@ -1033,11 +1033,11 @@ class extended_diagnostic_notation
         }
         if (h->info > double_precision_float) [[unlikely]]
             return std::unexpected(error::syntax_error);
-        heads::float_key const key = heads::float_key_of(h->info, h->argument);
+        ieee754::float_key const key = ieee754::float_key_of(h->info, h->argument);
         if (key.nan) {
             if (auto const r = append_head(out, major_type::simple_float,
-                                           key.widened | std::uint64_t{heads::double_precision.exponent_max}
-                                                             << heads::double_precision.significand_bits,
+                                           key.widened | std::uint64_t{ieee754::double_precision.exponent_max}
+                                                             << ieee754::double_precision.significand_bits,
                                            double_precision_float);
                 !r) [[unlikely]]
                 return std::unexpected(r.error());
@@ -1144,7 +1144,7 @@ class extended_diagnostic_notation
     {
         std::size_t const width =
             info - std::to_underlying(rfc8949::simple_float_information::half_precision_float);
-        double const value = heads::decode_float(info, argument);
+        double const value = ieee754::decode_float(info, argument);
         std::string const indicator =
             width == 0 ? std::string{} : std::string{'_', static_cast<char>('1' + width)};
         if (std::isnan(value)) {
@@ -1157,7 +1157,7 @@ class extended_diagnostic_notation
             return "float'" + hex_of(bytes) + "'";
         }
         std::size_t const preferred =
-            std::to_underlying(heads::preferred_float_info(value)) -
+            std::to_underlying(ieee754::preferred_float_info(value)) -
             std::to_underlying(rfc8949::simple_float_information::half_precision_float);
         return number_of(value) + (width == preferred ? std::string{} : indicator);
     }

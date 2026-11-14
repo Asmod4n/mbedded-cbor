@@ -133,6 +133,8 @@ class rfc8949
 
     friend class heads;
 
+    friend class ieee754;
+
     friend class sequence_reader;
 
     friend class well_formedness;

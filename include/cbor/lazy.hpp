@@ -957,9 +957,9 @@ detail::validity::intern_key(canonical_ids &ids, Message const &message, offset 
             return std::unexpected(c);
         return scalar(kind::simple, h->argument, {}, h->at);
     }
-    heads::float_key const p = heads::float_key_of(h->info, h->argument);
+    ieee754::float_key const p = ieee754::float_key_of(h->info, h->argument);
     if (p.nan) {
-        constexpr std::uint64_t significand = (std::uint64_t{1} << heads::double_precision.significand_bits) - 1u;
+        constexpr std::uint64_t significand = (std::uint64_t{1} << ieee754::double_precision.significand_bits) - 1u;
         return scalar(kind::nan, p.widened & significand, {}, h->at);
     }
     return scalar(kind::floating, std::bit_cast<std::uint64_t>(p.value == 0.0 ? 0.0 : p.value), {}, h->at);
@@ -1090,11 +1090,11 @@ std::expected<bool, error> detail::validity::keys_equivalent(First const &first,
         return false;
     if (!h_float)
         return h->argument == k->argument;
-    heads::float_key const p = heads::float_key_of(h->info, h->argument);
-    heads::float_key const q = heads::float_key_of(k->info, k->argument);
+    ieee754::float_key const p = ieee754::float_key_of(h->info, h->argument);
+    ieee754::float_key const q = ieee754::float_key_of(k->info, k->argument);
     if (p.nan || q.nan) {
         constexpr std::uint64_t significand =
-            (std::uint64_t{1} << heads::double_precision.significand_bits) - 1u;
+            (std::uint64_t{1} << ieee754::double_precision.significand_bits) - 1u;
         return p.nan && q.nan && (p.widened & significand) == (q.widened & significand);
     }
     return p.value == q.value;

@@ -349,7 +349,7 @@ class reflection
     template <class E>
     static constexpr bool is_typed_array_float = requires {
         requires std::is_floating_point_v<E> && std::numeric_limits<E>::is_iec559;
-        requires(sizeof(E) == sizeof(std::uint16_t) && std::numeric_limits<E>::digits == heads::half_precision.significand_bits + 1) ||
+        requires(sizeof(E) == sizeof(std::uint16_t) && std::numeric_limits<E>::digits == ieee754::half_precision.significand_bits + 1) ||
                     (sizeof(E) == sizeof(float) && std::numeric_limits<E>::digits == std::numeric_limits<float>::digits) ||
                     (sizeof(E) == sizeof(double) &&
                      std::numeric_limits<E>::digits == std::numeric_limits<double>::digits);
@@ -2042,7 +2042,7 @@ class reflection
                 return static_cast<U>(std::bit_cast<F>(bits));
 #else
                 if constexpr (sizeof(B) == sizeof(std::uint16_t))
-                    return static_cast<U>(heads::float_decode_binary16(bits));
+                    return static_cast<U>(ieee754::float_decode_binary16(bits));
                 else
                     return static_cast<U>(
                         std::bit_cast<std::conditional_t<sizeof(B) == sizeof(std::uint32_t), float,
