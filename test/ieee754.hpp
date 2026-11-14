@@ -28,4 +28,19 @@ inline constexpr int binary16_sign_bit = 15;
 inline constexpr int binary32_sign_bit = 31;
 inline constexpr int binary64_sign_bit = 63;
 
+
+// RFC 8949 2.2 and 4.1: a NaN of a shorter form becomes a NaN of binary64 when its significand is zero-extended on the
+// right. The sign stays, the exponent field is all ones.
+constexpr std::uint64_t bits_of_half_nan_widened_to_double(std::uint16_t const half)
+{
+    constexpr std::uint64_t binary64_exponent_all_ones = 0x7ff0000000000000;
+    constexpr std::uint64_t half_significand_mask = 0x3ff;
+    constexpr int widening_shift = 52 - 10;
+    return std::uint64_t{static_cast<std::uint16_t>(half >> binary16_sign_bit)} << binary64_sign_bit |
+           binary64_exponent_all_ones | (half & half_significand_mask) << widening_shift;
+}
+
+// The positive quiet NaN of binary64 without a payload (IEEE 754-2019 6.2.1).
+inline constexpr std::uint64_t binary64_quiet_nan_bits = 0x7ff8000000000000;
+
 }
