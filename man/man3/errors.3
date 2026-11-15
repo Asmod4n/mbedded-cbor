@@ -75,7 +75,7 @@ Each value is one enumerator of \fR\fBcbor::error\fP\fP\&.
 .IP "\(bu" 2
 \fRreserved_simple_value\fP: an encode meets a simple value from 24 to 31\&.
 .IP "\(bu" 2
-\fRunsupported_value\fP: the encoder meets a typed array with a reserved tag, or a tag outside RFC 8746; \fR\fBcbor::encode()\fP\fP writes a tag 29 only with \fR\fBcbor::cycles\fP\fP\&.
+\fRunsupported_value\fP: the encoder meets a typed array with a reserved tag, or a tag outside RFC 8746; \fR\fBcbor::encode()\fP\fP writes no tag 29; \fR\fBcbor::encode_cycles()\fP\fP writes it\&.
 .IP "\(bu" 2
 \fRnot_indexable\fP: a key or an index meets an item that is not a map or an array\&.
 .IP "\(bu" 2
@@ -111,7 +111,7 @@ Each value is one enumerator of \fR\fBcbor::error\fP\fP\&.
 .IP "\(bu" 2
 \fRnot_singular_query\fP: \fRcbor::path::compile<T>\fP gets a path that is not singular, and \fRT\fP is not \fRnodelist\fP\&.
 .IP "\(bu" 2
-\fRamplification_limit_breach\fP: \fR\fBcbor::encode()\fP\fP with \fR\fBcbor::cycles\fP\fP would write more than \fR\fBcbor::limits::maximum_amplification\fP\fP times the size of the tree, past \fR\fBcbor::limits::amplification_activation_threshold\fP\fP\&.
+\fRamplification_limit_breach\fP: \fR\fBcbor::encode_cycles()\fP\fP would write more than \fR\fBcbor::limits::maximum_amplification\fP\fP times the size of the tree, past \fR\fBcbor::limits::amplification_activation_threshold\fP\fP\&.
 .PP
 .SH "THE CONVERSION TO std::error_code"
 .PP
@@ -163,7 +163,7 @@ Each limit is a \fRstatic constexpr\fP member of \fR\fBcbor::limits\fP\fP\&. No 
 A macro that the build does not set takes its default\&. The default of the first two limits is \fRSIZE_MAX\fP\&. A limit at \fRSIZE_MAX\fP is not set, and its check is not in the program\&. Every translation unit of one program uses the same values\&. A value that does not fit \fRstd::size_t\fP does not compile\&.
 
 .PP
-\fR\fBcbor::encode()\fP\fP with \fR\fBcbor::cycles\fP\fP gives \fRamplification_limit_breach\fP, and writes nothing, when the output would be larger than \fR\fBcbor::limits::amplification_activation_threshold\fP\fP and than \fR\fBcbor::limits::maximum_amplification\fP\fP times the tree\&.
+\fR\fBcbor::encode_cycles()\fP\fP gives \fRamplification_limit_breach\fP, and writes nothing, when the output would be larger than \fR\fBcbor::limits::amplification_activation_threshold\fP\fP and than \fR\fBcbor::limits::maximum_amplification\fP\fP times the tree\&.
 
 .PP
 A limit counts what a call reads or decodes\&. An item that a call only skips does not count\&. The error comes at the read that meets the value\&. A count in the input reserves no memory\&. The library does not bound the size of the input\&. The program bounds it before it calls the library\&.

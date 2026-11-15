@@ -14,10 +14,6 @@ decode \- a decoded tree of CBOR and the encoder
 .br
 .RI "One node of a tree from \fBcbor::decode()\fP or \fR\fBlazy::clone\fP\fP\&. "
 .ti -1c
-.RI "struct \fBcbor::cycles_t\fP"
-.br
-.RI "Selects the encode that writes each cycle of a tree with tags 28 and 29 (RFC 8949 3\&.4, IANA tags 28 and 29)\&. "
-.ti -1c
 .RI "class \fBcbor::iov_writer\fP"
 .br
 .RI "A target of \fBcbor::encoder\fP that collects pieces, not one buffer\&. "
@@ -42,7 +38,7 @@ decode \- a decoded tree of CBOR and the encoder
 .br
 .RI "Writes the tree at \fRroot\fP and gives the count of bytes written\&. "
 .ti -1c
-.RI "template<class Target> std::expected< std::size_t, \fBerror\fP > \fBcbor::encode\fP (\fBitem\fP const &root, Target &&target, \fBcycles_t\fP)"
+.RI "template<class Target> std::expected< std::size_t, \fBerror\fP > \fBcbor::encode_cycles\fP (\fBitem\fP const &root, Target &&target)"
 .br
 .RI "Writes the tree at \fRroot\fP with tags 28 and 29 for each cycle and gives the count of bytes written\&. "
 .ti -1c
@@ -50,17 +46,9 @@ decode \- a decoded tree of CBOR and the encoder
 .br
 .RI "Writes the tree at \fRroot\fP into a list of \fRstruct iovec\fP pieces, not into one buffer\&. "
 .ti -1c
-.RI "std::expected< \fBref\fP< std::span< iovec const > >, \fBerror\fP > \fBcbor::encode_iov\fP (\fBitem\fP const &root, \fBcycles_t\fP)"
+.RI "std::expected< \fBref\fP< std::span< iovec const > >, \fBerror\fP > \fBcbor::encode_iov_cycles\fP (\fBitem\fP const &root)"
 .br
 .RI "Writes the tree at \fRroot\fP with tags 28 and 29 for each cycle into a list of \fRstruct iovec\fP pieces\&. "
-.in -1c
-.SS "Variables"
-
-.in +1c
-.ti -1c
-.RI "constexpr \fBcycles_t\fP \fBcbor::cycles\fP {}"
-.br
-.RI "The value of \fBcbor::cycles_t\fP\&. "
 .in -1c
 .SH "DESCRIPTION"
 .PP 
@@ -127,7 +115,7 @@ a writer of the program with \fRallocate\fP, \fRappend\fP and \fRdone\fP\&. An e
 .PP
 
 .PP
-\fRcbor::encode(item, target)\fP writes a tree with the additional information that each item keeps\&. Each integer, length and tag number keeps the width of its head on the wire\&. A float keeps the width of its type, and a NaN keeps its bits\&. A bignum that fits in 64 bits is written in its shortest head\&. A \fRshared_reference\fP gives \fRunsupported_value\fP\&. \fRencode(tree, out, cbor::cycles)\fP writes tags 28 and 29 only for a cycle\&. It walks the tree before it writes, depth first, and follows each \fRshared_reference\fP to its item\&. An item that the walk reaches again while it is inside that item gets a tag 28\&. Each such edge is a tag 29 with the index of that mark\&. A value that two references reach without a cycle is written in full each time\&. The path through references can be deeper than the tree, so \fRencode\fP can give \fRnesting_depth_exceeded\fP for a tree that \fR\fBcbor::decode\fP\fP gave\&. A tree of \fRclone\fP keeps tags 28 and 29 as tags, and \fRencode\fP writes them as they are\&.
+\fRcbor::encode(item, target)\fP writes a tree with the additional information that each item keeps\&. Each integer, length and tag number keeps the width of its head on the wire\&. A float keeps the width of its type, and a NaN keeps its bits\&. A bignum that fits in 64 bits is written in its shortest head\&. A \fRshared_reference\fP gives \fRunsupported_value\fP\&. \fRencode_cycles(tree, out)\fP writes tags 28 and 29 only for a cycle\&. It walks the tree before it writes, depth first, and follows each \fRshared_reference\fP to its item\&. An item that the walk reaches again while it is inside that item gets a tag 28\&. Each such edge is a tag 29 with the index of that mark\&. A value that two references reach without a cycle is written in full each time\&. The path through references can be deeper than the tree, so \fRencode\fP can give \fRnesting_depth_exceeded\fP for a tree that \fR\fBcbor::decode\fP\fP gave\&. A tree of \fRclone\fP keeps tags 28 and 29 as tags, and \fRencode\fP writes them as they are\&.
 
 .PP
 \fRcbor::encode_iov(item)\fP writes a tree into a list of pieces as \fRstruct iovec\fP, with their storage, which lives as long as the result\&. The pieces are for \fRwritev\fP, \fRsendmsg\fP, \fRIORING_OP_WRITEV\fP and \fRIORING_OP_SENDMSG\fP\&. The result is \fRstd::expected<\fBcbor::ref\fP<std::span<iovec const>>, \fBcbor::error\fP>\fP\&. The pieces are for sending only\&. Hold the result until the call returns, or until the last completion of the request comes\&. The encoder writes into blocks of 16 KiB and copies each byte once\&.
