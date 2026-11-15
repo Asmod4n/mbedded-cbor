@@ -17,22 +17,20 @@ cbor::lazy \- A position in one top-level item: the owner of the bytes, the byte
 .br
 .RI "Gives the bytes from the position of the lazy to the end of its top-level bytes\&. "
 .ti -1c
-.RI "std::expected< lazy, \fBerror\fP > \fBat\fP (std::string_view key) const"
+.RI "std::expected< lazy, \fBerror\fP > \fBat_key\fP (std::string_view key) const"
 .br
-.RI "Gives the lazy of one child\&. "
+.RI "Gives the lazy of the value of one map key\&. "
 .ti -1c
-.RI "std::expected< lazy, \fBerror\fP > \fBat\fP (key k) const"
+.RI "std::expected< lazy, \fBerror\fP > \fBat_key\fP (std::int64_t key) const"
 .br
 .ti -1c
 .RI "std::expected< lazy, \fBerror\fP > \fBat\fP (std::size_t index) const"
 .br
+.RI "Gives the lazy of one element of an array\&. "
 .ti -1c
 .RI "std::expected< lazy, \fBerror\fP > \fBoperator[]\fP (std::string_view key) const"
 .br
-.RI "Gives the same result as \fBcbor::lazy::at()\fP with the same argument\&. "
-.ti -1c
-.RI "std::expected< lazy, \fBerror\fP > \fBoperator[]\fP (key k) const"
-.br
+.RI "Gives the same result as \fBcbor::lazy::at_key()\fP with a text key, or as \fBcbor::lazy::at()\fP with an index\&. "
 .ti -1c
 .RI "std::expected< lazy, \fBerror\fP > \fBoperator[]\fP (std::size_t index) const"
 .br
