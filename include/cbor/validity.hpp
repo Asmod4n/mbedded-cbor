@@ -4,7 +4,7 @@
 // content and typed arrays. Throws std::logic_error on a wrong use, or
 // ends the process when the build has no exceptions. Gives the
 // provisional tag number of the fixed array of cbor::schema, and the
-// sizes of the blocks of the encoder and of the string saver.
+// sizes of the blocks of encode_iov and of the string saver.
 // https://www.rfc-editor.org/rfc/rfc8949
 // https://www.rfc-editor.org/rfc/rfc8746#section-2
 #pragma once

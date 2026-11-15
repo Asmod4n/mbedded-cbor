@@ -66,9 +66,6 @@ class path;
 class sequence_reader;
 
 template <class>
-class encoder;
-
-template <class>
 class structs;
 
 template <class>
@@ -724,9 +721,6 @@ class heads
     friend class cbor::path;
 
     friend class detail::canonical_ids;
-
-    template <class>
-    friend class cbor::encoder;
 
     friend struct cbor::lazy;
 

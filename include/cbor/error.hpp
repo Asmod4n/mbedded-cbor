@@ -66,8 +66,7 @@ enum class error {
     sharedref_not_defined,
     /** An encode meets a simple value from 24 to 31. */
     reserved_simple_value,
-    /** The encoder meets a typed array with a reserved tag or a tag outside RFC 8746, or a tag 29 that
-     * cbor::encode() writes. */
+    /** cbor::encode() meets a `shared_reference`. */
     unsupported_value,
     /** A key or an index meets an item that is not a map or an array. */
     not_indexable,

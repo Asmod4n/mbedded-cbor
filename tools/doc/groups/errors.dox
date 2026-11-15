@@ -27,7 +27,7 @@ Each value is one enumerator of `cbor::error`.
 - `sharedref_not_complete`: `cbor::structs` %decode meets a tag 29 that names a tag 28 in a skipped member.
 - `sharedref_not_defined`: `cbor::decode` meets a tag 29 that names a tag 28 whose content is only tags 28 and this tag 29.
 - `reserved_simple_value`: an encode meets a simple value from 24 to 31.
-- `unsupported_value`: the encoder meets a typed array with a reserved tag, or a tag outside RFC 8746; `cbor::encode()` writes no tag 29; `cbor::encode_cycles()` writes it.
+- `unsupported_value`: `cbor::encode()` meets a `shared_reference`; `cbor::encode()` writes no tag 29; `cbor::encode_cycles()` writes it.
 - `not_indexable`: a key or an index meets an item that is not a map or an array.
 - `index_out_of_bounds`: the index is outside the array.
 - `key_not_found`: the key is not in the map.

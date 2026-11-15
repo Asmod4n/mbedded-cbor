@@ -14,7 +14,7 @@ Include `<cbor/cbor.hpp>`. It includes every header of the library. The library 
 
 Each group has its own man page. Use the group that fits your task.
 
-- `mbedded-cbor-decode(3)`: `cbor::item`, `cbor::decode` and `cbor::encode`. A decoded tree and the encoder. Use it for a tree that lives on after the bytes are gone, and for CBOR that you write item by item.
+- `mbedded-cbor-decode(3)`: `cbor::item`, `cbor::decode` and `cbor::encode`. A decoded tree and its encode. Use it for a tree that lives on after the bytes are gone.
 - `mbedded-cbor-lazy(3)`: `cbor::lazy`. It reads a message in place, step by step. Use it for a message whose shape you learn while you read it.
 - `mbedded-cbor-path(3)`: `cbor::at_path`. It reads one value by its JSONPath (RFC 9535), with CBOR keys that are not text, with tags and with typed arrays. Use it for one value when you know its JSONPath.
 - `mbedded-cbor-structs(3)`: `cbor::structs<T>`. It reads any CBOR into a C++ struct and writes the struct back as CBOR. Use it for CBOR that any program wrote, read into the members of a struct.
@@ -66,10 +66,10 @@ A plain struct inside a `std::pmr` container gets no allocator, so its
 members use the default resource. A step of a `cbor::lazy`, `get` and
 `cbor::lazy::view` allocate nothing. `cbor::lazy::adopt` allocates the
 `std::shared_ptr` that holds the bytes. `clone` allocates its items.
-`cbor::diagnostic_notation` and the encoder into a `std::string` allocate the
+`cbor::diagnostic_notation` and `cbor::encode` into a `std::string` allocate the
 string.
 
-The target of the encoder chooses where the bytes go. A container of bytes, a fixed span, a `cbor::iov_writer` and a writer of your own are targets. The encoder allocates nothing when it writes into a fixed span. `cbor::item_size` and the iterator of `cbor::sequence` allocate nothing. Other calls take no allocator. A refused allocation there throws `std::bad_alloc`.
+The target of `cbor::encode` chooses where the bytes go. A container of bytes, a fixed span and a writer of your own are targets. `cbor::encode` allocates nothing when it writes into a fixed span. `cbor::item_size` and the iterator of `cbor::sequence` allocate nothing. Other calls take no allocator. A refused allocation there throws `std::bad_alloc`.
 
 @if man
 @section overview_see SEE ALSO

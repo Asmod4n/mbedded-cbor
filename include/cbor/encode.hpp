@@ -1,8 +1,7 @@
 /**
  * @file
- * Writes CBOR into a span, a byte container or a writer.
- * cbor::encoder writes one head or one value for each call.
- * cbor::encode and cbor::encode_iov write a tree of cbor::item.
+ * Writes a tree of cbor::item as CBOR into a span, a byte container or a writer, with cbor::encode, and into a list
+ * of `struct iovec` pieces, with cbor::encode_iov.
  * https://www.rfc-editor.org/rfc/rfc8949#section-3
  * https://www.rfc-editor.org/rfc/rfc8746#section-2
  */
@@ -45,11 +44,6 @@ namespace cbor
 template <class T>
 class schema;
 
-template <class Target>
-class encoder;
-
-class iov_writer;
-
 /**
  * @brief Writes the tree at `root` and gives the count of bytes written.
  *
@@ -86,7 +80,6 @@ class iov_writer;
  * @snippet doc_reference_item.cpp encode
  * @see cbor::encode_iov()
  * @see cbor::decode()
- * @see cbor::encoder
  *
  * @ingroup decode
  */
@@ -144,7 +137,6 @@ std::expected<std::size_t, error> encode_cycles(item const &root, Target &&targe
  *
  * @see cbor::encode()
  * @see cbor::encode_iov(owning<item> const &)
- * @see cbor::iov_writer
  *
  * @ingroup decode
  */
@@ -209,6 +201,10 @@ public:
 private:
     template <class Writer>
     struct binary_writer;
+
+#if __has_include(<sys/uio.h>)
+    class iov_writer;
+#endif
 
     template <class C>
     struct container_message {
@@ -279,8 +275,6 @@ private:
             return span_message<typename U::element_type>{target, 0};
         else if constexpr (byte_container<U>)
             return container_message<U>{target};
-        else if constexpr (std::same_as<U, iov_writer>)
-            return (target);
         else
             return target.allocate(hint);
     }
@@ -334,9 +328,6 @@ private:
 #endif
 
     template <class>
-    friend class cbor::encoder;
-
-    template <class>
     friend class cbor::structs;
 
     template <class>
@@ -348,9 +339,11 @@ private:
 template <class Writer>
 struct detail::encoding::binary_writer {
     static constexpr bool direct = std::same_as<Writer, detail::encoding::span_message<char>>;
-    static constexpr bool blocks = requires(Writer &w, std::size_t const n) {
-        { w.preallocate(n) } -> std::same_as<std::span<char>>;
-    };
+#if __has_include(<sys/uio.h>)
+    static constexpr bool blocks = std::same_as<Writer, detail::encoding::iov_writer>;
+#else
+    static constexpr bool blocks = false;
+#endif
 
     Writer &writer;
     std::conditional_t<direct || blocks, std::span<char>, std::array<char, inline_buffer_size>> block;
@@ -372,8 +365,6 @@ struct detail::encoding::binary_writer {
         requires blocks
     {
         block = writer.preallocate(std::max(needed, block_size));
-        detail::validity::throw_logic_error_if(
-            block.size() < needed, "cbor::encoder: the writer gave a block shorter than the item");
         used = 0;
         closed = 0;
     }
@@ -433,16 +424,6 @@ struct detail::encoding::binary_writer {
         }
     }
 
-    template <std::unsigned_integral T>
-    CBOR_ALWAYS_INLINE void put_item(char const initial, T const argument)
-    {
-        std::span<char> const out = std::span<char>(block).subspan(used);
-        out.front() = initial;
-        std::ranges::copy(std::bit_cast<std::array<char, sizeof(T)>>(std::byteswap(argument)),
-                          out.subspan(detail::heads::initial_byte_size).begin());
-        used += detail::heads::initial_byte_size + sizeof(T);
-    }
-
     CBOR_ALWAYS_INLINE std::expected<void, std::errc> encode_head(major_type const major, std::uint64_t const argument)
     {
         if (!direct && detail::validity::bytes_fit(detail::heads::head_size_max, block.size() - used)) [[likely]] {
@@ -458,13 +439,6 @@ struct detail::encoding::binary_writer {
     static void copy_into(std::span<E const> const from, std::span<char> const to)
     {
         std::ranges::copy(std::as_bytes(from), std::as_writable_bytes(to.first(from.size())).begin());
-    }
-
-    std::expected<void, std::errc> encode_byte_string(std::span<std::byte const> const bytes)
-    {
-        if (auto const r = encode_head(major_type::byte_string, bytes.size()); !r) [[unlikely]]
-            return r;
-        return encode_payload(bytes);
     }
 
     template <class E>
@@ -514,107 +488,6 @@ struct detail::encoding::binary_writer {
         }
     }
 
-    CBOR_ALWAYS_INLINE std::expected<void, std::errc> encode_text_string(std::string_view text)
-    {
-        if (auto const r = encode_head(major_type::text_string, text.size()); !r) [[unlikely]]
-            return r;
-        std::span<char> const out = block;
-        std::size_t const at = used;
-        if (text.size() <= out.size() - at) [[likely]] {
-            std::ranges::copy(text, out.subspan(at).begin());
-            used = at + text.size();
-            return {};
-        }
-        if constexpr (direct) {
-            return std::unexpected(std::errc::no_buffer_space);
-        } else if constexpr (blocks) {
-            std::size_t const first = out.size() - at;
-            std::ranges::copy(std::span(text).first(first), out.subspan(at).begin());
-            used = out.size();
-            std::string_view const rest{std::span(text).subspan(first)};
-            if (auto const r = refill(rest.size()); !r) [[unlikely]]
-                return r;
-            std::ranges::copy(rest, block.begin());
-            used = rest.size();
-            return {};
-        } else {
-            if (auto const r = flush(); !r) [[unlikely]]
-                return r;
-            written += text.size();
-            return writer.append(text);
-        }
-    }
-
-    template <class S>
-        requires std::same_as<S, std::string>
-    std::expected<void, std::errc> encode_text_string(S &&text)
-    {
-        if constexpr (blocks)
-            if (text.size() > copybreak) {
-                auto const owner = std::make_shared<std::string const>(std::move(text));
-                return encode_piece(major_type::text_string, std::as_bytes(std::span(*owner)), owner);
-            }
-        return encode_text_string(std::string_view(text));
-    }
-
-    std::expected<void, std::errc> encode_text_string(std::shared_ptr<std::string const> const text)
-    {
-        detail::validity::throw_logic_error_if_null(text,
-                                                    "cbor::encoder::encode_text_string: the string is null");
-        if constexpr (blocks)
-            if (text->size() > copybreak)
-                return encode_piece(major_type::text_string, std::as_bytes(std::span(*text)), text);
-        return encode_text_string(std::string_view(*text));
-    }
-
-    std::expected<void, std::errc> encode_text_string(ref<std::string_view> const text)
-    {
-        if constexpr (blocks)
-            if ((*text).size() > copybreak)
-                return encode_piece(major_type::text_string, std::as_bytes(std::span(*text)), text.owner);
-        return encode_text_string(*text);
-    }
-
-    template <class V>
-        requires std::same_as<V, std::vector<std::byte>>
-    std::expected<void, std::errc> encode_byte_string(V &&bytes)
-    {
-        if constexpr (blocks)
-            if (bytes.size() > copybreak) {
-                auto const owner = std::make_shared<std::vector<std::byte> const>(std::move(bytes));
-                return encode_piece(major_type::byte_string, std::span(*owner), owner);
-            }
-        return encode_byte_string(std::span<std::byte const>(bytes));
-    }
-
-    std::expected<void, std::errc> encode_byte_string(std::shared_ptr<std::vector<std::byte> const> const bytes)
-    {
-        detail::validity::throw_logic_error_if_null(bytes,
-                                                    "cbor::encoder::encode_byte_string: the bytes are null");
-        if constexpr (blocks)
-            if (bytes->size() > copybreak)
-                return encode_piece(major_type::byte_string, std::span(*bytes), bytes);
-        return encode_byte_string(std::span<std::byte const>(*bytes));
-    }
-
-    std::expected<void, std::errc> encode_byte_string(ref<std::span<std::byte const>> const bytes)
-    {
-        if constexpr (blocks)
-            if ((*bytes).size() > copybreak)
-                return encode_piece(major_type::byte_string, *bytes, bytes.owner);
-        return encode_byte_string(*bytes);
-    }
-
-    std::expected<void, std::errc> encode_piece(major_type const major, std::span<std::byte const> const piece,
-                                                std::shared_ptr<void const> owner)
-        requires blocks
-    {
-        if (auto const r = encode_head(major, piece.size()); !r) [[unlikely]]
-            return r;
-        writer.push_owner(std::move(owner));
-        return append_ref(piece);
-    }
-
     std::expected<void, std::errc> append_ref(std::span<std::byte const> const piece)
         requires blocks
     {
@@ -634,59 +507,10 @@ struct detail::encoding::binary_writer {
         closed = 0;
         return writer.release();
     }
-
-    template <std::unsigned_integral T>
-        requires(sizeof(T) <= sizeof(std::uint64_t))
-    CBOR_ALWAYS_INLINE std::expected<void, std::errc> encode_fixed_width_head(major_type const major, T const argument)
-    {
-        constexpr std::uint8_t info = static_cast<std::uint8_t>(
-            std::to_underlying(rfc8949::additional_information::one_byte_argument) + std::countr_zero(sizeof(T)));
-        if (detail::validity::bytes_fit(item_size_max, block.size() - used)) [[likely]] {
-            put_item(detail::heads::initial_byte(major, info), argument);
-            return {};
-        }
-        return encode_head(major, info, argument);
-    }
-
-    template <std::floating_point T>
-        requires(sizeof(T) == sizeof(std::uint32_t) || sizeof(T) == sizeof(std::uint64_t))
-    std::expected<void, std::errc> encode_fixed_width_float(T value)
-    {
-        return encode_fixed_width_head(
-            major_type::simple,
-            std::bit_cast<
-                std::conditional_t<sizeof(T) == sizeof(std::uint32_t), std::uint32_t, std::uint64_t>>(value));
-    }
 };
 
 #if __has_include(<sys/uio.h>)
-/**
- * @brief A target of cbor::encoder that collects pieces, not one buffer.
- *
- * The encoder writes heads and short strings into blocks of CBOR_ENCODER_BLOCK_SIZE bytes.
- * A text or a byte string longer than `CBOR_ENCODER_COPYBREAK` bytes that the program hands over with its owner becomes a piece of its own,
- * with no copy.
- * cbor::encoder::finish_iov() gives the pieces as `struct iovec`, in a `ref` that holds the blocks and the owners.
- * The pieces are for sending only, as cbor::encode_iov() says.
- * The class exists where `<sys/uio.h>` exists.
- * The class has no public member function.
- * A write after `finish_iov` throws `std::logic_error`.
- *
- * @code{.output}
- * call: cbor::iov_writer w; cbor::encoder e(w);
- * call: e.text_string(text), with text a std::shared_ptr<std::string const> of 4097 times "x"
- * call: auto const pieces = e.finish_iov()
- * (*pieces)->size(): 2, the head 79 10 01 and *text with no copy
- * sent with writev: "xxx...x", 4097 times "x"
- * @endcode
- *
- * @snippet doc_reference_item.cpp iov_writer
- * @see cbor::encode_iov()
- * @see cbor::encoder
- *
- * @ingroup decode
- */
-class iov_writer
+class detail::encoding::iov_writer
 {
     struct storage {
         std::vector<std::vector<char>> blocks;
@@ -695,18 +519,15 @@ class iov_writer
     };
 
     std::shared_ptr<storage> kept = std::make_shared<storage>();
-    bool released = false;
 
     std::span<char> preallocate(std::size_t const size)
     {
-        detail::validity::throw_logic_error_if(released, "cbor::iov_writer: a write after release");
         kept->blocks.emplace_back(size);
         return std::span(kept->blocks.back());
     }
 
     void append_ref(std::span<std::byte const> const piece)
     {
-        detail::validity::throw_logic_error_if(released, "cbor::iov_writer: a write after release");
         iovec v{};
         v.iov_base = const_cast<std::byte *>(piece.data());
         v.iov_len = piece.size();
@@ -715,7 +536,6 @@ class iov_writer
 
     void postallocate(std::span<char> const part)
     {
-        detail::validity::throw_logic_error_if(released, "cbor::iov_writer: a write after release");
         if (part.empty())
             return;
         append_ref(std::as_bytes(part));
@@ -723,14 +543,11 @@ class iov_writer
 
     void push_owner(std::shared_ptr<void const> owner)
     {
-        detail::validity::throw_logic_error_if(released, "cbor::iov_writer: a write after release");
         kept->owners.push_back(std::move(owner));
     }
 
     ref<std::span<iovec const>> release()
     {
-        detail::validity::throw_logic_error_if(released, "cbor::iov_writer: a second release");
-        released = true;
         std::span<iovec const> const pieces = kept->pieces;
         return {std::move(kept), pieces};
     }
@@ -738,638 +555,6 @@ class iov_writer
     friend class detail::encoding;
 };
 #endif
-
-/**
- * @brief Writes CBOR one data item per call, in the order of the bytes.
- *
- * The encoder counts nothing: the counts of `array` and `map` come from the program.
- * The target is one of these:
- * - a container of bytes, for example `std::string`: the encoder appends;
- * - a `std::span` of bytes: the encoder writes into it and allocates nothing;
- * - a cbor::iov_writer: the encoder gives pieces;
- * - an object with `allocate(std::size_t)`, which gives a writer with `append(std::string_view)` and
- *   `done(std::size_t)`.
- *
- * The encoder does not write tags 28 and 29.
- * Each call gives `std::expected<void, error>`.
- * After an error, and after cbor::encoder::finish(), each call throws `std::logic_error`.
- * A copy does not compile.
- *
- * @code{.example}
- * bytes: a1 61 61 18 05
- * call: std::string out;
- * result: ""
- * call: cbor::encoder e(out);
- * result: encoder over a std::string
- * call: e.map(1)
- * result: void
- * call: e.text_string("a")
- * result: void
- * call: e.unsigned_integer(std::uint8_t{5})
- * result: void
- * call: e.finish()
- * result: 5
- * call: out
- * result: 5 bytes: a1 61 61 18 05
- * @endcode
- *
- * @snippet doc_reference_item.cpp encoder
- * @see cbor::encoder::finish()
- * @see cbor::encode()
- *
- * @ingroup decode
- */
-template <class Target>
-class encoder
-{
-    static constexpr bool pieces = std::same_as<Target, iov_writer>;
-
-    using message_type = decltype(detail::encoding::message_of(std::declval<Target &>(), 0));
-
-    message_type message;
-    detail::encoding::binary_writer<std::remove_reference_t<message_type>> out;
-    bool usable = true;
-
-    void throw_logic_error_if_unusable() const
-    {
-        detail::validity::throw_logic_error_if(!usable,
-                                               "cbor::encoder: a call after an error or after finish");
-    }
-
-    std::expected<void, error> written(std::expected<void, std::errc> const r)
-    {
-        if (!r) [[unlikely]] {
-            usable = false;
-            return std::unexpected(detail::validity::writer_error(r.error()));
-        }
-        return {};
-    }
-
-    std::expected<void, error> refused(error const e)
-    {
-        usable = false;
-        return std::unexpected(e);
-    }
-
-    template <class T>
-    static constexpr bool integer_argument =
-        std::unsigned_integral<T> && !std::same_as<T, bool> && !std::same_as<T, char> && !std::same_as<T, wchar_t> &&
-        !std::same_as<T, char8_t> && !std::same_as<T, char16_t> && !std::same_as<T, char32_t>;
-
-public:
-    explicit encoder(Target &target)
-        requires(!pieces && !requires { typename Target::element_type; })
-        : message(detail::encoding::message_of(target, 0)), out(message)
-    {
-    }
-
-    explicit encoder(Target const target)
-        requires requires { typename Target::element_type; }
-        : message(detail::encoding::message_of(target, 0)), out(message)
-    {
-    }
-
-    explicit encoder(Target &target)
-        requires pieces
-        : message(detail::encoding::message_of(target, 0)), out(message)
-    {
-    }
-
-    encoder(encoder const &) = delete;
-    encoder &operator=(encoder const &) = delete;
-
-    /**
-     * @brief Writes `value` as an unsigned integer (major type 0).
-     *
-     * The head takes the width of `T`: one byte of argument for `std::uint8_t`, eight for `std::uint64_t`, also when
-     * a shorter head holds the value.
-     * `T` is an unsigned integer type.
-     * `bool` and the character types do not compile.
-     * `no_buffer_space` over a span that is too short.
-     * The error of a writer.
-     * A call after an error or after `finish` throws `std::logic_error`.
-     *
-     * @code{.example}
-     * bytes: 19 00 05
-     * call: std::string out;
-     * result: ""
-     * call: cbor::encoder e(out);
-     * result: encoder over a std::string
-     * call: e.unsigned_integer(std::uint16_t{5})
-     * result: void
-     * call: e.finish()
-     * result: 3
-     * call: out
-     * result: 3 bytes: 19 00 05
-     * @endcode
-     *
-     * @snippet doc_reference_item.cpp unsigned_integer
-     * @see cbor::encoder::negative_integer()
-     * @see cbor::encoder
-     */
-    template <class T>
-        requires integer_argument<T>
-    std::expected<void, error> unsigned_integer(T const value)
-    {
-        throw_logic_error_if_unusable();
-        return written(out.encode_fixed_width_head(major_type::unsigned_integer, value));
-    }
-
-    /**
-     * @brief Writes a negative integer (major type 1) with the argument `argument`.
-     *
-     * The value is -1 - `argument`.
-     * The head takes the width of `T`.
-     * `T` is an unsigned integer type.
-     * `bool` and the character types do not compile.
-     * `no_buffer_space` over a span that is too short.
-     * The error of a writer.
-     * A call after an error or after `finish` throws `std::logic_error`.
-     *
-     * @code{.example}
-     * bytes: 39 01 f3
-     * call: std::string out;
-     * result: ""
-     * call: cbor::encoder e(out);
-     * result: encoder over a std::string
-     * call: e.negative_integer(std::uint16_t{499})
-     * result: void
-     * call: e.finish()
-     * result: 3
-     * call: out
-     * result: 3 bytes: 39 01 f3
-     * call: cbor::decode(out)
-     * result: owning item of -500
-     * @endcode
-     *
-     * @snippet doc_reference_item.cpp negative_integer
-     * @see cbor::encoder::unsigned_integer()
-     * @see cbor::encoder
-     */
-    template <class T>
-        requires integer_argument<T>
-    std::expected<void, error> negative_integer(T const argument)
-    {
-        throw_logic_error_if_unusable();
-        return written(out.encode_fixed_width_head(major_type::negative_integer, argument));
-    }
-
-    /**
-     * @brief Writes `bytes` as a byte string, with the shortest head for the length.
-     *
-     * Over an cbor::iov_writer, the last three forms do not copy more than `CBOR_ENCODER_COPYBREAK` bytes: the result keeps the moved vector
-     * or the owner.
-     * Over any other target, each form copies the bytes.
-     * `no_buffer_space` over a span that is too short.
-     * The error of a writer.
-     * A null `std::shared_ptr` throws `std::logic_error`.
-     * A call after an error or after `finish` throws `std::logic_error`.
-     *
-     * @code{.example}
-     * bytes: 42 61 62
-     * call: std::array<std::uint8_t, 2> ab{97, 98};
-     * result: {97, 98}
-     * call: std::string out;
-     * result: ""
-     * call: cbor::encoder e(out);
-     * result: encoder over a std::string
-     * call: e.byte_string(std::as_bytes(std::span(ab)))
-     * result: void
-     * call: e.finish()
-     * result: 3
-     * call: out
-     * result: "Bab"
-     * call: cbor::decode(out)
-     * result: owning item of h'6162'
-     * @endcode
-     *
-     * @snippet doc_reference_item.cpp byte_string
-     * @see cbor::encoder::text_string()
-     * @see cbor::encoder
-     */
-    std::expected<void, error> byte_string(std::span<std::byte const> const bytes)
-    {
-        throw_logic_error_if_unusable();
-        return written(out.encode_byte_string(bytes));
-    }
-
-    /**
-     * @brief Writes a byte string that it takes by move.
-     */
-    template <class V>
-        requires std::same_as<V, std::vector<std::byte>>
-    std::expected<void, error> byte_string(V &&bytes)
-    {
-        throw_logic_error_if_unusable();
-        return written(out.encode_byte_string(std::move(bytes)));
-    }
-
-    /**
-     * @brief Writes a byte string that @p bytes owns.
-     */
-    std::expected<void, error> byte_string(std::shared_ptr<std::vector<std::byte> const> const &bytes)
-    {
-        throw_logic_error_if_unusable();
-        return written(out.encode_byte_string(bytes));
-    }
-
-    /**
-     * @brief Writes the byte string that a cbor::ref views.
-     */
-    std::expected<void, error> byte_string(ref<std::span<std::byte const>> const &bytes)
-    {
-        throw_logic_error_if_unusable();
-        return written(out.encode_byte_string(bytes));
-    }
-
-    /**
-     * @brief Writes `text` as a text string, with the shortest head for the length.
-     *
-     * The call does not check UTF-8.
-     * Over an cbor::iov_writer, the last three forms do not copy a text longer than `CBOR_ENCODER_COPYBREAK` bytes: the result keeps the
-     * moved string or the owner.
-     * Over any other target, each form copies the text.
-     * `no_buffer_space` over a span that is too short.
-     * The error of a writer.
-     * A null `std::shared_ptr` throws `std::logic_error`.
-     * A call after an error or after `finish` throws `std::logic_error`.
-     *
-     * @code{.example}
-     * bytes: 63 61 62 63
-     * call: std::string out;
-     * result: ""
-     * call: cbor::encoder e(out);
-     * result: encoder over a std::string
-     * call: e.text_string("abc")
-     * result: void
-     * call: e.finish()
-     * result: 4
-     * call: out
-     * result: "cabc"
-     * call: cbor::decode(out)
-     * result: owning item of "abc"
-     * @endcode
-     *
-     * @snippet doc_reference_item.cpp text_string
-     * @see cbor::encoder::byte_string()
-     * @see cbor::iov_writer
-     */
-    std::expected<void, error> text_string(std::string_view const text)
-    {
-        throw_logic_error_if_unusable();
-        return written(out.encode_text_string(text));
-    }
-
-    /**
-     * @brief Writes a text string that it takes by move.
-     */
-    template <class S>
-        requires std::same_as<S, std::string>
-    std::expected<void, error> text_string(S &&text)
-    {
-        throw_logic_error_if_unusable();
-        return written(out.encode_text_string(std::move(text)));
-    }
-
-    /**
-     * @brief Writes a text string that @p text owns.
-     */
-    std::expected<void, error> text_string(std::shared_ptr<std::string const> const &text)
-    {
-        throw_logic_error_if_unusable();
-        return written(out.encode_text_string(text));
-    }
-
-    /**
-     * @brief Writes the text string that a cbor::ref views.
-     */
-    std::expected<void, error> text_string(ref<std::string_view> const &text)
-    {
-        throw_logic_error_if_unusable();
-        return written(out.encode_text_string(text));
-    }
-
-    /**
-     * @brief Writes the head of an array (major type 4) with `count` elements, with the shortest head for `count`.
-     *
-     * The next calls write the elements.
-     * The encoder does not count them: a wrong count gives bytes that are not one item.
-     * `no_buffer_space` over a span that is too short.
-     * The error of a writer.
-     * A call after an error or after `finish` throws `std::logic_error`.
-     *
-     * @code{.example}
-     * bytes: 82 18 01 18 02
-     * call: std::string out;
-     * result: ""
-     * call: cbor::encoder e(out);
-     * result: encoder over a std::string
-     * call: e.array(2)
-     * result: void
-     * call: e.unsigned_integer(std::uint8_t{1})
-     * result: void
-     * call: e.unsigned_integer(std::uint8_t{2})
-     * result: void
-     * call: e.finish()
-     * result: 5
-     * call: out
-     * result: 5 bytes: 82 18 01 18 02
-     * @endcode
-     *
-     * @snippet doc_reference_item.cpp array
-     * @see cbor::encoder::map()
-     * @see cbor::encoder
-     */
-    std::expected<void, error> array(std::uint64_t const count)
-    {
-        throw_logic_error_if_unusable();
-        return written(out.encode_head(major_type::array, count));
-    }
-
-    /**
-     * @brief Writes the head of a map (major type 5) with `count` pairs, with the shortest head for `count`.
-     *
-     * The next calls write each key and then its value.
-     * The encoder does not count them: a wrong count gives bytes that are not one item.
-     * `no_buffer_space` over a span that is too short.
-     * The error of a writer.
-     * A call after an error or after `finish` throws `std::logic_error`.
-     *
-     * @code{.example}
-     * bytes: a1 61 61 18 05
-     * call: std::string out;
-     * result: ""
-     * call: cbor::encoder e(out);
-     * result: encoder over a std::string
-     * call: e.map(1)
-     * result: void
-     * call: e.text_string("a")
-     * result: void
-     * call: e.unsigned_integer(std::uint8_t{5})
-     * result: void
-     * call: e.finish()
-     * result: 5
-     * call: out
-     * result: 5 bytes: a1 61 61 18 05
-     * @endcode
-     *
-     * @snippet doc_reference_item.cpp map
-     * @see cbor::encoder::array()
-     * @see cbor::encoder
-     */
-    std::expected<void, error> map(std::uint64_t const count)
-    {
-        throw_logic_error_if_unusable();
-        return written(out.encode_head(major_type::map, count));
-    }
-
-    /**
-     * @brief Writes the head of a tag (major type 6) with the tag number `number`, with the shortest head.
-     *
-     * The next call writes the content.
-     * The call does not check that the content fits the tag.
-     * `no_buffer_space` over a span that is too short.
-     * The error of a writer.
-     * A call after an error or after `finish` throws `std::logic_error`.
-     *
-     * @code{.example}
-     * bytes: d9 d9 f7 18 01
-     * call: std::string out;
-     * result: ""
-     * call: cbor::encoder e(out);
-     * result: encoder over a std::string
-     * call: e.tag(55799)
-     * result: void
-     * call: e.unsigned_integer(std::uint8_t{1})
-     * result: void
-     * call: e.finish()
-     * result: 5
-     * call: out
-     * result: 5 bytes: d9 d9 f7 18 01
-     * @endcode
-     *
-     * @snippet doc_reference_item.cpp tag
-     * @see cbor::encoder::typed_array()
-     * @see cbor::encoder
-     */
-    std::expected<void, error> tag(std::uint64_t const number)
-    {
-        throw_logic_error_if_unusable();
-        return written(out.encode_head(major_type::tag, number));
-    }
-
-private:
-    std::expected<void, error> shareable()
-    {
-        throw_logic_error_if_unusable();
-        return written(out.encode_head(major_type::tag, std::to_underlying(rfc8949::tag_number::shareable)));
-    }
-
-    std::expected<void, error> sharedref(std::uint64_t const index)
-    {
-        throw_logic_error_if_unusable();
-        return written(detail::encoding::encode_sharedref(out, index));
-    }
-
-public:
-
-    /**
-     * @brief Writes a simple value (major type 7), for example `false_value`, `true_value`, `null` or `undefined`.
-     *
-     * A value from 0 to 23 takes one byte, and a value from 32 to 255 takes two.
-     * `no_buffer_space` over a span that is too short.
-     * The error of a writer.
-     *
-     * @code{.example}
-     * bytes: f6
-     * call: std::string out;
-     * result: ""
-     * call: cbor::encoder e(out);
-     * result: encoder over a std::string
-     * call: e.simple_value(cbor::simple_value::null)
-     * result: void
-     * call: e.finish()
-     * result: 1
-     * call: out
-     * result: 1 bytes: f6
-     * call: std::string out2;
-     * result: ""
-     * call: cbor::encoder e2(out2);
-     * result: encoder over a std::string
-     * call: e2.simple_value(cbor::simple_value{16})
-     * result: void
-     * @endcode
-     *
-     * @retval reserved_simple_value `value` is from 24 to 31 (RFC 8949 3.3)
-     * @snippet doc_reference_item.cpp simple_value
-     * @see cbor::encoder::floating_point()
-     * @see cbor::encoder
-     */
-    std::expected<void, error> simple_value(cbor::simple_value const value)
-    {
-        throw_logic_error_if_unusable();
-        std::uint8_t const info = detail::heads::preferred_argument_info(std::to_underlying(value));
-        if (!detail::validity::check_simple_value(info, std::to_underlying(value))) [[unlikely]]
-            return refused(error::reserved_simple_value);
-        return written(out.encode_head(major_type::simple, info, std::to_underlying(value)));
-    }
-
-    /**
-     * @brief Writes `value` as a float in the width of `T`: 16, 32 or 64 bits.
-     *
-     * It does not choose a shorter form.
-     * A NaN keeps its bits.
-     * `T` is an IEEE 754 type of 16, 32 or 64 bits.
-     * Another float type does not compile.
-     * `no_buffer_space` over a span that is too short.
-     * The error of a writer.
-     * A call after an error or after `finish` throws `std::logic_error`.
-     *
-     * @code{.example}
-     * bytes: fa 3f c0 00 00
-     * call: std::string out;
-     * result: ""
-     * call: cbor::encoder e(out);
-     * result: encoder over a std::string
-     * call: e.floating_point(1.5f)
-     * result: void
-     * call: e.finish()
-     * result: 5
-     * call: out
-     * result: 5 bytes: fa 3f c0 00 00
-     * @endcode
-     *
-     * @snippet doc_reference_item.cpp floating_point
-     * @see cbor::encoder::simple_value()
-     * @see cbor::encoder
-     */
-    template <std::floating_point T>
-        requires(std::numeric_limits<T>::is_iec559 &&
-                 (sizeof(T) == sizeof(std::uint32_t) || sizeof(T) == sizeof(std::uint64_t) ||
-                  (sizeof(T) == sizeof(std::uint16_t) &&
-                   std::numeric_limits<T>::digits == detail::ieee754::half_precision.significand_bits + 1)))
-    std::expected<void, error> floating_point(T const value)
-    {
-        throw_logic_error_if_unusable();
-        if constexpr (sizeof(T) == sizeof(std::uint16_t))
-            return written(out.encode_fixed_width_head(major_type::simple, std::bit_cast<std::uint16_t>(value)));
-        else
-            return written(out.encode_fixed_width_float(value));
-    }
-
-    /**
-     * @brief Writes a typed array (RFC 8746): the tag `value.tag` and then `value.bytes` as a byte string.
-     *
-     * The bytes are copied as they are, in the byte order that the tag names.
-     * `no_buffer_space` over a span that is too short.
-     * The error of a writer.
-     *
-     * @code{.example}
-     * bytes: d8 40 42 01 02
-     * call: std::array<std::uint8_t, 2> two{1, 2};
-     * result: {1, 2}
-     * call: std::string out;
-     * result: ""
-     * call: cbor::encoder e(out);
-     * result: encoder over a std::string
-     * call: e.typed_array(cbor::typed_array{64, std::as_bytes(std::span(two))})
-     * result: void
-     * call: e.finish()
-     * result: 5
-     * call: out
-     * result: 5 bytes: d8 40 42 01 02
-     * call: std::string out2;
-     * result: ""
-     * call: cbor::encoder e2(out2);
-     * result: encoder over a std::string
-     * call: e2.typed_array(cbor::typed_array{68, std::as_bytes(std::span(two))})
-     * result: void
-     * @endcode
-     *
-     * @retval unsupported_value `value.tag` is not the tag of a typed array
-     * @retval inadmissible_type_for_tag_content the count of bytes is not a multiple of the size of one element
-     * @snippet doc_reference_item.cpp typed_array
-     * @see cbor::encoder::tag()
-     * @see cbor::encoder::byte_string()
-     * @see cbor::encoder
-     */
-    std::expected<void, error> typed_array(cbor::typed_array const value)
-    {
-        throw_logic_error_if_unusable();
-        if (auto const r = detail::validity::check_typed_array(value.tag, value.bytes.size()); !r)
-            [[unlikely]]
-            return refused(r.error() == error::incorrect_type ? error::unsupported_value : r.error());
-        if (auto const r = written(out.encode_head(major_type::tag, value.tag)); !r) [[unlikely]]
-            return r;
-        return byte_string(value.bytes);
-    }
-
-    /**
-     * @brief Ends the encoder.
-     *
-     * It writes the buffer of the encoder to the target and calls `done` of a writer.
-     * It gives the count of bytes written.
-     * An encoder over an cbor::iov_writer ends with cbor::encoder::finish_iov(), and `finish` does not compile there.
-     * After the call, each call of the encoder throws `std::logic_error`.
-     * `no_buffer_space`, `value_too_large`, `not_enough_memory`, `io_error`: the error of the target.
-     * A second `finish` throws `std::logic_error`.
-     *
-     * @code{.example}
-     * bytes: 63 61 62 63
-     * call: std::array<char, 16> buffer{};
-     * result: 16 bytes: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-     * call: cbor::encoder e{std::span<char>(buffer)};
-     * result: encoder over a std::span<char>
-     * call: e.text_string("abc")
-     * result: void
-     * call: e.finish()
-     * result: 4
-     * call: buffer
-     * result: 16 bytes: 63 61 62 63 00 00 00 00 00 00 00 00 00 00 00 00
-     * @endcode
-     *
-     * @snippet doc_reference_item.cpp finish
-     * @see cbor::encoder
-     * @see cbor::iov_writer
-     */
-    std::expected<std::size_t, error> finish()
-        requires(!pieces)
-    {
-        throw_logic_error_if_unusable();
-        usable = false;
-        if (auto const r = written(out.flush()); !r) [[unlikely]]
-            return std::unexpected(r.error());
-        if (auto const r = written(message.done(out.written)); !r) [[unlikely]]
-            return std::unexpected(r.error());
-        return out.written;
-    }
-
-    /**
-     * @brief Ends an encoder over an cbor::iov_writer and gives its pieces.
-     *
-     * The pieces are `struct iovec`, in a `ref` that holds the blocks and the owners, as cbor::encode_iov() gives them.
-     * After the call, each call of the encoder throws `std::logic_error`.
-     * A second `finish_iov` throws `std::logic_error`.
-     * The function exists only on an encoder over an cbor::iov_writer.
-     *
-     * @snippet doc_reference_item.cpp iov_writer
-     * @see cbor::encoder::finish()
-     * @see cbor::iov_writer
-     */
-    auto finish_iov()
-        requires(pieces)
-    {
-        throw_logic_error_if_unusable();
-        usable = false;
-        return std::expected<decltype(out.release()), error>(out.release());
-    }
-};
-
-template <class Target>
-encoder(Target &) -> encoder<Target>;
-
-template <class Element>
-encoder(std::span<Element>) -> encoder<std::span<Element>>;
 
 inline detail::encoding::head_parts detail::encoding::head_of(item const &node)
 {

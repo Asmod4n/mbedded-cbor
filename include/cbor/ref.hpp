@@ -49,8 +49,6 @@ struct lazy;
 
 class path;
 
-class iov_writer;
-
 template <class T>
 inline constexpr bool is_view = std::ranges::view<T>;
 
@@ -130,8 +128,6 @@ class CBOR_OWNER ref
     friend class path;
 
     friend class detail::encoding;
-
-    friend class iov_writer;
 
 public:
     /** @brief Shares the owner and copies the value. */

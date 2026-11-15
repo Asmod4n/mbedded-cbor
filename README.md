@@ -354,8 +354,8 @@ the IETF CBOR working group and the JSONPath Compliance Test Suite.
 `test/run.sh full` builds and runs them with g++ 16 and clang 23, each
 with AddressSanitizer and UndefinedBehaviorSanitizer at -O0, and runs
 other decoders on the output. Fuzz
-targets cover decode, diagnostic notation, encode, the encoder,
-item_size, lazy, path, sequence_reader, structs and schema.
+targets cover decode, diagnostic notation, item_size, lazy, path,
+sequence_reader, structs and schema.
 
 ## Status
 

@@ -160,9 +160,6 @@ class rfc8949
     template <bool>
     friend struct detail::tree_decoder;
 
-    template <class Target>
-    friend class encoder;
-
     template <fixed_string Path>
     friend class is_singular_query;
 
