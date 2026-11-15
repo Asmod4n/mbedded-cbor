@@ -595,7 +595,7 @@ TEST_CASE("application tag: the iov target with shared references gives the byte
     cbor::iov_writer iov;
     cbor::encoder e(iov);
     REQUIRE(w.write(e, v, false).has_value());
-    auto const pieces = e.finish();
+    auto const pieces = e.finish_iov();
     REQUIRE(pieces.has_value());
     auto const read = test::join_pieces_into_bytes(**pieces);
     REQUIRE(read.has_value());
