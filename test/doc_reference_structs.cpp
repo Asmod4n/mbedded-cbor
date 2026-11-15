@@ -82,7 +82,7 @@ TEST_CASE("doc reference structs: encode appends to a target")
 TEST_CASE("doc reference structs: encode into a span that is too small")
 {
     std::array<char, 2> small{};
-    auto const n = cbor::structs<std::string>::encode("abcdef"s, std::span<char>(small));
+    auto const n = cbor::structs<person>::encode(person{"ann", 30}, std::span<char>(small));
     REQUIRE_FALSE(n.has_value());
     CHECK_EQ(n.error(), cbor::error::no_buffer_space);
 }

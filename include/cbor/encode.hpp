@@ -44,82 +44,6 @@ namespace cbor
 template <class T>
 class schema;
 
-/**
- * @brief Writes the tree at `root` and gives the count of bytes written.
- *
- * Each integer, length and tag number keeps the width of its head, from `additional_information`.
- * A float keeps its width.
- * The call walks the tree once and writes no tag 28 or 29 of its own.
- * A tag 28 and a tag 29 of a tree of cbor::lazy::to_item() are written as they are.
- * A `shared_reference` gives `unsupported_value`; the target then holds the bytes written before it.
- * cbor::encode_cycles() writes it with tags 28 and 29.
- * The target is one of these:
- * - a container of bytes, for example `std::string`: the call appends;
- * - a `std::span` of bytes: the call writes into it and allocates nothing;
- * - an object with `allocate(std::size_t)`, which gives a writer with `append(std::string_view)` and
- *   `done(std::size_t)`.
- *
- * @code{.example}
- * message: [1, "a"]
- * call: auto const tree = cbor::decode(bytes)
- * result: owning item of [1, "a"]
- * call: std::string out;
- * result: ""
- * call: cbor::encode(**tree, out)
- * result: 4
- * call: out
- * result: 4 bytes: 82 01 61 61
- * call: bytes
- * result: 4 bytes: 82 01 61 61
- * @endcode
- *
- * @retval no_buffer_space the span is too short
- * @retval nesting_depth_exceeded the tree is deeper than the limit
- * @retval unsupported_value the tree holds a `shared_reference`
- * @retval value_too_large, not_enough_memory, io_error the error of a writer, from its `std::errc`
- * @snippet doc_reference_item.cpp encode
- * @see cbor::encode_iov()
- * @see cbor::decode()
- *
- * @ingroup decode
- */
-template <class Target>
-std::expected<std::size_t, error> encode(item const &root, Target &&target);
-
-/**
- * @brief Writes the tree at `root` with tags 28 and 29 for each cycle and gives the count of bytes written.
- *
- * A `shared_reference` stands for the item it names.
- * A walk before the write finds each item that a depth-first walk reaches again while it is inside that item.
- * Such an item gets a tag 28, and each edge that reaches it again is a tag 29 with the index of that mark, in its
- * shortest head.
- * A value that two references reach without a cycle is written in full each time.
- * Every other item is written as cbor::encode() writes it.
- *
- * @code{.example}
- * bytes: d8 1c 81 d8 1d 00
- * call: auto const tree = cbor::decode(bytes)
- * result: owning item of 28([29(0)])
- * call: std::string out;
- * result: ""
- * call: cbor::encode_cycles(**tree, out)
- * result: 6
- * call: out
- * result: 6 bytes: d8 1c 81 d8 1d 00
- * @endcode
- *
- * @retval no_buffer_space the span is too short
- * @retval nesting_depth_exceeded the tree, or the path through its references, is deeper than the limit
- * @retval amplification_limit_breach the output would be larger than `cbor::limits::amplification_activation_threshold`
- * and than `cbor::limits::maximum_amplification` times the tree; nothing is written
- * @retval value_too_large, not_enough_memory, io_error the error of a writer, from its `std::errc`
- * @see cbor::encode()
- *
- * @ingroup decode
- */
-template <class Target>
-std::expected<std::size_t, error> encode_cycles(item const &root, Target &&target);
-
 #if __has_include(<sys/uio.h>)
 /**
  * @brief Writes the tree at `root` into a list of `struct iovec` pieces, not into one buffer.
@@ -266,7 +190,23 @@ private:
         requires std::ranges::contiguous_range<C>;
     };
 
+public:
     template <class Target>
+    static constexpr bool is_target_v =
+        requires(Target &target) {
+            std::span(target);
+            requires std::same_as<typename Target::element_type, char> ||
+                         std::same_as<typename Target::element_type, std::byte>;
+            requires !requires { target.resize(std::size_t{}); };
+        } || byte_container<Target> ||
+        requires(Target &target, std::size_t const hint) { target.allocate(hint).done(hint); };
+
+    template <bool Cycles, class Target>
+    static std::expected<std::size_t, error> encode_into(item const &root, Target &&target);
+
+private:
+    template <class Target>
+        requires is_target_v<std::remove_reference_t<Target>>
     static decltype(auto) message_of(Target &&target, std::size_t const hint)
     {
         using U = std::remove_cvref_t<Target>;
@@ -304,21 +244,12 @@ private:
     template <bool Cycles, bool AppendRef, class Writer>
     static std::expected<void, error> encode_tree(binary_writer<Writer> &out, item const &root);
 
-    template <bool Cycles, class Target>
-    static std::expected<std::size_t, error> encode_into(item const &root, Target &&target);
-
 #if __has_include(<sys/uio.h>)
     template <bool Cycles>
     static std::expected<ref<std::span<iovec const>>, error> encode_iov_of(item const &root);
     template <bool Cycles>
     static std::expected<ref<std::span<iovec const>>, error> encode_iov_of(owning<item> const &root);
 #endif
-
-    template <class Target>
-    friend std::expected<std::size_t, error> cbor::encode(item const &root, Target &&target);
-
-    template <class Target>
-    friend std::expected<std::size_t, error> cbor::encode_cycles(item const &root, Target &&target);
 
 #if __has_include(<sys/uio.h>)
     friend std::expected<ref<std::span<iovec const>>, error> cbor::encode_iov(item const &root);
@@ -335,6 +266,84 @@ private:
 };
 
 }
+
+/**
+ * @brief Writes the tree at `root` and gives the count of bytes written.
+ *
+ * Each integer, length and tag number keeps the width of its head, from `additional_information`.
+ * A float keeps its width.
+ * The call walks the tree once and writes no tag 28 or 29 of its own.
+ * A tag 28 and a tag 29 of a tree of cbor::lazy::to_item() are written as they are.
+ * A `shared_reference` gives `unsupported_value`; the target then holds the bytes written before it.
+ * cbor::encode_cycles() writes it with tags 28 and 29.
+ * The target is one of these:
+ * - a container of bytes, for example `std::string`: the call appends;
+ * - a `std::span` of bytes: the call writes into it and allocates nothing;
+ * - an object with `allocate(std::size_t)`, which gives a writer with `append(std::string_view)` and
+ *   `done(std::size_t)`.
+ *
+ * @code{.example}
+ * message: [1, "a"]
+ * call: auto const tree = cbor::decode(bytes)
+ * result: owning item of [1, "a"]
+ * call: std::string out;
+ * result: ""
+ * call: cbor::encode(**tree, out)
+ * result: 4
+ * call: out
+ * result: 4 bytes: 82 01 61 61
+ * call: bytes
+ * result: 4 bytes: 82 01 61 61
+ * @endcode
+ *
+ * @retval no_buffer_space the span is too short
+ * @retval nesting_depth_exceeded the tree is deeper than the limit
+ * @retval unsupported_value the tree holds a `shared_reference`
+ * @retval value_too_large, not_enough_memory, io_error the error of a writer, from its `std::errc`
+ * @snippet doc_reference_item.cpp encode
+ * @see cbor::encode_iov()
+ * @see cbor::decode()
+ *
+ * @ingroup decode
+ */
+template <class Target>
+    requires detail::encoding::is_target_v<std::remove_reference_t<Target>>
+std::expected<std::size_t, error> encode(item const &root, Target &&target);
+
+/**
+ * @brief Writes the tree at `root` with tags 28 and 29 for each cycle and gives the count of bytes written.
+ *
+ * A `shared_reference` stands for the item it names.
+ * A walk before the write finds each item that a depth-first walk reaches again while it is inside that item.
+ * Such an item gets a tag 28, and each edge that reaches it again is a tag 29 with the index of that mark, in its
+ * shortest head.
+ * A value that two references reach without a cycle is written in full each time.
+ * Every other item is written as cbor::encode() writes it.
+ *
+ * @code{.example}
+ * bytes: d8 1c 81 d8 1d 00
+ * call: auto const tree = cbor::decode(bytes)
+ * result: owning item of 28([29(0)])
+ * call: std::string out;
+ * result: ""
+ * call: cbor::encode_cycles(**tree, out)
+ * result: 6
+ * call: out
+ * result: 6 bytes: d8 1c 81 d8 1d 00
+ * @endcode
+ *
+ * @retval no_buffer_space the span is too short
+ * @retval nesting_depth_exceeded the tree, or the path through its references, is deeper than the limit
+ * @retval amplification_limit_breach the output would be larger than `cbor::limits::amplification_activation_threshold`
+ * and than `cbor::limits::maximum_amplification` times the tree; nothing is written
+ * @retval value_too_large, not_enough_memory, io_error the error of a writer, from its `std::errc`
+ * @see cbor::encode()
+ *
+ * @ingroup decode
+ */
+template <class Target>
+    requires detail::encoding::is_target_v<std::remove_reference_t<Target>>
+std::expected<std::size_t, error> encode_cycles(item const &root, Target &&target);
 
 template <class Writer>
 struct detail::encoding::binary_writer {
@@ -882,12 +891,14 @@ std::expected<std::size_t, error> detail::encoding::encode_into(item const &root
 }
 
 template <class Target>
+    requires detail::encoding::is_target_v<std::remove_reference_t<Target>>
 std::expected<std::size_t, error> encode(item const &root, Target &&target)
 {
     return detail::encoding::encode_into<false>(root, std::forward<Target>(target));
 }
 
 template <class Target>
+    requires detail::encoding::is_target_v<std::remove_reference_t<Target>>
 std::expected<std::size_t, error> encode_cycles(item const &root, Target &&target)
 {
     return detail::encoding::encode_into<true>(root, std::forward<Target>(target));

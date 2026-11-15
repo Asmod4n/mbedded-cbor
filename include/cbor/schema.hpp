@@ -4607,7 +4607,8 @@ public:
      * @brief Appends the message of @p value to @p target, and gives the count of bytes of the message.
      */
     template <class Target>
-        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() &&
+                 detail::encoding::is_target_v<std::remove_reference_t<Target>>)
     CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(T const &value, Target &&target)
     {
         return encode<detail::description_place::inside>(value, std::forward<Target>(target));
@@ -5057,7 +5058,8 @@ public:
      * message.
      */
     template <class Target>
-        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() &&
+                 detail::encoding::is_target_v<std::remove_reference_t<Target>>)
     CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(T const &value, Target &&target)
     {
         return schema<T>::template encode<detail::description_place::apart>(value, std::forward<Target>(target));

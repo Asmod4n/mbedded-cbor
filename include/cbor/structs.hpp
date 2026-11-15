@@ -1581,6 +1581,8 @@ public:
      * @throws std::logic_error a `std::chrono::year_month_day` that is no valid date
      */
     template <class Target>
+        requires(detail::encoding::is_target_v<std::remove_reference_t<Target>> &&
+                 !detail::encoding::is_target_v<T>)
     CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(T const &value, Target &&target)
     {
         using U = std::remove_cvref_t<Target>;
