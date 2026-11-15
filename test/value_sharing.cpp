@@ -1008,7 +1008,7 @@ std::string encoded_again(std::string_view const input)
     auto const decoded = cbor::decode(input);
     REQUIRE(decoded.has_value());
     std::string out;
-    REQUIRE(cbor::encode_value_sharing(**decoded, out).has_value());
+    REQUIRE(cbor::encode_cycles(**decoded, out).has_value());
     return out;
 }
 
@@ -1033,7 +1033,7 @@ std::string diamonds_of(std::size_t const k)
 
 } // namespace shared_test
 
-// The owner decided that encode writes no shared reference unless the program calls encode_value_sharing: cbor::encode with a
+// The owner decided that encode writes no shared reference unless the program calls encode_cycles: cbor::encode with a
 // tree with a shared_reference gives unsupported_value. A tree without one is written as before.
 TEST_CASE("value sharing: cbor::encode writes no tag 28 or 29")
 {
@@ -1051,7 +1051,7 @@ TEST_CASE("value sharing: cbor::encode writes no tag 28 or 29")
     CHECK_EQ(plain, "\x82\x01\x02"s);
 }
 
-// theories/Writer.v write: encode_value_sharing puts a tag 28 on a node that a back edge of the walk reaches. A
+// theories/Writer.v write: encode_cycles puts a tag 28 on a node that a back edge of the walk reaches. A
 // tag 29 with the index of that mark on each back edge. A value reached twice without a cycle is written twice (owner
 // decision). Each expectation is the stream that write gives for the graph that cbor::decode reads.
 TEST_CASE("value sharing: cbor::encode writes the marks of each cycle as Writer.v writes them")
@@ -1091,7 +1091,7 @@ TEST_CASE("value sharing: cbor::decode reads back what cbor::encode writes")
         REQUIRE(back.has_value());
         CHECK(test::unfoldings_equal(**tree, **back));
 #if __has_include(<sys/uio.h>)
-        auto const pieces = cbor::encode_iov_value_sharing(**tree);
+        auto const pieces = cbor::encode_iov_cycles(**tree);
         REQUIRE(pieces.has_value());
         std::string joined;
         for (iovec const &piece : **pieces)
@@ -1112,10 +1112,10 @@ TEST_CASE("value sharing: cbor::encode writes each copy and stops at the amplifi
     auto const tree = cbor::decode(shared_test::diamonds_of(levels_past_the_limit));
     REQUIRE(tree.has_value());
     std::string out;
-    CHECK_EQ(cbor::encode_value_sharing(**tree, out).error(), error::amplification_limit_breach);
+    CHECK_EQ(cbor::encode_cycles(**tree, out).error(), error::amplification_limit_breach);
     CHECK(out.empty());
     std::array<char, 64> span{};
-    CHECK_EQ(cbor::encode_value_sharing(**tree, std::span(span)).error(), error::amplification_limit_breach);
+    CHECK_EQ(cbor::encode_cycles(**tree, std::span(span)).error(), error::amplification_limit_breach);
     CHECK(std::ranges::all_of(span, [](char const c) { return c == 0; }));
 }
 
@@ -1154,7 +1154,7 @@ TEST_CASE("value sharing: a path through references deeper than the stack gives 
     REQUIRE(tree.has_value());
     CHECK_EQ(test::error_on_small_stack([&tree] {
                  std::string out;
-                 return cbor::encode_value_sharing(**tree, out);
+                 return cbor::encode_cycles(**tree, out);
              }),
              error::nesting_depth_exceeded);
 }

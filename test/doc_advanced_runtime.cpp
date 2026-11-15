@@ -314,7 +314,7 @@ TEST_CASE("doc advanced runtime: item_size")
 
 // The section "Tags 28 and 29" shows that a lazy, clone and diagnostic notation read both as plain tags. That
 // cbor::decode resolves them. The second element is a shared_reference to the first. An index with no mark is an error.
-// 28(29(0)) names no value. encode refuses a shared_reference. encode_value_sharing writes the shared value twice and
+// 28(29(0)) names no value. encode refuses a shared_reference. encode_cycles writes the shared value twice and
 // marks only a cycle.
 TEST_CASE("doc advanced runtime: tags 28 and 29")
 {
@@ -328,12 +328,12 @@ TEST_CASE("doc advanced runtime: tags 28 and 29")
     std::string out;
     CHECK_EQ(cbor::encode(**tree, out).error(), error::unsupported_value);
     std::string shared;
-    CHECK_EQ(cbor::encode_value_sharing(**tree, shared), 3u);
+    CHECK_EQ(cbor::encode_cycles(**tree, shared), 3u);
     CHECK_EQ(shared, "\x82\x01\x01"s);
     auto const cyclic = cbor::decode("\xd8\x1c\x81\xd8\x1d\x00"sv);
     REQUIRE(cyclic.has_value());
     std::string cycle;
-    CHECK_EQ(cbor::encode_value_sharing(**cyclic, cycle), 6u);
+    CHECK_EQ(cbor::encode_cycles(**cyclic, cycle), 6u);
     CHECK_EQ(cycle, "\xd8\x1c\x81\xd8\x1d\x00"s);
     auto const l = *test::make_lazy_from_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
     CHECK_EQ(l.at(1)->type(), cbor::type::tag);

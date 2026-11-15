@@ -1,5 +1,5 @@
-// The bench of the block cbor::encode_value_sharing and encode_iov_value_sharing (encode.hpp), the encode that writes
-// tags 28 and 29. VALUE_SHARING_FORM selects these names. Without it the names of the earlier form are used:
+// The bench of the block cbor::encode_cycles and encode_iov_cycles (encode.hpp), the encode that writes
+// tags 28 and 29 for each cycle. CYCLES_FORM selects these names. Without it the names of the earlier form are used:
 // cbor::encode and cbor::encode_iov with cbor::cycles.
 // Each iteration writes every tree of a buffer of COLD_BYTES bytes of messages.
 #include <benchmark/benchmark.h>
@@ -29,8 +29,8 @@ std::size_t cold_bytes()
 
 auto written(cbor::item const &tree, std::string &out)
 {
-#ifdef VALUE_SHARING_FORM
-    return cbor::encode_value_sharing(tree, out);
+#ifdef CYCLES_FORM
+    return cbor::encode_cycles(tree, out);
 #else
     return cbor::encode(tree, out, cbor::cycles);
 #endif
@@ -38,14 +38,14 @@ auto written(cbor::item const &tree, std::string &out)
 
 auto pieces(cbor::item const &tree)
 {
-#ifdef VALUE_SHARING_FORM
-    return cbor::encode_iov_value_sharing(tree);
+#ifdef CYCLES_FORM
+    return cbor::encode_iov_cycles(tree);
 #else
     return cbor::encode_iov(tree, cbor::cycles);
 #endif
 }
 
-void encode_value_sharing(benchmark::State &state)
+void encode_cycles(benchmark::State &state)
 {
     std::vector<cbor::owning<cbor::item>> trees;
     for (std::size_t total = 0; total < cold_bytes(); total += message.size())
@@ -65,7 +65,7 @@ void encode_value_sharing(benchmark::State &state)
     state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(trees.size()));
 }
 
-void encode_iov_value_sharing(benchmark::State &state)
+void encode_iov_cycles(benchmark::State &state)
 {
     std::vector<cbor::owning<cbor::item>> trees;
     for (std::size_t total = 0; total < cold_bytes(); total += message.size())
@@ -81,6 +81,6 @@ void encode_iov_value_sharing(benchmark::State &state)
 
 }
 
-BENCHMARK(encode_value_sharing)->Unit(benchmark::kMillisecond);
-BENCHMARK(encode_iov_value_sharing)->Unit(benchmark::kMillisecond);
+BENCHMARK(encode_cycles)->Unit(benchmark::kMillisecond);
+BENCHMARK(encode_iov_cycles)->Unit(benchmark::kMillisecond);
 BENCHMARK_MAIN();

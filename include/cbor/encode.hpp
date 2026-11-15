@@ -58,7 +58,7 @@ class iov_writer;
  * The call walks the tree once and writes no tag 28 or 29 of its own.
  * A tag 28 and a tag 29 of a tree of cbor::lazy::clone() are written as they are.
  * A `shared_reference` gives `unsupported_value`; the target then holds the bytes written before it.
- * cbor::encode_value_sharing() writes it with tags 28 and 29.
+ * cbor::encode_cycles() writes it with tags 28 and 29.
  * The target is one of these:
  * - a container of bytes, for example `std::string`: the call appends;
  * - a `std::span` of bytes: the call writes into it and allocates nothing;
@@ -109,7 +109,7 @@ std::expected<std::size_t, error> encode(item const &root, Target &&target);
  * result: owning item of 28([29(0)])
  * call: std::string out;
  * result: ""
- * call: cbor::encode_value_sharing(**tree, out)
+ * call: cbor::encode_cycles(**tree, out)
  * result: 6
  * call: out
  * result: 6 bytes: d8 1c 81 d8 1d 00
@@ -125,7 +125,7 @@ std::expected<std::size_t, error> encode(item const &root, Target &&target);
  * @ingroup decode
  */
 template <class Target>
-std::expected<std::size_t, error> encode_value_sharing(item const &root, Target &&target);
+std::expected<std::size_t, error> encode_cycles(item const &root, Target &&target);
 
 #if __has_include(<sys/uio.h>)
 /**
@@ -138,7 +138,7 @@ std::expected<std::size_t, error> encode_value_sharing(item const &root, Target 
  * The function exists where `<sys/uio.h>` exists.
  * `nesting_depth_exceeded`: the tree is deeper than the limit.
  * `unsupported_value`: the tree holds a `shared_reference`.
- * cbor::encode_iov_value_sharing() writes tags 28 and 29 as cbor::encode_value_sharing() does.
+ * cbor::encode_iov_cycles() writes tags 28 and 29 as cbor::encode_cycles() does.
  * A piece that refers to the string of an owner points into memory that the owner holds as const; a call that writes
  * into the pieces, such as `readv`, is a wrong use.
  *
@@ -160,13 +160,13 @@ std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &root);
 /**
  * @brief Writes the tree at `root` with tags 28 and 29 for each cycle into a list of `struct iovec` pieces.
  *
- * The bytes are those of cbor::encode_value_sharing(), and its errors.
+ * The bytes are those of cbor::encode_cycles(), and its errors.
  *
  * @see cbor::encode()
  *
  * @ingroup decode
  */
-std::expected<ref<std::span<iovec const>>, error> encode_iov_value_sharing(item const &root);
+std::expected<ref<std::span<iovec const>>, error> encode_iov_cycles(item const &root);
 #endif
 
 namespace detail
@@ -297,11 +297,11 @@ private:
     friend std::expected<std::size_t, error> cbor::encode(item const &root, Target &&target);
 
     template <class Target>
-    friend std::expected<std::size_t, error> cbor::encode_value_sharing(item const &root, Target &&target);
+    friend std::expected<std::size_t, error> cbor::encode_cycles(item const &root, Target &&target);
 
 #if __has_include(<sys/uio.h>)
     friend std::expected<ref<std::span<iovec const>>, error> cbor::encode_iov(item const &root);
-    friend std::expected<ref<std::span<iovec const>>, error> cbor::encode_iov_value_sharing(item const &root);
+    friend std::expected<ref<std::span<iovec const>>, error> cbor::encode_iov_cycles(item const &root);
 #endif
 
     template <class>
@@ -1642,7 +1642,7 @@ std::expected<std::size_t, error> encode(item const &root, Target &&target)
 }
 
 template <class Target>
-std::expected<std::size_t, error> encode_value_sharing(item const &root, Target &&target)
+std::expected<std::size_t, error> encode_cycles(item const &root, Target &&target)
 {
     return detail::encoding::encode_into<true>(root, std::forward<Target>(target));
 }
@@ -1663,7 +1663,7 @@ inline std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &
     return detail::encoding::encode_iov_of<false>(root);
 }
 
-inline std::expected<ref<std::span<iovec const>>, error> encode_iov_value_sharing(item const &root)
+inline std::expected<ref<std::span<iovec const>>, error> encode_iov_cycles(item const &root)
 {
     return detail::encoding::encode_iov_of<true>(root);
 }

@@ -27,7 +27,7 @@ Each value is one enumerator of `cbor::error`.
 - `sharedref_not_complete`: `cbor::structs` %decode meets a tag 29 that names a tag 28 in a skipped member.
 - `sharedref_not_defined`: `cbor::decode` meets a tag 29 that names a tag 28 whose content is only tags 28 and this tag 29.
 - `reserved_simple_value`: an encode meets a simple value from 24 to 31.
-- `unsupported_value`: the encoder meets a typed array with a reserved tag, or a tag outside RFC 8746; `cbor::encode()` writes no tag 29; `cbor::encode_value_sharing()` writes it.
+- `unsupported_value`: the encoder meets a typed array with a reserved tag, or a tag outside RFC 8746; `cbor::encode()` writes no tag 29; `cbor::encode_cycles()` writes it.
 - `not_indexable`: a key or an index meets an item that is not a map or an array.
 - `index_out_of_bounds`: the index is outside the array.
 - `key_not_found`: the key is not in the map.
@@ -45,7 +45,7 @@ Each value is one enumerator of `cbor::error`.
 - `string_length_exceeded`: a string is longer than `cbor::limits::string_length`.
 - `container_elements_exceeded`: a container has more items than `cbor::limits::container_elements`.
 - `not_singular_query`: `cbor::path::compile<T>` gets a %path that is not singular, and `T` is not `nodelist`.
-- `amplification_limit_breach`: `cbor::encode_value_sharing()` would write more than `cbor::limits::maximum_amplification` times the size of the tree, past `cbor::limits::amplification_activation_threshold`.
+- `amplification_limit_breach`: `cbor::encode_cycles()` would write more than `cbor::limits::maximum_amplification` times the size of the tree, past `cbor::limits::amplification_activation_threshold`.
 
 @section errors_conversion THE CONVERSION TO std::error_code
 
@@ -97,7 +97,7 @@ check is not in the program. Every translation unit of one program uses
 the same values. A value that does not fit `std::size_t` does not
 compile.
 
-`cbor::encode_value_sharing()` gives `amplification_limit_breach`,
+`cbor::encode_cycles()` gives `amplification_limit_breach`,
 and writes nothing, when the output would be larger than
 `cbor::limits::amplification_activation_threshold` and than
 `cbor::limits::maximum_amplification` times the tree.

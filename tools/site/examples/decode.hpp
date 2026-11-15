@@ -152,7 +152,7 @@ inline result encoded_cbor_data_item_found(call const &c)
     return expected_view_of(c.arguments.front(), cbor::encoded_cbor_data_item(**tree, **tagged));
 }
 
-template <bool ValueSharing>
+template <bool Cycles>
 result encode_made(call const &c)
 {
     if (auto const ok = arguments_counted(c, 2); !ok) [[unlikely]]
@@ -161,8 +161,8 @@ result encode_made(call const &c)
     if (!root) [[unlikely]]
         return std::unexpected(root.error());
     auto const write = [&](auto &target) {
-        if constexpr (ValueSharing)
-            return cbor::encode_value_sharing(**root, target);
+        if constexpr (Cycles)
+            return cbor::encode_cycles(**root, target);
         else
             return cbor::encode(**root, target);
     };
@@ -478,7 +478,7 @@ inline constexpr entry decode_functions[] = {
     {"cbor::decode()", decode_made},
     {"cbor::encoded_cbor_data_item()", encoded_cbor_data_item_found},
     {"cbor::encode()", encode_made<false>},
-    {"cbor::encode_value_sharing()", encode_made<true>},
+    {"cbor::encode_cycles()", encode_made<true>},
     {.name = "cbor::owning<cbor::item>.operator*()", .run = owning_item_star, .runnable = true},
     {.name = "cbor::item const *.operator*()", .run = item_pointer_star, .runnable = true},
     {.name = "cbor::item const *.get()", .run = item_get, .candidates = item_get_candidates, .runnable = true},
