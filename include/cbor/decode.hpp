@@ -104,7 +104,7 @@ struct zone_owner {
  * result: owning item of 24(h'6161')
  * call: auto const inner = cbor::encoded_cbor_data_item(*tree, **tree)
  * result: reference to item of "a"
- * call: inner->get().get<cbor::type::text_string>()
+ * call: inner->get().get<std::string_view>()
  * result: "a"
  * @endcode
  *
@@ -404,7 +404,7 @@ std::expected<decoded_tree, error> decode_tree(std::string_view const encoded)
  * message: ["hi", 1]
  * call: auto const tree = cbor::decode(bytes)
  * result: owning item of ["hi", 1]
- * call: (*tree)->get<cbor::type::array>()->size()
+ * call: (*tree)->get<std::span<cbor::item const>>()->size()
  * result: 2
  * @endcode
  * @code{.example}
