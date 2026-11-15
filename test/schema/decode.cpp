@@ -344,7 +344,7 @@ TEST_CASE("decode: a class with a constructor in a std::pmr::vector takes the re
 TEST_CASE("a message cut at any length is too_little_data")
 {
     std::string const bytes = encode_with_schema(reading{7, "kg"});
-    std::string const encode_data_apart = *form<byte_fields>::template encode<cbor::description_place::apart>(make_byte_fields());
+    std::string const encode_data_apart = *cbor::static_dictionary<byte_fields>::encode(make_byte_fields());
     std::string const whole = *form<byte_fields>::encode(make_byte_fields());
     for (std::size_t n = 0; n < whole.size(); ++n) {
         CAPTURE(n);
@@ -362,8 +362,8 @@ TEST_CASE("a message cut at any length is too_little_data")
     for (std::size_t n = 0; n < encode_data_apart.size(); ++n) {
         CAPTURE(n);
         std::string const cut = encode_data_apart.substr(0, n);
-        CHECK_EQ(form<byte_fields>::template decode<cbor::description_place::apart>(std::string(cut)).error(), error::too_little_data);
-        CHECK_EQ(form<byte_fields>::template at_path<"$.list[1]", cbor::description_place::apart>(cut).error(), error::too_little_data);
+        CHECK_EQ(cbor::static_dictionary<byte_fields>::decode(std::string(cut)).error(), error::too_little_data);
+        CHECK_EQ(cbor::static_dictionary<byte_fields>::at_path<"$.list[1]">(cut).error(), error::too_little_data);
     }
 }
 

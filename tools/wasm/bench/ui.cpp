@@ -268,7 +268,7 @@ __attribute__((export_name("schema_apart_encode"))) std::uint64_t schema_apart_e
                                   moment{1700000000u + r * 86400u}});
     for (std::uint32_t f = 0; f < form_fields; ++f)
         s.entry.fields.push_back(field{"field" + std::to_string(f), "Field " + std::to_string(f), f % 2 ? "number" : "text"});
-    schema_wire = *cbor::schema<screen>::encode<cbor::description_place::apart>(s);
+    schema_wire = *cbor::static_dictionary<screen>::encode(s);
     return packed(schema_wire);
 }
 
@@ -279,7 +279,7 @@ __attribute__((export_name("schema_description_size"))) std::uint32_t schema_des
 
 __attribute__((export_name("schema_apart_load"))) std::int32_t schema_apart_load(char const *const ptr, std::size_t const len)
 {
-    auto r = cbor::schema<screen>::adopt<cbor::description_place::apart>(std::string(ptr, len));
+    auto r = cbor::static_dictionary<screen>::adopt(std::string(ptr, len));
     if (!r)
         return -static_cast<std::int32_t>(r.error());
     root.emplace(std::move(*r));

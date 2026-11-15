@@ -104,16 +104,6 @@ struct kind<cbor::ref<car>> : ref_kind<car> {
 };
 
 template <>
-struct kind<cbor::description_place> {
-    static constexpr std::string_view name = "cbor::description_place";
-    static std::string text(cbor::description_place const v)
-    {
-        return v == cbor::description_place::apart ? "cbor::description_place::apart"
-                                                   : "cbor::description_place::inside";
-    }
-};
-
-template <>
 struct kind<char> {
     static constexpr std::string_view name = "char";
     static std::string text(char const v)

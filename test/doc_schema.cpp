@@ -158,15 +158,14 @@ struct cbor::describe_members<doc_packed::other> {
 namespace doc_packed
 {
 
-// The section "Store the description apart" reads the data form with apart. The data form and the description together
-// have the size of the message.
+// The section "Store the description apart" reads the data form with cbor::static_dictionary. The data form and the
+// description together have the size of the message.
 TEST_CASE("doc schema: store the description apart")
 {
     using namespace doc_packed;
-    constexpr auto apart = cbor::description_place::apart;
-    auto const data = cbor::schema<sensor>::encode<apart>(sensor{"t1", 7, {1.5, 2.5}});
+    auto const data = cbor::static_dictionary<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
     REQUIRE(data.has_value());
-    CHECK_EQ((cbor::schema<sensor>::at_path<"$.id", apart>(*data)), 7);
+    CHECK_EQ((cbor::static_dictionary<sensor>::at_path<"$.id">(*data)), 7);
     auto const whole = cbor::schema<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
     REQUIRE(whole.has_value());
     CHECK_EQ(data->size() + cbor::schema<sensor>::description().size(), whole->size());

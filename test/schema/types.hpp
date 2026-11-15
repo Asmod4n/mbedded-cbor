@@ -1545,12 +1545,10 @@ inline std::string encode_again(auto const &decoded)
 
 
 
-constexpr auto apart = cbor::description_place::apart;
-
 template <class T>
 std::string encode_data_apart(T const &value)
 {
-    auto const bytes = form<T>::template encode<apart>(value);
+    auto const bytes = cbor::static_dictionary<T>::encode(value);
     REQUIRE(bytes.has_value());
     return *bytes;
 }
