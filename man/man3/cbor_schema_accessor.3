@@ -126,7 +126,7 @@ A path that starts with \fR@\fP starts at \fRU\fP\&. A path that starts with \fR
 .PP
 .nf
 bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
-call: auto const root = cbor::schema<car>::path(std::move(bytes))
+call: auto const root = cbor::schema<car>::adopt(std::move(bytes))
 result: accessor of a car
 call: auto const tires = root\->at_path<"$\&.tires">()
 result: accessor of a std::vector<tire> of 2 elements
@@ -154,7 +154,7 @@ result: accessor of a tire in a std::vector<tire>
 .PP
 .nf
 bytes: d8 71 82 9a 00 00 00 12 d8 72 81 63 70 65 74 d8 72 82 64 62 61 72 6b 64 6e 61 6d 65 d8 72 82 64 6e 61 6d 65 64 74 6f 79 73 5a 00 00 00 08 00 00 00 42 00 00 00 54 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 0b d8 81 9a 00 00 00 02 18 03 c6 3a 00 00 00 00 7a 00 00 00 03 72 65 78 d9 07 0d d8 80 9a 00 00 00 01 c6 1a 00 00 00 00
-call: auto const house = cbor::schema<home>::path(std::move(bytes))
+call: auto const house = cbor::schema<home>::adopt(std::move(bytes))
 result: accessor of a home
 call: auto const pet = house\->at_path<"$\&.pet">()
 result: accessor of a std::variant<dog, cat> that holds a dog
@@ -173,7 +173,7 @@ result: unexpected cbor::error::incorrect_type
 .PP
 .nf
 bytes: d8 71 82 9a 00 00 00 12 d8 72 82 64 6e 61 6d 65 65 76 61 6c 75 65 5a 00 00 00 08 00 00 00 31 00 00 00 3b f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 77 69 64 74 68 1b 00 00 00 00 00 00 00 f0 d9 07 0e d8 80 9a 00 00 00 02 c6 1a 00 00 00 00 c6 3a 00 00 00 00
-call: auto const width = cbor::schema<property>::path(std::move(bytes))
+call: auto const width = cbor::schema<property>::adopt(std::move(bytes))
 result: accessor of a property
 call: auto const value = width\->at_path<"$\&.value">()
 result: accessor of a std::variant<bool, std::int64_t, std::string> that holds a std::int64_t
@@ -198,7 +198,7 @@ result: unexpected cbor::error::incorrect_type
 .PP
 .nf
     // bytes: from schema<car>::encode(car{"Volvo", 5, {{17, 2\&.5f}, {18, 2\&.25f}}, {1\&.0, 2\&.0, 3\&.0}})
-    auto const root = cbor::schema<car>::path(std::move(bytes));
+    auto const root = cbor::schema<car>::adopt(std::move(bytes));
     auto const tires = root\->at_path<"$\&.tires">();
     auto const count = tires\->size();                       // 2
     auto const second = tires\->at_path<"@[1]\&.diameter">();  // 18
@@ -212,7 +212,7 @@ result: unexpected cbor::error::incorrect_type
 .PP
 .nf
     // home: struct { std::variant<dog, cat> pet; }; bytes: from schema<home>::encode(home{dog{{"rex"}, 3}})
-    auto const doc = cbor::schema<home>::path(std::string(*bytes));
+    auto const doc = cbor::schema<home>::adopt(std::string(*bytes));
     auto const pet = doc\->at_path<"$\&.pet">();
     auto const held = pet\->index();                         // 0
     auto const name = pet\->get<dog>()\->at_path<"@\&.name">();  // "rex"
@@ -224,7 +224,7 @@ result: unexpected cbor::error::incorrect_type
 .PP
 \fBSee also\fP
 .RS 4
-cbor::schema::path() 
+cbor::schema::adopt() 
 
 .PP
 \fBcbor::typed_array_view\fP 
