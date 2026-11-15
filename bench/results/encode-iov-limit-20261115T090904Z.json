@@ -31,7 +31,7 @@
   "copy": 20.4,
   "view2": 17.4
  },
- "result": "the copy is slower than the view at every size; above the A/A of its size at 4096, 32768, 65536 and every size from 1048576 up; under it at 8192, 16384 (equal), 131072 and 262144 to 524288 is above it. The copy wins at no size.",
+ "result": "The copy is slower than the view at every size. The difference is larger than the A/A of its size at 4096, 32768, 65536, 262144, 524288 and every size from 1048576 up; it is not larger at 8192, 16384 and 131072. The copy wins at no size.",
  "sizes": {
   "4096": {
    "view": {
