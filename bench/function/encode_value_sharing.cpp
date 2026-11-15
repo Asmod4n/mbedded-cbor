@@ -1,5 +1,6 @@
 // The bench of the block cbor::encode_value_sharing and encode_iov_value_sharing (encode.hpp), the encode that writes
-// tags 28 and 29. A build of a commit before the rename calls cbor::encode and cbor::encode_iov with cbor::cycles.
+// tags 28 and 29. VALUE_SHARING_FORM selects these names. Without it the names of the earlier form are used:
+// cbor::encode and cbor::encode_iov with cbor::cycles.
 // Each iteration writes every tree of a buffer of COLD_BYTES bytes of messages.
 #include <benchmark/benchmark.h>
 #include <cbor/decode.hpp>
@@ -26,22 +27,22 @@ std::size_t cold_bytes()
     return std::stoull(given);
 }
 
-template <class Tree, class Target>
-auto written(Tree const &tree, Target &out)
+auto written(cbor::item const &tree, std::string &out)
 {
-    if constexpr (requires { cbor::encode_value_sharing(tree, out); })
-        return cbor::encode_value_sharing(tree, out);
-    else
-        return cbor::encode(tree, out, cbor::cycles);
+#ifdef VALUE_SHARING_FORM
+    return cbor::encode_value_sharing(tree, out);
+#else
+    return cbor::encode(tree, out, cbor::cycles);
+#endif
 }
 
-template <class Tree>
-auto pieces(Tree const &tree)
+auto pieces(cbor::item const &tree)
 {
-    if constexpr (requires { cbor::encode_iov_value_sharing(tree); })
-        return cbor::encode_iov_value_sharing(tree);
-    else
-        return cbor::encode_iov(tree, cbor::cycles);
+#ifdef VALUE_SHARING_FORM
+    return cbor::encode_iov_value_sharing(tree);
+#else
+    return cbor::encode_iov(tree, cbor::cycles);
+#endif
 }
 
 void encode_value_sharing(benchmark::State &state)
