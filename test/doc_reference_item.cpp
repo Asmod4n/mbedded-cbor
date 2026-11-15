@@ -445,7 +445,7 @@ TEST_CASE("doc reference item: iov_writer")
     cbor::iov_writer w;
     cbor::encoder e(w);
     bool const written = e.text_string(text).has_value();
-    auto const pieces = e.finish();  // 2 pieces: the head 78 28, then *text with no copy
+    auto const pieces = e.finish_iov();  // 2 pieces: the head 78 28, then *text with no copy
     // [iov_writer]
     CHECK(written);
     REQUIRE(pieces);

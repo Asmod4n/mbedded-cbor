@@ -231,7 +231,7 @@ TEST_CASE("encoder: the iov target gives the bytes of the string target in piece
     REQUIRE(e.array(2).has_value());
     REQUIRE(e.text_string(text).has_value());
     REQUIRE(e.unsigned_integer(std::uint8_t{7}).has_value());
-    auto const pieces = e.finish();
+    auto const pieces = e.finish_iov();
     REQUIRE(pieces.has_value());
     auto const joined = test::join_pieces_into_bytes(**pieces);
     REQUIRE(joined.has_value());

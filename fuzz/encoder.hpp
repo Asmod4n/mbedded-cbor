@@ -345,7 +345,7 @@ struct iov_sink {
 
     void finish()
     {
-        auto const r = e->finish();
+        auto const r = e->finish_iov();
         require(r.has_value());
         auto const bytes = test::join_pieces_into_bytes(**r);
         require(bytes.has_value());

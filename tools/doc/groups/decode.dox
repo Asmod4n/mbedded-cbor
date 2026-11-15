@@ -75,8 +75,8 @@ item, stay tags.
 bytes. An integer and a float take the width of their type, and a NaN
 keeps its bits. A count, a length and a tag number take the shortest
 head. The encoder counts nothing: the counts of `array` and `map` are
-the caller's. `finish()` gives the size in bytes, or the pieces for an
-`iov_writer`.
+the caller's. `finish()` gives the size in bytes. An encoder over an `iov_writer`
+ends with `finish_iov()`, which gives the pieces.
 
 The calls are `unsigned_integer`, `negative_integer`, `byte_string`,
 `text_string`, `array`, `map`, `tag`, `simple_value`, `floating_point` and

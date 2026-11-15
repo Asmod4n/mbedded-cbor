@@ -390,7 +390,7 @@ TEST_CASE("doc advanced runtime: encode_iov")
     cbor::iov_writer w;
     cbor::encoder e(w);
     REQUIRE(e.text_string(std::move(text)).has_value());
-    auto const kept = e.finish();
+    auto const kept = e.finish_iov();
     REQUIRE(kept.has_value());
     CHECK_EQ((**kept).size(), 2u);
 }

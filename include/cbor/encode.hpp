@@ -630,16 +630,16 @@ struct detail::encoding::binary_writer {
  * The encoder writes heads and short strings into blocks of CBOR_ENCODER_BLOCK_SIZE bytes.
  * A text or a byte string of 32 bytes or more that the program hands over with its owner becomes a piece of its own,
  * with no copy.
- * cbor::encoder::finish() gives the pieces as `struct iovec`, in a `ref` that holds the blocks and the owners.
+ * cbor::encoder::finish_iov() gives the pieces as `struct iovec`, in a `ref` that holds the blocks and the owners.
  * The pieces are for sending only, as cbor::encode_iov() says.
  * The class exists where `<sys/uio.h>` exists.
  * The class has no public member function.
- * A write after `finish` throws `std::logic_error`.
+ * A write after `finish_iov` throws `std::logic_error`.
  *
  * @code{.output}
  * call: cbor::iov_writer w; cbor::encoder e(w);
  * call: e.text_string(text), with text a std::shared_ptr<std::string const> of 40 times "x"
- * call: auto const pieces = e.finish()
+ * call: auto const pieces = e.finish_iov()
  * (*pieces)->size(): 2, the head 78 28 and *text with no copy
  * sent with writev: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
  * @endcode
@@ -1272,7 +1272,8 @@ public:
      * @brief Ends the encoder.
      *
      * It writes the buffer of the encoder to the target and calls `done` of a writer.
-     * It gives the count of bytes written, or the pieces over an cbor::iov_writer.
+     * It gives the count of bytes written.
+     * An encoder over an cbor::iov_writer ends with cbor::encoder::finish_iov(), and `finish` does not compile there.
      * After the call, each call of the encoder throws `std::logic_error`.
      * `no_buffer_space`, `value_too_large`, `not_enough_memory`, `io_error`: the error of the target.
      * A second `finish` throws `std::logic_error`.
@@ -1295,19 +1296,36 @@ public:
      * @see cbor::encoder
      * @see cbor::iov_writer
      */
-    auto finish()
+    std::expected<std::size_t, error> finish()
+        requires(!pieces)
     {
         throw_logic_error_if_unusable();
         usable = false;
-        if constexpr (pieces) {
-            return std::expected<decltype(out.release()), error>(out.release());
-        } else {
-            if (auto const r = written(out.flush()); !r) [[unlikely]]
-                return std::expected<std::size_t, error>(std::unexpected(r.error()));
-            if (auto const r = written(message.done(out.written)); !r) [[unlikely]]
-                return std::expected<std::size_t, error>(std::unexpected(r.error()));
-            return std::expected<std::size_t, error>(out.written);
-        }
+        if (auto const r = written(out.flush()); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        if (auto const r = written(message.done(out.written)); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        return out.written;
+    }
+
+    /**
+     * @brief Ends an encoder over an cbor::iov_writer and gives its pieces.
+     *
+     * The pieces are `struct iovec`, in a `ref` that holds the blocks and the owners, as cbor::encode_iov() gives them.
+     * After the call, each call of the encoder throws `std::logic_error`.
+     * A second `finish_iov` throws `std::logic_error`.
+     * The function exists only on an encoder over an cbor::iov_writer.
+     *
+     * @snippet doc_reference_item.cpp iov_writer
+     * @see cbor::encoder::finish()
+     * @see cbor::iov_writer
+     */
+    auto finish_iov()
+        requires(pieces)
+    {
+        throw_logic_error_if_unusable();
+        usable = false;
+        return std::expected<decltype(out.release()), error>(out.release());
     }
 };
 

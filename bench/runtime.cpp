@@ -1114,7 +1114,7 @@ static std::uint64_t op()
     cbor::encoder<cbor::iov_writer> e(w);
     if (!e.byte_string(*bytes_ref))
         std::abort();
-    auto pieces = e.finish();
+    auto pieces = e.finish_iov();
     if (!pieces)
         std::abort();
     benchmark::DoNotOptimize(pieces);

@@ -76,7 +76,7 @@ void encode_iov_owned(benchmark::State &state)
         cbor::encoder e{w};
         if (!e.text_string(copied) || !e.text_string(referenced))
             throw std::logic_error("bench: cbor::encoder refuses a text");
-        auto r = e.finish();
+        auto r = e.finish_iov();
         if (!r)
             throw std::logic_error("bench: cbor::encoder::finish fails");
         return std::move(*r);

@@ -470,13 +470,22 @@ std::expected<void, error> encode_value(cbor::encoder<Target> &e, value const &x
 }
 
 template <class Target>
+auto finished(cbor::encoder<Target> &e)
+{
+    if constexpr (requires { e.finish_iov(); })
+        return e.finish_iov();
+    else
+        return e.finish();
+}
+
+template <class Target>
 auto encode(Target &&target, value const &x)
-    -> decltype(std::declval<cbor::encoder<std::remove_cvref_t<Target>> &>().finish())
+    -> decltype(finished(std::declval<cbor::encoder<std::remove_cvref_t<Target>> &>()))
 {
     cbor::encoder e{std::forward<Target>(target)};
     if (auto const r = encode_value(e, x); !r)
         return std::unexpected(r.error());
-    return e.finish();
+    return finished(e);
 }
 
 }

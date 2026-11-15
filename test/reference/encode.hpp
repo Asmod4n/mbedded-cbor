@@ -103,7 +103,10 @@ auto encode(Target &&target, value const &v)
 inline std::expected<cbor::ref<std::span<iovec const>>, error> encode_iov(value const &v)
 {
     cbor::iov_writer w;
-    return encode(w, v);
+    cbor::encoder e{w};
+    if (auto const r = encode_value(e, v); !r)
+        return std::unexpected(r.error());
+    return e.finish_iov();
 }
 #endif
 
