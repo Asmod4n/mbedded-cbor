@@ -44,7 +44,7 @@ A \fRstd::shared_ptr<void const>\fP and a \fRstd::string_view\fP beside it are r
 A \fRstd::string\fP lvalue beside an owner does not compile\&. Its bytes can end before the owner ends\&.
 
 .PP
-\fR\fBcbor::structs\fP<T>::decode\fP, \fRcbor::schema<T>::decode\fP, \fRcbor::schema<T>::path\fP and \fR\fBcbor::at_path\fP\fP take the same forms for a view result\&. \fR\fBcbor::sequence\fP\fP takes the two forms that use a \fRstd::shared_ptr\fP, and no rvalue \fRstd::string\fP\&. The library takes no other pointer to bytes\&.
+\fR\fBcbor::structs\fP<T>::decode\fP, \fRcbor::schema<T>::decode\fP, \fRcbor::schema<T>::adopt\fP and \fR\fBcbor::at_path\fP\fP take the same forms for a view result\&. \fR\fBcbor::sequence\fP\fP takes the two forms that use a \fRstd::shared_ptr\fP, and no rvalue \fRstd::string\fP\&. The library takes no other pointer to bytes\&.
 
 .PP
 A larger object can hold the bytes\&. Two forms read them in place\&. The aliasing constructor of \fRstd::shared_ptr\fP makes an owner from a member of the object, and that owner shares the count of the object\&. Or the object is the owner, and a view of its bytes is passed beside it\&.

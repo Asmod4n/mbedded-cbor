@@ -144,15 +144,15 @@ On a byte string, a \fRstd::array\fP or a \fRstd::vector\fP of \fRstd::uint8_t\f
 These do not compile: a member that \fRT\fP does not have, a wrong count of arguments, a path to a text, a constant index past the end of a \fRstd::array\fP, and a path to a member that is not trivially copyable, such as a \fRstd::vector\fP of structs\&.
 .SH "OPEN A MESSAGE"
 .PP
-\fRcbor::schema<T>::path(\&.\&.\&.)\fP opens a message and gives the root accessor, \fRcbor::schema<T>::accessor<T>\fP\&. It checks the message once, and it reads no field\&. The forms are:
+\fRcbor::schema<T>::adopt(\&.\&.\&.)\fP and \fRcbor::schema<T>::view(\&.\&.\&.)\fP open a message and gives the root accessor, \fRcbor::schema<T>::accessor<T>\fP\&. It checks the message once, and it reads no field\&. The forms are:
 
 .PP
 .IP "\(bu" 2
-\fRpath(std::move(bytes))\fP: the string moves into the owner\&. Nothing is copied\&.
+\fRadopt(std::move(bytes))\fP: the string moves into the owner\&. Nothing is copied\&.
 .IP "\(bu" 2
-\fRpath(owner)\fP: \fRowner\fP is a \fRstd::shared_ptr<std::string const>\fP\&. The message is read in place\&.
+\fRview(owner)\fP: \fRowner\fP is a \fRstd::shared_ptr<std::string const>\fP\&. The message is read in place\&.
 .IP "\(bu" 2
-\fRpath(owner, part)\fP: \fRpart\fP is a \fRstd::string_view\fP into memory that \fRowner\fP, a \fRstd::shared_ptr<void const>\fP, keeps alive\&.
+\fRview(owner, part)\fP: \fRpart\fP is a \fRstd::string_view\fP into memory that \fRowner\fP, a \fRstd::shared_ptr<void const>\fP, keeps alive\&.
 .PP
 
 .PP
@@ -218,7 +218,7 @@ With \fRcbor::description_place::apart\fP, \fRencode\fP writes the message witho
 \fRcbor::schema<T>::description()\fP gives the description\&. It is the same in every message of \fRT\fP\&. The size of a message written with \fRapart\fP plus the size of \fRdescription()\fP is the size of the message with the description\&. A generic decoder of Packed CBOR does not read a message written with \fRapart\fP\&.
 .SH "READ A MESSAGE FROM A PEER YOU TRUST"
 .PP
-\fRunverified_path\fP, \fRunverified_at_path\fP and \fRunverified_decode\fP take the same arguments as \fRpath\fP, \fRat_path\fP and \fRdecode\fP\&. They check each bound of the message, so no read leaves the message\&. They do not check the data of the message\&. A wrong byte gives a wrong value, not an error\&.
+\fRunverified_adopt\fP, \fRunverified_view\fP, \fRunverified_at_path\fP and \fRunverified_decode\fP take the same arguments as \fRadopt\fP, \fRview\fP, \fRat_path\fP and \fRdecode\fP\&. They check each bound of the message, so no read leaves the message\&. They do not check the data of the message\&. A wrong byte gives a wrong value, not an error\&.
 
 .PP
 These forms do not check:
@@ -257,7 +257,7 @@ the limits of the build and, in \fRunverified_decode\fP, the nesting depth\&.
 .PP
 
 .PP
-Every accessor of \fRunverified_path\fP is unverified too\&.
+Every accessor of \fRunverified_adopt\fP and \fRunverified_view\fP is unverified too\&.
 .SH "SIZE AND OFFSET"
 .PP
 \fRcbor::schema<T>::fixed_size()\fP gives the count of bytes of the root record of \fRT\fP\&. The root record ends the message\&. \fRfixed_size<U>()\fP gives the count of bytes that a field of type \fRU\fP takes\&.
@@ -309,7 +309,7 @@ A list of a number is an RFC 8746 typed array in little endian\&. A \fRstd::vect
 A list of fixed-size structs is \fR32873([simple(j), h'\&.\&.\&.'])\fP\&. \fRj\fP is the index of its description in the table\&. From index 16 on, \fR6(N)\fP takes the place of \fRsimple(j)\fP\&. The byte string holds the elements with no padding, in little endian\&. Tag 32873 is provisional\&. The IANA registry does not have it yet\&.
 .SH "WHAT IS CHECKED ONCE AND WHAT AT EACH READ"
 .PP
-\fRpath\fP checks once:
+\fRadopt\fP and \fRview\fP check once:
 
 .PP
 .IP "\(bu" 2
@@ -323,7 +323,7 @@ the tag of the struct of the root\&.
 .PP
 
 .PP
-With \fRcbor::description_place::apart\fP, the message holds no keys\&. \fRpath\fP then checks the start of the message, the count of the table and the tag of the root\&.
+With \fRcbor::description_place::apart\fP, the message holds no keys\&. \fRadopt\fP and \fRview\fP then check the start of the message, the count of the table and the tag of the root\&.
 
 .PP
 Each \fRat_path\fP of an accessor checks at each read:
@@ -344,17 +344,17 @@ for a list of fixed-size structs, the tag 32873 and its reference, and that the 
 .PP
 
 .PP
-\fRview\fP checks the tag and the length of the typed array once\&. After that, each element read checks only its index\&. \fRcbor::schema<T>::at_path\fP makes the checks of \fRpath\fP and of \fRat_path\fP in one call\&.
+\fRview\fP checks the tag and the length of the typed array once\&. After that, each element read checks only its index\&. \fRcbor::schema<T>::at_path\fP makes the checks of \fRview\fP and of \fRat_path\fP in one call\&.
 .SH "COST"
 .PP
-\fRpath\fP with a shared owner takes a time that does not depend on the size of the message\&. \fRpath\fP with an rvalue takes the same time, and it makes one allocation for the owner\&. Each \fRat_path\fP takes one step for each part of its path\&. \fRdecode\fP and \fRencode\fP take a time in the size of the message\&.
+\fRview\fP takes a time that does not depend on the size of the message\&. \fRadopt\fP takes the same time, and it makes one allocation for the owner\&. Each \fRat_path\fP takes one step for each part of its path\&. \fRdecode\fP and \fRencode\fP take a time in the size of the message\&.
 
 .PP
-An error of \fRpath\fP, \fRat_path\fP or \fRdecode\fP can cost a walk over the message\&. The walk checks whether the message ends too early\&.
+An error of \fRadopt\fP, \fRview\fP, \fRat_path\fP or \fRdecode\fP can cost a walk over the message\&. The walk checks whether the message ends too early\&.
 .SH "ERRORS"
 .PP
 .IP "\(bu" 2
-\fRtoo_little_data\fP: the message ends too early\&. \fRpath\fP, \fRat_path\fP and \fRdecode\fP give this error also where another check fails first\&. A message that is shorter than its table and root gives it in \fRpath\fP\&.
+\fRtoo_little_data\fP: the message ends too early\&. \fRadopt\fP, \fRview\fP, \fRat_path\fP and \fRdecode\fP give this error also where another check fails first\&. A message that is shorter than its table and root gives it in \fRadopt\fP and \fRview\fP\&.
 .IP "\(bu" 2
 \fRincorrect_type\fP: a message of another struct or layout, a wrong tag of a struct, a wrong head of a field, a variant item whose head names no alternative, or \fRget<A>()\fP of another alternative\&.
 .IP "\(bu" 2
@@ -375,7 +375,7 @@ An error of \fRpath\fP, \fRat_path\fP or \fRdecode\fP can cost a walk over the m
 A refused allocation of the owner or of the result throws \fRstd::bad_alloc\fP\&.
 
 .PP
-A null or empty owner throws \fRstd::logic_error\fP in \fRpath\fP, \fRdecode\fP and the unverified forms\&. A call on a moved-from accessor throws it too\&. \fRoperator[]\fP, \fRfront\fP and \fRback\fP of a typed array view throw it outside the view\&.
+A null or empty owner throws \fRstd::logic_error\fP in \fRview\fP, \fRdecode\fP and the unverified forms\&. A call on a moved-from accessor throws it too\&. \fRoperator[]\fP, \fRfront\fP and \fRback\fP of a typed array view throw it outside the view\&.
 
 .PP
 The unverified forms give the error of the check that fails\&.
