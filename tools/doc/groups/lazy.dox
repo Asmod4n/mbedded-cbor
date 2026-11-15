@@ -161,8 +161,8 @@ Each step gives a `cbor::error`:
 - `indefinite_length`: `elements()` or `entries()` of an array or a map of
   indefinite length, or `clone()` of such an item.
 - `nesting_depth_exceeded`: `clone()` of an item that nests too deep.
-- `not_enough_memory`: an allocation of the owner in `adopt` fails.
 
+A refused allocation of the owner in `adopt` throws `std::bad_alloc`.
 A wrong use throws `std::logic_error`. It throws for a null `owner` in
 `view`, and for an empty `owner` in the form with `part`. It throws for
 each member function of a lazy that holds no top-level item, for example

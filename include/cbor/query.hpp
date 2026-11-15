@@ -113,7 +113,7 @@ std::expected<ref<T>, error> at_path(std::shared_ptr<Encoded const> owner);
 /**
  * @brief Reads a view at a path, and moves the bytes into a new owner.
  * @ingroup path
- * @retval not_enough_memory an allocation of the owner fails
+ * @throws std::bad_alloc an allocation of the owner fails
  */
 template <fixed_string Path, class T, owning_range_of_chars Encoded>
     requires(is_singular_query_v<Path> && view_result<T>)
@@ -1249,17 +1249,14 @@ std::expected<typename path::query<T>::result_type, error> at_path(std::shared_p
 /**
  * @brief Reads the result of a query, and moves the bytes into a new owner.
  * @ingroup path
- * @retval not_enough_memory an allocation of the owner fails
+ * @throws std::bad_alloc an allocation of the owner fails
  */
 template <class T, owning_range_of_chars Encoded>
     requires(view_result<T> || std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
 std::expected<typename path::query<T>::result_type, error> at_path(Encoded &&encoded,
                                                                        path::query<T> const &e)
 {
-    auto owner = detail::validity::make_shared_owner(std::move(encoded));
-    if (!owner) [[unlikely]]
-        return std::unexpected(owner.error());
-    return at_path(std::move(*owner), e);
+    return at_path(std::make_shared<Encoded const>(std::move(encoded)), e);
 }
 
 template <fixed_string Path>
@@ -2328,10 +2325,7 @@ template <fixed_string Path, class T, owning_range_of_chars Encoded>
     requires(is_singular_query_v<Path> && view_result<T>)
 std::expected<ref<T>, error> at_path(Encoded &&encoded)
 {
-    auto owner = detail::validity::make_shared_owner(std::move(encoded));
-    if (!owner) [[unlikely]]
-        return std::unexpected(owner.error());
-    return at_path<Path, T>(std::move(*owner));
+    return at_path<Path, T>(std::make_shared<Encoded const>(std::move(encoded)));
 }
 
 template <fixed_string Path, copied_value T>

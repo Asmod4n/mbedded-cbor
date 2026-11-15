@@ -16,6 +16,7 @@
 #include <map>
 #include <memory>
 #include <memory_resource>
+#include <new>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -142,8 +143,8 @@ TEST_CASE("doc advanced basics: nesting depth")
     CHECK_EQ(cbor::item_size(bytes), test::levels_beyond_small_stack + 1);
 }
 
-// The section "Memory" shows that the caller bounds the memory of a decode with a std::pmr resource. That a resource
-// that refuses after 64 bytes gives not_enough_memory.
+// The section "Memory" shows that the caller bounds the memory of a decode with a std::pmr resource. A resource that
+// refuses after 64 bytes throws std::bad_alloc.
 TEST_CASE("doc advanced basics: a std::pmr target")
 {
     using texts = std::pmr::vector<std::pmr::string>;
@@ -151,7 +152,7 @@ TEST_CASE("doc advanced basics: a std::pmr target")
         *cbor::structs<std::vector<std::string>>::encode({std::string(40, 'a'), std::string(40, 'b')}));
     std::array<std::byte, 64> buffer{};
     std::pmr::monotonic_buffer_resource budget(buffer.data(), buffer.size(), std::pmr::null_memory_resource());
-    CHECK_EQ(cbor::structs<texts>::decode(owner, texts(&budget)).error(), error::not_enough_memory);
+    CHECK_THROWS_AS(static_cast<void>(cbor::structs<texts>::decode(owner, texts(&budget))), std::bad_alloc);
     std::array<std::byte, 4096> large{};
     std::pmr::monotonic_buffer_resource enough(large.data(), large.size(), std::pmr::null_memory_resource());
     auto const fits = cbor::structs<texts>::decode(owner, texts(&enough));

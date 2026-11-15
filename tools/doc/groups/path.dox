@@ -318,10 +318,9 @@ and broken input have different errors, so a program tells them apart.
   its definition does not allow, for example tag 24 over a number.
 - `nodelist_too_long`: one step of a nodelist read selects more nodes
   than the top-level item has bytes.
-- `not_enough_memory`: the allocation of the owner fails, in the form
-  with an rvalue.
 
-A wrong use that the compiler cannot see throws `std::logic_error`: a
+A refused allocation of the owner, in the form with an rvalue, throws
+`std::bad_alloc`. A wrong use that the compiler cannot see throws `std::logic_error`: a
 null or empty owner in a form that takes an owner, a moved-from query, and
 a `cbor::lazy{}` that holds no item in every form that takes a lazy.
 

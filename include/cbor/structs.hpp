@@ -1471,7 +1471,7 @@ public:
      * shared value that the decode holds
      * @retval string_length_exceeded a string is longer than `limits::string_length`
      * @retval container_elements_exceeded the count of an array or a map is greater than `limits::container_elements`
-     * @retval not_enough_memory a refused allocation
+     * @throws std::bad_alloc a refused allocation
      * @snippet doc_reference_structs.cpp decode
      * @see cbor::structs::encode()
      * @see cbor::ref
@@ -1479,15 +1479,7 @@ public:
     template <owning_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode(Encoded &&encoded)
     {
-#if defined(__cpp_exceptions)
-        try {
-#endif
-            return decode(std::make_shared<Encoded const>(std::move(encoded)));
-#if defined(__cpp_exceptions)
-        } catch (std::bad_alloc const &) {
-            return std::unexpected(error::not_enough_memory);
-        }
-#endif
+        return decode(std::make_shared<Encoded const>(std::move(encoded)));
     }
 
     /**
@@ -1640,18 +1632,10 @@ private:
     {
         detail::validity::throw_logic_error_if_empty(
             owner, "cbor::structs::decode: the owner of the encoded data item is empty");
-#if defined(__cpp_exceptions)
-        try {
-#endif
-            auto value = read(encoded, std::move(target));
-            if (!value) [[unlikely]]
-                return std::unexpected(value.error());
-            return ref<T>(std::move(owner), std::move(*value));
-#if defined(__cpp_exceptions)
-        } catch (std::bad_alloc const &) {
-            return std::unexpected(error::not_enough_memory);
-        }
-#endif
+        auto value = read(encoded, std::move(target));
+        if (!value) [[unlikely]]
+            return std::unexpected(value.error());
+        return ref<T>(std::move(owner), std::move(*value));
     }
 
     static std::expected<T, error> read(std::string_view const encoded, T out)

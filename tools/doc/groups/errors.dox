@@ -40,7 +40,7 @@ Each value is one enumerator of `cbor::error`.
 - `duplicate_key`: a deterministic check finds a key twice in one map.
 - `no_buffer_space`: the writer of an encode gives this error.
 - `value_too_large`: the writer of an encode gives this error.
-- `not_enough_memory`: the writer of an encode gives this error. A refused allocation in `cbor::structs` or `cbor::schema` %decode gives it too.
+- `not_enough_memory`: the writer of an encode gives this error. A refused allocation throws `std::bad_alloc`, as in the standard library.
 - `io_error`: the writer of an encode gives this error.
 - `string_length_exceeded`: a string is longer than `cbor::limits::string_length`.
 - `container_elements_exceeded`: a container has more items than `cbor::limits::container_elements`.

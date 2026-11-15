@@ -56,11 +56,11 @@ Nesting has no fixed limit. A reader that recurses gives `cbor::error::nesting_d
 
 @section overview_memory MEMORY
 
-`cbor::lazy::adopt` moves a `std::string` into a new `std::shared_ptr<std::string const>`, which owns the bytes. Its allocation can fail with `cbor::error::not_enough_memory`. `cbor::lazy::view` takes an owner that you give.
+`cbor::lazy::adopt` moves a `std::string` into a new `std::shared_ptr<std::string const>`, which owns the bytes. A refused allocation throws `std::bad_alloc`. `cbor::lazy::view` takes an owner that you give.
 
 A text string or byte string comes back as a view into the bytes, in a `cbor::ref`. The `cbor::ref` holds the owner, so the view stays valid while the `cbor::ref` lives.
 
-The %decode calls of `cbor::structs<T>` and `cbor::schema<T>` take a target as their last argument. The target holds `std::pmr` containers with a `std::pmr::memory_resource`. Each element uses the allocator of its container. When the resource refuses, the call gives `cbor::error::not_enough_memory`. A `std::bad_alloc` does not leave these calls.
+The %decode calls of `cbor::structs<T>` and `cbor::schema<T>` take a target as their last argument. The target holds `std::pmr` containers with a `std::pmr::memory_resource`. Each element uses the allocator of its container. When the resource refuses, the call throws `std::bad_alloc`, as a container of the standard library does.
 
 A plain struct inside a `std::pmr` container gets no allocator, so its
 members use the default resource. A step of a `cbor::lazy`, `get` and

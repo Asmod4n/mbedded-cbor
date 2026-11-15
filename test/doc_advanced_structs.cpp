@@ -14,6 +14,7 @@
 #include <map>
 #include <memory>
 #include <memory_resource>
+#include <new>
 #include <optional>
 #include <set>
 #include <span>
@@ -287,8 +288,7 @@ TEST_CASE("doc advanced structs: a tag 29 into a plain member is incorrect_type"
              error::sharedref_not_complete);
 }
 
-// The section "A memory budget" shows a std::pmr target, and that a refused allocation is the error
-// not_enough_memory.
+// The section "A memory budget" shows a std::pmr target, and that a refused allocation throws std::bad_alloc.
 TEST_CASE("doc advanced structs: a std::pmr target")
 {
     using texts = std::pmr::vector<std::pmr::string>;
@@ -296,7 +296,7 @@ TEST_CASE("doc advanced structs: a std::pmr target")
         *cbor::structs<std::vector<std::string>>::encode({std::string(40, 'a'), std::string(40, 'b')}));
     std::array<std::byte, 64> small{};
     std::pmr::monotonic_buffer_resource budget(small.data(), small.size(), std::pmr::null_memory_resource());
-    CHECK_EQ(cbor::structs<texts>::decode(owner, texts(&budget)).error(), error::not_enough_memory);
+    CHECK_THROWS_AS(static_cast<void>(cbor::structs<texts>::decode(owner, texts(&budget))), std::bad_alloc);
     std::array<std::byte, 1024> large{};
     std::pmr::monotonic_buffer_resource enough(large.data(), large.size(), std::pmr::null_memory_resource());
     auto const fits = cbor::structs<texts>::decode(owner, texts(&enough));

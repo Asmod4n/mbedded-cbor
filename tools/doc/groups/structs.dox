@@ -73,7 +73,7 @@ The forms without `target` start from `T{}`, so `T` must be default
 constructible. A null or empty owner throws `std::logic_error`.
 
 A `target` of `std::pmr` containers sets the memory resource of each
-element. When the resource cannot give memory, the read gives `not_enough_memory`. The decoder
+element. When the resource cannot give memory, the read throws `std::bad_alloc`. The decoder
 reserves no memory for a count that the input states. It makes each element
 when it reads that element.
 
@@ -224,8 +224,6 @@ Each function gives a `cbor::error` in its `std::expected`:
   `nesting_depth_exceeded`: a string or a container is longer than a limit
   of the library, or the item nests too deep.
 - `sharedref_index_not_marked`, `sharedref_not_complete`: see SHARED VALUES.
-- `not_enough_memory`: a refused allocation of `%decode`, or a refusal of a
-  `std::pmr` resource.
 - `no_buffer_space`: a `std::span<char>` target that is too small.
 - `value_too_large`: the size of the bytes does not fit in `std::size_t`.
 

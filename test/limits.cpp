@@ -9,6 +9,7 @@
 #include <limits>
 #include <memory>
 #include <memory_resource>
+#include <new>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -78,11 +79,11 @@ std::string long_texts_encoded(std::size_t const n)
 } // namespace
 
 // The caller bounds the memory of a decode with the standard library. The target holds a std::pmr allocator over a
-// resource with a budget. Every element is made with the allocator of its container. The refusal of the resource reaches
-// the caller of structs as not_enough_memory. A monotonic_buffer_resource over a fixed buffer with null_memory_resource
+// resource with a budget. Every element is made with the allocator of its container. The refusal of the resource is
+// std::bad_alloc, and it reaches the caller of structs. A monotonic_buffer_resource over a fixed buffer with null_memory_resource
 // upstream refuses every byte beyond the buffer.
-TEST_CASE("structs: a std::pmr target decodes with its allocator, and the refusal of its resource is "
-          "not_enough_memory")
+TEST_CASE("structs: a std::pmr target decodes with its allocator, and the refusal of its resource throws "
+          "std::bad_alloc")
 {
     using texts = std::pmr::vector<std::pmr::string>;
     std::string const encoded = long_texts_encoded(3);
@@ -110,10 +111,9 @@ TEST_CASE("structs: a std::pmr target decodes with its allocator, and the refusa
         CAPTURE(size);
         std::array<std::byte, 4096> buffer{};
         std::pmr::monotonic_buffer_resource budget(buffer.data(), size, std::pmr::null_memory_resource());
-        auto const decoded = cbor::structs<texts>::decode(std::make_shared<std::string const>(encoded),
-                                                           texts(&budget));
-        REQUIRE_FALSE(decoded.has_value());
-        CHECK_EQ(decoded.error(), error::not_enough_memory);
+        CHECK_THROWS_AS(static_cast<void>(cbor::structs<texts>::decode(std::make_shared<std::string const>(encoded),
+                                                                        texts(&budget))),
+                        std::bad_alloc);
     }
 #endif
 }
@@ -146,9 +146,9 @@ TEST_CASE("schema: a target with std::pmr members decodes with their allocators"
 // container. So an empty container over a refusing resource ends the program before the decode runs; the refusal is
 // tested where containers take no such proxy.
 #if !defined(_ITERATOR_DEBUG_LEVEL) || _ITERATOR_DEBUG_LEVEL == 0
-// schema reads into the members of the target as structs does. So the refusal of their resource reaches the caller of
-// schema as not_enough_memory, and std::bad_alloc does not leave the call.
-TEST_CASE("schema: the refusal of the resource of a std::pmr member is not_enough_memory")
+// schema reads into the members of the target as structs does. The refusal of their resource is std::bad_alloc, and
+// it reaches the caller of schema, as it reaches the caller of a container of the standard library.
+TEST_CASE("schema: the refusal of the resource of a std::pmr member throws std::bad_alloc")
 {
     auto const encoded = cbor::schema<pmr_names>::encode(
         pmr_names{std::pmr::string(long_text), {std::pmr::string(long_text), std::pmr::string(long_text)}});
@@ -158,10 +158,9 @@ TEST_CASE("schema: the refusal of the resource of a std::pmr member is not_enoug
         CAPTURE(size);
         std::array<std::byte, 4096> buffer{};
         std::pmr::monotonic_buffer_resource budget(buffer.data(), size, std::pmr::null_memory_resource());
-        auto const decoded = cbor::schema<pmr_names>::decode(
-            owner, pmr_names{std::pmr::string(&budget), std::pmr::vector<std::pmr::string>(&budget)});
-        REQUIRE_FALSE(decoded.has_value());
-        CHECK_EQ(decoded.error(), error::not_enough_memory);
+        CHECK_THROWS_AS(static_cast<void>(cbor::schema<pmr_names>::decode(
+                            owner, pmr_names{std::pmr::string(&budget), std::pmr::vector<std::pmr::string>(&budget)})),
+                        std::bad_alloc);
     }
 }
 #endif

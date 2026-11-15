@@ -4274,7 +4274,7 @@ public:
      *
      * @retval too_little_data the message is shorter than its table and root, or its end is missing
      * @retval incorrect_type a message of another layout, or a wrong tag of the root
-     * @retval not_enough_memory an allocation of the owner fails (the rvalue form)
+     * @throws std::bad_alloc an allocation of the owner fails (the rvalue form)
      * @snippet doc_reference_schema.cpp path
      * @see cbor::schema::accessor
      * @see cbor::schema::at_path()
@@ -4285,10 +4285,7 @@ public:
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(Encoded &&encoded)
     {
-        auto owner = detail::validity::make_shared_owner(std::move(encoded));
-        if (!owner) [[unlikely]]
-            return std::unexpected(owner.error());
-        return path_with_owner<true, D>(std::move(*owner));
+        return path_with_owner<true, D>(std::make_shared<Encoded const>(std::move(encoded)));
     }
 
     /**
@@ -4387,7 +4384,7 @@ public:
      * @see cbor::schema::encode()
      * @see cbor::schema::%path()
      * @see cbor::ref
-     * @retval not_enough_memory an allocation of the result fails
+     * @throws std::bad_alloc an allocation of the result fails
      * @throws std::logic_error a null or empty owner
      */
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
@@ -4484,7 +4481,7 @@ public:
      * @retval unpopulated_table_index, syntax_error a reference or a directory entry outside the table or the items
      * @retval incorrect_type a variant item whose head names no alternative. The head chooses the alternative, so
      * these forms compare it too
-     * @retval not_enough_memory an allocation of the owner fails (the rvalue form)
+     * @throws std::bad_alloc an allocation of the owner fails (the rvalue form)
      * @snippet doc_reference_schema.cpp unverified
      * @see cbor::schema::unverified_at_path()
      * @see cbor::schema::unverified_decode()
@@ -4494,10 +4491,7 @@ public:
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_path(Encoded &&encoded)
     {
-        auto owner = detail::validity::make_shared_owner(std::move(encoded));
-        if (!owner) [[unlikely]]
-            return std::unexpected(owner.error());
-        return path_with_owner<false, D>(std::move(*owner));
+        return path_with_owner<false, D>(std::make_shared<Encoded const>(std::move(encoded)));
     }
 
     /**
@@ -4776,16 +4770,8 @@ private:
     template <bool Verified, description_place D, owning_range_of_chars Encoded>
     static std::expected<ref<T>, error> decode_with_owner(Encoded &&encoded)
     {
-#if defined(__cpp_exceptions)
-        try {
-#endif
-            auto owner = std::make_shared<Encoded const>(std::move(encoded));
-            return decode_with_owner<Verified, D>(std::move(owner));
-#if defined(__cpp_exceptions)
-        } catch (std::bad_alloc const &) {
-            return std::unexpected(error::not_enough_memory);
-        }
-#endif
+        auto owner = std::make_shared<Encoded const>(std::move(encoded));
+        return decode_with_owner<Verified, D>(std::move(owner));
     }
 
     template <bool Verified, description_place D, owning_range_of_chars Encoded>
@@ -4805,18 +4791,10 @@ private:
         } else {
             detail::validity::throw_logic_error_if_empty(
                 owner, "cbor::schema::decode: the owner of the encoded data item is empty");
-#if defined(__cpp_exceptions)
-            try {
-#endif
-                std::optional<T> made;
-                if (auto const r = detail::reflection::read_root<T, Verified, D>(made, encoded); !r) [[unlikely]]
-                    return std::unexpected(Verified ? detail::reflection::too_little_data_if_truncated<T, D>(encoded, r.error()) : r.error());
-                return ref<T>(std::move(owner), std::move(*made));
-#if defined(__cpp_exceptions)
-            } catch (std::bad_alloc const &) {
-                return std::unexpected(error::not_enough_memory);
-            }
-#endif
+            std::optional<T> made;
+            if (auto const r = detail::reflection::read_root<T, Verified, D>(made, encoded); !r) [[unlikely]]
+                return std::unexpected(Verified ? detail::reflection::too_little_data_if_truncated<T, D>(encoded, r.error()) : r.error());
+            return ref<T>(std::move(owner), std::move(*made));
         }
     }
 
@@ -4835,18 +4813,10 @@ private:
     {
         detail::validity::throw_logic_error_if_empty(
             owner, "cbor::schema::decode: the owner of the encoded data item is empty");
-#if defined(__cpp_exceptions)
-        try {
-#endif
-            if (auto const r = detail::reflection::read_root<T, Verified, D>(target, encoded); !r)
-                [[unlikely]]
-                return std::unexpected(Verified ? detail::reflection::too_little_data_if_truncated<T, D>(encoded, r.error()) : r.error());
-            return ref<T>(std::move(owner), std::move(target));
-#if defined(__cpp_exceptions)
-        } catch (std::bad_alloc const &) {
-            return std::unexpected(error::not_enough_memory);
-        }
-#endif
+        if (auto const r = detail::reflection::read_root<T, Verified, D>(target, encoded); !r)
+            [[unlikely]]
+            return std::unexpected(Verified ? detail::reflection::too_little_data_if_truncated<T, D>(encoded, r.error()) : r.error());
+        return ref<T>(std::move(owner), std::move(target));
     }
 };
 

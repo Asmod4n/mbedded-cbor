@@ -368,10 +368,10 @@ message. The walk checks whether the message ends too early.
   fixed-size structs, whose length is not a multiple of its element size.
 - `nesting_depth_exceeded`: a value that is nested too deep for `encode`
   or for `%decode`.
-- `not_enough_memory`: an allocation of the owner in `%path` fails, or an
-  allocation of the result in `%decode` fails.
 - `no_buffer_space`: a `std::span<char>` is shorter than the message.
 - `value_too_large`: the message is longer than 2^32 - 1 bytes.
+
+A refused allocation of the owner or of the result throws `std::bad_alloc`.
 
 A null or empty owner throws `std::logic_error` in `%path`, `%decode` and
 the unverified forms. A call on a moved-from accessor throws it too.

@@ -491,21 +491,6 @@ public:
     static std::expected<bool, error> keys_equivalent(First const &first, offset first_at,
                                                       Second const &second, offset second_at);
 
-    template <class Encoded>
-        requires(!std::is_reference_v<Encoded>)
-    static std::expected<std::shared_ptr<Encoded const>, error> make_shared_owner(Encoded &&encoded)
-    {
-#if defined(__cpp_exceptions)
-        try {
-#endif
-            return std::make_shared<Encoded const>(std::move(encoded));
-#if defined(__cpp_exceptions)
-        } catch (std::bad_alloc const &) {
-            return std::unexpected(error::not_enough_memory);
-        }
-#endif
-    }
-
     static constexpr error writer_error(std::errc const e) noexcept
     {
         if (e == std::errc::no_buffer_space)

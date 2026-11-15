@@ -682,8 +682,8 @@ struct large_elements {
 // An array head of 2^20 elements before 1 MiB of input made decode reserve 2^20 elements of 4096 bytes, 4 GiB, and
 // std::bad_alloc escaped decode. The reserve is now at most what the remaining bytes hold. So the allocator that refuses
 // more than 2 MiB is not reached, and the read ends at the first element that is no array. A std::bad_alloc that does
-// happen inside decode comes back as not_enough_memory.
-TEST_CASE("structs: decode reserves no more than the remaining bytes and returns std::bad_alloc as an error")
+// happen inside decode reaches the caller.
+TEST_CASE("structs: decode reserves no more than the remaining bytes and lets std::bad_alloc through")
 {
     std::string message = "\xa1\x61v\x9a\x00\x10\x00\x00"s;
     message += std::string(std::size_t{1} << 20, '\xf6');
@@ -695,9 +695,7 @@ TEST_CASE("structs: decode reserves no more than the remaining bytes and returns
     std::string const element = "\xd8\x47\x59\x10\x00"s + std::string(4096, '\x00');
     for (int i = 0; i < 0x201; ++i)
         many += element;
-    auto const full = cbor::structs<large_elements>::decode(std::move(many));
-    REQUIRE_FALSE(full.has_value());
-    CHECK_EQ(full.error(), error::not_enough_memory);
+    CHECK_THROWS_AS(static_cast<void>(cbor::structs<large_elements>::decode(std::move(many))), std::bad_alloc);
 }
 
 // An array head of 2^20 elements stood before 4 MiB of input. decode reserved min(2^20, 4 MiB / 4096) = 1024 elements of
@@ -753,9 +751,7 @@ TEST_CASE("structs decode keeps the resource of a moved pmr target")
     std::array<std::byte, 64> buffer;
     std::pmr::monotonic_buffer_resource budget(buffer.data(), buffer.size(), std::pmr::null_memory_resource());
     texts target(&budget);
-    auto const decoded = cbor::structs<texts>::decode(owner, std::move(target));
-    REQUIRE_FALSE(decoded.has_value());
-    CHECK_EQ(decoded.error(), error::not_enough_memory);
+    CHECK_THROWS_AS(static_cast<void>(cbor::structs<texts>::decode(owner, std::move(target))), std::bad_alloc);
 }
 
 // A resource that counts the allocations it gives, so that a test sees which resource a member took.

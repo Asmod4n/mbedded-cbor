@@ -94,9 +94,8 @@ struct next_allocation_refused {
 } // namespace
 
 // The rvalue forms of schema::path and schema::unverified_path move the message into a new owner. A full memory
-// gives std::bad_alloc there, and the owner decided that it becomes not_enough_memory, as in schema::decode.
-// Before, the std::bad_alloc left the call.
-TEST_CASE("schema: path and unverified_path give not_enough_memory when the owner cannot be allocated")
+// gives std::bad_alloc there. The owner decided that the library does not catch it, as the standard library does not.
+TEST_CASE("schema: path and unverified_path throw std::bad_alloc when the owner cannot be allocated")
 {
     using doc_reference_schema::car;
     car const sample{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}};
@@ -104,24 +103,20 @@ TEST_CASE("schema: path and unverified_path give not_enough_memory when the owne
     REQUIRE(encoded.has_value());
     std::string verified = *encoded;
     std::string unverified = verified;
-    error verified_error{};
-    error unverified_error{};
     {
         next_allocation_refused const refused;
-        verified_error = cbor::schema<car>::path(std::move(verified)).error_or(error{});
+        CHECK_THROWS_AS(static_cast<void>(cbor::schema<car>::path(std::move(verified))), std::bad_alloc);
     }
     {
         next_allocation_refused const refused;
-        unverified_error = cbor::schema<car>::unverified_path(std::move(unverified)).error_or(error{});
+        CHECK_THROWS_AS(static_cast<void>(cbor::schema<car>::unverified_path(std::move(unverified))), std::bad_alloc);
     }
-    CHECK_EQ(verified_error, error::not_enough_memory);
-    CHECK_EQ(unverified_error, error::not_enough_memory);
 }
 
 // lazy::adopt and the two rvalue forms of at_path move the message into a new owner, as schema::path does. A full
-// memory gives std::bad_alloc there, and the owner decided that it becomes not_enough_memory. The new owner is the
-// first allocation of each call, so the refused allocation is the owner.
-TEST_CASE("lazy::adopt and at_path give not_enough_memory when the owner cannot be allocated")
+// memory gives std::bad_alloc there, and the library does not catch it. The new owner is the first allocation of each
+// call, so the refused allocation is the owner.
+TEST_CASE("lazy::adopt and at_path throw std::bad_alloc when the owner cannot be allocated")
 {
     std::string const message = "\xa2\x61\x61\x61\x78\x61\x62\x82\x02\x03"s;
     auto const query = cbor::path::compile<std::string_view>("$.a");
@@ -129,24 +124,18 @@ TEST_CASE("lazy::adopt and at_path give not_enough_memory when the owner cannot 
     std::string adopted = message;
     std::string queried = message;
     std::string viewed = message;
-    error adopt_error{};
-    error query_error{};
-    error view_error{};
     {
         next_allocation_refused const refused;
-        adopt_error = cbor::lazy::adopt(std::move(adopted)).error_or(error{});
+        CHECK_THROWS_AS(static_cast<void>(cbor::lazy::adopt(std::move(adopted))), std::bad_alloc);
     }
     {
         next_allocation_refused const refused;
-        query_error = cbor::at_path(std::move(queried), *query).error_or(error{});
+        CHECK_THROWS_AS(static_cast<void>(cbor::at_path(std::move(queried), *query)), std::bad_alloc);
     }
     {
         next_allocation_refused const refused;
-        view_error = cbor::at_path<"$.a", std::string_view>(std::move(viewed)).error_or(error{});
+        CHECK_THROWS_AS(static_cast<void>(cbor::at_path<"$.a", std::string_view>(std::move(viewed))), std::bad_alloc);
     }
-    CHECK_EQ(adopt_error, error::not_enough_memory);
-    CHECK_EQ(query_error, error::not_enough_memory);
-    CHECK_EQ(view_error, error::not_enough_memory);
 }
 
 // A filter compared each element with its literal, or with the number of length() or count(). It used a std::string and
