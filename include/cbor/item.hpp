@@ -85,6 +85,17 @@ concept view_result =
  *
  * @ingroup decode
  */
+namespace detail
+{
+
+template <class T, class Item>
+constexpr bool is_chunk_view_of_items = false;
+
+template <class Item>
+constexpr bool is_chunk_view_of_items<std::ranges::chunk_view<std::span<Item const>>, Item> = true;
+
+}
+
 struct item {
 private:
     cbor::type const m_type;
@@ -165,7 +176,7 @@ public:
 #endif
                   ) ||
                  view_result<T> || std::same_as<T, std::span<item const>> ||
-                 std::same_as<T, std::ranges::chunk_view<std::span<item const>>> ||
+                 detail::is_chunk_view_of_items<T, item> ||
                  std::same_as<T, std::pair<std::uint64_t, item const *>>)
     std::expected<T, error> get() const
     {
