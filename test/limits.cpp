@@ -142,6 +142,48 @@ TEST_CASE("schema: a target with std::pmr members decodes with their allocators"
 }
 
 
+// A std::pmr target that a caller names was copied into the parameter of schema::decode, and the copy took the default
+// resource. The decode then ignored the limit of the caller's resource. structs::decode takes the target only as an
+// rvalue for this reason, and schema::decode now does the same.
+template <class T>
+concept schema_decodes_named_target = requires(std::shared_ptr<std::string const> owner, T target) {
+    cbor::schema<T>::decode(owner, target);
+};
+
+template <class T>
+concept schema_unverified_decodes_named_target = requires(std::shared_ptr<std::string const> owner, T target) {
+    cbor::schema<T>::unverified_decode(owner, target);
+};
+
+template <class T>
+concept schema_decodes_named_target_with_owner = requires(std::shared_ptr<void const> owner, std::string_view bytes,
+                                                          T target) {
+    cbor::schema<T>::decode(owner, bytes, target);
+};
+
+template <class T>
+concept schema_unverified_decodes_named_target_with_owner = requires(std::shared_ptr<void const> owner,
+                                                                     std::string_view bytes, T target) {
+    cbor::schema<T>::unverified_decode(owner, bytes, target);
+};
+
+TEST_CASE("schema: decode takes a std::pmr target only as an rvalue")
+{
+    CHECK((!schema_decodes_named_target<pmr_names>));
+    CHECK((!schema_unverified_decodes_named_target<pmr_names>));
+    CHECK((!schema_decodes_named_target_with_owner<pmr_names>));
+    CHECK((!schema_unverified_decodes_named_target_with_owner<pmr_names>));
+    std::array<std::byte, 4096> buffer{};
+    std::pmr::monotonic_buffer_resource budget(buffer.data(), buffer.size(), std::pmr::null_memory_resource());
+    pmr_names target{std::pmr::string(&budget), std::pmr::vector<std::pmr::string>(&budget)};
+    auto const encoded = cbor::schema<pmr_names>::encode(pmr_names{std::pmr::string("x"), {}});
+    REQUIRE(encoded.has_value());
+    auto const decoded =
+        cbor::schema<pmr_names>::decode(std::make_shared<std::string const>(*encoded), std::move(target));
+    REQUIRE(decoded.has_value());
+    CHECK_EQ((**decoded).text.get_allocator().resource(), &budget);
+}
+
 // A debug build of the C++ library of MSVC takes a proxy object from the allocator in the noexcept constructor of each
 // container. So an empty container over a refusing resource ends the program before the decode runs; the refusal is
 // tested where containers take no such proxy.

@@ -4409,7 +4409,7 @@ public:
      */
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
-    static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded, T target)
+    static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded, T &&target)
     {
         return decode_with_owner<true, D>(std::move(encoded), std::move(target));
     }
@@ -4429,7 +4429,7 @@ public:
      */
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
-    static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded, T target)
+    static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded, T &&target)
     {
         return decode_with_owner<true, D>(std::move(owner), std::string_view(std::span<char const>(encoded)),
                                      std::move(target));
@@ -4578,7 +4578,7 @@ public:
      */
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
-    static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<Encoded const> encoded, T target)
+    static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<Encoded const> encoded, T &&target)
     {
         return decode_with_owner<false, D>(std::move(encoded), std::move(target));
     }
@@ -4598,7 +4598,7 @@ public:
      */
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
-    static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded, T target)
+    static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded, T &&target)
     {
         return decode_with_owner<false, D>(std::move(owner), std::string_view(std::span<char const>(encoded)),
                                      std::move(target));
