@@ -120,8 +120,8 @@ TEST_CASE("decode: a node decoded twice gives two items that the caller owns")
 {
     auto const top_level = test::make_lazy_from_copy(std::string("\x82\x01\x62hi"sv));
     REQUIRE(top_level.has_value());
-    auto const first = top_level->clone();
-    auto const second = top_level->clone();
+    auto const first = top_level->to_item();
+    auto const second = top_level->to_item();
     REQUIRE(first.has_value());
     REQUIRE(second.has_value());
     CHECK_NE(&**first, &**second);
@@ -188,7 +188,7 @@ TEST_CASE("decode: bytes after the data item are not read")
 TEST_CASE("decode: the item outlives the lazy that decoded it")
 {
     std::string const s("\x83\x01\x02\x03"sv);
-    auto const r = test::make_lazy_from_copy(s)->clone();
+    auto const r = test::make_lazy_from_copy(s)->to_item();
     REQUIRE(r.has_value());
     CHECK_EQ((*r)->type, cbor::type::array);
     CHECK_EQ(read_argument_of_item(*(*r)), 3u);
@@ -202,7 +202,7 @@ TEST_CASE("decode: a child decoded through two paths has one content")
 {
     auto const top_level = test::make_lazy_from_copy(std::string("\xa1\x61k\x82\x01\x02"sv));
     REQUIRE(top_level.has_value());
-    auto const map = item_of(top_level->clone());
+    auto const map = item_of(top_level->to_item());
     CHECK_EQ(read_argument_of_item(*map), 1u);
     auto const entries = top_level->entries();
     REQUIRE(entries.has_value());
@@ -210,8 +210,8 @@ TEST_CASE("decode: a child decoded through two paths has one content")
     REQUIRE(entry.has_value());
     auto const value = top_level->at_key("k");
     REQUIRE(value.has_value());
-    auto const by_key = item_of(value->clone());
-    auto const by_entry = item_of(entry->second.clone());
+    auto const by_key = item_of(value->to_item());
+    auto const by_entry = item_of(entry->second.to_item());
     CHECK_EQ(read_argument_of_item(*by_key), read_argument_of_item(*by_entry));
     REQUIRE_EQ(list_children_of_item(*by_key).size(), 2u);
     REQUIRE_EQ(list_children_of_item(*by_entry).size(), 2u);
@@ -224,7 +224,7 @@ TEST_CASE("decode: an array and a map hold their data items in the order of the 
 {
     auto const top_level = test::make_lazy_from_copy(std::string("\x82\x01\xa2\x61k\x62hi\x02\x80"sv));
     REQUIRE(top_level.has_value());
-    auto const array = item_of(top_level->clone());
+    auto const array = item_of(top_level->to_item());
     auto const elements = list_children_of_item(*array);
     REQUIRE_EQ(elements.size(), 2u);
     CHECK_EQ(read_argument_of_item(*elements[0]), 1u);
@@ -245,7 +245,7 @@ TEST_CASE("decode: nested arrays and maps each show their own children")
     // [[1, [2, 3]], {4: [5]}, [], 6]
     auto const top_level = test::make_lazy_from_copy(std::string("\x84\x82\x01\x82\x02\x03\xa1\x04\x81\x05\x80\x06"sv));
     REQUIRE(top_level.has_value());
-    auto const root = item_of(top_level->clone());
+    auto const root = item_of(top_level->to_item());
     auto const outer = list_children_of_item(*root);
     REQUIRE_EQ(outer.size(), 4u);
     auto const first = list_children_of_item(*outer[0]);
@@ -271,12 +271,12 @@ TEST_CASE("decode: an array that claims more elements than bytes is refused")
 {
     auto const top_level = test::make_lazy_from_copy(std::string("\x9b\x80\x00\x00\x00\x00\x00\x00\x00\x01"sv));
     REQUIRE(top_level.has_value());
-    auto const r = top_level->clone();
+    auto const r = top_level->to_item();
     REQUIRE_FALSE(r.has_value());
     CHECK_EQ(r.error(), cbor::error::too_little_data);
     auto const map = test::make_lazy_from_copy(std::string("\xbb\x40\x00\x00\x00\x00\x00\x00\x00\x01"sv));
     REQUIRE(map.has_value());
-    auto const m = map->clone();
+    auto const m = map->to_item();
     REQUIRE_FALSE(m.has_value());
     CHECK_EQ(m.error(), cbor::error::too_little_data);
 }
@@ -287,7 +287,7 @@ TEST_CASE("decode: a count equal to the bytes left of empty children is read")
 {
     auto const top_level = test::make_lazy_from_copy(std::string("\x85\x80\x80\x80\x80\x80"sv));
     REQUIRE(top_level.has_value());
-    auto const root = item_of(top_level->clone());
+    auto const root = item_of(top_level->to_item());
     auto const elements = list_children_of_item(*root);
     REQUIRE_EQ(elements.size(), 5u);
     for (cbor::item const *const e : elements)
@@ -305,7 +305,7 @@ TEST_CASE("decode: many sibling containers keep their children through the growt
         wire += "\x82\x01\x02"sv;
     auto const top_level = cbor::lazy::adopt(std::move(wire));
     REQUIRE(top_level.has_value());
-    auto const root = item_of(top_level->clone());
+    auto const root = item_of(top_level->to_item());
     auto const elements = list_children_of_item(*root);
     REQUIRE_EQ(elements.size(), siblings);
     std::size_t sum = 0;
@@ -321,7 +321,7 @@ TEST_CASE("decode: a bignum and a typed array are tags over a byte string")
 {
     auto const top_level = test::make_lazy_from_copy(std::string("\x82\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00\xd8\x40\x42\x01\x02"sv));
     REQUIRE(top_level.has_value());
-    auto const root = item_of(top_level->clone());
+    auto const root = item_of(top_level->to_item());
     auto const elements = list_children_of_item(*root);
     REQUIRE_EQ(elements.size(), 2u);
     CHECK_EQ(elements[0]->type, cbor::type::unsigned_bignum);
@@ -339,13 +339,13 @@ TEST_CASE("decode: a map with a repeated key is read with no error")
 {
     auto const twice = test::make_lazy_from_copy(std::string("\xa2\x61k\x01\x61k\x02"sv));
     REQUIRE(twice.has_value());
-    CHECK(twice->clone().has_value());
+    CHECK(twice->to_item().has_value());
     auto const nested = test::make_lazy_from_copy(std::string("\x81\xa2\x01\x00\x18\x01\x00"sv));
     REQUIRE(nested.has_value());
-    REQUIRE(nested->clone().has_value());
+    REQUIRE(nested->to_item().has_value());
     auto const inner = nested->at(0);
     REQUIRE(inner.has_value());
-    CHECK(inner->clone().has_value());
+    CHECK(inner->to_item().has_value());
 }
 
 // decode compares no keys, so a map of 65536 text keys reads in one walk, with its last key equal to its first
@@ -367,10 +367,10 @@ TEST_CASE("decode: a map of 65536 keys is read with a repeated key")
     distinct[distinct.size() - 4] = '\xff';
     auto const unique = cbor::lazy::adopt(std::move(distinct));
     REQUIRE(unique.has_value());
-    CHECK(unique->clone().has_value());
+    CHECK(unique->to_item().has_value());
     auto const twice = cbor::lazy::adopt(std::move(map));
     REQUIRE(twice.has_value());
-    CHECK(twice->clone().has_value());
+    CHECK(twice->to_item().has_value());
 }
 
 // A fuzzer held one core for more than 10 s with one map of 65535 integer keys. The keys were compared pair by pair.
@@ -389,19 +389,19 @@ TEST_CASE("decode: a map of 65535 integer keys is read with a repeated key")
     negative[3] = '\x39';
     auto const unique = cbor::lazy::adopt(std::move(negative));
     REQUIRE(unique.has_value());
-    CHECK(unique->clone().has_value());
+    CHECK(unique->to_item().has_value());
     std::string longer = map;
     longer.replace(map.size() - 4, 4, "\x1a\x00\x00\x00\x00\x00"sv);
     auto const twice = cbor::lazy::adopt(std::move(longer));
     REQUIRE(twice.has_value());
-    CHECK(twice->clone().has_value());
+    CHECK(twice->to_item().has_value());
 }
 
 // The result owns what it shows, so decode on a temporary lazy is safe
 // and compiles.
 TEST_CASE("decode: a temporary lazy gives an item")
 {
-    auto const r = std::move(*test::make_lazy_from_copy(std::string("\x01"sv))).clone();
+    auto const r = std::move(*test::make_lazy_from_copy(std::string("\x01"sv))).to_item();
     REQUIRE(r.has_value());
     CHECK_EQ((*r)->type, cbor::type::unsigned_integer);
     CHECK_EQ(read_argument_of_item(*(*r)), 1u);
@@ -415,11 +415,11 @@ TEST_CASE("decode: a child decoded before its parent has the same content after 
     REQUIRE(top_level.has_value());
     auto const child = top_level->at(1);
     REQUIRE(child.has_value());
-    auto const inner = item_of(child->clone());
-    REQUIRE(top_level->clone().has_value());
+    auto const inner = item_of(child->to_item());
+    REQUIRE(top_level->to_item().has_value());
     auto const again = top_level->at(1);
     REQUIRE(again.has_value());
-    auto const later = item_of(again->clone());
+    auto const later = item_of(again->to_item());
     CHECK_EQ(read_argument_of_item(*later), read_argument_of_item(*inner));
     CHECK_EQ(read_argument_of_item(*list_children_of_item(*later)[1]), read_argument_of_item(*list_children_of_item(*inner)[1]));
 }
@@ -430,7 +430,7 @@ TEST_CASE("decode: a shared reference points to the item of the shared value")
 {
     auto const top_level = test::make_lazy_from_copy(std::string("\x82\xd8\x1c\x62hi\xd8\x1d\x00"sv));
     REQUIRE(top_level.has_value());
-    auto const root = item_of(top_level->clone());
+    auto const root = item_of(top_level->to_item());
     auto const elements = list_children_of_item(*root);
     REQUIRE_EQ(elements.size(), 2u);
     CHECK_EQ(elements[0]->type, cbor::type::tag);
@@ -449,7 +449,7 @@ TEST_CASE("decode: a tag 29 after its mark is a tag over its index")
     REQUIRE(top_level.has_value());
     auto const element = top_level->at(1);
     REQUIRE(element.has_value());
-    auto const inner = item_of(element->clone());
+    auto const inner = item_of(element->to_item());
     cbor::item const &reference = *list_children_of_item(*inner)[0];
     CHECK_EQ(reference.get<cbor::type::tag>().value().first, 29u);
     CHECK_EQ(reference.get<cbor::type::tag>().value().second->get<cbor::type::unsigned_integer>().value(), 0u);
@@ -460,7 +460,7 @@ TEST_CASE("decode: a cyclic array is its own element")
 {
     auto const top_level = test::make_lazy_from_copy(std::string("\xd8\x1c\x81\xd8\x1d\x00"sv));
     REQUIRE(top_level.has_value());
-    auto const root = item_of(top_level->clone());
+    auto const root = item_of(top_level->to_item());
     auto const *const array = root->get<cbor::type::tag>().value().second;
     CHECK_EQ(array->type, cbor::type::array);
     auto const elements = list_children_of_item(*array);
@@ -473,11 +473,11 @@ TEST_CASE("decode: a forward tag 29 is a plain tag")
 {
     auto const top_level = test::make_lazy_from_copy(std::string("\x82\xd8\x1d\x00\xd8\x1c\x00"sv));
     REQUIRE(top_level.has_value());
-    auto const whole = item_of(top_level->clone());
+    auto const whole = item_of(top_level->to_item());
     CHECK_EQ(whole->get<cbor::type::array>().value()[0].get<cbor::type::tag>().value().first, 29u);
     auto const element = top_level->at(0);
     REQUIRE(element.has_value());
-    auto const inner = item_of(element->clone());
+    auto const inner = item_of(element->to_item());
     CHECK_EQ(inner->get<cbor::type::tag>().value().first, 29u);
 }
 // Fault 21: in [28(0), 28(29(0)), 28(29(1)), ...] each element refers to the one before it. The decode of the last
@@ -508,7 +508,7 @@ TEST_CASE("decode: a long chain of shared references is read without recursion")
     REQUIRE(top_level.has_value());
     auto const last = top_level->at(chain_length - 1);
     REQUIRE(last.has_value());
-    auto const decoded = item_of(last->clone());
+    auto const decoded = item_of(last->to_item());
     auto const reference = decoded->get<cbor::type::tag>().value().second->get<cbor::type::tag>();
     REQUIRE(reference.has_value());
     CHECK_EQ(reference->first, 29u);
@@ -523,10 +523,10 @@ TEST_CASE("decode: the depth is bounded by the stack of the thread")
     for (std::string_view const level : {"\xd8\x64"sv, "\x81"sv}) {
         auto const read = test::make_lazy_from_copy(test::repeat(level, test::levels_every_stack_holds) + '\x00');
         REQUIRE(read.has_value());
-        CHECK(read->clone().has_value());
+        CHECK(read->to_item().has_value());
         auto const deep = test::make_lazy_from_copy(test::repeat(level, test::levels_beyond_small_stack) + '\x00');
         REQUIRE(deep.has_value());
-        CHECK_EQ(test::error_on_small_stack([&deep] { return deep->clone(); }), cbor::error::nesting_depth_exceeded);
+        CHECK_EQ(test::error_on_small_stack([&deep] { return deep->to_item(); }), cbor::error::nesting_depth_exceeded);
     }
 }
 
@@ -535,7 +535,7 @@ TEST_CASE("decode: indefinite length is refused")
 {
     auto const top_level = test::make_lazy_from_copy(std::string("\x82\x01\x9f\xff"sv));
     REQUIRE(top_level.has_value());
-    auto const r = top_level->clone();
+    auto const r = top_level->to_item();
     REQUIRE_FALSE(r.has_value());
     CHECK_EQ(r.error(), cbor::error::indefinite_length);
 }
@@ -546,7 +546,7 @@ TEST_CASE("decode: a float16 keeps additional information 25")
 {
     auto const top_level = test::make_lazy_from_copy(std::string("\xf9\x3e\x00"sv));
     REQUIRE(top_level.has_value());
-    auto const f = item_of(top_level->clone());
+    auto const f = item_of(top_level->to_item());
     CHECK_EQ(f->type, cbor::type::half_float);
     CHECK_EQ(f->additional_information, 25);
     CHECK_EQ(std::bit_cast<std::uint64_t>(f->get<cbor::type::half_float>().value()), 0x3ff8000000000000u);
@@ -601,7 +601,7 @@ TEST_CASE("type: every type of an item, through lazy and through the decoded ite
         auto const by_lazy = l->type();
         REQUIRE(by_lazy.has_value());
         CHECK_EQ(*by_lazy, r.expected);
-        auto const tree = item_of(l->clone());
+        auto const tree = item_of(l->to_item());
         CHECK_EQ(tree->type, r.expected);
     }
 }
@@ -613,7 +613,7 @@ TEST_CASE("type: lazy and the item keep tags 28 and 29")
     REQUIRE(root.has_value());
     CHECK_EQ(*root->at(0)->type(), cbor::type::tag);
     CHECK_EQ(*root->at(1)->type(), cbor::type::tag);
-    auto const tree = item_of(root->clone());
+    auto const tree = item_of(root->to_item());
     auto const elements = list_children_of_item(*tree);
     CHECK_EQ(elements[0]->type, cbor::type::tag);
     CHECK_EQ(elements[1]->type, cbor::type::tag);
@@ -623,7 +623,7 @@ TEST_CASE("type: lazy and the item keep tags 28 and 29")
 TEST_CASE("type: an empty lazy throws")
 {
     CHECK_THROWS_AS((void)cbor::lazy{}.type(), std::logic_error);
-    CHECK_THROWS_AS((void)cbor::lazy{}.clone(), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::lazy{}.to_item(), std::logic_error);
 }
 
 }
@@ -647,7 +647,7 @@ TEST_CASE("encode: a tree is written with the head widths of its input, also wit
         CAPTURE(r.wire);
         auto const top_level = test::make_lazy_from_copy(std::string(r.wire));
         REQUIRE(top_level.has_value());
-        auto const root = item_of(top_level->clone());
+        auto const root = item_of(top_level->to_item());
         std::string out;
         auto const size = cbor::encode(*root, out);
         REQUIRE(size.has_value());
@@ -673,7 +673,7 @@ TEST_CASE("encode: a deep tree that decode gives is encoded")
     std::string const deep = test::repeat("\x81"sv, test::levels_every_stack_holds) + '\x00';
     auto const top_level = test::make_lazy_from_copy(deep);
     REQUIRE(top_level.has_value());
-    auto const root = item_of(top_level->clone());
+    auto const root = item_of(top_level->to_item());
     std::string out;
     REQUIRE(cbor::encode(*root, out).has_value());
     CHECK_EQ(out, deep);
@@ -684,7 +684,7 @@ TEST_CASE("encode: a span that is too short")
 {
     auto const top_level = test::make_lazy_from_copy(std::string("\x63" "abc"sv));
     REQUIRE(top_level.has_value());
-    auto const root = item_of(top_level->clone());
+    auto const root = item_of(top_level->to_item());
     std::array<char, 3> buffer{};
     auto const r = cbor::encode(*root, std::span<char>(buffer));
     REQUIRE_FALSE(r.has_value());
@@ -696,7 +696,7 @@ TEST_CASE("decode: a reference before its mark is a plain tag")
 {
     auto const top_level = test::make_lazy_from_copy(std::string("\x82\xd8\x1d\x00\xd8\x1c\x01"sv));
     REQUIRE(top_level.has_value());
-    auto const root = item_of(top_level->clone());
+    auto const root = item_of(top_level->to_item());
     CHECK_EQ(root->get<cbor::type::array>().value()[0].get<cbor::type::tag>().value().first, 29u);
 }
 // RFC 8949 3.4.5.1: tag 24 holds a byte string with one encoded CBOR data item. The decode gives both the byte string as
@@ -707,7 +707,7 @@ TEST_CASE("decode: tag 24 gives the byte string and the embedded item")
     std::string const wire = "\xd8\x18\x45\x64IETF"s;
     auto const top_level = test::make_lazy_from_copy(wire);
     REQUIRE(top_level.has_value());
-    auto const root = item_of(top_level->clone());
+    auto const root = item_of(top_level->to_item());
     REQUIRE_EQ(root->type, cbor::type::tag);
     CHECK_EQ(root->get<cbor::type::tag>().value().first, 24u);
     CHECK_EQ(root->get<cbor::type::tag>().value().second->get<cbor::type::byte_string>().value().size(), 5u);
@@ -724,7 +724,7 @@ TEST_CASE("decode: a tag 24 inside a tag 24 is decoded at each level")
     std::string const wire = "\xd8\x18\x44\xd8\x18\x41\x01"s;
     auto const top_level = test::make_lazy_from_copy(wire);
     REQUIRE(top_level.has_value());
-    auto const root = item_of(top_level->clone());
+    auto const root = item_of(top_level->to_item());
     auto const outer_found = cbor::encoded_cbor_data_item(root, *root);
     REQUIRE(outer_found.has_value());
     cbor::item const &outer = outer_found->get();
@@ -746,7 +746,7 @@ TEST_CASE("decode: the embedded item of a tag 24 lives as long as the result")
     std::optional<cbor::owning<cbor::item>> root;
     {
         std::string const wire = "\xd8\x18\x47\xd8\x18\x44\x82\x01\x61x"s;
-        root.emplace(item_of(test::make_lazy_from_copy(std::string(wire))->clone()));
+        root.emplace(item_of(test::make_lazy_from_copy(std::string(wire))->to_item()));
     }
     auto const outer_found = cbor::encoded_cbor_data_item(*root, **root);
     REQUIRE(outer_found.has_value());
@@ -760,12 +760,12 @@ TEST_CASE("decode: the embedded item of a tag 24 lives as long as the result")
     CHECK_EQ(children[1]->get<cbor::type::text_string>().value(), "x");
 }
 
-// lazy::clone keeps a tag 28 over its value and a tag 29 over its index (owner decision: only cbor::decode
+// lazy::to_item keeps a tag 28 over its value and a tag 29 over its index (owner decision: only cbor::decode
 // resolves them).
 TEST_CASE("clone: a tag 28 and a tag 29 are tag nodes")
 {
     std::string const wire = "\x82\xd8\x1c\x82\x01\x02\xd8\x1d\x00"s;
-    auto const root = item_of(test::make_lazy_from_copy(std::string(wire))->clone());
+    auto const root = item_of(test::make_lazy_from_copy(std::string(wire))->to_item());
     auto const children = list_children_of_item(*root);
     CHECK(children[0]->get<cbor::type::tag>().value().second->get<cbor::type::array>().has_value());
     CHECK_EQ(children[1]->get<cbor::type::tag>().value().first, 29u);
@@ -778,7 +778,7 @@ TEST_CASE("decode: a shared reference inside tag 24 refers to a mark inside the 
 {
     auto const top_level = test::make_lazy_from_copy(std::string("\xd8\x18\x48\x82\xd8\x1c\x61\x61\xd8\x1d\x00"sv));
     REQUIRE(top_level.has_value());
-    auto const root = item_of(top_level->clone());
+    auto const root = item_of(top_level->to_item());
     auto const elements = list_children_of_item(cbor::encoded_cbor_data_item(root, *root).value().get());
     REQUIRE_EQ(elements.size(), 2u);
     CHECK_EQ(elements[1]->get<cbor::type::tag>().value().first, 29u);
@@ -790,7 +790,7 @@ TEST_CASE("decode: a shared reference inside tag 24 does not see a mark outside"
 {
     auto const top_level = test::make_lazy_from_copy(std::string("\x82\xd8\x1c\x61\x61\xd8\x18\x43\xd8\x1d\x00"sv));
     REQUIRE(top_level.has_value());
-    auto const root = item_of(top_level->clone());
+    auto const root = item_of(top_level->to_item());
     auto const embedded = cbor::encoded_cbor_data_item(root, root->get<cbor::type::array>().value()[1]);
     REQUIRE(embedded.has_value());
     CHECK_EQ(embedded->get().get<cbor::type::tag>().value().first, 29u);
@@ -801,7 +801,7 @@ TEST_CASE("decode: a mark inside tag 24 does not count outside")
 {
     auto const top_level = test::make_lazy_from_copy(std::string("\x82\xd8\x18\x43\xd8\x1c\x01\xd8\x1d\x00"sv));
     REQUIRE(top_level.has_value());
-    auto const root = item_of(top_level->clone());
+    auto const root = item_of(top_level->to_item());
     CHECK_EQ(root->get<cbor::type::array>().value()[1].get<cbor::type::tag>().value().first, 29u);
 }
 
@@ -811,15 +811,15 @@ TEST_CASE("decode: malformed bytes inside tag 24 give their own error")
 {
     auto const short_head = test::make_lazy_from_copy(std::string("\xd8\x18\x41\x18"sv));
     REQUIRE(short_head.has_value());
-    auto const r = short_head->clone();
+    auto const r = short_head->to_item();
     REQUIRE_FALSE(r.has_value());
     CHECK_EQ(r.error(), cbor::error::too_little_data);
     auto const reserved = test::make_lazy_from_copy(std::string("\xd8\x18\x41\x1c"sv));
     REQUIRE(reserved.has_value());
     auto const at_top = test::make_lazy_from_copy(std::string("\x1c"sv));
     REQUIRE(at_top.has_value());
-    auto const inside = reserved->clone();
-    auto const outside = at_top->clone();
+    auto const inside = reserved->to_item();
+    auto const outside = at_top->to_item();
     REQUIRE_FALSE(inside.has_value());
     REQUIRE_FALSE(outside.has_value());
     CHECK_EQ(inside.error(), outside.error());
@@ -832,10 +832,10 @@ TEST_CASE("decode: the stack check goes on inside tag 24")
 {
     auto const read = test::make_lazy_from_copy(test::repeat("\x81"sv, test::levels_every_stack_holds) + "\xd8\x18\x41\x00"s);
     REQUIRE(read.has_value());
-    CHECK(read->clone().has_value());
+    CHECK(read->to_item().has_value());
     auto const deep = test::make_lazy_from_copy(test::repeat("\x81"sv, test::levels_beyond_small_stack) + "\xd8\x18\x41\x00"s);
     REQUIRE(deep.has_value());
-    CHECK_EQ(test::error_on_small_stack([&deep] { return deep->clone(); }), cbor::error::nesting_depth_exceeded);
+    CHECK_EQ(test::error_on_small_stack([&deep] { return deep->to_item(); }), cbor::error::nesting_depth_exceeded);
 }
 
 // RFC 8949 3.4.5.1: the byte string of tag 24 holds one encoded data item. decode reads everything and refuses bytes
@@ -846,7 +846,7 @@ TEST_CASE("tag 24 with bytes after its data item is refused by decode and not se
     std::string const wire = "\xd8\x18\x42\x01\x02"s;
     auto const top_level = test::make_lazy_from_copy(wire);
     REQUIRE(top_level.has_value());
-    auto const tree = top_level->clone();
+    auto const tree = top_level->to_item();
     REQUIRE_FALSE(tree.has_value());
     CHECK_EQ(tree.error(), cbor::error::syntax_error);
     CHECK_EQ(*top_level->get<int>(), 1);
@@ -890,7 +890,7 @@ TEST_CASE("encode: a float of each width comes back byte for byte")
     };
     for (row const &r : rows) {
         CAPTURE(r.wire);
-        auto const root = item_of(test::make_lazy_from_copy(std::string(r.wire))->clone());
+        auto const root = item_of(test::make_lazy_from_copy(std::string(r.wire))->to_item());
         CHECK_EQ(root->type, r.type);
         CHECK_EQ(root->additional_information, static_cast<std::uint8_t>(r.wire.front()) & 0x1f);
         std::string again;
@@ -971,7 +971,7 @@ TEST_CASE("decode: every major type and additional information gives the type of
             }
             auto const top_level = test::make_lazy_from_copy(std::string(wire));
             REQUIRE(top_level.has_value());
-            auto const decoded = top_level->clone();
+            auto const decoded = top_level->to_item();
             REQUIRE(decoded.has_value());
             CHECK_EQ((*decoded)->type, expected);
             bool const bignum = major == 6 && (argument == 2 || argument == 3);
@@ -1004,7 +1004,7 @@ TEST_CASE("encode: a bignum that fits is an integer, a larger bignum and a typed
                         row{minus_two_64_minus_1, minus_two_64_minus_1, cbor::major_type::tag},
                         row{"\xd8\x40\x40"sv, "\xd8\x40\x40"sv, cbor::major_type::tag}}) {
         CAPTURE(r.wire);
-        auto const root = item_of(test::make_lazy_from_copy(std::string(r.wire))->clone());
+        auto const root = item_of(test::make_lazy_from_copy(std::string(r.wire))->to_item());
         CHECK_EQ(find_major_type_of(root->type), r.major);
         std::string again;
         REQUIRE(cbor::encode(*root, again).has_value());
@@ -1017,7 +1017,7 @@ TEST_CASE("encode: a bignum that fits is an integer, a larger bignum and a typed
 // throws, so a caller never reads an item that does not exist.
 TEST_CASE("encoded_cbor_data_item: an item that is not a tag 24 of the tree throws")
 {
-    auto const root = item_of(test::make_lazy_from_copy(std::string("\x82\xd8\x1c\x01\xd8\x1d\x00"sv))->clone());
+    auto const root = item_of(test::make_lazy_from_copy(std::string("\x82\xd8\x1c\x01\xd8\x1d\x00"sv))->to_item());
     CHECK_THROWS_AS((void)cbor::encoded_cbor_data_item(root, root->get<cbor::type::array>().value()[1]), std::logic_error);
     // A tree that no decode made cannot be built: owning<item> has no public constructor.
     CHECK_FALSE((std::is_constructible_v<cbor::owning<cbor::item>, std::shared_ptr<cbor::item const>>));
@@ -1042,7 +1042,7 @@ TEST_CASE("decode: a count larger than the bytes left is too_little_data before 
         CAPTURE(wire);
         auto const top_level = test::make_lazy_from_copy(wire);
         REQUIRE(top_level.has_value());
-        auto const r = top_level->clone();
+        auto const r = top_level->to_item();
         REQUIRE_FALSE(r.has_value());
         CHECK_EQ(r.error(), cbor::error::too_little_data);
     }

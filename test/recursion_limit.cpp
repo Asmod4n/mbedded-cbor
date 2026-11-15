@@ -68,15 +68,15 @@ TEST_CASE("recursion limit: decode of the item tree")
     refused_on_small_stack([&deep] { return test::make_value_from_item(*test::make_lazy_from_copy(deep)); });
 }
 
-// lazy::clone decodes the item tree. It recurses once for each tag.
-TEST_CASE("recursion limit: lazy::clone")
+// lazy::to_item decodes the item tree. It recurses once for each tag.
+TEST_CASE("recursion limit: lazy::to_item")
 {
     auto const read = test::make_lazy_from_copy(repeat("\xd8\x64"sv, held) + '\x00');
     REQUIRE(read.has_value());
-    CHECK(read->clone().has_value());
+    CHECK(read->to_item().has_value());
     auto const deep = test::make_lazy_from_copy(repeat("\xd8\x64"sv, beyond) + '\x00');
     REQUIRE(deep.has_value());
-    refused_on_small_stack([&deep] { return deep->clone(); });
+    refused_on_small_stack([&deep] { return deep->to_item(); });
 }
 
 // A key literal of a path is compared with a key of the map through every level (RFC 8949 5.6.1). The two keys differ
@@ -147,11 +147,11 @@ TEST_CASE("recursion limit: diagnostic_notation")
 // its encode on the small stack stops where that stack ends.
 TEST_CASE("recursion limit: encode")
 {
-    auto const read = test::make_lazy_from_copy(encode_in_preferred_form(arrays_around_zero(held)))->clone();
+    auto const read = test::make_lazy_from_copy(encode_in_preferred_form(arrays_around_zero(held)))->to_item();
     REQUIRE(read.has_value());
     std::string out;
     CHECK(cbor::encode(**read, out).has_value());
-    auto const deep = test::make_lazy_from_copy(arrays_around(test::levels_main_thread_holds, "\x00"sv))->clone();
+    auto const deep = test::make_lazy_from_copy(arrays_around(test::levels_main_thread_holds, "\x00"sv))->to_item();
     if constexpr (!test::main_thread_holds_deep_input) {
         if (!deep) {
             CHECK_EQ(deep.error(), error::nesting_depth_exceeded);
@@ -175,10 +175,10 @@ TEST_CASE("recursion limit: a shared value read through its reference")
                                "\xd8\x1d\x00"s;
     auto const whole = test::make_lazy_from_copy(shared);
     REQUIRE(whole.has_value());
-    CHECK(whole->clone().has_value());
+    CHECK(whole->to_item().has_value());
     auto const second = whole->at(1);
     REQUIRE(second.has_value());
-    CHECK(second->clone().has_value());
+    CHECK(second->to_item().has_value());
 }
 
 // structs::read_generic recurses once for the array of each struct and once for its element. nests_around(n) nests a map

@@ -162,7 +162,7 @@ TEST_CASE("doc advanced runtime: get")
 TEST_CASE("doc advanced runtime: clone and decode")
 {
     auto const owner = std::make_shared<std::string const>(encode_in_preferred_form(A(1, M("a"s, 2))));
-    auto const tree = cbor::lazy::view(owner)->clone();
+    auto const tree = cbor::lazy::view(owner)->to_item();
     REQUIRE(tree.has_value());
     CHECK_EQ((*tree)->type, cbor::type::array);
     CHECK_EQ((*tree)->get<cbor::type::array>()->size(), 2u);
@@ -172,12 +172,12 @@ TEST_CASE("doc advanced runtime: clone and decode")
     CHECK_EQ(pairs.get<cbor::type::map>()->front().get<cbor::type::text_string>(), "a"sv);
     CHECK_EQ(pairs.get<cbor::type::map>()->back().get<cbor::type::unsigned_integer>(), 2u);
     auto const cut = std::make_shared<std::string const>("\x82\x01"s);
-    CHECK_EQ(cbor::lazy::view(cut)->clone().error(), error::too_little_data);
-    CHECK_EQ(test::make_lazy_from_copy("\x9b\x80\x00\x00\x00\x00\x00\x00\x00\x01"s)->clone().error(), error::too_little_data);
+    CHECK_EQ(cbor::lazy::view(cut)->to_item().error(), error::too_little_data);
+    CHECK_EQ(test::make_lazy_from_copy("\x9b\x80\x00\x00\x00\x00\x00\x00\x00\x01"s)->to_item().error(), error::too_little_data);
     CHECK_EQ(*test::make_lazy_from_copy("\xc2\x41\x05"s)->type(), cbor::type::unsigned_integer);
     CHECK_EQ(*test::make_lazy_from_copy("\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s)->type(), cbor::type::unsigned_bignum);
     CHECK_EQ(*test::make_lazy_from_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->at(1)->type(), cbor::type::tag);
-    auto const tags = test::make_lazy_from_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->clone();
+    auto const tags = test::make_lazy_from_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->to_item();
     REQUIRE(tags.has_value());
     CHECK_EQ(list_children_of_item(*(*tags))[1]->type, cbor::type::tag);
 }
@@ -203,7 +203,7 @@ TEST_CASE("doc advanced runtime: the tree copies its strings")
     input.assign(input.size(), '\0');
     CHECK_EQ(*text, "abc"sv);
     CHECK(cbor::decode("\x01\x02"sv).has_value());
-    CHECK(test::make_lazy_from_copy("\x01\x02"s)->clone().has_value());
+    CHECK(test::make_lazy_from_copy("\x01\x02"s)->to_item().has_value());
 }
 
 // The section "encode" shows the calls of the encoder, each kind of target, and encode of an item.
@@ -234,7 +234,7 @@ TEST_CASE("doc advanced runtime: encode")
     REQUIRE(test::encode(w, v).has_value());
     CHECK_EQ(w.encoded, "\x82"s + write_unsigned_at_native_width(1) + write_unsigned_at_native_width(2));
     std::string const cycle = "\xd8\x1c\xc6\xd8\x1d\x00"s;
-    auto const tagged = *test::make_lazy_from_copy(cycle)->clone();
+    auto const tagged = *test::make_lazy_from_copy(cycle)->to_item();
     cbor::item const *const six = tagged->get<cbor::type::tag>().value().second;
     CHECK_EQ(read_argument_of_item(*six), 6u);
     cbor::item const *const reference = six->get<cbor::type::tag>().value().second;
@@ -242,7 +242,7 @@ TEST_CASE("doc advanced runtime: encode")
     std::string const wire = "\x82\xd8\x1c\x19\x00\x01\xd8\x1d\x00"s;
     std::string const own = wire;
     std::string again;
-    auto const tree = test::make_lazy_from_copy(wire)->clone();
+    auto const tree = test::make_lazy_from_copy(wire)->to_item();
     CHECK_EQ(cbor::encode(**tree, again), own.size());
     CHECK_EQ(again, own);
     CHECK(same_value(again, wire));
@@ -339,10 +339,10 @@ TEST_CASE("doc advanced runtime: tags 28 and 29")
     CHECK_EQ(l.at(1)->type(), cbor::type::tag);
     CHECK_EQ(l.at(1)->get<std::int64_t>(), 0);
     CHECK_EQ(cbor::diagnostic_notation("\x82\xd8\x1c\x01\xd8\x1d\x00"sv), "[28(1), 29(0)]");
-    auto const forward = test::make_lazy_from_copy("\x82\xd8\x1d\x00\xd8\x1c\x05"s)->clone();
+    auto const forward = test::make_lazy_from_copy("\x82\xd8\x1d\x00\xd8\x1c\x05"s)->to_item();
     REQUIRE(forward.has_value());
     CHECK_EQ((*forward)->get<cbor::type::array>().value()[0].get<cbor::type::tag>().value().first, 29u);
-    CHECK(test::make_lazy_from_copy("\xd8\x1c\x81\xd8\x1d\x00"s)->clone().has_value());
+    CHECK(test::make_lazy_from_copy("\xd8\x1c\x81\xd8\x1d\x00"s)->to_item().has_value());
     CHECK_EQ(test::make_lazy_from_copy("\xd8\x1c\xd8\x1d\x00"s)->at(0).error(), error::not_indexable);
 }
 
@@ -351,13 +351,13 @@ TEST_CASE("doc advanced runtime: tag 55799")
 {
     auto const owner = std::make_shared<std::string const>("\xd9\xd9\xf7\x82\x01\x02"s);
     CHECK_EQ(cbor::lazy::view(owner)->at(1)->get<std::int64_t>(), 2);
-    auto const content = cbor::lazy::view(owner)->clone();
+    auto const content = cbor::lazy::view(owner)->to_item();
     REQUIRE(content.has_value());
     CHECK_EQ((*content)->type, cbor::type::array);
     auto const decoded = cbor::decode(*owner);
     REQUIRE(decoded.has_value());
     CHECK_EQ((*decoded)->type, cbor::type::array);
-    auto const tree = test::make_lazy_from_copy("\x81\xd9\xd9\xf7\x01"s)->clone();
+    auto const tree = test::make_lazy_from_copy("\x81\xd9\xd9\xf7\x01"s)->to_item();
     REQUIRE(tree.has_value());
     cbor::item const *const inner = list_children_of_item(*(*tree))[0];
     CHECK_EQ(inner->type, cbor::type::tag);

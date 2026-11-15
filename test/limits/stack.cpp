@@ -154,7 +154,7 @@ read_values every_reader(std::size_t const levels, holder const &chain, outcome 
     auto const l = test::make_lazy_from_copy(deep);
     CHECK(l.has_value());
     if (l)
-        reads(l->clone(), expected);
+        reads(l->to_item(), expected);
     reads(cbor::diagnostic_notation(deep), expected);
     // item_size counts the items that are still to read and does not recurse: it reads every depth.
     reads(cbor::item_size(deep), outcome::value);
@@ -231,7 +231,7 @@ TEST_CASE("stack: a deep tree of the library ends and encodes on a small stack")
     std::optional<cbor::owning<cbor::item>> tree(std::move(*decoded));
     auto const l = test::make_lazy_from_copy(arrays_around_one(tree_levels));
     REQUIRE(l.has_value());
-    auto cloned = l->clone();
+    auto cloned = l->to_item();
     REQUIRE(cloned.has_value());
     std::optional<cbor::owning<cbor::item>> clone(std::move(*cloned));
     test::run_on_small_stack([&tree, &clone] {

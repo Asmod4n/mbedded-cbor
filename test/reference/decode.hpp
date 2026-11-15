@@ -133,7 +133,7 @@ inline std::expected<value, error> make_value_from_item(cbor::item const &it)
 
 inline std::expected<value, error> make_value_from_item(cbor::lazy const &l)
 {
-    auto const tree = l.clone();
+    auto const tree = l.to_item();
     if (!tree)
         return std::unexpected(tree.error());
     return make_value_from_item(**tree);

@@ -81,7 +81,7 @@ template <cbor::type K>
 using item_alternative_t = typename item_alternative<K>::type;
 
 /**
- * @brief One node of a tree from cbor::decode() or `lazy::clone`.
+ * @brief One node of a tree from cbor::decode() or `lazy::to_item`.
  *
  * `type` gives the kind of the node.
  * `additional_information` gives the low 5 bits of the initial byte (RFC 8949 3).

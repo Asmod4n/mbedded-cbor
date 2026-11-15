@@ -76,7 +76,7 @@ inline void tree_encode(std::string_view const input)
     auto const top_level = test::make_lazy_from_copy(input);
     if (!top_level)
         return;
-    auto const tree = top_level->clone();
+    auto const tree = top_level->to_item();
     if (!tree)
         return;
     auto const end = cbor::item_size(input);
@@ -93,7 +93,7 @@ inline void tree_encode(std::string_view const input)
         require(value.error() == again.error());
     auto const top_again = test::make_lazy_from_copy(out);
     require(top_again.has_value());
-    auto const tree_again = top_again->clone();
+    auto const tree_again = top_again->to_item();
     require(tree_again.has_value());
     std::string twice;
     require(cbor::encode(**tree_again, twice).has_value() && twice == out);
@@ -132,9 +132,9 @@ inline std::vector<cbor::item const *> nodes_of(cbor::owning<cbor::item> const &
     return nodes;
 }
 
-// cbor::decode resolves tags 28 and 29 (theories/Cycles.v). A decode that succeeds reads a stream that clone
+// cbor::decode resolves tags 28 and 29 (theories/Cycles.v). A decode that succeeds reads a stream that to_item
 // also reads; each shared_reference names a node of the tree (theorem read_no_dangling); the tree has no more nodes
-// than the tree of clone, which keeps one node per tag (read_no_expansion). encode_cycles writes a tree
+// than the tree of to_item, which keeps one node per tag (read_no_expansion). encode_cycles writes a tree
 // with a shared_reference unless the amplification limit, the depth or the bounded span stops it, and decode reads back
 // a graph with the same unfolding (theories/Writer.v write_read_back). A tree with as many nodes as the tree of
 // clone holds no tag 28, so encode writes it as it writes the tree of clone.
@@ -145,7 +145,7 @@ inline void resolving_decode(std::string_view const input)
         return;
     auto const top_level = test::make_lazy_from_copy(input);
     require(top_level.has_value());
-    auto const plain = top_level->clone();
+    auto const plain = top_level->to_item();
     require(plain.has_value());
     std::vector<cbor::item const *> const nodes = nodes_of(*resolved);
     std::size_t const plain_nodes = nodes_of(*plain).size();

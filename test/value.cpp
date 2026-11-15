@@ -111,7 +111,7 @@ TEST_CASE("depth: encode of a deep tree")
     value deep = V(0);
     for (std::size_t i = 0; i < test::levels_every_stack_holds; ++i)
         deep = A(deep);
-    auto const fits = test::make_lazy_from_copy(encode_in_preferred_form(deep))->clone();
+    auto const fits = test::make_lazy_from_copy(encode_in_preferred_form(deep))->to_item();
     REQUIRE(fits.has_value());
     std::string w;
     CHECK(cbor::encode(**fits, w).has_value());

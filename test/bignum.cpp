@@ -117,9 +117,9 @@ TEST_CASE("bignum: encode takes a deep tagged bignum that decode gives")
     std::string const bignum = "\xc2\x49"s + std::string(9, '\x01');
     std::string const deep = std::string(test::levels_beyond_small_stack, '\x81') + bignum;
     std::string const shallow = std::string(test::levels_every_stack_holds, '\x81') + bignum;
-    CHECK_EQ(test::error_on_small_stack([&deep] { return test::make_lazy_from_copy(deep)->clone(); }),
+    CHECK_EQ(test::error_on_small_stack([&deep] { return test::make_lazy_from_copy(deep)->to_item(); }),
              error::nesting_depth_exceeded);
-    auto const ok = test::make_lazy_from_copy(shallow)->clone();
+    auto const ok = test::make_lazy_from_copy(shallow)->to_item();
     REQUIRE(ok.has_value());
     std::string again;
     REQUIRE(cbor::encode(**ok, again).has_value());
@@ -156,7 +156,7 @@ TEST_CASE("bignum: a magnitude that fits 64 bits is an integer in decode and in 
         auto const t = l->type();
         REQUIRE(t.has_value());
         CHECK_EQ(*t, r.type);
-        auto const tree = l->clone();
+        auto const tree = l->to_item();
         REQUIRE(tree.has_value());
         CHECK_EQ((*tree)->type, r.type);
         CHECK_EQ(read_argument_of_item(**tree), r.argument);
@@ -216,7 +216,7 @@ TEST_CASE("bignum: a wrong content is a tag in decode and in type()")
         auto const l = test::make_lazy_from_copy(std::string(r.wire));
         REQUIRE(l.has_value());
         CHECK_EQ(l->type(), r.type);
-        auto const tree = l->clone();
+        auto const tree = l->to_item();
         REQUIRE(tree.has_value());
         CHECK_EQ((*tree)->type, r.type);
         CHECK_EQ(read_argument_of_item(**tree), r.wire[0] == '\xc2' ? 2u : 3u);
@@ -231,7 +231,7 @@ TEST_CASE("bignum: a wrong content is a tag in decode and in type()")
         CAPTURE(f.wire);
         auto const l = test::make_lazy_from_copy(std::string(f.wire));
         REQUIRE(l.has_value());
-        CHECK_EQ(l->clone().error(), f.expected);
+        CHECK_EQ(l->to_item().error(), f.expected);
     }
 }
 
@@ -242,7 +242,7 @@ TEST_CASE("bignum: tag 28 around a bignum that fits is a tag over the integer")
     std::string const wire = "\x82\xd8\x1c\xc2\x41\x01\xd8\x1d\x00"s;
     auto const l = test::make_lazy_from_copy(wire);
     REQUIRE(l.has_value());
-    auto const tree = l->clone();
+    auto const tree = l->to_item();
     REQUIRE(tree.has_value());
     auto const elements = list_children_of_item(**tree);
     REQUIRE_EQ(elements.size(), 2u);

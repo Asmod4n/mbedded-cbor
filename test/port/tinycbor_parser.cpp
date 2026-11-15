@@ -1061,7 +1061,7 @@ TEST_CASE("tinycbor parser: find a key in a map")
             continue;
         CHECK_EQ(make_outcome_text(value->type()), make_error_text(no_error));
         CHECK_EQ(value->type().value_or(cbor::type::null), cbor::type::tag);
-        auto const tree = value->clone();
+        auto const tree = value->to_item();
         REQUIRE_EQ(make_outcome_text(tree), make_error_text(no_error));
         CHECK_EQ((*tree)->get<cbor::type::tag>().value_or(std::pair<std::uint64_t, cbor::item const *>{}).first, 42u);
         auto const text = value->get<std::string_view>();

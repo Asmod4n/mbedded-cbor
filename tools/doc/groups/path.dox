@@ -171,7 +171,7 @@ A `cbor::nodelist` is a `std::vector<cbor::lazy>`. It gives every match
 as a `cbor::lazy` that holds the owner of the bytes. It also reads a
 singular path. A path that selects nothing gives an empty nodelist and
 no error. A node can be any CBOR item: a map, an array or a tag. Read it
-on with a step, `get`, `type()` or `clone()`.
+on with a step, `get`, `type()` or `to_item()`.
 
 The compiler parses a compile-time path once. At run time it is a set of
 constant arrays. A run-time path is checked once, in `compile`: the
@@ -243,7 +243,7 @@ The limits are the constants of `cbor::limits`.
 - `nesting_depth_exceeded` comes where the stack of the thread ends, in
   the steps that recurse: a filter, a group in parentheses, a function
   call or a literal that is nested deeper than the stack holds, a
-  descendant segment that goes deeper than the stack holds, and `clone()`
+  descendant segment that goes deeper than the stack holds, and `to_item()`
   of a node that is deeper than the stack holds. A path of child segments
   does not recurse. An item that a typed read only skips can be of any
   depth.

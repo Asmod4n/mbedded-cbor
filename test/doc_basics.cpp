@@ -168,6 +168,6 @@ TEST_CASE("doc basics: limits")
 TEST_CASE("doc basics: the error at the end of the stack")
 {
     std::string const deep = test::repeat("\x81"sv, test::levels_beyond_small_stack) + '\x01';
-    CHECK_EQ(test::error_on_small_stack([&deep] { return test::make_lazy_from_copy(deep)->clone(); }),
+    CHECK_EQ(test::error_on_small_stack([&deep] { return test::make_lazy_from_copy(deep)->to_item(); }),
              error::nesting_depth_exceeded);
 }

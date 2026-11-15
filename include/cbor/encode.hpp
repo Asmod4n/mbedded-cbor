@@ -56,7 +56,7 @@ class iov_writer;
  * Each integer, length and tag number keeps the width of its head, from `additional_information`.
  * A float keeps its width.
  * The call walks the tree once and writes no tag 28 or 29 of its own.
- * A tag 28 and a tag 29 of a tree of cbor::lazy::clone() are written as they are.
+ * A tag 28 and a tag 29 of a tree of cbor::lazy::to_item() are written as they are.
  * A `shared_reference` gives `unsupported_value`; the target then holds the bytes written before it.
  * cbor::encode_cycles() writes it with tags 28 and 29.
  * The target is one of these:

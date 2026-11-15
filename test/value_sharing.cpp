@@ -34,7 +34,7 @@ using cbor::error;
 namespace shared_test
 {
 
-// The decoded item tree of a top-level item, as lazy::clone gives it.
+// The decoded item tree of a top-level item, as lazy::to_item gives it.
 using tree = cbor::owning<cbor::item>;
 
 // An item of a decoded tree together with the tree. A tree decode reads a tag 29 as a plain tag. So the tests of the
@@ -108,7 +108,7 @@ tree decoded_ref(std::string_view const wire)
 {
     auto const l = test::make_lazy_from_copy(wire);
     REQUIRE(l.has_value());
-    auto t = l->clone();
+    auto t = l->to_item();
     REQUIRE(t.has_value());
     return *t;
 }
@@ -655,7 +655,7 @@ TEST_CASE("lazy: a shared value keeps its identity")
 {
     auto const a = arr({u(1), u(2)});
     std::string const doc = encoded_shared(arr({a, a}), marks::repeats_marked);
-    auto const r = test::make_lazy_from_copy(doc)->clone();
+    auto const r = test::make_lazy_from_copy(doc)->to_item();
     REQUIRE(r.has_value());
     CHECK(targets_encode_to_the_same_bytes(element(*r, 0), element(*r, 1)));
 }
@@ -664,7 +664,7 @@ TEST_CASE("lazy: a shared value keeps its identity")
 TEST_CASE("lazy: a cyclic array")
 {
     std::string const doc = "\xd8\x1c\x81\xd8\x1d\x00"s;
-    auto const r = test::make_lazy_from_copy(doc)->clone();
+    auto const r = test::make_lazy_from_copy(doc)->to_item();
     REQUIRE(r.has_value());
     CHECK(targets_encode_to_the_same_bytes(*r, element(*r, 0)));
 }
@@ -693,7 +693,7 @@ TEST_CASE("lazy: a value shared by two map values keeps its identity")
 {
     auto const v = arr({u(1), u(2), u(3)});
     std::string const doc = encoded_shared(obj({{s("a"), v}, {s("b"), v}}), marks::repeats_marked);
-    auto const r = test::make_lazy_from_copy(doc)->clone();
+    auto const r = test::make_lazy_from_copy(doc)->to_item();
     REQUIRE(r.has_value());
     CHECK(targets_encode_to_the_same_bytes(at(*r, "a"), at(*r, "b")));
 }
@@ -741,7 +741,7 @@ TEST_CASE("lazy: a registered object keeps its identity")
 {
     auto const l = object_of(5003, arr({u(99)}));
     std::string const doc = encoded_shared(obj({{s("a"), l}, {s("b"), l}}), marks::repeats_marked);
-    auto const r = test::make_lazy_from_copy(doc)->clone();
+    auto const r = test::make_lazy_from_copy(doc)->to_item();
     REQUIRE(r.has_value());
     CHECK(targets_encode_to_the_same_bytes(at(*r, "a"), at(*r, "b")));
 }
@@ -796,7 +796,7 @@ TEST_CASE("value sharing: lazy, at_path, decode and diagnostic notation read tag
         for (auto const e : *l.elements())
             types.push_back(*e->type());
         CHECK(types == std::vector<cbor::type>(3, cbor::type::tag));
-        auto const tree = l.clone();
+        auto const tree = l.to_item();
         REQUIRE(tree.has_value());
         auto const elements = list_children_of_item(**tree);
         REQUIRE_EQ(elements.size(), 3u);
@@ -945,13 +945,13 @@ TEST_CASE("value sharing: cbor::decode reads a long chain of marks and a tag 24 
     CHECK_EQ(cbor::decode("\x82\xd8\x1c\x01\xd8\x18\x43\xd8\x1d\x00"sv).error(), error::sharedref_index_not_marked);
 }
 
-// lazy::clone, paths and diagnostic_notation pass tags 28 and 29 as plain tags (owner decision); only the eager
+// lazy::to_item, paths and diagnostic_notation pass tags 28 and 29 as plain tags (owner decision); only the eager
 // cbor::decode resolves them.
-TEST_CASE("value sharing: lazy::clone keeps tags 28 and 29")
+TEST_CASE("value sharing: lazy::to_item keeps tags 28 and 29")
 {
     auto const top_level = test::make_lazy_from_copy("\xd8\x1c\x81\xd8\x1d\x00"s);
     REQUIRE(top_level.has_value());
-    auto const tree = top_level->clone();
+    auto const tree = top_level->to_item();
     REQUIRE(tree.has_value());
     CHECK_EQ((*tree)->get<cbor::type::tag>().value().first, 28u);
 }
@@ -989,12 +989,12 @@ TEST_CASE("value sharing: clone at an inner offset keeps tags 28, 29 and 55799")
 {
     auto const top_level = test::make_lazy_from_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
     REQUIRE(top_level.has_value());
-    auto const reference = top_level->at(1).and_then([](cbor::lazy const &l) { return l.clone(); });
+    auto const reference = top_level->at(1).and_then([](cbor::lazy const &l) { return l.to_item(); });
     REQUIRE(reference.has_value());
     CHECK_EQ((*reference)->get<cbor::type::tag>().value().first, 29u);
     auto const marked = test::make_lazy_from_copy("\x81\xd9\xd9\xf7\x01"s);
     REQUIRE(marked.has_value());
-    auto const inner = marked->at(0).and_then([](cbor::lazy const &l) { return l.clone(); });
+    auto const inner = marked->at(0).and_then([](cbor::lazy const &l) { return l.to_item(); });
     REQUIRE(inner.has_value());
     CHECK_EQ((*inner)->get<cbor::type::tag>().value().first, 55799u);
 }

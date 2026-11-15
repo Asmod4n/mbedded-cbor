@@ -54,7 +54,7 @@ std::string nodes_written(cbor::nodelist const &nodes)
 {
     std::string out = std::to_string(nodes.size()) + "\n[";
     for (auto const &node : nodes) {
-        auto const decoded = node.clone();
+        auto const decoded = node.to_item();
         if (!decoded) [[unlikely]]
             return error_named(decoded.error());
         std::string bytes;
@@ -144,7 +144,7 @@ std::int32_t js_values_built(std::expected<cbor::nodelist, cbor::error> const &n
     if (!nodes) [[unlikely]]
         return -static_cast<std::int32_t>(nodes.error());
     for (auto const &n : *nodes) {
-        auto const d = n.clone();
+        auto const d = n.to_item();
         if (!d) [[unlikely]]
             return -static_cast<std::int32_t>(d.error());
         js_value_built(**d);

@@ -258,7 +258,7 @@ TEST_CASE("head: every initial byte gives the result that RFC 8949 gives it")
         auto const l = cbor::lazy::adopt(std::string(bytes));
         if (!l)
             return l.error();
-        auto const c = l->clone();
+        auto const c = l->to_item();
         return c ? cbor::error{} : c.error();
     };
     for (unsigned const major : {2u, 3u, 4u, 5u}) {

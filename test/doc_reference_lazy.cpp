@@ -294,11 +294,11 @@ TEST_CASE("doc reference lazy: clone")
 {
     auto const tree = [] {
         std::string bytes = test::encode_in_preferred_form(test::M("a"s, test::A(1, "x"s)));
-        // [clone]
+        // [to_item]
         // bytes: a std::string with {"a": [1, "x"]}
         auto const doc = cbor::lazy::adopt(std::move(bytes));
-        auto const copy = doc->at_key("a")->clone();  // the tree of [1, "x"], valid after doc ends
-        // [clone]
+        auto const copy = doc->at_key("a")->to_item();  // the tree of [1, "x"], valid after doc ends
+        // [to_item]
         return copy;
     }();
     REQUIRE(tree);

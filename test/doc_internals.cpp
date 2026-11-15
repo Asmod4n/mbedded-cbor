@@ -88,7 +88,7 @@ TEST_CASE("doc internals: a text of the item tree is a copy")
 {
     std::string const bytes = encode_in_preferred_form(V(std::string(40, 'a')));
     auto const owner = std::make_shared<std::string const>(bytes);
-    auto const tree = cbor::lazy::view(owner)->clone();
+    auto const tree = cbor::lazy::view(owner)->to_item();
     REQUIRE(tree.has_value());
     auto const text = (*tree)->get<cbor::type::text_string>();
     REQUIRE(text.has_value());
@@ -108,7 +108,7 @@ TEST_CASE("doc internals: the compiler parses a compile-time path")
 TEST_CASE("doc internals: an item keeps the bits of a NaN")
 {
     std::string const single = "\xfa\xff\x80\x01\x23"s;
-    auto const tree = test::make_lazy_from_copy(single)->clone();
+    auto const tree = test::make_lazy_from_copy(single)->to_item();
     REQUIRE(tree.has_value());
     std::string again;
     REQUIRE(cbor::encode(**tree, again).has_value());

@@ -1010,7 +1010,7 @@ TEST_CASE("lazy: every member refuses a lazy that holds no top-level item")
     CHECK_THROWS_AS((void)none.get<cbor::typed_array>(), std::logic_error);
     CHECK_THROWS_AS((void)none.elements(), std::logic_error);
     CHECK_THROWS_AS((void)none.entries(), std::logic_error);
-    CHECK_THROWS_AS((void)none.clone(), std::logic_error);
+    CHECK_THROWS_AS((void)none.to_item(), std::logic_error);
     CHECK_THROWS_AS((void)test::make_value_from_item(none), std::logic_error);
 }
 
@@ -1077,7 +1077,7 @@ TEST_CASE("lazy: a repeated key gives the first entry with no error")
     CHECK_EQ(*lazy_of("\xa3\x61\x61\x01\x61\x61\x02\x61\x62\x03"s).at_key("b")->get<std::uint64_t>(), 3u);
     CHECK(lazy_of(twice).entries().has_value());
     cbor::lazy const top = lazy_of(twice);
-    CHECK(top.clone().has_value());
+    CHECK(top.to_item().has_value());
     CHECK(test::make_value_from_item(lazy_of(twice)).has_value());
     CHECK(test::make_value_from_item(lazy_of("\x81\xa2\x01\x00\x18\x01\x00"s)).has_value());
 }
@@ -1095,7 +1095,7 @@ TEST_CASE("lazy: a repeated key at depth 3 is read with no error")
     CHECK_EQ(*(cbor::at_path<"$.a.b.d", int>(inner)), 2);
     CHECK(test::query("$..*", lazy_of(inner)).has_value());
     CHECK(test::read_value_at_path("$.a.b.d", lazy_of(inner)).has_value());
-    CHECK(lazy_of(inner).at_key("a")->at_key("b")->clone().has_value());
+    CHECK(lazy_of(inner).at_key("a")->at_key("b")->to_item().has_value());
 }
 
 // The same map many times in one array is no repeated key: a key is compared only with the keys of its own
@@ -1108,7 +1108,7 @@ TEST_CASE("lazy: an array of the same map many times is read with no error")
     for (int i = 0; i < maps; ++i)
         doc += "\xa2\x61\x61\x01\x61\x62\x02"s;
     cbor::lazy const top = lazy_of(doc);
-    CHECK(top.clone().has_value());
+    CHECK(top.to_item().has_value());
     CHECK(test::make_value_from_item(lazy_of(doc)).has_value());
     CHECK(test::query("$..*", lazy_of(doc)).has_value());
     CHECK(test::query("$[*].a", lazy_of(doc)).has_value());
@@ -1209,7 +1209,7 @@ TEST_CASE("lazy: two threads read one root lazy" * doctest::skip(!test::threads_
                 auto const index = l.at_path<"$[1]", std::uint64_t>();
                 auto const named = l.at(std::size_t{2})
                                        .and_then([](cbor::lazy const &m) { return m.at_key("k"); })
-                                       .and_then([](cbor::lazy const &r) { return r.clone(); });
+                                       .and_then([](cbor::lazy const &r) { return r.to_item(); });
                 auto const count = l.elements().transform([](cbor::lazy_elements const &e) {
                     return std::ranges::distance(e.begin(), e.end());
                 });
@@ -1501,7 +1501,7 @@ TEST_CASE("lazy: an index reads an element of each typed array")
     REQUIRE(element.has_value());
     CHECK_EQ(*element->type(), cbor::type::single_float);
     CHECK_EQ(element->at(0).error(), error::not_indexable);
-    auto const element_tree = element->clone();
+    auto const element_tree = element->to_item();
     CHECK_EQ((*element_tree)->type, cbor::type::single_float);
     auto const negative = lazy_of(typed_array_of(72, "\x00\xff"sv)).at(1);
     REQUIRE(negative.has_value());
@@ -1562,7 +1562,7 @@ TEST_CASE("lazy: an element of a float128 typed array")
         for (std::size_t i = 0; i < elements; ++i) {
             auto const element = l.at(i);
             REQUIRE(element.has_value());
-            CHECK_EQ(element->clone().error(), error::incorrect_type);
+            CHECK_EQ(element->to_item().error(), error::incorrect_type);
             CHECK_EQ(element->get<double>().error(), error::incorrect_type);
             auto const raw = element->get<std::span<std::byte const>>();
             REQUIRE(raw.has_value());
@@ -1826,8 +1826,8 @@ TEST_CASE("lazy: a decode checks a container count that does not fit 32 bits")
 {
     std::string const array_count = "\x82\x9b\x00\x00\x00\x01\x00\x00\x00\x00\x01"s;
     std::string const map_count = "\x82\xbb\x00\x00\x00\x00\x80\x00\x00\x00\x01"s;
-    CHECK_EQ(test::make_lazy_from_copy(array_count)->clone().error(), error::too_little_data);
-    CHECK_EQ(test::make_lazy_from_copy(map_count)->clone().error(), error::too_little_data);
+    CHECK_EQ(test::make_lazy_from_copy(array_count)->to_item().error(), error::too_little_data);
+    CHECK_EQ(test::make_lazy_from_copy(map_count)->to_item().error(), error::too_little_data);
 }
 
 // A lazy over empty input holds no data item. Its clone must give the error that cbor::decode gives for the same
@@ -1836,8 +1836,8 @@ TEST_CASE("lazy: the clone of empty input gives the error of decode")
 {
     auto const empty = test::make_lazy_from_copy(""s);
     REQUIRE(empty.has_value());
-    CHECK_EQ(empty->clone().error(), error::too_little_data);
-    CHECK_EQ(empty->clone().error(), cbor::decode(std::string_view{}).error());
+    CHECK_EQ(empty->to_item().error(), error::too_little_data);
+    CHECK_EQ(empty->to_item().error(), cbor::decode(std::string_view{}).error());
 }
 
 // RFC 8746 2.1 (refs/rfc8746.txt:143): the content of a typed array tag is a byte string. A typed array tag whose
@@ -1859,7 +1859,7 @@ TEST_CASE("lazy: a typed array tag with content that is no byte string is refuse
     CHECK(refused(l->at(0)));
     CHECK(refused(l->at_key("a")));
     CHECK(refused(l->size()));
-    CHECK(refused(l->clone()));
+    CHECK(refused(l->to_item()));
 }
 
 // The fault: a read through operator-> of a temporary expected<lazy> gave a reference into bytes that the temporary
@@ -1882,7 +1882,7 @@ TEST_CASE("lazy: a read through a temporary lazy keeps the bytes alive")
     for (auto const &e : *elements)
         types.push_back(*e->type());
     CHECK_EQ(types, std::vector{cbor::type::text_string, cbor::type::array});
-    auto const copy = cbor::lazy::adopt(message())->clone();
+    auto const copy = cbor::lazy::adopt(message())->to_item();
     REQUIRE(copy.has_value());
     CHECK_EQ((*copy)->get<cbor::type::array>()->size(), 2u);
 }

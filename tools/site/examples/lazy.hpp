@@ -285,7 +285,7 @@ inline constexpr entry lazy_functions[] = {
     {.name = "cbor::lazy.type()", .run = lazy_member<&cbor::lazy::type>, .runnable = true},
     {.name = "cbor::lazy.elements()", .run = lazy_member<&cbor::lazy::elements>, .runnable = true},
     {.name = "cbor::lazy.entries()", .run = lazy_member<&cbor::lazy::entries>, .runnable = true},
-    {.name = "cbor::lazy.clone()", .run = lazy_member<&cbor::lazy::clone>, .runnable = true},
+    {.name = "cbor::lazy.to_item()", .run = lazy_member<&cbor::lazy::to_item>, .runnable = true},
     {.name = "cbor::lazy_elements.size()", .run = view_size<cbor::lazy_elements>, .runnable = true},
     {.name = "cbor::lazy_entries.size()", .run = view_size<cbor::lazy_entries>, .runnable = true},
     {.name = "cbor::nodelist.size()", .run = view_size<cbor::nodelist>, .runnable = true},

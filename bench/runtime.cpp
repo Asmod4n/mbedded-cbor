@@ -1151,7 +1151,7 @@ static std::uint64_t op()
         std::abort();
     return item_tree_sum(**r);
 #elif defined(ARM_READ)
-    auto const r = cbor::lazy::view(*held)->clone();
+    auto const r = cbor::lazy::view(*held)->to_item();
     if (!r)
         std::abort();
     return item_tree_sum(**r);

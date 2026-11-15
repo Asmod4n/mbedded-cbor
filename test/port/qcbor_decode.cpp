@@ -805,7 +805,7 @@ TEST_CASE("qcbor ComprehensiveInputTest: every input of one or two bytes is read
         if (auto const doc = lazy_of(in); doc.has_value()) {
             (void)doc->type();
             (void)doc->size();
-            (void)doc->clone();
+            (void)doc->to_item();
         }
         for (auto const e : cbor::sequence{std::make_shared<std::string const>(in)})
             (void)e;

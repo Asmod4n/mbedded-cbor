@@ -125,9 +125,9 @@ TEST_CASE("limits sizes 2: the stack is checked beside the size limits")
 {
     std::string const held = test::repeat("\xd8\x64"sv, test::levels_every_stack_holds) + '\x00';
     std::string const deep = test::repeat("\xd8\x64"sv, test::levels_beyond_small_stack) + '\x00';
-    CHECK(test::make_lazy_from_copy(held)->clone().has_value());
+    CHECK(test::make_lazy_from_copy(held)->to_item().has_value());
     CHECK(cbor::diagnostic_notation(held).has_value());
-    CHECK_EQ(test::error_on_small_stack([&deep] { return test::make_lazy_from_copy(deep)->clone(); }),
+    CHECK_EQ(test::error_on_small_stack([&deep] { return test::make_lazy_from_copy(deep)->to_item(); }),
              error::nesting_depth_exceeded);
     CHECK_EQ(test::error_on_small_stack([&deep] { return cbor::diagnostic_notation(deep); }),
              error::nesting_depth_exceeded);

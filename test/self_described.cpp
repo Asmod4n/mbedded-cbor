@@ -92,7 +92,7 @@ TEST_CASE("self-described CBOR: type() of a second tag 55799 and of a tag 55799 
         REQUIRE(two.has_value());
         CHECK_EQ(two->type().value(), cbor::type::tag);
         CHECK_EQ(two->get<std::int64_t>().value(), 1);
-        auto const cloned = two->clone();
+        auto const cloned = two->to_item();
         REQUIRE(cloned.has_value());
         CHECK_EQ((*cloned)->type, cbor::type::tag);
         auto const tree = cbor::decode(head + head + "\x01");
@@ -144,7 +144,7 @@ TEST_CASE("self-described CBOR: a tag 55799 in the content of a bignum or a type
             auto const tree = cbor::decode(tagged);
             REQUIRE(tree.has_value());
             CHECK_EQ((*tree)->type, l->type().value());
-            auto const cloned = l->clone();
+            auto const cloned = l->to_item();
             REQUIRE(cloned.has_value());
             CHECK_EQ((*cloned)->type, (*tree)->type);
             std::string const map_tagged = "\xa1" + tagged + "\x05";
@@ -173,7 +173,7 @@ TEST_CASE("self-described CBOR: a tag 55799 in the content of a bignum or a type
         CHECK_EQ(l->at(0).error(), t->at(0).error());
         CHECK_EQ((cbor::at_path<"$[0]", std::int64_t>(typed)).error(), (cbor::at_path<"$[0]", std::int64_t>(typed_text)).error());
         CHECK_EQ(cbor::decode(typed).error(), cbor::decode(typed_text).error());
-        CHECK_EQ(l->clone().error(), t->clone().error());
+        CHECK_EQ(l->to_item().error(), t->to_item().error());
     }
 }
 

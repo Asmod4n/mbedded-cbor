@@ -152,7 +152,7 @@ std::expected<void, cbor::error> item_walk(cbor::encoder<Target> &e, cbor::item 
 void reencode(std::string_view const name, std::string_view const section, std::string const &input)
 {
     auto const doc = test::make_lazy_from_copy(std::string_view(input));
-    auto const item = doc.and_then([](cbor::lazy const &d) { return d.clone(); });
+    auto const item = doc.and_then([](cbor::lazy const &d) { return d.to_item(); });
     if (!item) {
         case_print(std::string("decode/") + std::string(name), section, message_of(item.error()), test::hexlify(input));
         return;

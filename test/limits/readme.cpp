@@ -30,7 +30,7 @@ TEST_CASE("limits readme: an array inside tag 24 counts")
     std::string const embedded = "\x98\x65"s + std::string(101, '\x00');
     auto const tagged = test::make_lazy_from_copy("\xd8\x18\x58\x67"s + embedded);
     REQUIRE(tagged.has_value());
-    auto const refused = tagged->clone();
+    auto const refused = tagged->to_item();
     REQUIRE_FALSE(refused.has_value());
     CHECK_EQ(refused.error(), cbor::error::container_elements_exceeded);
 }

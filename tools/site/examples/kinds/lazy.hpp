@@ -33,7 +33,7 @@ inline std::string item_notation(cbor::item const &node)
 
 inline std::string lazy_notation(cbor::lazy const &node)
 {
-    auto const tree = node.clone();
+    auto const tree = node.to_item();
     if (!tree) [[unlikely]]
         return kind<cbor::error>::text(tree.error());
     return item_notation(**tree);

@@ -1,6 +1,7 @@
-// The bench of lazy::clone (lazy.hpp), which decodes the item of a lazy into a tree of cbor::item.
-// lazy_clone_element: each element of an array of 16 maps, an item that stands inside its message, so the clone
-// reads only its part. lazy_clone_top: the whole array, the control row.
+// The bench of lazy::to_item (lazy.hpp), which decodes the item of a lazy into a tree of cbor::item. TO_ITEM_FORM
+// selects this name. Without it the earlier name lazy::clone is used.
+// lazy_to_item_element: each element of an array of 16 maps, an item that stands inside its message, so to_item
+// reads only its part. lazy_to_item_top: the whole array, the control row.
 // Each iteration clones every lazy of a buffer of COLD_BYTES bytes of messages.
 #include <benchmark/benchmark.h>
 #include <cbor/cbor.hpp>
@@ -37,6 +38,15 @@ std::string message_of()
     return m;
 }
 
+auto tree_of(cbor::lazy const &l)
+{
+#ifdef TO_ITEM_FORM
+    return l.to_item();
+#else
+    return l.clone();
+#endif
+}
+
 void run(benchmark::State &state, bool const inside)
 {
     std::string const message = message_of();
@@ -50,32 +60,32 @@ void run(benchmark::State &state, bool const inside)
         for (std::size_t i = 0; i < elements; ++i)
             lazies.push_back(*top.at(i));
     }
-    auto const sample = lazies.front().clone();
+    auto const sample = tree_of(lazies.front());
     if (!sample) {
-        state.SkipWithError("clone of a lazy of the message fails");
+        state.SkipWithError("to_item of a lazy of the message fails");
         return;
     }
     for (auto _ : state) {
         for (cbor::lazy const &each : lazies) {
-            auto r = each.clone();
+            auto r = tree_of(each);
             benchmark::DoNotOptimize(r);
         }
     }
     state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(lazies.size()));
 }
 
-void lazy_clone_element(benchmark::State &state)
+void lazy_to_item_element(benchmark::State &state)
 {
     run(state, true);
 }
 
-void lazy_clone_top(benchmark::State &state)
+void lazy_to_item_top(benchmark::State &state)
 {
     run(state, false);
 }
 
 }
 
-BENCHMARK(lazy_clone_element)->Unit(benchmark::kMillisecond);
-BENCHMARK(lazy_clone_top)->Unit(benchmark::kMillisecond);
+BENCHMARK(lazy_to_item_element)->Unit(benchmark::kMillisecond);
+BENCHMARK(lazy_to_item_top)->Unit(benchmark::kMillisecond);
 BENCHMARK_MAIN();

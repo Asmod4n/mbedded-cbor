@@ -4,7 +4,7 @@
  * Finds a value by key, by index or by path. Gives a number, a text
  * string, a byte string, an array or a map. Gives a string, an array
  * and a map as a view of these bytes. Reads one element of a typed
- * array. clone copies the data item into a tree of cbor::item.
+ * array. to_item copies the data item into a tree of cbor::item.
  * https://www.rfc-editor.org/rfc/rfc8949
  * https://www.rfc-editor.org/rfc/rfc8746#section-2
  */
@@ -421,7 +421,7 @@ public:
      * @retval too_little_data, syntax_error the head is broken
      * @snippet doc_reference_lazy.cpp type
      * @see cbor::lazy::get()
-     * @see cbor::lazy::clone()
+     * @see cbor::lazy::to_item()
      */
     std::expected<cbor::type, error> type() const;
 
@@ -462,7 +462,7 @@ public:
      * @snippet doc_reference_lazy.cpp get
      * @see cbor::lazy::at_key()
      * @see cbor::lazy::type()
-     * @see cbor::lazy::clone()
+     * @see cbor::lazy::to_item()
      */
     template <class T>
         requires scalar_result<T> || view_result<T>
@@ -526,20 +526,20 @@ public:
      *
      * @code{.example}
      * message: {"a": [1, "x"]}
-     * call: doc->at_key("a")->clone()
+     * call: doc->at_key("a")->to_item()
      * result: owning item of [1, "x"]
-     * call: (*doc->at_key("a")->clone())->type
+     * call: (*doc->at_key("a")->to_item())->type
      * result: cbor::type::array
      * @endcode
      *
      * @retval too_little_data, syntax_error, indefinite_length, nesting_depth_exceeded a broken item, as
      * cbor::decode() gives
-     * @snippet doc_reference_lazy.cpp clone
+     * @snippet doc_reference_lazy.cpp to_item
      * @see cbor::item
      * @see cbor::decode()
      * @see cbor::lazy::get()
      */
-    std::expected<owning<item>, error> clone() const;
+    std::expected<owning<item>, error> to_item() const;
 
 private:
     template <class Entries = lazy_entries>
@@ -1678,9 +1678,9 @@ inline std::expected<lazy_entries, error> lazy::entries() const
     return lazy_entries(source, detail::validity::distance(source.encoded, d.encoded), h.argument);
 }
 
-inline std::expected<owning<item>, error> lazy::clone() const
+inline std::expected<owning<item>, error> lazy::to_item() const
 {
-    throw_logic_error_if_no_top_level("cbor::lazy::clone: the lazy holds no top-level item");
+    throw_logic_error_if_no_top_level("cbor::lazy::to_item: the lazy holds no top-level item");
     if (typed_array_tag != 0) [[unlikely]] {
         auto const h = resolve(*this).transform([](resolved const &found) { return found.h; });
         if (!h) [[unlikely]]

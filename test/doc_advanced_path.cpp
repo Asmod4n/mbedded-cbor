@@ -155,13 +155,13 @@ TEST_CASE("doc advanced path: no free form takes a lazy")
         ([]<class L>(L const &l) { return requires { cbor::at_path<"$.a", std::string_view>(l); }; }(cbor::lazy{})));
 }
 
-// The section "Any item as a node" names clone() as a way to read a node on.
-TEST_CASE("doc advanced path: clone of a node")
+// The section "Any item as a node" names to_item() as a way to read a node on.
+TEST_CASE("doc advanced path: to_item of a node")
 {
     auto const l = *test::make_lazy_from_copy(encode_in_preferred_form(M("a"s, A(1, 2, 3))));
     auto const node = l.at_path<"$.a">();
     REQUIRE(node.has_value());
-    CHECK(node->clone().has_value());
+    CHECK(node->to_item().has_value());
 }
 
 // The section "The forms" shows that a lazy is a start point for every typed form.
