@@ -1,6 +1,6 @@
-// Reads the pieces of an iov_writer back the way a caller sends them. It calls writev into a temporary file, IOV_MAX
-// pieces at a time. Then it reads until the file has given every byte. Only the file descriptor reads and writes the
-// file. https://pubs.opengroup.org/onlinepubs/9799919799/functions/writev.html
+// Reads the pieces of cbor::encode_iov back the way a caller sends them. It calls writev into a temporary file,
+// IOV_MAX pieces at a time. Then it reads until the file has given every byte. Only the file descriptor reads and writes
+// the file. https://pubs.opengroup.org/onlinepubs/9799919799/functions/writev.html
 #ifndef CBOR_TEST_PIECES_HPP
 #define CBOR_TEST_PIECES_HPP
 

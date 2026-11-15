@@ -772,61 +772,14 @@ TEST_CASE("lazy: get reads a typed array")
     CHECK_EQ(get<cbor::typed_array>("\x43\x01\x02\x03"s).error(), error::incorrect_type);
 }
 
-namespace
-{
-
-// The bytes of the public encoder for one typed array.
-std::expected<std::string, cbor::error> typed_encoded(std::uint64_t const tag, std::string_view const bytes)
-{
-    std::string out;
-    cbor::encoder e(out);
-    if (auto const r = e.typed_array(cbor::typed_array{tag, std::as_bytes(std::span(bytes))}); !r)
-        return std::unexpected(r.error());
-    REQUIRE(e.finish().has_value());
-    return out;
-}
-
-} // namespace
-
-// The encoder writes the tag and one byte string, and get reads both back.
-TEST_CASE("encode: a typed array is a tag and a byte string")
-{
-    auto const wire = typed_encoded(65, "\x00\x01\x00\x02"sv);
-    REQUIRE(wire.has_value());
-    CHECK_EQ(*wire, "\xd8\x41\x44\x00\x01\x00\x02"s);
-    auto const document = lazy_of(*wire);
-    auto const back = document.get<cbor::typed_array>();
-    REQUIRE(back.has_value());
-    CHECK_EQ((*back)->tag, 65u);
-    CHECK(std::ranges::equal((*back)->bytes, std::as_bytes(std::span("\x00\x01\x00\x02"sv))));
-}
-
-// A tag outside 64 to 87, or the reserved 76, is no typed array. A length that is not a multiple of the element size is
-// inadmissible content.
-TEST_CASE("encode: a typed array with a wrong tag or length")
-{
-    CHECK((typed_encoded(76, "\x00"sv).error() == cbor::error{cbor::error::unsupported_value}));
-    CHECK((typed_encoded(63, "\x00"sv).error() == cbor::error{cbor::error::unsupported_value}));
-    CHECK((typed_encoded(66, "\x00\x01\x02"sv).error() == cbor::error{cbor::error::inadmissible_type_for_tag_content}));
-}
-
 // RFC 8949 3.4.5.1: tag 24 carries an encoded data item in a byte string. The library never writes tag 24 by itself. So
 // the application writes the tag and the bytes of the embedded item, and a view passes through the tag into it.
 TEST_CASE("tag 24: an embedded item written by the application is read through")
 {
     std::string const embedded =
         "\x82\x1b\x00\x00\x00\x00\x00\x00\x00\x02\x1b\x00\x00\x00\x00\x00\x00\x00\x03"s;
-    test::string_writer w;
-    {
-        cbor::encoder e(w);
-        REQUIRE(e.array(2).has_value());
-        REQUIRE(e.unsigned_integer(std::uint64_t{1}).has_value());
-        REQUIRE(e.tag(24).has_value());
-        REQUIRE(e.byte_string(std::as_bytes(std::span(embedded))).has_value());
-        REQUIRE(e.finish().has_value());
-    }
-    CHECK_EQ(w.encoded, "\x82"s + test::write_unsigned_at_native_width(1) + "\xd8\x18\x53\x82"s + test::write_unsigned_at_native_width(2) + test::write_unsigned_at_native_width(3));
-    auto const inner = lazy_of(w.encoded).at(1);
+    std::string const document = "\x82\x1b\x00\x00\x00\x00\x00\x00\x00\x01\xd8\x18\x53"s + embedded;
+    auto const inner = lazy_of(document).at(1);
     REQUIRE(inner.has_value());
     auto const three = inner->at(1);
     REQUIRE(three.has_value());

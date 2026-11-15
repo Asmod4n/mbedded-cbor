@@ -206,18 +206,9 @@ TEST_CASE("doc advanced runtime: the tree copies its strings")
     CHECK(test::make_lazy_from_copy("\x01\x02"s)->to_item().has_value());
 }
 
-// The section "encode" shows the calls of the encoder, each kind of target, and encode of an item.
+// The section "encode" shows each kind of target and encode of an item.
 TEST_CASE("doc advanced runtime: encode")
 {
-    std::string out;
-    {
-        cbor::encoder e(out);
-        REQUIRE(e.array(2).has_value());
-        REQUIRE(e.unsigned_integer(std::uint8_t{1}).has_value());
-        REQUIRE(e.text_string("a").has_value());
-        CHECK_EQ(e.finish(), 5u);
-    }
-    CHECK_EQ(out, "\x82\x18\x01\x61" "a"s);
     auto const decoded = cbor::decode("\x82\x01\x02"sv);
     REQUIRE(decoded.has_value());
     std::string appended = "\x00"s;
@@ -249,17 +240,10 @@ TEST_CASE("doc advanced runtime: encode")
     CHECK(same_value(again, wire));
 }
 
-// The section "encode" states that a NaN keeps its bits in the encoder and in encode of an item. A NaN with a
-// payload shows it, because a writer that makes every NaN the quiet NaN loses the payload.
+// The section "encode" states that a NaN keeps its bits in encode of an item. A NaN with a payload shows it, because a
+// writer that makes every NaN the quiet NaN loses the payload.
 TEST_CASE("doc advanced runtime: a NaN keeps its bits")
 {
-    std::string out;
-    {
-        cbor::encoder e(out);
-        REQUIRE(e.floating_point(std::bit_cast<float>(std::uint32_t{0x7fc00001})).has_value());
-        REQUIRE(e.finish().has_value());
-    }
-    CHECK_EQ(out, "\xfa\x7f\xc0\x00\x01"s);
     for (std::string_view const wire :
          {"\xf9\x7e\x01"sv, "\xfa\x7f\xc0\x00\x01"sv, "\xfb\x7f\xf8\x00\x00\x00\x00\x00\x01"sv}) {
         auto const tree = cbor::decode(wire);
@@ -363,17 +347,13 @@ TEST_CASE("doc advanced runtime: tag 55799")
     cbor::item const *const inner = list_children_of_item(*(*tree))[0];
     CHECK_EQ(inner->type, cbor::type::tag);
     CHECK_EQ(read_argument_of_item(*inner), 55799u);
-    std::string out;
-    cbor::encoder e(out);
-    REQUIRE(e.tag(55799).has_value());
-    REQUIRE(e.finish().has_value());
-    CHECK_EQ(out, "\xd9\xd9\xf7"s);
 }
 
 // The iov forms exist where the platform has <sys/uio.h>, as in the library (encode.hpp); Windows has none.
 #if __has_include(<sys/uio.h>)
 // The section "encode_iov" writes an item into pieces and joins them; the joined bytes are those of encode. The
-// encoder over an iov_writer keeps a string that the caller moved in as a piece of its own.
+// overload for a decoded tree gives a text longer than the copy limit as a piece of its own, after the piece of its
+// head.
 TEST_CASE("doc advanced runtime: encode_iov")
 {
     std::string const bytes = "\x82\x01\x63" "abc"s;
@@ -387,11 +367,12 @@ TEST_CASE("doc advanced runtime: encode_iov")
     std::string const joined = *read;
     CHECK_EQ(joined, wire);
 
-    std::string text(CBOR_ENCODER_COPYBREAK + 1, 'x');
-    cbor::iov_writer w;
-    cbor::encoder e(w);
-    REQUIRE(e.text_string(std::move(text)).has_value());
-    auto const kept = e.finish_iov();
+    std::string const long_text =
+        test::write_integer_at_native_width(cbor::major_type::text_string, CBOR_ENCODER_COPYBREAK + 1) +
+        std::string(CBOR_ENCODER_COPYBREAK + 1, 'x');
+    auto const long_tree = cbor::decode(long_text);
+    REQUIRE(long_tree.has_value());
+    auto const kept = cbor::encode_iov(*long_tree);
     REQUIRE(kept.has_value());
     CHECK_EQ((**kept).size(), 2u);
 }

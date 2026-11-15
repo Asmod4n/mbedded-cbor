@@ -56,18 +56,6 @@ using cbor2::unhexlify;
 namespace
 {
 
-// The bytes of one item that the calls of `write` give to a cbor::encoder, as hex.
-template <class Write>
-std::string encoded_by(Write const write)
-{
-    std::string out;
-    cbor::encoder e(out);
-    write(e);
-    auto const size = e.finish();
-    REQUIRE(size.has_value());
-    return hexlify(out);
-}
-
 struct text_in_order {
     std::string a;
     std::string b;
@@ -112,14 +100,12 @@ struct cbor::describe_members<integer_keys> {
     };
 };
 
-// Upstream: test_encode_length. cbor::encoder writes the head of an array and of a map with the shortest head for
-// the count (encode.hpp). The rows with an indefinite length are not ported: encode.hpp gives no call that writes
-// one.
+// Upstream: test_encode_length. The rows that write the head of an array or of a map alone are not ported: the
+// library has no call that writes one head. The rows with an indefinite length are not ported: encode.hpp gives no call
+// that writes one.
 TEST_CASE("cbor2 encoder: test_encode_length")
 {
     CHECK_EQ(dumps(std::uint64_t{1}), "01");
-    CHECK_EQ(encoded_by([](auto &e) { REQUIRE(e.array(2).has_value()); }), "82");
-    CHECK_EQ(encoded_by([](auto &e) { REQUIRE(e.map(0).has_value()); }), "a0");
 }
 
 #ifdef CBOR_HAS_INT128
@@ -199,8 +185,6 @@ TEST_CASE("cbor2 encoder: test_bytestring")
     std::string const four = unhexlify("01020304");
     CHECK_EQ(dumps(std::span<std::byte const>()), "40");
     CHECK_EQ(dumps(std::as_bytes(std::span(four))), "4401020304");
-    CHECK_EQ(encoded_by([&](auto &e) { REQUIRE(e.byte_string(std::as_bytes(std::span(four))).has_value()); }),
-             "4401020304");
 }
 
 // Upstream: test_bytearray. A bytearray is a mutable byte string; its C++ form is std::vector<std::byte>. structs.hpp:
@@ -255,8 +239,6 @@ TEST_CASE("cbor2 encoder: test_simple_value")
     for (row const &r : std::vector<row>{{0, "e0"}, {2, "e2"}, {23, "f7"}, {32, "f820"}}) {
         INFO("expected: ", r.expected);
         CHECK_EQ(dumps(cbor::simple_value{r.value}), r.expected);
-        CHECK_EQ(encoded_by([&](auto &e) { REQUIRE(e.simple_value(cbor::simple_value{r.value}).has_value()); }),
-                 r.expected);
     }
     CHECK_EQ(dumps(std::map<cbor::simple_value, int>{{cbor::simple_value{99}, 1}}), "a1f86301");
 }
@@ -298,16 +280,6 @@ TEST_CASE("cbor2 encoder: test_custom_tag, test_largest_tag")
 {
     CHECK_EQ(dumps(cbor::tagged_item<6000, std::string>{"Hello"}), "d917706548656c6c6f");
     CHECK_EQ(dumps(cbor::tagged_item<18446744073709551615u, std::string>{"v"}), "dbffffffffffffffff6176");
-    CHECK_EQ(encoded_by([](auto &e) {
-                 REQUIRE(e.tag(6000).has_value());
-                 REQUIRE(e.text_string("Hello").has_value());
-             }),
-             "d917706548656c6c6f");
-    CHECK_EQ(encoded_by([](auto &e) {
-                 REQUIRE(e.tag(18446744073709551615u).has_value());
-                 REQUIRE(e.text_string("v").has_value());
-             }),
-             "dbffffffffffffffff6176");
 }
 
 // Upstream: test_not_cyclic_same_object[nosharing], test_dump_to_file and test_indefinite_containers, the rows

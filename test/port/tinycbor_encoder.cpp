@@ -25,19 +25,17 @@
 // THE SOFTWARE.
 //
 // Each upstream call maps to the call of mbedded-cbor that writes the same thing:
-// - cbor_encode_uint(), cbor_encode_int(), cbor_encode_boolean(), cbor_encode_null() write the shortest head. The
-//   streaming cbor::encoder writes an integer in the width of its C++ type (encode.hpp, "also when a shorter head
-//   holds the value"), so the port writes these values with cbor::structs, which writes preferred serialization;
-// - cbor_encode_negative_int(), cbor_encode_simple_value(), cbor_encode_undefined(), cbor_encode_half_float(),
-//   cbor_encode_float(), cbor_encode_double(), cbor_encode_byte_string(), cbor_encode_text_string() and
-//   cbor_encode_tag() map to the member functions of cbor::encoder with the same names;
+// - cbor_encode_uint(), cbor_encode_int(), cbor_encode_boolean(), cbor_encode_null(), cbor_encode_simple_value() and
+//   cbor_encode_undefined() write the shortest head, as cbor::structs does, which writes preferred serialization;
+// - cbor_encode_float_as_half_float() writes the shortest float, as cbor::structs does for a float;
 // - a container of upstream is a C++ container that cbor::structs writes as an array or a map;
 // - the tests that wrap each value in a tag, an array or a map (tags(), arrays(), maps(), writerApi(),
 //   shortBuffer()) write the tree that cbor::decode() reads from the expected bytes, with cbor::encode(), which keeps
 //   the width of each head (encode.hpp).
 // No call of the library writes indefinite length; the rows of upstream with indefinite length are not ported.
+// The library writes no single head. So the tests of upstream that write a float or a half float at the width of its
+// type, a string, a wrong count of items or a reserved simple value one call at a time are not ported.
 
-#include "../rfc8949.hpp"
 #include "tinycbor.hpp"
 
 #include <doctest/doctest.h>
@@ -78,24 +76,6 @@ std::string written_by_structs(T const &value)
     if (!r)
         return "error: " + make_error_text(r.error());
     return *r;
-}
-
-// Writes with one call of cbor::encoder into a std::string, as upstream writes with one call into a buffer.
-template <class Call>
-std::string written_by_encoder(Call const call)
-{
-    std::string out;
-    cbor::encoder e(out);
-    if (auto const r = call(e); !r)
-        return "error: " + make_error_text(r.error());
-    if (auto const r = e.finish(); !r)
-        return "error: " + make_error_text(r.error());
-    return out;
-}
-
-std::span<std::byte const> bytes_of(std::string_view const s)
-{
-    return std::as_bytes(std::span(s));
 }
 
 // The tree that cbor::decode() reads from the bytes, written again by cbor::encode().
@@ -270,10 +250,9 @@ TEST_CASE("tinycbor encoder fixed: integers")
     CHECK_EQ(written_by_structs(std::int64_t{-4294967297}), "\x3b\0\0\0\1\0\0\0\0"s);
 }
 
-// fixed, the rows of NegativeInteger: cbor_encode_negative_int(abs) writes -abs, and abs 0 stands for -2^64. A value
-// that std::int64_t holds is written by cbor::structs, as cbor_encode_int() writes it. The two values below -2^63
-// take the eight-byte head, which cbor::encoder::negative_integer() with a std::uint64_t argument writes (the argument
-// is abs - 1, RFC 8949 3.1).
+// fixed, the rows of NegativeInteger: cbor_encode_negative_int(abs) writes -abs. A value that std::int64_t holds is
+// written by cbor::structs, as cbor_encode_int() writes it. The two values below -2^63 have no C++ type that
+// cbor::structs writes, so they are not ported.
 TEST_CASE("tinycbor encoder fixed: negative integers")
 {
     CHECK_EQ(written_by_structs(std::int64_t{-1}), "\x20"s);
@@ -286,85 +265,22 @@ TEST_CASE("tinycbor encoder fixed: negative integers")
     CHECK_EQ(written_by_structs(std::int64_t{-65537}), "\x3a\0\1\x00\x00"s);
     CHECK_EQ(written_by_structs(std::int64_t{-4294967296}), "\x3a\xff\xff\xff\xff"s);
     CHECK_EQ(written_by_structs(std::int64_t{-4294967297}), "\x3b\0\0\0\1\0\0\0\0"s);
-    std::uint64_t const max = std::numeric_limits<std::uint64_t>::max();
-    CHECK_EQ(written_by_encoder([&](auto &e) { return e.negative_integer(max - 1); }),
-             "\x3b" "\xff\xff\xff\xff" "\xff\xff\xff\xfe"s);
-    CHECK_EQ(written_by_encoder([&](auto &e) { return e.negative_integer(max); }),
-             "\x3b" "\xff\xff\xff\xff" "\xff\xff\xff\xff"s);
 }
 
 // fixed, the simple values: false, true and null are C++ values; undefined and the other simple values are
 // cbor::simple_value.
 TEST_CASE("tinycbor encoder fixed: simple values")
 {
-    auto const simple = [](std::uint8_t const n) {
-        return written_by_encoder([n](auto &e) { return e.simple_value(cbor::simple_value{n}); });
-    };
+    auto const simple = [](std::uint8_t const n) { return written_by_structs(cbor::simple_value{n}); };
     CHECK_EQ(simple(0), "\xe0"s);
     CHECK_EQ(simple(19), "\xf3"s);
     CHECK_EQ(written_by_structs(false), "\xf4"s);
     CHECK_EQ(written_by_structs(true), "\xf5"s);
     CHECK_EQ(written_by_structs(nullptr), "\xf6"s);
-    CHECK_EQ(written_by_encoder([](auto &e) { return e.simple_value(cbor::simple_value::undefined); }), "\xf7"s);
+    CHECK_EQ(written_by_structs(cbor::simple_value::undefined), "\xf7"s);
     CHECK_EQ(simple(32), "\xf8\x20"s);
     CHECK_EQ(simple(255), "\xf8\xff"s);
 }
-
-// fixed, the floats: cbor_encode_float() and cbor_encode_double() keep the width of the value, as
-// cbor::encoder::floating_point() does ("It does not choose a shorter form").
-TEST_CASE("tinycbor encoder fixed: floats")
-{
-    auto const as_float = [](float const v) {
-        return written_by_encoder([v](auto &e) { return e.floating_point(v); });
-    };
-    auto const as_double = [](double const v) {
-        return written_by_encoder([v](auto &e) { return e.floating_point(v); });
-    };
-    float const nanf = std::bit_cast<float>(std::uint32_t{0x7fc00000});
-    float const inff = std::bit_cast<float>(std::uint32_t{0x7f800000});
-    float const ninff = std::bit_cast<float>(std::uint32_t{0xff800000});
-    double const nan = std::bit_cast<double>(std::uint64_t{0x7ff8000000000000});
-    double const inf = std::bit_cast<double>(std::uint64_t{0x7ff0000000000000});
-    double const ninf = std::bit_cast<double>(std::uint64_t{0xfff0000000000000});
-    CHECK_EQ(as_float(0.f), "\xfa\0\0\0\0"s);
-    CHECK_EQ(as_double(0.), "\xfb\0\0\0\0\0\0\0\0"s);
-    CHECK_EQ(as_float(-1.f), "\xfa\xbf\x80\0\0"s);
-    CHECK_EQ(as_double(-1.), "\xfb\xbf\xf0\0\0\0\0\0\0"s);
-    CHECK_EQ(as_float(16777215.f), "\xfa\x4b\x7f\xff\xff"s);
-    CHECK_EQ(as_double(16777215.), "\xfb\x41\x6f\xff\xff\xe0\0\0\0"s);
-    CHECK_EQ(as_float(-16777215.f), "\xfa\xcb\x7f\xff\xff"s);
-    CHECK_EQ(as_double(-16777215.), "\xfb\xc1\x6f\xff\xff\xe0\0\0\0"s);
-    CHECK_EQ(as_float(nanf), "\xfa\x7f\xc0\0\0"s);
-    CHECK_EQ(as_double(nan), "\xfb\x7f\xf8\0\0\0\0\0\0"s);
-    CHECK_EQ(as_float(ninff), "\xfa\xff\x80\0\0"s);
-    CHECK_EQ(as_double(ninf), "\xfb\xff\xf0\0\0\0\0\0\0"s);
-    CHECK_EQ(as_float(inff), "\xfa\x7f\x80\0\0"s);
-    CHECK_EQ(as_double(inf), "\xfb\x7f\xf0\0\0\0\0\0\0"s);
-}
-
-#if defined(__STDCPP_FLOAT16_T__)
-// fixed, the half floats (qfloat16 of upstream), and halfFloat: cbor_encode_half_float() writes the 16 bits that it
-// gets, as cbor::encoder::floating_point() of a std::float16_t does ("A NaN keeps its bits").
-TEST_CASE("tinycbor encoder: half floats")
-{
-    auto const as_half = [](std::uint16_t const bits) {
-        return written_by_encoder([bits](auto &e) { return e.floating_point(std::bit_cast<std::float16_t>(bits)); });
-    };
-    CHECK_EQ(as_half(0x0000), "\xf9\0\0"s);
-    CHECK_EQ(as_half(0xbc00), "\xf9\xbc\0"s);
-    CHECK_EQ(as_half(0x3e00), "\xf9\x3e\0"s);
-    CHECK_EQ(as_half(0x7e00), "\xf9\x7e\0"s);
-    CHECK_EQ(as_half(0xfc00), "\xf9\xfc\0"s);
-    CHECK_EQ(as_half(0x7c00), "\xf9\x7c\0"s);
-    std::uint16_t const raws[] = {0x0000, 0x8000, 0x0001, 0x8001, 0x03ff, 0x83ff, 0x0400, 0x8400, 0x3c00, 0xbc00,
-                                  0x3e00, 0xbe00, 0x7bff, 0xfbff, 0x7c00, 0xfc00, 0x7c01, 0xfc01, 0x7e00, 0xfe00};
-    for (std::uint16_t const raw : raws) {
-        CAPTURE(raw);
-        std::string const expected = "\xf9"s + static_cast<char>(raw >> 8) + static_cast<char>(raw & 0xff);
-        CHECK_EQ(as_half(raw), expected);
-    }
-}
-#endif
 
 // floatAsHalfFloat: cbor_encode_float_as_half_float() writes a float as a half float. cbor::structs writes a float as
 // "the shortest float that holds the value" (structs.hpp), which is the half float for each row. Upstream leaves out
@@ -420,30 +336,6 @@ TEST_CASE("tinycbor encoder: a NaN as a half float")
     CHECK_EQ(static_cast<unsigned char>(out.at(0)), 0xf9u);
     CHECK_EQ(static_cast<unsigned char>(out.at(1)) & 0x7cu, 0x7cu);
     CHECK_NE((static_cast<unsigned char>(out.at(1)) & 0x03u) | static_cast<unsigned char>(out.at(2)), 0u);
-}
-
-// strings: cbor_encode_byte_string() and cbor_encode_text_string() write the shortest head for the length, as
-// cbor::encoder does.
-TEST_CASE("tinycbor encoder: strings")
-{
-    auto const bytes = [](std::string const &s) {
-        return written_by_encoder([&s](auto &e) { return e.byte_string(bytes_of(s)); });
-    };
-    auto const text = [](std::string const &s) {
-        return written_by_encoder([&s](auto &e) { return e.text_string(s); });
-    };
-    CHECK_EQ(bytes(""s), "\x40"s);
-    CHECK_EQ(bytes(" "s), "\x41 "s);
-    CHECK_EQ(bytes("\0"s), "\x41\0"s);
-    CHECK_EQ(bytes("Hello"s), "\x45Hello"s);
-    CHECK_EQ(bytes("123456789012345678901234"s), "\x58\x18""123456789012345678901234"s);
-    CHECK_EQ(bytes(std::string(256, '3')), "\x59\1\0"s + std::string(256, '3'));
-    CHECK_EQ(text(""s), "\x60"s);
-    CHECK_EQ(text(" "s), "\x61 "s);
-    CHECK_EQ(text("\0"s), "\x61\0"s);
-    CHECK_EQ(text("Hello"s), "\x65Hello"s);
-    CHECK_EQ(text("123456789012345678901234"s), "\x78\x18""123456789012345678901234"s);
-    CHECK_EQ(text(std::string(256, '3')), "\x79\1\0"s + std::string(256, '3'));
 }
 
 // arraysAndMaps, the definite rows: a C++ container that cbor::structs writes as an array or a map. A std::tuple is
@@ -619,55 +511,5 @@ TEST_CASE("tinycbor encoder: a buffer that is too short")
                      make_error_text(error::no_buffer_space));
         }
         CHECK_EQ(cbor::encode(**tree, std::span<char>(buffer)).value_or(0), r.output.size());
-    }
-}
-
-// tooShortArrays, tooShortMaps, tooBigArrays, tooBigMaps: upstream counts the items of a container and gives
-// CborErrorTooFewItems or CborErrorTooManyItems. cbor::encoder does not count them: "a wrong count gives bytes that are
-// not one item" (encode.hpp). The port writes the wrong count, finishes without error, and checks that the bytes are
-// not one item: too few items end too early, and too many items leave bytes after the item. The input is the row
-// "textstring5".
-TEST_CASE("tinycbor encoder: a wrong count of items")
-{
-    auto const input = [](auto &e) { return e.text_string("Hello"); };
-    struct wrong_count {
-        std::string_view name;
-        bool map;
-        std::uint64_t count;
-        int inputs;
-        bool too_few;
-    };
-    wrong_count const rows[] = {
-        {"tooShortArrays", false, 2, 1, true},
-        {"tooShortMaps", true, 2, 1, true},
-        {"tooBigArrays", false, 1, 2, false},
-        {"tooBigMaps", true, 1, 3, false},
-    };
-    for (wrong_count const &r : rows) {
-        CAPTURE(r.name);
-        std::string out;
-        cbor::encoder e(out);
-        bool const opened = r.map ? e.map(r.count).has_value() : e.array(r.count).has_value();
-        CHECK(opened);
-        for (int i = 0; i < r.inputs; ++i)
-            CHECK(input(e).has_value());
-        CHECK_EQ(make_outcome_text(e.finish()), make_error_text(no_error));
-        auto const size = cbor::item_size(out);
-        if (r.too_few)
-            CHECK_EQ(make_outcome_text(size), make_error_text(error::too_little_data));
-        else
-            CHECK_LT(size.value_or(out.size()), out.size());
-    }
-}
-
-// illegalSimpleType: a simple value from 24 to 31 is reserved (RFC 8949 3.3); cbor::encoder::simple_value() gives
-// reserved_simple_value. Upstream refuses 25 to 31.
-TEST_CASE("tinycbor encoder: reserved simple values")
-{
-    for (std::uint8_t n = test::rfc8949::first_reserved_simple_value + 1; n <= test::rfc8949::last_reserved_simple_value; ++n) {
-        CAPTURE(int{n});
-        std::string out;
-        cbor::encoder e(out);
-        CHECK_EQ(make_outcome_text(e.simple_value(cbor::simple_value{n})), make_error_text(error::reserved_simple_value));
     }
 }

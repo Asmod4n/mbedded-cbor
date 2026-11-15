@@ -182,210 +182,13 @@ bool targets_encode_to_the_same_bytes(A const &a, B const &b)
 
 using namespace shared_test;
 
-namespace shared_test
-{
-
-// The values of an application with identity, as mrb_value is: two handles to one node are the same object.
-struct node;
-using handle = std::shared_ptr<node>;
-
-// An object of the application that it writes as its own tag over a content.
-struct object {
-    std::uint64_t tag;
-    handle content;
-};
-
-struct node {
-    std::variant<std::uint64_t, std::string, std::vector<handle>, std::vector<std::pair<handle, handle>>, object> kind;
-};
-
-handle u(std::uint64_t const n)
-{
-    return std::make_shared<node>(node{n});
-}
-
-handle s(std::string text)
-{
-    return std::make_shared<node>(node{std::move(text)});
-}
-
-handle arr(std::vector<handle> elements)
-{
-    return std::make_shared<node>(node{std::move(elements)});
-}
-
-handle obj(std::vector<std::pair<handle, handle>> pairs)
-{
-    return std::make_shared<node>(node{std::move(pairs)});
-}
-
-handle object_of(std::uint64_t const tag, handle content)
-{
-    return std::make_shared<node>(node{object{tag, std::move(content)}});
-}
-
-// The writer of the application. It decides what has identity: an integer has none, and a string key has none, as mruby
-// copies an unfrozen String key. The encoder writes tags 28 and 29 only for a cycle. A first pass walks the value as the
-// write walks it. It finds each node that a cycle reaches again. The second pass writes tag 28 before such a node. It
-// writes tag 29 with its index where the cycle reaches the node again. It does this through the public encoder. A node
-// that two places hold without a cycle is written in full at each place. The mode repeats_marked writes the input of
-// another writer, which marks every node it meets twice; the decoder reads that input too.
-enum class marks { cycles, repeats_marked, none };
-
-// The public encoder writes an unsigned integer in the width of its type. So the writer writes the index of a tag 29 in
-// one byte. The tests hold fewer than 256 marks.
-std::uint8_t index_of(std::uint64_t const i)
-{
-    REQUIRE(i <= std::numeric_limits<std::uint8_t>::max());
-    return static_cast<std::uint8_t>(i);
-}
-
-struct shared_writer {
-    marks mode = marks::cycles;
-    std::unordered_map<node const *, std::size_t> seen;
-    std::unordered_set<node const *> cyclic;
-    std::unordered_map<node const *, std::vector<std::uint64_t>> open;
-    std::unordered_map<node const *, std::uint64_t> numbers;
-    std::uint64_t next = 0;
-    int content_reads = 0;
-
-    static node const *identity(handle const &v, bool const key)
-    {
-        if (std::holds_alternative<std::uint64_t>(v->kind) || (key && std::holds_alternative<std::string>(v->kind)))
-            return nullptr;
-        return v.get();
-    }
-
-    template <class F>
-    static void children_visit(handle const &v, F const &f)
-    {
-        if (auto const *a = std::get_if<std::vector<handle>>(&v->kind)) {
-            for (handle const &e : *a)
-                f(e, false);
-        } else if (auto const *m = std::get_if<std::vector<std::pair<handle, handle>>>(&v->kind)) {
-            for (auto const &[k, x] : *m) {
-                f(k, true);
-                f(x, false);
-            }
-        } else if (auto const *o = std::get_if<object>(&v->kind)) {
-            f(o->content, false);
-        }
-    }
-
-    void count(handle const &v, bool const key)
-    {
-        node const *const id = identity(v, key);
-        if (mode == marks::repeats_marked) {
-            if (id != nullptr && ++seen[id] > 1)
-                return;
-        } else if (id != nullptr) {
-            if (open.contains(id)) {
-                cyclic.insert(id);
-                return;
-            }
-            open[id];
-        }
-        if (std::holds_alternative<object>(v->kind))
-            ++content_reads;
-        children_visit(v, [this](handle const &c, bool const k) { count(c, k); });
-        if (mode != marks::repeats_marked && id != nullptr)
-            open.erase(id);
-    }
-
-    template <class Target>
-    std::expected<void, error> write(cbor::encoder<Target> &e, handle const &v, bool const key)
-    {
-        node const *const id = identity(v, key);
-        bool opened = false;
-        if (id != nullptr && mode == marks::repeats_marked) {
-            if (auto const n = numbers.find(id); n != numbers.end())
-                return e.tag(29).and_then([&] { return e.unsigned_integer(index_of(n->second)); });
-            if (seen[id] > 1) {
-                if (auto const r = e.tag(28); !r)
-                    return r;
-                numbers.emplace(id, next++);
-            }
-        } else if (id != nullptr) {
-            if (auto const n = open.find(id); n != open.end() && !n->second.empty()) {
-                if (mode == marks::none)
-                    return std::unexpected(error::cyclic_data_structure);
-                return e.tag(29).and_then([&] { return e.unsigned_integer(index_of(n->second.back())); });
-            }
-            if (cyclic.contains(id)) {
-                if (auto const r = e.tag(28); !r)
-                    return r;
-                open[id].push_back(next++);
-            } else {
-                open[id].push_back(0);
-            }
-            opened = true;
-        }
-        auto const r = content_write(e, v);
-        if (opened)
-            open[id].pop_back();
-        return r;
-    }
-
-    template <class Target>
-    std::expected<void, error> content_write(cbor::encoder<Target> &e, handle const &v)
-    {
-        if (auto const *n = std::get_if<std::uint64_t>(&v->kind))
-            return e.unsigned_integer(*n);
-        if (auto const *t = std::get_if<std::string>(&v->kind))
-            return e.text_string(std::string_view(*t));
-        if (auto const *a = std::get_if<std::vector<handle>>(&v->kind)) {
-            if (auto const r = e.array(a->size()); !r)
-                return r;
-            for (handle const &x : *a)
-                if (auto const r = write(e, x, false); !r)
-                    return r;
-            return {};
-        }
-        if (auto const *m = std::get_if<std::vector<std::pair<handle, handle>>>(&v->kind)) {
-            if (auto const r = e.map(m->size()); !r)
-                return r;
-            for (auto const &[k, x] : *m) {
-                if (auto const r = write(e, k, true); !r)
-                    return r;
-                if (auto const r = write(e, x, false); !r)
-                    return r;
-            }
-            return {};
-        }
-        object const &o = std::get<object>(v->kind);
-        if (auto const r = e.tag(o.tag); !r)
-            return r;
-        return write(e, o.content, false);
-    }
-};
-
-std::string encoded_shared(handle const &v, marks const mode = marks::cycles)
-{
-    shared_writer w;
-    w.mode = mode;
-    w.count(v, false);
-    std::string out;
-    cbor::encoder e(out);
-    REQUIRE(w.write(e, v, false).has_value());
-    REQUIRE(e.finish().has_value());
-    return out;
-}
-
-tree round_trip(handle const &v, marks const mode = marks::cycles)
-{
-    return decoded_ref(encoded_shared(v, mode));
-}
-
-} // namespace shared_test
-
 // The owner decided that tags 28 and 29 exist only to write cycles. A value that two places hold without a cycle is
 // written in full at each place. It has no tag 28. It decodes to two equal values.
 TEST_CASE("tag 28/29: a repeated value without a cycle is written twice")
 {
-    auto const a = arr({u(1), u(2)});
-    std::string const one = "\x82"s + test::write_unsigned_at_native_width(1) + test::write_unsigned_at_native_width(2);
-    CHECK_EQ(encoded_shared(arr({a, a})), "\x82"s + one + one);
-    auto const r = round_trip(arr({a, a}));
+    auto const r = decoded_ref(
+        "\x82\x82\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x1b\x00\x00\x00\x00\x00\x00\x00\x02"
+        "\x82\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x1b\x00\x00\x00\x00\x00\x00\x00\x02"sv);
     CHECK_FALSE(is_reference(children(r)[1]));
     CHECK_EQ(read_argument_of_item(*element(element(r, 1), 1)), 2u);
 }
@@ -394,16 +197,19 @@ TEST_CASE("tag 28/29: a repeated value without a cycle is written twice")
 // marks every repeated value; the decoder keeps its identity.
 TEST_CASE("tag 28/29: a repeated value that another writer marked keeps its identity")
 {
-    auto const a = arr({u(1), u(2)});
-    auto const r = round_trip(arr({a, a}), marks::repeats_marked);
+    auto const r = decoded_ref(
+        "\x82\xd8\x1c\x82\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x1b\x00\x00\x00\x00\x00\x00\x00\x02"
+        "\xd8\x1d\x18\x00"sv);
     CHECK(targets_encode_to_the_same_bytes(element(r, 0), element(r, 1)));
 }
 
 // Ported from test.rb: 'tag 28/29: three-way sharing preserves identity (eager)'.
 TEST_CASE("tag 28/29: three-way sharing")
 {
-    auto const v = arr({u(1), u(2), u(3)});
-    auto const r = round_trip(obj({{s("a"), v}, {s("b"), v}, {s("c"), v}}), marks::repeats_marked);
+    auto const r = decoded_ref(
+        "\xa3\x61" "a\xd8\x1c\x83\x1b\x00\x00\x00\x00\x00\x00\x00\x01"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x02\x1b\x00\x00\x00\x00\x00\x00\x00\x03"
+        "\x61" "b\xd8\x1d\x18\x00\x61" "c\xd8\x1d\x18\x00"sv);
     CHECK(targets_encode_to_the_same_bytes(at(r, "a"), at(r, "b")));
     CHECK(targets_encode_to_the_same_bytes(at(r, "b"), at(r, "c")));
 }
@@ -411,12 +217,12 @@ TEST_CASE("tag 28/29: three-way sharing")
 // Ported from test.rb: 'tag 28/29: shared hash / shared string roundtrip'.
 TEST_CASE("tag 28/29: shared map and shared string")
 {
-    auto const h = obj({{s("k"), s("v")}, {s("n"), u(42)}});
-    auto const rh = round_trip(arr({h, h, h}), marks::repeats_marked);
+    auto const rh = decoded_ref(
+        "\x83\xd8\x1c\xa2\x61k\x61v\x61n\x1b\x00\x00\x00\x00\x00\x00\x00\x2a"
+        "\xd8\x1d\x18\x00\xd8\x1d\x18\x00"sv);
     CHECK(targets_encode_to_the_same_bytes(element(rh, 0), element(rh, 1)));
     CHECK(targets_encode_to_the_same_bytes(element(rh, 1), element(rh, 2)));
-    auto const str = s("shared_string");
-    auto const rs = round_trip(arr({str, str, obj({{s("key"), str}})}), marks::repeats_marked);
+    auto const rs = decoded_ref("\x83\xd8\x1c\x6dshared_string\xd8\x1d\x18\x00\xa1\x63key\xd8\x1d\x18\x00"sv);
     CHECK(targets_encode_to_the_same_bytes(element(rs, 0), element(rs, 1)));
     CHECK(targets_encode_to_the_same_bytes(element(rs, 1), at(element(rs, 2), "key")));
 }
@@ -424,18 +230,10 @@ TEST_CASE("tag 28/29: shared map and shared string")
 // Ported from test.rb: 'tag 28/29: cyclic array and cyclic hash (eager)'.
 TEST_CASE("tag 28/29: a cyclic array and a cyclic map")
 {
-    auto const a = arr({});
-    std::get<std::vector<handle>>(a->kind).push_back(a);
-    CHECK_EQ(encoded_shared(a), "\xd8\x1c\x81\xd8\x1d\x18\x00"sv);
-    auto const ra = round_trip(a);
+    auto const ra = decoded_ref("\xd8\x1c\x81\xd8\x1d\x18\x00"sv);
     CHECK(targets_encode_to_the_same_bytes(ra, element(ra, 0)));
-    auto const h = obj({});
-    std::get<std::vector<std::pair<handle, handle>>>(h->kind).emplace_back(s("self"), h);
-    auto const rh = round_trip(h);
+    auto const rh = decoded_ref("\xd8\x1c\xa1\x64self\xd8\x1d\x18\x00"sv);
     CHECK(targets_encode_to_the_same_bytes(rh, at(rh, "self")));
-    // The cycles of the application hold their nodes; the test ends them, so the sanitizers see no leak.
-    std::get<std::vector<handle>>(a->kind).clear();
-    std::get<std::vector<std::pair<handle, handle>>>(h->kind).clear();
 }
 
 // A cycle can come from the wire. encode of the tree writes the reference as it stands. It does not follow it, so a
@@ -451,61 +249,38 @@ TEST_CASE("tag 28/29: encode of a tree with a cycle ends")
 // Ported from test.rb: 'tag 28/29: mutual recursion — hash↔array cycle'.
 TEST_CASE("tag 28/29: mutual recursion between a map and an array")
 {
-    auto const list = arr({});
-    auto const h = obj({{s("list"), list}});
-    std::get<std::vector<handle>>(list->kind) = {h, h};
-    auto const r = round_trip(h);
+    auto const r = decoded_ref("\xd8\x1c\xa1\x64list\x82\xd8\x1d\x18\x00\xd8\x1d\x18\x00"sv);
     CHECK(targets_encode_to_the_same_bytes(r, element(at(r, "list"), 0)));
     CHECK(targets_encode_to_the_same_bytes(r, element(at(r, "list"), 1)));
-    std::get<std::vector<handle>>(list->kind).clear();
-}
-
-// An application that writes no marks cannot write a cycle, and its writer gives cyclic_data_structure.
-TEST_CASE("without marks: a cycle is cyclic_data_structure")
-{
-    auto const a = arr({});
-    std::get<std::vector<handle>>(a->kind).push_back(a);
-    shared_writer w;
-    w.mode = marks::none;
-    std::string out;
-    cbor::encoder e(out);
-    auto const r = w.write(e, a, false);
-    REQUIRE_FALSE(r.has_value());
-    CHECK_EQ(r.error(), error::cyclic_data_structure);
-    std::get<std::vector<handle>>(a->kind).clear();
 }
 
 // Ported from test.rb: 'tag 28/29: cyclic map round-trip — full cycle navigable'.
 TEST_CASE("tag 28/29: a full cycle through two maps")
 {
-    auto const inner = obj({{s("name"), s("cycle")}});
-    auto const outer = obj({{s("child"), inner}});
-    std::get<std::vector<std::pair<handle, handle>>>(inner->kind).emplace_back(s("parent"), outer);
-    auto const r = round_trip(outer);
+    auto const r = decoded_ref(
+        "\xd8\x1c\xa1\x65" "child\xa2\x64name\x65" "cycle\x66parent"
+        "\xd8\x1d\x18\x00"sv);
     CHECK(targets_encode_to_the_same_bytes(r, at(at(r, "child"), "parent")));
     CHECK(targets_encode_to_the_same_bytes(at(r, "child"), at(at(at(r, "child"), "parent"), "child")));
-    std::get<std::vector<std::pair<handle, handle>>>(inner->kind).clear();
 }
 
 // Ported from test.rb: 'tag 28/29: shared leaf reached through deep paths'.
 TEST_CASE("tag 28/29: a shared leaf through a deep path")
 {
-    auto const leaf = arr({u(10), u(20), u(30)});
-    auto const deep = obj({{s("e"), leaf}});
-    auto const root =
-        obj({{s("a"), obj({{s("b"), obj({{s("c"), obj({{s("d"), deep}})}})}})}, {s("x"), leaf}});
-    auto const r = round_trip(root, marks::repeats_marked);
+    auto const r = decoded_ref(
+        "\xa2\x61" "a\xa1\x61" "b\xa1\x61" "c\xa1\x61" "d\xa1\x61" "e"
+        "\xd8\x1c\x83\x1b\x00\x00\x00\x00\x00\x00\x00\x0a\x1b\x00\x00\x00\x00\x00\x00\x00\x14"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x1e\x61x\xd8\x1d\x18\x00"sv);
     CHECK(targets_encode_to_the_same_bytes(at(at(at(at(at(r, "a"), "b"), "c"), "d"), "e"), at(r, "x")));
 }
 
 // Ported from test.rb: 'tag 28/29: diamond pattern preserves identity across all paths'.
 TEST_CASE("tag 28/29: a diamond")
 {
-    auto const bottom = obj({{s("value"), u(99)}});
-    auto const root = obj({{s("left"), obj({{s("child"), bottom}})},
-                           {s("right"), obj({{s("child"), bottom}})},
-                           {s("direct"), bottom}});
-    auto const r = round_trip(root, marks::repeats_marked);
+    auto const r = decoded_ref(
+        "\xa3\x64left\xa1\x65" "child\xd8\x1c\xa1\x65value\x1b\x00\x00\x00\x00\x00\x00\x00\x63"
+        "\x65right\xa1\x65" "child\xd8\x1d\x18\x00\x66" "direct\xd8\x1d"
+        "\x18\x00"sv);
     CHECK(targets_encode_to_the_same_bytes(at(at(r, "left"), "child"), at(at(r, "right"), "child")));
     CHECK(targets_encode_to_the_same_bytes(at(at(r, "left"), "child"), at(r, "direct")));
 }
@@ -513,9 +288,10 @@ TEST_CASE("tag 28/29: a diamond")
 // Ported from test.rb: 'tag 28/29: nested sharing — outer and inner both share'.
 TEST_CASE("tag 28/29: outer and inner both share")
 {
-    auto const inner = arr({u(1), u(2), u(3)});
-    auto const outer = arr({inner, inner});
-    auto const r = round_trip(arr({outer, outer}), marks::repeats_marked);
+    auto const r = decoded_ref(
+        "\x82\xd8\x1c\x82\xd8\x1c\x83\x1b\x00\x00\x00\x00\x00\x00\x00\x01"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x02\x1b\x00\x00\x00\x00\x00\x00\x00\x03"
+        "\xd8\x1d\x18\x01\xd8\x1d\x18\x00"sv);
     CHECK(targets_encode_to_the_same_bytes(element(r, 0), element(r, 1)));
     CHECK(targets_encode_to_the_same_bytes(element(element(r, 0), 0), element(element(r, 0), 1)));
     CHECK(targets_encode_to_the_same_bytes(element(element(r, 0), 0), element(element(r, 1), 0)));
@@ -524,16 +300,13 @@ TEST_CASE("tag 28/29: outer and inner both share")
 // Ported from test.rb: 'tag 28/29: distinct shared groups do not conflate'.
 TEST_CASE("tag 28/29: distinct groups do not conflate")
 {
-    auto const a = arr({u(1), u(2)});
-    auto const b = obj({{s("k"), s("v")}});
-    auto const c = s("str");
-    auto const r = round_trip(obj({{s("a1"), a},
-                                   {s("a2"), a},
-                                   {s("b1"), b},
-                                   {s("b2"), b},
-                                   {s("c1"), c},
-                                   {s("c2"), c},
-                                   {s("nested"), obj({{s("a"), a}, {s("b"), b}, {s("c"), c}})}}), marks::repeats_marked);
+    auto const r = decoded_ref(
+        "\xa7\x62" "a1\xd8\x1c\x82\x1b\x00\x00\x00\x00\x00\x00\x00\x01"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x02\x62" "a2\xd8\x1d\x18\x00"
+        "\x62" "b1\xd8\x1c\xa1\x61k\x61v\x62" "b2\xd8\x1d\x18\x01"
+        "\x62" "c1\xd8\x1c\x63str\x62" "c2\xd8\x1d\x18\x02\x66nested"
+        "\xa3\x61" "a\xd8\x1d\x18\x00\x61" "b\xd8\x1d\x18\x01\x61" "c"
+        "\xd8\x1d\x18\x02"sv);
     CHECK(targets_encode_to_the_same_bytes(at(r, "a1"), at(at(r, "nested"), "a")));
     CHECK(targets_encode_to_the_same_bytes(at(r, "b1"), at(at(r, "nested"), "b")));
     CHECK(targets_encode_to_the_same_bytes(at(r, "c1"), at(at(r, "nested"), "c")));
@@ -541,21 +314,15 @@ TEST_CASE("tag 28/29: distinct groups do not conflate")
     CHECK_FALSE(targets_encode_to_the_same_bytes(at(r, "b1"), at(r, "c1")));
 }
 
-// Ported from test.rb: 'tag 28/29: hash keys do not participate in sharing'. The application decides what has
-// identity; this one gives a string key no identity, as mruby copies an unfrozen String key.
-TEST_CASE("tag 28/29: a string key without identity is written each time")
-{
-    auto const k = s("repeated_key");
-    CHECK_EQ(encoded_shared(arr({obj({{k, u(1)}}), obj({{k, u(2)}})})),
-             "\x82\xa1\x6crepeated_key"s + test::write_unsigned_at_native_width(1) + "\xa1\x6crepeated_key"s + test::write_unsigned_at_native_width(2));
-}
-
 // Replaces test.rb: 'tag 28/29: same object as value AND key — only values share'. mruby keeps an Array key as the same
 // object. It was measured with mruby 14fc2ef. So an array key with identity shares.
 TEST_CASE("tag 28/29: an array key with identity shares with the values")
 {
-    auto const a = arr({u(1), u(2), u(3)});
-    auto const r = round_trip(obj({{s("v1"), a}, {s("v2"), a}, {s("as_key_map"), obj({{a, s("payload")}})}}), marks::repeats_marked);
+    auto const r = decoded_ref(
+        "\xa3\x62v1\xd8\x1c\x83\x1b\x00\x00\x00\x00\x00\x00\x00\x01"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x02\x1b\x00\x00\x00\x00\x00\x00\x00\x03"
+        "\x62v2\xd8\x1d\x18\x00\x6a" "as_key_map\xa1\xd8\x1d\x18\x00"
+        "\x67payload"sv);
     CHECK(targets_encode_to_the_same_bytes(at(r, "v1"), at(r, "v2")));
     auto const key = target(children(at(r, "as_key_map"))[0]);
     CHECK(targets_encode_to_the_same_bytes(key, at(r, "v1")));
@@ -565,54 +332,11 @@ TEST_CASE("tag 28/29: an array key with identity shares with the values")
 // writes no marks writes a shared value each time, and the decoded values are distinct.
 TEST_CASE("without marks: values are written each time")
 {
-    auto const shared = arr({u(1), u(2), u(3)});
-    auto const r = decoded_ref(encoded_shared(obj({{s("a"), shared}, {s("b"), shared}}), marks::none));
+    auto const r = decoded_ref(
+        "\xa2\x61" "a\x83\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x1b\x00\x00\x00\x00\x00\x00\x00\x02"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x03\x61" "b\x83\x1b\x00\x00\x00\x00\x00\x00\x00\x01"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x02\x1b\x00\x00\x00\x00\x00\x00\x00\x03"sv);
     CHECK_FALSE(is_reference(children(r)[3]));
-}
-
-// Ported from test.rb: 'registered tag + sharedref: same instance in array → identity preserved'. The owner decided
-// that only a cycle is shared, so one object three times is written three times in full, with no tag 28.
-TEST_CASE("application tag: one object three times is written three times")
-{
-    auto const p = object_of(5000, arr({u(3), u(7)}));
-    shared_writer w;
-    w.count(arr({p, p, p}), false);
-    CHECK_EQ(w.content_reads, 3);
-    std::string const one = "\xd9\x13\x88\x82"s + test::write_unsigned_at_native_width(3) + test::write_unsigned_at_native_width(7);
-    CHECK_EQ(encoded_shared(arr({p, p, p})), "\x83"s + one + one + one);
-}
-
-// The iov target of the encoder gives the bytes of the string target, the marks and a long string included.
-// The iov forms exist where the platform has <sys/uio.h>, as in the library (encode.hpp); Windows has none.
-#if __has_include(<sys/uio.h>)
-// The iov target and the string target must write the same bytes. The test fails if a shared reference or a long string differs between them.
-TEST_CASE("application tag: the iov target with shared references gives the bytes of the string target")
-{
-    auto const p = object_of(5000, arr({u(3), u(7)}));
-    handle const v = arr({p, p, p, s(std::string(40, 'x'))});
-    shared_writer w;
-    w.count(v, false);
-    cbor::iov_writer iov;
-    cbor::encoder e(iov);
-    REQUIRE(w.write(e, v, false).has_value());
-    auto const pieces = e.finish_iov();
-    REQUIRE(pieces.has_value());
-    auto const read = test::join_pieces_into_bytes(**pieces);
-    REQUIRE(read.has_value());
-    std::string const joined = *read;
-    CHECK_EQ(joined, encoded_shared(v));
-}
-#endif
-
-// Ported from test.rb: 'registered tag + sharedref: distinct instances with equal fields do NOT share'.
-TEST_CASE("application tag: distinct objects with equal content do not share")
-{
-    auto const p1 = object_of(5000, arr({u(1), u(2)}));
-    auto const p2 = object_of(5000, arr({u(1), u(2)}));
-    shared_writer w;
-    w.count(arr({p1, p2}), false);
-    CHECK_EQ(w.content_reads, 2);
-    CHECK_EQ(encoded_shared(arr({p1, p2})), "\x82\xd9\x13\x88\x82"s + test::write_unsigned_at_native_width(1) + test::write_unsigned_at_native_width(2) + "\xd9\x13\x88\x82"s + test::write_unsigned_at_native_width(1) + test::write_unsigned_at_native_width(2));
 }
 
 // Ported from test.rb: 'registered tag + sharedref: instance with self-referential field'. The tag item of the
@@ -653,8 +377,9 @@ TEST_CASE("application tag: a tag without meaning is a tag item")
 // Ported from test.rb: 'tag 28/29: shared value preserved via lazy.value'.
 TEST_CASE("lazy: a shared value keeps its identity")
 {
-    auto const a = arr({u(1), u(2)});
-    std::string const doc = encoded_shared(arr({a, a}), marks::repeats_marked);
+    std::string const doc(
+        "\x82\xd8\x1c\x82\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x1b\x00\x00\x00\x00\x00\x00\x00\x02"
+        "\xd8\x1d\x18\x00"sv);
     auto const r = test::make_lazy_from_copy(doc)->to_item();
     REQUIRE(r.has_value());
     CHECK(targets_encode_to_the_same_bytes(element(*r, 0), element(*r, 1)));
@@ -669,30 +394,14 @@ TEST_CASE("lazy: a cyclic array")
     CHECK(targets_encode_to_the_same_bytes(*r, element(*r, 0)));
 }
 
-// An application as mruby gives the content of an object by value, as a temporary that only its writer holds. The
-// encoder copies the content before the temporary ends.
-TEST_CASE("application tag: a content made at the time of the write")
-{
-    std::string out;
-    cbor::encoder e(out);
-    constexpr int tagged_items = 2;
-    for (int i = 0; i < tagged_items; ++i) {
-        REQUIRE(e.tag(5000).has_value());
-        shared_writer w;
-        handle const fresh = arr({u(1), arr({u(2), u(3)})});
-        REQUIRE(w.write(e, fresh, false).has_value());
-    }
-    REQUIRE(e.finish().has_value());
-    std::string const one = "\xd9\x13\x88\x82"s + test::write_unsigned_at_native_width(1) + "\x82"s + test::write_unsigned_at_native_width(2) + test::write_unsigned_at_native_width(3);
-    CHECK_EQ(out, one + one);
-}
-
 // Ported from test.rb: 'tag 28/29: shared value preserved via lazy.value'. The map half: the first
 // test above covers only the array half.
 TEST_CASE("lazy: a value shared by two map values keeps its identity")
 {
-    auto const v = arr({u(1), u(2), u(3)});
-    std::string const doc = encoded_shared(obj({{s("a"), v}, {s("b"), v}}), marks::repeats_marked);
+    std::string const doc(
+        "\xa2\x61" "a\xd8\x1c\x83\x1b\x00\x00\x00\x00\x00\x00\x00\x01"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x02\x1b\x00\x00\x00\x00\x00\x00\x00\x03"
+        "\x61" "b\xd8\x1d\x18\x00"sv);
     auto const r = test::make_lazy_from_copy(doc)->to_item();
     REQUIRE(r.has_value());
     CHECK(targets_encode_to_the_same_bytes(at(*r, "a"), at(*r, "b")));
@@ -706,23 +415,26 @@ TEST_CASE("tag 28: inside tag 28 without a reference")
     CHECK_EQ(read_argument_of_item(*target(r)), 42u);
 }
 
-// Ported from test.rb: 'registered tag + sharedref: same instance in array → identity preserved'. The
-// test above checks the encoder only; this one checks that the decoder gives one object three times.
+// Ported from test.rb: 'registered tag + sharedref: same instance in array → identity preserved'. The decoder gives
+// one object three times.
 TEST_CASE("application tag: the same object three times keeps its identity")
 {
-    auto const p = object_of(5000, arr({u(3), u(7)}));
-    auto const r = round_trip(arr({p, p, p}), marks::repeats_marked);
+    auto const r = decoded_ref(
+        "\x83\xd8\x1c\xd9\x13\x88\x82\x1b\x00\x00\x00\x00\x00\x00\x00\x03"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x07\xd8\x1d\x18\x00\xd8\x1d"
+        "\x18\x00"sv);
     CHECK(targets_encode_to_the_same_bytes(element(r, 0), element(r, 1)));
     CHECK(targets_encode_to_the_same_bytes(element(r, 1), element(r, 2)));
 }
 
-// Ported from test.rb: 'registered tag + sharedref: distinct instances with equal fields do NOT share'.
-// The test above checks the encoder only; this one checks that the decoder gives two objects.
+// Ported from test.rb: 'registered tag + sharedref: distinct instances with equal fields do NOT share'. The decoder
+// gives two objects.
 TEST_CASE("application tag: distinct objects with equal content decode to two objects")
 {
-    auto const p1 = object_of(5000, arr({u(1), u(2)}));
-    auto const p2 = object_of(5000, arr({u(1), u(2)}));
-    auto const r = round_trip(arr({p1, p2}));
+    auto const r = decoded_ref(
+        "\x82\xd9\x13\x88\x82\x1b\x00\x00\x00\x00\x00\x00\x00\x01"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x02\xd9\x13\x88\x82\x1b\x00\x00\x00\x00\x00\x00\x00\x01"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x02"sv);
     CHECK_FALSE(is_reference(children(r)[1]));
 }
 
@@ -730,8 +442,9 @@ TEST_CASE("application tag: distinct objects with equal content decode to two ob
 // string inside the content gets its own mark, so the mark of the object must be placed before it.
 TEST_CASE("application tag: an object whose content holds a string keeps its identity")
 {
-    auto const cfg = object_of(5001, arr({u(30), s("default")}));
-    auto const r = round_trip(obj({{s("p"), cfg}, {s("b"), cfg}, {s("f"), cfg}}), marks::repeats_marked);
+    auto const r = decoded_ref(
+        "\xa3\x61p\xd8\x1c\xd9\x13\x89\x82\x1b\x00\x00\x00\x00\x00\x00\x00\x1e"
+        "\x67" "default\x61" "b\xd8\x1d\x18\x00\x61" "f\xd8\x1d\x18\x00"sv);
     CHECK(targets_encode_to_the_same_bytes(at(r, "p"), at(r, "b")));
     CHECK(targets_encode_to_the_same_bytes(at(r, "b"), at(r, "f")));
 }
@@ -739,26 +452,12 @@ TEST_CASE("application tag: an object whose content holds a string keeps its ide
 // Ported from test.rb: 'registered tag + sharedref: identity preserved through lazy.value'.
 TEST_CASE("lazy: a registered object keeps its identity")
 {
-    auto const l = object_of(5003, arr({u(99)}));
-    std::string const doc = encoded_shared(obj({{s("a"), l}, {s("b"), l}}), marks::repeats_marked);
+    std::string const doc(
+        "\xa2\x61" "a\xd8\x1c\xd9\x13\x8b\x81\x1b\x00\x00\x00\x00\x00\x00\x00\x63"
+        "\x61" "b\xd8\x1d\x18\x00"sv);
     auto const r = test::make_lazy_from_copy(doc)->to_item();
     REQUIRE(r.has_value());
     CHECK(targets_encode_to_the_same_bytes(at(*r, "a"), at(*r, "b")));
-}
-
-// The owner decided that a user of the public encoder never writes tags 28 and 29. The encoder writes them
-// only for a cycle that it finds itself.
-template <class E>
-concept writes_shareable = requires(E e) { e.shareable(); };
-
-template <class E>
-concept writes_sharedref = requires(E e) { e.sharedref(std::uint64_t{0}); };
-
-// A user of the public encoder must not write tags 28 and 29. The test fails if the encoder offers either function.
-TEST_CASE("encoder: shareable and sharedref are not public")
-{
-    CHECK_FALSE(writes_shareable<cbor::encoder<std::string>>);
-    CHECK_FALSE(writes_sharedref<cbor::encoder<std::string>>);
 }
 
 namespace shared_test

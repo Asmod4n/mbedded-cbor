@@ -381,21 +381,18 @@ TEST_CASE("path: a typed read with a key that is not text allocates nothing")
     CHECK_EQ(value, 7);
 }
 
-// The public encoder over a span of the caller writes into that memory only. A whole data item of every kind of head, a
-// string and a float allocate nothing.
-TEST_CASE("encoder: the span target allocates nothing")
+// cbor::encode over a span of the caller writes into that memory only. A whole data item of every kind of head, a
+// string, a float and a typed array allocate nothing.
+TEST_CASE("encode: the span target allocates nothing")
 {
+    auto const tree = cbor::decode("\x85\x1a\x00\x00\x00\x07\x63" "abc\x42\x01\x02\xf9\x3e\x00\xd8\x40\x42\x01\x02"sv);
+    REQUIRE(tree.has_value());
     std::array<char, 64> buffer{};
-    std::array<std::byte, 2> const bytes{std::byte{1}, std::byte{2}};
     std::size_t const before = allocations;
-    cbor::encoder e{std::span<char>(buffer)};
-    bool const all = e.array(5).has_value() && e.unsigned_integer(std::uint32_t{7}).has_value() &&
-                     e.text_string("abc"sv).has_value() && e.byte_string(std::span<std::byte const>(bytes)).has_value() &&
-                     e.floating_point(1.5).has_value() && e.typed_array(cbor::typed_array{64, bytes}).has_value();
-    auto const size = e.finish();
+    auto const size = cbor::encode(**tree, std::span<char>(buffer));
     std::size_t const after = allocations;
-    CHECK(all);
     REQUIRE(size.has_value());
+    CHECK_EQ(*size, 21u);
     CHECK_EQ(after, before);
 }
 

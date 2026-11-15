@@ -1,6 +1,6 @@
 // Writes every interop case as one line to stdout. The line is "name TAB section TAB written TAB expected". Written and
-// expected are hex. Written comes from a public writer of the library. The writers are cbor::encoder,
-// cbor::encode(item), structs<T>::encode and schema<T>::encode. Expected holds the same value in bytes that do not come
+// expected are hex. Written comes from a public writer of the library. The writers are cbor::encode(item),
+// structs<T>::encode and schema<T>::encode. Expected holds the same value in bytes that do not come
 // from the writer under test. These bytes are the input of a re-encode, or bytes written by hand from RFC 8949 and RFC
 // 8746. A dash stands for a case with no expected bytes; the decoders must then only accept the written bytes. A writer
 // that refuses a value gives "!" and the error in place of written, so the driver reports it.
@@ -54,101 +54,8 @@ void result_print(std::string_view const name, std::string_view const section,
     case_print(name, section, written ? test::hexlify(*written) : message_of(written.error()), expected);
 }
 
-std::span<std::byte const> span_of(std::string_view const s)
-{
-    return std::as_bytes(std::span(s));
-}
-
-// Writes the item again through one call of cbor::encoder per head. Each integer, simple value and float takes the C++
-// type of the width that it had on the wire. So every native width of the encoder runs.
-template <class Target>
-std::expected<void, cbor::error> item_walk(cbor::encoder<Target> &e, cbor::item const &node)
-{
-    using cbor::type;
-    std::uint8_t const info = node.additional_information;
-    auto const integer = [&](std::uint64_t const arg, auto const call) {
-        if (info <= 24)
-            return call(static_cast<std::uint8_t>(arg));
-        if (info == 25)
-            return call(static_cast<std::uint16_t>(arg));
-        if (info == 26)
-            return call(static_cast<std::uint32_t>(arg));
-        return call(arg);
-    };
-    auto const container = [&](std::span<cbor::item const> const children, std::uint64_t const count, bool const array) {
-        auto const r = array ? e.array(count) : e.map(count);
-        if (!r)
-            return r;
-        for (cbor::item const &child : children)
-            if (auto const c = item_walk(e, child); !c)
-                return c;
-        return std::expected<void, cbor::error>{};
-    };
-    // A float goes through the encoder at the width and with the bits of the wire, so a NaN keeps its payload.
-    auto const bits = [&] {
-        std::string head;
-        (void)cbor::encode(node, head);
-        std::uint64_t v = 0;
-        for (char const c : std::string_view(head).substr(1))
-            v = v << 8 | static_cast<std::uint8_t>(c);
-        return v;
-    };
-    auto const tagged = [&](std::pair<std::uint64_t, cbor::item const *> const t) -> std::expected<void, cbor::error> {
-        if (auto const r = e.tag(t.first); !r)
-            return r;
-        return item_walk(e, *t.second);
-    };
-    switch (node.type) {
-    case type::unsigned_integer:
-        return integer(node.get<type::unsigned_integer>().value(), [&](auto const v) { return e.unsigned_integer(v); });
-    case type::negative_integer:
-        return integer(node.get<type::negative_integer>().value(), [&](auto const v) { return e.negative_integer(v); });
-    case type::byte_string:
-        return e.byte_string(node.get<type::byte_string>().value());
-    case type::text_string:
-        return e.text_string(node.get<type::text_string>().value());
-    case type::array: {
-        std::span<cbor::item const> const children = node.get<type::array>().value();
-        return container(children, children.size(), true);
-    }
-    case type::map: {
-        std::span<cbor::item const> const children = node.get<type::map>().value();
-        return container(children, children.size() / 2, false);
-    }
-    case type::typed_array: {
-        std::pair<std::uint64_t, cbor::item const *> const t = node.get<type::typed_array>().value();
-        return e.typed_array({t.first, t.second->get<type::byte_string>().value()});
-    }
-    case type::tag:
-        return tagged(node.get<type::tag>().value());
-    case type::unsigned_bignum:
-        return tagged(node.get<type::unsigned_bignum>().value());
-    case type::negative_bignum:
-        return tagged(node.get<type::negative_bignum>().value());
-    case type::shared_reference:
-        return std::unexpected(cbor::error::unsupported_value);
-    case type::half_float:
-        return e.floating_point(std::bit_cast<std::float16_t>(static_cast<std::uint16_t>(bits())));
-    case type::single_float:
-        return e.floating_point(std::bit_cast<float>(static_cast<std::uint32_t>(bits())));
-    case type::double_float:
-        return e.floating_point(std::bit_cast<double>(bits()));
-    case type::false_value:
-        return e.simple_value(node.get<type::false_value>().value());
-    case type::true_value:
-        return e.simple_value(node.get<type::true_value>().value());
-    case type::null:
-        return e.simple_value(node.get<type::null>().value());
-    case type::undefined:
-        return e.simple_value(node.get<type::undefined>().value());
-    case type::simple_value:
-        return e.simple_value(node.get<type::simple_value>().value());
-    }
-    std::unreachable();
-}
-
-// One input item goes through both generic writers: cbor::encode of the decoded item, and cbor::encoder
-// with one call per head. The input bytes are the expectation of both.
+// One input item goes through the generic writer: cbor::encode of the decoded item. The input bytes are the
+// expectation.
 void reencode(std::string_view const name, std::string_view const section, std::string const &input)
 {
     auto const doc = test::make_lazy_from_copy(std::string_view(input));
@@ -160,12 +67,6 @@ void reencode(std::string_view const name, std::string_view const section, std::
     std::string a;
     auto const size = cbor::encode(**item, a);
     case_print(std::string("encode/") + std::string(name), section, size ? test::hexlify(a) : message_of(size.error()),
-               test::hexlify(input));
-    std::string b;
-    cbor::encoder e(b);
-    auto const walked = item_walk(e, **item);
-    auto const done = walked ? e.finish().transform([](auto) { return 0; }) : std::unexpected(walked.error());
-    case_print(std::string("encoder/") + std::string(name), section, done ? test::hexlify(b) : message_of(done.error()),
                test::hexlify(input));
 }
 
@@ -233,51 +134,33 @@ void corpora(std::filesystem::path const &dir)
 }
 
 template <class T>
-std::string one_item(T const value)
+std::expected<std::string, cbor::error> one_item(T const value)
 {
-    std::string out;
-    cbor::encoder e(out);
-    if constexpr (std::floating_point<T>)
-        (void)e.floating_point(value);
-    else if constexpr (std::signed_integral<T>)
-        (void)(value < 0 ? e.negative_integer(static_cast<std::make_unsigned_t<T>>(-(value + 1)))
-                         : e.unsigned_integer(static_cast<std::make_unsigned_t<T>>(value)));
-    else
-        (void)e.unsigned_integer(value);
-    (void)e.finish();
-    return out;
+    return cbor::structs<T>::encode(value);
 }
 
-// Every C++ integer type at its limits and every float width at its special values. The expected bytes are
-// the preferred serialization of RFC 8949 4.2.1 and 4.2.2, written by hand.
+// Every C++ integer type at its limits and every float width at its special values, through structs<T>::encode. The
+// expected bytes are the preferred serialization of RFC 8949 4.2.1 and 4.2.2, written by hand. -2^64, a half float and a
+// simple value have no C++ type that structs writes, so their expected bytes are the input of a re-encode.
 void native_widths()
 {
     char const *const s = "RFC 8949 3.1, 3.3";
-    case_print("native/uint8_max", s, test::hexlify(one_item(std::uint8_t{255})), "18ff");
-    case_print("native/uint8_zero", s, test::hexlify(one_item(std::uint8_t{0})), "00");
-    case_print("native/uint16_max", s, test::hexlify(one_item(std::uint16_t{65535})), "19ffff");
-    case_print("native/uint16_one", s, test::hexlify(one_item(std::uint16_t{1})), "01");
-    case_print("native/uint32_max", s, test::hexlify(one_item(std::uint32_t{4294967295})), "1affffffff");
-    case_print("native/uint32_zero", s, test::hexlify(one_item(std::uint32_t{0})), "00");
-    case_print("native/uint64_max", s, test::hexlify(one_item(std::numeric_limits<std::uint64_t>::max())),
-               "1bffffffffffffffff");
-    case_print("native/uint64_zero", s, test::hexlify(one_item(std::uint64_t{0})), "00");
-    case_print("native/int8_min", s, test::hexlify(one_item(std::int8_t{-128})), "387f");
-    case_print("native/int8_max", s, test::hexlify(one_item(std::int8_t{127})), "187f");
-    case_print("native/int8_minus_one", s, test::hexlify(one_item(std::int8_t{-1})), "20");
-    case_print("native/int16_min", s, test::hexlify(one_item(std::int16_t{-32768})), "397fff");
-    case_print("native/int32_min", s, test::hexlify(one_item(std::numeric_limits<std::int32_t>::min())), "3a7fffffff");
-    case_print("native/int64_min", s, test::hexlify(one_item(std::numeric_limits<std::int64_t>::min())),
-               "3b7fffffffffffffff");
-    case_print("native/int64_max", s, test::hexlify(one_item(std::numeric_limits<std::int64_t>::max())),
-               "1b7fffffffffffffff");
-    {
-        std::string out;
-        cbor::encoder e(out);
-        (void)e.negative_integer(std::numeric_limits<std::uint64_t>::max());
-        (void)e.finish();
-        case_print("native/nint_minus_2_64", s, test::hexlify(out), "3bffffffffffffffff");
-    }
+    result_print("native/uint8_max", s, one_item(std::uint8_t{255}), "18ff");
+    result_print("native/uint8_zero", s, one_item(std::uint8_t{0}), "00");
+    result_print("native/uint16_max", s, one_item(std::uint16_t{65535}), "19ffff");
+    result_print("native/uint16_one", s, one_item(std::uint16_t{1}), "01");
+    result_print("native/uint32_max", s, one_item(std::uint32_t{4294967295}), "1affffffff");
+    result_print("native/uint32_zero", s, one_item(std::uint32_t{0}), "00");
+    result_print("native/uint64_max", s, one_item(std::numeric_limits<std::uint64_t>::max()), "1bffffffffffffffff");
+    result_print("native/uint64_zero", s, one_item(std::uint64_t{0}), "00");
+    result_print("native/int8_min", s, one_item(std::int8_t{-128}), "387f");
+    result_print("native/int8_max", s, one_item(std::int8_t{127}), "187f");
+    result_print("native/int8_minus_one", s, one_item(std::int8_t{-1}), "20");
+    result_print("native/int16_min", s, one_item(std::int16_t{-32768}), "397fff");
+    result_print("native/int32_min", s, one_item(std::numeric_limits<std::int32_t>::min()), "3a7fffffff");
+    result_print("native/int64_min", s, one_item(std::numeric_limits<std::int64_t>::min()), "3b7fffffffffffffff");
+    result_print("native/int64_max", s, one_item(std::numeric_limits<std::int64_t>::max()), "1b7fffffffffffffff");
+    reencode("native/nint_minus_2_64", s, test::unhexlify("3bffffffffffffffff"));
     char const *const f = "RFC 8949 3.3, IEEE 754";
     struct float_case {
         char const *name;
@@ -297,8 +180,7 @@ void native_widths()
         {"1e300", 0x7e37e43c8800759c, "fb7e37e43c8800759c"},
     };
     for (auto const &c : doubles)
-        case_print(std::string("native/double_") + c.name, f, test::hexlify(one_item(std::bit_cast<double>(c.binary64))),
-                   c.expected);
+        result_print(std::string("native/double_") + c.name, f, one_item(std::bit_cast<double>(c.binary64)), c.expected);
     struct single_case {
         char const *name;
         std::uint32_t binary32;
@@ -314,104 +196,44 @@ void native_widths()
         {"one_tenth", 0x3dcccccd, "fa3dcccccd"},
     };
     for (auto const &c : singles)
-        case_print(std::string("native/float_") + c.name, f, test::hexlify(one_item(std::bit_cast<float>(c.binary32))),
-                   c.expected);
-    struct half_case {
+        result_print(std::string("native/float_") + c.name, f, one_item(std::bit_cast<float>(c.binary32)), c.expected);
+    struct written_case {
         char const *name;
-        std::uint16_t binary16;
         char const *expected;
     };
-    static constexpr half_case halves[] = {
-        {"one", 0x3c00, "f93c00"},          {"minus_zero", 0x8000, "f98000"},
-        {"infinity", 0x7c00, "f97c00"},     {"nan", 0x7e00, "f97e00"},
-        {"max", 0x7bff, "f97bff"},          {"min_subnormal", 1, "f90001"},
-        {"min_normal", 0x0400, "f90400"},   {"minus_two", 0xc000, "f9c000"},
+    static constexpr written_case halves[] = {
+        {"one", "f93c00"}, {"minus_zero", "f98000"}, {"infinity", "f97c00"},   {"nan", "f97e00"},
+        {"max", "f97bff"}, {"min_subnormal", "f90001"}, {"min_normal", "f90400"}, {"minus_two", "f9c000"},
     };
     for (auto const &c : halves)
-        case_print(std::string("native/float16_") + c.name, f,
-                   test::hexlify(one_item(std::bit_cast<std::float16_t>(c.binary16))), c.expected);
-    struct simple_case {
-        char const *name;
-        std::uint8_t value;
-        char const *expected;
+        reencode(std::string("native/float16_") + c.name, f, test::unhexlify(c.expected));
+    static constexpr written_case simples[] = {
+        {"false", "f4"}, {"true", "f5"}, {"null", "f6"}, {"undefined", "f7"}, {"zero", "e0"}, {"32", "f820"}, {"255", "f8ff"},
     };
-    static constexpr simple_case simples[] = {
-        {"false", 20, "f4"}, {"true", 21, "f5"},   {"null", 22, "f6"},
-        {"undefined", 23, "f7"}, {"zero", 0, "e0"}, {"32", 32, "f820"}, {"255", 255, "f8ff"},
-    };
-    for (auto const &c : simples) {
-        std::string out;
-        cbor::encoder e(out);
-        auto const r = e.simple_value(static_cast<cbor::simple_value>(c.value));
-        if (r)
-            (void)e.finish();
-        case_print(std::string("native/simple_") + c.name, "RFC 8949 3.3", r ? test::hexlify(out) : message_of(r.error()),
-                   c.expected);
-    }
+    for (auto const &c : simples)
+        reencode(std::string("native/simple_") + c.name, "RFC 8949 3.3", test::unhexlify(c.expected));
 }
 
-// Tags 28 and 29 of the value-sharing registration. Each expected item is the same bytes written by hand.
+// Tags 28 and 29 of the value-sharing registration, written by hand. cbor::encode writes the decoded tree with the
+// tags as they stand.
 void shared_values()
 {
     char const *const s = "value-sharing (tags 28, 29), RFC 8949 3.4";
-    {
-        std::string out;
-        cbor::encoder e(out);
-        (void)e.array(2);
-        (void)e.tag(28);
-        (void)e.text_string("x");
-        (void)e.tag(29);
-        (void)e.unsigned_integer(std::uint8_t{0});
-        (void)e.finish();
-        case_print("shared/array_text", s, test::hexlify(out), "82d81c6178d81d00");
-    }
-    {
-        std::string out;
-        cbor::encoder e(out);
-        (void)e.map(2);
-        (void)e.text_string("a");
-        (void)e.tag(28);
-        (void)e.array(2);
-        (void)e.unsigned_integer(std::uint8_t{1});
-        (void)e.unsigned_integer(std::uint8_t{2});
-        (void)e.text_string("b");
-        (void)e.tag(29);
-        (void)e.unsigned_integer(std::uint8_t{0});
-        (void)e.finish();
-        case_print("shared/map_array", s, test::hexlify(out), "a26161d81c8201026162d81d00");
-    }
-    {
-        std::string out;
-        cbor::encoder e(out);
-        (void)e.array(4);
-        (void)e.tag(28);
-        (void)e.text_string("p");
-        (void)e.tag(28);
-        (void)e.byte_string(span_of("q"));
-        (void)e.tag(29);
-        (void)e.unsigned_integer(std::uint8_t{1});
-        (void)e.tag(29);
-        (void)e.unsigned_integer(std::uint8_t{0});
-        (void)e.finish();
-        case_print("shared/two_marks", s, test::hexlify(out), "84d81c6170d81c4171d81d01d81d00");
-    }
+    reencode("shared/array_text", s, test::unhexlify("82d81c6178d81d00"));
+    reencode("shared/map_array", s, test::unhexlify("a26161d81c8201026162d81d00"));
+    reencode("shared/two_marks", s, test::unhexlify("84d81c6170d81c4171d81d01d81d00"));
 }
 
-// Every tag of RFC 8746 Table 1 is written by encoder::typed_array. The reserved tag 76 is the exception. 16 bytes are a
+// Every tag of RFC 8746 Table 1 over 16 bytes, written by hand. The reserved tag 76 is the exception. 16 bytes are a
 // whole number of elements for every element size.
 void typed_arrays()
 {
-    std::string const payload = test::unhexlify("000102030405060708090a0b0c0d0e0f");
+    std::string const payload = "000102030405060708090a0b0c0d0e0f";
     for (std::uint64_t tag = test::rfc8746::first_typed_array_tag; tag <= test::rfc8746::last_typed_array_tag; ++tag) {
         if (tag == test::rfc8746::reserved_typed_array_tag)
             continue;
-        std::string out;
-        cbor::encoder e(out);
-        auto const r = e.typed_array({tag, span_of(payload)});
-        if (r)
-            (void)e.finish();
-        case_print("typed_array/" + std::to_string(tag), "RFC 8746 2", r ? test::hexlify(out) : message_of(r.error()),
-                   "d8" + test::hexlify(std::string(1, static_cast<char>(tag))) + "50" + test::hexlify(payload));
+        reencode("typed_array/" + std::to_string(tag), "RFC 8746 2",
+                 test::unhexlify("d8" + test::hexlify(std::string(1, static_cast<char>(tag))) + "50" + payload));
     }
 }
 

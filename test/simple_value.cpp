@@ -159,26 +159,6 @@ TEST_CASE("simple value: diagnostic_notation gives every simple value 0 to 255")
     }
 }
 
-// The encoder writes every simple value in its shortest head and refuses the values 24 to 31, which have no
-// well-formed encoding.
-TEST_CASE("simple value: cbor::encoder::simple_value writes every simple value 0 to 255")
-{
-    for (unsigned i = 0; i < test::rfc8949::one_byte_values; ++i) {
-        auto const v = static_cast<std::uint8_t>(i);
-        CAPTURE(i);
-        std::string out;
-        cbor::encoder e{out};
-        auto const r = e.simple_value(static_cast<cbor::simple_value>(v));
-        if (reserved(v)) {
-            CHECK_EQ(r.error(), error::reserved_simple_value);
-            continue;
-        }
-        REQUIRE(r.has_value());
-        REQUIRE(e.finish().has_value());
-        CHECK_EQ(out, wire_of(v));
-    }
-}
-
 // structs reads and writes cbor::simple_value with the same bytes.
 TEST_CASE("simple value: structs reads and writes every simple value 0 to 255")
 {

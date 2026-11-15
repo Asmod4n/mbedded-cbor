@@ -106,56 +106,6 @@ TEST_CASE("head: a truncated argument is too_little_data")
         CHECK_EQ(read_decode_error_of_wire(w), error::too_little_data);
 }
 
-namespace
-{
-
-std::string tag_head_of(std::uint64_t const number)
-{
-    std::string out;
-    cbor::encoder e{out};
-    REQUIRE(e.tag(number).has_value());
-    REQUIRE(e.finish().has_value());
-    return out;
-}
-
-std::string array_head_of(std::uint64_t const count)
-{
-    std::string out;
-    cbor::encoder e{out};
-    REQUIRE(e.array(count).has_value());
-    REQUIRE(e.finish().has_value());
-    return out;
-}
-
-} // namespace
-
-// Lengths and tag numbers take the shortest head of RFC 8949 4.1. The encoder writes an integer at a fixed width, tested
-// below. So the shortest form is tested through the tag number and the count of an array. Ported from test.rb: the major
-// 0 roundtrip tests, here as the exact bytes of RFC 8949 4.1 under major type 6.
-TEST_CASE("tag: the head of a tag number takes the shortest form")
-{
-    CHECK_EQ(tag_head_of(0), "\xc0"sv);
-    CHECK_EQ(tag_head_of(23), "\xd7"sv);
-    CHECK_EQ(tag_head_of(24), "\xd8\x18"sv);
-    CHECK_EQ(tag_head_of(255), "\xd8\xff"sv);
-    CHECK_EQ(tag_head_of(256), "\xd9\x01\x00"sv);
-    CHECK_EQ(tag_head_of(65535), "\xd9\xff\xff"sv);
-    CHECK_EQ(tag_head_of(65536), "\xda\x00\x01\x00\x00"sv);
-    CHECK_EQ(tag_head_of(0xffffffff), "\xda\xff\xff\xff\xff"sv);
-    CHECK_EQ(tag_head_of(1ull << 40), "\xdb\x00\x00\x01\x00\x00\x00\x00\x00"sv);
-    CHECK_EQ(tag_head_of(~0ull), "\xdb\xff\xff\xff\xff\xff\xff\xff\xff"sv);
-}
-
-// Ported from test.rb: the major 1 wire tests, in the other direction, here under major type 4.
-TEST_CASE("array: the head of a count takes the shortest form")
-{
-    CHECK_EQ(array_head_of(0), "\x80"sv);
-    CHECK_EQ(array_head_of(24), "\x98\x18"sv);
-    CHECK_EQ(array_head_of(0xffffffff), "\x9a\xff\xff\xff\xff"sv);
-    CHECK_EQ(array_head_of(1ull << 63), "\x9b\x80\x00\x00\x00\x00\x00\x00\x00"sv);
-    CHECK_EQ(array_head_of(~0ull), "\x9b\xff\xff\xff\xff\xff\xff\xff\xff"sv);
-}
-
 // The error of the Writer reaches the caller as the member of the same name, because only the language knows what it
 // means. A Writer error that has no member of its own must still fail, and never read as success.
 TEST_CASE("head: encode returns the error of the Writer")

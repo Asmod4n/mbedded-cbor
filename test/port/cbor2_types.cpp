@@ -91,17 +91,3 @@ TEST_CASE("cbor2 types: TestCBORSimpleValue.test_ordering")
     std::ranges::sort(disordered);
     CHECK(disordered == expected);
 }
-
-// Upstream: TestCBORSimpleValue.test_simple_value_out_of_range, the values 24 and 31. RFC 8949 3.3: the simple
-// values 24 to 31 are reserved. encode.hpp: "@retval reserved_simple_value `value` is from 24 to 31". The values -1
-// and 256 are not ported: cbor::simple_value has 8 bits, so they do not compile.
-TEST_CASE("cbor2 types: TestCBORSimpleValue.test_simple_value_out_of_range")
-{
-    for (int const v : {24, 31}) {
-        INFO("value: ", v);
-        std::string out;
-        cbor::encoder e(out);
-        CHECK_EQ(e.simple_value(cbor::simple_value{static_cast<std::uint8_t>(v)}).error_or(error{}),
-                 error::reserved_simple_value);
-    }
-}

@@ -24,9 +24,7 @@ inline constexpr unsigned first_reserved_information = 28;
 inline constexpr unsigned last_reserved_information = 30;
 inline constexpr unsigned indefinite_length = 31;
 
-// 3.3: a one-byte argument holds 256 values; the simple values 24 to 31 are reserved.
+// 3.3: a one-byte argument holds 256 values.
 inline constexpr unsigned one_byte_values = 256;
-inline constexpr unsigned first_reserved_simple_value = 24;
-inline constexpr unsigned last_reserved_simple_value = 31;
 
 }

@@ -120,13 +120,7 @@ TEST_CASE("cbor2 docs: decoding concatenated objects")
 // data content will be returned." RFC 8949 3.4.6. decode.hpp: "One leading tag 55799 is read as its content".
 TEST_CASE("cbor2 docs: self-described CBOR")
 {
-    std::string out;
-    cbor::encoder e(out);
-    REQUIRE(e.tag(55799).has_value());
-    REQUIRE(e.array(2).has_value());
-    REQUIRE(e.text_string("hello").has_value());
-    REQUIRE(e.text_string("world").has_value());
-    REQUIRE(e.finish().has_value());
+    std::string const out = "\xd9\xd9\xf7\x82\x65hello\x65world";
     auto const decoded = loads(out);
     REQUIRE(decoded.has_value());
     CHECK(*decoded == A("hello", "world"));
