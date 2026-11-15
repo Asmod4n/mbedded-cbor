@@ -674,10 +674,10 @@ struct detail::encoding::binary_writer {
  *
  * @code{.output}
  * call: cbor::iov_writer w; cbor::encoder e(w);
- * call: e.text_string(text), with text a std::shared_ptr<std::string const> of 40 times "x"
+ * call: e.text_string(text), with text a std::shared_ptr<std::string const> of 4097 times "x"
  * call: auto const pieces = e.finish_iov()
- * (*pieces)->size(): 2, the head 78 28 and *text with no copy
- * sent with writev: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+ * (*pieces)->size(): 2, the head 79 10 01 and *text with no copy
+ * sent with writev: "xxx...x", 4097 times "x"
  * @endcode
  *
  * @snippet doc_reference_item.cpp iov_writer

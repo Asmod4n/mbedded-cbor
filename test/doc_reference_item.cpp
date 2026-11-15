@@ -439,20 +439,21 @@ TEST_CASE("doc reference item: encoder::finish")
 // encode.hpp, snippet iov_writer: a long text with its owner becomes a piece of its own, with no copy.
 TEST_CASE("doc reference item: iov_writer")
 {
-    auto const text = std::make_shared<std::string const>(std::string(40, 'x'));
+    constexpr std::size_t longer_than_copybreak = CBOR_ENCODER_COPYBREAK + 1;
+    auto const text = std::make_shared<std::string const>(std::string(longer_than_copybreak, 'x'));
     // [iov_writer]
-    // text: a std::shared_ptr<std::string const> with 40 times "x"
+    // text: a std::shared_ptr<std::string const> with 4097 times "x"
     cbor::iov_writer w;
     cbor::encoder e(w);
     bool const written = e.text_string(text).has_value();
-    auto const pieces = e.finish_iov();  // 2 pieces: the head 78 28, then *text with no copy
+    auto const pieces = e.finish_iov();  // 2 pieces: the head 79 10 01, then *text with no copy
     // [iov_writer]
     CHECK(written);
     REQUIRE(pieces);
     REQUIRE_EQ((*pieces)->size(), 2u);
     auto const head = test::join_pieces_into_bytes((*pieces)->first(1));
     REQUIRE(head.has_value());
-    CHECK_EQ(*head, "\x78\x28"sv);
+    CHECK_EQ(*head, "\x79\x10\x01"sv);
     CHECK_EQ(static_cast<void const *>((**pieces)[1].iov_base), static_cast<void const *>(text->data()));
     CHECK_EQ((**pieces)[1].iov_len, text->size());
     auto const sent = test::join_pieces_into_bytes(**pieces);

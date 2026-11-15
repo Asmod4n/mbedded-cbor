@@ -67,8 +67,7 @@ void encode(benchmark::State &state)
     state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(count));
 }
 
-// A text one byte shorter than the size from which the iov writer passes a text by reference, and a text of
-// that size. The first is copied into a block, the second becomes a piece of its own.
+// A text of CBOR_ENCODER_COPYBREAK bytes and a text one byte longer. The first is copied into a block, the second becomes a piece of its own.
 template <class Encoder>
 auto finished(Encoder &e)
 {
@@ -80,8 +79,8 @@ auto finished(Encoder &e)
 
 void encode_iov_owned(benchmark::State &state)
 {
-    auto const copied = std::make_shared<std::string const>(31, 'a');
-    auto const referenced = std::make_shared<std::string const>(32, 'b');
+    auto const copied = std::make_shared<std::string const>(CBOR_ENCODER_COPYBREAK, 'a');
+    auto const referenced = std::make_shared<std::string const>(CBOR_ENCODER_COPYBREAK + 1, 'b');
     auto const write = [&] {
         cbor::iov_writer w;
         cbor::encoder e{w};
@@ -100,7 +99,7 @@ void encode_iov_owned(benchmark::State &state)
     };
     if (points_into(*copied) || !points_into(*referenced)) {
         state.SkipWithError(
-            "the iov writer does not copy the 31-byte text and pass the 32-byte text by reference");
+            "the iov writer does not copy a text at CBOR_ENCODER_COPYBREAK and pass a longer one by reference");
         return;
     }
     std::size_t const count = cold_bytes() / (copied->size() + referenced->size()) + 1;

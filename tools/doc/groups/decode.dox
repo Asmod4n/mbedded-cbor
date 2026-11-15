@@ -121,7 +121,7 @@ The encoder writes into blocks of 16 KiB and copies each byte once.
 
 `cbor::encode_iov(*tree)`, with the `cbor::owning<cbor::item>` that
 `cbor::decode` gives, does not copy a text or a byte string longer than
-`CBOR_ENCODER_COPYBREAK` bytes (31 by default): its piece points into the
+`CBOR_ENCODER_COPYBREAK` bytes (4096 by default): its piece points into the
 tree, and the result holds the tree alive. `cbor::encode_iov(**tree)`
 copies every string.
 

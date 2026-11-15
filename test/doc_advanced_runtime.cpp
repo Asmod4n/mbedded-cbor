@@ -386,7 +386,7 @@ TEST_CASE("doc advanced runtime: encode_iov")
     std::string const joined = *read;
     CHECK_EQ(joined, wire);
 
-    std::string text(40, 'x');
+    std::string text(CBOR_ENCODER_COPYBREAK + 1, 'x');
     cbor::iov_writer w;
     cbor::encoder e(w);
     REQUIRE(e.text_string(std::move(text)).has_value());
