@@ -95,7 +95,7 @@ A lazy, \fRclone\fP, \fRat_path\fP, \fR\fBcbor::path::query\fP\fP and \fR\fBcbor
 Tag 55799 (RFC 8949, section 3\&.4\&.6) marks bytes as CBOR\&. \fR\fBcbor::decode\fP\fP reads one leading tag 55799 as its content, so the root of its tree is the content\&. A second tag 55799, and a tag 55799 inside an item, stay tags\&.
 .SH "THE ENCODER"
 .PP
-\fR\fBcbor::encoder\fP\fP writes one data item per call, in the order of the bytes\&. An integer and a float take the width of their type, and a NaN keeps its bits\&. A count, a length and a tag number take the shortest head\&. The encoder counts nothing: the counts of \fRarray\fP and \fRmap\fP are the caller's\&. \fRfinish()\fP gives the size in bytes, or the pieces for an \fRiov_writer\fP\&.
+\fR\fBcbor::encoder\fP\fP writes one data item per call, in the order of the bytes\&. An integer and a float take the width of their type, and a NaN keeps its bits\&. A count, a length and a tag number take the shortest head\&. The encoder counts nothing: the counts of \fRarray\fP and \fRmap\fP are the caller's\&. \fRfinish()\fP gives the size in bytes\&. An encoder over an \fRiov_writer\fP ends with \fRfinish_iov()\fP, which gives the pieces\&.
 
 .PP
 The calls are \fRunsigned_integer\fP, \fRnegative_integer\fP, \fRbyte_string\fP, \fRtext_string\fP, \fRarray\fP, \fRmap\fP, \fRtag\fP, \fRsimple_value\fP, \fRfloating_point\fP and \fRtyped_array\fP\&. Each gives \fRstd::expected<void, \fBcbor::error\fP>\fP\&. \fRtag(28)\fP and \fRtag(29)\fP write those tags as any other tag\&. \fRtag(55799)\fP writes \fRd9 d9 f7\fP\&. No function of the library calls \fRshareable()\fP and \fRsharedref()\fP of the encoder\&. \fR\fBcbor::structs\fP\fP writes no tag 28 and no tag 29\&.

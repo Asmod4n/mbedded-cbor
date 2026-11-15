@@ -116,9 +116,13 @@ std::expected< void, \fBerror\fP > \fBfloating_point\fP (T const value)
 .br
 .RI "Writes a typed array (RFC 8746): the tag \fRvalue\&.tag\fP and then \fRvalue\&.bytes\fP as a byte string\&. "
 .ti -1c
-.RI "auto \fBfinish\fP ()"
+.RI "std::expected< std::size_t, \fBerror\fP > \fBfinish\fP ()"
 .br
 .RI "Ends the encoder\&. "
+.ti -1c
+.RI "auto \fBfinish_iov\fP ()"
+.br
+.RI "Ends an encoder over an \fBcbor::iov_writer\fP and gives its pieces\&. "
 .in -1c
 .SH "DESCRIPTION"
 .PP 
