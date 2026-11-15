@@ -10,6 +10,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <vector>
 
 struct moment {
@@ -49,6 +50,33 @@ CBOR_DEFINE_TYPE_MEMBERS(table, cbor::tag{40100}, head, rows);
 CBOR_DEFINE_TYPE_MEMBERS(field, cbor::tag{40102}, name, label, input);
 CBOR_DEFINE_TYPE_MEMBERS(form, cbor::tag{40101}, action, fields);
 CBOR_DEFINE_TYPE_MEMBERS(screen, cbor::tag{40105}, list, entry);
+
+struct server_row {
+    std::string name;
+    std::uint32_t amount;
+    std::chrono::sys_seconds time;
+};
+
+struct server_table {
+    std::vector<std::string> head;
+    std::vector<server_row> rows;
+};
+
+struct server_field {
+    std::string name;
+    std::string label;
+    std::string input;
+};
+
+struct server_form {
+    std::string action;
+    std::vector<server_field> fields;
+};
+
+CBOR_DEFINE_TYPE_MEMBERS(server_row, cbor::untagged, name, amount, time);
+CBOR_DEFINE_TYPE_MEMBERS(server_table, cbor::tag{40100}, head, rows);
+CBOR_DEFINE_TYPE_MEMBERS(server_field, cbor::tag{40102}, name, label, input);
+CBOR_DEFINE_TYPE_MEMBERS(server_form, cbor::tag{40101}, action, fields);
 
 namespace
 {
@@ -190,45 +218,15 @@ __attribute__((export_name("release"))) void release(void *const ptr)
 
 __attribute__((export_name("server_encode"))) std::uint64_t server_encode(std::uint32_t const rows)
 {
-    wire.clear();
-    cbor::encoder<std::string> e{wire};
-    std::ignore = e.array(2);
-    std::ignore = e.tag(ui_table);
-    std::ignore = e.map(2);
-    std::ignore = e.text_string("head");
-    std::ignore = e.array(3);
-    std::ignore = e.text_string("Name <user>");
-    std::ignore = e.text_string("Amount");
-    std::ignore = e.text_string("Time");
-    std::ignore = e.text_string("rows");
-    std::ignore = e.array(rows);
-    for (std::uint32_t r = 0; r < rows; ++r) {
-        std::ignore = e.map(3);
-        std::ignore = e.text_string("name");
-        std::ignore = e.text_string(std::string(names[r % std::size(names)]) + " & co " + std::to_string(r));
-        std::ignore = e.text_string("amount");
-        std::ignore = e.unsigned_integer(std::uint64_t{r * 37u % 10000u});
-        std::ignore = e.text_string("time");
-        std::ignore = e.tag(epoch_time);
-        std::ignore = e.unsigned_integer(std::uint64_t{1700000000u + r * 86400u});
-    }
-    std::ignore = e.tag(ui_form);
-    std::ignore = e.map(2);
-    std::ignore = e.text_string("action");
-    std::ignore = e.text_string("/send");
-    std::ignore = e.text_string("fields");
-    std::ignore = e.array(form_fields);
-    for (std::uint32_t f = 0; f < form_fields; ++f) {
-        std::ignore = e.tag(ui_field);
-        std::ignore = e.map(3);
-        std::ignore = e.text_string("name");
-        std::ignore = e.text_string("field" + std::to_string(f));
-        std::ignore = e.text_string("label");
-        std::ignore = e.text_string("Field " + std::to_string(f));
-        std::ignore = e.text_string("input");
-        std::ignore = e.text_string(f % 2 ? "number" : "text");
-    }
-    std::ignore = e.finish();
+    std::tuple<server_table, server_form> message{{{"Name <user>", "Amount", "Time"}, {}}, {"/send", {}}};
+    for (std::uint32_t r = 0; r < rows; ++r)
+        std::get<0>(message).rows.push_back(
+            server_row{std::string(names[r % std::size(names)]) + " & co " + std::to_string(r), r * 37u % 10000u,
+                       std::chrono::sys_seconds{std::chrono::seconds{1700000000u + r * 86400u}}});
+    for (std::uint32_t f = 0; f < form_fields; ++f)
+        std::get<1>(message).fields.push_back(
+            server_field{"field" + std::to_string(f), "Field " + std::to_string(f), f % 2 ? "number" : "text"});
+    wire = *cbor::structs<std::tuple<server_table, server_form>>::encode(message);
     return packed(wire);
 }
 

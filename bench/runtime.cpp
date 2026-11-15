@@ -349,9 +349,6 @@ static void mp_pack(msgpack::packer<msgpack::sbuffer> &pk, bench::value const &x
 }
 #endif
 
-#if defined(ARM_S_STRING) || defined(ARM_S_STRING_REUSE) || defined(ARM_TC_WRITE) || defined(ARM_S_IOV)
-#define ARM_S_TREE 1
-#endif
 #if defined(ARM_TC_WRITE)
 #include <tinycbor/cbor.h>
 static void tc_walk(CborEncoder *e, bench::value const &x)
@@ -966,7 +963,7 @@ static std::uint64_t fb_path(flexbuffers::Reference const root)
 #endif
 
 static std::string const *bytes = &doc;
-#if defined(ARM_S) || defined(ARM_S_TREE) || defined(ARM_VG_RAW) || defined(ARM_MP) || defined(ARM_FB)
+#if defined(ARM_TC_WRITE) || defined(ARM_VG_RAW) || defined(ARM_MP) || defined(ARM_FB)
 static bench::value tree;
 #endif
 #if defined(ARM_MP) || defined(ARM_FB)
@@ -978,14 +975,8 @@ static msgpack::sbuffer mpbuf;
 #if defined(ARM_FB_REUSE)
 static flexbuffers::Builder fbb;
 #endif
-#if defined(ARM_S)
-static std::vector<char> buf;
-#endif
 #if defined(ARM_MB_TREE_ENCODE)
 static std::optional<cbor::owning<cbor::item>> decoded;
-#endif
-#if defined(ARM_S_STRING_REUSE)
-static std::string reused;
 #endif
 #if defined(ARM_LC_PREALLOC)
 static cbor_item_t *lc;
@@ -999,13 +990,6 @@ static std::vector<std::uint8_t> jcbuf;
 static vg_out vo;
 #endif
 
-#if defined(ARM_S_BYTES_STRING) || defined(ARM_S_BYTES_SPAN) || defined(ARM_S_IOV_BYTES_REF)
-static std::vector<char> bytes_out;
-#endif
-#if defined(ARM_S_IOV_BYTES_REF)
-static std::optional<cbor::ref<std::span<std::byte const>>> bytes_ref;
-#endif
-
 static void setup()
 {
 #if defined(ARM_MB_TREE_ENCODE)
@@ -1015,32 +999,11 @@ static void setup()
     variant_message = *cbor::schema<bench_variant::home>::encode(variant_sample);
     bytes = &variant_message;
 #endif
-#if defined(ARM_S_BYTES_SPAN)
-    bytes_out.resize(doc.size() + cbor::detail::encoding::item_size_max);
-#endif
-#if defined(ARM_S_IOV_BYTES_REF)
-    {
-        std::string encoded;
-        cbor::encoder e(encoded);
-        if (!e.byte_string(std::as_bytes(std::span(doc))) || !e.finish())
-            std::abort();
-        auto const l = cbor::lazy::adopt(std::move(encoded));
-        if (!l)
-            std::abort();
-        auto r = l->get<std::span<std::byte const>>();
-        if (!r)
-            std::abort();
-        bytes_ref.emplace(std::move(*r));
-    }
-#endif
-#if defined(ARM_S) || defined(ARM_S_TREE) || defined(ARM_VG_RAW) || defined(ARM_MP) || defined(ARM_FB)
+#if defined(ARM_TC_WRITE) || defined(ARM_VG_RAW) || defined(ARM_MP) || defined(ARM_FB)
     auto t = bench::value_of(*test::make_lazy_from_copy(std::string_view(doc)));
     if (!t)
         std::abort();
     tree = std::move(*t);
-#endif
-#if defined(ARM_S)
-    buf.resize(2 * doc.size() + 64);
 #endif
 #if defined(ARM_TC_WRITE)
     tcbuf.resize(2 * doc.size() + 64);
@@ -1076,68 +1039,12 @@ static void setup()
 
 static std::uint64_t op()
 {
-#if defined(ARM_S_IOV)
-    cbor::iov_writer w;
-    auto const r = bench::encode(w, tree);
-    if (!r)
-        std::abort();
-    std::span<iovec const> const pieces = **r;
-    benchmark::DoNotOptimize(pieces.data());
-    benchmark::ClobberMemory();
-    return std::ranges::fold_left(pieces | std::views::transform(&iovec::iov_len), std::size_t{0}, std::plus<>{});
-#elif defined(ARM_S_STRING_REUSE)
-    reused.clear();
-    if (!bench::encode(reused, tree))
-        std::abort();
-    benchmark::DoNotOptimize(reused.data());
-    benchmark::ClobberMemory();
-    return reused.size();
-#elif defined(ARM_S_BYTES_STRING)
-    std::string out;
-    cbor::encoder e(out);
-    if (!e.byte_string(std::as_bytes(std::span(in))) || !e.finish())
-        std::abort();
-    benchmark::DoNotOptimize(out.data());
-    benchmark::ClobberMemory();
-    return out.size();
-#elif defined(ARM_S_BYTES_SPAN)
-    cbor::encoder e{std::span<char>(bytes_out)};
-    if (!e.byte_string(std::as_bytes(std::span(in))))
-        std::abort();
-    auto const n = e.finish();
-    if (!n)
-        std::abort();
-    benchmark::ClobberMemory();
-    return *n;
-#elif defined(ARM_S_IOV_BYTES_REF)
-    cbor::iov_writer w;
-    cbor::encoder<cbor::iov_writer> e(w);
-    if (!e.byte_string(*bytes_ref))
-        std::abort();
-    auto pieces = e.finish_iov();
-    if (!pieces)
-        std::abort();
-    benchmark::DoNotOptimize(pieces);
-    benchmark::ClobberMemory();
-    return (**pieces).size();
-#elif defined(ARM_S_STRING)
-    std::string out;
-    if (!bench::encode(out, tree))
-        std::abort();
-    benchmark::DoNotOptimize(out.data());
-    benchmark::ClobberMemory();
-    return out.size();
-#elif defined(ARM_TC_WRITE)
+#if defined(ARM_TC_WRITE)
     CborEncoder e;
     cbor_encoder_init(&e, tcbuf.data(), tcbuf.size(), 0);
     tc_walk(&e, tree);
     benchmark::ClobberMemory();
     return cbor_encoder_get_buffer_size(&e, tcbuf.data());
-#elif defined(ARM_S)
-    if (!bench::encode(std::span<char>(buf), tree))
-        std::abort();
-    benchmark::ClobberMemory();
-    return buf.size();
 #elif defined(ARM_MB_TREE_ENCODE)
     std::string out;
     if (!cbor::encode(**decoded, out))

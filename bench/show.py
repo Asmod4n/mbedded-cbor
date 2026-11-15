@@ -9,11 +9,11 @@ arms = data["arms"]
 print(f'{data["time"]}  {data["commit"]}  {data["flags"]}  {data["cpu"]["model"]}  {data["processes"]} processes')
 print()
 
-names = {"S": "mbedded-cbor", "READ": "mbedded-cbor", "LC": "libcbor", "JC": "jsoncons", "VG": "vladimirgamalyan",
+names = {"MB": "mbedded-cbor", "READ": "mbedded-cbor", "LC": "libcbor", "JC": "jsoncons", "VG": "vladimirgamalyan",
          "MP": "msgpack-cxx", "FB": "FlexBuffers"}
 docs = ["cwt", "senml", "floats", "ints", "strings", "records", "twitter"]
 compilers = sorted({n.split(".")[1] for n in arms if n.startswith("rt.")})
-for job, kinds in (("encode", ("S", "_PREALLOC", "_CLEAR", "_RAW", "_REUSE")), ("read every item", ("READ", "_READ"))):
+for job, kinds in (("encode", ("MB_TREE_ENCODE", "_PREALLOC", "_CLEAR", "_RAW", "_REUSE")), ("read every item", ("READ", "_READ"))):
     for cc in compilers:
         print(f"== runtime, {job}, {cc}: documents per second, best first")
         for d in docs:

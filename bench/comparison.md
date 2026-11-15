@@ -276,7 +276,7 @@ bool const same = v[0] == v[1];
 
 ### mbedded-cbor
 
-Tags 28 and 29 are plain tags in a lazy, in a path and in `clone`. `cbor::decode` resolves them: the second element is a `shared_reference` to the first. `cbor::structs` decode reads a tag 29 into no plain member. No writer of the library adds them by itself. `encode` of an item writes a tag 28 or 29 that the item holds, and a program writes them with `encoder::tag` (`mbedded-cbor-decode(3)`).
+Tags 28 and 29 are plain tags in a lazy, in a path and in `clone`. `cbor::decode` resolves them: the second element is a `shared_reference` to the first. `cbor::structs` decode reads a tag 29 into no plain member. No writer of the library adds them by itself. `encode` of an item writes a tag 28 or 29 that the item holds (`mbedded-cbor-decode(3)`).
 
 ```cpp
 // owner: a std::shared_ptr<std::string const> with [28("x"), 29(0)]
@@ -558,8 +558,7 @@ number for them.
 ## 10. Other decoders read what mbedded-cbor writes
 
 `test/interop/run.sh` writes values with every public writer:
-`cbor::encoder`, `cbor::encode(item)`, `structs<T>::encode` and
-`schema<T>::encode`. The values are the examples of RFC 8949 Appendix A,
+`cbor::encode(item)`, `structs<T>::encode` and `schema<T>::encode`. The values are the examples of RFC 8949 Appendix A,
 the cbor-wg test vectors, the bench corpora, every integer and float
 width, tags 28 and 29, and typed arrays. Each decoder below reads the
 output. The script then compares the value with the value that was

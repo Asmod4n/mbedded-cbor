@@ -9,18 +9,6 @@
 namespace site
 {
 
-template <class Target>
-struct encoder_over {
-    std::shared_ptr<void> target;
-    cbor::encoder<Target> encoder;
-
-    template <class Argument>
-    encoder_over(std::shared_ptr<void> t, Argument &&argument)
-        : target(std::move(t)), encoder(std::forward<Argument>(argument))
-    {
-    }
-};
-
 inline std::string bytes_text(std::span<std::byte const> const bytes)
 {
     return number_text(bytes.size()) + " bytes: " + hex_text(bytes);
@@ -84,24 +72,6 @@ struct kind<cbor::simple_value> {
             return "cbor::simple_value::undefined";
         }
         return "cbor::simple_value{" + number_text(std::to_underlying(v)) + "}";
-    }
-};
-
-template <>
-struct kind<encoder_over<std::string>> {
-    static constexpr std::string_view name = "cbor::encoder<std::string>";
-    static std::string text(encoder_over<std::string> const &)
-    {
-        return "encoder over a std::string";
-    }
-};
-
-template <>
-struct kind<encoder_over<std::span<char>>> {
-    static constexpr std::string_view name = "cbor::encoder<std::span<char>>";
-    static std::string text(encoder_over<std::span<char>> const &)
-    {
-        return "encoder over a std::span<char>";
     }
 };
 

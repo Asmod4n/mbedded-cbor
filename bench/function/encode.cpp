@@ -1,7 +1,5 @@
-// The bench of the block cbor::encode of a tree into a std::string and into a std::span (encode.hpp), of
-// cbor::encode_iov of a tree, and of cbor::encoder over a cbor::iov_writer with texts that the program hands over with
-// their owner. A commit before
-// encoder::finish_iov ends the encoder over the iov_writer with finish.
+// The bench of the block cbor::encode of a tree into a std::string and into a std::span (encode.hpp), and of
+// cbor::encode_iov of a tree.
 // Each iteration writes every tree of a list whose messages hold COLD_BYTES bytes.
 #include <benchmark/benchmark.h>
 #include <cbor/decode.hpp>
@@ -67,51 +65,6 @@ void encode(benchmark::State &state)
     state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(count));
 }
 
-// A text of CBOR_ENCODER_COPYBREAK bytes and a text one byte longer. The first is copied into a block, the second becomes a piece of its own.
-template <class Encoder>
-auto finished(Encoder &e)
-{
-    if constexpr (requires { e.finish_iov(); })
-        return e.finish_iov();
-    else
-        return e.finish();
-}
-
-void encode_iov_owned(benchmark::State &state)
-{
-    auto const copied = std::make_shared<std::string const>(CBOR_ENCODER_COPYBREAK, 'a');
-    auto const referenced = std::make_shared<std::string const>(CBOR_ENCODER_COPYBREAK + 1, 'b');
-    auto const write = [&] {
-        cbor::iov_writer w;
-        cbor::encoder e{w};
-        if (!e.text_string(copied) || !e.text_string(referenced))
-            throw std::logic_error("bench: cbor::encoder refuses a text");
-        auto r = finished(e);
-        if (!r)
-            throw std::logic_error("bench: cbor::encoder::finish fails");
-        return std::move(*r);
-    };
-    auto const sample = write();
-    auto const points_into = [&sample](std::string const &text) {
-        return std::ranges::any_of(*sample, [&text](iovec const &piece) {
-            return static_cast<void const *>(piece.iov_base) == static_cast<void const *>(text.data());
-        });
-    };
-    if (points_into(*copied) || !points_into(*referenced)) {
-        state.SkipWithError(
-            "the iov writer does not copy a text at CBOR_ENCODER_COPYBREAK and pass a longer one by reference");
-        return;
-    }
-    std::size_t const count = cold_bytes() / (copied->size() + referenced->size()) + 1;
-    for (auto _ : state) {
-        for (std::size_t i = 0; i < count; ++i) {
-            auto pieces = write();
-            benchmark::DoNotOptimize(pieces);
-        }
-    }
-    state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(count));
-}
-
 void encode_iov_item(benchmark::State &state)
 {
     auto const sample = cbor::decode(message);
@@ -132,6 +85,5 @@ void encode_iov_item(benchmark::State &state)
 
 BENCHMARK(encode<false>)->Name("encode_string")->Unit(benchmark::kMillisecond);
 BENCHMARK(encode<true>)->Name("encode_span")->Unit(benchmark::kMillisecond);
-BENCHMARK(encode_iov_owned)->Unit(benchmark::kMillisecond);
 BENCHMARK(encode_iov_item)->Unit(benchmark::kMillisecond);
 BENCHMARK_MAIN();

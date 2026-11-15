@@ -21,6 +21,7 @@
 
 namespace {
 
+using namespace std::string_literals;
 using namespace std::string_view_literals;
 
 constexpr std::string_view message = "\x84\xf9\x3e\x00\xfa\x3f\xc0\x00\x00\x01\xfb\x3f\xf1\x99\x99\x99\x99\x99\x9a"sv;
@@ -118,24 +119,28 @@ void path_absolute_compiled(benchmark::State &state)
 
 std::string maps_message()
 {
-    constexpr std::size_t maps = 8;
-    constexpr std::size_t pairs = 8;
-    constexpr std::size_t inner_pairs = 2;
-    std::string m;
-    cbor::encoder<std::string> e(m);
-    (void)e.array(maps);
-    for (std::size_t i = 0; i < maps; ++i) {
-        (void)e.map(pairs);
-        for (std::size_t k = pairs; k-- > 0;) {
-            (void)e.unsigned_integer(static_cast<std::uint8_t>(k));
-            (void)e.map(inner_pairs);
-            (void)e.text_string("a"sv);
-            (void)e.unsigned_integer(static_cast<std::uint8_t>(k));
-            (void)e.text_string("b"sv);
-            (void)e.unsigned_integer(static_cast<std::uint8_t>(i % 2));
-        }
-    }
-    (void)e.finish();
+    constexpr std::size_t map_pairs = 4;
+    std::string_view const even = "\xa8"
+        "\x18\x07\xa2\x61" "a\x18\x07\x61" "b\x18\x00"
+        "\x18\x06\xa2\x61" "a\x18\x06\x61" "b\x18\x00"
+        "\x18\x05\xa2\x61" "a\x18\x05\x61" "b\x18\x00"
+        "\x18\x04\xa2\x61" "a\x18\x04\x61" "b\x18\x00"
+        "\x18\x03\xa2\x61" "a\x18\x03\x61" "b\x18\x00"
+        "\x18\x02\xa2\x61" "a\x18\x02\x61" "b\x18\x00"
+        "\x18\x01\xa2\x61" "a\x18\x01\x61" "b\x18\x00"
+        "\x18\x00\xa2\x61" "a\x18\x00\x61" "b\x18\x00"sv;
+    std::string_view const odd = "\xa8"
+        "\x18\x07\xa2\x61" "a\x18\x07\x61" "b\x18\x01"
+        "\x18\x06\xa2\x61" "a\x18\x06\x61" "b\x18\x01"
+        "\x18\x05\xa2\x61" "a\x18\x05\x61" "b\x18\x01"
+        "\x18\x04\xa2\x61" "a\x18\x04\x61" "b\x18\x01"
+        "\x18\x03\xa2\x61" "a\x18\x03\x61" "b\x18\x01"
+        "\x18\x02\xa2\x61" "a\x18\x02\x61" "b\x18\x01"
+        "\x18\x01\xa2\x61" "a\x18\x01\x61" "b\x18\x01"
+        "\x18\x00\xa2\x61" "a\x18\x00\x61" "b\x18\x01"sv;
+    std::string m = "\x88";
+    for (std::size_t i = 0; i < map_pairs; ++i)
+        m.append(even).append(odd);
     return m;
 }
 
@@ -162,21 +167,15 @@ void path_map_equal_compiled(benchmark::State &state)
 
 std::string map_keys_message()
 {
-    constexpr std::size_t keys = 8;
-    constexpr std::size_t key_pairs = 2;
-    std::string m;
-    cbor::encoder<std::string> e(m);
-    (void)e.map(keys);
-    for (std::size_t k = 0; k < keys; ++k) {
-        (void)e.map(key_pairs);
-        (void)e.text_string("a"sv);
-        (void)e.unsigned_integer(static_cast<std::uint8_t>(k));
-        (void)e.text_string("b"sv);
-        (void)e.unsigned_integer(std::uint8_t{0});
-        (void)e.unsigned_integer(static_cast<std::uint8_t>(k));
-    }
-    (void)e.finish();
-    return m;
+    return "\xa8"
+        "\xa2\x61" "a\x18\x00\x61" "b\x18\x00\x18\x00"
+        "\xa2\x61" "a\x18\x01\x61" "b\x18\x00\x18\x01"
+        "\xa2\x61" "a\x18\x02\x61" "b\x18\x00\x18\x02"
+        "\xa2\x61" "a\x18\x03\x61" "b\x18\x00\x18\x03"
+        "\xa2\x61" "a\x18\x04\x61" "b\x18\x00\x18\x04"
+        "\xa2\x61" "a\x18\x05\x61" "b\x18\x00\x18\x05"
+        "\xa2\x61" "a\x18\x06\x61" "b\x18\x00\x18\x06"
+        "\xa2\x61" "a\x18\x07\x61" "b\x18\x00\x18\x07"s;
 }
 
 void path_map_key_compiled(benchmark::State &state)
