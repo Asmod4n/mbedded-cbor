@@ -64,8 +64,6 @@ enum class error {
     sharedref_not_complete,
     /** `decode` meets a tag 29 that names a tag 28 whose content is only tags 28 and this tag 29. */
     sharedref_not_defined,
-    /** An encode meets a simple value from 24 to 31. */
-    reserved_simple_value,
     /** cbor::encode() meets a `shared_reference`. */
     unsupported_value,
     /** A key or an index meets an item that is not a map or an array. */
@@ -183,8 +181,6 @@ public:
             return "sharedref not complete";
         case error::sharedref_not_defined:
             return "sharedref not defined";
-        case error::reserved_simple_value:
-            return "reserved simple value";
         case error::unsupported_value:
             return "unsupported value";
         case error::not_indexable:

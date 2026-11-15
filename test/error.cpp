@@ -12,8 +12,8 @@ using cbor::error;
 namespace
 {
 
-// cbor::error is a finite set, so each test below checks each member. The list holds the 28 members in the order of
-// include/cbor/error.hpp, whose values run from 1 to 28 with no gap.
+// cbor::error is a finite set, so each test below checks each member. The list holds the 27 members in the order of
+// include/cbor/error.hpp, whose values run from 1 to 27 with no gap.
 constexpr std::array every_error{
     error::too_little_data,
     error::syntax_error,
@@ -23,7 +23,6 @@ constexpr std::array every_error{
     error::sharedref_index_not_marked,
     error::sharedref_not_complete,
     error::sharedref_not_defined,
-    error::reserved_simple_value,
     error::unsupported_value,
     error::not_indexable,
     error::index_out_of_bounds,
