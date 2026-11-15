@@ -429,7 +429,7 @@ inline std::string encode_in_preferred_form(value const &v)
     return out;
 }
 
-// The encoder writes a run-time integer at its native width: the initial byte with eight argument bytes.
+// An integer at its native width: the initial byte with eight argument bytes.
 inline std::string write_integer_at_native_width(cbor::major_type const major, std::uint64_t const argument)
 {
     constexpr int bits_per_byte = std::numeric_limits<unsigned char>::digits;
@@ -471,18 +471,6 @@ inline std::string add_one_to_magnitude(std::string_view const m)
     }
     sum.insert(sum.begin(), '\1');
     return sum;
-}
-
-// RFC 8949 3.4.3: tag 3 holds n for the value -1 - n, so n is the absolute value less one.
-inline std::string subtract_one_from_magnitude(std::string_view const m)
-{
-    std::string n(m);
-    for (auto it = n.rbegin(); it != n.rend(); ++it) {
-        *it = static_cast<char>(static_cast<unsigned char>(*it) - 1);
-        if (*it != '\xff')
-            break;
-    }
-    return std::string(strip_leading_zeros_of_magnitude(n));
 }
 
 } // namespace test

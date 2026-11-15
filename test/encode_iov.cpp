@@ -338,51 +338,6 @@ TEST_CASE("encode_iov: a write after finish and a second finish are a wrong use"
     CHECK_EQ(join_pieces_into_bytes(p), "\x18\x05"sv);
 }
 
-// The forms that carry an owner must still copy with every other writer, and give the same bytes.
-TEST_CASE("encode_iov: the owner forms copy with the other writers")
-{
-    std::string const text(64, 'o');
-    std::string const expected = text_item(text);
-    auto const owner = std::make_shared<std::string const>(text);
-    CHECK_EQ(copied([&](auto &e) { return e.text_string(owner); }), expected);
-    CHECK_EQ(copied([&](auto &e) { return e.text_string(std::string(text)); }), expected);
-    std::string span_out(expected.size(), '\0');
-    REQUIRE(test::encode(std::span<char>(span_out), value{std::string(text)}).has_value());
-    CHECK_EQ(span_out, expected);
-}
-
-// The encoder copies every byte of a view that it is given. Its result must equal the
-// bytes that encode writes into a std::string, for examples of RFC 8949 Appendix A of each major type.
-TEST_CASE("encode_iov: the encoder over views gives the bytes of encode")
-{
-    for (std::string_view const wire :
-         {"\x00"sv, "\x18\x64"sv, "\x3b\xff\xff\xff\xff\xff\xff\xff\xff"sv, "\xf9\x3c\x00"sv,
-          "\xfb\x7e\x37\xe4\x3c\x88\x00\x75\x9c"sv, "\x64\x49\x45\x54\x46"sv, "\x83\x01\x82\x02\x03\x82\x04\x05"sv,
-          "\xa2\x61\x61\x01\x61\x62\x82\x02\x03"sv, "\xc1\x1a\x51\x4b\x67\xb0"sv}) {
-        auto const v = decode_wire_into_value(wire);
-        REQUIRE(v.has_value());
-        auto const p = test::encode_iov(*v);
-        REQUIRE(p.has_value());
-        CHECK_EQ(join_pieces_into_bytes(*p), encode_value_to_wire(*v));
-    }
-    value const long_text{std::string(40000, 'w')};
-    auto const p = test::encode_iov(long_text);
-    REQUIRE(p.has_value());
-    CHECK_EQ(join_pieces_into_bytes(*p), encode_value_to_wire(long_text));
-}
-
-// Without preferred serialization the encoder writes every float as a double, the width that needs no
-// test of the value. With it, the shortest width that keeps the value, as RFC 8949 4.2.2 prefers.
-TEST_CASE("encode: a float is a double unless preferred serialization is on")
-{
-    string_writer w;
-    REQUIRE(test::encode(w, value{1.0}).has_value());
-    CHECK_EQ(w.encoded, "\xfb\x3f\xf0\x00\x00\x00\x00\x00\x00"sv);
-    string_writer p;
-    REQUIRE(test::encode(p, value{1.0}).has_value());
-    CHECK_EQ(p.encoded, "\xfb\x3f\xf0\x00\x00\x00\x00\x00\x00"sv);
-}
-
 // writev takes at most IOV_MAX pieces in one call. test::joined reads an encoding with more pieces back in turns. It is
 // the one place that splits. 1100 long strings with owners give more pieces than the 1024 of Linux.
 TEST_CASE("encode_iov: more pieces than IOV_MAX are written in turns")

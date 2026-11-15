@@ -60,12 +60,20 @@ std::vector<vector_case> cases_of(std::string const &file)
     return cases;
 }
 
+std::string encode_decoded_wire(std::string_view const wire)
+{
+    auto const tree = cbor::decode(wire);
+    REQUIRE(tree.has_value());
+    std::string out;
+    REQUIRE(cbor::encode(**tree, out).has_value());
+    return out;
+}
+
 } // namespace
 
 // Ported from test-vectors.rb: 'passes the official test vectors', the examples of RFC 8949
 // Appendix A. Indefinite lengths are refused, as in mruby-cbor. Every other example decodes, and
-// one that a generic encoder writes back comes back as the same value. The bytes differ: the examples
-// are in preferred form, and the encoder writes a run-time number at its native width. The skip list of
+// one that cbor::encode writes back from its decoded tree comes back as the same value. The skip list of
 // mruby-cbor is not needed: the reference model keeps bytes, text, simple values and tags apart.
 TEST_CASE("test vectors: RFC 8949 Appendix A")
 {
@@ -80,7 +88,7 @@ TEST_CASE("test vectors: RFC 8949 Appendix A")
             continue;
         }
         if (c.roundtrip) {
-            auto const back = decode_wire_into_value(encode_value_to_wire(*v));
+            auto const back = decode_wire_into_value(encode_decoded_wire(wire));
             REQUIRE(back.has_value());
             CHECK(*back == *v);
         }
@@ -439,13 +447,6 @@ std::expected<value, error> lazy_value_of(std::string_view const wire)
     return lazy_value(*top);
 }
 
-std::string wire_encoded(value const &v)
-{
-    string_writer w;
-    REQUIRE(test::encode(w, v).has_value());
-    return w.encoded;
-}
-
 // draft-ietf-cbor-edn-literals-28 4.1 and 4.2: an encoding indicator _0 to _3 follows a head that is not the
 // preferred one. Outside a string the indicator and the blank after an opening bracket are removed.
 std::string without_encoding_indicators(std::string_view const edn)
@@ -503,9 +504,8 @@ wg_count wg_good_check(wg_vector const &v)
     REQUIRE(d.has_value());
     CHECK(equivalent(*d, *expected));
     if (v.roundtrip) {
-        // The encoder writes a run-time number at its native width, so the bytes differ from the vector,
-        // which is in preferred form. The value read back must be the same.
-        auto const back = decode_wire_into_value(wire_encoded(*d));
+        // cbor::encode writes the decoded tree back. The value read back must be the same.
+        auto const back = decode_wire_into_value(encode_decoded_wire(v.encoded));
         REQUIRE(back.has_value());
         CHECK(equivalent(*back, *expected));
     }

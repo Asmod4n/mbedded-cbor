@@ -36,33 +36,18 @@ value N(std::uint64_t argument)
     return {negative{argument}};
 }
 
-// A Writer whose language has no more space.
-struct broken_writer {
-    broken_writer &allocate(std::size_t)
+// A Writer whose language gives one error for each append.
+struct refusing_writer {
+    std::errc refusal;
+
+    refusing_writer &allocate(std::size_t)
     {
         return *this;
     }
 
     std::expected<void, std::errc> append(std::string_view)
     {
-        return std::unexpected(std::errc::io_error);
-    }
-
-    std::expected<void, std::errc> done(std::size_t)
-    {
-        return {};
-    }
-};
-
-struct full_writer {
-    full_writer &allocate(std::size_t)
-    {
-        return *this;
-    }
-
-    std::expected<void, std::errc> append(std::string_view)
-    {
-        return std::unexpected(std::errc::not_enough_memory);
+        return std::unexpected(refusal);
     }
 
     std::expected<void, std::errc> done(std::size_t)
@@ -171,37 +156,23 @@ TEST_CASE("array: the head of a count takes the shortest form")
     CHECK_EQ(array_head_of(~0ull), "\x9b\xff\xff\xff\xff\xff\xff\xff\xff"sv);
 }
 
-// The encoder writes an integer at its native width: the reference model gives std::uint64_t, so the head
-// carries eight bytes, also for a small value.
-TEST_CASE("major 0 and 1: the encoder writes an integer at its native width")
-{
-    CHECK_EQ(encode_value_to_wire(U(0)), "\x1b\x00\x00\x00\x00\x00\x00\x00\x00"sv);
-    CHECK_EQ(encode_value_to_wire(N(0)), "\x3b\x00\x00\x00\x00\x00\x00\x00\x00"sv);
-}
-
-// Ported from test.rb: 'major 0: all powers of 2 up to 31 bits roundtrip'. The test goes up to 63 bits, because the
-// argument is 64 bits wide here.
-TEST_CASE("head: every power of 2 survives encode and decode")
-{
-    for (int i = 0; i < std::numeric_limits<std::uint64_t>::digits; ++i) {
-        check_value(encode_value_to_wire(U(1ull << i)), U(1ull << i));
-        check_value(encode_value_to_wire(N(1ull << i)), N(1ull << i));
-    }
-}
-
-// The error of the Writer reaches the caller unchanged, because only the language knows what it means.
-// The encoder collects the bytes in a block, so the error arrives when the block goes to the Writer.
+// The error of the Writer reaches the caller as the member of the same name, because only the language knows what it
+// means. A Writer error that has no member of its own must still fail, and never read as success.
 TEST_CASE("head: encode returns the error of the Writer")
 {
-    full_writer w;
-    CHECK_EQ(test::encode(w, U(0)).error(), cbor::error{cbor::error::not_enough_memory});
-}
-
-// A Writer error that has no member of its own must still fail, and never read as success.
-TEST_CASE("head: encode returns io_error for any other error of the Writer")
-{
-    broken_writer w;
-    CHECK_EQ(test::encode(w, U(0)).error(), cbor::error::io_error);
+    auto const tree = cbor::decode("\x00"sv);
+    REQUIRE(tree.has_value());
+    struct {
+        std::errc refusal;
+        cbor::error expected;
+    } const cases[] = {
+        {std::errc::no_buffer_space, error::no_buffer_space},
+        {std::errc::value_too_large, error::value_too_large},
+        {std::errc::not_enough_memory, error::not_enough_memory},
+        {std::errc::permission_denied, error::io_error},
+    };
+    for (auto const &c : cases)
+        CHECK_EQ(cbor::encode(**tree, refusing_writer{c.refusal}).error(), c.expected);
 }
 
 struct one_simple_value {

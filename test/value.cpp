@@ -118,49 +118,31 @@ TEST_CASE("depth: encode of a deep tree")
     CHECK_EQ(w, encode_in_preferred_form(deep));
 }
 
-// RFC 8949 Table 4: the simple values 24 to 31 are reserved; Appendix F: f8 with a value below 32 is
-// not well-formed, so no encoder may write one.
-TEST_CASE("encode: a reserved simple value is an error")
-{
-    for (std::uint8_t v = test::rfc8949::first_reserved_simple_value; v <= test::rfc8949::last_reserved_simple_value; ++v) {
-        string_writer w;
-        auto const r = test::encode(w, V(simple{v}));
-        REQUIRE_FALSE(r.has_value());
-        CHECK((r.error() == cbor::error{error::reserved_simple_value}));
-    }
-    CHECK_EQ(encode_value_to_wire(V(simple{23})), "\xf7"sv);
-    CHECK_EQ(encode_value_to_wire(V(simple{32})), "\xf8\x20"sv);
-}
-
 // A span target is written in place. The last items of a top-level item lie closer to the end than the widest head. So
 // each kind is checked as the last item of a span of exact size and of one byte less. It is checked with the shortest
-// float widths and with every float as a double.
+// heads and float widths and with every number at eight bytes. cbor::encode keeps the width of each head, so the bytes
+// are those of the wire.
 TEST_CASE("encode: a span of exact size holds the top-level item, one byte less is no_buffer_space")
 {
-    for (value const &v : {A(1, 24), A(1, 1.5), A(1, 100000.25), A(1, 0.1), A(1, "abc"s),
-                           A(1, simple{std::to_underlying(cbor::simple_value::null)}), A(1, value{std::uint64_t{4294967296}})}) {
-        {
-            std::string const expected = encode_value_to_wire(v);
-            std::vector<char> exact(expected.size());
-            CHECK(test::encode(std::span<char>(exact), v)
-                      .has_value());
-            CHECK_EQ(std::string_view(exact.data(), exact.size()), expected);
-            std::vector<char> short_by_one(expected.size() - 1);
-            CHECK_EQ(test::encode(std::span<char>(short_by_one), v)
-                         .error(),
-                     cbor::error{cbor::error::no_buffer_space});
-        }
-        {
-            string_writer w;
-            REQUIRE(test::encode(w, v).has_value());
-            std::string const expected = w.encoded;
-            std::vector<char> exact(expected.size());
-            CHECK(test::encode(std::span<char>(exact), v).has_value());
-            CHECK_EQ(std::string_view(exact.data(), exact.size()), expected);
-            std::vector<char> short_by_one(expected.size() - 1);
-            CHECK_EQ(test::encode(std::span<char>(short_by_one), v).error(),
-                     cbor::error{cbor::error::no_buffer_space});
-        }
+    for (std::string_view const wire :
+         {"\x82\x01\x18\x18"sv, "\x82\x01\xf9\x3e\x00"sv, "\x82\x01\xfa\x47\xc3\x50\x20"sv,
+          "\x82\x01\xfb\x3f\xb9\x99\x99\x99\x99\x99\x9a"sv, "\x82\x01\x63" "abc"sv, "\x82\x01\xf6"sv,
+          "\x82\x01\x1a\xff\xff\xff\xff"sv,
+          "\x82\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x1b\x00\x00\x00\x00\x00\x00\x00\x18"sv,
+          "\x82\x1b\x00\x00\x00\x00\x00\x00\x00\x01\xfb\x3f\xf8\x00\x00\x00\x00\x00\x00"sv,
+          "\x82\x1b\x00\x00\x00\x00\x00\x00\x00\x01\xfb\x40\xf8\x6a\x04\x00\x00\x00\x00"sv,
+          "\x82\x1b\x00\x00\x00\x00\x00\x00\x00\x01\xfb\x3f\xb9\x99\x99\x99\x99\x99\x9a"sv,
+          "\x82\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x63" "abc"sv,
+          "\x82\x1b\x00\x00\x00\x00\x00\x00\x00\x01\xf6"sv,
+          "\x82\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x1b\x00\x00\x00\x01\x00\x00\x00\x00"sv}) {
+        CAPTURE(wire);
+        auto const tree = cbor::decode(wire);
+        REQUIRE(tree.has_value());
+        std::vector<char> exact(wire.size());
+        CHECK(cbor::encode(**tree, std::span<char>(exact)).has_value());
+        CHECK_EQ(std::string_view(exact.data(), exact.size()), wire);
+        std::vector<char> short_by_one(wire.size() - 1);
+        CHECK_EQ(cbor::encode(**tree, std::span<char>(short_by_one)).error(), cbor::error{cbor::error::no_buffer_space});
     }
 }
 

@@ -2,6 +2,8 @@
 
 #include "../owned_copy.hpp"
 #include "value.hpp"
+#include <cbor/decode.hpp>
+#include <cbor/encode.hpp>
 #include <cbor/item.hpp>
 #include <cbor/lazy.hpp>
 
@@ -160,6 +162,20 @@ inline error read_decode_error_of_wire(std::string_view const wire)
     auto const v = decode_wire_into_value(wire);
     REQUIRE_FALSE(v.has_value());
     return v.error();
+}
+
+// A wire and its value in the model. The wire reads into the value. cbor::encode keeps the width of every head, so the
+// tree that cbor::decode makes of a definite-length wire writes back to the same bytes.
+inline void check_both(std::string_view const wire, [[maybe_unused]] value const &expected)
+{
+    auto const v = decode_wire_into_value(wire);
+    REQUIRE(v.has_value());
+    CHECK(*v == expected);
+    auto const tree = cbor::decode(wire);
+    REQUIRE(tree.has_value());
+    std::string back;
+    REQUIRE(cbor::encode(**tree, back).has_value());
+    CHECK_EQ(back, wire);
 }
 
 } // namespace test

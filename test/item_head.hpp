@@ -15,7 +15,7 @@
 
 #include <doctest/doctest.h>
 
-// The argument of the head of an item, as the encoder writes it; a float is read back from its encoding. So that a test
+// The argument of the head of an item, as cbor::encode writes it; a float is read back from its encoding. So that a test
 // compares an item with the bytes of its head without a case for each type.
 inline std::uint64_t read_argument_of_item(cbor::item const &node)
 {

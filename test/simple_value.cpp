@@ -128,7 +128,8 @@ TEST_CASE("simple value: lazy::to_item gives every simple value 0 to 255 as its 
     }
 }
 
-// decode gives every simple value to the reference model, and the encoder writes it back in the same bytes.
+// decode gives every simple value to the reference model, and cbor::encode writes the decoded tree back in the same
+// bytes.
 TEST_CASE("simple value: decode and encode for every simple value 0 to 255")
 {
     for (unsigned i = 0; i < test::rfc8949::one_byte_values; ++i) {
@@ -136,10 +137,6 @@ TEST_CASE("simple value: decode and encode for every simple value 0 to 255")
         CAPTURE(i);
         if (reserved(v)) {
             CHECK_EQ(read_decode_error_of_wire(wire_of(v)), error::syntax_error);
-            string_writer w;
-            auto const r = test::encode(w, V(simple{v}));
-            REQUIRE_FALSE(r.has_value());
-            CHECK((r.error() == cbor::error{error::reserved_simple_value}));
             continue;
         }
         check_both(wire_of(v), V(simple{v}));

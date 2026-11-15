@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-// The parameters of the binary interchange formats of IEEE 754-2019 (table 3.5) that the reference encoder of the
+// The parameters of the binary interchange formats of IEEE 754-2019 (table 3.5) that the reference model of the
 // tests uses. The tests write the preferred float of RFC 8949 4.2.2 from these numbers, not from the library.
 namespace test::ieee754
 {

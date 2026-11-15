@@ -30,11 +30,6 @@ double float_of(std::string_view wire)
     return std::get<double>(v->kind);
 }
 
-std::string encoded_float(double d)
-{
-    return encode_value_to_wire(value{d});
-}
-
 std::string write_preferred_float(double d)
 {
     auto const e = cbor::structs<double>::encode(d);
@@ -64,9 +59,9 @@ TEST_CASE("major 7: float widths decode")
 // Ported from test.rb: 'major 7: ±Inf and NaN roundtrip at all widths'.
 TEST_CASE("major 7: ±Inf and NaN")
 {
-    CHECK_EQ(bits_of(float_of(encoded_float(INFINITY))), bits_of(INFINITY));
-    CHECK_EQ(bits_of(float_of(encoded_float(-INFINITY))), bits_of(-INFINITY));
-    CHECK_EQ(bits_of(float_of(encoded_float(NAN))), 0x7ff8000000000000u);
+    CHECK_EQ(bits_of(float_of(write_preferred_float(INFINITY))), bits_of(INFINITY));
+    CHECK_EQ(bits_of(float_of(write_preferred_float(-INFINITY))), bits_of(-INFINITY));
+    CHECK_EQ(bits_of(float_of(write_preferred_float(NAN))), 0x7ff8000000000000u);
     CHECK_EQ(bits_of(float_of("\xf9\x7c\x00"sv)), bits_of(INFINITY));
     CHECK_EQ(bits_of(float_of("\xf9\x7e\x00"sv)), 0x7ff8000000000000u);
 }
@@ -106,15 +101,7 @@ TEST_CASE("major 7: a NaN keeps its sign and payload when it is decoded")
 TEST_CASE("major 7: ±zero and sample floats")
 {
     for (double const f : {0.0, -0.0, 1.5, 1.0e300})
-        CHECK_EQ(bits_of(float_of(encoded_float(f))), bits_of(f));
-}
-
-// The encoder writes a double at its native width, binary64. structs writes deterministic CBOR,
-// so the width tests below go through structs.
-TEST_CASE("major 7: the encoder writes a double as binary64")
-{
-    for (double const v : {0.0, 1.5, 65504.0, 3.14})
-        CHECK_EQ(encoded_float(v).size(), 9);
+        CHECK_EQ(bits_of(float_of(write_preferred_float(f))), bits_of(f));
 }
 
 // Ported from test.rb: '§4.1 float wire: exact bytes for well-known f16 values'.

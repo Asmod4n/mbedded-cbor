@@ -623,7 +623,7 @@ void read_target(std::string_view const message)
     }
 }
 
-// A native value from the bytes of the input, member by member. Text is ASCII, because the encoder writes
+// A native value from the bytes of the input, member by member. Text is ASCII, because schema encode writes
 // it as it is and a reader of the databind form expects UTF-8.
 template <class T>
 T filled(source &in, int depth);

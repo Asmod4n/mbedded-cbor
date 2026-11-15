@@ -337,7 +337,8 @@ TEST_CASE("decode: a wide array of nested arrays is read whole after the decode"
 TEST_CASE("path: a typed read allocates nothing")
 {
     auto const doc = std::make_shared<std::string const>(
-        encode_value_to_wire(M("statuses"s, A(M("user"s, M("screen_name"s, "ann"s)), M("user"s, M("screen_name"s, "bob"s))))));
+        "\xa1\x68statuses\x82\xa1\x64user\xa1\x6bscreen_name\x63" "ann"
+        "\xa1\x64user\xa1\x6bscreen_name\x63" "bob"s);
     std::string const numbers = "\x83\x01\x39\x03\xe7\x03"s;
     std::string const marked = "\xa1\x61\x61\xd8\x1c\x82\x01\x02"s;
     std::size_t const before = allocations;

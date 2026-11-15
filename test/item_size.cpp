@@ -14,13 +14,13 @@ using cbor::error;
 // too_little_data, as RFC 8949 Appendix F allows an application to wait for more bytes.
 TEST_CASE("item_size: the end of the first top-level item")
 {
-    std::string const first = encode_value_to_wire(V(42));
-    std::string const second = encode_value_to_wire(V("hello"s));
+    std::string const first = "\x1b\x00\x00\x00\x00\x00\x00\x00\x2a"s;
+    std::string const second = "\x65hello"s;
     CHECK_EQ(cbor::item_size(first + second).value(), first.size());
     CHECK_EQ(cbor::item_size(""sv).error(), error::too_little_data);
     CHECK_EQ(cbor::item_size("\x1b"sv).error(), error::too_little_data);
-    std::string const skip = encode_value_to_wire(V("skip"s));
-    std::string const both = skip + encode_value_to_wire(V(99));
+    std::string const skip = "\x64skip"s;
+    std::string const both = skip + "\x1b\x00\x00\x00\x00\x00\x00\x00\x63"s;
     CHECK_EQ(cbor::item_size(std::string_view(both).substr(skip.size())).value(),
              both.size() - skip.size());
 }

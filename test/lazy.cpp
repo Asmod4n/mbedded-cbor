@@ -77,12 +77,18 @@ cbor::lazy at_key(cbor::lazy const &l, std::int64_t const key)
 // Ported from test.rb: 'lazy: basic key access (string, integer, mixed)'.
 TEST_CASE("lazy: key access by string and by integer")
 {
-    std::string const a = encode_value_to_wire(M("a"s, 1, "b"s, 2));
+    std::string const a =
+        "\xa2\x61" "a\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x61" "b"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x02"s;
     CHECK(value_at(at_key(lazy_of(a), "a")) == V(1));
-    std::string const b = encode_value_to_wire(M(1, "one"s, 2, "two"s));
+    std::string const b =
+        "\xa2\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x63one\x1b\x00\x00\x00\x00\x00\x00\x00\x02"
+        "\x63two"s;
     CHECK(value_at(at_key(lazy_of(b), 1)) == V("one"s));
     CHECK(value_at(at_key(lazy_of(b), 2)) == V("two"s));
-    std::string const c = encode_value_to_wire(M(1, "int"s, "str"s, "s"s, 100, "c"s));
+    std::string const c =
+        "\xa3\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x63int\x63str"
+        "\x61s\x1b\x00\x00\x00\x00\x00\x00\x00\x64\x61" "c"s;
     CHECK(value_at(at_key(lazy_of(c), 1)) == V("int"s));
     CHECK(value_at(at_key(lazy_of(c), "str")) == V("s"s));
     CHECK(value_at(at_key(lazy_of(c), 100)) == V("c"s));
@@ -93,11 +99,13 @@ TEST_CASE("lazy: key access by string and by integer")
 // not_indexable.
 TEST_CASE("lazy: access errors")
 {
-    std::string const empty_array = encode_value_to_wire(A());
-    std::string const empty_map = encode_value_to_wire(M());
-    std::string const one = encode_value_to_wire(M("a"s, 1));
-    std::string const three = encode_value_to_wire(A(1, 2, 3));
-    std::string const scalar = encode_value_to_wire(V(42));
+    std::string const empty_array = "\x80"s;
+    std::string const empty_map = "\xa0"s;
+    std::string const one = "\xa1\x61" "a\x1b\x00\x00\x00\x00\x00\x00\x00\x01"s;
+    std::string const three =
+        "\x83\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x1b\x00\x00\x00\x00\x00\x00\x00\x02"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x03"s;
+    std::string const scalar = "\x1b\x00\x00\x00\x00\x00\x00\x00\x2a"s;
     CHECK_EQ(lazy_of(empty_array).at(0).error(), error::index_out_of_bounds);
     CHECK_EQ(lazy_of(empty_map).at_key("x").error(), error::key_not_found);
     CHECK_EQ(lazy_of(one).at_key("missing").error(), error::key_not_found);
@@ -114,7 +122,8 @@ TEST_CASE("lazy: access errors")
 // literal index chooses the array form, so at(1) never reads the map key 1.
 TEST_CASE("lazy: at(std::size_t) reads an array, at_key(std::int64_t) reads a map")
 {
-    std::string const both = encode_value_to_wire(A(M(1, "one"s), 7));
+    std::string const both =
+        "\x82\xa1\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x63one\x1b\x00\x00\x00\x00\x00\x00\x00\x07"s;
     cbor::lazy const root = lazy_of(both);
     CHECK(value_at(at(root, 1)) == V(7));
     CHECK(value_at(at_key(at(root, 0), 1)) == V("one"s));
@@ -127,13 +136,76 @@ TEST_CASE("lazy: at(std::size_t) reads an array, at_key(std::int64_t) reads a ma
 // Ported from test.rb: 'lazy: deep nesting + wide maps'.
 TEST_CASE("lazy: deep nesting and a wide map")
 {
-    std::string const deep = encode_value_to_wire(A(A(A(A(A(42))))));
+    std::string const deep = "\x81\x81\x81\x81\x81\x1b\x00\x00\x00\x00\x00\x00\x00\x2a"s;
     CHECK(value_at(at(at(at(at(at(lazy_of(deep), 0), 0), 0), 0), 0)) == V(42));
-    map wide;
-    constexpr int wide_entries = 100;
-    for (int i = 0; i < wide_entries; ++i)
-        wide.push_back(entry{V("key_" + std::to_string(i)), V(i)});
-    std::string const w = encode_value_to_wire(value{wide});
+    std::string const w =
+        "\xb8\x64\x65key_0\x1b\x00\x00\x00\x00\x00\x00\x00\x00"
+        "\x65key_1\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x65key_2"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x02\x65key_3\x1b\x00\x00\x00\x00\x00\x00\x00\x03"
+        "\x65key_4\x1b\x00\x00\x00\x00\x00\x00\x00\x04\x65key_5"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x05\x65key_6\x1b\x00\x00\x00\x00\x00\x00\x00\x06"
+        "\x65key_7\x1b\x00\x00\x00\x00\x00\x00\x00\x07\x65key_8"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x08\x65key_9\x1b\x00\x00\x00\x00\x00\x00\x00\x09"
+        "\x66key_10\x1b\x00\x00\x00\x00\x00\x00\x00\x0a\x66key_11"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x0b\x66key_12\x1b\x00\x00\x00\x00\x00\x00\x00\x0c"
+        "\x66key_13\x1b\x00\x00\x00\x00\x00\x00\x00\x0d\x66key_14"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x0e\x66key_15\x1b\x00\x00\x00\x00\x00\x00\x00\x0f"
+        "\x66key_16\x1b\x00\x00\x00\x00\x00\x00\x00\x10\x66key_17"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x11\x66key_18\x1b\x00\x00\x00\x00\x00\x00\x00\x12"
+        "\x66key_19\x1b\x00\x00\x00\x00\x00\x00\x00\x13\x66key_20"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x14\x66key_21\x1b\x00\x00\x00\x00\x00\x00\x00\x15"
+        "\x66key_22\x1b\x00\x00\x00\x00\x00\x00\x00\x16\x66key_23"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x17\x66key_24\x1b\x00\x00\x00\x00\x00\x00\x00\x18"
+        "\x66key_25\x1b\x00\x00\x00\x00\x00\x00\x00\x19\x66key_26"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x1a\x66key_27\x1b\x00\x00\x00\x00\x00\x00\x00\x1b"
+        "\x66key_28\x1b\x00\x00\x00\x00\x00\x00\x00\x1c\x66key_29"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x1d\x66key_30\x1b\x00\x00\x00\x00\x00\x00\x00\x1e"
+        "\x66key_31\x1b\x00\x00\x00\x00\x00\x00\x00\x1f\x66key_32"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x20\x66key_33\x1b\x00\x00\x00\x00\x00\x00\x00\x21"
+        "\x66key_34\x1b\x00\x00\x00\x00\x00\x00\x00\x22\x66key_35"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x23\x66key_36\x1b\x00\x00\x00\x00\x00\x00\x00\x24"
+        "\x66key_37\x1b\x00\x00\x00\x00\x00\x00\x00\x25\x66key_38"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x26\x66key_39\x1b\x00\x00\x00\x00\x00\x00\x00\x27"
+        "\x66key_40\x1b\x00\x00\x00\x00\x00\x00\x00\x28\x66key_41"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x29\x66key_42\x1b\x00\x00\x00\x00\x00\x00\x00\x2a"
+        "\x66key_43\x1b\x00\x00\x00\x00\x00\x00\x00\x2b\x66key_44"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x2c\x66key_45\x1b\x00\x00\x00\x00\x00\x00\x00\x2d"
+        "\x66key_46\x1b\x00\x00\x00\x00\x00\x00\x00\x2e\x66key_47"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x2f\x66key_48\x1b\x00\x00\x00\x00\x00\x00\x00\x30"
+        "\x66key_49\x1b\x00\x00\x00\x00\x00\x00\x00\x31\x66key_50"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x32\x66key_51\x1b\x00\x00\x00\x00\x00\x00\x00\x33"
+        "\x66key_52\x1b\x00\x00\x00\x00\x00\x00\x00\x34\x66key_53"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x35\x66key_54\x1b\x00\x00\x00\x00\x00\x00\x00\x36"
+        "\x66key_55\x1b\x00\x00\x00\x00\x00\x00\x00\x37\x66key_56"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x38\x66key_57\x1b\x00\x00\x00\x00\x00\x00\x00\x39"
+        "\x66key_58\x1b\x00\x00\x00\x00\x00\x00\x00\x3a\x66key_59"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x3b\x66key_60\x1b\x00\x00\x00\x00\x00\x00\x00\x3c"
+        "\x66key_61\x1b\x00\x00\x00\x00\x00\x00\x00\x3d\x66key_62"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x3e\x66key_63\x1b\x00\x00\x00\x00\x00\x00\x00\x3f"
+        "\x66key_64\x1b\x00\x00\x00\x00\x00\x00\x00\x40\x66key_65"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x41\x66key_66\x1b\x00\x00\x00\x00\x00\x00\x00\x42"
+        "\x66key_67\x1b\x00\x00\x00\x00\x00\x00\x00\x43\x66key_68"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x44\x66key_69\x1b\x00\x00\x00\x00\x00\x00\x00\x45"
+        "\x66key_70\x1b\x00\x00\x00\x00\x00\x00\x00\x46\x66key_71"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x47\x66key_72\x1b\x00\x00\x00\x00\x00\x00\x00\x48"
+        "\x66key_73\x1b\x00\x00\x00\x00\x00\x00\x00\x49\x66key_74"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x4a\x66key_75\x1b\x00\x00\x00\x00\x00\x00\x00\x4b"
+        "\x66key_76\x1b\x00\x00\x00\x00\x00\x00\x00\x4c\x66key_77"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x4d\x66key_78\x1b\x00\x00\x00\x00\x00\x00\x00\x4e"
+        "\x66key_79\x1b\x00\x00\x00\x00\x00\x00\x00\x4f\x66key_80"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x50\x66key_81\x1b\x00\x00\x00\x00\x00\x00\x00\x51"
+        "\x66key_82\x1b\x00\x00\x00\x00\x00\x00\x00\x52\x66key_83"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x53\x66key_84\x1b\x00\x00\x00\x00\x00\x00\x00\x54"
+        "\x66key_85\x1b\x00\x00\x00\x00\x00\x00\x00\x55\x66key_86"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x56\x66key_87\x1b\x00\x00\x00\x00\x00\x00\x00\x57"
+        "\x66key_88\x1b\x00\x00\x00\x00\x00\x00\x00\x58\x66key_89"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x59\x66key_90\x1b\x00\x00\x00\x00\x00\x00\x00\x5a"
+        "\x66key_91\x1b\x00\x00\x00\x00\x00\x00\x00\x5b\x66key_92"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x5c\x66key_93\x1b\x00\x00\x00\x00\x00\x00\x00\x5d"
+        "\x66key_94\x1b\x00\x00\x00\x00\x00\x00\x00\x5e\x66key_95"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x5f\x66key_96\x1b\x00\x00\x00\x00\x00\x00\x00\x60"
+        "\x66key_97\x1b\x00\x00\x00\x00\x00\x00\x00\x61\x66key_98"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x62\x66key_99\x1b\x00\x00\x00\x00\x00\x00\x00\x63"s;
     CHECK(value_at(at_key(lazy_of(w), "key_0")) == V(0));
     CHECK(value_at(at_key(lazy_of(w), "key_50")) == V(50));
     CHECK(value_at(at_key(lazy_of(w), "key_99")) == V(99));
@@ -144,10 +216,15 @@ TEST_CASE("lazy: deep nesting and a wide map")
 // application counts a negative index from size(). A path keeps the negative index of RFC 9535.
 TEST_CASE("lazy: negative indices and misses")
 {
-    std::string const h = encode_value_to_wire(M("a"s, 1, "b"s, M("c"s, 42)));
+    std::string const h =
+        "\xa2\x61" "a\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x61" "b"
+        "\xa1\x61" "c\x1b\x00\x00\x00\x00\x00\x00\x00\x2a"s;
     CHECK_EQ(lazy_of(h).at_key("missing").error(), error::key_not_found);
     CHECK(value_at(at_key(at_key(lazy_of(h), "b"), "c")) == V(42));
-    std::string const a = encode_value_to_wire(A(10, 20, 30, 40, 50));
+    std::string const a =
+        "\x85\x1b\x00\x00\x00\x00\x00\x00\x00\x0a\x1b\x00\x00\x00\x00\x00\x00\x00\x14"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x1e\x1b\x00\x00\x00\x00\x00\x00\x00\x28"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x32"s;
     cbor::lazy const l = lazy_of(a);
     CHECK(value_at(at(l, static_cast<std::size_t>(*l.size() - 1))) == V(50));
     CHECK(value_at(at(l, static_cast<std::size_t>(*l.size() - 5))) == V(10));
@@ -197,7 +274,7 @@ TEST_CASE("lazy: at and a path index select the element that Normalize of RFC 95
 // Ported from test.rb: 'lazy: can still navigate child lazies after calling .value on parent'.
 TEST_CASE("lazy: a value of the parent does not change the children")
 {
-    std::string const doc = encode_value_to_wire(M("a"s, M("b"s, 42)));
+    std::string const doc = "\xa1\x61" "a\xa1\x61" "b\x1b\x00\x00\x00\x00\x00\x00\x00\x2a"s;
     CHECK(value_at(lazy_of(doc)) == M("a"s, M("b"s, 42)));
     CHECK(value_at(at_key(at_key(lazy_of(doc), "a"), "b")) == V(42));
 }
@@ -205,12 +282,60 @@ TEST_CASE("lazy: a value of the parent does not change the children")
 // Ported from test.rb: 'lazy: random-access stress'. A fixed seed, so a failure repeats.
 TEST_CASE("lazy: random access")
 {
-    array statuses;
     constexpr int status_count = 50;
     constexpr int random_reads = 200;
-    for (int i = 1; i <= status_count; ++i)
-        statuses.push_back(M("id"s, i, "txt"s, "msg" + std::to_string(i)));
-    std::string const doc = encode_value_to_wire(M("statuses"s, value{statuses}));
+    std::string const doc =
+        "\xa1\x68statuses\x98\x32\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x01"
+        "\x63txt\x64msg1\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x02"
+        "\x63txt\x64msg2\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x03"
+        "\x63txt\x64msg3\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x04"
+        "\x63txt\x64msg4\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x05"
+        "\x63txt\x64msg5\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x06"
+        "\x63txt\x64msg6\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x07"
+        "\x63txt\x64msg7\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x08"
+        "\x63txt\x64msg8\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x09"
+        "\x63txt\x64msg9\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x0a"
+        "\x63txt\x65msg10\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x0b"
+        "\x63txt\x65msg11\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x0c"
+        "\x63txt\x65msg12\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x0d"
+        "\x63txt\x65msg13\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x0e"
+        "\x63txt\x65msg14\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x0f"
+        "\x63txt\x65msg15\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x10"
+        "\x63txt\x65msg16\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x11"
+        "\x63txt\x65msg17\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x12"
+        "\x63txt\x65msg18\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x13"
+        "\x63txt\x65msg19\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x14"
+        "\x63txt\x65msg20\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x15"
+        "\x63txt\x65msg21\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x16"
+        "\x63txt\x65msg22\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x17"
+        "\x63txt\x65msg23\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x18"
+        "\x63txt\x65msg24\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x19"
+        "\x63txt\x65msg25\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x1a"
+        "\x63txt\x65msg26\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x1b"
+        "\x63txt\x65msg27\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x1c"
+        "\x63txt\x65msg28\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x1d"
+        "\x63txt\x65msg29\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x1e"
+        "\x63txt\x65msg30\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x1f"
+        "\x63txt\x65msg31\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x20"
+        "\x63txt\x65msg32\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x21"
+        "\x63txt\x65msg33\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x22"
+        "\x63txt\x65msg34\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x23"
+        "\x63txt\x65msg35\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x24"
+        "\x63txt\x65msg36\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x25"
+        "\x63txt\x65msg37\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x26"
+        "\x63txt\x65msg38\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x27"
+        "\x63txt\x65msg39\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x28"
+        "\x63txt\x65msg40\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x29"
+        "\x63txt\x65msg41\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x2a"
+        "\x63txt\x65msg42\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x2b"
+        "\x63txt\x65msg43\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x2c"
+        "\x63txt\x65msg44\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x2d"
+        "\x63txt\x65msg45\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x2e"
+        "\x63txt\x65msg46\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x2f"
+        "\x63txt\x65msg47\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x30"
+        "\x63txt\x65msg48\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x31"
+        "\x63txt\x65msg49\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x32"
+        "\x63txt\x65msg50"s;
     std::mt19937 rng(1);
     for (int n = 0; n < random_reads; ++n) {
         std::size_t const i = rng() % status_count;
@@ -228,7 +353,9 @@ TEST_CASE("lazy: a truncated item before the target")
 // Ported from test.rb: 'lazy: huge aref index handled cleanly'.
 TEST_CASE("lazy: a huge index")
 {
-    std::string const doc = encode_value_to_wire(A(1, 2, 3));
+    std::string const doc =
+        "\x83\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x1b\x00\x00\x00\x00\x00\x00\x00\x02"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x03"s;
     CHECK_EQ(lazy_of(doc).at(0x7fffffff).error(), error::index_out_of_bounds);
 }
 
@@ -279,8 +406,10 @@ std::vector<value> elements_of(std::string const &document)
 // The elements of an array come in wire order, each as a view of its own.
 TEST_CASE("lazy: the elements of an array")
 {
-    CHECK(elements_of(encode_value_to_wire(A(1, "a"s, A(2)))) == std::vector<value>{V(1), V("a"s), A(2)});
-    CHECK(elements_of(encode_value_to_wire(A())).empty());
+    CHECK(elements_of(
+        "\x83\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x61" "a\x81"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x02"s) == std::vector<value>{V(1), V("a"s), A(2)});
+    CHECK(elements_of("\x80"s).empty());
 }
 
 // A mark around the array is passed, as at passes it.
@@ -292,7 +421,9 @@ TEST_CASE("lazy: the elements of a marked array")
 // The entries of a map come in wire order, each as a pair of key and value.
 TEST_CASE("lazy: the entries of a map")
 {
-    auto const entries = lazy_of(encode_value_to_wire(M("a"s, 1, 2, "b"s))).entries();
+    auto const entries = lazy_of(
+        "\xa2\x61" "a\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x1b\x00\x00\x00\x00\x00\x00\x00\x02"
+        "\x61" "b"s).entries();
     REQUIRE(entries.has_value());
     std::vector<value> keys;
     std::vector<value> values;
@@ -308,9 +439,9 @@ TEST_CASE("lazy: the entries of a map")
 // Only an array has elements and only a map has entries.
 TEST_CASE("lazy: elements and entries of the wrong kind")
 {
-    CHECK_EQ(lazy_of(encode_value_to_wire(M("a"s, 1))).elements().error(), error::not_indexable);
-    CHECK_EQ(lazy_of(encode_value_to_wire(A(1))).entries().error(), error::not_indexable);
-    CHECK_EQ(lazy_of(encode_value_to_wire(V(1))).elements().error(), error::not_indexable);
+    CHECK_EQ(lazy_of("\xa1\x61" "a\x1b\x00\x00\x00\x00\x00\x00\x00\x01"s).elements().error(), error::not_indexable);
+    CHECK_EQ(lazy_of("\x81\x1b\x00\x00\x00\x00\x00\x00\x00\x01"s).entries().error(), error::not_indexable);
+    CHECK_EQ(lazy_of("\x1b\x00\x00\x00\x00\x00\x00\x00\x01"s).elements().error(), error::not_indexable);
 }
 
 // The standard algorithms and views take entries and elements as they take any standard view. Each concept that the two
@@ -346,13 +477,15 @@ concept front_reads = requires(R const &r) { r.front(); };
 // the byte after the array.
 TEST_CASE("lazy: size and empty of entries and elements")
 {
-    auto const entries = lazy_of(encode_value_to_wire(M("a"s, 1, "b"s, 2))).entries();
+    auto const entries = lazy_of(
+        "\xa2\x61" "a\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x61" "b"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x02"s).entries();
     REQUIRE(entries.has_value());
     CHECK_EQ(entries->size(), 2u);
     CHECK_EQ(std::ranges::size(*entries), 2u);
     CHECK_FALSE(entries->empty());
     CHECK(static_cast<bool>(*entries));
-    auto const none = lazy_of(encode_value_to_wire(A())).elements();
+    auto const none = lazy_of("\x80"s).elements();
     REQUIRE(none.has_value());
     CHECK_EQ(none->size(), 0u);
     CHECK(none->empty());
@@ -366,7 +499,9 @@ TEST_CASE("lazy: size and empty of entries and elements")
 // std::ranges::find_if gives stays valid after the range is gone (borrowed_range).
 TEST_CASE("lazy: std::views::take, std::views::drop and find_if over entries and elements")
 {
-    auto const elements = lazy_of(encode_value_to_wire(A(1, 2, 3, 4))).elements();
+    auto const elements = lazy_of(
+        "\x84\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x1b\x00\x00\x00\x00\x00\x00\x00\x02"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x03\x1b\x00\x00\x00\x00\x00\x00\x00\x04"s).elements();
     REQUIRE(elements.has_value());
     std::vector<value> taken;
     for (auto const element : *elements | std::views::take(2))
@@ -380,7 +515,10 @@ TEST_CASE("lazy: std::views::take, std::views::drop and find_if over entries and
 
     cbor::lazy_entries::iterator found;
     {
-        cbor::lazy const map = lazy_of(encode_value_to_wire(M("a"s, 1, "b"s, 2, "c"s, 3)));
+        cbor::lazy const map = lazy_of(
+            "\xa3\x61" "a\x1b\x00\x00\x00\x00\x00\x00\x00\x01"
+            "\x61" "b\x1b\x00\x00\x00\x00\x00\x00\x00\x02\x61" "c"
+            "\x1b\x00\x00\x00\x00\x00\x00\x00\x03"s);
         found = std::ranges::find_if(*map.entries(), [](auto const &entry) {
             return entry.has_value() && value_at(entry->second) == V(2);
         });
@@ -397,7 +535,9 @@ TEST_CASE("lazy: std::views::take, std::views::drop and find_if over entries and
 // the place it was copied from.
 TEST_CASE("lazy: a copy of an entries iterator walks the same pairs")
 {
-    auto const entries = lazy_of(encode_value_to_wire(M("a"s, 1, "b"s, 2))).entries();
+    auto const entries = lazy_of(
+        "\xa2\x61" "a\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x61" "b"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x02"s).entries();
     REQUIRE(entries.has_value());
     auto first = entries->begin();
     auto const copy = first;
@@ -413,7 +553,9 @@ TEST_CASE("lazy: a copy of an entries iterator walks the same pairs")
 // The std::ranges algorithms walk the entries and the elements.
 TEST_CASE("lazy: std::ranges algorithms over entries and elements")
 {
-    auto const entries = lazy_of(encode_value_to_wire(M("a"s, 1, 2, "b"s, "c"s, 3))).entries();
+    auto const entries = lazy_of(
+        "\xa3\x61" "a\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x1b\x00\x00\x00\x00\x00\x00\x00\x02"
+        "\x61" "b\x61" "c\x1b\x00\x00\x00\x00\x00\x00\x00\x03"s).entries();
     REQUIRE(entries.has_value());
     CHECK_EQ(std::ranges::distance(*entries), 3);
     auto const found = std::ranges::find_if(*entries, [](auto const &entry) {
@@ -426,7 +568,9 @@ TEST_CASE("lazy: std::ranges algorithms over entries and elements")
              }),
              2);
 
-    auto const elements = lazy_of(encode_value_to_wire(A(1, 2, 3))).elements();
+    auto const elements = lazy_of(
+        "\x83\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x1b\x00\x00\x00\x00\x00\x00\x00\x02"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x03"s).elements();
     REQUIRE(elements.has_value());
     CHECK_EQ(std::ranges::distance(*elements), 3);
     CHECK(std::ranges::all_of(*elements, [](auto const &element) { return element.has_value(); }));
@@ -443,14 +587,14 @@ TEST_CASE("lazy: at gives the value of a present key")
     CHECK(value_at(*l.at_key("b")) == V(2));
     CHECK(value_at(*l.at_key(7)) == V("seven"s));
     CHECK(value_at(*l.at_key(-2)) == V("minus"s));
-    CHECK_EQ(lazy_of(encode_value_to_wire(M())).at_key("a").error(), error::key_not_found);
+    CHECK_EQ(lazy_of("\xa0"s).at_key("a").error(), error::key_not_found);
 }
 
 // at is a lookup in a map. An array or a scalar has no keys.
 TEST_CASE("lazy: a key in an item that is not a map")
 {
-    CHECK_EQ(lazy_of(encode_value_to_wire(A(1))).at_key(0).error(), error::not_indexable);
-    CHECK_EQ(lazy_of(encode_value_to_wire(V(1))).at_key("a").error(), error::not_indexable);
+    CHECK_EQ(lazy_of("\x81\x1b\x00\x00\x00\x00\x00\x00\x00\x01"s).at_key(0).error(), error::not_indexable);
+    CHECK_EQ(lazy_of("\x1b\x00\x00\x00\x00\x00\x00\x00\x01"s).at_key("a").error(), error::not_indexable);
 }
 
 // A key under tag 29 is a tag and no text key.
@@ -472,7 +616,9 @@ TEST_CASE("lazy: at in a truncated map gives the error")
 // at the end. Std::ranges::find_if over [begin, from) searches the part before it.
 TEST_CASE("lazy: an element iterator steps on and searches back with std::ranges")
 {
-    auto const elements = lazy_of(encode_value_to_wire(A(1, 2, 3, 4))).elements();
+    auto const elements = lazy_of(
+        "\x84\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x1b\x00\x00\x00\x00\x00\x00\x00\x02"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x03\x1b\x00\x00\x00\x00\x00\x00\x00\x04"s).elements();
     REQUIRE(elements.has_value());
     auto const two = std::ranges::next(elements->begin(), 1, std::default_sentinel);
     auto const four = std::ranges::next(two, 2, std::default_sentinel);
@@ -492,7 +638,10 @@ TEST_CASE("lazy: an entry iterator outlives the lazy that gave it")
 {
     std::optional<cbor::lazy_entries::iterator> kept;
     {
-        std::string message = encode_value_to_wire(M("a"s, 1, "b"s, 2, "c"s, 3));
+        std::string message =
+            "\xa3\x61" "a\x1b\x00\x00\x00\x00\x00\x00\x00\x01"
+            "\x61" "b\x1b\x00\x00\x00\x00\x00\x00\x00\x02\x61" "c"
+            "\x1b\x00\x00\x00\x00\x00\x00\x00\x03"s;
         auto const l = cbor::lazy::adopt(std::move(message));
         REQUIRE(l.has_value());
         kept = l->entries()->begin();
@@ -665,7 +814,8 @@ TEST_CASE("encode: a typed array with a wrong tag or length")
 // the application writes the tag and the bytes of the embedded item, and a view passes through the tag into it.
 TEST_CASE("tag 24: an embedded item written by the application is read through")
 {
-    std::string const embedded = test::encode_value_to_wire(A(2, 3));
+    std::string const embedded =
+        "\x82\x1b\x00\x00\x00\x00\x00\x00\x00\x02\x1b\x00\x00\x00\x00\x00\x00\x00\x03"s;
     test::string_writer w;
     {
         cbor::encoder e(w);
@@ -716,7 +866,8 @@ void get_is_exact_at_the_edges_of()
             bool const fits = expected >= cbor::int128{std::numeric_limits<T>::min()} &&
                               expected <= cbor::int128{std::numeric_limits<T>::max()};
             auto const r =
-                get<T>(negative_value ? encode_value_to_wire(value{negative{argument}}) : encode_value_to_wire(value{argument}));
+                get<T>(negative_value ? test::write_integer_at_native_width(cbor::major_type::negative_integer, argument)
+                                      : test::write_unsigned_at_native_width(argument));
             if (fits)
                 CHECK(r == T(expected));
             else
@@ -779,7 +930,7 @@ TEST_CASE("lazy: the content of each tag for every major type")
         for (auto const &[major, content] : contents) {
             CAPTURE(tag);
             CAPTURE(major);
-            std::string tagged = encode_value_to_wire(value{tag}) + content;
+            std::string tagged = test::write_unsigned_at_native_width(tag) + content;
             tagged[0] = static_cast<char>(static_cast<std::uint8_t>(tagged[0]) | tag_major_bits);
             bool admitted = true;
             if (byte_string_only)
@@ -844,7 +995,7 @@ TEST_CASE("lazy: view of an aliasing owner holds the owner until the last lazy e
     bool released = false;
     std::optional<cbor::lazy> name;
     {
-        auto const owner = std::make_shared<buffer_owner>(encode_value_to_wire(M("user"s, M("name"s, "ann"s))), &released);
+        auto const owner = std::make_shared<buffer_owner>("\xa1\x64user\xa1\x64name\x63" "ann"s, &released);
         auto const doc = cbor::lazy::view(owner, std::string_view(owner->bytes));
         REQUIRE(doc.has_value());
         name.emplace(*doc->at_key("user").and_then([](cbor::lazy const &u) { return u.at_key("name"); }));
@@ -863,7 +1014,9 @@ TEST_CASE("lazy: view of an aliasing owner holds the owner until the last lazy e
 // next step, so an error anywhere reaches the end of the chain.
 TEST_CASE("lazy: copy, at and get as a chain")
 {
-    std::string bytes = encode_value_to_wire(M("statuses"s, A(M("user"s, M("name"s, "ann"s)), M("user"s, M("name"s, "bob"s)))));
+    std::string bytes =
+        "\xa1\x68statuses\x82\xa1\x64user\xa1\x64name\x63" "ann"
+        "\xa1\x64user\xa1\x64name\x63" "bob"s;
     std::span<char const> const data(bytes);
     cbor::lazy const doc = *cbor::lazy::adopt(std::move(bytes));
     auto const name = doc.at_key("statuses")
@@ -916,7 +1069,7 @@ TEST_CASE("lazy: a view holds the top-level item")
     bool released = false;
     std::optional<cbor::ref<std::string_view>> view;
     {
-        auto const owner = std::make_shared<buffer_owner>(encode_value_to_wire(M("name"s, "ann"s)), &released);
+        auto const owner = std::make_shared<buffer_owner>("\xa1\x64name\x63" "ann"s, &released);
         auto const name = cbor::lazy::view(owner, std::string_view(owner->bytes))
                               .and_then([](cbor::lazy const &d) { return d.at_key("name"); })
                               .and_then([](cbor::lazy const &n) { return n.get<std::string_view>(); });
@@ -1033,7 +1186,7 @@ TEST_CASE("lazy: copy moves an rvalue string and copies everything else")
         return std::string(**r);
     };
     std::string const text(40, 't');
-    std::string const message = encode_value_to_wire(M("k"s, text));
+    std::string const message = "\xa1\x61k\x78\x28tttttttttttttttttttttttttttttttttttttttt"s;
     auto buffer = std::make_unique<std::string>(message);
     std::span<char const> const data(*buffer);
     auto const moved = cbor::lazy::adopt(std::move(*buffer));
@@ -1120,17 +1273,21 @@ TEST_CASE("lazy: an array of the same map many times is read with no error")
 // are not checked before the call.
 TEST_CASE("lazy: size and empty")
 {
-    cbor::lazy const map = lazy_of(encode_value_to_wire(M("a"s, 1, 2, "b"s)));
+    cbor::lazy const map = lazy_of(
+        "\xa2\x61" "a\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x1b\x00\x00\x00\x00\x00\x00\x00\x02"
+        "\x61" "b"s);
     CHECK_EQ(map.size().value(), 2u);
     CHECK_FALSE(map.empty().value());
 
-    cbor::lazy const array = lazy_of(encode_value_to_wire(A(1, 2, 3)));
+    cbor::lazy const array = lazy_of(
+        "\x83\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x1b\x00\x00\x00\x00\x00\x00\x00\x02"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x03"s);
     CHECK_EQ(array.size().value(), 3u);
     CHECK_FALSE(array.empty().value());
-    CHECK(lazy_of(encode_value_to_wire(A())).empty().value());
+    CHECK(lazy_of("\x80"s).empty().value());
     CHECK(lazy_of("\xa0"s).empty().value());
-    CHECK_EQ(lazy_of(encode_value_to_wire(V(1))).size().error(), error::not_indexable);
-    CHECK_EQ(lazy_of(encode_value_to_wire(V("a"s))).empty().error(), error::not_indexable);
+    CHECK_EQ(lazy_of("\x1b\x00\x00\x00\x00\x00\x00\x00\x01"s).size().error(), error::not_indexable);
+    CHECK_EQ(lazy_of("\x61" "a"s).empty().error(), error::not_indexable);
     CHECK_EQ(lazy_of("\xd8\x1c\x82\x01\x02"s).size().value(), 2u);
 }
 
@@ -1638,13 +1795,17 @@ TEST_CASE("lazy: an index reads a typed array through tag 24 and tag 28")
 // bytes are not checked before the call. A missing key is a value, not a fault of ours.
 TEST_CASE("lazy: operator[] gives what at gives")
 {
-    cbor::lazy const map = lazy_of(encode_value_to_wire(M("a"s, A(1, 2), 2, "two"s)));
+    cbor::lazy const map = lazy_of(
+        "\xa2\x61" "a\x82\x1b\x00\x00\x00\x00\x00\x00\x00\x01"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x02\x1b\x00\x00\x00\x00\x00\x00\x00\x02"
+        "\x63two"s);
     CHECK(value_at(*map["a"]) == value_at(*map.at_key("a")));
     CHECK(value_at(*map.at_key(2)) == V("two"s));
     CHECK(value_at(*(*map["a"])[std::size_t{1}]) == V(2));
     CHECK_EQ(map["z"].error(), error::key_not_found);
     CHECK_EQ(map["z"].error(), map.at_key("z").error());
-    cbor::lazy const array = lazy_of(encode_value_to_wire(A(1, 2)));
+    cbor::lazy const array = lazy_of(
+        "\x82\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x1b\x00\x00\x00\x00\x00\x00\x00\x02"s);
     CHECK(value_at(*array[std::size_t{0}]) == V(1));
     CHECK_EQ(array["a"].error(), error::not_indexable);
     CHECK_EQ(array[std::size_t{2}].error(), array.at(std::size_t{2}).error());
@@ -1724,8 +1885,12 @@ TEST_CASE("lazy: at_path over bare bytes compiles for a scalar only")
 // at_path. The literal form gives the same nodelist.
 TEST_CASE("lazy: one query applies to many documents")
 {
-    std::string const one = encode_value_to_wire(M("a"s, A(1, 2)));
-    std::string const two = encode_value_to_wire(M("a"s, A(3, 4, 5)));
+    std::string const one =
+        "\xa1\x61" "a\x82\x1b\x00\x00\x00\x00\x00\x00\x00\x01"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x02"s;
+    std::string const two =
+        "\xa1\x61" "a\x83\x1b\x00\x00\x00\x00\x00\x00\x00\x03"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x04\x1b\x00\x00\x00\x00\x00\x00\x00\x05"s;
     auto const all = *cbor::path::compile<cbor::nodelist>("$.a[*]");
     auto const first = *cbor::path::compile<int>("$.a[0]");
     cbor::lazy const l1 = *test::make_lazy_from_copy(one);
@@ -1743,7 +1908,7 @@ TEST_CASE("lazy: one query applies to many documents")
     CHECK_EQ(cbor::at_path(std::string(two), all)->size(), 3u);
     auto const node = cbor::at_path(shared, *cbor::path::compile<cbor::lazy>("$.a[2]"));
     CHECK(test::make_value_from_item(node) == V(5));
-    std::string const text = encode_value_to_wire(M("s"s, "x"s));
+    std::string const text = "\xa1\x61s\x61x"s;
     auto const s = *cbor::path::compile<std::string_view>("$.s");
     auto const from_view = cbor::at_path(std::string(text), s);
     CHECK_EQ(**from_view, "x"sv);
@@ -1757,7 +1922,7 @@ TEST_CASE("lazy: one query applies to many documents")
 // no read reaches freed memory.
 TEST_CASE("lazy: a copy of a query outlives the original")
 {
-    std::string const doc = encode_value_to_wire(M("k"s, A(7)));
+    std::string const doc = "\xa1\x61k\x81\x1b\x00\x00\x00\x00\x00\x00\x00\x07"s;
     std::optional<cbor::path::query<int>> original = *cbor::path::compile<int>("$['k'][0]");
     cbor::path::query<int> const copy = *original;
     original.reset();
@@ -1768,7 +1933,7 @@ TEST_CASE("lazy: a copy of a query outlives the original")
 // other wrong use; the moved-to query applies as before.
 TEST_CASE("lazy: a moved-from query is a wrong use")
 {
-    std::string const doc = encode_value_to_wire(M("a"s, "x"s));
+    std::string const doc = "\xa1\x61" "a\x61x"s;
     cbor::lazy const l = *test::make_lazy_from_copy(doc);
     auto number = *cbor::path::compile<int>("$.a");
     auto const moved_number = std::move(number);
@@ -1791,7 +1956,7 @@ TEST_CASE("lazy: a moved-from query is a wrong use")
 // with a small stack. This holds when the filters nest more often than that stack holds. One filter does compile.
 TEST_CASE("lazy: the compile of a query stops where the stack of the thread ends")
 {
-    std::string const doc = encode_value_to_wire(A(1));
+    std::string const doc = "\x81\x1b\x00\x00\x00\x00\x00\x00\x00\x01"s;
     cbor::lazy const l = *test::make_lazy_from_copy(doc);
     constexpr std::size_t depth = test::levels_beyond_small_stack;
     std::string const deep = "$" + test::repeat("[?@", depth) + ".a" + std::string(depth, ']');
@@ -1805,7 +1970,9 @@ TEST_CASE("lazy: the compile of a query stops where the stack of the thread ends
 // sanitizer shows that no access races.
 TEST_CASE("lazy: threads apply one query at once" * doctest::skip(!test::threads_available))
 {
-    std::string const doc = encode_value_to_wire(M("a"s, A(1, 2, 3)));
+    std::string const doc =
+        "\xa1\x61" "a\x83\x1b\x00\x00\x00\x00\x00\x00\x00\x01"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x02\x1b\x00\x00\x00\x00\x00\x00\x00\x03"s;
     cbor::lazy const l = *test::make_lazy_from_copy(doc);
     auto const e = *cbor::path::compile<cbor::nodelist>("$.a[?@ > 1]");
     std::array<std::size_t, 4> found{};

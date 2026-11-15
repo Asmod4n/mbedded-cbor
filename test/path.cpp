@@ -34,7 +34,7 @@ namespace
 // test is the value for a singular query and the nodelist for any other.
 std::expected<value, cbor::error> path_read(std::string_view const path, value const &data)
 {
-    std::string const doc = encode_value_to_wire(data);
+    std::string const doc = test::encode_in_preferred_form(data);
     auto const l = *test::make_lazy_from_copy(doc);
     auto const r = test::read_value_at_path(path, l);
     if (r || r.error() != error::not_singular_query)
@@ -159,8 +159,13 @@ TEST_CASE("path: a wildcard on a map and missing keys")
 // Ported from test.rb: 'path: compiled path is reusable across different lazies'.
 TEST_CASE("path: one compiled path, two top-level items")
 {
-    std::string const d1 = encode_value_to_wire(M("items"s, A(M("id"s, 1), M("id"s, 2))));
-    std::string const d2 = encode_value_to_wire(M("items"s, A(M("id"s, 9), M("id"s, 8), M("id"s, 7))));
+    std::string const d1 =
+        "\xa1\x65items\x82\xa1\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x01"
+        "\xa1\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x02"s;
+    std::string const d2 =
+        "\xa1\x65items\x83\xa1\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x09"
+        "\xa1\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x08\xa1\x62id"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x07"s;
     CHECK(found(compiled_query<"$.items[*].id">(d1)) == A(1, 2));
     CHECK(found(compiled_query<"$.items[*].id">(d2)) == A(9, 8, 7));
 }
@@ -517,8 +522,12 @@ TEST_CASE("path: the function extensions")
 // also with single quotes.
 TEST_CASE("path: an EDN literal in a filter")
 {
-    std::string const doc = encode_value_to_wire(A(M("a"s, bytes{"\x01"}), M("a"s, tagged{1000, "x"s}), M("a"s, A(1, 2)),
-                                      M("a"s, M("k"s, 1)), M("a"s, "s"s)));
+    std::string const doc =
+        "\x85\xa1\x61" "a\x41\x01\xa1\x61" "a\xd9\x03\xe8\x61x"
+        "\xa1\x61" "a\x82\x1b\x00\x00\x00\x00\x00\x00\x00\x01"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x02\xa1\x61" "a\xa1"
+        "\x61k\x1b\x00\x00\x00\x00\x00\x00\x00\x01\xa1\x61" "a"
+        "\x61s"s;
     CHECK(found(compiled_query<"$[?@.a == h'01'].a">(doc)) == A(bytes{"\x01"}));
     CHECK(found(compiled_query<"$[?@.a == 1000(\"x\")].a">(doc)) == A(tagged{1000, "x"s}));
     CHECK(found(compiled_query<"$[?@.a == [1, 2]].a">(doc)) == A(A(1, 2)));
@@ -625,13 +634,20 @@ bool inside(std::string const &doc, void const *const p)
 // arrays, one float of an array of floats, and a text in an array of records.
 TEST_CASE("path: a typed read of each shape of the bench")
 {
-    std::string const statuses = encode_value_to_wire(M("statuses"s, A(M("user"s, M("screen_name"s, "ann"s)), M("user"s, M("screen_name"s, "bob"s)),
-                                                          M("user"s, M("screen_name"s, "cy"s)))));
+    std::string const statuses =
+        "\xa1\x68statuses\x83\xa1\x64user\xa1\x6bscreen_name\x63" "ann"
+        "\xa1\x64user\xa1\x6bscreen_name\x63" "bob\xa1\x64user"
+        "\xa1\x6bscreen_name\x62" "cy"s;
     check_path<"$.statuses[2].user.screen_name", std::string_view>(statuses, {"statuses"sv, std::int64_t{2}, "user"sv, "screen_name"sv},
                                                                    "cy"sv);
-    std::string const floats = encode_value_to_wire(A(0.5, 1.5, 2.5));
+    std::string const floats =
+        "\x83\xfb\x3f\xe0\x00\x00\x00\x00\x00\x00\xfb\x3f\xf8\x00\x00\x00\x00\x00\x00"
+        "\xfb\x40\x04\x00\x00\x00\x00\x00\x00"s;
     check_path<"$[1]", double>(floats, {std::int64_t{1}}, std::bit_cast<std::uint64_t>(1.5));
-    std::string const records = encode_value_to_wire(A(M("id"s, 1, "user"s, M("name"s, "ann"s)), M("id"s, 2, "user"s, M("name"s, "bob"s))));
+    std::string const records =
+        "\x82\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x64user"
+        "\xa1\x64name\x63" "ann\xa2\x62id\x1b\x00\x00\x00\x00\x00\x00\x00\x02"
+        "\x64user\xa1\x64name\x63" "bob"s;
     check_path<"$[1].user.name", std::string_view>(records, {std::int64_t{1}, "user"sv, "name"sv}, "bob"sv);
 }
 
@@ -836,7 +852,9 @@ TEST_CASE("path: a typed read with a negative index and with an integer key")
     std::string const keyed = "\xa2\x01\x61x\x21\x61y"s;
     check_path<"$[1]", std::string_view>(keyed, {std::int64_t{1}}, "x"sv);
     check_path<"$[-2]", std::string_view>(keyed, {std::int64_t{-2}}, "y"sv);
-    check_path<"$['a'][-1]['b']", std::string_view>(encode_value_to_wire(M("a"s, A(1, M("b"s, "z"s)))), {"a"sv, std::int64_t{-1}, "b"sv}, "z"sv);
+    check_path<"$['a'][-1]['b']", std::string_view>(
+        "\xa1\x61" "a\x82\x1b\x00\x00\x00\x00\x00\x00\x00\x01"
+        "\xa1\x61" "b\x61z"s, {"a"sv, std::int64_t{-1}, "b"sv}, "z"sv);
 }
 
 // Each type of the read takes the CBOR items that RFC 8949 maps to it and refuses every other item as incorrect_type. An
@@ -1053,7 +1071,9 @@ TEST_CASE("path: a typed read that is not safe does not compile")
 // for a singular query.
 TEST_CASE("path: at_path reads a singular query, at_path with a nodelist reads any query")
 {
-    std::string const doc = encode_value_to_wire(M("a"s, A(1, 2)));
+    std::string const doc =
+        "\xa1\x61" "a\x82\x1b\x00\x00\x00\x00\x00\x00\x00\x01"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x02"s;
     cbor::lazy const l = *test::make_lazy_from_copy(doc);
     CHECK(*test::read_value_at_path("$.a[1]", l) == V(2));
     CHECK(*test::query("$.a[1]", l) == A(2));
@@ -1077,7 +1097,7 @@ TEST_CASE("path: at_path reads a singular query, at_path with a nodelist reads a
 // only the nesting of parentheses, which the nesting depth bounds.
 TEST_CASE("path: a long chain of || or && in one filter is tested without recursion")
 {
-    std::string const doc = encode_value_to_wire(A(1));
+    std::string const doc = "\x81\x1b\x00\x00\x00\x00\x00\x00\x00\x01"s;
     auto const l = *test::make_lazy_from_copy(doc);
     for (std::string_view const op : {"||"sv, "&&"sv}) {
         std::string path = "$[?@==1";
@@ -1108,7 +1128,10 @@ TEST_CASE("path: an absolute query in a filter is evaluated once")
     CHECK_EQ(std::get<test::array *>(found(test::query("$[?$[-1]]", l)).kind)->size(), n);
     CHECK_EQ(std::get<test::array *>(found(test::query("$[?count($[*]) == 5000]", l)).kind)->size(), n);
 
-    std::string const small = encode_value_to_wire(M("a"s, A(1, 2, 3), "b"s, 2));
+    std::string const small =
+        "\xa2\x61" "a\x83\x1b\x00\x00\x00\x00\x00\x00\x00\x01"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x02\x1b\x00\x00\x00\x00\x00\x00\x00\x03"
+        "\x61" "b\x1b\x00\x00\x00\x00\x00\x00\x00\x02"s;
     auto const s = *test::make_lazy_from_copy(small);
     CHECK(found(test::query("$.a[?@ == $.b]", s)) == A(2));
     CHECK(found(test::query("$.a[?$.a[?@ == $.b]]", s)) == A(1, 2, 3));
@@ -1269,7 +1292,10 @@ TEST_CASE("at_path: a path from a held lazy")
 // tags and a tag inside an array.
 TEST_CASE("path: a tag literal in a run-time filter")
 {
-    auto const doc = *test::make_lazy_from_copy(encode_value_to_wire(A(1, tagged{1000, V(1)}, tagged{1001, V(tagged{1000, V(3)})}, A(tagged{1, V(2)}))));
+    auto const doc = *test::make_lazy_from_copy(
+        "\x84\x1b\x00\x00\x00\x00\x00\x00\x00\x01\xd9\x03\xe8"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x01\xd9\x03\xe9\xd9\x03\xe8"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x03\x81\xc1\x1b\x00\x00\x00\x00\x00\x00\x00\x02"s);
     CHECK(*test::query("$[?@ == 1000(1)]", doc) == A(tagged{1000, V(1)}));
     CHECK(*test::query("$[?@ == 1001(1000(3))]", doc) == A(tagged{1001, V(tagged{1000, V(3)})}));
     CHECK(*test::query("$[?@ == [1(2)]]", doc) == A(A(tagged{1, V(2)})));
@@ -1323,7 +1349,9 @@ auto member_at_path(L const &l)
 // so "$" is that item and not the top-level item.
 TEST_CASE("path: the member at_path starts at the item of the lazy")
 {
-    std::string const doc = encode_value_to_wire(M("a"s, M("b"s, A(1, 2, "x"s))));
+    std::string const doc =
+        "\xa1\x61" "a\xa1\x61" "b\x83\x1b\x00\x00\x00\x00\x00\x00\x00\x01"
+        "\x1b\x00\x00\x00\x00\x00\x00\x00\x02\x61x"s;
     cbor::lazy const l = *test::make_lazy_from_copy(doc);
     CHECK(*test::read_value_at_path("$", *l.at_path(*cbor::path::compile<cbor::lazy>("$.a.b[1]"))) == V(2));
     CHECK_EQ(cbor::path::compile<cbor::lazy>("$.a.b[").error(), error::invalid_path);
@@ -1354,7 +1382,7 @@ TEST_CASE("path: a typed at_path with a path that is not singular does not compi
 // result.
 TEST_CASE("path: every standalone at_path gives what the member gives")
 {
-    std::string const doc = encode_value_to_wire(M("a"s, A(7, "x"s)));
+    std::string const doc = "\xa1\x61" "a\x82\x1b\x00\x00\x00\x00\x00\x00\x00\x07\x61x"s;
     cbor::lazy const l = *test::make_lazy_from_copy(doc);
     CHECK_EQ(cbor::at_path<"$.a[0]", int>(std::string_view(doc)), l.at_path<"$.a[0]", int>());
     auto const owner = std::make_shared<std::string const>(doc);

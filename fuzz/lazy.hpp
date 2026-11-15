@@ -30,13 +30,6 @@ inline void lazy_channels(std::string_view const input)
     auto const whole = test::make_value_from_item(root);
     if (eager && whole)
         require(values_are_the_same(*eager, *whole));
-    if (whole) {
-        string_writer w;
-        if (test::encode(w, *whole)) {
-            auto const again = test::decode_wire_into_value(w.encoded);
-            require(again.has_value() && same_number(*whole, *again));
-        }
-    }
     if (eager) {
         if (auto const *a = test::get_if<test::array>(*eager)) {
             if (auto const elements = root.elements()) {
