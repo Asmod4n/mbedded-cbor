@@ -553,7 +553,7 @@ TEST_CASE("decode: a float16 keeps additional information 25")
     CHECK_EQ(f->additional_information, 25);
     CHECK_EQ(std::bit_cast<std::uint64_t>(f->get<double>().value()), 0x3ff8000000000000u);
     std::string again;
-    REQUIRE(cbor::encode(*f, again).has_value());
+    REQUIRE(cbor::encode(again, *f).has_value());
     CHECK_EQ(again, "\xf9\x3e\x00"sv);
 }
 
@@ -651,7 +651,7 @@ TEST_CASE("encode: a tree is written with the head widths of its input, also wit
         REQUIRE(top_level.has_value());
         auto const root = item_of(top_level->to_item());
         std::string out;
-        auto const size = cbor::encode(*root, out);
+        auto const size = cbor::encode(out, *root);
         REQUIRE(size.has_value());
         CHECK_EQ(*size, r.own.size());
         CHECK_EQ(out, r.own);
@@ -677,7 +677,7 @@ TEST_CASE("encode: a deep tree that decode gives is encoded")
     REQUIRE(top_level.has_value());
     auto const root = item_of(top_level->to_item());
     std::string out;
-    REQUIRE(cbor::encode(*root, out).has_value());
+    REQUIRE(cbor::encode(out, *root).has_value());
     CHECK_EQ(out, deep);
 }
 
@@ -688,7 +688,7 @@ TEST_CASE("encode: a span that is too short")
     REQUIRE(top_level.has_value());
     auto const root = item_of(top_level->to_item());
     std::array<char, 3> buffer{};
-    auto const r = cbor::encode(*root, std::span<char>(buffer));
+    auto const r = cbor::encode(std::span<char>(buffer), *root);
     REQUIRE_FALSE(r.has_value());
     CHECK_EQ(r.error(), cbor::error::no_buffer_space);
 }
@@ -715,7 +715,7 @@ TEST_CASE("decode: tag 24 gives the byte string and the embedded item")
     CHECK_EQ(root->get<std::pair<std::uint64_t, cbor::item const *>>().value().second->get<std::span<std::byte const>>().value().size(), 5u);
     CHECK_EQ(cbor::encoded_cbor_data_item(root, *root)->get().get<std::string_view>().value(), "IETF");
     std::string again;
-    REQUIRE(cbor::encode(*root, again).has_value());
+    REQUIRE(cbor::encode(again, *root).has_value());
     CHECK_EQ(again, wire);
 }
 
@@ -737,7 +737,7 @@ TEST_CASE("decode: a tag 24 inside a tag 24 is decoded at each level")
     CHECK_EQ(inner.type(), cbor::type::unsigned_integer);
     CHECK_EQ(inner.get<std::uint64_t>().value(), 1u);
     std::string again;
-    REQUIRE(cbor::encode(*root, again).has_value());
+    REQUIRE(cbor::encode(again, *root).has_value());
     CHECK_EQ(again, wire);
 }
 
@@ -896,7 +896,7 @@ TEST_CASE("encode: a float of each width comes back byte for byte")
         CHECK_EQ(root->type(), r.type);
         CHECK_EQ(root->additional_information, static_cast<std::uint8_t>(r.wire.front()) & 0x1f);
         std::string again;
-        REQUIRE(cbor::encode(*root, again).has_value());
+        REQUIRE(cbor::encode(again, *root).has_value());
         CHECK_EQ(again, r.wire);
     }
 }
@@ -982,7 +982,7 @@ TEST_CASE("decode: every major type and additional information gives the type of
                                                         : static_cast<cbor::major_type>(major));
             std::string const own = bignum ? (argument == 2 ? "\x05"s : "\x25"s) : wire;
             std::string again;
-            REQUIRE(cbor::encode(**decoded, again).has_value());
+            REQUIRE(cbor::encode(again, **decoded).has_value());
             CHECK_EQ(again, own);
             CHECK(same_value(again, wire));
         }
@@ -1009,7 +1009,7 @@ TEST_CASE("encode: a bignum that fits is an integer, a larger bignum and a typed
         auto const root = item_of(test::make_lazy_from_copy(std::string(r.wire))->to_item());
         CHECK_EQ(find_major_type_of(root->type()), r.major);
         std::string again;
-        REQUIRE(cbor::encode(*root, again).has_value());
+        REQUIRE(cbor::encode(again, *root).has_value());
         CHECK_EQ(again, r.own);
         CHECK(same_value(again, r.wire));
     }
@@ -1555,9 +1555,9 @@ TEST_CASE("item get<T> and lazy get<T> agree")
 // std::string::size and std::span::size give it. The expectation comes from that decision, not from the header.
 TEST_CASE("encode: the count of bytes written is a std::size_t")
 {
-    CHECK((std::is_same_v<decltype(cbor::encode(std::declval<cbor::item const &>(), std::declval<std::string &>())),
+    CHECK((std::is_same_v<decltype(cbor::encode(std::declval<std::string &>(), std::declval<cbor::item const &>())),
                           std::expected<std::size_t, cbor::error>>));
-    CHECK((std::is_same_v<decltype(cbor::encode_cycles(std::declval<cbor::item const &>(), std::declval<std::string &>())),
+    CHECK((std::is_same_v<decltype(cbor::encode_cycles(std::declval<std::string &>(), std::declval<cbor::item const &>())),
                           std::expected<std::size_t, cbor::error>>));
 }
 

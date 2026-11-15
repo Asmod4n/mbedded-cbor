@@ -150,7 +150,7 @@ TEST_CASE("recursion limit: encode")
     auto const read = test::make_lazy_from_copy(encode_in_preferred_form(arrays_around_zero(held)))->to_item();
     REQUIRE(read.has_value());
     std::string out;
-    CHECK(cbor::encode(**read, out).has_value());
+    CHECK(cbor::encode(out, **read).has_value());
     auto const deep = test::make_lazy_from_copy(arrays_around(test::levels_main_thread_holds, "\x00"sv))->to_item();
     if constexpr (!test::main_thread_holds_deep_input) {
         if (!deep) {
@@ -161,7 +161,7 @@ TEST_CASE("recursion limit: encode")
     REQUIRE(deep.has_value());
     auto const failure = test::error_on_small_stack([&deep] {
         std::string written;
-        return cbor::encode(**deep, written);
+        return cbor::encode(written, **deep);
     });
     REQUIRE(failure.has_value());
     CHECK_EQ(*failure, error::nesting_depth_exceeded);

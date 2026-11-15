@@ -134,7 +134,7 @@ TEST_CASE("doc reference item: the example of the group decode")
     auto const tree = cbor::decode(bytes);
     auto const second = (*tree)->get<std::span<cbor::item const>>()->at(1).get<std::string_view>();  // "a"
     std::string out;
-    auto const size = cbor::encode(**tree, out);  // 5; out == bytes
+    auto const size = cbor::encode(out, **tree);  // 5; out == bytes
     // [decode group]
     REQUIRE(tree);
     CHECK_EQ(second.value(), "a"sv);
@@ -207,19 +207,19 @@ TEST_CASE("doc reference item: encode")
     // bytes: a std::string with [1, "a"]
     auto const tree = cbor::decode(bytes);
     std::string out;
-    auto const size = cbor::encode(**tree, out);  // 4; out == bytes
+    auto const size = cbor::encode(out, **tree);  // 4; out == bytes
     // [encode]
     REQUIRE(tree);
     CHECK_EQ(size.value(), 4u);
     CHECK_EQ(out, bytes);
 
     std::array<char, 2> small{};
-    CHECK_EQ(cbor::encode(**tree, std::span<char>(small)).error(), cbor::error::no_buffer_space);
+    CHECK_EQ(cbor::encode(std::span<char>(small), **tree).error(), cbor::error::no_buffer_space);
 
     std::string written;
-    CHECK_EQ(cbor::encode(**tree, writer_target{&written, false}).value(), 4u);
+    CHECK_EQ(cbor::encode(writer_target{&written, false}, **tree).value(), 4u);
     CHECK_EQ(written, bytes);
-    CHECK_EQ(cbor::encode(**tree, writer_target{&written, true}).error(), cbor::error::io_error);
+    CHECK_EQ(cbor::encode(writer_target{&written, true}, **tree).error(), cbor::error::io_error);
 }
 
 // The iov forms exist where the platform has <sys/uio.h>, as in the library (encode.hpp); Windows has none.

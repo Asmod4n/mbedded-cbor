@@ -389,7 +389,7 @@ TEST_CASE("encode: the span target allocates nothing")
     REQUIRE(tree.has_value());
     std::array<char, 64> buffer{};
     std::size_t const before = allocations;
-    auto const size = cbor::encode(**tree, std::span<char>(buffer));
+    auto const size = cbor::encode(std::span<char>(buffer), **tree);
     std::size_t const after = allocations;
     REQUIRE(size.has_value());
     CHECK_EQ(*size, 21u);

@@ -300,7 +300,7 @@ namespace schema_types
 inline std::string encode_with_schema(auto const &value)
 {
     string_writer w;
-    REQUIRE(form<std::remove_cvref_t<decltype(value)>>::encode(value, w).has_value());
+    REQUIRE(form<std::remove_cvref_t<decltype(value)>>::encode(w, value).has_value());
     return w.encoded;
 }
 

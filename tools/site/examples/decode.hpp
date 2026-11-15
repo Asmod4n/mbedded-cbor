@@ -161,22 +161,22 @@ result encode_made(call const &c)
 {
     if (auto const ok = arguments_counted(c, 2); !ok) [[unlikely]]
         return std::unexpected(ok.error());
-    auto const root = argument_of<cbor::item>(c, 0, "a cbor::item");
+    auto const root = argument_of<cbor::item>(c, 1, "a cbor::item");
     if (!root) [[unlikely]]
         return std::unexpected(root.error());
     auto const write = [&](auto &target) {
         if constexpr (Cycles)
-            return cbor::encode_cycles(**root, target);
+            return cbor::encode_cycles(target, **root);
         else
-            return cbor::encode(**root, target);
+            return cbor::encode(target, **root);
     };
-    if (auto *const target = changed_if<std::string>(c.arguments[1]))
+    if (auto *const target = changed_if<std::string>(c.arguments[0]))
         return value_of(write(*target));
-    if (auto const *const target = held_if<std::span<char>>(c.arguments[1])) {
+    if (auto const *const target = held_if<std::span<char>>(c.arguments[0])) {
         std::span<char> span = *target;
         return value_of(write(span));
     }
-    return std::unexpected("the argument 2 is not a std::string or a std::span<char>");
+    return std::unexpected("the argument 1 is not a std::string or a std::span<char>");
 }
 
 template <class T>

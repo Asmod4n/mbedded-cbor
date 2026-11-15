@@ -187,7 +187,7 @@ TEST_CASE("encode_iov: both overloads give the bytes of encode for a decoded tre
         auto const tree = cbor::decode(input);
         REQUIRE(tree.has_value());
         std::string expected;
-        REQUIRE(cbor::encode(**tree, expected).has_value());
+        REQUIRE(cbor::encode(expected, **tree).has_value());
         auto const copied_pieces = cbor::encode_iov(**tree);
         REQUIRE(copied_pieces.has_value());
         CHECK_EQ(join_pieces_into_bytes(*copied_pieces), expected);
@@ -237,7 +237,7 @@ TEST_CASE("encode_iov: the pieces of a decoded tree outlive the tree")
     {
         auto tree = cbor::decode(input);
         REQUIRE(tree.has_value());
-        REQUIRE(cbor::encode(**tree, expected).has_value());
+        REQUIRE(cbor::encode(expected, **tree).has_value());
         kept = cbor::encode_iov(*tree);
         REQUIRE(kept.has_value());
     }
@@ -254,7 +254,7 @@ TEST_CASE("encode_iov_cycles: the overload for a decoded tree gives the bytes of
         auto const tree = cbor::decode(input);
         REQUIRE(tree.has_value());
         std::string expected;
-        REQUIRE(cbor::encode_cycles(**tree, expected).has_value());
+        REQUIRE(cbor::encode_cycles(expected, **tree).has_value());
         auto const referred = cbor::encode_iov_cycles(*tree);
         REQUIRE(referred.has_value());
         CHECK_EQ(join_pieces_into_bytes(*referred), expected);

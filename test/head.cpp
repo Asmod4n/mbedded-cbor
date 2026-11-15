@@ -122,7 +122,7 @@ TEST_CASE("head: encode returns the error of the Writer")
         {std::errc::permission_denied, error::io_error},
     };
     for (auto const &c : cases)
-        CHECK_EQ(cbor::encode(**tree, refusing_writer{c.refusal}).error(), c.expected);
+        CHECK_EQ(cbor::encode(refusing_writer{c.refusal}, **tree).error(), c.expected);
 }
 
 struct one_simple_value {

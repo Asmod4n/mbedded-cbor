@@ -44,7 +44,7 @@ inline std::uint64_t argument_of_negative_integer(cbor::item const &it)
     if (auto const v = it.get<std::int64_t>())
         return static_cast<std::uint64_t>(-1 - *v);
     std::string head;
-    if (!cbor::encode(it, head) || head.size() != 1 + sizeof(std::uint64_t))
+    if (!cbor::encode(head, it) || head.size() != 1 + sizeof(std::uint64_t))
         return 0;
     std::uint64_t argument = 0;
     for (char const c : std::string_view(head).substr(1))
@@ -188,7 +188,7 @@ inline void check_both(std::string_view const wire, [[maybe_unused]] value const
     auto const tree = cbor::decode(wire);
     REQUIRE(tree.has_value());
     std::string back;
-    REQUIRE(cbor::encode(**tree, back).has_value());
+    REQUIRE(cbor::encode(back, **tree).has_value());
     CHECK_EQ(back, wire);
 }
 

@@ -125,16 +125,16 @@ result schema_encode(call const &c)
     if (!c.template_arguments.empty()) [[unlikely]]
         return std::unexpected("encode takes no template argument");
     if (c.arguments.empty() || c.arguments.size() > 2) [[unlikely]]
-        return std::unexpected("encode takes a value and an optional std::string target");
-    auto const v = member_converted<T>(c.arguments.front(), 0);
+        return std::unexpected("encode takes an optional std::string target and a value");
+    auto const v = member_converted<T>(c.arguments.back(), c.arguments.size() - 1);
     if (!v) [[unlikely]]
         return std::unexpected(v.error());
     if (c.arguments.size() == 1)
         return value_of(Form<T>::encode(*v));
-    auto *const target = changed_if<std::string>(c.arguments[1]);
+    auto *const target = changed_if<std::string>(c.arguments.front());
     if (target == nullptr) [[unlikely]]
-        return std::unexpected("the argument 2 is not a std::string");
-    return value_of(Form<T>::encode(*v, *target));
+        return std::unexpected("the argument 1 is not a std::string");
+    return value_of(Form<T>::encode(*target, *v));
 }
 
 template <template <class> class Form, class T, bool Verified>

@@ -4570,8 +4570,8 @@ public:
      * @brief Writes `value` as one Packed CBOR message (`wire`).
      *
      * The first form returns a new `std::string`.
-     * The second form appends to `target` and returns the count of bytes of the message.
-     * `target` is a `std::string`, a container of `char`, a `std::span<char>` or a message writer.
+     * The second form appends to `out` and returns the count of bytes of the message.
+     * `out` is a `std::string`, a container of `char`, a `std::span<char>` or a message writer.
      * Only public members are written.
      * Each field has a head of fixed width.
      * So a value does not change the offset of a field.
@@ -4584,7 +4584,7 @@ public:
      * result: 66 bytes: d8 71 82 9a 00 00 00 10 d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 5a 00 00 00 00 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 08 d8 80 9a 00 00 00 02 19 00 11 fa 40 20 00 00
      * call: std::string out = "x"
      * result: "x"
-     * call: auto const n = cbor::schema<tire>::encode(tire{17, 2.5f}, out)
+     * call: auto const n = cbor::schema<tire>::encode(out, tire{17, 2.5f})
      * result: 66
      * call: out.size()
      * result: 67
@@ -4604,14 +4604,14 @@ public:
     }
 
     /**
-     * @brief Appends the message of @p value to @p target, and gives the count of bytes of the message.
+     * @brief Appends the message of @p value to @p out, and gives the count of bytes of the message.
      */
     template <class Target>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() &&
                  detail::encoding::is_target_v<std::remove_reference_t<Target>>)
-    CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(T const &value, Target &&target)
+    CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(Target &&out, T const &value)
     {
-        return encode<detail::description_place::inside>(value, std::forward<Target>(target));
+        return encode<detail::description_place::inside>(std::forward<Target>(out), value);
     }
 
 private:
@@ -4638,7 +4638,7 @@ private:
     }
 
     template <detail::description_place D, class Target>
-    CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(T const &value, Target &&target)
+    CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(Target &&target, T const &value)
     {
         using U = std::remove_cvref_t<Target>;
         detail::reflection::second_item<T> second;
@@ -5054,15 +5054,15 @@ public:
     }
 
     /**
-     * @brief Appends the message of @p value without its description to @p target, and gives the count of bytes of the
+     * @brief Appends the message of @p value without its description to @p out, and gives the count of bytes of the
      * message.
      */
     template <class Target>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() &&
                  detail::encoding::is_target_v<std::remove_reference_t<Target>>)
-    CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(T const &value, Target &&target)
+    CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(Target &&out, T const &value)
     {
-        return schema<T>::template encode<detail::description_place::apart>(value, std::forward<Target>(target));
+        return schema<T>::template encode<detail::description_place::apart>(std::forward<Target>(out), value);
     }
 };
 

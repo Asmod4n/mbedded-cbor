@@ -499,7 +499,7 @@ TEST_CASE("tinycbor parser: half floats")
         else
             CHECK_EQ(std::bit_cast<std::uint64_t>(value), std::bit_cast<std::uint64_t>(r.value));
         std::string out;
-        CHECK_EQ(make_outcome_text(cbor::encode(**tree, out)), make_error_text(no_error));
+        CHECK_EQ(make_outcome_text(cbor::encode(out, **tree)), make_error_text(no_error));
         CHECK_EQ(out, data);
     }
 }

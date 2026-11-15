@@ -32,24 +32,24 @@ namespace fuzz
 inline void encode_targets(cbor::item const &root, std::string const &out)
 {
     std::vector<char> chars;
-    require(cbor::encode(root, chars) == out.size() && std::ranges::equal(chars, out));
+    require(cbor::encode(chars, root) == out.size() && std::ranges::equal(chars, out));
     std::vector<std::byte> bytes;
-    require(cbor::encode(root, bytes) == out.size() && std::ranges::equal(std::as_bytes(std::span(bytes)), std::as_bytes(std::span(out))));
+    require(cbor::encode(bytes, root) == out.size() && std::ranges::equal(std::as_bytes(std::span(bytes)), std::as_bytes(std::span(out))));
     std::vector<char> exact(out.size());
-    require(cbor::encode(root, std::span<char>(exact)) == out.size() && std::ranges::equal(exact, out));
+    require(cbor::encode(std::span<char>(exact), root) == out.size() && std::ranges::equal(exact, out));
     std::vector<std::byte> exact_bytes(out.size());
-    require(cbor::encode(root, std::span<std::byte>(exact_bytes)) == out.size() &&
+    require(cbor::encode(std::span<std::byte>(exact_bytes), root) == out.size() &&
             std::ranges::equal(std::as_bytes(std::span(exact_bytes)), std::as_bytes(std::span(out))));
     if (!out.empty()) {
         std::vector<char> short_by_one(out.size() - 1);
-        auto const refused = cbor::encode(root, std::span<char>(short_by_one));
+        auto const refused = cbor::encode(std::span<char>(short_by_one), root);
         require(!refused && refused.error() == cbor::error::no_buffer_space);
         std::vector<std::byte> short_bytes(out.size() - 1);
-        auto const refused_bytes = cbor::encode(root, std::span<std::byte>(short_bytes));
+        auto const refused_bytes = cbor::encode(std::span<std::byte>(short_bytes), root);
         require(!refused_bytes && refused_bytes.error() == cbor::error::no_buffer_space);
     }
     string_writer w;
-    require(cbor::encode(root, w) == out.size() && w.encoded == out);
+    require(cbor::encode(w, root) == out.size() && w.encoded == out);
 }
 
 // encode of the decoded tree writes the library's own form (RFC 8949 2: the same value, not the same bytes). The
@@ -66,7 +66,7 @@ inline void tree_encode(std::string_view const input)
     auto const end = cbor::item_size(input);
     require(end.has_value());
     std::string out;
-    auto const written = cbor::encode(**tree, out);
+    auto const written = cbor::encode(out, **tree);
     require(written.has_value() && *written == out.size());
     auto const value = test::decode_wire_into_value(input.substr(0, *end));
     auto const again = test::decode_wire_into_value(out);
@@ -80,7 +80,7 @@ inline void tree_encode(std::string_view const input)
     auto const tree_again = top_again->to_item();
     require(tree_again.has_value());
     std::string twice;
-    require(cbor::encode(**tree_again, twice).has_value() && twice == out);
+    require(cbor::encode(twice, **tree_again).has_value() && twice == out);
     auto const pieces = cbor::encode_iov(*tree);
     require(pieces.has_value());
     auto const joined = test::join_pieces_into_bytes(**pieces);
@@ -142,7 +142,7 @@ inline void resolving_decode(std::string_view const input)
         }
     if (shared) {
         std::array<char, 1 << 16> bounded;
-        auto const size = cbor::encode_cycles(**resolved, std::span(bounded));
+        auto const size = cbor::encode_cycles(std::span(bounded), **resolved);
         if (!size) {
             require(size.error() == cbor::error::amplification_limit_breach ||
                     size.error() == cbor::error::nesting_depth_exceeded ||
@@ -154,12 +154,12 @@ inline void resolving_decode(std::string_view const input)
         return;
     }
     std::string out;
-    auto const written = cbor::encode(**resolved, out);
+    auto const written = cbor::encode(out, **resolved);
     require(written.has_value());
     if (nodes.size() != plain_nodes)
         return;
     std::string plain_out;
-    require(cbor::encode(**plain, plain_out).has_value() && out == plain_out);
+    require(cbor::encode(plain_out, **plain).has_value() && out == plain_out);
 }
 
 inline void decode_target(std::string_view const input)

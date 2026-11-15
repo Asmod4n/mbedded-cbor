@@ -32,7 +32,7 @@ class bisimilarity
     static std::string bytes_of(cbor::item const &i)
     {
         std::string out;
-        if (!cbor::encode(i, out))
+        if (!cbor::encode(out, i))
             return {};
         return out;
     }

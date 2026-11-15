@@ -215,7 +215,7 @@ TEST_CASE("RFC 9277: the label of a Labeled CBOR Sequence is the first element a
     auto const tree = cbor::decode(label);
     REQUIRE(tree.has_value());
     std::string again;
-    REQUIRE(cbor::encode(**tree, again).has_value());
+    REQUIRE(cbor::encode(again, **tree).has_value());
     CHECK_EQ(again, label);
     auto const file = std::make_shared<std::string const>(label + "\x00\x08\x0f"s);
     std::vector<std::string_view> elements;

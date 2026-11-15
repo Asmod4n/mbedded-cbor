@@ -99,7 +99,7 @@ void encode_car(benchmark::State &state)
         if constexpr (Span) {
             std::span<char> rest(spans);
             for (std::size_t i = 0; i < count; ++i) {
-                auto n = Codec<car>::encode(sample_car, rest);
+                auto n = Codec<car>::encode(rest, sample_car);
                 benchmark::DoNotOptimize(n);
                 rest = rest.subspan(*n);
             }
@@ -107,7 +107,7 @@ void encode_car(benchmark::State &state)
         } else {
             for (std::size_t i = 0; i < count; ++i) {
                 out.clear();
-                auto n = Codec<car>::encode(sample_car, out);
+                auto n = Codec<car>::encode(out, sample_car);
                 benchmark::DoNotOptimize(n);
             }
             benchmark::DoNotOptimize(out.data());
@@ -182,13 +182,13 @@ void heads_encode_large(benchmark::State &state)
         message += "\x68" "abcdefgh"sv;
     auto const tree = cbor::decode(message);
     std::string out;
-    if (!tree || !cbor::encode(**tree, out) || out != message) {
+    if (!tree || !cbor::encode(out, **tree) || out != message) {
         state.SkipWithError("cbor::encode does not give the large message back");
         return;
     }
     for (auto _ : state) {
         out.clear();
-        auto n = cbor::encode(**tree, out);
+        auto n = cbor::encode(out, **tree);
         benchmark::DoNotOptimize(n);
         benchmark::DoNotOptimize(out.data());
     }

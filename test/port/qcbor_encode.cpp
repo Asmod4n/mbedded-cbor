@@ -217,7 +217,7 @@ TEST_CASE("qcbor EncodeRawTest: two encoded items inserted into an array keep th
     for (std::string const &raw : {five_arrays, expected_encoded_ints}) {
         auto const tree = cbor::decode(raw);
         REQUIRE(tree.has_value());
-        CHECK(cbor::encode(**tree, out) == raw.size());
+        CHECK(cbor::encode(out, **tree) == raw.size());
     }
     CHECK_EQ(test::hexlify(out), test::hexlify(as_string({0x82}) + five_arrays + expected_encoded_ints));
 }

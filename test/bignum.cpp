@@ -101,7 +101,7 @@ TEST_CASE("bignum: encode takes a deep tagged bignum that decode gives")
     auto const ok = test::make_lazy_from_copy(shallow)->to_item();
     REQUIRE(ok.has_value());
     std::string again;
-    REQUIRE(cbor::encode(**ok, again).has_value());
+    REQUIRE(cbor::encode(again, **ok).has_value());
     CHECK_EQ(again, shallow);
 }
 
@@ -232,7 +232,7 @@ TEST_CASE("bignum: tag 28 around a bignum that fits is a tag over the integer")
     CHECK_EQ(*l->at(1)->type(), cbor::type::tag);
     CHECK_EQ(*l->at(1)->get<std::int64_t>(), 0);
     std::string again;
-    REQUIRE(cbor::encode(**tree, again).has_value());
+    REQUIRE(cbor::encode(again, **tree).has_value());
     CHECK_EQ(again, "\x82\xd8\x1c\x01\xd8\x1d\x00"s);
 }
 

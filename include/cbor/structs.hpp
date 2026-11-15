@@ -1535,8 +1535,8 @@ public:
      * @brief Writes @p value as one CBOR item in preferred serialization, into a new `std::string`.
      *
      * A struct is a map, and its keys come in the order of RFC 8949 4.2.1.
-     * The second form appends to `target` and returns the count of bytes that it appended.
-     * `target` is a `std::string`, a container of `char`, a `std::span<char>` or a writer.
+     * The second form appends to `out` and returns the count of bytes that it appended.
+     * `out` is a `std::string`, a container of `char`, a `std::span<char>` or a writer.
      * The function writes no shared value (tag 28, tag 29).
      * A type that `structs` does not take does not compile.
      *
@@ -1572,8 +1572,9 @@ public:
     }
 
     /**
-     * @brief Appends @p value as one CBOR item in preferred serialization to @p target.
-     * @param target a `std::string`, a container of `char`, a `std::span<char>` or a writer
+     * @brief Appends @p value as one CBOR item in preferred serialization to @p out.
+     * @param out a `std::string`, a container of `char`, a `std::span<char>` or a writer. A `T` that is itself such
+     * a type has only the form that returns a new `std::string`.
      * @return the count of bytes that it appended
      * @retval no_buffer_space a `std::span<char>` that is too small for the bytes, or the writer gives this error
      * @retval value_too_large the size of the bytes does not fit in `std::size_t`, or the writer gives this error
@@ -1583,7 +1584,7 @@ public:
     template <class Target>
         requires(detail::encoding::is_target_v<std::remove_reference_t<Target>> &&
                  !detail::encoding::is_target_v<T>)
-    CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(T const &value, Target &&target)
+    CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(Target &&out, T const &value)
     {
         using U = std::remove_cvref_t<Target>;
         auto const counted = detail::generic::generic_size(value);
@@ -1596,20 +1597,19 @@ public:
         std::size_t const size = *counted;
         if constexpr (detail::encoding::byte_container<U> &&
                              requires { requires std::same_as<std::ranges::range_value_t<U>, char>; }) {
-            std::size_t const at = std::ranges::size(target);
+            std::size_t const at = std::ranges::size(out);
             auto const total = detail::validity::checked_add(at, padded);
             if (!total) [[unlikely]]
                 return std::unexpected(detail::validity::writer_error(total.error()));
-            target.resize(*total);
-            auto const written = detail::generic::write_generic(std::span<char>(target), at, value);
-            target.resize(written ? at + size : at);
+            out.resize(*total);
+            auto const written = detail::generic::write_generic(std::span<char>(out), at, value);
+            out.resize(written ? at + size : at);
             if (!written) [[unlikely]]
                 return std::unexpected(written.error());
             return size;
-        } else if constexpr (!detail::encoding::byte_container<U> && requires { std::span<char>(target); }) {
-            std::span<char> const out(target);
-            if (detail::validity::bytes_fit(size, out.size())) {
-                auto const written = detail::generic::write_generic(out.first(size), 0, value);
+        } else if constexpr (!detail::encoding::byte_container<U> && requires { std::span<char>(out); }) {
+            if (detail::validity::bytes_fit(size, std::span<char>(out).size())) {
+                auto const written = detail::generic::write_generic(std::span<char>(out).first(size), 0, value);
                 if (!written) [[unlikely]]
                     return std::unexpected(written.error());
                 return size;
@@ -1620,7 +1620,7 @@ public:
         if (!written) [[unlikely]]
             return std::unexpected(written.error());
         encoded.resize(*written);
-        decltype(auto) message = detail::encoding::message_of(target, encoded.size());
+        decltype(auto) message = detail::encoding::message_of(out, encoded.size());
         if (auto const r = message.append(encoded); !r) [[unlikely]]
             return std::unexpected(detail::validity::writer_error(r.error()));
         if (auto const r = message.done(encoded.size()); !r) [[unlikely]]

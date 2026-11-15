@@ -212,18 +212,18 @@ TEST_CASE("doc advanced runtime: encode")
     auto const decoded = cbor::decode("\x82\x01\x02"sv);
     REQUIRE(decoded.has_value());
     std::string appended = "\x00"s;
-    REQUIRE(cbor::encode(**decoded, appended).has_value());
+    REQUIRE(cbor::encode(appended, **decoded).has_value());
     CHECK_EQ(appended, "\x00\x82\x01\x02"s);
     std::vector<std::byte> bytes;
-    REQUIRE(cbor::encode(**decoded, bytes).has_value());
+    REQUIRE(cbor::encode(bytes, **decoded).has_value());
     CHECK_EQ(bytes.size(), 3u);
     std::array<char, 3> fixed{};
-    REQUIRE(cbor::encode(**decoded, std::span<char>(fixed)).has_value());
+    REQUIRE(cbor::encode(std::span<char>(fixed), **decoded).has_value());
     CHECK_EQ(std::string(fixed.data(), fixed.size()), "\x82\x01\x02"s);
     std::array<char, 2> small{};
-    CHECK_EQ(cbor::encode(**decoded, std::span<char>(small)).error(), error::no_buffer_space);
+    CHECK_EQ(cbor::encode(std::span<char>(small), **decoded).error(), error::no_buffer_space);
     string_writer w;
-    REQUIRE(cbor::encode(**decoded, w).has_value());
+    REQUIRE(cbor::encode(w, **decoded).has_value());
     CHECK_EQ(w.encoded, "\x82\x01\x02"s);
     std::string const cycle = "\xd8\x1c\xc6\xd8\x1d\x00"s;
     auto const tagged = *test::make_lazy_from_copy(cycle)->to_item();
@@ -235,7 +235,7 @@ TEST_CASE("doc advanced runtime: encode")
     std::string const own = wire;
     std::string again;
     auto const tree = test::make_lazy_from_copy(wire)->to_item();
-    CHECK_EQ(cbor::encode(**tree, again), own.size());
+    CHECK_EQ(cbor::encode(again, **tree), own.size());
     CHECK_EQ(again, own);
     CHECK(same_value(again, wire));
 }
@@ -249,7 +249,7 @@ TEST_CASE("doc advanced runtime: a NaN keeps its bits")
         auto const tree = cbor::decode(wire);
         REQUIRE(tree.has_value());
         std::string again;
-        REQUIRE(cbor::encode(**tree, again).has_value());
+        REQUIRE(cbor::encode(again, **tree).has_value());
         CHECK_EQ(again, wire);
     }
 }
@@ -311,14 +311,14 @@ TEST_CASE("doc advanced runtime: tags 28 and 29")
     CHECK_EQ(cbor::decode("\x81\xd8\x1d\x00"sv).error(), error::sharedref_index_not_marked);
     CHECK_EQ(cbor::decode("\xd8\x1c\xd8\x1d\x00"sv).error(), error::sharedref_not_defined);
     std::string out;
-    CHECK_EQ(cbor::encode(**tree, out).error(), error::unsupported_value);
+    CHECK_EQ(cbor::encode(out, **tree).error(), error::unsupported_value);
     std::string shared;
-    CHECK_EQ(cbor::encode_cycles(**tree, shared), 3u);
+    CHECK_EQ(cbor::encode_cycles(shared, **tree), 3u);
     CHECK_EQ(shared, "\x82\x01\x01"s);
     auto const cyclic = cbor::decode("\xd8\x1c\x81\xd8\x1d\x00"sv);
     REQUIRE(cyclic.has_value());
     std::string cycle;
-    CHECK_EQ(cbor::encode_cycles(**cyclic, cycle), 6u);
+    CHECK_EQ(cbor::encode_cycles(cycle, **cyclic), 6u);
     CHECK_EQ(cycle, "\xd8\x1c\x81\xd8\x1d\x00"s);
     auto const l = *test::make_lazy_from_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
     CHECK_EQ(l.at(1)->type(), cbor::type::tag);

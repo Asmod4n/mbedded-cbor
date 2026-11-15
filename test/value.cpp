@@ -114,7 +114,7 @@ TEST_CASE("depth: encode of a deep tree")
     auto const fits = test::make_lazy_from_copy(encode_in_preferred_form(deep))->to_item();
     REQUIRE(fits.has_value());
     std::string w;
-    CHECK(cbor::encode(**fits, w).has_value());
+    CHECK(cbor::encode(w, **fits).has_value());
     CHECK_EQ(w, encode_in_preferred_form(deep));
 }
 
@@ -139,10 +139,10 @@ TEST_CASE("encode: a span of exact size holds the top-level item, one byte less 
         auto const tree = cbor::decode(wire);
         REQUIRE(tree.has_value());
         std::vector<char> exact(wire.size());
-        CHECK(cbor::encode(**tree, std::span<char>(exact)).has_value());
+        CHECK(cbor::encode(std::span<char>(exact), **tree).has_value());
         CHECK_EQ(std::string_view(exact.data(), exact.size()), wire);
         std::vector<char> short_by_one(wire.size() - 1);
-        CHECK_EQ(cbor::encode(**tree, std::span<char>(short_by_one)).error(), cbor::error{cbor::error::no_buffer_space});
+        CHECK_EQ(cbor::encode(std::span<char>(short_by_one), **tree).error(), cbor::error{cbor::error::no_buffer_space});
     }
 }
 

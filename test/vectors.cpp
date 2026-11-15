@@ -65,7 +65,7 @@ std::string encode_decoded_wire(std::string_view const wire)
     auto const tree = cbor::decode(wire);
     REQUIRE(tree.has_value());
     std::string out;
-    REQUIRE(cbor::encode(**tree, out).has_value());
+    REQUIRE(cbor::encode(out, **tree).has_value());
     return out;
 }
 
@@ -140,7 +140,7 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
         }
         cbor::item const &it = **decoded_item;
         std::string again;
-        REQUIRE(cbor::encode(it, again).has_value());
+        REQUIRE(cbor::encode(again, it).has_value());
         CHECK_EQ(again, wire);
         std::uint8_t const info = initial & 0x1f;
         std::size_t const argument_bytes = info < 24 ? 0 : std::size_t{1} << (info - 24);
@@ -182,7 +182,7 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
                 break;
             }
             std::string content;
-            REQUIRE(cbor::encode(*read_tag_content_of_item(it), content).has_value());
+            REQUIRE(cbor::encode(content, *read_tag_content_of_item(it)).has_value());
             CHECK_EQ(static_cast<std::uint8_t>(content.front()) >> 5, static_cast<std::uint8_t>(after_head.front()) >> 5);
             break;
         }
@@ -527,12 +527,12 @@ wg_count wg_good_check(wg_vector const &v)
     auto const tree = top_level->to_item();
     REQUIRE(tree.has_value());
     std::string again;
-    REQUIRE(cbor::encode(**tree, again).has_value());
+    REQUIRE(cbor::encode(again, **tree).has_value());
     CHECK(same_value(again, v.encoded));
     std::string twice;
     auto const again_lazy = test::make_lazy_from_copy(again);
     auto const again_tree = again_lazy->to_item();
-    REQUIRE(cbor::encode(**again_tree, twice).has_value());
+    REQUIRE(cbor::encode(twice, **again_tree).has_value());
     CHECK_EQ(twice, again);
 
     auto const text = cbor::diagnostic_notation(v.encoded);

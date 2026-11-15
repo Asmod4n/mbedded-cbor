@@ -39,7 +39,7 @@ void encode(benchmark::State &state)
         return;
     }
     std::string written;
-    if (!cbor::encode(**sample, written) || written != message) {
+    if (!cbor::encode(written, **sample) || written != message) {
         state.SkipWithError("cbor::encode does not give the bytes of the message back");
         return;
     }
@@ -49,14 +49,14 @@ void encode(benchmark::State &state)
         if constexpr (Span) {
             std::span<char> rest(out);
             for (std::size_t i = 0; i < count; ++i) {
-                auto n = cbor::encode(**sample, rest);
+                auto n = cbor::encode(rest, **sample);
                 benchmark::DoNotOptimize(n);
                 rest = rest.subspan(*n);
             }
         } else {
             out.clear();
             for (std::size_t i = 0; i < count; ++i) {
-                auto n = cbor::encode(**sample, out);
+                auto n = cbor::encode(out, **sample);
                 benchmark::DoNotOptimize(n);
             }
         }

@@ -84,19 +84,19 @@ TEST_CASE("description apart: every target of encode writes the same bytes")
 {
     std::string const data = encode_data_apart(sample_everything);
     std::string appended = "ab";
-    REQUIRE_EQ(cbor::static_dictionary<everything>::encode(sample_everything, appended), data.size());
+    REQUIRE_EQ(cbor::static_dictionary<everything>::encode(appended, sample_everything), data.size());
     CHECK_EQ(appended, "ab" + data);
     std::vector<char> chars;
-    REQUIRE_EQ(cbor::static_dictionary<everything>::encode(sample_everything, chars), data.size());
+    REQUIRE_EQ(cbor::static_dictionary<everything>::encode(chars, sample_everything), data.size());
     CHECK(std::ranges::equal(chars, data));
     std::vector<char> room(data.size() + 64);
-    REQUIRE_EQ(cbor::static_dictionary<everything>::encode(sample_everything, std::span<char>(room)), data.size());
+    REQUIRE_EQ(cbor::static_dictionary<everything>::encode(std::span<char>(room), sample_everything), data.size());
     CHECK(std::ranges::equal(std::span(room).first(data.size()), data));
     std::vector<char> exact(data.size());
-    REQUIRE_EQ(cbor::static_dictionary<everything>::encode(sample_everything, std::span<char>(exact)), data.size());
+    REQUIRE_EQ(cbor::static_dictionary<everything>::encode(std::span<char>(exact), sample_everything), data.size());
     CHECK(std::ranges::equal(exact, data));
     string_writer w;
-    REQUIRE_EQ(cbor::static_dictionary<everything>::encode(sample_everything, w), data.size());
+    REQUIRE_EQ(cbor::static_dictionary<everything>::encode(w, sample_everything), data.size());
     CHECK_EQ(w.encoded, data);
 }
 

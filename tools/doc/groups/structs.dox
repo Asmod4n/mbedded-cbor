@@ -25,11 +25,12 @@ and the pkg-config file add it to the include path.
 `cbor::structs<T>::encode(value)` gives `std::expected<std::string,
 cbor::error>`, the bytes of the item.
 
-`cbor::structs<T>::encode(value, target)` appends the bytes to `target`. It
+`cbor::structs<T>::encode(out, value)` appends the bytes to `out`. It
 gives `std::expected<std::size_t, cbor::error>`, the count of bytes that it
-appended. The target is a `std::string`, a container of `char`, a
-`std::span<char>`, or a writer of the program. A `std::span<char>` that is
-too small for the bytes gives `no_buffer_space`.
+appended. `out` is a `std::string`, a container of `char`, a
+`std::span<char>`, or a writer of the program. A `T` that is itself such a
+type has only the form `encode(value)`. A `std::span<char>` that is too
+small for the bytes gives `no_buffer_space`.
 
 The keys of a struct come in the order of RFC 8949 section 4.2.1. The
 functions write no shared value (tag 28 and tag 29).

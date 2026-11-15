@@ -150,7 +150,7 @@ TEST_CASE("doc advanced schema: encode and decode")
     CHECK_EQ((*back)->tires[1].diameter, 18u);
     CHECK_FALSE((*back)->note.has_value());
     std::string out = "\x00"s;
-    auto const appended = cbor::schema<car>::encode(sample, out);
+    auto const appended = cbor::schema<car>::encode(out, sample);
     REQUIRE(appended.has_value());
     CHECK_EQ(*appended, bytes->size());
     CHECK_EQ(out.substr(1), *bytes);

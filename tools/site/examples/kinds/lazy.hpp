@@ -21,10 +21,10 @@ inline std::string notation_of(std::string_view const encoded)
 inline std::string item_notation(cbor::item const &node)
 {
     std::string encoded;
-    auto written = cbor::encode(node, encoded);
+    auto written = cbor::encode(encoded, node);
     if (!written && written.error() == cbor::error::unsupported_value) {
         encoded.clear();
-        written = cbor::encode_cycles(node, encoded);
+        written = cbor::encode_cycles(encoded, node);
     }
     if (!written) [[unlikely]]
         return kind<cbor::error>::text(written.error());

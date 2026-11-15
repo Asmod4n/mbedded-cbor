@@ -299,17 +299,17 @@ TEST_CASE("structs: a CTAP2 getAssertion response")
     CHECK_FALSE((*r)->user.has_value());
     CHECK_EQ(*cbor::structs<get_assertion_response>::encode(**r), message);
     std::array<char, 64> room{};
-    auto const placed = cbor::structs<get_assertion_response>::encode(**r, std::span(room));
+    auto const placed = cbor::structs<get_assertion_response>::encode(std::span(room), **r);
     REQUIRE(placed.has_value());
     CHECK_EQ(std::string_view(room.data(), *placed), message);
     std::vector<char> tight(message.size());
-    auto const exact = cbor::structs<get_assertion_response>::encode(**r, std::span(tight));
+    auto const exact = cbor::structs<get_assertion_response>::encode(std::span(tight), **r);
     REQUIRE(exact.has_value());
     CHECK_EQ(std::string_view(tight.data(), *exact), message);
     std::array<char, 8> small{};
-    CHECK_EQ(cbor::structs<get_assertion_response>::encode(**r, std::span(small)).error(), cbor::error::no_buffer_space);
+    CHECK_EQ(cbor::structs<get_assertion_response>::encode(std::span(small), **r).error(), cbor::error::no_buffer_space);
     std::string text = "x";
-    CHECK_EQ(*cbor::structs<get_assertion_response>::encode(**r, text), message.size());
+    CHECK_EQ(*cbor::structs<get_assertion_response>::encode(text, **r), message.size());
     CHECK_EQ(text, "x" + message);
 }
 
@@ -1243,7 +1243,7 @@ TEST_CASE("encode: a span keeps every byte behind the struct")
     REQUIRE(expected.has_value());
     std::array<char, 64> buffer;
     buffer.fill(sentinel);
-    auto const n = cbor::structs<pair_ab>::encode(value, std::span<char>(buffer));
+    auto const n = cbor::structs<pair_ab>::encode(std::span<char>(buffer), value);
     REQUIRE(n.has_value());
     CHECK_EQ(std::string_view(buffer.data(), *n), *expected);
     CHECK(std::ranges::all_of(std::span(buffer).subspan(*n), [](char const c) { return c == sentinel; }));
@@ -1253,6 +1253,6 @@ TEST_CASE("encode: a span keeps every byte behind the struct")
 // std::string::size gives it. The expectation comes from that decision, not from the header.
 TEST_CASE("structs: the count of bytes appended is a std::size_t")
 {
-    CHECK((std::is_same_v<decltype(cbor::structs<pair_ab>::encode(std::declval<pair_ab const &>(), std::declval<std::string &>())),
+    CHECK((std::is_same_v<decltype(cbor::structs<pair_ab>::encode(std::declval<std::string &>(), std::declval<pair_ab const &>())),
                           std::expected<std::size_t, cbor::error>>));
 }

@@ -65,7 +65,7 @@ void reencode(std::string_view const name, std::string_view const section, std::
         return;
     }
     std::string a;
-    auto const size = cbor::encode(**item, a);
+    auto const size = cbor::encode(a, **item);
     case_print(std::string("encode/") + std::string(name), section, size ? test::hexlify(a) : message_of(size.error()),
                test::hexlify(input));
 }

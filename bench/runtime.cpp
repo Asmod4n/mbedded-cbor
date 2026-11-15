@@ -1012,7 +1012,7 @@ static std::uint64_t op()
     return cbor_encoder_get_buffer_size(&e, tcbuf.data());
 #elif defined(ARM_MB_TREE_ENCODE)
     std::string out;
-    if (!cbor::encode(**decoded, out))
+    if (!cbor::encode(out, **decoded))
         std::abort();
     benchmark::DoNotOptimize(out.data());
     benchmark::ClobberMemory();

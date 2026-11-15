@@ -61,7 +61,7 @@ std::string nodes_written(cbor::nodelist const &nodes)
         if (!decoded) [[unlikely]]
             return error_named(decoded.error());
         std::string bytes;
-        if (auto const written = cbor::encode(**decoded, bytes); !written) [[unlikely]]
+        if (auto const written = cbor::encode(bytes, **decoded); !written) [[unlikely]]
             return error_named(written.error());
         auto const edn = cbor::diagnostic_notation(bytes);
         if (!edn) [[unlikely]]

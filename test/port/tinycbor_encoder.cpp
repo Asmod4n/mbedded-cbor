@@ -85,7 +85,7 @@ std::string encode_again(std::string const &bytes)
     if (!tree)
         return "error: decode: " + make_error_text(tree.error());
     std::string out;
-    if (auto const r = cbor::encode(**tree, out); !r)
+    if (auto const r = cbor::encode(out, **tree); !r)
         return "error: encode: " + make_error_text(r.error());
     return out;
 }
@@ -486,11 +486,11 @@ TEST_CASE("tinycbor encoder: a writer")
         REQUIRE(tree.has_value());
         std::string out;
         int calls = 0;
-        CHECK_EQ(make_outcome_text(cbor::encode(**tree, counting_target{&out, &calls, false})), make_error_text(no_error));
+        CHECK_EQ(make_outcome_text(cbor::encode(counting_target{&out, &calls, false}, **tree)), make_error_text(no_error));
         CHECK_EQ(out, r.output);
         std::string unused;
         int failed_calls = 0;
-        CHECK_EQ(make_outcome_text(cbor::encode(**tree, counting_target{&unused, &failed_calls, true})),
+        CHECK_EQ(make_outcome_text(cbor::encode(counting_target{&unused, &failed_calls, true}, **tree)),
                  make_error_text(error::io_error));
         CHECK_EQ(failed_calls, 1);
     }
@@ -507,9 +507,9 @@ TEST_CASE("tinycbor encoder: a buffer that is too short")
         std::vector<char> buffer(r.output.size());
         for (std::size_t length = 0; length < r.output.size(); ++length) {
             CAPTURE(length);
-            CHECK_EQ(make_outcome_text(cbor::encode(**tree, std::span<char>(buffer).first(length))),
+            CHECK_EQ(make_outcome_text(cbor::encode(std::span<char>(buffer).first(length), **tree)),
                      make_error_text(error::no_buffer_space));
         }
-        CHECK_EQ(cbor::encode(**tree, std::span<char>(buffer)).value_or(0), r.output.size());
+        CHECK_EQ(cbor::encode(std::span<char>(buffer), **tree).value_or(0), r.output.size());
     }
 }

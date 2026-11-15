@@ -202,7 +202,7 @@ public:
         requires(Target &target, std::size_t const hint) { target.allocate(hint).done(hint); };
 
     template <bool Cycles, class Target>
-    static std::expected<std::size_t, error> encode_into(item const &root, Target &&target);
+    static std::expected<std::size_t, error> encode_into(Target &&target, item const &root);
 
 private:
     template <class Target>
@@ -274,9 +274,9 @@ private:
  * A float keeps its width.
  * The call walks the tree once and writes no tag 28 or 29 of its own.
  * A tag 28 and a tag 29 of a tree of cbor::lazy::to_item() are written as they are.
- * A `shared_reference` gives `unsupported_value`; the target then holds the bytes written before it.
+ * A `shared_reference` gives `unsupported_value`; `out` then holds the bytes written before it.
  * cbor::encode_cycles() writes it with tags 28 and 29.
- * The target is one of these:
+ * `out` is one of these:
  * - a container of bytes, for example `std::string`: the call appends;
  * - a `std::span` of bytes: the call writes into it and allocates nothing;
  * - an object with `allocate(std::size_t)`, which gives a writer with `append(std::string_view)` and
@@ -288,7 +288,7 @@ private:
  * result: owning item of [1, "a"]
  * call: std::string out;
  * result: ""
- * call: cbor::encode(**tree, out)
+ * call: cbor::encode(out, **tree)
  * result: 4
  * call: out
  * result: 4 bytes: 82 01 61 61
@@ -308,7 +308,7 @@ private:
  */
 template <class Target>
     requires detail::encoding::is_target_v<std::remove_reference_t<Target>>
-std::expected<std::size_t, error> encode(item const &root, Target &&target);
+std::expected<std::size_t, error> encode(Target &&out, item const &root);
 
 /**
  * @brief Writes the tree at `root` with tags 28 and 29 for each cycle and gives the count of bytes written.
@@ -326,7 +326,7 @@ std::expected<std::size_t, error> encode(item const &root, Target &&target);
  * result: owning item of 28([29(0)])
  * call: std::string out;
  * result: ""
- * call: cbor::encode_cycles(**tree, out)
+ * call: cbor::encode_cycles(out, **tree)
  * result: 6
  * call: out
  * result: 6 bytes: d8 1c 81 d8 1d 00
@@ -343,7 +343,7 @@ std::expected<std::size_t, error> encode(item const &root, Target &&target);
  */
 template <class Target>
     requires detail::encoding::is_target_v<std::remove_reference_t<Target>>
-std::expected<std::size_t, error> encode_cycles(item const &root, Target &&target);
+std::expected<std::size_t, error> encode_cycles(Target &&out, item const &root);
 
 template <class Writer>
 struct detail::encoding::binary_writer {
@@ -877,7 +877,7 @@ std::expected<void, error> detail::encoding::encode_tree(binary_writer<Writer> &
 }
 
 template <bool Cycles, class Target>
-std::expected<std::size_t, error> detail::encoding::encode_into(item const &root, Target &&target)
+std::expected<std::size_t, error> detail::encoding::encode_into(Target &&target, item const &root)
 {
     decltype(auto) message = message_of(target, 0);
     binary_writer<std::remove_reference_t<decltype(message)>> out(message);
@@ -892,16 +892,16 @@ std::expected<std::size_t, error> detail::encoding::encode_into(item const &root
 
 template <class Target>
     requires detail::encoding::is_target_v<std::remove_reference_t<Target>>
-std::expected<std::size_t, error> encode(item const &root, Target &&target)
+std::expected<std::size_t, error> encode(Target &&out, item const &root)
 {
-    return detail::encoding::encode_into<false>(root, std::forward<Target>(target));
+    return detail::encoding::encode_into<false>(std::forward<Target>(out), root);
 }
 
 template <class Target>
     requires detail::encoding::is_target_v<std::remove_reference_t<Target>>
-std::expected<std::size_t, error> encode_cycles(item const &root, Target &&target)
+std::expected<std::size_t, error> encode_cycles(Target &&out, item const &root)
 {
-    return detail::encoding::encode_into<true>(root, std::forward<Target>(target));
+    return detail::encoding::encode_into<true>(std::forward<Target>(out), root);
 }
 
 #if __has_include(<sys/uio.h>)

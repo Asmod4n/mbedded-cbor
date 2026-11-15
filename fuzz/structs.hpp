@@ -62,20 +62,20 @@ template <class T>
 void encode_targets(T const &value, std::string const &expected)
 {
     std::vector<char> chars;
-    require(cbor::structs<T>::encode(value, chars) == expected.size() && std::ranges::equal(chars, expected));
+    require(cbor::structs<T>::encode(chars, value) == expected.size() && std::ranges::equal(chars, expected));
     std::vector<char> exact(expected.size());
-    require(cbor::structs<T>::encode(value, std::span<char>(exact)) == expected.size() &&
+    require(cbor::structs<T>::encode(std::span<char>(exact), value) == expected.size() &&
             std::ranges::equal(exact, expected));
     std::vector<char> longer(expected.size() + 1);
-    require(cbor::structs<T>::encode(value, std::span<char>(longer)) == expected.size() &&
+    require(cbor::structs<T>::encode(std::span<char>(longer), value) == expected.size() &&
             std::ranges::equal(std::span(longer).first(expected.size()), expected));
     if (!expected.empty()) {
         std::vector<char> short_by_one(expected.size() - 1);
-        auto const refused = cbor::structs<T>::encode(value, std::span<char>(short_by_one));
+        auto const refused = cbor::structs<T>::encode(std::span<char>(short_by_one), value);
         require(!refused && refused.error() == cbor::error::no_buffer_space);
     }
     string_writer w;
-    require(cbor::structs<T>::encode(value, w) == expected.size() && w.encoded == expected);
+    require(cbor::structs<T>::encode(w, value) == expected.size() && w.encoded == expected);
 }
 
 // cbor::structs reads any CBOR that has the shape of the struct. What it reads, it writes back, and the written bytes

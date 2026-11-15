@@ -730,19 +730,19 @@ void round_trip(source &in)
     T native{};
     fill(native, in, 0);
     string_writer w;
-    auto const written = cbor::schema<T>::encode(native, w);
+    auto const written = cbor::schema<T>::encode(w, native);
     require(written.has_value());
     auto const whole = cbor::schema<T>::encode(native);
     require(whole.has_value() && *whole == w.encoded && *written == w.encoded.size());
     std::string prefixed = in.string();
     std::size_t const before = prefixed.size();
-    require(cbor::schema<T>::encode(native, prefixed).has_value() && std::string_view(prefixed).substr(before) == w.encoded);
+    require(cbor::schema<T>::encode(prefixed, native).has_value() && std::string_view(prefixed).substr(before) == w.encoded);
     std::vector<char> chars(in.byte() % 4);
     std::size_t const used = chars.size();
-    require(cbor::schema<T>::encode(native, chars).has_value() &&
+    require(cbor::schema<T>::encode(chars, native).has_value() &&
             std::string_view(std::span<char const>(chars)).substr(used) == w.encoded);
     std::vector<char> room(in.number() % (w.encoded.size() + 16));
-    auto const placed = cbor::schema<T>::encode(native, std::span(room));
+    auto const placed = cbor::schema<T>::encode(std::span(room), native);
     require(placed.has_value() == (room.size() >= w.encoded.size()));
     if (placed)
         require(std::string_view(std::span<char const>(room).first(*placed)) == w.encoded);

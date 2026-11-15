@@ -291,7 +291,7 @@ TEST_CASE("view: each count of mapped bytes is a std::size_t")
 {
     CHECK((std::is_same_v<decltype(std::declval<cbor::typed_array_view<double> const &>().size()), std::size_t>));
     CHECK((std::is_same_v<decltype(form<numbers>::fixed_size()), std::size_t>));
-    CHECK((std::is_same_v<decltype(form<numbers>::encode(std::declval<numbers const &>(), std::declval<std::string &>())),
+    CHECK((std::is_same_v<decltype(form<numbers>::encode(std::declval<std::string &>(), std::declval<numbers const &>())),
                           std::expected<std::size_t, error>>));
     auto const root = form<everything>::adopt(encode_with_schema(sample_everything));
     REQUIRE(root.has_value());

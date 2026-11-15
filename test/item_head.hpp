@@ -25,7 +25,7 @@ using item_pairs = std::ranges::chunk_view<std::span<cbor::item const>>;
 inline std::uint64_t read_argument_from_encoding(cbor::item const &node)
 {
     std::string head;
-    REQUIRE(cbor::encode(node, head).has_value());
+    REQUIRE(cbor::encode(head, node).has_value());
     std::uint8_t const info = static_cast<std::uint8_t>(head.front()) & 0x1f;
     if (info < 24)
         return info;

@@ -80,7 +80,7 @@ TEST_CASE("doc reference schema: encode")
     // [encode]
     auto const bytes = cbor::schema<tire>::encode(tire{17, 2.5f});
     std::string out = "x";
-    auto const n = cbor::schema<tire>::encode(tire{17, 2.5f}, out);  // out.size() == 1 + *n
+    auto const n = cbor::schema<tire>::encode(out, tire{17, 2.5f});  // out.size() == 1 + *n
     // [encode]
     REQUIRE(bytes.has_value());
     CHECK_EQ(cbor::schema<tire>::at_path<"$.diameter">(*bytes), 17);
@@ -89,7 +89,7 @@ TEST_CASE("doc reference schema: encode")
     CHECK_EQ(out.substr(1), *bytes);
 
     std::array<char, 4> small{};
-    CHECK_EQ(cbor::schema<tire>::encode(tire{17, 2.5f}, std::span<char>(small)).error(), error::no_buffer_space);
+    CHECK_EQ(cbor::schema<tire>::encode(std::span<char>(small), tire{17, 2.5f}).error(), error::no_buffer_space);
 }
 
 // schema.hpp, snippet decode: a moved string gives the whole struct. A message of another struct gives incorrect_type, a

@@ -95,8 +95,8 @@ direct base class, and it is the same base for each of them.
 @section schema_write WRITE A MESSAGE
 
 - `encode(value)` gives a `std::expected<std::string, cbor::error>`.
-- `encode(value, target)` appends the message to `target`. It gives the
-  count of bytes that it appended. `target` is a `std::string`, a
+- `encode(out, value)` appends the message to `out`. It gives the
+  count of bytes that it appended. `out` is a `std::string`, a
   container of `char`, a `std::span<char>` or a message writer.
 - A `std::span<char>` that is shorter than the message gives
   `no_buffer_space`.

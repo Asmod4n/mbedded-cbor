@@ -236,7 +236,7 @@ TEST_CASE("stack: a deep tree of the library ends and encodes on a small stack")
     std::optional<cbor::owning<cbor::item>> clone(std::move(*cloned));
     test::run_on_small_stack([&tree, &clone] {
         std::string out;
-        auto const written = cbor::encode(**tree, out);
+        auto const written = cbor::encode(out, **tree);
         REQUIRE_FALSE(written.has_value());
         CHECK_EQ(written.error(), error::nesting_depth_exceeded);
         tree.reset();

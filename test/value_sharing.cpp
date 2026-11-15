@@ -161,7 +161,7 @@ place content(P const &tagged)
 std::string encoded_of(place const &p)
 {
     std::string out;
-    REQUIRE(cbor::encode(*p.i, out).has_value());
+    REQUIRE(cbor::encode(out, *p.i).has_value());
     return out;
 }
 
@@ -243,7 +243,7 @@ TEST_CASE("tag 28/29: encode of a tree with a cycle ends")
 {
     tree const a = decoded_ref("\xd8\x1c\x81\xd8\x1d\x00"sv);
     std::string out;
-    REQUIRE(cbor::encode(*a, out).has_value());
+    REQUIRE(cbor::encode(out, *a).has_value());
     CHECK_EQ(out, "\xd8\x1c\x81\xd8\x1d\x00"sv);
 }
 
@@ -708,7 +708,7 @@ std::string encoded_again(std::string_view const input)
     auto const decoded = cbor::decode(input);
     REQUIRE(decoded.has_value());
     std::string out;
-    REQUIRE(cbor::encode_cycles(**decoded, out).has_value());
+    REQUIRE(cbor::encode_cycles(out, **decoded).has_value());
     return out;
 }
 
@@ -740,14 +740,14 @@ TEST_CASE("value sharing: cbor::encode writes no tag 28 or 29")
     auto const cyclic = cbor::decode("\xd8\x1c\x81\xd8\x1d\x00"sv);
     REQUIRE(cyclic.has_value());
     std::string out;
-    CHECK_EQ(cbor::encode(**cyclic, out).error(), error::unsupported_value);
+    CHECK_EQ(cbor::encode(out, **cyclic).error(), error::unsupported_value);
 #if __has_include(<sys/uio.h>)
     CHECK_EQ(cbor::encode_iov(**cyclic).error(), error::unsupported_value);
 #endif
     auto const marked = cbor::decode("\x82\xd8\x1c\x01\x02"sv);
     REQUIRE(marked.has_value());
     std::string plain;
-    CHECK_EQ(cbor::encode(**marked, plain), 3u);
+    CHECK_EQ(cbor::encode(plain, **marked), 3u);
     CHECK_EQ(plain, "\x82\x01\x02"s);
 }
 
@@ -812,10 +812,10 @@ TEST_CASE("value sharing: cbor::encode writes each copy and stops at the amplifi
     auto const tree = cbor::decode(shared_test::diamonds_of(levels_past_the_limit));
     REQUIRE(tree.has_value());
     std::string out;
-    CHECK_EQ(cbor::encode_cycles(**tree, out).error(), error::amplification_limit_breach);
+    CHECK_EQ(cbor::encode_cycles(out, **tree).error(), error::amplification_limit_breach);
     CHECK(out.empty());
     std::array<char, 64> span{};
-    CHECK_EQ(cbor::encode_cycles(**tree, std::span(span)).error(), error::amplification_limit_breach);
+    CHECK_EQ(cbor::encode_cycles(std::span(span), **tree).error(), error::amplification_limit_breach);
     CHECK(std::ranges::all_of(span, [](char const c) { return c == 0; }));
 }
 
@@ -854,7 +854,7 @@ TEST_CASE("value sharing: a path through references deeper than the stack gives 
     REQUIRE(tree.has_value());
     CHECK_EQ(test::error_on_small_stack([&tree] {
                  std::string out;
-                 return cbor::encode_cycles(**tree, out);
+                 return cbor::encode_cycles(out, **tree);
              }),
              error::nesting_depth_exceeded);
 }

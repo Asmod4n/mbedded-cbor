@@ -111,7 +111,7 @@ TEST_CASE("doc internals: an item keeps the bits of a NaN")
     auto const tree = test::make_lazy_from_copy(single)->to_item();
     REQUIRE(tree.has_value());
     std::string again;
-    REQUIRE(cbor::encode(**tree, again).has_value());
+    REQUIRE(cbor::encode(again, **tree).has_value());
     CHECK_EQ(again, single);
 }
 

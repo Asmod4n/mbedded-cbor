@@ -113,8 +113,8 @@ namespace doc_advanced_structs
 TEST_CASE("doc advanced structs: encode appends to a target")
 {
     std::string out;
-    CHECK_EQ(cbor::structs<std::uint8_t>::encode(1, out), 1u);
-    CHECK_EQ(cbor::structs<std::uint8_t>::encode(2, out), 1u);
+    CHECK_EQ(cbor::structs<std::uint8_t>::encode(out, 1), 1u);
+    CHECK_EQ(cbor::structs<std::uint8_t>::encode(out, 2), 1u);
     CHECK_EQ(out, "\x01\x02"s);
 }
 

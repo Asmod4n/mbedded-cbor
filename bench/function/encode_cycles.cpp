@@ -30,7 +30,7 @@ std::size_t cold_bytes()
 auto written(cbor::item const &tree, std::string &out)
 {
 #ifdef CYCLES_FORM
-    return cbor::encode_cycles(tree, out);
+    return cbor::encode_cycles(out, tree);
 #else
     return cbor::encode(tree, out, cbor::cycles);
 #endif

@@ -67,12 +67,12 @@ TEST_CASE("doc reference structs: encode a value")
     CHECK_EQ(*bytes, test::encode_in_preferred_form(test::M("age"s, 30, "name"s, "ann"s)));
 }
 
-// structs.hpp, the comment of encode: encode(value, target) appends to the target and returns the count of bytes
+// structs.hpp, the comment of encode: encode(out, value) appends to out and returns the count of bytes
 // that it appended.
 TEST_CASE("doc reference structs: encode appends to a target")
 {
     std::string out = "\x01"s;
-    auto const n = cbor::structs<std::uint8_t>::encode(2, out);
+    auto const n = cbor::structs<std::uint8_t>::encode(out, 2);
     REQUIRE(n.has_value());
     CHECK_EQ(*n, 1u);
     CHECK_EQ(out, "\x01\x02"s);
@@ -82,7 +82,7 @@ TEST_CASE("doc reference structs: encode appends to a target")
 TEST_CASE("doc reference structs: encode into a span that is too small")
 {
     std::array<char, 2> small{};
-    auto const n = cbor::structs<person>::encode(person{"ann", 30}, std::span<char>(small));
+    auto const n = cbor::structs<person>::encode(std::span<char>(small), person{"ann", 30});
     REQUIRE_FALSE(n.has_value());
     CHECK_EQ(n.error(), cbor::error::no_buffer_space);
 }

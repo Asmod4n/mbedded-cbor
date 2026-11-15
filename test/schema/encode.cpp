@@ -125,24 +125,24 @@ TEST_CASE("encode: into a string, a vector, a span and a writer of the caller")
 {
     std::string const expected = *form<garage>::encode(sample_garage);
     std::string text = "x";
-    CHECK_EQ(*form<garage>::encode(sample_garage, text), expected.size());
+    CHECK_EQ(*form<garage>::encode(text, sample_garage), expected.size());
     CHECK_EQ(text, "x" + expected);
     std::vector<std::byte> bytes;
-    REQUIRE(form<garage>::encode(sample_garage, bytes).has_value());
+    REQUIRE(form<garage>::encode(bytes, sample_garage).has_value());
     CHECK_EQ(bytes.size(), expected.size());
     std::array<char, 4096> buffer{};
-    auto const fits = form<garage>::encode(sample_garage, std::span(buffer));
+    auto const fits = form<garage>::encode(std::span(buffer), sample_garage);
     REQUIRE(fits.has_value());
     CHECK_EQ(std::string_view(buffer.data(), *fits), expected);
     std::vector<char> chars{'x'};
-    CHECK_EQ(*form<garage>::encode(sample_garage, chars), expected.size());
+    CHECK_EQ(*form<garage>::encode(chars, sample_garage), expected.size());
     CHECK_EQ(std::string_view(chars.data(), chars.size()), "x" + expected);
     std::vector<char> exact(expected.size());
-    auto const fits_exactly = form<garage>::encode(sample_garage, std::span(exact));
+    auto const fits_exactly = form<garage>::encode(std::span(exact), sample_garage);
     REQUIRE(fits_exactly.has_value());
     CHECK_EQ(std::string_view(exact.data(), *fits_exactly), expected);
     std::array<char, 8> small{};
-    auto const too_small = form<garage>::encode(sample_garage, std::span(small));
+    auto const too_small = form<garage>::encode(std::span(small), sample_garage);
     REQUIRE_FALSE(too_small.has_value());
     CHECK_EQ(too_small.error(), cbor::error::no_buffer_space);
 
@@ -171,7 +171,7 @@ TEST_CASE("encode: into a string, a vector, a span and a writer of the caller")
             return message{*this};
         }
     } writer;
-    REQUIRE(form<garage>::encode(sample_garage, writer).has_value());
+    REQUIRE(form<garage>::encode(writer, sample_garage).has_value());
     CHECK_EQ(writer.sent, expected);
     CHECK_EQ(writer.finished, expected.size());
     CHECK_EQ(writer.hint, expected.size());
@@ -211,7 +211,7 @@ TEST_CASE("encode: into the exact span that a writer allocates")
         std::string const expected = *form<std::remove_cvref_t<decltype(value)>>::encode(value);
         reserving writer;
         writer.store.fill('#');
-        REQUIRE_EQ(*form<std::remove_cvref_t<decltype(value)>>::encode(value, writer), expected.size());
+        REQUIRE_EQ(*form<std::remove_cvref_t<decltype(value)>>::encode(writer, value), expected.size());
         CHECK_EQ(writer.asked, expected.size());
         CHECK_EQ(writer.finished, expected.size());
         CHECK_EQ(std::string_view(writer.store.data(), expected.size()), expected);
@@ -293,7 +293,7 @@ TEST_CASE("encode: a variant that holds no value is a wrong use")
     REQUIRE(h.pet.valueless_by_exception());
     CHECK_THROWS_AS((void)form<home>::encode(h), std::logic_error);
     std::string out;
-    CHECK_THROWS_AS((void)form<home>::encode(h, out), std::logic_error);
+    CHECK_THROWS_AS((void)form<home>::encode(out, h), std::logic_error);
     CHECK(out.empty());
 }
 
@@ -389,7 +389,7 @@ TEST_CASE("encode: a span keeps every byte behind the message")
     constexpr char sentinel = 'Z';
     std::string const expected = *form<garage>::encode(sample_garage);
     std::vector<char> buffer(expected.size() + 64, sentinel);
-    auto const n = form<garage>::encode(sample_garage, std::span<char>(buffer));
+    auto const n = form<garage>::encode(std::span<char>(buffer), sample_garage);
     REQUIRE(n.has_value());
     CHECK_EQ(std::string_view(buffer.data(), *n), expected);
     CHECK(std::ranges::all_of(std::span(buffer).subspan(*n), [](char const c) { return c == sentinel; }));
