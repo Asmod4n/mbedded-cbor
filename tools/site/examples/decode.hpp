@@ -63,7 +63,7 @@ inline result item_type_of(call const &c)
     auto const node = node_of(*c.self);
     if (!node) [[unlikely]]
         return std::unexpected(node.error());
-    return value_of((*node)->type);
+    return value_of((*node)->type());
 }
 
 inline result item_additional_information(call const &c)

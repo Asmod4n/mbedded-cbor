@@ -285,7 +285,7 @@ TEST_CASE("qcbor IntegerValuesParseTest: a negative integer below INT64_MIN does
     CHECK(read_as<std::int64_t>(lazy_of(too_small)) == std::unexpected(error::number_out_of_range));
     auto const tree = cbor::decode(too_small);
     REQUIRE(tree.has_value());
-    CHECK((**tree).type == cbor::type::negative_integer);
+    CHECK((**tree).type() == cbor::type::negative_integer);
     CHECK((**tree).get<cbor::type::negative_integer>() == std::uint64_t{0x8000000000000000});
 }
 
@@ -491,16 +491,16 @@ TEST_CASE("qcbor SimpleValueDecodeTests: simple values decode, and the reserved 
     };
     auto const f = cbor::decode(as_string({0xf4}));
     REQUIRE(f.has_value());
-    CHECK((**f).type == cbor::type::false_value);
+    CHECK((**f).type() == cbor::type::false_value);
     auto const t = cbor::decode(as_string({0xf5}));
     REQUIRE(t.has_value());
-    CHECK((**t).type == cbor::type::true_value);
+    CHECK((**t).type() == cbor::type::true_value);
     auto const n = cbor::decode(as_string({0xf6}));
     REQUIRE(n.has_value());
-    CHECK((**n).type == cbor::type::null);
+    CHECK((**n).type() == cbor::type::null);
     auto const u = cbor::decode(as_string({0xf7}));
     REQUIRE(u.has_value());
-    CHECK((**u).type == cbor::type::undefined);
+    CHECK((**u).type() == cbor::type::undefined);
     CHECK(cbor::decode(as_string({0xff})).error_or(error{}) == error::syntax_error);
     CHECK(simple_of(as_string({0xe0})) == cbor::simple_value{0});
     CHECK(simple_of(as_string({0xf3})) == cbor::simple_value{19});
@@ -780,7 +780,7 @@ TEST_CASE("qcbor DecodeFailureTests: a tag with an inadmissible content type")
     auto const type_of = [](std::string const &in) {
         auto const tree = cbor::decode(in);
         REQUIRE(tree.has_value());
-        return (*tree)->type;
+        return (*tree)->type();
     };
     CHECK(type_of(as_string({0xc0, 0x00})) == cbor::type::tag);
     CHECK(type_of(as_string({0xc1, 0x41, 0x33})) == cbor::type::tag);
@@ -905,7 +905,7 @@ TEST_CASE("qcbor BignumParseTest: bignums larger than 64 bits keep their bytes")
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     });
     auto magnitude_of = [](cbor::item const &node, cbor::type const kind) {
-        CHECK(node.type == kind);
+        CHECK(node.type() == kind);
         auto const b = kind == cbor::type::unsigned_bignum ? node.get<cbor::type::unsigned_bignum>()
                                                             : node.get<cbor::type::negative_bignum>();
         REQUIRE(b.has_value());

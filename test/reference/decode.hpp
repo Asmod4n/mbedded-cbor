@@ -66,7 +66,7 @@ std::expected<value, error> make_value_from_tag_item(cbor::item const &it)
 // string.
 inline std::expected<value, error> make_value_from_item(cbor::item const &it)
 {
-    switch (it.type) {
+    switch (it.type()) {
     case cbor::type::text_string:
         return value{std::string(it.get<cbor::type::text_string>().value())};
     case cbor::type::byte_string: {

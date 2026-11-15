@@ -514,7 +514,7 @@ static double path_read()
 static cbor::item const &untagged(cbor::item const &i)
 {
     cbor::item const *at = &i;
-    while (at->type == cbor::type::tag) {
+    while (at->type() == cbor::type::tag) {
         auto const t = at->get<cbor::type::tag>();
         if (!t) [[unlikely]] std::abort();
         at = t->second;
@@ -540,7 +540,7 @@ static cbor::item const &member(cbor::item const &m, std::string_view const key)
 static double item_sum(cbor::item const &tagged)
 {
     cbor::item const &i = untagged(tagged);
-    switch (i.type) {
+    switch (i.type()) {
     case cbor::type::text_string: return bytes_sum(*i.get<cbor::type::text_string>());
     case cbor::type::unsigned_integer: return double(*i.get<cbor::type::unsigned_integer>());
     case cbor::type::negative_integer: return -1.0 - double(*i.get<cbor::type::negative_integer>());

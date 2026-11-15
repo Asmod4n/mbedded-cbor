@@ -300,15 +300,15 @@ std::expected<void, error> tree_decoder<Resolve>::decode_content(std::pmr::vecto
             return r;
         item const &content = held.front();
         node.via.tag = {head.argument, &content};
-        if (node.type == cbor::type::typed_array)
+        if (node.m_type == cbor::type::typed_array)
             if (auto const r = detail::validity::check_typed_array_content(
-                    head.argument, detail::heads::major_type_of(content.type),
-                    content.type == cbor::type::byte_string ? content.via.bin.size() : std::size_t{});
+                    head.argument, detail::heads::major_type_of(content.m_type),
+                    content.m_type == cbor::type::byte_string ? content.via.bin.size() : std::size_t{});
                 !r) [[unlikely]]
                 return std::unexpected(r.error());
         if (head.argument != std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item))
             return {};
-        if (content.type != cbor::type::byte_string) {
+        if (content.m_type != cbor::type::byte_string) {
             decoded.encoded_cbor_data_items.emplace_back(&node, nullptr);
             return {};
         }

@@ -234,7 +234,7 @@ inline result item_type(call const &c)
     auto const self = self_of<cbor::item const *>(c);
     if (!self) [[unlikely]]
         return std::unexpected(self.error());
-    return value_of((**self)->type);
+    return value_of((**self)->type());
 }
 
 inline result adopt(call const &c)

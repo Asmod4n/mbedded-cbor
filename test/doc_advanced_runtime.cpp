@@ -164,7 +164,7 @@ TEST_CASE("doc advanced runtime: clone and decode")
     auto const owner = std::make_shared<std::string const>(encode_in_preferred_form(A(1, M("a"s, 2))));
     auto const tree = cbor::lazy::view(owner)->to_item();
     REQUIRE(tree.has_value());
-    CHECK_EQ((*tree)->type, cbor::type::array);
+    CHECK_EQ((*tree)->type(), cbor::type::array);
     CHECK_EQ((*tree)->get<cbor::type::array>()->size(), 2u);
     CHECK_EQ((*tree)->get<cbor::type::map>().error(), error::incorrect_type);
     cbor::item const &pairs = (*(*tree)->get<cbor::type::array>())[1];
@@ -179,7 +179,7 @@ TEST_CASE("doc advanced runtime: clone and decode")
     CHECK_EQ(*test::make_lazy_from_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->at(1)->type(), cbor::type::tag);
     auto const tags = test::make_lazy_from_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->to_item();
     REQUIRE(tags.has_value());
-    CHECK_EQ(list_children_of_item(*(*tags))[1]->type, cbor::type::tag);
+    CHECK_EQ(list_children_of_item(*(*tags))[1]->type(), cbor::type::tag);
 }
 
 // The section "clone and decode" says that the tree holds a copy of each string. So that it stays valid after the input
@@ -306,7 +306,7 @@ TEST_CASE("doc advanced runtime: tags 28 and 29")
     auto const tree = cbor::decode("\x82\xd8\x1c\x01\xd8\x1d\x00"sv);
     REQUIRE(tree.has_value());
     auto const elements = (*tree)->get<cbor::type::array>().value();
-    CHECK_EQ(elements[1].type, cbor::type::shared_reference);
+    CHECK_EQ(elements[1].type(), cbor::type::shared_reference);
     CHECK_EQ(elements[1].get<cbor::type::shared_reference>().value().second, &elements[0]);
     CHECK_EQ(cbor::decode("\x81\xd8\x1d\x00"sv).error(), error::sharedref_index_not_marked);
     CHECK_EQ(cbor::decode("\xd8\x1c\xd8\x1d\x00"sv).error(), error::sharedref_not_defined);
@@ -338,14 +338,14 @@ TEST_CASE("doc advanced runtime: tag 55799")
     CHECK_EQ(cbor::lazy::view(owner)->at(1)->get<std::int64_t>(), 2);
     auto const content = cbor::lazy::view(owner)->to_item();
     REQUIRE(content.has_value());
-    CHECK_EQ((*content)->type, cbor::type::array);
+    CHECK_EQ((*content)->type(), cbor::type::array);
     auto const decoded = cbor::decode(*owner);
     REQUIRE(decoded.has_value());
-    CHECK_EQ((*decoded)->type, cbor::type::array);
+    CHECK_EQ((*decoded)->type(), cbor::type::array);
     auto const tree = test::make_lazy_from_copy("\x81\xd9\xd9\xf7\x01"s)->to_item();
     REQUIRE(tree.has_value());
     cbor::item const *const inner = list_children_of_item(*(*tree))[0];
-    CHECK_EQ(inner->type, cbor::type::tag);
+    CHECK_EQ(inner->type(), cbor::type::tag);
     CHECK_EQ(read_argument_of_item(*inner), 55799u);
 }
 

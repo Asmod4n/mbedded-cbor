@@ -137,7 +137,7 @@ TEST_CASE("bignum: a magnitude that fits 64 bits is an integer in decode and in 
         CHECK_EQ(*t, r.type);
         auto const tree = l->to_item();
         REQUIRE(tree.has_value());
-        CHECK_EQ((*tree)->type, r.type);
+        CHECK_EQ((*tree)->type(), r.type);
         CHECK_EQ(read_argument_of_item(**tree), r.argument);
     }
     CHECK_EQ(test::make_lazy_from_copy("\xc3\x48"s + max)->get<std::int64_t>().error(), error::number_out_of_range);
@@ -197,7 +197,7 @@ TEST_CASE("bignum: a wrong content is a tag in decode and in type()")
         CHECK_EQ(l->type(), r.type);
         auto const tree = l->to_item();
         REQUIRE(tree.has_value());
-        CHECK_EQ((*tree)->type, r.type);
+        CHECK_EQ((*tree)->type(), r.type);
         CHECK_EQ(read_argument_of_item(**tree), r.wire[0] == '\xc2' ? 2u : 3u);
     }
     struct failure {

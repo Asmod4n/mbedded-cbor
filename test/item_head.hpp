@@ -19,7 +19,7 @@
 // compares an item with the bytes of its head without a case for each type.
 inline std::uint64_t read_argument_of_item(cbor::item const &node)
 {
-    switch (node.type) {
+    switch (node.type()) {
     case cbor::type::byte_string:
         return node.get<cbor::type::byte_string>().value().size();
     case cbor::type::text_string:
@@ -70,7 +70,7 @@ inline std::uint64_t read_argument_of_item(cbor::item const &node)
 // from the wire.
 inline cbor::item const *read_tag_content_of_item(cbor::item const &node)
 {
-    switch (node.type) {
+    switch (node.type()) {
     case cbor::type::tag:
         return node.get<cbor::type::tag>().value().second;
     case cbor::type::unsigned_bignum:
@@ -152,9 +152,9 @@ bool tag_values_are_equal(cbor::item const &a, cbor::item const &b)
 
 inline bool item_values_are_equal(cbor::item const &a, cbor::item const &b)
 {
-    if (a.type != b.type)
+    if (a.type() != b.type())
         return false;
-    switch (a.type) {
+    switch (a.type()) {
     case cbor::type::byte_string:
         return std::ranges::equal(a.get<cbor::type::byte_string>().value(), b.get<cbor::type::byte_string>().value());
     case cbor::type::text_string:

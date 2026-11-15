@@ -61,9 +61,9 @@ public:
         cbor::item const &b = resolved(y);
         if (!assumed.emplace(&a, &b).second)
             return true;
-        if (a.type != b.type || a.additional_information != b.additional_information)
+        if (a.type() != b.type() || a.additional_information != b.additional_information)
             return false;
-        switch (a.type) {
+        switch (a.type()) {
         case cbor::type::array:
             return all_hold(a.get<cbor::type::array>().value(), b.get<cbor::type::array>().value());
         case cbor::type::map:

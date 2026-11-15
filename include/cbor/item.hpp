@@ -105,20 +105,20 @@ using item_alternative_t = typename item_alternative<K>::type;
 /**
  * @brief One node of a tree from cbor::decode() or `lazy::to_item`.
  *
- * `type` gives the kind of the node.
+ * cbor::item::type() gives the kind of the node.
  * `additional_information` gives the low 5 bits of the initial byte (RFC 8949 3).
- * cbor::item::get() gives the value.
+ * cbor::item::get() and cbor::item::visit() give the value.
  * The constructor is private: only a decode makes an item.
  * An item owns no memory and has no destructor to run.
  * The tree owns every node and every string.
  * An item gives no error.
- * `type` and `additional_information` are data members.
+ * `additional_information` is a data member.
  *
  * @code{.example}
  * message: [1, {"a": 2}]
  * call: auto const tree = cbor::decode(bytes)
  * result: owning item of [1, {"a": 2}]
- * call: (*tree)->type
+ * call: (*tree)->type()
  * result: cbor::type::array
  * call: (*tree)->additional_information
  * result: 2
@@ -134,11 +134,37 @@ using item_alternative_t = typename item_alternative<K>::type;
  * @ingroup decode
  */
 struct item {
-    cbor::type const type;
+private:
+    cbor::type const m_type;
+
+public:
     std::uint8_t const additional_information;
 
     /**
-     * @brief Gives the value of the node when `type` is `K`.
+     * @brief Gives the kind of the node.
+     *
+     * A tag 2 or 3 whose magnitude fits 64 bits is an integer node, so it gives `unsigned_integer` or
+     * `negative_integer`.
+     *
+     * @code{.example}
+     * message: [1, 2(h'010000000000000000')]
+     * call: auto const tree = cbor::decode(bytes)
+     * result: owning item of [1, 2(h'010000000000000000')]
+     * call: (*tree)->type()
+     * result: cbor::type::array
+     * call: (*tree)->get<std::span<cbor::item const>>().value()[1].type()
+     * result: cbor::type::unsigned_bignum
+     * @endcode
+     *
+     * @see cbor::lazy::type()
+     */
+    constexpr cbor::type type() const
+    {
+        return m_type;
+    }
+
+    /**
+     * @brief Gives the value of the node when type() is `K`.
      *
      * | K | Result |
      * |---|---|
@@ -153,7 +179,7 @@ struct item {
      * | `false_value`, `true_value`, `null`, `undefined`, `simple_value` | `cbor::simple_value` |
      * A negative integer gives its argument n, for the value -1 - n.
      * A view and a pointer in the result point into the tree.
-     * `incorrect_type`: `type` is not `K`.
+     * `incorrect_type`: type() is not `K`.
      *
      * @code{.example}
      * message: {"a": -3}
@@ -165,7 +191,7 @@ struct item {
      * result: "a"
      * call: map[1].get<cbor::type::negative_integer>()
      * result: 2
-     * call: map[1].type
+     * call: map[1].type()
      * result: cbor::type::negative_integer
      * @endcode
      *
@@ -176,7 +202,7 @@ struct item {
     template <cbor::type K>
     std::expected<item_alternative_t<K>, error> get() const
     {
-        if (type != K) [[unlikely]]
+        if (m_type != K) [[unlikely]]
             return std::unexpected(error::incorrect_type);
         if constexpr (std::same_as<item_alternative_t<K>, std::uint64_t>)
             return via.u64;
@@ -251,12 +277,12 @@ struct item {
     {
         item const *at = this;
         if constexpr (!std::same_as<T, std::pair<std::uint64_t, item const *>>)
-            while (at->type == cbor::type::tag && detail::heads::is_tag_passed(at->via.tag.number))
+            while (at->m_type == cbor::type::tag && detail::heads::is_tag_passed(at->via.tag.number))
                 at = at->via.tag.content;
         item const &node = *at;
         if constexpr (std::integral<T> && !std::same_as<T, bool>) {
-            bool const negative = node.type == cbor::type::negative_integer;
-            if (node.type != cbor::type::unsigned_integer && !negative) [[unlikely]]
+            bool const negative = node.m_type == cbor::type::negative_integer;
+            if (node.m_type != cbor::type::unsigned_integer && !negative) [[unlikely]]
                 return node.reject_as_number();
             if (error const c = detail::validity::check_number_range<T>(negative, node.via.u64).error_or(error{});
                 c != error{}) [[unlikely]]
@@ -264,14 +290,14 @@ struct item {
             return negative ? detail::heads::subtract_argument_from_minus_one<T>(node.via.u64)
                             : static_cast<T>(node.via.u64);
         } else if constexpr (std::same_as<T, double>) {
-            switch (node.type) {
+            switch (node.m_type) {
             case cbor::type::half_float:
             case cbor::type::single_float:
             case cbor::type::double_float:
                 return node.via.f64;
             case cbor::type::unsigned_integer:
             case cbor::type::negative_integer: {
-                bool const negative = node.type == cbor::type::negative_integer;
+                bool const negative = node.m_type == cbor::type::negative_integer;
                 if (error const c =
                         detail::validity::check_number_range<double>(negative, node.via.u64).error_or(error{});
                     c != error{}) [[unlikely]]
@@ -283,15 +309,15 @@ struct item {
                 return node.reject_as_number();
             }
         } else if constexpr (std::same_as<T, bool>) {
-            if (node.type != cbor::type::false_value && node.type != cbor::type::true_value) [[unlikely]]
+            if (node.m_type != cbor::type::false_value && node.m_type != cbor::type::true_value) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            return node.type == cbor::type::true_value;
+            return node.m_type == cbor::type::true_value;
         } else if constexpr (std::same_as<T, std::nullptr_t>) {
-            if (node.type != cbor::type::null) [[unlikely]]
+            if (node.m_type != cbor::type::null) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
             return nullptr;
         } else if constexpr (std::same_as<T, simple_value>) {
-            switch (node.type) {
+            switch (node.m_type) {
             case cbor::type::false_value:
             case cbor::type::true_value:
             case cbor::type::null:
@@ -302,27 +328,27 @@ struct item {
                 return std::unexpected(error::incorrect_type);
             }
         } else if constexpr (std::same_as<T, std::string_view>) {
-            if (node.type != cbor::type::text_string) [[unlikely]]
+            if (node.m_type != cbor::type::text_string) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
             return node.via.str;
         } else if constexpr (std::same_as<T, std::span<std::byte const>>) {
-            if (node.type != cbor::type::byte_string) [[unlikely]]
+            if (node.m_type != cbor::type::byte_string) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
             return node.via.bin;
         } else if constexpr (std::same_as<T, typed_array>) {
-            if (node.type != cbor::type::typed_array) [[unlikely]]
+            if (node.m_type != cbor::type::typed_array) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
             return typed_array{node.via.tag.number, node.via.tag.content->via.bin};
         } else if constexpr (std::same_as<T, std::span<item const>>) {
-            if (node.type != cbor::type::array) [[unlikely]]
+            if (node.m_type != cbor::type::array) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
             return node.via.array;
         } else if constexpr (std::same_as<T, std::ranges::chunk_view<std::span<item const>>>) {
-            if (node.type != cbor::type::map) [[unlikely]]
+            if (node.m_type != cbor::type::map) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
             return std::ranges::chunk_view(node.via.map, rfc8949::data_items_per_pair);
         } else {
-            switch (node.type) {
+            switch (node.m_type) {
             case cbor::type::tag:
             case cbor::type::unsigned_bignum:
             case cbor::type::negative_bignum:
@@ -388,7 +414,7 @@ struct item {
                           std::same_as<std::invoke_result_t<F, typed_array>, result> &&
                           std::same_as<std::invoke_result_t<F, item const *>, result>,
                       "cbor::item::visit: f must give one return type for every kind of node, as std::visit requires");
-        switch (type) {
+        switch (m_type) {
         case cbor::type::unsigned_integer:
             return std::invoke(std::forward<F>(f), via.u64);
         case cbor::type::negative_integer:
@@ -407,7 +433,7 @@ struct item {
             return std::invoke(std::forward<F>(f), std::ranges::chunk_view(via.map, rfc8949::data_items_per_pair));
         case cbor::type::false_value:
         case cbor::type::true_value:
-            return std::invoke(std::forward<F>(f), type == cbor::type::true_value);
+            return std::invoke(std::forward<F>(f), m_type == cbor::type::true_value);
         case cbor::type::null:
             return std::invoke(std::forward<F>(f), nullptr);
         case cbor::type::undefined:
@@ -429,10 +455,10 @@ struct item {
 private:
     std::unexpected<error> reject_as_number() const
     {
-        if (type != cbor::type::unsigned_bignum && type != cbor::type::negative_bignum) [[unlikely]]
+        if (m_type != cbor::type::unsigned_bignum && m_type != cbor::type::negative_bignum) [[unlikely]]
             return std::unexpected(error::incorrect_type);
         if (error const c = detail::validity::check_tag_content(via.tag.number,
-                                                                 detail::heads::major_type_of(via.tag.content->type))
+                                                                 detail::heads::major_type_of(via.tag.content->m_type))
                                 .error_or(error{});
             c != error{}) [[unlikely]]
             return std::unexpected(c);
@@ -454,7 +480,7 @@ private:
     } via;
 
     constexpr item(cbor::type const t, std::uint8_t const info, content const v)
-        : type(t), additional_information(info), via(v)
+        : m_type(t), additional_information(info), via(v)
     {
     }
 

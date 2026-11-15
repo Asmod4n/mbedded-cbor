@@ -426,7 +426,7 @@ TEST_CASE("tinycbor parser: integers")
         auto const tree = cbor::decode(r.data);
         REQUIRE(tree.has_value());
         cbor::item const &node = **tree;
-        CHECK_EQ(node.type, r.negative ? cbor::type::negative_integer : cbor::type::unsigned_integer);
+        CHECK_EQ(node.type(), r.negative ? cbor::type::negative_integer : cbor::type::unsigned_integer);
         auto const raw = r.negative ? node.get<cbor::type::negative_integer>() : node.get<cbor::type::unsigned_integer>();
         CHECK_EQ(raw.value_or(0), r.raw);
         auto const as_int64 = cbor::at_path<"$", std::int64_t>(r.data);
@@ -487,7 +487,7 @@ TEST_CASE("tinycbor parser: half floats")
         std::string const data = "\xf9"s + r.data;
         auto const tree = cbor::decode(data);
         REQUIRE(tree.has_value());
-        CHECK_EQ((*tree)->type, cbor::type::half_float);
+        CHECK_EQ((*tree)->type(), cbor::type::half_float);
         double const value = (*tree)->get<cbor::type::half_float>().value_or(0);
         if (std::isnan(r.value))
             CHECK_EQ(std::bit_cast<std::uint64_t>(value), test::ieee754::bits_of_half_nan_widened_to_double(
@@ -507,7 +507,7 @@ TEST_CASE("tinycbor parser: floats")
         CAPTURE(r.name);
         auto const tree = cbor::decode(r.data);
         REQUIRE(tree.has_value());
-        CHECK_EQ((*tree)->type, r.type);
+        CHECK_EQ((*tree)->type(), r.type);
         double value = 0;
         if (r.type == cbor::type::half_float)
             value = (*tree)->get<cbor::type::half_float>().value_or(0);
@@ -887,7 +887,7 @@ TEST_CASE("tinycbor parser: string length")
         }
         REQUIRE_EQ(make_outcome_text(tree), make_error_text(no_error));
         cbor::item const &node = **tree;
-        if (node.type == cbor::type::text_string)
+        if (node.type() == cbor::type::text_string)
             CHECK_EQ(node.get<cbor::type::text_string>()->size(), r.expected);
         else
             CHECK_EQ(node.get<cbor::type::byte_string>()->size(), r.expected);

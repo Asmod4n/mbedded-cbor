@@ -61,7 +61,7 @@ static std::uint64_t simple_sum(cbor::item const &it)
 
 static std::uint64_t item_tree_sum(cbor::item const &it)
 {
-    switch (it.type) {
+    switch (it.type()) {
     case cbor::type::text_string: {
         std::string_view const t = it.get<cbor::type::text_string>().value();
         return t.size() + bytes_sum(t);

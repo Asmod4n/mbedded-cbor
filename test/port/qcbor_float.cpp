@@ -291,9 +291,9 @@ TEST_CASE("qcbor GeneralFloatDecodeTests: floats of each width decode to double"
     auto const elements = (**tree).get<cbor::type::array>();
     REQUIRE(elements.has_value());
     REQUIRE_EQ(elements->size(), 11u);
-    CHECK((*elements)[0].type == cbor::type::half_float);
-    CHECK((*elements)[1].type == cbor::type::double_float);
-    CHECK((*elements)[6].type == cbor::type::single_float);
+    CHECK((*elements)[0].type() == cbor::type::half_float);
+    CHECK((*elements)[1].type() == cbor::type::double_float);
+    CHECK((*elements)[6].type() == cbor::type::single_float);
     CHECK_EQ(std::bit_cast<std::uint64_t>((*elements)[6].get<cbor::type::single_float>().value_or(0.0)),
              std::bit_cast<std::uint64_t>(3.1400001049041748));
 }

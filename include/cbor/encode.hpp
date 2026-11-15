@@ -558,8 +558,8 @@ class detail::encoding::iov_writer
 
 inline detail::encoding::head_parts detail::encoding::head_of(item const &node)
 {
-    head_parts head{detail::heads::major_type_of(node.type), node.additional_information, node.via.u64};
-    switch (node.type) {
+    head_parts head{detail::heads::major_type_of(node.m_type), node.additional_information, node.via.u64};
+    switch (node.m_type) {
     case cbor::type::byte_string:
         head.argument = node.via.bin.size();
         break;
@@ -576,11 +576,11 @@ inline detail::encoding::head_parts detail::encoding::head_of(item const &node)
         break;
     case cbor::type::unsigned_bignum:
     case cbor::type::negative_bignum:
-        if (node.via.tag.content->type == cbor::type::byte_string) {
+        if (node.via.tag.content->m_type == cbor::type::byte_string) {
             std::span<std::byte const> const magnitude =
                 detail::heads::magnitude_without_leading_zeros(node.via.tag.content->via.bin);
             if (detail::validity::check_magnitude_size(magnitude.size(), sizeof(std::uint64_t))) {
-                head.major = node.type == cbor::type::negative_bignum ? major_type::negative_integer
+                head.major = node.m_type == cbor::type::negative_bignum ? major_type::negative_integer
                                                                       : major_type::unsigned_integer;
                 head.argument = detail::heads::magnitude_value(magnitude);
                 head.info = detail::heads::preferred_argument_info(head.argument);
@@ -643,7 +643,7 @@ inline std::span<item const> detail::encoding::children_of(item const &node, maj
 
 inline item const *detail::encoding::content_of(item const &node, major_type const major)
 {
-    if (major != major_type::tag || node.type == cbor::type::shared_reference)
+    if (major != major_type::tag || node.m_type == cbor::type::shared_reference)
         return nullptr;
     return node.via.tag.content;
 }
@@ -682,7 +682,7 @@ std::expected<void, error> detail::encoding::encode_item(binary_writer<Writer> &
 {
     if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
         return r;
-    if (node.type == cbor::type::shared_reference) [[unlikely]]
+    if (node.m_type == cbor::type::shared_reference) [[unlikely]]
         return std::unexpected(error::unsupported_value);
     head_parts const head = head_of(node);
     std::expected<void, std::errc> const written = encode_head_and_payload<AppendRef>(out, node, head);
@@ -767,7 +767,7 @@ class detail::encoding::depth_first_search
 
     std::expected<void, error> follow_edge(item const &child, frame const &here, bool const below)
     {
-        bool const reference = child.type == cbor::type::shared_reference;
+        bool const reference = child.m_type == cbor::type::shared_reference;
         item const &next = reference ? *child.via.tag.content : child;
         if (reference) [[unlikely]] {
             if (!below)
@@ -823,7 +823,7 @@ class detail::encoding::depth_first_search
     std::expected<std::uint64_t, error> write_edge(binary_writer<Writer> &out, item const &child, frame const &here,
                                                    std::uint64_t const marks)
     {
-        bool const reference = child.type == cbor::type::shared_reference;
+        bool const reference = child.m_type == cbor::type::shared_reference;
         item const &next = reference ? *child.via.tag.content : child;
         if (reference && !path_in_map) [[unlikely]]
             enter_path(here);
@@ -842,7 +842,7 @@ public:
     template <bool AppendRef, class Writer>
     std::expected<void, error> encode(binary_writer<Writer> &out, item const &root)
     {
-        item const &start = root.type == cbor::type::shared_reference ? *root.via.tag.content : root;
+        item const &start = root.m_type == cbor::type::shared_reference ? *root.via.tag.content : root;
         if (auto const r = find_back_edges(start, nullptr, false); !r) [[unlikely]]
             return r;
         std::ranges::sort(targets);

@@ -516,7 +516,7 @@ public:
      * message: {"a": [1, "x"]}
      * call: doc->at_key("a")->to_item()
      * result: owning item of [1, "x"]
-     * call: (*doc->at_key("a")->to_item())->type
+     * call: (*doc->at_key("a")->to_item())->type()
      * result: cbor::type::array
      * @endcode
      *

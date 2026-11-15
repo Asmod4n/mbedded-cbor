@@ -151,7 +151,7 @@ TEST_CASE("cbor2 decoder: test_integer")
         INFO("payload: ", r.payload);
         auto const tree = cbor::decode(unhexlify(r.payload));
         REQUIRE(tree.has_value());
-        CHECK_EQ((*tree)->type, r.type);
+        CHECK_EQ((*tree)->type(), r.type);
         if (r.type == cbor::type::unsigned_integer)
             CHECK_EQ((*tree)->get<cbor::type::unsigned_integer>().value(), r.argument);
         else
@@ -173,7 +173,7 @@ TEST_CASE("cbor2 decoder: test_integer")
         INFO("payload: ", r.payload);
         auto const tree = cbor::decode(unhexlify(r.payload));
         REQUIRE(tree.has_value());
-        REQUIRE_EQ((*tree)->type, r.type);
+        REQUIRE_EQ((*tree)->type(), r.type);
         auto const tag = r.type == cbor::type::unsigned_bignum ? (*tree)->get<cbor::type::unsigned_bignum>()
                                                                 : (*tree)->get<cbor::type::negative_bignum>();
         REQUIRE(tag.has_value());
@@ -266,7 +266,7 @@ TEST_CASE("cbor2 decoder: test_float")
         INFO("payload: ", r.payload);
         auto const tree = cbor::decode(unhexlify(r.payload));
         REQUIRE(tree.has_value());
-        REQUIRE_EQ((*tree)->type, r.type);
+        REQUIRE_EQ((*tree)->type(), r.type);
         double const got = r.type == cbor::type::half_float     ? (*tree)->get<cbor::type::half_float>().value()
                            : r.type == cbor::type::single_float ? (*tree)->get<cbor::type::single_float>().value()
                                                                 : (*tree)->get<cbor::type::double_float>().value();
@@ -304,7 +304,7 @@ TEST_CASE("cbor2 decoder: test_special")
         INFO("payload: ", r.payload);
         auto const tree = cbor::decode(unhexlify(r.payload));
         REQUIRE(tree.has_value());
-        CHECK_EQ((*tree)->type, r.type);
+        CHECK_EQ((*tree)->type(), r.type);
         auto const decoded = loads(unhexlify(r.payload));
         REQUIRE(decoded.has_value());
         CHECK(*decoded == V(test::simple{std::to_underlying(r.expected)}));
@@ -519,7 +519,7 @@ TEST_CASE("cbor2 decoder: test_simple_value")
         INFO("payload: ", r.payload);
         auto const tree = cbor::decode(unhexlify(r.payload));
         REQUIRE(tree.has_value());
-        CHECK_EQ((*tree)->type, cbor::type::simple_value);
+        CHECK_EQ((*tree)->type(), cbor::type::simple_value);
         CHECK_EQ((*tree)->get<cbor::type::simple_value>().value(), cbor::simple_value{r.value});
     }
     check_decoded({{"A1F86301", M(test::simple{99}, 1)}});
@@ -669,7 +669,7 @@ TEST_CASE("cbor2 decoder: test_bignum_non_bytestring")
         INFO("payload: ", payload);
         auto const tree = cbor::decode(unhexlify(payload));
         REQUIRE(tree.has_value());
-        CHECK_EQ((*tree)->type, payload[1] == '2' ? cbor::type::unsigned_bignum : cbor::type::negative_bignum);
+        CHECK_EQ((*tree)->type(), payload[1] == '2' ? cbor::type::unsigned_bignum : cbor::type::negative_bignum);
     }
 }
 
@@ -896,7 +896,7 @@ TEST_CASE("cbor2 decoder: test_self_describe_cbor")
     check_decoded({{"d9d9f71903e8", V(1000)}});
     auto const tree = cbor::decode(unhexlify("d9d9f7c249010000000000000000"));
     REQUIRE(tree.has_value());
-    CHECK_EQ((*tree)->type, cbor::type::unsigned_bignum);
+    CHECK_EQ((*tree)->type(), cbor::type::unsigned_bignum);
 }
 
 // Upstream: test_unhandled_tag and test_nested_dict. RFC 8949 3.4: a tag number and its content.

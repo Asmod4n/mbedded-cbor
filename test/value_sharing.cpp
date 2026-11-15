@@ -68,7 +68,7 @@ std::vector<cbor::item const *> marks_of(tree const &t)
                 marks.push_back(i);
             pending.push_back(tag->second);
         }
-        if (i->type == cbor::type::array || i->type == cbor::type::map) {
+        if (i->type() == cbor::type::array || i->type() == cbor::type::map) {
             auto const c = list_children_of_item(*i);
             for (auto it = c.rbegin(); it != c.rend(); ++it)
                 pending.push_back(*it);
@@ -566,7 +566,7 @@ TEST_CASE("value sharing: cbor::decode reads each case of the model")
     REQUIRE(shared.has_value());
     auto const three = elements_of(**shared);
     CHECK_EQ(target_of(three[1]), &three[0]);
-    CHECK_EQ(three[2].type, cbor::type::array);
+    CHECK_EQ(three[2].type(), cbor::type::array);
     // 28([29(0)]): an array that holds itself.
     auto const cyclic = cbor::decode("\xd8\x1c\x81\xd8\x1d\x00"sv);
     REQUIRE(cyclic.has_value());

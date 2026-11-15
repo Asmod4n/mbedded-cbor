@@ -46,7 +46,7 @@ TEST_CASE("an integer is the head fields and nothing else")
     auto const tree = cbor::decode("\x39\x01\xf3"sv);
     REQUIRE(tree.has_value());
     cbor::item const &minus_500 = **tree;
-    CHECK(minus_500.type == cbor::type::negative_integer);
+    CHECK(minus_500.type() == cbor::type::negative_integer);
     CHECK(minus_500.additional_information == 25);
     CHECK(-1 - static_cast<std::int64_t>(minus_500.get<cbor::type::negative_integer>().value()) == -500);
 }
@@ -93,7 +93,7 @@ TEST_CASE("null and undefined are two items")
     auto const items = (*tree)->get<cbor::type::array>().value();
     cbor::item const &null = items[0];
     cbor::item const &undefined = items[1];
-    CHECK(null.type != undefined.type);
+    CHECK(null.type() != undefined.type());
     CHECK(null.additional_information != undefined.additional_information);
 }
 
@@ -193,7 +193,7 @@ TEST_CASE("decode: the item outlives the lazy that decoded it")
     std::string const s("\x83\x01\x02\x03"sv);
     auto const r = test::make_lazy_from_copy(s)->to_item();
     REQUIRE(r.has_value());
-    CHECK_EQ((*r)->type, cbor::type::array);
+    CHECK_EQ((*r)->type(), cbor::type::array);
     CHECK_EQ(read_argument_of_item(*(*r)), 3u);
     auto const elements = list_children_of_item(**r);
     REQUIRE_EQ(elements.size(), 3u);
@@ -231,13 +231,13 @@ TEST_CASE("decode: an array and a map hold their data items in the order of the 
     auto const elements = list_children_of_item(*array);
     REQUIRE_EQ(elements.size(), 2u);
     CHECK_EQ(read_argument_of_item(*elements[0]), 1u);
-    CHECK_EQ(elements[1]->type, cbor::type::map);
+    CHECK_EQ(elements[1]->type(), cbor::type::map);
     auto const pairs = list_children_of_item(*elements[1]);
     REQUIRE_EQ(pairs.size(), 4u);
     CHECK_EQ(pairs[0]->get<cbor::type::text_string>().value(), "k");
     CHECK_EQ(pairs[1]->get<cbor::type::text_string>().value(), "hi");
     CHECK_EQ(read_argument_of_item(*pairs[2]), 2u);
-    CHECK_EQ(pairs[3]->type, cbor::type::array);
+    CHECK_EQ(pairs[3]->type(), cbor::type::array);
     CHECK(list_children_of_item(*pairs[3]).empty());
 }
 
@@ -327,7 +327,7 @@ TEST_CASE("decode: a bignum and a typed array are tags over a byte string")
     auto const root = item_of(top_level->to_item());
     auto const elements = list_children_of_item(*root);
     REQUIRE_EQ(elements.size(), 2u);
-    CHECK_EQ(elements[0]->type, cbor::type::unsigned_bignum);
+    CHECK_EQ(elements[0]->type(), cbor::type::unsigned_bignum);
     CHECK_EQ(read_argument_of_item(*elements[0]), 2u);
     auto const *const magnitude = elements[0]->get<cbor::type::unsigned_bignum>().value().second;
     CHECK_EQ(magnitude->get<cbor::type::byte_string>().value().size(), 9u);
@@ -406,7 +406,7 @@ TEST_CASE("decode: a temporary lazy gives an item")
 {
     auto const r = std::move(*test::make_lazy_from_copy(std::string("\x01"sv))).to_item();
     REQUIRE(r.has_value());
-    CHECK_EQ((*r)->type, cbor::type::unsigned_integer);
+    CHECK_EQ((*r)->type(), cbor::type::unsigned_integer);
     CHECK_EQ(read_argument_of_item(*(*r)), 1u);
 }
 
@@ -436,7 +436,7 @@ TEST_CASE("decode: a shared reference points to the item of the shared value")
     auto const root = item_of(top_level->to_item());
     auto const elements = list_children_of_item(*root);
     REQUIRE_EQ(elements.size(), 2u);
-    CHECK_EQ(elements[0]->type, cbor::type::tag);
+    CHECK_EQ(elements[0]->type(), cbor::type::tag);
     CHECK_EQ(read_argument_of_item(*elements[0]), 28u);
     auto const *const value = elements[0]->get<cbor::type::tag>().value().second;
     CHECK_EQ(value->get<cbor::type::text_string>().value(), "hi");
@@ -465,7 +465,7 @@ TEST_CASE("decode: a cyclic array is its own element")
     REQUIRE(top_level.has_value());
     auto const root = item_of(top_level->to_item());
     auto const *const array = root->get<cbor::type::tag>().value().second;
-    CHECK_EQ(array->type, cbor::type::array);
+    CHECK_EQ(array->type(), cbor::type::array);
     auto const elements = list_children_of_item(*array);
     REQUIRE_EQ(elements.size(), 1u);
     CHECK_EQ(elements[0]->get<cbor::type::tag>().value().first, 29u);
@@ -550,7 +550,7 @@ TEST_CASE("decode: a float16 keeps additional information 25")
     auto const top_level = test::make_lazy_from_copy(std::string("\xf9\x3e\x00"sv));
     REQUIRE(top_level.has_value());
     auto const f = item_of(top_level->to_item());
-    CHECK_EQ(f->type, cbor::type::half_float);
+    CHECK_EQ(f->type(), cbor::type::half_float);
     CHECK_EQ(f->additional_information, 25);
     CHECK_EQ(std::bit_cast<std::uint64_t>(f->get<cbor::type::half_float>().value()), 0x3ff8000000000000u);
     std::string again;
@@ -605,7 +605,7 @@ TEST_CASE("type: every type of an item, through lazy and through the decoded ite
         REQUIRE(by_lazy.has_value());
         CHECK_EQ(*by_lazy, r.expected);
         auto const tree = item_of(l->to_item());
-        CHECK_EQ(tree->type, r.expected);
+        CHECK_EQ(tree->type(), r.expected);
     }
 }
 
@@ -618,8 +618,8 @@ TEST_CASE("type: lazy and the item keep tags 28 and 29")
     CHECK_EQ(*root->at(1)->type(), cbor::type::tag);
     auto const tree = item_of(root->to_item());
     auto const elements = list_children_of_item(*tree);
-    CHECK_EQ(elements[0]->type, cbor::type::tag);
-    CHECK_EQ(elements[1]->type, cbor::type::tag);
+    CHECK_EQ(elements[0]->type(), cbor::type::tag);
+    CHECK_EQ(elements[1]->type(), cbor::type::tag);
 }
 
 // A lazy that holds no top-level item is a wrong use, as for every other read of lazy.
@@ -711,7 +711,7 @@ TEST_CASE("decode: tag 24 gives the byte string and the embedded item")
     auto const top_level = test::make_lazy_from_copy(wire);
     REQUIRE(top_level.has_value());
     auto const root = item_of(top_level->to_item());
-    REQUIRE_EQ(root->type, cbor::type::tag);
+    REQUIRE_EQ(root->type(), cbor::type::tag);
     CHECK_EQ(root->get<cbor::type::tag>().value().first, 24u);
     CHECK_EQ(root->get<cbor::type::tag>().value().second->get<cbor::type::byte_string>().value().size(), 5u);
     CHECK_EQ(cbor::encoded_cbor_data_item(root, *root)->get().get<cbor::type::text_string>().value(), "IETF");
@@ -731,11 +731,11 @@ TEST_CASE("decode: a tag 24 inside a tag 24 is decoded at each level")
     auto const outer_found = cbor::encoded_cbor_data_item(root, *root);
     REQUIRE(outer_found.has_value());
     cbor::item const &outer = outer_found->get();
-    REQUIRE_EQ(outer.type, cbor::type::tag);
+    REQUIRE_EQ(outer.type(), cbor::type::tag);
     auto const inner_found = cbor::encoded_cbor_data_item(root, outer);
     REQUIRE(inner_found.has_value());
     cbor::item const &inner = inner_found->get();
-    CHECK_EQ(inner.type, cbor::type::unsigned_integer);
+    CHECK_EQ(inner.type(), cbor::type::unsigned_integer);
     CHECK_EQ(inner.get<cbor::type::unsigned_integer>().value(), 1u);
     std::string again;
     REQUIRE(cbor::encode(*root, again).has_value());
@@ -894,7 +894,7 @@ TEST_CASE("encode: a float of each width comes back byte for byte")
     for (row const &r : rows) {
         CAPTURE(r.wire);
         auto const root = item_of(test::make_lazy_from_copy(std::string(r.wire))->to_item());
-        CHECK_EQ(root->type, r.type);
+        CHECK_EQ(root->type(), r.type);
         CHECK_EQ(root->additional_information, static_cast<std::uint8_t>(r.wire.front()) & 0x1f);
         std::string again;
         REQUIRE(cbor::encode(*root, again).has_value());
@@ -976,10 +976,10 @@ TEST_CASE("decode: every major type and additional information gives the type of
             REQUIRE(top_level.has_value());
             auto const decoded = top_level->to_item();
             REQUIRE(decoded.has_value());
-            CHECK_EQ((*decoded)->type, expected);
+            CHECK_EQ((*decoded)->type(), expected);
             bool const bignum = major == 6 && (argument == 2 || argument == 3);
             CHECK_EQ((*decoded)->additional_information, bignum ? 5 : info);
-            CHECK_EQ(find_major_type_of((*decoded)->type), bignum ? static_cast<cbor::major_type>(argument - 2)
+            CHECK_EQ(find_major_type_of((*decoded)->type()), bignum ? static_cast<cbor::major_type>(argument - 2)
                                                         : static_cast<cbor::major_type>(major));
             std::string const own = bignum ? (argument == 2 ? "\x05"s : "\x25"s) : wire;
             std::string again;
@@ -1008,7 +1008,7 @@ TEST_CASE("encode: a bignum that fits is an integer, a larger bignum and a typed
                         row{"\xd8\x40\x40"sv, "\xd8\x40\x40"sv, cbor::major_type::tag}}) {
         CAPTURE(r.wire);
         auto const root = item_of(test::make_lazy_from_copy(std::string(r.wire))->to_item());
-        CHECK_EQ(find_major_type_of(root->type), r.major);
+        CHECK_EQ(find_major_type_of(root->type()), r.major);
         std::string again;
         REQUIRE(cbor::encode(*root, again).has_value());
         CHECK_EQ(again, r.own);
@@ -1141,7 +1141,7 @@ template <cbor::type K>
 void check_get(cbor::item const &it)
 {
     auto const r = it.get<K>();
-    if (K == it.type) {
+    if (K == it.type()) {
         CHECK(r.has_value());
         return;
     }
@@ -1169,7 +1169,7 @@ TEST_CASE("item get<K>: the value for its own type and incorrect_type for every 
             s.type == cbor::type::shared_reference ? (*tree)->get<cbor::type::array>().value()
                                                    : std::span<cbor::item const>(&**tree, 1);
         cbor::item const &it = elements.back();
-        REQUIRE_EQ(it.type, s.type);
+        REQUIRE_EQ(it.type(), s.type);
         check_every_kind(it, std::make_index_sequence<samples.size()>{});
     }
 }
@@ -1222,7 +1222,7 @@ TEST_CASE("decode: tags 0 to 5, 21 to 24 and 32 to 36 over every major type stay
                                         : tag == 2               ? cbor::type::unsigned_bignum
                                         : tag == 3               ? cbor::type::negative_bignum
                                                                  : cbor::type::tag;
-            CHECK_EQ((*r)->type, expected);
+            CHECK_EQ((*r)->type(), expected);
         }
     }
 }

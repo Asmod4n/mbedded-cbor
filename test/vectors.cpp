@@ -153,10 +153,10 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
         std::string_view const after_head = std::string_view(wire).substr(1 + argument_bytes);
         switch (major) {
         case cbor::major_type::unsigned_integer:
-            CHECK_EQ(it.type, cbor::type::unsigned_integer);
+            CHECK_EQ(it.type(), cbor::type::unsigned_integer);
             break;
         case cbor::major_type::negative_integer:
-            CHECK_EQ(it.type, cbor::type::negative_integer);
+            CHECK_EQ(it.type(), cbor::type::negative_integer);
             break;
         case cbor::major_type::byte_string: {
             auto const b = it.get<cbor::type::byte_string>();
@@ -172,8 +172,8 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
         }
         case cbor::major_type::array:
         case cbor::major_type::map:
-            REQUIRE((it.type == cbor::type::array || it.type == cbor::type::map));
-            CHECK_EQ(list_children_of_item(it).size(), it.type == cbor::type::map ? 2 * argument : argument);
+            REQUIRE((it.type() == cbor::type::array || it.type() == cbor::type::map));
+            CHECK_EQ(list_children_of_item(it).size(), it.type() == cbor::type::map ? 2 * argument : argument);
             break;
         case cbor::major_type::tag: {
             std::string content;
@@ -183,11 +183,11 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
         }
         case cbor::major_type::simple:
             if (info == 25)
-                CHECK_EQ(it.type, cbor::type::half_float);
+                CHECK_EQ(it.type(), cbor::type::half_float);
             else if (info == 26)
-                CHECK_EQ(it.type, cbor::type::single_float);
+                CHECK_EQ(it.type(), cbor::type::single_float);
             else if (info == 27)
-                CHECK_EQ(it.type, cbor::type::double_float);
+                CHECK_EQ(it.type(), cbor::type::double_float);
             else
                 CHECK_EQ(read_argument_of_item(it), argument);
             break;
@@ -369,7 +369,7 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
     if (!decoded_item)
         return std::unexpected(decoded_item.error());
     cbor::item const &it = **decoded_item;
-    switch (find_major_type_of(it.type)) {
+    switch (find_major_type_of(it.type())) {
     case cbor::major_type::unsigned_integer:
         return value{read_argument_of_item(it)};
     case cbor::major_type::negative_integer:

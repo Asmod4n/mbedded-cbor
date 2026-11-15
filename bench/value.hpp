@@ -355,7 +355,7 @@ value tag_value(cbor::item const &it)
 
 inline value value_of(cbor::item const &it)
 {
-    switch (it.type) {
+    switch (it.type()) {
     case cbor::type::text_string:
         return text_value(it.get<cbor::type::text_string>().value());
     case cbor::type::byte_string: {

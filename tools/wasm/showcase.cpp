@@ -93,7 +93,7 @@ std::uint64_t result_packed(std::string text)
 
 void js_value_built(cbor::item const &i)
 {
-    switch (i.type) {
+    switch (i.type()) {
     case cbor::type::unsigned_integer:
         return value_number(static_cast<double>(i.get<cbor::type::unsigned_integer>().value()));
     case cbor::type::negative_integer:

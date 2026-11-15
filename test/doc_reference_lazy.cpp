@@ -302,7 +302,7 @@ TEST_CASE("doc reference lazy: clone")
         return copy;
     }();
     REQUIRE(tree);
-    CHECK_EQ((*tree)->type, cbor::type::array);
+    CHECK_EQ((*tree)->type(), cbor::type::array);
     auto const children = (*tree)->get<cbor::type::array>().value();
     REQUIRE_EQ(children.size(), 2u);
     CHECK_EQ(children[1].get<cbor::type::text_string>().value(), "x"sv);
