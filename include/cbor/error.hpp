@@ -67,7 +67,7 @@ enum class error {
     /** An encode meets a simple value from 24 to 31. */
     reserved_simple_value,
     /** The encoder meets a typed array with a reserved tag or a tag outside RFC 8746, or a tag 29 that
-     * cbor::encode() writes without cbor::cycles. */
+     * cbor::encode() writes. */
     unsupported_value,
     /** A key or an index meets an item that is not a map or an array. */
     not_indexable,
@@ -107,7 +107,7 @@ enum class error {
     /** `path::compile<T>` gets a path that is not singular, and `T` is not `nodelist`. */
     not_singular_query,
     /**
-     * cbor::encode() with cbor::cycles would write more than `cbor::limits::maximum_amplification` times the size of the
+     * cbor::encode_value_sharing() would write more than `cbor::limits::maximum_amplification` times the size of the
      * tree, past `cbor::limits::amplification_activation_threshold`.
      */
     amplification_limit_breach

@@ -152,35 +152,27 @@ inline result encoded_cbor_data_item_found(call const &c)
     return expected_view_of(c.arguments.front(), cbor::encoded_cbor_data_item(**tree, **tagged));
 }
 
-template <class... Option>
-result encode_made_with(call const &c, Option const... option)
+template <bool ValueSharing>
+result encode_made(call const &c)
 {
+    if (auto const ok = arguments_counted(c, 2); !ok) [[unlikely]]
+        return std::unexpected(ok.error());
     auto const root = argument_of<cbor::item>(c, 0, "a cbor::item");
     if (!root) [[unlikely]]
         return std::unexpected(root.error());
+    auto const write = [&](auto &target) {
+        if constexpr (ValueSharing)
+            return cbor::encode_value_sharing(**root, target);
+        else
+            return cbor::encode(**root, target);
+    };
     if (auto *const target = changed_if<std::string>(c.arguments[1]))
-        return value_of(cbor::encode(**root, *target, option...));
-    if (auto const *const target = held_if<std::span<char>>(c.arguments[1]))
-        return value_of(cbor::encode(**root, *target, option...));
-    return std::unexpected("the argument 2 is not a std::string or a std::span<char>");
-}
-
-inline result encode_made(call const &c)
-{
-    if (c.arguments.size() == 3) {
-        auto const cycles = argument_of<cbor::cycles_t>(c, 2, "cbor::cycles");
-        if (!cycles) [[unlikely]]
-            return std::unexpected(cycles.error());
-        return encode_made_with(c, **cycles);
+        return value_of(write(*target));
+    if (auto const *const target = held_if<std::span<char>>(c.arguments[1])) {
+        std::span<char> span = *target;
+        return value_of(write(span));
     }
-    if (auto const ok = arguments_counted(c, 2); !ok) [[unlikely]]
-        return std::unexpected(ok.error());
-    return encode_made_with(c);
-}
-
-inline result cycles_named(call const &)
-{
-    return value_of(cbor::cycles);
+    return std::unexpected("the argument 2 is not a std::string or a std::span<char>");
 }
 
 template <class T>
@@ -485,8 +477,8 @@ using chars_encoder = cbor::encoder<std::span<char>>;
 inline constexpr entry decode_functions[] = {
     {"cbor::decode()", decode_made},
     {"cbor::encoded_cbor_data_item()", encoded_cbor_data_item_found},
-    {"cbor::encode()", encode_made},
-    {"cbor::cycles", cycles_named},
+    {"cbor::encode()", encode_made<false>},
+    {"cbor::encode_value_sharing()", encode_made<true>},
     {.name = "cbor::owning<cbor::item>.operator*()", .run = owning_item_star, .runnable = true},
     {.name = "cbor::item const *.operator*()", .run = item_pointer_star, .runnable = true},
     {.name = "cbor::item const *.get()", .run = item_get, .candidates = item_get_candidates, .runnable = true},

@@ -24,7 +24,7 @@ inline std::string item_notation(cbor::item const &node)
     auto written = cbor::encode(node, encoded);
     if (!written && written.error() == cbor::error::unsupported_value) {
         encoded.clear();
-        written = cbor::encode(node, encoded, cbor::cycles);
+        written = cbor::encode_value_sharing(node, encoded);
     }
     if (!written) [[unlikely]]
         return kind<cbor::error>::text(written.error());
