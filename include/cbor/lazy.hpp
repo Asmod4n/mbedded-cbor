@@ -345,9 +345,10 @@ public:
     std::expected<typename E::result_type, error> at_path(E const &e) const;
 
     /**
-     * @brief Gives the count of the head: the elements of an array, the pairs of a map, or the elements of a typed
-     * array.
+     * @brief Gives the count of the head of an array or a map, or the count of the elements of a typed array.
      *
+     * The count of an array or a map is the argument of its head (RFC 8949 section 3).
+     * The count of a typed array is the count of whole elements in its bytes (RFC 8746 section 2).
      * It reads only the head.
      * It does not read the children.
      *
@@ -586,7 +587,6 @@ private:
  * @brief The elements of one array, from cbor::lazy::elements().
  *
  * It is a forward range, a sized range and a borrowed range.
- * `size()` gives the count of the head.
  * `*it` gives the lazy of the element, or the error of the element.
  * An iterator holds the owner of the bytes, so it stays valid after the lazy and the view end.
  * `front()` does not compile.
@@ -660,6 +660,12 @@ struct lazy_elements : std::ranges::view_interface<lazy_elements> {
         return {};
     }
 
+    /**
+     * @brief Gives the count of the elements.
+     *
+     * The count of an array is the argument of its head (RFC 8949 section 3).
+     * The count of a typed array is the count of whole elements in its bytes (RFC 8746 section 2).
+     */
     std::uint64_t size() const
     {
         return count;
@@ -686,7 +692,6 @@ private:
  * @brief The pairs of one map, from cbor::lazy::entries(), in the order of the bytes.
  *
  * It is a forward range, a sized range and a borrowed range.
- * `size()` gives the count of pairs in the head.
  * `*it` gives the key in `first` and the value in `second`, or the error of the pair.
  * An iterator holds the owner of the bytes, so it stays valid after the lazy and the view end.
  * `front()` does not compile.
@@ -764,6 +769,11 @@ struct lazy_entries : std::ranges::view_interface<lazy_entries> {
         return {};
     }
 
+    /**
+     * @brief Gives the count of the pairs.
+     *
+     * The count is the argument of the head of the map (RFC 8949 section 3).
+     */
     std::uint64_t size() const
     {
         return count;

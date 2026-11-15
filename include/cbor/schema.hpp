@@ -3384,6 +3384,9 @@ public:
 
     using iterator = detail::indexing_iterator<E, std::monostate, &detail::reflection::typed_array_element_at<E>>;
 
+    /**
+     * @brief Gives the count of the elements in the mapped bytes.
+     */
     CBOR_ALWAYS_INLINE std::size_t size() const
     {
         return bytes.size() / sizeof(E);
@@ -4023,6 +4026,9 @@ public:
                 typed_array_view<E>(std::forward_like<Self>(self.owner), detail::reflection::list_span(self.encoded, list->items, sizeof(E))));
         }
 
+        /**
+         * @brief Gives the count of the elements of a list, or of the pairs of a map, in the mapped bytes.
+         */
         std::size_t size() const
             requires(listed)
         {
