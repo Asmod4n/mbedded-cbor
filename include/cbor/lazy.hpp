@@ -85,18 +85,6 @@ struct lazy;
 using nodelist = std::vector<lazy>;
 
 template <class T>
-concept scalar_result = (std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
-                        std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>
-#ifdef __STDCPP_FLOAT128_T__
-                        || std::is_same_v<T, std::float128_t>
-#endif
-    ;
-
-template <class T>
-concept view_result =
-    std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>;
-
-template <class T>
 concept path_result = scalar_result<T> || view_result<T> || std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>;
 
 template <class E>

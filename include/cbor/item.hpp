@@ -10,12 +10,22 @@
 #include <concepts>
 #include <cstdint>
 #include <expected>
+#include <functional>
+#include <ranges>
 #include <span>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 
+#if __has_include(<stdfloat>)
+#include <stdfloat>
+#endif
+
 #include "error.hpp"
+#include "head.hpp"
+#include "rfc8746.hpp"
 #include "rfc8949.hpp"
+#include "validity.hpp"
 
 namespace cbor
 {
@@ -31,6 +41,18 @@ struct tree_decoder;
 }
 
 struct item;
+
+template <class T>
+concept scalar_result = (std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
+                        std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>
+#ifdef __STDCPP_FLOAT128_T__
+                        || std::is_same_v<T, std::float128_t>
+#endif
+    ;
+
+template <class T>
+concept view_result =
+    std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>;
 
 template <cbor::type K>
 struct item_alternative;
@@ -174,7 +196,249 @@ struct item {
             return via.simple_value;
     }
 
+    /**
+     * @brief Gives the value of the node as `T`, as cbor::lazy::get() reads it.
+     *
+     * | T | Reads |
+     * |---|---|
+     * | an integer type | an integer that fits `T` |
+     * | `double` | a float, or an integer that a `double` holds exactly |
+     * | `bool`, `std::nullptr_t` | `false` or `true`, `null` |
+     * | `cbor::simple_value` | `false`, `true`, `null`, `undefined` or another simple value |
+     * | `std::string_view`, `std::span<std::byte const>` | a text, a byte string |
+     * | `cbor::typed_array` | a typed array (RFC 8746): its tag number and its bytes |
+     * | `std::span<item const>` | an array: its elements |
+     * | `std::ranges::chunk_view<std::span<item const>>` | a map: each key and its value as one chunk of two items |
+     * | `std::pair<std::uint64_t, item const *>` | a tag, a bignum or a shared reference: the tag number or the index, and the content or the target |
+     *
+     * A negative integer gives its value, -1 minus the argument (RFC 8949 3.1).
+     * Every `T` except the pair passes a tag that the call does not interpret, as cbor::lazy::get() does.
+     * A tag 2, 3 or 24 and a typed array are not passed, and a shared reference is not passed.
+     * A view and a pointer in the result point into the tree: the result is valid as long as the tree.
+     *
+     * @code{.example}
+     * message: {"a": -500}
+     * call: auto const tree = cbor::decode(bytes)
+     * result: owning item of {"a": -500}
+     * call: auto const map = *(*tree)->get<std::ranges::chunk_view<std::span<cbor::item const>>>()
+     * result: chunk_view of 1 pair: "a": -500
+     * call: map[0][0].get<std::string_view>()
+     * result: "a"
+     * call: map[0][1].get<std::int64_t>()
+     * result: -500
+     * call: map[0][1].get<std::uint64_t>()
+     * result: error number_out_of_range
+     * @endcode
+     *
+     * @retval incorrect_type the node is of another kind
+     * @retval number_out_of_range the number does not fit `T`, or the node is a bignum: a bignum node holds more than
+     * 64 bits, because cbor::decode() makes a smaller bignum an integer node
+     * @retval inadmissible_type_for_tag_content the node is a bignum whose content is not a byte string
+     * @see cbor::item::visit()
+     * @see cbor::lazy::get()
+     * @see cbor::decode()
+     */
+    template <class T>
+        requires((scalar_result<T>
+#ifdef __STDCPP_FLOAT128_T__
+                  && !std::is_same_v<T, std::float128_t>
+#endif
+                  ) ||
+                 view_result<T> || std::same_as<T, std::span<item const>> ||
+                 std::same_as<T, std::ranges::chunk_view<std::span<item const>>> ||
+                 std::same_as<T, std::pair<std::uint64_t, item const *>>)
+    std::expected<T, error> get() const
+    {
+        item const *at = this;
+        if constexpr (!std::same_as<T, std::pair<std::uint64_t, item const *>>)
+            while (at->type == cbor::type::tag && detail::heads::is_tag_passed(at->via.tag.number))
+                at = at->via.tag.content;
+        item const &node = *at;
+        if constexpr (std::integral<T> && !std::same_as<T, bool>) {
+            bool const negative = node.type == cbor::type::negative_integer;
+            if (node.type != cbor::type::unsigned_integer && !negative) [[unlikely]]
+                return node.reject_as_number();
+            if (error const c = detail::validity::check_number_range<T>(negative, node.via.u64).error_or(error{});
+                c != error{}) [[unlikely]]
+                return std::unexpected(c);
+            return negative ? detail::heads::subtract_argument_from_minus_one<T>(node.via.u64)
+                            : static_cast<T>(node.via.u64);
+        } else if constexpr (std::same_as<T, double>) {
+            switch (node.type) {
+            case cbor::type::half_float:
+            case cbor::type::single_float:
+            case cbor::type::double_float:
+                return node.via.f64;
+            case cbor::type::unsigned_integer:
+            case cbor::type::negative_integer: {
+                bool const negative = node.type == cbor::type::negative_integer;
+                if (error const c =
+                        detail::validity::check_number_range<double>(negative, node.via.u64).error_or(error{});
+                    c != error{}) [[unlikely]]
+                    return std::unexpected(c);
+                return negative ? detail::heads::subtract_argument_from_minus_one<double>(node.via.u64)
+                                : static_cast<double>(node.via.u64);
+            }
+            [[unlikely]] default:
+                return node.reject_as_number();
+            }
+        } else if constexpr (std::same_as<T, bool>) {
+            if (node.type != cbor::type::false_value && node.type != cbor::type::true_value) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            return node.type == cbor::type::true_value;
+        } else if constexpr (std::same_as<T, std::nullptr_t>) {
+            if (node.type != cbor::type::null) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            return nullptr;
+        } else if constexpr (std::same_as<T, simple_value>) {
+            switch (node.type) {
+            case cbor::type::false_value:
+            case cbor::type::true_value:
+            case cbor::type::null:
+            case cbor::type::undefined:
+            case cbor::type::simple_value:
+                return node.via.simple_value;
+            [[unlikely]] default:
+                return std::unexpected(error::incorrect_type);
+            }
+        } else if constexpr (std::same_as<T, std::string_view>) {
+            if (node.type != cbor::type::text_string) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            return node.via.str;
+        } else if constexpr (std::same_as<T, std::span<std::byte const>>) {
+            if (node.type != cbor::type::byte_string) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            return node.via.bin;
+        } else if constexpr (std::same_as<T, typed_array>) {
+            if (node.type != cbor::type::typed_array) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            return typed_array{node.via.tag.number, node.via.tag.content->via.bin};
+        } else if constexpr (std::same_as<T, std::span<item const>>) {
+            if (node.type != cbor::type::array) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            return node.via.array;
+        } else if constexpr (std::same_as<T, std::ranges::chunk_view<std::span<item const>>>) {
+            if (node.type != cbor::type::map) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            return std::ranges::chunk_view(node.via.map, rfc8949::data_items_per_pair);
+        } else {
+            switch (node.type) {
+            case cbor::type::tag:
+            case cbor::type::unsigned_bignum:
+            case cbor::type::negative_bignum:
+            case cbor::type::shared_reference:
+                return std::pair<std::uint64_t, item const *>(node.via.tag.number, node.via.tag.content);
+            [[unlikely]] default:
+                return std::unexpected(error::incorrect_type);
+            }
+        }
+    }
+
+#ifdef CBOR_HAS_INT128
+    /**
+     * @brief Calls `f` once with the value of the node, as std::visit calls its visitor, and gives what `f` gives.
+     *
+     * | Kind | `f` receives |
+     * |---|---|
+     * | `unsigned_integer` | `std::uint64_t` |
+     * | `negative_integer` | `cbor::int128`: the value, -1 minus the argument (RFC 8949 3.1) |
+     * | `half_float`, `single_float`, `double_float` | `double` |
+     * | `byte_string`, `text_string` | `std::span<std::byte const>`, `std::string_view` |
+     * | `array` | `std::span<item const>`: the elements |
+     * | `map` | `std::ranges::chunk_view<std::span<item const>>`: each key and its value as one chunk of two items |
+     * | `false_value`, `true_value` | `bool` |
+     * | `null` | `std::nullptr_t` |
+     * | `undefined`, `simple_value` | `cbor::simple_value` |
+     * | `tag`, `unsigned_bignum`, `negative_bignum` | `std::pair<std::uint64_t, item const *>`: the tag number and the content; a bignum has the tag number 2 or 3 (RFC 8949 3.4.3) |
+     * | `typed_array` | `cbor::typed_array` |
+     * | `shared_reference` | `item const *`: the target |
+     *
+     * `f` gives one return type for every alternative, as std::visit requires; another `f` does not compile.
+     * visit exists where cbor::int128 exists.
+     * A view and a pointer that `f` receives point into the tree.
+     *
+     * @code{.example}
+     * message: [1, -2]
+     * call: auto const tree = cbor::decode(bytes)
+     * result: owning item of [1, -2]
+     * call: (*tree)->visit([](auto const &v) { return sizeof(v); })
+     * result: 16
+     * call: auto const elements = *(*tree)->get<std::span<cbor::item const>>()
+     * result: span of 2 items: 1, -2
+     * call: elements[1].visit([](auto const v) -> bool { if constexpr (std::is_same_v<decltype(v), cbor::int128 const>) return v == -2; else return false; })
+     * result: true
+     * @endcode
+     *
+     * @see cbor::item::get()
+     */
+    template <class F>
+    decltype(auto) visit(F &&f) const
+    {
+        using result = std::invoke_result_t<F, std::uint64_t>;
+        static_assert(std::same_as<std::invoke_result_t<F, int128>, result> &&
+                          std::same_as<std::invoke_result_t<F, double>, result> &&
+                          std::same_as<std::invoke_result_t<F, std::span<std::byte const>>, result> &&
+                          std::same_as<std::invoke_result_t<F, std::string_view>, result> &&
+                          std::same_as<std::invoke_result_t<F, std::span<item const>>, result> &&
+                          std::same_as<std::invoke_result_t<F, std::ranges::chunk_view<std::span<item const>>>, result> &&
+                          std::same_as<std::invoke_result_t<F, bool>, result> &&
+                          std::same_as<std::invoke_result_t<F, std::nullptr_t>, result> &&
+                          std::same_as<std::invoke_result_t<F, simple_value>, result> &&
+                          std::same_as<std::invoke_result_t<F, std::pair<std::uint64_t, item const *>>, result> &&
+                          std::same_as<std::invoke_result_t<F, typed_array>, result> &&
+                          std::same_as<std::invoke_result_t<F, item const *>, result>,
+                      "cbor::item::visit: f must give one return type for every kind of node, as std::visit requires");
+        switch (type) {
+        case cbor::type::unsigned_integer:
+            return std::invoke(std::forward<F>(f), via.u64);
+        case cbor::type::negative_integer:
+            return std::invoke(std::forward<F>(f), detail::heads::subtract_argument_from_minus_one<int128>(via.u64));
+        case cbor::type::half_float:
+        case cbor::type::single_float:
+        case cbor::type::double_float:
+            return std::invoke(std::forward<F>(f), via.f64);
+        case cbor::type::byte_string:
+            return std::invoke(std::forward<F>(f), via.bin);
+        case cbor::type::text_string:
+            return std::invoke(std::forward<F>(f), via.str);
+        case cbor::type::array:
+            return std::invoke(std::forward<F>(f), via.array);
+        case cbor::type::map:
+            return std::invoke(std::forward<F>(f), std::ranges::chunk_view(via.map, rfc8949::data_items_per_pair));
+        case cbor::type::false_value:
+        case cbor::type::true_value:
+            return std::invoke(std::forward<F>(f), type == cbor::type::true_value);
+        case cbor::type::null:
+            return std::invoke(std::forward<F>(f), nullptr);
+        case cbor::type::undefined:
+        case cbor::type::simple_value:
+            return std::invoke(std::forward<F>(f), via.simple_value);
+        case cbor::type::tag:
+        case cbor::type::unsigned_bignum:
+        case cbor::type::negative_bignum:
+            return std::invoke(std::forward<F>(f), std::pair<std::uint64_t, item const *>(via.tag.number, via.tag.content));
+        case cbor::type::typed_array:
+            return std::invoke(std::forward<F>(f), typed_array{via.tag.number, via.tag.content->via.bin});
+        case cbor::type::shared_reference:
+            return std::invoke(std::forward<F>(f), via.tag.content);
+        }
+        detail::validity::throw_logic_error("cbor::item::visit: the type is not a member of cbor::type");
+    }
+#endif
+
 private:
+    std::unexpected<error> reject_as_number() const
+    {
+        if (type != cbor::type::unsigned_bignum && type != cbor::type::negative_bignum) [[unlikely]]
+            return std::unexpected(error::incorrect_type);
+        if (error const c = detail::validity::check_tag_content(via.tag.number,
+                                                                 detail::heads::major_type_of(via.tag.content->type))
+                                .error_or(error{});
+            c != error{}) [[unlikely]]
+            return std::unexpected(c);
+        return std::unexpected(error::number_out_of_range);
+    }
+
     union content {
         std::uint64_t u64;
         double f64;

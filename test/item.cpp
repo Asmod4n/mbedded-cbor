@@ -8,13 +8,16 @@
 #include "item_head.hpp"
 #include "reference.hpp"
 
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <climits>
 #include <cstddef>
 #include <cstdint>
+#include <expected>
 #include <functional>
 #include <limits>
+#include <ranges>
 #include <span>
 #include <stdexcept>
 #include <memory>
@@ -1222,4 +1225,518 @@ TEST_CASE("decode: tags 0 to 5, 21 to 24 and 32 to 36 over every major type stay
             CHECK_EQ((*r)->type, expected);
         }
     }
+}
+
+namespace item_get_test
+{
+
+using cbor::error;
+
+// The integer types of the C++ standard, signed and unsigned, and the character types. Each is an integral type that
+// is not bool, so get takes each of them, and the set is finite.
+template <class... T>
+struct types {
+};
+
+using integer_types = types<signed char, short, int, long, long long, unsigned char, unsigned short, unsigned,
+                            unsigned long, unsigned long long, char, wchar_t, char8_t, char16_t, char32_t>;
+
+template <class T>
+bool holds(std::int64_t const value)
+{
+    if (value < 0)
+        return std::numeric_limits<T>::is_signed && value >= static_cast<std::int64_t>(std::numeric_limits<T>::min());
+    return static_cast<std::uint64_t>(value) <= static_cast<std::uint64_t>(std::numeric_limits<T>::max());
+}
+
+// The values of the samples, from RFC 8949 Appendix A: 100, -1 - 99, the tag 1 over 1363896240, a bignum of 2^64 and
+// of -1 - 2^64. A bignum node holds more than 64 bits, so no integer type holds it.
+std::expected<std::int64_t, error> integer_of(cbor::type const kind)
+{
+    switch (kind) {
+    case cbor::type::unsigned_integer:
+        return 100;
+    case cbor::type::negative_integer:
+        return -100;
+    case cbor::type::tag:
+        return 1363896240;
+    case cbor::type::unsigned_bignum:
+    case cbor::type::negative_bignum:
+        return std::unexpected(error::number_out_of_range);
+    default:
+        return std::unexpected(error::incorrect_type);
+    }
+}
+
+// A double holds each integer of the samples exactly. Each float of the samples widens to a double exactly (RFC 8949
+// 3.3): 1.0, 100000.0 and 1.1.
+std::expected<double, error> double_of(cbor::type const kind)
+{
+    switch (kind) {
+    case cbor::type::unsigned_integer:
+        return 100.0;
+    case cbor::type::negative_integer:
+        return -100.0;
+    case cbor::type::tag:
+        return 1363896240.0;
+    case cbor::type::half_float:
+        return 1.0;
+    case cbor::type::single_float:
+        return 100000.0;
+    case cbor::type::double_float:
+        return 1.1;
+    case cbor::type::unsigned_bignum:
+    case cbor::type::negative_bignum:
+        return std::unexpected(error::number_out_of_range);
+    default:
+        return std::unexpected(error::incorrect_type);
+    }
+}
+
+// RFC 8949 3.3 Table 4: false is 20, true 21, null 22 and undefined 23. The sample of a simple value is simple(16).
+std::expected<cbor::simple_value, error> simple_of(cbor::type const kind)
+{
+    switch (kind) {
+    case cbor::type::false_value:
+        return cbor::simple_value{20};
+    case cbor::type::true_value:
+        return cbor::simple_value{21};
+    case cbor::type::null:
+        return cbor::simple_value{22};
+    case cbor::type::undefined:
+        return cbor::simple_value{23};
+    case cbor::type::simple_value:
+        return cbor::simple_value{16};
+    default:
+        return std::unexpected(error::incorrect_type);
+    }
+}
+
+template <class T, class E>
+void check_result(std::expected<T, error> const &got, std::expected<E, error> const &expected)
+{
+    REQUIRE_EQ(got.has_value(), expected.has_value());
+    if (!expected)
+        CHECK_EQ(got.error(), expected.error());
+}
+
+using pair = std::pair<std::uint64_t, cbor::item const *>;
+using pairs = std::ranges::chunk_view<std::span<cbor::item const>>;
+
+template <class T>
+void check_integer(cbor::type const kind, cbor::item const &it)
+{
+    CAPTURE(sizeof(T));
+    CAPTURE(std::numeric_limits<T>::is_signed);
+    std::expected<std::int64_t, error> expected = integer_of(kind);
+    if (expected && !holds<T>(*expected))
+        expected = std::unexpected(error::number_out_of_range);
+    auto const got = it.get<T>();
+    check_result(got, expected);
+    if (expected)
+        CHECK_EQ(static_cast<std::int64_t>(*got), *expected);
+}
+
+template <class... T>
+void check_integers(cbor::type const kind, cbor::item const &it, types<T...>)
+{
+    (check_integer<T>(kind, it), ...);
+}
+
+void check_every_type(cbor::type const kind, cbor::item const &it, cbor::item const *const first)
+{
+    check_integers(kind, it, integer_types{});
+
+    std::expected<double, error> const d = double_of(kind);
+    auto const got_double = it.get<double>();
+    check_result(got_double, d);
+    if (d)
+        CHECK_EQ(*got_double, *d);
+
+    auto const got_bool = it.get<bool>();
+    check_result(got_bool, kind == cbor::type::false_value || kind == cbor::type::true_value
+                               ? std::expected<bool, error>(kind == cbor::type::true_value)
+                               : std::unexpected(error::incorrect_type));
+    if (got_bool)
+        CHECK_EQ(*got_bool, kind == cbor::type::true_value);
+
+    check_result(it.get<std::nullptr_t>(), kind == cbor::type::null ? std::expected<std::nullptr_t, error>(nullptr)
+                                                                    : std::unexpected(error::incorrect_type));
+
+    std::expected<cbor::simple_value, error> const s = simple_of(kind);
+    auto const got_simple = it.get<cbor::simple_value>();
+    check_result(got_simple, s);
+    if (s)
+        CHECK_EQ(*got_simple, *s);
+
+    auto const text = it.get<std::string_view>();
+    check_result(text, kind == cbor::type::text_string ? std::expected<int, error>(0)
+                                                       : std::unexpected(error::incorrect_type));
+    if (text)
+        CHECK_EQ(*text, "IETF"sv);
+
+    auto const bytes = it.get<std::span<std::byte const>>();
+    check_result(bytes, kind == cbor::type::byte_string ? std::expected<int, error>(0)
+                                                        : std::unexpected(error::incorrect_type));
+    if (bytes)
+        CHECK(std::ranges::equal(*bytes, std::array{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}}));
+
+    // RFC 8746 2: the tag 64 is a typed array of uint8, and its content is the byte string of the elements.
+    auto const typed = it.get<cbor::typed_array>();
+    check_result(typed, kind == cbor::type::typed_array ? std::expected<int, error>(0)
+                                                        : std::unexpected(error::incorrect_type));
+    if (typed) {
+        CHECK_EQ(typed->tag, 64u);
+        CHECK(std::ranges::equal(typed->bytes, std::array{std::byte{1}, std::byte{2}}));
+    }
+
+    auto const elements = it.get<std::span<cbor::item const>>();
+    check_result(elements, kind == cbor::type::array ? std::expected<int, error>(0)
+                                                     : std::unexpected(error::incorrect_type));
+    if (elements) {
+        REQUIRE_EQ(elements->size(), 3u);
+        CHECK_EQ((*elements)[2].get<int>().value(), 3);
+    }
+
+    auto const map = it.get<pairs>();
+    check_result(map, kind == cbor::type::map ? std::expected<int, error>(0) : std::unexpected(error::incorrect_type));
+    if (map) {
+        REQUIRE_EQ(map->size(), 1u);
+        CHECK_EQ((*map)[0][0].get<int>().value(), 1);
+        CHECK_EQ((*map)[0][1].get<int>().value(), 2);
+    }
+
+    // RFC 8949 3.4: the tag 1 sample has the number 1; a bignum has the number 2 or 3 (3.4.3); the shared reference
+    // 29(0) has the index 0, and its target is the first element, which the tag 28 marks.
+    auto const tagged = it.get<pair>();
+    bool const is_pair = kind == cbor::type::tag || kind == cbor::type::unsigned_bignum ||
+                         kind == cbor::type::negative_bignum || kind == cbor::type::shared_reference;
+    check_result(tagged, is_pair ? std::expected<int, error>(0) : std::unexpected(error::incorrect_type));
+    if (tagged) {
+        std::uint64_t const number = kind == cbor::type::tag               ? 1
+                                     : kind == cbor::type::unsigned_bignum ? 2
+                                     : kind == cbor::type::negative_bignum ? 3
+                                                                           : 0;
+        CHECK_EQ(tagged->first, number);
+        if (kind == cbor::type::shared_reference)
+            CHECK_EQ(tagged->second, first);
+        else if (kind == cbor::type::tag)
+            CHECK_EQ(tagged->second->get<std::uint64_t>().value(), 1363896240u);
+        else
+            CHECK_EQ(tagged->second->get<std::span<std::byte const>>()->size(), 9u);
+    }
+}
+
+cbor::item const &node_of(sample const &s, cbor::owning<cbor::item> const &tree)
+{
+    if (s.type != cbor::type::shared_reference)
+        return *tree;
+    return tree->get<std::span<cbor::item const>>().value()[1];
+}
+
+// get<T> is defined for every pair of a kind of node and a type T. The kinds are the 19 members of cbor::type and the
+// types are a finite set, so every pair is checked. The expectations come from RFC 8949 and RFC 8746, not from the code.
+TEST_CASE("item get<T>: every kind of node read as every type")
+{
+    for (sample const &s : samples) {
+        CAPTURE(std::to_underlying(s.type));
+        auto const tree = cbor::decode(s.encoded);
+        REQUIRE(tree.has_value());
+        cbor::item const &it = node_of(s, *tree);
+        cbor::item const *const first =
+            s.type == cbor::type::shared_reference ? &(*tree)->get<std::span<cbor::item const>>().value()[0] : nullptr;
+        check_every_type(s.type, it, first);
+    }
+}
+
+std::string head_of(int const major, std::uint64_t const argument)
+{
+    std::string head(1, static_cast<char>(major << 5 | 27));
+    for (int shift = 56; shift >= 0; shift -= 8)
+        head.push_back(static_cast<char>((argument >> shift) & 0xff));
+    return head;
+}
+
+constexpr int unsigned_major = 0;
+constexpr int negative_major = 1;
+constexpr std::uint64_t all_bits = std::numeric_limits<std::uint64_t>::max();
+
+template <class T>
+std::expected<T, error> read_integer(int const major, std::uint64_t const argument)
+{
+    auto const tree = cbor::decode(head_of(major, argument));
+    REQUIRE(tree.has_value());
+    return (*tree)->get<T>();
+}
+
+template <class T>
+void check_out_of_range(std::expected<T, error> const &got)
+{
+    REQUIRE_FALSE(got.has_value());
+    CHECK_EQ(got.error(), error::number_out_of_range);
+}
+
+template <class T>
+void check_bounds()
+{
+    CAPTURE(sizeof(T));
+    CAPTURE(std::numeric_limits<T>::is_signed);
+    auto const max = static_cast<std::uint64_t>(std::numeric_limits<T>::max());
+    CHECK(read_integer<T>(unsigned_major, 0).value() == T{});
+    CHECK(read_integer<T>(unsigned_major, max).value() == std::numeric_limits<T>::max());
+    if (max != all_bits)
+        check_out_of_range(read_integer<T>(unsigned_major, max + 1));
+    auto const all = read_integer<T>(unsigned_major, all_bits);
+    if (max == all_bits)
+        CHECK(all.value() == std::numeric_limits<T>::max());
+    else
+        check_out_of_range(all);
+    // RFC 8949 3.1: the value of major type 1 is -1 minus the argument. So -1 is the argument 0, the minimum of a
+    // signed type is the argument max, and the argument 2^64 - 1 is -2^64, which no type of 64 bits holds.
+    if constexpr (std::numeric_limits<T>::is_signed) {
+        CHECK(read_integer<T>(negative_major, 0).value() == T{-1});
+        CHECK(read_integer<T>(negative_major, max).value() == std::numeric_limits<T>::min());
+        check_out_of_range(read_integer<T>(negative_major, max + 1));
+    } else {
+        check_out_of_range(read_integer<T>(negative_major, 0));
+    }
+    check_out_of_range(read_integer<T>(negative_major, all_bits));
+}
+
+template <class... T>
+void check_every_bound(types<T...>)
+{
+    (check_bounds<T>(), ...);
+}
+
+// Each bound of each integer type is a place where a range check can be off by one: 0, max, max + 1, -1, min, min - 1,
+// 2^64 - 1 and -2^64.
+TEST_CASE("item get<T>: the bounds of every integer type")
+{
+    check_every_bound(integer_types{});
+}
+
+// A double has 53 bits of significand (IEEE 754 binary64). An integer that it does not hold exactly is out of range,
+// as for cbor::lazy::get<double>.
+TEST_CASE("item get<double>: an integer that a double holds and one that it does not")
+{
+    constexpr std::uint64_t two_to_53 = std::uint64_t{1} << 53;
+    CHECK_EQ(read_integer<double>(unsigned_major, two_to_53).value(), 9007199254740992.0);
+    check_out_of_range(read_integer<double>(unsigned_major, two_to_53 + 1));
+    check_out_of_range(read_integer<double>(negative_major, two_to_53));
+    CHECK_EQ(read_integer<double>(negative_major, all_bits).value(), -18446744073709551616.0);
+    auto const half = cbor::decode("\xf9\xc4\x00"sv);
+    CHECK_EQ((*half)->get<double>().value(), -4.0);
+    auto const single = cbor::decode("\xfa\x7f\x7f\xff\xff"sv);
+    CHECK_EQ((*single)->get<double>().value(), 3.4028234663852886e+38);
+    auto const wide = cbor::decode("\xfb\xc0\x10\x66\x66\x66\x66\x66\x66"sv);
+    CHECK_EQ((*wide)->get<double>().value(), -4.1);
+    auto const bignum = cbor::decode("\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"sv);
+    check_out_of_range((*bignum)->get<double>());
+}
+
+// RFC 8949 3.4: a decoder passes a tag that it does not interpret. get passes the tags that cbor::lazy::get passes.
+// A tag 24 is not passed: its content is a byte string, and cbor::encoded_cbor_data_item gives the item in it. A tag
+// 55799 inside an item is a tag of its own (RFC 8949 3.4.6) and is passed. The tag 1 in 28(1(29(0))) holds a shared
+// reference to itself; a shared reference is not passed, so the call ends.
+TEST_CASE("item get<T>: the tags that get passes")
+{
+    auto const epoch = cbor::decode("\xc1\x05"sv);
+    CHECK_EQ((*epoch)->get<int>().value(), 5);
+    auto const embedded = cbor::decode("\xd8\x18\x41\x01"sv);
+    CHECK_EQ((*embedded)->get<int>().error(), error::incorrect_type);
+    CHECK_EQ((*embedded)->get<std::span<std::byte const>>().error(), error::incorrect_type);
+    CHECK_EQ((*embedded)->get<pair>()->first, 24u);
+    auto const self_described = cbor::decode("\x81\xd9\xd9\xf7\x07"sv);
+    CHECK_EQ((*self_described)->get<std::span<cbor::item const>>().value()[0].get<int>().value(), 7);
+    auto const loop = cbor::decode("\xd8\x1c\xc1\xd8\x1d\x00"sv);
+    REQUIRE(loop.has_value());
+    CHECK_EQ((*loop)->get<int>().error(), error::incorrect_type);
+    CHECK_EQ((*loop)->get<pair>()->first, 1u);
+}
+
+// RFC 8949 3.4.3: the content of a bignum is a byte string. A tree keeps a tag 2 over another content as a bignum
+// node, and get reports the content as cbor::lazy::get does.
+TEST_CASE("item get<T>: a bignum over a text")
+{
+    auto const tree = cbor::decode("\xc2\x61\x61"sv);
+    REQUIRE(tree.has_value());
+    CHECK_EQ((*tree)->get<int>().error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ((*tree)->get<double>().error(), error::inadmissible_type_for_tag_content);
+}
+
+template <class T>
+void check_agreement(cbor::item const &it, cbor::lazy const &doc)
+{
+    auto const tree = it.get<T>();
+    auto const lazy = doc.get<T>();
+    REQUIRE_EQ(tree.has_value(), lazy.has_value());
+    if (!tree) {
+        CHECK_EQ(tree.error(), lazy.error());
+        return;
+    }
+    if constexpr (std::same_as<T, std::span<std::byte const>>)
+        CHECK(std::ranges::equal(*tree, **lazy));
+    else if constexpr (std::same_as<T, std::string_view>)
+        CHECK_EQ(*tree, **lazy);
+    else if constexpr (std::same_as<T, cbor::typed_array>) {
+        CHECK_EQ(tree->tag, (*lazy)->tag);
+        CHECK(std::ranges::equal(tree->bytes, (*lazy)->bytes));
+    } else
+        CHECK(*tree == *lazy);
+}
+
+template <class... T>
+void check_agreements(cbor::item const &it, cbor::lazy const &doc, types<T...>)
+{
+    (check_agreement<T>(it, doc), ...);
+}
+
+// A program reads a value either from a tree or from a lazy, and both must give the same value or the same error. The
+// exceptions are a ref against a plain view, a tag 24, which a lazy passes into its content, and the tags 28 and 29,
+// which a tree resolves and a lazy passes.
+TEST_CASE("item get<T> and lazy get<T> agree")
+{
+    for (sample const &s : samples) {
+        if (s.type == cbor::type::shared_reference)
+            continue;
+        CAPTURE(std::to_underlying(s.type));
+        auto const tree = cbor::decode(s.encoded);
+        REQUIRE(tree.has_value());
+        auto const doc = cbor::lazy::view(std::make_shared<std::string const>(s.encoded));
+        REQUIRE(doc.has_value());
+        check_agreements(**tree, *doc, integer_types{});
+        check_agreements(**tree, *doc,
+                         types<double, bool, std::nullptr_t, cbor::simple_value, std::string_view,
+                               std::span<std::byte const>, cbor::typed_array>{});
+    }
+}
+
+#ifdef CBOR_HAS_INT128
+using received = std::variant<std::uint64_t, cbor::int128, double, std::span<std::byte const>, std::string_view,
+                              std::span<cbor::item const>, pairs, bool, std::nullptr_t, cbor::simple_value, pair,
+                              cbor::typed_array, cbor::item const *>;
+
+// The alternative that f receives for each kind, in the order of received, from the table of item::visit.
+std::size_t alternative_of(cbor::type const kind)
+{
+    switch (kind) {
+    case cbor::type::unsigned_integer:
+        return 0;
+    case cbor::type::negative_integer:
+        return 1;
+    case cbor::type::half_float:
+    case cbor::type::single_float:
+    case cbor::type::double_float:
+        return 2;
+    case cbor::type::byte_string:
+        return 3;
+    case cbor::type::text_string:
+        return 4;
+    case cbor::type::array:
+        return 5;
+    case cbor::type::map:
+        return 6;
+    case cbor::type::false_value:
+    case cbor::type::true_value:
+        return 7;
+    case cbor::type::null:
+        return 8;
+    case cbor::type::undefined:
+    case cbor::type::simple_value:
+        return 9;
+    case cbor::type::tag:
+    case cbor::type::unsigned_bignum:
+    case cbor::type::negative_bignum:
+        return 10;
+    case cbor::type::typed_array:
+        return 11;
+    case cbor::type::shared_reference:
+        return 12;
+    }
+    return std::variant_npos;
+}
+
+// visit calls f once with the value of the node. Each kind has its own C++ type, so f tells an array from a map and a
+// shared reference from a tag. A negative integer comes as cbor::int128, which holds every value down to -2^64. The
+// kinds are the 19 members of cbor::type, so every kind is checked.
+TEST_CASE("item visit: f receives the value of every kind of node")
+{
+    for (sample const &s : samples) {
+        CAPTURE(std::to_underlying(s.type));
+        auto const tree = cbor::decode(s.encoded);
+        REQUIRE(tree.has_value());
+        cbor::item const &it = node_of(s, *tree);
+        int calls = 0;
+        auto const got = it.visit([&calls](auto const value) {
+            ++calls;
+            return received(value);
+        });
+        CHECK((std::same_as<decltype(it.visit([](auto) { return received{}; })), received>));
+        CHECK_EQ(calls, 1);
+        REQUIRE_EQ(got.index(), alternative_of(s.type));
+        switch (s.type) {
+        case cbor::type::unsigned_integer:
+            CHECK_EQ(std::get<std::uint64_t>(got), 100u);
+            break;
+        case cbor::type::negative_integer:
+            CHECK(std::get<cbor::int128>(got) == -100);
+            break;
+        case cbor::type::half_float:
+        case cbor::type::single_float:
+        case cbor::type::double_float:
+            CHECK_EQ(std::get<double>(got), double_of(s.type).value());
+            break;
+        case cbor::type::byte_string:
+            CHECK_EQ(std::get<std::span<std::byte const>>(got).size(), 4u);
+            break;
+        case cbor::type::text_string:
+            CHECK_EQ(std::get<std::string_view>(got), "IETF"sv);
+            break;
+        case cbor::type::array:
+            CHECK_EQ(std::get<std::span<cbor::item const>>(got).size(), 3u);
+            break;
+        case cbor::type::map:
+            CHECK_EQ(std::get<pairs>(got).size(), 1u);
+            break;
+        case cbor::type::false_value:
+        case cbor::type::true_value:
+            CHECK_EQ(std::get<bool>(got), s.type == cbor::type::true_value);
+            break;
+        case cbor::type::null:
+            break;
+        case cbor::type::undefined:
+        case cbor::type::simple_value:
+            CHECK_EQ(std::get<cbor::simple_value>(got), simple_of(s.type).value());
+            break;
+        case cbor::type::tag:
+        case cbor::type::unsigned_bignum:
+        case cbor::type::negative_bignum:
+            CHECK_EQ(std::get<pair>(got).first, s.type == cbor::type::tag ? 1u : s.type == cbor::type::unsigned_bignum ? 2u : 3u);
+            break;
+        case cbor::type::typed_array:
+            CHECK_EQ(std::get<cbor::typed_array>(got).tag, 64u);
+            break;
+        case cbor::type::shared_reference:
+            CHECK_EQ(std::get<cbor::item const *>(got), &(*tree)->get<std::span<cbor::item const>>().value()[0]);
+            break;
+        }
+    }
+}
+
+// RFC 8949 3.1: the smallest negative integer is -2^64, the argument 2^64 - 1. No 64-bit type holds it, cbor::int128
+// does.
+TEST_CASE("item visit: the smallest negative integer")
+{
+    auto const tree = cbor::decode(head_of(negative_major, all_bits));
+    REQUIRE(tree.has_value());
+    CHECK((*tree)->visit([](auto const value) -> bool {
+        if constexpr (std::same_as<decltype(value), cbor::int128 const>)
+            return value == -static_cast<cbor::int128>(all_bits) - 1;
+        else
+            return false;
+    }));
+}
+#endif
+
 }

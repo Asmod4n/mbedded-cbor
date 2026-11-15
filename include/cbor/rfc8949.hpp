@@ -157,6 +157,8 @@ class rfc8949
 
     friend struct lazy;
 
+    friend struct item;
+
     template <bool>
     friend struct detail::tree_decoder;
 

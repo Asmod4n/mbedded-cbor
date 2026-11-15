@@ -260,6 +260,16 @@ class heads
         return n;
     }
 
+    template <class T>
+    CBOR_ALWAYS_INLINE static constexpr T subtract_argument_from_minus_one(std::uint64_t const argument)
+    {
+        if constexpr (std::same_as<T, double>)
+            return -static_cast<double>(argument == std::numeric_limits<std::uint64_t>::max() ? argument
+                                                                                              : argument + 1);
+        else
+            return static_cast<T>(~static_cast<T>(argument));
+    }
+
     struct head {
         major_type major;
         std::uint8_t info;
@@ -403,8 +413,7 @@ class heads
                 if (error const c = detail::validity::check_number_range<T>(negative, argument).error_or(error{});
                     c != error{}) [[unlikely]]
                     return std::unexpected(c);
-                T const magnitude = static_cast<T>(argument);
-                return static_cast<T>(negative ? ~magnitude : magnitude);
+                return negative ? subtract_argument_from_minus_one<T>(argument) : static_cast<T>(argument);
             } else if constexpr (std::same_as<T, double>) {
                 if (is_bignum(h.major, h.argument)) [[unlikely]] {
                     auto const read = decode_bignum(h.argument);
@@ -425,8 +434,7 @@ class heads
                         return std::unexpected(c);
                     if (!negative)
                         return static_cast<double>(h.argument);
-                    return -static_cast<double>(
-                        h.argument == std::numeric_limits<std::uint64_t>::max() ? h.argument : h.argument + 1);
+                    return subtract_argument_from_minus_one<double>(h.argument);
                 }
                 if (h.major != major_type::simple) [[unlikely]]
                     return std::unexpected(error::incorrect_type);
