@@ -1,5 +1,6 @@
-// The bench of the block cbor::encode of a tree into a std::string and into a std::span (encode.hpp), and of
-// cbor::encoder over a cbor::iov_writer with texts that the program hands over with their owner. A commit before
+// The bench of the block cbor::encode of a tree into a std::string and into a std::span (encode.hpp), of
+// cbor::encode_iov of a tree, and of cbor::encoder over a cbor::iov_writer with texts that the program hands over with
+// their owner. A commit before
 // encoder::finish_iov ends the encoder over the iov_writer with finish.
 // Each iteration writes every tree of a list whose messages hold COLD_BYTES bytes.
 #include <benchmark/benchmark.h>
@@ -111,9 +112,27 @@ void encode_iov_owned(benchmark::State &state)
     }
     state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(count));
 }
+
+void encode_iov_item(benchmark::State &state)
+{
+    auto const sample = cbor::decode(message);
+    if (!sample) {
+        state.SkipWithError("cbor::decode refuses {\"a\": \"IETF\", \"b\": [h'01020304', 2]}");
+        return;
+    }
+    std::size_t const count = cold_bytes() / message.size() + 1;
+    for (auto _ : state) {
+        for (std::size_t i = 0; i < count; ++i) {
+            auto pieces = cbor::encode_iov(**sample);
+            benchmark::DoNotOptimize(pieces);
+        }
+    }
+    state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(count));
+}
 }
 
 BENCHMARK(encode<false>)->Name("encode_string")->Unit(benchmark::kMillisecond);
 BENCHMARK(encode<true>)->Name("encode_span")->Unit(benchmark::kMillisecond);
 BENCHMARK(encode_iov_owned)->Unit(benchmark::kMillisecond);
+BENCHMARK(encode_iov_item)->Unit(benchmark::kMillisecond);
 BENCHMARK_MAIN();
