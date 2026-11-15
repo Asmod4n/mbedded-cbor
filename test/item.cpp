@@ -1551,6 +1551,16 @@ TEST_CASE("item get<T> and lazy get<T> agree")
     }
 }
 
+// cbor::encode and cbor::encode_cycles count the bytes that they wrote to memory. Such a count is a std::size_t, as
+// std::string::size and std::span::size give it. The expectation comes from that decision, not from the header.
+TEST_CASE("encode: the count of bytes written is a std::size_t")
+{
+    CHECK((std::is_same_v<decltype(cbor::encode(std::declval<cbor::item const &>(), std::declval<std::string &>())),
+                          std::expected<std::size_t, cbor::error>>));
+    CHECK((std::is_same_v<decltype(cbor::encode_cycles(std::declval<cbor::item const &>(), std::declval<std::string &>())),
+                          std::expected<std::size_t, cbor::error>>));
+}
+
 #ifdef CBOR_HAS_INT128
 using received = std::variant<std::uint64_t, cbor::int128, double, std::span<std::byte const>, std::string_view,
                               std::span<cbor::item const>, pairs, bool, std::nullptr_t, cbor::simple_value, pair,

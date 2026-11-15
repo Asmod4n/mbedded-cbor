@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <string>
 #include <string_view>
+#include <type_traits>
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
@@ -92,4 +93,11 @@ TEST_CASE("item_size: an array and a map of 100000 data items are read in one pa
     CHECK_EQ(cbor::item_size(array).value(), array.size());
     std::string const map = "\xba\x00\x00\xc3\x50"s + std::string(100000, '\x00');
     CHECK_EQ(cbor::item_size(map).value(), map.size());
+}
+
+// item_size counts the bytes of an item in memory. Such a count is a std::size_t, as std::string_view::size gives it.
+// The expectation comes from that decision, not from the header.
+TEST_CASE("item_size: the size of an item is a std::size_t")
+{
+    CHECK((std::is_same_v<decltype(cbor::item_size(""sv)), std::expected<std::size_t, error>>));
 }

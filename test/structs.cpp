@@ -27,6 +27,7 @@
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <type_traits>
 #include <unordered_map>
 #include <variant>
 #include <vector>
@@ -1246,4 +1247,12 @@ TEST_CASE("encode: a span keeps every byte behind the struct")
     REQUIRE(n.has_value());
     CHECK_EQ(std::string_view(buffer.data(), *n), *expected);
     CHECK(std::ranges::all_of(std::span(buffer).subspan(*n), [](char const c) { return c == sentinel; }));
+}
+
+// structs::encode with a target counts the bytes that it appended to memory. Such a count is a std::size_t, as
+// std::string::size gives it. The expectation comes from that decision, not from the header.
+TEST_CASE("structs: the count of bytes appended is a std::size_t")
+{
+    CHECK((std::is_same_v<decltype(cbor::structs<pair_ab>::encode(std::declval<pair_ab const &>(), std::declval<std::string &>())),
+                          std::expected<std::size_t, cbor::error>>));
 }

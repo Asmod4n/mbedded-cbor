@@ -283,3 +283,19 @@ TEST_CASE("view: an empty view has no front, no back and no element")
     CHECK_EQ(v->first(1).error(), error::index_out_of_bounds);
     CHECK_EQ(v->last(1).error(), error::index_out_of_bounds);
 }
+
+// A count of a schema comes from memory that is mapped: whole elements of a fixed width in the bytes of the message,
+// or bytes. Such a count is a std::size_t, as std::span::size gives it. The expectation comes from that decision, not
+// from the header.
+TEST_CASE("view: each count of mapped bytes is a std::size_t")
+{
+    CHECK((std::is_same_v<decltype(std::declval<cbor::typed_array_view<double> const &>().size()), std::size_t>));
+    CHECK((std::is_same_v<decltype(form<numbers>::fixed_size()), std::size_t>));
+    CHECK((std::is_same_v<decltype(form<numbers>::encode(std::declval<numbers const &>(), std::declval<std::string &>())),
+                          std::expected<std::size_t, error>>));
+    auto const root = form<everything>::adopt(encode_with_schema(sample_everything));
+    REQUIRE(root.has_value());
+    auto const owners = root->at_path<"$.owners">();
+    REQUIRE(owners.has_value());
+    CHECK((std::is_same_v<decltype(owners->size()), std::size_t>));
+}

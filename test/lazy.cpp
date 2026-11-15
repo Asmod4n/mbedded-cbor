@@ -26,6 +26,7 @@
 #include <system_error>
 #include <thread>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -2026,4 +2027,36 @@ TEST_CASE("lazy: a count longer than the bytes is too_little_data before the fir
     ++it;
     REQUIRE(it != elements->end());
     CHECK_EQ((*it).error(), error::too_little_data);
+}
+
+// The type of a count follows its source. The count of an array or a map is the argument of its head, and RFC 8949
+// section 3 allows up to 2^64 - 1, so it is a std::uint64_t on every target. The count of a typed array has the same
+// type, because one function has one return type. The expectation comes from that decision, not from the header.
+TEST_CASE("lazy: each count of a head is a std::uint64_t")
+{
+    CHECK((std::is_same_v<decltype(std::declval<cbor::lazy const &>().size()), std::expected<std::uint64_t, error>>));
+    CHECK((std::is_same_v<decltype(std::declval<cbor::lazy const &>().empty()), std::expected<bool, error>>));
+    CHECK((std::is_same_v<decltype(std::declval<cbor::lazy_elements const &>().size()), std::uint64_t>));
+    CHECK((std::is_same_v<decltype(std::declval<cbor::lazy_entries const &>().size()), std::uint64_t>));
+}
+
+// A count of 2^32 does not fit a 32-bit std::size_t. With no bytes after the head, size() and elements() compare the
+// full count with the bytes that are left, and give too_little_data on every target.
+TEST_CASE("lazy: a head that claims 2^32 elements over no bytes is too_little_data")
+{
+    auto const doc = lazy_of("\x9b\x00\x00\x00\x01\x00\x00\x00\x00"s);
+    CHECK_EQ(doc.size().error(), error::too_little_data);
+    CHECK_EQ(doc.elements().error(), error::too_little_data);
+}
+
+// RFC 8746 section 2: the head of a typed array holds the count of its bytes, not of its elements. Tag 70 is uint32 in
+// little endian, 4 bytes for each element (RFC 8746 section 2.1, table 1). So 12 bytes are 3 elements, and size() and
+// elements().size() give 3, not 12.
+TEST_CASE("lazy: the count of a typed array is its whole elements, not its bytes")
+{
+    auto const doc = lazy_of("\xd8\x46\x4c"s + std::string(12, '\x01'));
+    CHECK_EQ(doc.size().value(), 3u);
+    auto const elements = doc.elements();
+    REQUIRE(elements.has_value());
+    CHECK_EQ(elements->size(), 3u);
 }
