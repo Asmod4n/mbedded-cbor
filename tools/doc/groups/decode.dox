@@ -16,26 +16,36 @@ nothing: an array that claims more elements than bytes are left gives
 
 @section decode_tree THE TREE
 
-An item has two data members: `type`, a `cbor::type`, and
-`additional_information` (RFC 8949, section 3). `get<K>()` gives the
-value as `std::expected<cbor::item_alternative_t<K>, error>`, where `K`
-is a `cbor::type`. A `K` that is not the `type` of the item gives
-`incorrect_type`.
+`type()` gives the kind of an item, a `cbor::type`.
+`additional_information` gives the low 5 bits of its initial byte
+(RFC 8949, section 3). `get<T>()` gives the value as
+`std::expected<T, error>`, as `cbor::lazy::get<T>()` reads it. A node of
+another kind gives `incorrect_type`, and a number that `T` does not hold
+gives `number_out_of_range`.
 
-- `unsigned_integer`, `negative_integer`: `std::uint64_t`, the argument.
-- `byte_string`, `text_string`: `std::span<std::byte const>`,
-  `std::string_view`.
-- `array`: `std::span<cbor::item const>`, the elements.
-- `map`: `std::span<cbor::item const>`, each key and its value one after
-  the other.
-- `tag`, `unsigned_bignum`, `negative_bignum`, `typed_array`:
-  `std::pair<std::uint64_t, cbor::item const *>`, the tag number and the
-  item of the content.
-- `shared_reference`: `std::pair<std::uint64_t, cbor::item const *>`, the
-  index of the tag 29 and the item that the tag 28 of that index marks.
-- `half_float`, `single_float`, `double_float`: `double`.
-- `false_value`, `true_value`, `null`, `undefined`, `simple_value`:
-  `cbor::simple_value`.
+- An integer type: an integer; a negative integer gives its value,
+  -1 minus the argument.
+- `double`: a float, or an integer that a `double` holds exactly.
+- `bool`, `std::nullptr_t`: `false` or `true`, `null`.
+- `cbor::simple_value`: `false`, `true`, `null`, `undefined` or another
+  simple value.
+- `std::string_view`, `std::span<std::byte const>`: a text, a byte
+  string.
+- `cbor::typed_array`: a typed array (RFC 8746), its tag number and its
+  bytes.
+- `std::span<cbor::item const>`: an array, its elements.
+- `std::ranges::chunk_view<std::span<cbor::item const>>`: a map, each key
+  and its value as one chunk of two items.
+- `std::pair<std::uint64_t, cbor::item const *>`: a tag, a bignum or a
+  `shared_reference`, the tag number or the index, and the content or
+  the item that the tag 28 of that index marks.
+
+Every `T` except the pair passes a tag that it does not interpret, as
+`cbor::lazy::get` does. `visit(f)` calls `f` once with the value of the
+node, as `std::visit` does: a negative integer as `cbor::int128`, a map
+as the `chunk_view`, a tag or a bignum as the pair, a typed array as
+`cbor::typed_array` and a `shared_reference` as the `cbor::item const *`
+of its target. `visit` exists where `cbor::int128` exists.
 
 A bignum (tag 2 or 3) whose magnitude fits in 64 bits is the same value
 as a basic integer (RFC 8949, section 3.4.3). `cbor::decode` makes it an
