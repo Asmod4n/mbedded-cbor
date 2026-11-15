@@ -99,7 +99,7 @@ std::expected< std::conditional_t< view_result< T >, \fBref\fP< T >, T >, \fBerr
 .br
 .RI "Gives the pairs of a map, in the order of the bytes, as a view\&. "
 .ti -1c
-.RI "std::expected< \fBowning\fP< \fBitem\fP >, \fBerror\fP > \fBclone\fP () const"
+.RI "std::expected< \fBowning\fP< \fBitem\fP >, \fBerror\fP > \fBto_item\fP () const"
 .br
 .RI "Decodes the whole item at the lazy into a tree of \fBcbor::item\fP, as \fBcbor::decode()\fP does, except that tags 28 and 29 stay tag nodes, and that a tag 55799 inside the top-level item stays a tag node\&. "
 .in -1c
