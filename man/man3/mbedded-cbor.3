@@ -58,7 +58,7 @@ A limit stops input that holds a string or a container that is too large\&. Each
 .PP
 
 .PP
-\fR\fBcbor::encode\fP\fP with \fR\fBcbor::cycles\fP\fP writes a value that two references reach twice\&. So each level of such references doubles the output\&. Past the activation threshold, the output may be \fRmaximum_amplification\fP times the tree at most\&. Past that, \fR\fBcbor::encode\fP\fP gives \fR\fBcbor::error::amplification_limit_breach\fP\fP and writes nothing\&. The check runs at each node\&. So it can stop before the whole tree is counted\&.
+\fR\fBcbor::encode_cycles\fP\fP writes a value that two references reach twice\&. So each level of such references doubles the output\&. Past the activation threshold, the output may be \fRmaximum_amplification\fP times the tree at most\&. Past that, \fR\fBcbor::encode_cycles\fP\fP gives \fR\fBcbor::error::amplification_limit_breach\fP\fP and writes nothing\&. The check runs at each node\&. So it can stop before the whole tree is counted\&.
 
 .PP
 A value that does not fit \fRstd::size_t\fP does not compile\&. A limit at its default has no check in the program\&. Every translation unit of one program uses the same values\&. A different value in one translation unit breaks the one definition rule\&.
