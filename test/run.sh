@@ -17,7 +17,6 @@
 #   gcc-describe builds with g++ and no reflection, so the tests take the path of the descriptions and Boost.PFR.
 #   wasm compiles test/describe.cpp for wasm32-wasip1 in the image mbedded-cbor-wasm and does not run it: the
 #   libc++ of Debian for wasm32 has no std::basic_fstream, which the runner of doctest needs.
-#   The compile_fail tests run in check, gcc-release, gcc-groups, clang-release, gcc15-release and gcc-describe only.
 #   full also runs test/interop/run.sh, which decodes the output of the library with other decoders.
 #   iter <target>...: builds only the named targets of gcc-asan with CBOR_TEST_GROUPS=ON in $CBOR_BUILD_ROOT/<branch>/iter,
 #   in a container that stays up between runs, and runs each test program among them.
@@ -69,24 +68,24 @@ tsan="-Og -fsanitize=thread -fno-omit-frame-pointer"
 pch_clang="-Xclang -fno-pch-timestamp -Wlifetime-safety -Wno-lifetime-safety-invalidation"
 
 one() {
-	local n=$1 cxx type flags options= img=$image file= compile_fail=ON
+	local n=$1 cxx type flags options= img=$image file=
 	case $n in
 	check) cxx=g++-16 type=Debug flags=-O0 ;;
-	gcc-asan) cxx=g++-16 type=Debug flags=$asan compile_fail=OFF ;;
+	gcc-asan) cxx=g++-16 type=Debug flags=$asan ;;
 	gcc-release) cxx=g++-16 type=Release flags= ;;
 	gcc-groups) cxx=g++-16 type=Release flags= options=-DCBOR_TEST_GROUPS=ON ;;
 	gcc-describe) cxx=g++-16 type=Release flags= options=-DCBOR_HAS_FREFLECTION=OFF ;;
 	gcc15-release) cxx=g++-15 type=Release flags= img=mbedded-cbor-gcc15 file=tumbleweed-gcc15 ;;
-	sid-asan) cxx=g++-16 type=Debug flags=$asan compile_fail=OFF img=mbedded-cbor-sid file=debian-sid ;;
+	sid-asan) cxx=g++-16 type=Debug flags=$asan img=mbedded-cbor-sid file=debian-sid ;;
 	alma-release) cxx=g++ type=Release flags= img=mbedded-cbor-alma file=almalinux ;;
 	alpine-release) cxx=g++ type=Release flags= img=mbedded-cbor-alpine file=alpine ;;
-	gcc-describe-bundled) cxx=g++-16 type=Release flags= options="-DCBOR_HAS_FREFLECTION=OFF -DCMAKE_DISABLE_FIND_PACKAGE_Boost=ON" compile_fail=OFF ;;
-	clang-asan) cxx=clang++-23 type=Debug flags="$asan $pch_clang" compile_fail=OFF ;;
+	gcc-describe-bundled) cxx=g++-16 type=Release flags= options="-DCBOR_HAS_FREFLECTION=OFF -DCMAKE_DISABLE_FIND_PACKAGE_Boost=ON" ;;
+	clang-asan) cxx=clang++-23 type=Debug flags="$asan $pch_clang" ;;
 	clang-release) cxx=clang++-23 type=Release flags=$pch_clang ;;
-	gcc-o2) cxx=g++-16 type=RelWithDebInfo flags= compile_fail=OFF ;;
-	clang-o2) cxx=clang++-23 type=RelWithDebInfo flags=$pch_clang compile_fail=OFF ;;
-	clang-libcxx) cxx=clang++-23 type=Release flags="-stdlib=libc++ $pch_clang" compile_fail=OFF ;;
-	tsan) cxx=clang++-23 type=Debug flags="$tsan $pch_clang" compile_fail=OFF ;;
+	gcc-o2) cxx=g++-16 type=RelWithDebInfo flags= ;;
+	clang-o2) cxx=clang++-23 type=RelWithDebInfo flags=$pch_clang ;;
+	clang-libcxx) cxx=clang++-23 type=Release flags="-stdlib=libc++ $pch_clang" ;;
+	tsan) cxx=clang++-23 type=Debug flags="$tsan $pch_clang" ;;
 	iter) iter; return ;;
 	wasm)
 		mkdir -p "$root/$branch/$n"
@@ -114,13 +113,13 @@ one() {
 		s=${EPOCHREALTIME/./}
 		cmake -S /src -B /b -G Ninja -DCMAKE_BUILD_TYPE='"$type"' \
 			-DCMAKE_CXX_COMPILER='"$cxx"' -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-			-DCMAKE_LINKER_TYPE=MOLD "-DCMAKE_CXX_FLAGS='"$flags"'" -DCBOR_COMPILE_FAIL='"$compile_fail"' -DCBOR_CONCURRENT_BUILDS='"$concurrent_builds"' '"$reserved_option $options"' >/b/configure.log 2>&1 &&
+			-DCMAKE_LINKER_TYPE=MOLD "-DCMAKE_CXX_FLAGS='"$flags"'" -DCBOR_CONCURRENT_BUILDS='"$concurrent_builds"' '"$reserved_option $options"' >/b/configure.log 2>&1 &&
 		export CMAKE_BUILD_PARALLEL_LEVEL=$(sed -n "s/^CBOR_PARALLEL_JOBS:INTERNAL=//p" /b/CMakeCache.txt) &&
 		cmake --build /b -j"$CMAKE_BUILD_PARALLEL_LEVEL" >/b/build.log 2>&1
 		r=$?; b=${EPOCHREALTIME/./}
 		rm -f /b/test.log /b/ctest.log; [ $r = 0 ] && { /b/mbedded-cbor-test ${CBOR_TEST_PATTERN:+"-tc=*$CBOR_TEST_PATTERN*"} >/b/test.log 2>&1; r=$?; }
 		jobs=$(sed -n "s/^CBOR_PARALLEL_COMPILE_JOBS:INTERNAL=//p" /b/CMakeCache.txt)
-		[ $r = 0 ] && { ctest --test-dir /b -j"$jobs" -R "^(cmake|clang_query|compile_fail|limits)_.*$CBOR_TEST_PATTERN" --output-on-failure >/b/ctest.log 2>&1; r=$?; }
+		[ $r = 0 ] && { ctest --test-dir /b -j"$jobs" -R "^(cmake|clang_query|limits)_.*$CBOR_TEST_PATTERN" --output-on-failure >/b/ctest.log 2>&1; r=$?; }
 		t=${EPOCHREALTIME/./}
 		printf "%-14s rc=%s build=%ds test=%ds %s\n" '"$n"' $r \
 			$(((b - s) / '"$microseconds_per_second"')) $(((t - b) / '"$microseconds_per_second"')) "$(tail -2 /b/test.log | head -1)"
@@ -181,7 +180,7 @@ iter() {
 			{ [ -n "'"${CBOR_RESERVED_PROCESSORS:-}"'" ] && ! grep -qxF "CBOR_RESERVED_PROCESSORS:STRING='"${CBOR_RESERVED_PROCESSORS:-}"'" /b/CMakeCache.txt; }; then
 			cmake -S /src -B /b -G Ninja -DCMAKE_BUILD_TYPE=Debug \
 				-DCMAKE_CXX_COMPILER=g++-16 -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-				-DCMAKE_LINKER_TYPE=MOLD "-DCMAKE_CXX_FLAGS='"$asan"'" -DCBOR_COMPILE_FAIL=OFF -DCBOR_TEST_GROUPS=ON -DCBOR_CONCURRENT_BUILDS='"$concurrent_builds"' '"$reserved_option"' "-DCBOR_TEST_PATTERN=$CBOR_TEST_PATTERN" >/b/configure.log 2>&1 ||
+				-DCMAKE_LINKER_TYPE=MOLD "-DCMAKE_CXX_FLAGS='"$asan"'" -DCBOR_TEST_GROUPS=ON -DCBOR_CONCURRENT_BUILDS='"$concurrent_builds"' '"$reserved_option"' "-DCBOR_TEST_PATTERN=$CBOR_TEST_PATTERN" >/b/configure.log 2>&1 ||
 				{ tail -n '"$error_lines"' /b/configure.log; exit 1; }
 		fi
 		export CMAKE_BUILD_PARALLEL_LEVEL=$(sed -n "s/^CBOR_PARALLEL_JOBS:INTERNAL=//p" /b/CMakeCache.txt)
