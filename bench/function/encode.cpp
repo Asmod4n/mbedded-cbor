@@ -1,5 +1,6 @@
 // The bench of the block cbor::encode of a tree into a std::string and into a std::span (encode.hpp), and of
-// cbor::encoder over a cbor::iov_writer with texts that the program hands over with their owner.
+// cbor::encoder over a cbor::iov_writer with texts that the program hands over with their owner. A commit before
+// encoder::finish_iov ends the encoder over the iov_writer with finish.
 // Each iteration writes every tree of a list whose messages hold COLD_BYTES bytes.
 #include <benchmark/benchmark.h>
 #include <cbor/decode.hpp>
@@ -67,6 +68,15 @@ void encode(benchmark::State &state)
 
 // A text one byte shorter than the size from which the iov writer passes a text by reference, and a text of
 // that size. The first is copied into a block, the second becomes a piece of its own.
+template <class Encoder>
+auto finished(Encoder &e)
+{
+    if constexpr (requires { e.finish_iov(); })
+        return e.finish_iov();
+    else
+        return e.finish();
+}
+
 void encode_iov_owned(benchmark::State &state)
 {
     auto const copied = std::make_shared<std::string const>(31, 'a');
@@ -76,7 +86,7 @@ void encode_iov_owned(benchmark::State &state)
         cbor::encoder e{w};
         if (!e.text_string(copied) || !e.text_string(referenced))
             throw std::logic_error("bench: cbor::encoder refuses a text");
-        auto r = e.finish_iov();
+        auto r = finished(e);
         if (!r)
             throw std::logic_error("bench: cbor::encoder::finish fails");
         return std::move(*r);
