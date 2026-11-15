@@ -555,8 +555,7 @@ TEST_CASE("describe: every kind of class reads and writes through its descriptio
 }
 
 // D11: decode constructs T{} and sets the members. A type with no default constructor is written as any other. It is
-// read only into an object that the caller gives; decode(shared_ptr) of it does not compile
-// (compile_fail_structs_no_default_constructor).
+// read only into an object that the caller gives.
 TEST_CASE("describe: a type with no default constructor decodes into an object of the caller")
 {
     using namespace describe_test;
