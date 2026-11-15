@@ -7,7 +7,7 @@ TEST_CASE("at_path: a fixed-size vector reads each element as at_path does")
 {
     auto const owner = std::make_shared<std::string const>(encode_with_schema(
         gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}, {false, color::black, {5, -6}, {7, 8}}, {true, color::black, {0, 9}, {0, 0}}}}));
-    auto const root = form<gauges>::path(owner);
+    auto const root = form<gauges>::view(owner);
     REQUIRE(root.has_value());
     auto const g = root->at_path<"$.g">();
     REQUIRE(g.has_value());
@@ -44,7 +44,7 @@ TEST_CASE("at_path: a fixed-size vector reads each element as at_path does")
         page.push_back(*e.at_path<"@.at.x">());
     CHECK(page == std::vector<int>{-6});
     check_positions_outside(*g);
-    auto const loose = form<gauges>::unverified_path(owner);
+    auto const loose = form<gauges>::unverified_view(owner);
     REQUIRE(loose.has_value());
     auto const h = loose->at_path<"$.g">();
     REQUIRE(h.has_value());
@@ -53,7 +53,7 @@ TEST_CASE("at_path: a fixed-size vector reads each element as at_path does")
         unverified.push_back(*e.at_path<"@.at.x">());
     CHECK(unverified == std::vector<int>{3, -6, 9});
     check_positions_outside(*h);
-    auto const none = form<gauges>::path(encode_with_schema(gauges{}));
+    auto const none = form<gauges>::adopt(encode_with_schema(gauges{}));
     REQUIRE(none.has_value());
     auto const nothing = none->at_path<"$.g">();
     REQUIRE(nothing.has_value());
@@ -69,7 +69,7 @@ TEST_CASE("at_path: a wrong element in a fixed-size vector gives the error of at
     std::size_t const element = flags.find("\x03\xfe\x01\x01\x00"s);
     REQUIRE_NE(element, std::string::npos);
     flags[element + 2] = '\x02';
-    auto const root = form<gauges>::path(std::string(flags));
+    auto const root = form<gauges>::adopt(std::string(flags));
     REQUIRE(root.has_value());
     auto const g = root->at_path<"$.g">();
     REQUIRE(g.has_value());
@@ -90,7 +90,7 @@ TEST_CASE("at_path: a fixed-size vector keeps its bytes in the iterator and move
     {
         auto owner = std::make_shared<std::string const>(encode_with_schema(
             gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}, {false, color::black, {5, -6}, {7, 8}}}}));
-        auto const root = form<gauges>::path(owner);
+        auto const root = form<gauges>::view(owner);
         REQUIRE(root.has_value());
         std::optional<A> source(*root->at_path<"$.g">());
         kept = source->begin() + 1;
@@ -117,13 +117,13 @@ TEST_CASE("at_path: a fixed-size vector keeps its bytes in the iterator and move
 // is one before the end.
 TEST_CASE("view: the iterator refuses each position outside of the view")
 {
-    auto const root = form<doubles>::path(encode_with_schema(doubles{{1.0, 2.0, 4.0}}));
+    auto const root = form<doubles>::adopt(encode_with_schema(doubles{{1.0, 2.0, 4.0}}));
     REQUIRE(root.has_value());
     auto const v = root->view<"$.v">();
     REQUIRE(v.has_value());
     CHECK_EQ(std::bit_cast<std::uint64_t>(*(v->end() - 1)), 0x4010000000000000u);
     check_positions_outside(*v);
-    auto const empty_root = form<doubles>::path(encode_with_schema(doubles{}));
+    auto const empty_root = form<doubles>::adopt(encode_with_schema(doubles{}));
     REQUIRE(empty_root.has_value());
     auto const e = empty_root->view<"$.v">();
     REQUIRE(e.has_value());
@@ -134,7 +134,7 @@ TEST_CASE("view: the iterator refuses each position outside of the view")
 // iterator taken before the move still reads, because it holds the owner.
 TEST_CASE("view: a moved view has begin equal to end")
 {
-    auto const root = form<doubles>::path(encode_with_schema(doubles{{1.0, 2.0, 4.0}}));
+    auto const root = form<doubles>::adopt(encode_with_schema(doubles{{1.0, 2.0, 4.0}}));
     REQUIRE(root.has_value());
     auto source = *root->view<"$.v">();
     auto const kept = source.begin() + 2;

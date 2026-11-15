@@ -312,7 +312,7 @@ auto read_leaf_with_copying_path(std::string_view const bytes, Index const... in
     using X = std::remove_cvref_t<decltype(*std::declval<typename form<T>::template accessor<> const &>().template at_path<Path>(indexes...))>;
     using Y = std::conditional_t<std::same_as<X, std::string_view>, std::string,
                                  std::conditional_t<std::same_as<X, std::optional<std::string_view>>, std::optional<std::string>, X>>;
-    auto const root = form<T>::path(std::string(bytes));
+    auto const root = form<T>::adopt(std::string(bytes));
     if (!root)
         return std::expected<Y, cbor::error>(std::unexpect, root.error());
     auto const x = root->template at_path<Path>(indexes...);
@@ -329,7 +329,7 @@ template <class T, cbor::fixed_string Path, class... Index>
 auto read_leaf_with_copying_path(std::shared_ptr<std::string const> const &owner, Index const... indexes)
     -> decltype(std::declval<typename form<T>::template accessor<> const &>().template at_path<Path>(indexes...))
 {
-    auto const root = form<T>::path(owner);
+    auto const root = form<T>::view(owner);
     if (!root)
         return std::unexpected(root.error());
     return root->template at_path<Path>(indexes...);

@@ -86,7 +86,7 @@ TEST_CASE("doc advanced comparison: a number array")
 {
     std::string bytes = *cbor::schema<series>::encode(series{{1.5, 2.5, 3.5}});
     // begin numbers
-    auto const root = cbor::schema<series>::path(std::move(bytes));
+    auto const root = cbor::schema<series>::adopt(std::move(bytes));
     auto const values = root->view<"$.values">();
     double const sum = std::accumulate(values->begin(), values->end(), 0.0);
     // end numbers

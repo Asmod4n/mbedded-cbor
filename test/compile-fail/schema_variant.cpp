@@ -123,7 +123,7 @@ int main()
     auto const bytes = cbor::schema<home>::encode(value);
     if (!bytes)
         return 1;
-    auto const doc = cbor::schema<home>::path(std::string(*bytes));
+    auto const doc = cbor::schema<home>::adopt(std::string(*bytes));
     if (!doc)
         return 1;
 #if CBOR_TEST_CASE == 12

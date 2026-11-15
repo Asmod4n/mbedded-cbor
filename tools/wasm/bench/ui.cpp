@@ -279,7 +279,7 @@ __attribute__((export_name("schema_description_size"))) std::uint32_t schema_des
 
 __attribute__((export_name("schema_apart_load"))) std::int32_t schema_apart_load(char const *const ptr, std::size_t const len)
 {
-    auto r = cbor::schema<screen>::path<cbor::description_place::apart>(std::string(ptr, len));
+    auto r = cbor::schema<screen>::adopt<cbor::description_place::apart>(std::string(ptr, len));
     if (!r)
         return -static_cast<std::int32_t>(r.error());
     root.emplace(std::move(*r));
@@ -288,7 +288,7 @@ __attribute__((export_name("schema_apart_load"))) std::int32_t schema_apart_load
 
 __attribute__((export_name("schema_load"))) std::int32_t schema_load(char const *const ptr, std::size_t const len)
 {
-    auto r = cbor::schema<screen>::path(std::string(ptr, len));
+    auto r = cbor::schema<screen>::adopt(std::string(ptr, len));
     if (!r)
         return -static_cast<std::int32_t>(r.error());
     root.emplace(std::move(*r));

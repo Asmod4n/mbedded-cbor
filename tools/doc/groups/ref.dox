@@ -27,7 +27,7 @@ in one of these forms. No form copies the bytes.
 A `std::string` lvalue beside an owner does not compile. Its bytes can end
 before the owner ends.
 
-`cbor::structs<T>::%decode`, `cbor::schema<T>::%decode`, `cbor::schema<T>::%path`
+`cbor::structs<T>::%decode`, `cbor::schema<T>::%decode`, `cbor::schema<T>::adopt`
 and `cbor::at_path` take the same forms for a view result. `cbor::sequence`
 takes the two forms that use a `std::shared_ptr`, and no rvalue
 `std::string`. The library takes no other pointer to bytes.

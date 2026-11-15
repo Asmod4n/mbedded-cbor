@@ -63,7 +63,7 @@ std::size_t probe_lot_read(std::string_view const message)
 {
     auto const block = std::make_shared<std::string const>(message);
     std::string_view const bytes = *block;
-    auto opened = form<probe>::path(block);
+    auto opened = form<probe>::view(block);
     if (!opened)
         return 0;
     auto &lot = *opened;
@@ -167,7 +167,7 @@ TEST_CASE("attack: no text result outlives its bytes")
     CHECK_FALSE(temporary_reads<form<probe>::accessor<tire>, "@.diameter">);
     CHECK_FALSE(chain_reads<A>);
     CHECK_FALSE(dereferenced_as_rvalue<cbor::ref<probe>>);
-    CHECK_THROWS_AS((void)form<probe>::path(std::shared_ptr<std::string const>{}), std::logic_error);
+    CHECK_THROWS_AS((void)form<probe>::view(std::shared_ptr<std::string const>{}), std::logic_error);
     CHECK_THROWS_AS((void)form<probe>::decode(std::shared_ptr<std::string const>{}), std::logic_error);
 }
 
@@ -178,17 +178,17 @@ TEST_CASE("attack: no text result outlives its bytes")
 TEST_CASE("attack: path and decode check that the owner holds an object")
 {
     auto const bytes = std::make_shared<std::string const>(*form<probe>::encode(sample_probe));
-    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { form<probe>::path(o, std::string(*o)); }; }(bytes)));
-    CHECK(([]<class O>(O const &) { return requires(O const &o) { form<probe>::path(o, std::string_view(*o)); }; }(bytes)));
+    CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { form<probe>::view(o, std::string(*o)); }; }(bytes)));
+    CHECK(([]<class O>(O const &) { return requires(O const &o) { form<probe>::view(o, std::string_view(*o)); }; }(bytes)));
     CHECK(([]<class O>(O const &) { return requires(O const &o) { form<probe>::decode(o, std::string_view(*o)); }; }(bytes)));
     CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { form<probe>::decode(o, *o); }; }(bytes)));
-    CHECK(([]<class O>(O const &) { return requires(O const &o) { form<probe>::path(o); }; }(bytes)));
+    CHECK(([]<class O>(O const &) { return requires(O const &o) { form<probe>::view(o); }; }(bytes)));
     CHECK(([]<class O>(O const &) { return requires(O const &o) { form<probe>::decode(o); }; }(bytes)));
     std::shared_ptr<std::string const> const holds_nothing(std::shared_ptr<std::string const>{}, bytes.get());
-    CHECK_THROWS_AS((void)form<probe>::path(holds_nothing), std::logic_error);
+    CHECK_THROWS_AS((void)form<probe>::view(holds_nothing), std::logic_error);
     CHECK_THROWS_AS((void)form<probe>::decode(holds_nothing), std::logic_error);
     std::shared_ptr<std::string const> const holds_bytes(std::shared_ptr<void const>(bytes), bytes.get());
-    auto const root = form<probe>::path(holds_bytes);
+    auto const root = form<probe>::view(holds_bytes);
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.i16">(), -300);
     auto const decoded = form<probe>::decode(holds_bytes);
@@ -218,7 +218,7 @@ TEST_CASE("attack: a shifted root is incorrect_type")
     CHECK_EQ(probe_paths_read(bytes + "\x00"s), 0u);
     CHECK_EQ(probe_lot_read("\x00"s + bytes), 0u);
     CHECK_EQ(probe_lot_read(bytes + "\x00"s), 0u);
-    CHECK_EQ(form<probe>::path(bytes + "\x00"s).error(), error::incorrect_type);
+    CHECK_EQ(form<probe>::adopt(bytes + "\x00"s).error(), error::incorrect_type);
 }
 
 // RFC 8949 3: each fixed field has one head. The valid heads are written here from RFC 8949 3.3 and 3.4 and the fixed
@@ -368,7 +368,7 @@ TEST_CASE("attack: a directory longer than the message is too_little_data")
     std::string forged = bytes;
     forged.replace(4, 4, big_endian(first + forged_length / 4));
     forged.replace(directory + 1, 4, big_endian(forged_length));
-    CHECK_EQ(form<login>::path(std::string(forged)).error(), error::too_little_data);
+    CHECK_EQ(form<login>::adopt(std::string(forged)).error(), error::too_little_data);
     CHECK_EQ(form<login>::decode(std::string(forged)).error(), error::too_little_data);
 }
 
@@ -384,7 +384,7 @@ TEST_CASE("attack: a forged reference of a fixed-size vector is incorrect_type")
     forged.at(head + 4) = static_cast<char>(forged.at(head + 4) + 1);
     CHECK_EQ(read_leaf_with_copying_path<probe, "$.tires[1].diameter">(forged).error(), error::incorrect_type);
     CHECK_EQ(read_leaf_with_copying_path<probe, "$.text">(forged), read_leaf_with_copying_path<probe, "$.text">(bytes));
-    auto lot = *form<probe>::path(std::string(forged));
+    auto lot = *form<probe>::adopt(std::string(forged));
     constexpr int passes = 2;
     for (int pass = 0; pass < passes; ++pass) {
         CHECK_EQ(lot.at_path<"$.tires[].diameter">(0uz).error(), error::incorrect_type);
@@ -401,7 +401,7 @@ TEST_CASE("attack: an accessor reads nothing outside a cut or forged message of 
     std::size_t differ = 0;
     auto const other = [](auto const &a, auto const &b) { return a.has_value() != b.has_value() || (a && *a != *b); };
     auto const read = [&differ, other](std::string_view const m) {
-        auto opened = form<parking_lot>::path(std::make_shared<std::string const>(m));
+        auto opened = form<parking_lot>::view(std::make_shared<std::string const>(m));
         std::size_t n = 0;
         if (!opened)
             return n;
@@ -446,7 +446,7 @@ std::size_t read_pet(std::string_view const bytes)
     std::size_t n = 0;
     n += form<home>::decode(std::string(bytes)).has_value();
     n += form<home>::unverified_decode(std::string(bytes)).has_value();
-    if (auto const doc = form<home>::path(std::string(bytes))) {
+    if (auto const doc = form<home>::adopt(std::string(bytes))) {
         if (auto const pet = doc->at_path<"$.pet">()) {
             n += 1;
             if (auto const d = pet->get<dog>())
@@ -490,7 +490,7 @@ TEST_CASE("attack: an unknown tag, a cut record and a wrong directory entry of a
     std::string unknown = bytes;
     unknown[at + 2] = '\xcf';
     CHECK_EQ(form<home>::decode(std::string(unknown)).error(), error::incorrect_type);
-    CHECK_EQ(form<home>::path(std::string(unknown))->at_path<"$.pet">().error(), error::incorrect_type);
+    CHECK_EQ(form<home>::adopt(std::string(unknown))->at_path<"$.pet">().error(), error::incorrect_type);
     std::string other_root = bytes;
     other_root[at + 2] = '\xce';
     CHECK_EQ(form<home>::decode(std::string(other_root)).error(), error::incorrect_type);
@@ -503,10 +503,10 @@ TEST_CASE("attack: an unknown tag, a cut record and a wrong directory entry of a
     REQUIRE_EQ(bytes.substr(head + 5, 4), big_endian(at));
     std::string cut = bytes;
     cut.replace(head + 9, 4, big_endian(at + 4));
-    CHECK_EQ(form<home>::path(std::string(cut))->at_path<"$.pet">().error(), error::too_little_data);
+    CHECK_EQ(form<home>::adopt(std::string(cut))->at_path<"$.pet">().error(), error::too_little_data);
     std::string moved = bytes;
     moved.replace(head + 5, 4, big_endian(at + 1));
-    CHECK_EQ(form<home>::path(std::string(moved))->at_path<"$.pet">().error(), error::incorrect_type);
+    CHECK_EQ(form<home>::adopt(std::string(moved))->at_path<"$.pet">().error(), error::incorrect_type);
     CHECK_EQ(form<home>::decode(std::string(moved)).error(), error::syntax_error);
 }
 
@@ -527,7 +527,7 @@ TEST_CASE("attack: value and text alternatives of a variant member")
             f.at(at) = static_cast<char>(f.at(at) ^ 0x41);
             (void)form<setting>::decode(std::string(f));
             (void)form<setting>::unverified_decode(std::string(f));
-            if (auto const doc = form<setting>::unverified_path(std::string(f)))
+            if (auto const doc = form<setting>::unverified_adopt(std::string(f)))
                 if (auto const v = doc->at_path<"$.value">()) {
                     (void)v->get<std::string>();
                     (void)v->get<std::int32_t>();
@@ -545,7 +545,7 @@ TEST_CASE("attack: value and text alternatives of a variant member")
     inside[pet + 4] = '\x07';
     CHECK_EQ(form<shelter>::decode(std::string(inside)).error(), error::syntax_error);
     CHECK_EQ(form<shelter>::unverified_decode(std::string(inside)).error(), error::syntax_error);
-    CHECK_EQ(form<shelter>::path(std::string(inside))->at_path<"$.pet">().error(), error::too_little_data);
+    CHECK_EQ(form<shelter>::adopt(std::string(inside))->at_path<"$.pet">().error(), error::too_little_data);
     // name "n" is the first item, the text "ab" of value the last; its length grows past the root.
     std::string const bytes = *form<setting>::encode(setting{"n", std::string("ab")});
     std::size_t const head = bytes.size() - form<setting>::fixed_size() - 7;

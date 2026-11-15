@@ -30,7 +30,7 @@ CBOR_DEFINE_TYPE_MEMBERS(point, cbor::tag{1703}, x, y);
 CBOR_DEFINE_TYPE_MEMBERS(track, cbor::tag{1704}, points);
 
 auto message = cbor::schema<track>::encode(track{{{1, 2}, {3, 4}, {5, 6}}});
-auto const lane = cbor::schema<track>::path(std::move(*message));
+auto const lane = cbor::schema<track>::adopt(std::move(*message));
 
 lane->at_path<"$.points[2].x">();                                   // 5: one jump to the field
 

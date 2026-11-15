@@ -14,7 +14,7 @@ namespace schema_types
 template <cbor::fixed_string Path>
 auto view_of(std::string const &bytes)
 {
-    auto const root = form<numbers>::path(std::string(bytes));
+    auto const root = form<numbers>::adopt(std::string(bytes));
     REQUIRE(root.has_value());
     return root->view<Path>();
 }
@@ -78,7 +78,7 @@ TEST_CASE("view: every typed array gives its elements back, and an index past th
 // A view of an empty typed array has size 0, and index 0 is already out of bounds.
 TEST_CASE("view: an empty typed array has no element")
 {
-    auto const root = form<doubles>::path(encode_with_schema(doubles{}));
+    auto const root = form<doubles>::adopt(encode_with_schema(doubles{}));
     REQUIRE(root.has_value());
     auto const v = root->view<"$.v">();
     REQUIRE(v.has_value());
@@ -96,7 +96,7 @@ TEST_CASE("view: a typed array with a wrong tag or a wrong length gives no view"
     std::size_t const at = bytes.find("\xd8\x56\x5a\x00\x00\x00\x10"sv);
     REQUIRE_NE(at, std::string::npos);
     auto refused = [](std::string const &wrong) {
-        auto const root = form<doubles>::path(std::string(wrong));
+        auto const root = form<doubles>::adopt(std::string(wrong));
         REQUIRE(root.has_value());
         auto const v = root->view<"$.v">();
         REQUIRE_FALSE(v.has_value());
@@ -202,7 +202,7 @@ TEST_CASE("view: range-for, the iterator and std::ranges algorithms read every e
 // would have undefined behaviour.
 TEST_CASE("view: front, back, first and last")
 {
-    auto const root = form<doubles>::path(encode_with_schema(doubles{{1.0, 2.0, 4.0}}));
+    auto const root = form<doubles>::adopt(encode_with_schema(doubles{{1.0, 2.0, 4.0}}));
     REQUIRE(root.has_value());
     auto const v = root->view<"$.v">();
     REQUIRE(v.has_value());
@@ -242,7 +242,7 @@ TEST_CASE("view: crend meets the requirements of a reversible container")
 {
     using V = cbor::typed_array_view<double>;
     CHECK((std::same_as<decltype(std::declval<V const &>().crend()), std::reverse_iterator<V::iterator>>));
-    auto const root = form<doubles>::path(encode_with_schema(doubles{{1.0, 2.0, 4.0}}));
+    auto const root = form<doubles>::adopt(encode_with_schema(doubles{{1.0, 2.0, 4.0}}));
     REQUIRE(root.has_value());
     auto const v = root->view<"$.v">();
     REQUIRE(v.has_value());
@@ -255,7 +255,7 @@ TEST_CASE("view: crend meets the requirements of a reversible container")
     for (auto i = v->crend(); i != v->crbegin();)
         forwards.push_back(std::bit_cast<std::uint64_t>(*--i));
     CHECK(forwards == std::vector<std::uint64_t>{0x3ff0000000000000u, 0x4000000000000000u, 0x4010000000000000u});
-    auto const empty_root = form<doubles>::path(encode_with_schema(doubles{}));
+    auto const empty_root = form<doubles>::adopt(encode_with_schema(doubles{}));
     REQUIRE(empty_root.has_value());
     auto const e = empty_root->view<"$.v">();
     REQUIRE(e.has_value());
@@ -268,7 +268,7 @@ TEST_CASE("view: crend meets the requirements of a reversible container")
 // are empty views, and first(1) is out of bounds.
 TEST_CASE("view: an empty view has no front, no back and no element")
 {
-    auto const root = form<doubles>::path(encode_with_schema(doubles{}));
+    auto const root = form<doubles>::adopt(encode_with_schema(doubles{}));
     REQUIRE(root.has_value());
     auto const v = root->view<"$.v">();
     REQUIRE(v.has_value());

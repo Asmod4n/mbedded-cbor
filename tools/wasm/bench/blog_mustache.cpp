@@ -55,7 +55,7 @@ __attribute__((export_name("setup"))) int setup()
 }
 __attribute__((export_name("feed_load"))) int feed_load(char const *p, std::size_t n)
 {
-    auto r = cbor::schema<feed>::path(std::string(p, n));
+    auto r = cbor::schema<feed>::adopt(std::string(p, n));
     if (!r)
         return -1;
     root.emplace(std::move(*r));

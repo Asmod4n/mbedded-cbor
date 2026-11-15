@@ -19,9 +19,9 @@ void check_description_apart(T const &value)
     CHECK_EQ(encode_again(form<T>::template decode<apart>(owner)), inside);
     CHECK_EQ(encode_again(form<T>::template decode<apart>(std::shared_ptr<void const>(owner), std::string_view(*owner))), inside);
     CHECK_EQ(encode_again(form<T>::template decode<apart>(owner, T{})), inside);
-    CHECK(form<T>::template path<apart>(std::string(data)).has_value());
-    CHECK(form<T>::template path<apart>(owner).has_value());
-    CHECK(form<T>::template unverified_path<apart>(owner).has_value());
+    CHECK(form<T>::template adopt<apart>(std::string(data)).has_value());
+    CHECK(form<T>::template view<apart>(owner).has_value());
+    CHECK(form<T>::template unverified_view<apart>(owner).has_value());
 }
 
 } // namespace schema_types
@@ -48,7 +48,7 @@ TEST_CASE("description apart: each read form reads the data form")
     CHECK_EQ((form<everything>::at_path<"$.big", apart>(data)), -5);
     CHECK_EQ((form<everything>::at_path<"$.gauges[].at.x", apart>(data, 1uz)), -6);
     CHECK_EQ((form<everything>::unverified_at_path<"$.tires[].airPressure", apart>(data, 1uz)), 3.0f);
-    auto const root = form<everything>::path<apart>(std::string(data));
+    auto const root = form<everything>::adopt<apart>(std::string(data));
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.text">(), "text"sv);
     CHECK_EQ(root->at_path<"$.names[1]">(), "bc"sv);
@@ -63,7 +63,7 @@ TEST_CASE("description apart: each read form reads the data form")
         xs.push_back(*g.at_path<"@.at.x">());
     CHECK_EQ(xs, (std::vector<int>{3, -6}));
     CHECK_EQ(root->at_path<"$.tires[1].diameter">(), 18u);
-    auto const unverified = form<everything>::unverified_path<apart>(std::string(data));
+    auto const unverified = form<everything>::unverified_adopt<apart>(std::string(data));
     REQUIRE(unverified.has_value());
     CHECK_EQ(unverified->at_path<"$.names[0]">(), "a"sv);
 }
@@ -95,21 +95,21 @@ TEST_CASE("description apart: every target of encode writes the same bytes")
 TEST_CASE("description apart: one form read as the other is refused")
 {
     for (std::string const &inside : {encode_with_schema(sample_everything), encode_with_schema(empty{}), encode_with_schema(eighteen_entries{})}) {
-        auto const as_data = form<everything>::path<apart>(std::string(inside));
+        auto const as_data = form<everything>::adopt<apart>(std::string(inside));
         REQUIRE_FALSE(as_data.has_value());
     }
     std::string const inside = encode_with_schema(sample_everything);
     std::string const data = encode_data_apart(sample_everything);
-    CHECK_EQ(form<everything>::path<apart>(std::string(inside)).error(), error::incorrect_type);
+    CHECK_EQ(form<everything>::adopt<apart>(std::string(inside)).error(), error::incorrect_type);
     CHECK_EQ(form<everything>::decode<apart>(std::string(inside)).error(), error::incorrect_type);
     CHECK_EQ((form<everything>::at_path<"$.big", apart>(inside)).error(), error::incorrect_type);
     // The data form holds no description. So read as the form with the description inside it is shorter than its table:
-    // the doc of schema::path gives too_little_data for that.
-    for (auto const e : {form<everything>::path(std::string(data)).error(),
+    // the doc of schema::adopt gives too_little_data for that.
+    for (auto const e : {form<everything>::adopt(std::string(data)).error(),
                          form<everything>::decode(std::string(data)).error()})
         CHECK_EQ(e, error::too_little_data);
     std::string const small = encode_data_apart(empty{});
-    CHECK_EQ(form<empty>::path(std::string(small)).error(), error::too_little_data);
+    CHECK_EQ(form<empty>::adopt(std::string(small)).error(), error::too_little_data);
 }
 
 // The data form keeps every check of the message. A cut gives too_little_data. A forged directory entry and a forged
@@ -119,7 +119,7 @@ TEST_CASE("description apart: the checks of the message hold for the data form")
     std::string const data = encode_data_apart(sample_everything);
     for (std::size_t n = 0; n < data.size(); ++n) {
         CHECK_FALSE(form<everything>::decode<apart>(data.substr(0, n)).has_value());
-        CHECK_FALSE(form<everything>::path<apart>(data.substr(0, n)).has_value());
+        CHECK_FALSE(form<everything>::adopt<apart>(data.substr(0, n)).has_value());
     }
     std::size_t const directory = data.find('\x5a');
     REQUIRE_EQ(directory, 8u);
@@ -132,7 +132,7 @@ TEST_CASE("description apart: the checks of the message hold for the data form")
     std::string filler = data;
     REQUIRE_EQ(filler[directory + 5 + length], '\xf7');
     filler[directory + 5 + length] = '\xf6';
-    CHECK_EQ(form<everything>::path<apart>(std::string(filler)).error(), error::incorrect_type);
+    CHECK_EQ(form<everything>::adopt<apart>(std::string(filler)).error(), error::incorrect_type);
 }
 
 // The unverified forms read the data form inside its bounds: every changed byte and every cut. A message read as the
@@ -143,7 +143,7 @@ TEST_CASE("description apart: the unverified forms stay inside the input")
     auto const reads = [](std::string const &bytes) {
         (void)form<everything>::unverified_at_path<"$.gauges[].at.x", apart>(bytes, 1uz);
         (void)form<everything>::unverified_decode<apart>(std::string(bytes));
-        if (auto const root = form<everything>::unverified_path<apart>(std::string(bytes))) {
+        if (auto const root = form<everything>::unverified_adopt<apart>(std::string(bytes))) {
             (void)root->at_path<"$.names[1]">();
             (void)root->at_path<"$.tires[1].diameter">();
             if (auto const track = root->view<"$.track">())

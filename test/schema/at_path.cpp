@@ -121,7 +121,7 @@ TEST_CASE("at_path: an accessor of a fixed-size vector and of one element")
 {
     auto const owner = std::make_shared<std::string const>(
         encode_with_schema(gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}, {false, color::black, {5, -6}, {7, 8}}}}));
-    auto const root = form<gauges>::path(owner);
+    auto const root = form<gauges>::view(owner);
     REQUIRE(root.has_value());
     auto const g = root->at_path<"$.g">();
     REQUIRE(g.has_value());
@@ -151,7 +151,7 @@ TEST_CASE("at_path and decode: a broken fixed-size vector is an error")
     CHECK_EQ(form<cloud>::decode(std::string(reference)).error(), error::incorrect_type);
     std::string description = bytes;
     description[description.find("\x18\x55"s) + 1] = '\x56';
-    CHECK_EQ(form<cloud>::path(std::string(description)).error(), error::incorrect_type);
+    CHECK_EQ(form<cloud>::adopt(std::string(description)).error(), error::incorrect_type);
     CHECK_EQ(form<cloud>::decode(std::string(description)).error(), error::incorrect_type);
     std::string partial = bytes;
     partial[head + 9] = '\x0f';
@@ -177,7 +177,7 @@ TEST_CASE("at_path: a fixed-size vector is a range of its elements")
 {
     auto const owner = std::make_shared<std::string const>(encode_with_schema(
         gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}, {false, color::black, {5, -6}, {7, 8}}, {true, color::black, {0, 9}, {0, 0}}}}));
-    auto const root = form<gauges>::path(owner);
+    auto const root = form<gauges>::view(owner);
     REQUIRE(root.has_value());
     auto const g = root->at_path<"$.g">();
     REQUIRE(g.has_value());
@@ -195,7 +195,7 @@ TEST_CASE("at_path: a fixed-size vector is a range of its elements")
     auto const third = g->begin()[2];
     CHECK_EQ(third.at_path<"@.on">(), true);
     std::string const empty = encode_with_schema(gauges{});
-    auto const none = form<gauges>::path(std::string(empty));
+    auto const none = form<gauges>::adopt(std::string(empty));
     REQUIRE(none.has_value());
     auto const nothing = none->at_path<"$.g">();
     REQUIRE(nothing.has_value());
@@ -219,14 +219,14 @@ TEST_CASE("at_path: [n] reads one byte of a byte string")
     CHECK_EQ(form<byte_fields>::at_path<"$.none[]">(bytes, 0uz).error(), error::index_out_of_bounds);
     CHECK_EQ(form<byte_fields>::unverified_at_path<"$.fixed[2]">(bytes), std::uint8_t{3});
     CHECK_EQ(form<byte_fields>::unverified_at_path<"$.list[1]">(bytes), std::uint8_t{9});
-    auto const root = form<byte_fields>::path(std::string(bytes));
+    auto const root = form<byte_fields>::adopt(std::string(bytes));
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.fixed[0]">(), std::uint8_t{1});
     CHECK_EQ(root->at_path<"$.list[0]">(), std::uint8_t{8});
     std::string const lists = *form<byte_lists>::encode(byte_lists{{{"x", {1, 2, 3, 4}}, {"y", {5, 6, 7, 8}}}, {{9, 10, 11, 12}}});
     CHECK_EQ(form<byte_lists>::at_path<"$.records[1].code[2]">(lists), std::uint8_t{7});
     CHECK_EQ(form<byte_lists>::at_path<"$.codes[0][3]">(lists), std::uint8_t{12});
-    auto const records = form<byte_lists>::path(std::string(lists));
+    auto const records = form<byte_lists>::adopt(std::string(lists));
     REQUIRE(records.has_value());
     auto const second = records->at_path<"$.records[1]">();
     REQUIRE(second.has_value());
@@ -262,7 +262,7 @@ concept accessor_path_reads = requires(typename form<T>::template accessor<> con
 // has no single type.
 TEST_CASE("at_path: a variant member gives its index and an accessor of the held alternative")
 {
-    auto const doc = form<home>::path(*form<home>::encode(make_home_with_dog()));
+    auto const doc = form<home>::adopt(*form<home>::encode(make_home_with_dog()));
     REQUIRE(doc);
     auto const pet = doc->at_path<"$.pet">();
     REQUIRE(pet);
@@ -283,7 +283,7 @@ TEST_CASE("at_path: a variant member gives its index and an accessor of the held
 TEST_CASE("at_path: a variant accessor owns the message and refuses a use after a move")
 {
     auto pet = [] {
-        auto const doc = form<home>::path(*form<home>::encode(make_home_with_cat()));
+        auto const doc = form<home>::adopt(*form<home>::encode(make_home_with_cat()));
         return *doc->at_path<"$.pet">();
     }();
     CHECK_EQ(pet.index(), 1u);
@@ -299,7 +299,7 @@ TEST_CASE("at_path: a variant accessor owns the message and refuses a use after 
 TEST_CASE("at_path: get of a value, a text and a byte string alternative")
 {
     for (setting const &s : make_sample_settings()) {
-        auto const doc = form<setting>::path(*form<setting>::encode(s));
+        auto const doc = form<setting>::adopt(*form<setting>::encode(s));
         REQUIRE(doc.has_value());
         auto const v = doc->at_path<"$.value">();
         REQUIRE(v.has_value());
@@ -317,7 +317,7 @@ TEST_CASE("at_path: get of a value, a text and a byte string alternative")
         if (s.value.index() != 0)
             CHECK_EQ(v->get<bool>().error(), error::incorrect_type);
     }
-    auto const doc = form<shelter>::path(*form<shelter>::encode(shelter{std::int64_t{-7}, "n"}));
+    auto const doc = form<shelter>::adopt(*form<shelter>::encode(shelter{std::int64_t{-7}, "n"}));
     auto const pet = doc->at_path<"$.pet">();
     CHECK_EQ(pet->get<std::int64_t>().value(), -7);
     CHECK_EQ(pet->get<dog>().error(), error::incorrect_type);

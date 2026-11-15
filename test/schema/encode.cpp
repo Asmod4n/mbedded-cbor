@@ -314,7 +314,7 @@ void check_value_alternative(T const value, std::string_view const head)
     REQUIRE(back.has_value());
     REQUIRE_EQ((*back)->value.index(), 0u);
     CHECK(std::get<0>((*back)->value) == value);
-    auto const doc = form<one_value<T>>::path(std::string(*bytes));
+    auto const doc = form<one_value<T>>::adopt(std::string(*bytes));
     REQUIRE(doc.has_value());
     auto const v = doc->template at_path<"$.value">();
     REQUIRE(v.has_value());

@@ -74,7 +74,7 @@ TEST_CASE("doc readme: write structs, read one field")
 {
     auto message = cbor::schema<track>::encode(track{{{1, 2}, {3, 4}, {5, 6}}});
     REQUIRE(message.has_value());
-    auto const lane = cbor::schema<track>::path(std::move(*message));
+    auto const lane = cbor::schema<track>::adopt(std::move(*message));
     REQUIRE(lane.has_value());
     CHECK_EQ(lane->at_path<"$.points[2].x">(), 5.0f);
     auto const points = lane->at_path<"$.points">();

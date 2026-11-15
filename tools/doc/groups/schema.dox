@@ -131,15 +131,15 @@ trivially copyable, such as a `std::vector` of structs.
 
 @section schema_path OPEN A MESSAGE
 
-`cbor::schema<T>::%path(...)` opens a message and gives the root accessor,
+`cbor::schema<T>::adopt(...)` and `cbor::schema<T>::view(...)` open a message and gives the root accessor,
 `cbor::schema<T>::accessor<T>`. It checks the message once, and it reads
 no field. The forms are:
 
-- `%path(std::move(bytes))`: the string moves into the owner. Nothing is
+- `adopt(std::move(bytes))`: the string moves into the owner. Nothing is
   copied.
-- `%path(owner)`: `owner` is a `std::shared_ptr<std::string const>`. The
+- `view(owner)`: `owner` is a `std::shared_ptr<std::string const>`. The
   message is read in place.
-- `%path(owner, part)`: `part` is a `std::string_view` into memory that
+- `view(owner, part)`: `part` is a `std::string_view` into memory that
   `owner`, a `std::shared_ptr<void const>`, keeps alive.
 
 An accessor holds its owner. Each value and each accessor that it gives
@@ -227,8 +227,9 @@ written with `apart`.
 
 @section schema_unverified READ A MESSAGE FROM A PEER YOU TRUST
 
-`unverified_path`, `unverified_at_path` and `unverified_decode` take the
-same arguments as `%path`, `at_path` and `%decode`. They check each bound
+`unverified_adopt`, `unverified_view`, `unverified_at_path` and
+`unverified_decode` take the same arguments as `adopt`, `view`, `at_path`
+and `%decode`. They check each bound
 of the message, so no read leaves the message. They do not check the
 data of the message. A wrong byte gives a wrong value, not an error.
 
@@ -251,7 +252,7 @@ These forms check:
 - each index against the count of its list, table or directory;
 - the limits of the build and, in `unverified_decode`, the nesting depth.
 
-Every accessor of `unverified_path` is unverified too.
+Every accessor of `unverified_adopt` and `unverified_view` is unverified too.
 
 @section schema_size SIZE AND OFFSET
 
@@ -314,7 +315,7 @@ does not have it yet.
 
 @section schema_checks WHAT IS CHECKED ONCE AND WHAT AT EACH READ
 
-`%path` checks once:
+`adopt` and `view` check once:
 
 - that the message is at least as long as the table and the root;
 - that the start of the table holds the keys of `T` and of each struct
@@ -323,8 +324,8 @@ does not have it yet.
 - that the directory lies inside the message;
 - the tag of the struct of the root.
 
-With `cbor::description_place::apart`, the message holds no keys. `%path`
-then checks the start of the message, the count of the table and the tag
+With `cbor::description_place::apart`, the message holds no keys. `adopt` and `view`
+then check the start of the message, the count of the table and the tag
 of the root.
 
 Each `at_path` of an accessor checks at each read:
@@ -341,23 +342,23 @@ Each `at_path` of an accessor checks at each read:
 
 `view` checks the tag and the length of the typed array once. After that,
 each element read checks only its index. `cbor::schema<T>::at_path` makes
-the checks of `%path` and of `at_path` in one call.
+the checks of `view` and of `at_path` in one call.
 
 @section schema_cost COST
 
-`%path` with a shared owner takes a time that does not depend on the size
-of the message. `%path` with an rvalue takes the same time, and it makes
+`view` takes a time that does not depend on the size
+of the message. `adopt` takes the same time, and it makes
 one allocation for the owner. Each `at_path` takes one step for each part
 of its path. `%decode` and `encode` take a time in the size of the message.
 
-An error of `%path`, `at_path` or `%decode` can cost a walk over the
+An error of `adopt`, `view`, `at_path` or `%decode` can cost a walk over the
 message. The walk checks whether the message ends too early.
 
 @section schema_errors ERRORS
 
-- `too_little_data`: the message ends too early. `%path`, `at_path` and
-  `%decode` give this error also where another check fails first. A
-  message that is shorter than its table and root gives it in `%path`.
+- `too_little_data`: the message ends too early. `adopt`, `view`, `at_path`
+  and `%decode` give this error also where another check fails first. A
+  message that is shorter than its table and root gives it in `adopt` and `view`.
 - `incorrect_type`: a message of another struct or layout, a wrong tag of
   a struct, a wrong head of a field, a variant item whose head names no
   alternative, or `get<A>()` of another alternative.
@@ -373,7 +374,7 @@ message. The walk checks whether the message ends too early.
 
 A refused allocation of the owner or of the result throws `std::bad_alloc`.
 
-A null or empty owner throws `std::logic_error` in `%path`, `%decode` and
+A null or empty owner throws `std::logic_error` in `view`, `%decode` and
 the unverified forms. A call on a moved-from accessor throws it too.
 `operator[]`, `front` and `back` of a typed array view throw it outside
 the view.

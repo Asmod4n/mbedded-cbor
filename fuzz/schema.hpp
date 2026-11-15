@@ -414,7 +414,7 @@ void read_all(std::string_view const message)
 {
     static constexpr auto texts = std::define_static_array(path_texts<T>());
     auto const owner = std::make_shared<std::string const>(message);
-    auto lot = cbor::schema<T>::path(owner);
+    auto lot = cbor::schema<T>::view(owner);
     if (!lot)
         return;
     template for (constexpr std::meta::info text : texts)
@@ -426,7 +426,7 @@ void read_all(std::string_view const message)
 template <class T>
 void compare_all(T const &native, std::string_view message);
 
-// The errors that an unverified form may give on raw input (the comment of cbor::schema::unverified_path in
+// The errors that an unverified form may give on raw input (the comment of cbor::schema::unverified_adopt in
 // schema.hpp): it skips the checks of the data and keeps every check of a bound, so it never raises and never reads
 // outside the input. The head of a variant item chooses the alternative, so a type with a variant member also gives
 // incorrect_type.
@@ -449,7 +449,7 @@ void unverified_raw(std::string_view const message)
         require(unverified_error<T>(decoded.error()));
     static constexpr auto texts = std::define_static_array(path_texts<T>());
     auto const owner = std::make_shared<std::string const>(message);
-    auto lot = cbor::schema<T>::unverified_path(owner);
+    auto lot = cbor::schema<T>::unverified_view(owner);
     if (!lot) {
         require(unverified_error<T>(lot.error()));
         return;
@@ -465,7 +465,7 @@ void unverified_raw(std::string_view const message)
 // '$' path from inside reads from the root.
 inline void garage_accessors(std::string const &written)
 {
-    auto const root = cbor::schema<garage>::path(std::string(written));
+    auto const root = cbor::schema<garage>::adopt(std::string(written));
     require(root.has_value());
     auto const cars = root->at_path<"$.cars">();
     require(cars.has_value());
@@ -491,7 +491,7 @@ inline void garage_accessors(std::string const &written)
 // that alternative reads its members as decode does; the other alternative is incorrect_type.
 inline void garage_parked(std::string const &written)
 {
-    auto const root = cbor::schema<garage>::path(std::string(written));
+    auto const root = cbor::schema<garage>::adopt(std::string(written));
     auto const decoded = cbor::schema<garage>::decode(std::string(written));
     require(root.has_value() && decoded.has_value());
     auto const &native = (*decoded)->parked;
@@ -559,7 +559,7 @@ void parked_raw(Lot const &lot, std::string_view const message)
 // count past the end is an error.
 inline void numbers_view(std::string const &written)
 {
-    auto const root = cbor::schema<numbers>::path(std::string(written));
+    auto const root = cbor::schema<numbers>::adopt(std::string(written));
     require(root.has_value());
     auto const blob = root->view<"$.list">();
     require(blob.has_value());
@@ -597,10 +597,10 @@ void read_forms(std::string const &written)
     encoded_as(cbor::schema<T>::unverified_decode(std::string(written)));
     encoded_as(cbor::schema<T>::unverified_decode(bytes));
     encoded_as(cbor::schema<T>::unverified_decode(bytes, std::span<char const>(*bytes)));
-    require(cbor::schema<T>::path(std::string(written)).has_value());
-    require(cbor::schema<T>::path(bytes).has_value());
-    require(cbor::schema<T>::path(bytes, std::span<char const>(*bytes)).has_value());
-    require(cbor::schema<T>::unverified_path(bytes, std::span<char const>(*bytes)).has_value());
+    require(cbor::schema<T>::adopt(std::string(written)).has_value());
+    require(cbor::schema<T>::view(bytes).has_value());
+    require(cbor::schema<T>::view(bytes, std::span<char const>(*bytes)).has_value());
+    require(cbor::schema<T>::unverified_view(bytes, std::span<char const>(*bytes)).has_value());
     if constexpr (std::is_same_v<T, garage>) {
         garage_accessors(written);
         garage_parked(written);
@@ -696,7 +696,7 @@ template <class T>
 void compare_all(T const &native, std::string_view const message)
 {
     static constexpr auto texts = std::define_static_array(path_texts<T>());
-    auto lot = cbor::schema<T>::path(std::string(message));
+    auto lot = cbor::schema<T>::adopt(std::string(message));
     require(lot.has_value());
     template for (constexpr std::meta::info text : texts)
         compare(native_at<T, text, 1>(native), lot->template at_path<path_text<text>>());
@@ -719,8 +719,8 @@ void apart_round_trip(T const &native)
     encoded_as(cbor::schema<T>::template decode<apart>(std::string(*data)));
     encoded_as(cbor::schema<T>::template decode<apart>(bytes, std::span<char const>(*bytes)));
     encoded_as(cbor::schema<T>::template unverified_decode<apart>(std::string(*data)));
-    require(cbor::schema<T>::template path<apart>(std::string(*data)).has_value());
-    require(cbor::schema<T>::template unverified_path<apart>(bytes, std::span<char const>(*bytes)).has_value());
+    require(cbor::schema<T>::template adopt<apart>(std::string(*data)).has_value());
+    require(cbor::schema<T>::template unverified_view<apart>(bytes, std::span<char const>(*bytes)).has_value());
 }
 
 // A struct from the bytes of the input, written and read back through every path of its type. The message

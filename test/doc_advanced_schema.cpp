@@ -224,7 +224,7 @@ TEST_CASE("doc advanced schema: a wrong path does not compile")
 TEST_CASE("doc advanced schema: the accessor")
 {
     std::string const bytes = *cbor::schema<car>::encode(sample);
-    auto const root = cbor::schema<car>::path(std::string(bytes));
+    auto const root = cbor::schema<car>::adopt(std::string(bytes));
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.make">(), "Volvo"sv);
     auto const tires = root->at_path<"$.tires">();
@@ -250,21 +250,21 @@ TEST_CASE("doc advanced schema: the accessor")
 TEST_CASE("doc advanced schema: the accessor holds the owner")
 {
     auto owner = std::make_shared<std::string const>(*cbor::schema<car>::encode(sample));
-    auto const root = cbor::schema<car>::path(owner);
+    auto const root = cbor::schema<car>::view(owner);
     owner.reset();
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.make">(), "Volvo"sv);
     std::string temp = *cbor::schema<car>::encode(sample);
-    auto const copied = cbor::schema<car>::path(std::string(temp));
+    auto const copied = cbor::schema<car>::adopt(std::string(temp));
     temp.assign(temp.size(), '\0');
     REQUIRE(copied.has_value());
     CHECK_EQ(*copied->at_path<"$.make">(), "Volvo"sv);
-    CHECK_THROWS_AS((void)cbor::schema<car>::path(std::shared_ptr<std::string const>{}), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::schema<car>::view(std::shared_ptr<std::string const>{}), std::logic_error);
     auto const held = std::make_shared<std::string const>(*cbor::schema<car>::encode(sample));
-    auto const beside = cbor::schema<car>::path(held, std::string_view(*held));
+    auto const beside = cbor::schema<car>::view(held, std::string_view(*held));
     REQUIRE(beside.has_value());
     CHECK_EQ(beside->at_path<"$.seats">(), 5u);
-    auto moved = cbor::schema<car>::path(std::string(*held));
+    auto moved = cbor::schema<car>::adopt(std::string(*held));
     REQUIRE(moved.has_value());
     auto const kept = std::move(*moved);
     CHECK_EQ(kept.at_path<"$.seats">(), 5u);
@@ -279,7 +279,7 @@ TEST_CASE("doc advanced schema: the accessor holds the owner")
 TEST_CASE("doc advanced schema: a list accessor keeps the bytes alive")
 {
     std::string const bytes = *cbor::schema<car>::encode(sample);
-    auto const tires = cbor::schema<car>::path(std::string(bytes))->at_path<"$.tires">();
+    auto const tires = cbor::schema<car>::adopt(std::string(bytes))->at_path<"$.tires">();
     REQUIRE(tires.has_value());
     CHECK_EQ(tires->size(), 2u);
     CHECK_EQ(*tires->at_path<"@[1].diameter">(), 18u);
@@ -290,7 +290,7 @@ TEST_CASE("doc advanced schema: a typed array view")
 {
     CHECK((std::ranges::random_access_range<cbor::typed_array_view<double>>));
     CHECK((std::ranges::sized_range<cbor::typed_array_view<double>>));
-    auto const root = cbor::schema<car>::path(*cbor::schema<car>::encode(sample));
+    auto const root = cbor::schema<car>::adopt(*cbor::schema<car>::encode(sample));
     REQUIRE(root.has_value());
     auto const track = root->view<"$.track">();
     REQUIRE(track.has_value());
@@ -315,11 +315,11 @@ TEST_CASE("doc advanced schema: errors")
     CHECK_EQ(cbor::schema<car>::decode(bytes.substr(0, 3)).error(), error::too_little_data);
     std::string_view const view = bytes;
     CHECK_EQ(cbor::schema<car>::at_path<"$.seats">(view.substr(0, view.size() - 1)).error(), error::too_little_data);
-    CHECK_EQ(cbor::schema<car>::path(bytes.substr(0, bytes.size() / 2)).error(), error::too_little_data);
+    CHECK_EQ(cbor::schema<car>::adopt(bytes.substr(0, bytes.size() / 2)).error(), error::too_little_data);
     std::string const small = *cbor::schema<tire>::encode(tire{1, 1.0f});
     CHECK_EQ(cbor::schema<car>::decode(std::string(small)).error(), error::too_little_data);
     CHECK_EQ(cbor::schema<tire>::decode(std::string(bytes)).error(), error::incorrect_type);
-    CHECK_EQ(cbor::schema<tire>::path(std::string(bytes)).error(), error::incorrect_type);
+    CHECK_EQ(cbor::schema<tire>::adopt(std::string(bytes)).error(), error::incorrect_type);
     std::size_t const seats = bytes.find("\x18\x05"sv);
     REQUIRE_NE(seats, std::string::npos);
     std::string forged = bytes;

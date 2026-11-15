@@ -335,5 +335,5 @@ TEST_CASE("limits sizes 2: string_length on a text alternative of a variant memb
     CHECK(cbor::schema<labelled>::decode(std::string(*fits)).has_value());
     auto const above = cbor::schema<labelled>::encode(labelled{std::string(limit + 1, 'a')});
     CHECK_EQ(cbor::schema<labelled>::decode(std::string(*above)).error(), error::string_length_exceeded);
-    CHECK_EQ(cbor::schema<labelled>::path(std::string(*above))->at_path<"$.label">().error(), error::string_length_exceeded);
+    CHECK_EQ(cbor::schema<labelled>::adopt(std::string(*above))->at_path<"$.label">().error(), error::string_length_exceeded);
 }

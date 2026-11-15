@@ -98,7 +98,7 @@ TEST_CASE("doc schema: read a text, a list or a struct")
     std::vector<double> used;
     auto const use = [&used](double const r) { used.push_back(r); };
     auto const owner = std::make_shared<std::string const>(bytes);
-    auto const root = cbor::schema<sensor>::path(owner);
+    auto const root = cbor::schema<sensor>::view(owner);
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.name">(), "t1"sv);
     auto const readings = root->view<"$.readings">();
@@ -131,11 +131,11 @@ TEST_CASE("doc schema: read the whole struct")
     CHECK_EQ((*back)->name, "t1");
 }
 
-// The section "Read from a peer that you trust" opens a message with unverified_path, which reads as path does.
+// The section "Read from a peer that you trust" opens a message with unverified_adopt, which reads as adopt does.
 TEST_CASE("doc schema: read from a peer that you trust")
 {
     auto const owner = std::make_shared<std::string const>(*cbor::schema<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}}));
-    auto const fast = cbor::schema<sensor>::unverified_path(owner);
+    auto const fast = cbor::schema<sensor>::unverified_view(owner);
     REQUIRE(fast.has_value());
     CHECK_EQ(fast->at_path<"$.id">(), 7);
     CHECK_EQ(fast->at_path<"$.readings[1]">(), 2.5);
@@ -212,7 +212,7 @@ TEST_CASE("doc schema: a list of fixed-size structs is a range of elements")
     using namespace doc_packed;
     auto message = cbor::schema<track>::encode(track{{{1, 2}, {3, 4}, {5, 6}}});
     REQUIRE(message.has_value());
-    auto const lane = cbor::schema<track>::path(std::move(*message));
+    auto const lane = cbor::schema<track>::adopt(std::move(*message));
     REQUIRE(lane.has_value());
     auto const points = lane->at_path<"$.points">();
     REQUIRE(points.has_value());

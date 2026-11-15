@@ -181,9 +181,9 @@ result schema_path(call const &c)
     if (auto const *const owner = held_if<std::shared_ptr<std::string const>>(c.arguments.front()))
         return placed(c, 0, [&]<cbor::description_place D>() -> result {
             if constexpr (Verified)
-                return value_of(cbor::schema<T>::template path<D>(*owner));
+                return value_of(cbor::schema<T>::template view<D>(*owner));
             else
-                return value_of(cbor::schema<T>::template unverified_path<D>(*owner));
+                return value_of(cbor::schema<T>::template unverified_view<D>(*owner));
         });
     auto const bytes =
         argument_of<std::string>(c, 0, "a std::string or a std::shared_ptr<std::string const>");
@@ -191,9 +191,9 @@ result schema_path(call const &c)
         return std::unexpected(bytes.error());
     return placed(c, 0, [&]<cbor::description_place D>() -> result {
         if constexpr (Verified)
-            return value_of(cbor::schema<T>::template path<D>(std::string(**bytes)));
+            return value_of(cbor::schema<T>::template adopt<D>(std::string(**bytes)));
         else
-            return value_of(cbor::schema<T>::template unverified_path<D>(std::string(**bytes)));
+            return value_of(cbor::schema<T>::template unverified_adopt<D>(std::string(**bytes)));
     });
 }
 
@@ -520,9 +520,9 @@ inline constexpr entry schema_functions[] = {
     {"cbor::schema<car>::decode()", schema_decode<car, true>},
     {"cbor::schema<tire>::decode()", schema_decode<tire, true>},
     {"cbor::schema<car>::unverified_decode()", schema_decode<car, false>},
-    {"cbor::schema<car>::path()", schema_path<car, true>},
-    {"cbor::schema<tire>::path()", schema_path<tire, true>},
-    {"cbor::schema<car>::unverified_path()", schema_path<car, false>},
+    {"cbor::schema<car>::view()", schema_path<car, true>},
+    {"cbor::schema<tire>::view()", schema_path<tire, true>},
+    {"cbor::schema<car>::unverified_view()", schema_path<car, false>},
     {"cbor::schema<car>::at_path()",
      schema_at_path<car, true, "$.seats", "$.make", "$.tires[1].diameter", "$.tires[].diameter",
                     "$.tires[].pressure", "$.track[2]">},
@@ -560,11 +560,11 @@ inline constexpr entry schema_functions[] = {
     {"cbor::schema<car>::accessor<cbor::fixed_element<tire>>.at_path()",
      accessor_at_path<cbor::schema<car>::accessor<cbor::fixed_element<tire>>, "@.diameter", "@.pressure",
                       "$.seats">},
-    {"cbor::schema<home>::path()", schema_path<home, true>},
+    {"cbor::schema<home>::view()", schema_path<home, true>},
     {"cbor::schema<home>::accessor<home>.at_path()", accessor_at_path<cbor::schema<home>::accessor<home>, "$.pet">},
     {"cbor::schema<home>::accessor<std::variant<dog, cat>>.index()", pet_index},
     {"cbor::schema<home>::accessor<std::variant<dog, cat>>.get()", pet_get},
-    {"cbor::schema<property>::path()", schema_path<property, true>},
+    {"cbor::schema<property>::view()", schema_path<property, true>},
     {"cbor::schema<property>::accessor<property>.at_path()",
      accessor_at_path<cbor::schema<property>::accessor<property>, "$.value", "$.name">},
     {"cbor::schema<property>::accessor<std::variant<bool, std::int64_t, std::string>>.index()", value_index},

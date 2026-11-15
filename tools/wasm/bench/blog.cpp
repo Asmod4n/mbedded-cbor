@@ -88,7 +88,7 @@ __attribute__((export_name("server_encode"))) std::uint64_t server_encode(std::u
 
 __attribute__((export_name("feed_load"))) std::int32_t feed_load(char const *const ptr, std::size_t const len)
 {
-    auto r = cbor::schema<feed>::path(std::string(ptr, len));
+    auto r = cbor::schema<feed>::adopt(std::string(ptr, len));
     if (!r)
         return -static_cast<std::int32_t>(r.error());
     root.emplace(std::move(*r));

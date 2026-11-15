@@ -93,9 +93,9 @@ struct next_allocation_refused {
 
 } // namespace
 
-// The rvalue forms of schema::path and schema::unverified_path move the message into a new owner. A full memory
+// schema::adopt and schema::unverified_adopt move the message into a new owner. A full memory
 // gives std::bad_alloc there. The owner decided that the library does not catch it, as the standard library does not.
-TEST_CASE("schema: path and unverified_path throw std::bad_alloc when the owner cannot be allocated")
+TEST_CASE("schema: adopt and unverified_adopt throw std::bad_alloc when the owner cannot be allocated")
 {
     using doc_reference_schema::car;
     car const sample{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}};
@@ -105,11 +105,11 @@ TEST_CASE("schema: path and unverified_path throw std::bad_alloc when the owner 
     std::string unverified = verified;
     {
         next_allocation_refused const refused;
-        CHECK_THROWS_AS(static_cast<void>(cbor::schema<car>::path(std::move(verified))), std::bad_alloc);
+        CHECK_THROWS_AS(static_cast<void>(cbor::schema<car>::adopt(std::move(verified))), std::bad_alloc);
     }
     {
         next_allocation_refused const refused;
-        CHECK_THROWS_AS(static_cast<void>(cbor::schema<car>::unverified_path(std::move(unverified))), std::bad_alloc);
+        CHECK_THROWS_AS(static_cast<void>(cbor::schema<car>::unverified_adopt(std::move(unverified))), std::bad_alloc);
     }
 }
 

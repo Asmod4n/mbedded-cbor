@@ -234,7 +234,7 @@ TEST_CASE("schema: a forged class tag of a nested record is incorrect_type")
 // not see a moved-from accessor.
 TEST_CASE("schema: an accessor inside an optional reads its fields")
 {
-    auto const root = form<everything>::path(encode_with_schema(sample_everything));
+    auto const root = form<everything>::adopt(encode_with_schema(sample_everything));
     REQUIRE(root.has_value());
     auto const inner = root->at_path<"$.inner">();
     REQUIRE(inner.has_value());
@@ -250,15 +250,15 @@ TEST_CASE("schema: an owner is empty only when it has no control block")
     std::string const bytes = encode_with_schema(sample_everything);
     auto const held = std::make_shared<std::string const>(bytes);
     auto const alias = std::shared_ptr<void const>(held, nullptr);
-    auto root = form<everything>::path(alias, std::string_view(*held));
+    auto root = form<everything>::view(alias, std::string_view(*held));
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.text">(), "text"sv);
 
     auto const moved = std::move(*root);
     CHECK_EQ(moved.at_path<"$.text">(), "text"sv);
     CHECK_THROWS_AS((void)root->at_path<"$.text">(), std::logic_error);
-    CHECK_THROWS_AS(std::ignore = form<everything>::path(std::shared_ptr<void const>(), std::string_view(bytes)), std::logic_error);
-    auto unverified = form<everything>::unverified_path(held);
+    CHECK_THROWS_AS(std::ignore = form<everything>::view(std::shared_ptr<void const>(), std::string_view(bytes)), std::logic_error);
+    auto unverified = form<everything>::unverified_view(held);
     REQUIRE(unverified.has_value());
     auto const taken = std::move(*unverified);
     CHECK_THROWS_AS((void)unverified->at_path<"$.text">(), std::logic_error);

@@ -30,10 +30,10 @@
 #define OP_MB_FIELD
 #endif
 #if defined(OP_MB_READ_UNVERIFIED) || defined(OP_MB_FIELD_UNVERIFIED)
-#define MB_PATH unverified_path
+#define MB_PATH unverified_view
 #define MB_AT_PATH unverified_at_path
 #else
-#define MB_PATH path
+#define MB_PATH view
 #define MB_AT_PATH at_path
 #endif
 

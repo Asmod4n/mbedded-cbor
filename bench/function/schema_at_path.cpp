@@ -49,14 +49,14 @@ void schema_at_path(benchmark::State &state)
         return;
     }
     auto const owner = std::make_shared<std::string const>(*encoded);
-    auto const sample = cbor::schema<car>::path(owner);
+    auto const sample = cbor::schema<car>::view(owner);
     if (!sample || sample->at_path<"$.make">() != "Volvo" || sample->at_path<"$.tires[1].diameter">() != 18) {
         state.SkipWithError("the accessor of the car does not give Volvo and 18");
         return;
     }
-    std::vector<decltype(cbor::schema<car>::path(owner))> accessors;
+    std::vector<decltype(cbor::schema<car>::view(owner))> accessors;
     for (std::size_t total = 0; total < cold_bytes(); total += encoded->size())
-        accessors.push_back(cbor::schema<car>::path(std::make_shared<std::string const>(*encoded)));
+        accessors.push_back(cbor::schema<car>::view(std::make_shared<std::string const>(*encoded)));
     for (auto _ : state) {
         std::size_t sum = 0;
         for (auto const &each : accessors) {

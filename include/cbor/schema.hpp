@@ -3325,7 +3325,7 @@ class reflection
  *
  * @code{.example}
  * bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
- * call: auto const root = cbor::schema<car>::path(std::move(bytes))
+ * call: auto const root = cbor::schema<car>::adopt(std::move(bytes))
  * result: accessor of a car
  * call: auto const track = root->view<"$.track">()
  * result: typed_array_view<double> of 3 elements: 1, 2, 3
@@ -3701,7 +3701,7 @@ public:
      * reads the data form.
      * A generic decoder of Packed CBOR does not.
      * The size of the data form plus the size of `description()` is the size of the message.
-     * The other errors are the errors of cbor::schema::path(), cbor::schema::at_path() and cbor::schema::decode().
+     * The other errors are the errors of cbor::schema::adopt(), cbor::schema::at_path() and cbor::schema::decode().
      *
      * @code{.example}
      * bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
@@ -3719,7 +3719,7 @@ public:
      * result: ref to car{"Volvo", 5, {tire{17, 2.5f}, tire{18, 2.25f}}, {1, 2, 3}}
      * call: auto const owner = std::make_shared<std::string const>(*data)
      * result: shared_ptr to 130 bytes: d8 71 82 9a 00 00 00 10 5a 00 00 00 0c 00 00 00 25 00 00 00 2f 00 00 00 45 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
-     * call: auto const root = cbor::schema<car>::path<cbor::description_place::apart>(owner)
+     * call: auto const root = cbor::schema<car>::view<cbor::description_place::apart>(owner)
      * result: accessor of a car
      * call: root->at_path<"$.tires[1].diameter">()
      * result: 18
@@ -3730,7 +3730,7 @@ public:
      * @snippet doc_reference_schema.cpp description
      * @see cbor::description_place
      * @see cbor::schema::encode()
-     * @see cbor::schema::%path()
+     * @see cbor::schema::adopt()
      */
     template <class U = T>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
@@ -3802,7 +3802,7 @@ public:
      *
      * @code{.example}
      * bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
-     * call: auto const root = cbor::schema<car>::path(std::move(bytes))
+     * call: auto const root = cbor::schema<car>::adopt(std::move(bytes))
      * result: accessor of a car
      * call: auto const tires = root->at_path<"$.tires">()
      * result: accessor of a std::vector<tire> of 2 elements
@@ -3827,7 +3827,7 @@ public:
      * @endcode
      * @code{.example}
      * bytes: d8 71 82 9a 00 00 00 12 d8 72 81 63 70 65 74 d8 72 82 64 62 61 72 6b 64 6e 61 6d 65 d8 72 82 64 6e 61 6d 65 64 74 6f 79 73 5a 00 00 00 08 00 00 00 42 00 00 00 54 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 0b d8 81 9a 00 00 00 02 18 03 c6 3a 00 00 00 00 7a 00 00 00 03 72 65 78 d9 07 0d d8 80 9a 00 00 00 01 c6 1a 00 00 00 00
-     * call: auto const house = cbor::schema<home>::path(std::move(bytes))
+     * call: auto const house = cbor::schema<home>::adopt(std::move(bytes))
      * result: accessor of a home
      * call: auto const pet = house->at_path<"$.pet">()
      * result: accessor of a std::variant<dog, cat> that holds a dog
@@ -3842,7 +3842,7 @@ public:
      * @endcode
      * @code{.example}
      * bytes: d8 71 82 9a 00 00 00 12 d8 72 82 64 6e 61 6d 65 65 76 61 6c 75 65 5a 00 00 00 08 00 00 00 31 00 00 00 3b f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 77 69 64 74 68 1b 00 00 00 00 00 00 00 f0 d9 07 0e d8 80 9a 00 00 00 02 c6 1a 00 00 00 00 c6 3a 00 00 00 00
-     * call: auto const width = cbor::schema<property>::path(std::move(bytes))
+     * call: auto const width = cbor::schema<property>::adopt(std::move(bytes))
      * result: accessor of a property
      * call: auto const value = width->at_path<"$.value">()
      * result: accessor of a std::variant<bool, std::int64_t, std::string> that holds a std::int64_t
@@ -3860,7 +3860,7 @@ public:
      * @retval unpopulated_table_index, syntax_error a broken reference
      * @snippet doc_reference_schema.cpp accessor
      * @snippet doc_reference_schema.cpp accessor variant
-     * @see cbor::schema::%path()
+     * @see cbor::schema::adopt()
      * @see cbor::typed_array_view
      * @throws std::logic_error a call on a moved-from accessor
      *
@@ -4105,7 +4105,7 @@ public:
      *
      * @code{.example}
      * bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
-     * call: auto const root = cbor::schema<car>::path(std::move(bytes))
+     * call: auto const root = cbor::schema<car>::adopt(std::move(bytes))
      * result: accessor of a car
      * call: auto const second = root->at_path<"$.tires[]">(1u)
      * result: accessor of a tire in a std::vector<tire>
@@ -4259,14 +4259,14 @@ public:
      * An owner is read in place.
      * Nothing is copied.
      * An lvalue `std::string` does not compile.
-     * `%path` checks the length, the table, the directory and the tag of the root once.
+     * `adopt` and `view` check the length, the table, the directory and the tag of the root once.
      * It reads no field.
      *
      * @code{.example}
      * bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
-     * call: cbor::schema<car>::path(std::string(bytes)).has_value()
+     * call: cbor::schema<car>::adopt(std::string(bytes)).has_value()
      * result: true
-     * call: auto const root = cbor::schema<car>::path(std::move(bytes))
+     * call: auto const root = cbor::schema<car>::adopt(std::move(bytes))
      * result: accessor of a car
      * call: root->at_path<"$.make">()
      * result: "Volvo"
@@ -4283,7 +4283,7 @@ public:
      */
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(Encoded &&encoded)
+    CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> adopt(Encoded &&encoded)
     {
         return path_with_owner<true, D>(std::make_shared<Encoded const>(std::move(encoded)));
     }
@@ -4293,7 +4293,7 @@ public:
      */
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(std::shared_ptr<Encoded const> encoded)
+    CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> view(std::shared_ptr<Encoded const> encoded)
     {
         return path_with_owner<true, D>(std::move(encoded));
     }
@@ -4303,7 +4303,7 @@ public:
      */
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> path(std::shared_ptr<void const> owner, Encoded const &encoded)
+    CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> view(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
         return path_with_owner<true, D>(std::move(owner), std::string_view(std::span<char const>(encoded)));
     }
@@ -4311,7 +4311,7 @@ public:
     /**
      * @brief Reads one value at `Path` and returns a `std::expected` of it.
      *
-     * It makes the checks of cbor::schema::path() and of an accessor in one call and keeps nothing.
+     * It makes the checks of cbor::schema::adopt() and of an accessor in one call and keeps nothing.
      * It exists only for a value that holds no view into the bytes: a number, a `bool`, an enum, or a
      * `std::optional` of one.
      * A path starts with `$`, names a member with `.name` and an element with `[n]`.
@@ -4336,12 +4336,12 @@ public:
      * result: 2.25
      * @endcode
      *
-     * @retval too_little_data, incorrect_type as cbor::schema::path()
+     * @retval too_little_data, incorrect_type as cbor::schema::adopt()
      * @retval index_out_of_bounds an index past the end of a list
      * @retval unpopulated_table_index, syntax_error a broken reference
      * @snippet doc_reference_schema.cpp at_path
      * @see cbor::schema::accessor
-     * @see cbor::schema::%path()
+     * @see cbor::schema::adopt()
      */
     template <fixed_string Path, description_place D = description_place::inside, std::convertible_to<std::size_t>... Index>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && Path.view().starts_with('$') &&
@@ -4382,7 +4382,7 @@ public:
      * its parent
      * @snippet doc_reference_schema.cpp decode
      * @see cbor::schema::encode()
-     * @see cbor::schema::%path()
+     * @see cbor::schema::adopt()
      * @see cbor::ref
      * @throws std::bad_alloc an allocation of the result fails
      * @throws std::logic_error a null or empty owner
@@ -4436,11 +4436,11 @@ public:
     }
 
     /**
-     * @brief Opens a message as cbor::schema::path() does, and does not check the data of the message.
+     * @brief Opens a message as cbor::schema::adopt() does, and does not check the data of the message.
      *
      * It checks every bound, so no read leaves the input.
      * Use it for a message from a peer that you trust.
-     * `unverified_path` gives an `accessor<T, false>`.
+     * `unverified_adopt` and `unverified_view` give an `accessor<T, false>`.
      * Every accessor that it gives on a path is unverified too, and so is each element of a vector of fixed-size
      * structs.
      * `view` of an unverified accessor does not check the tag of the typed array.
@@ -4468,7 +4468,7 @@ public:
      * result: 5
      * call: cbor::schema<car>::unverified_at_path<"$.tires[].diameter">(bytes, 0u)
      * result: 17
-     * call: auto const lane = cbor::schema<car>::unverified_path(std::string(bytes))
+     * call: auto const lane = cbor::schema<car>::unverified_adopt(std::string(bytes))
      * result: unverified accessor of a car
      * call: lane->at_path<"$.tires[1].diameter">()
      * result: 18
@@ -4485,11 +4485,11 @@ public:
      * @snippet doc_reference_schema.cpp unverified
      * @see cbor::schema::unverified_at_path()
      * @see cbor::schema::unverified_decode()
-     * @see cbor::schema::%path()
+     * @see cbor::schema::adopt()
      */
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_path(Encoded &&encoded)
+    CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_adopt(Encoded &&encoded)
     {
         return path_with_owner<false, D>(std::make_shared<Encoded const>(std::move(encoded)));
     }
@@ -4499,7 +4499,7 @@ public:
      */
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_path(std::shared_ptr<Encoded const> encoded)
+    CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_view(std::shared_ptr<Encoded const> encoded)
     {
         return path_with_owner<false, D>(std::move(encoded));
     }
@@ -4509,7 +4509,7 @@ public:
      */
     template <description_place D = description_place::inside, borrowed_range_of_chars Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_path(std::shared_ptr<void const> owner, Encoded const &encoded)
+    CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_view(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
         return path_with_owner<false, D>(std::move(owner), std::string_view(std::span<char const>(encoded)));
     }
@@ -4517,7 +4517,7 @@ public:
     /**
      * @brief Reads one value as cbor::schema::at_path() does, and does not check the data of the message.
      *
-     * The checks and the errors of cbor::schema::unverified_path() apply.
+     * The checks and the errors of cbor::schema::unverified_adopt() apply.
      *
      * @code{.example}
      * bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
@@ -4528,7 +4528,7 @@ public:
      * @endcode
      *
      * @snippet doc_reference_schema.cpp unverified
-     * @see cbor::schema::unverified_path()
+     * @see cbor::schema::unverified_adopt()
      * @see cbor::schema::at_path()
      */
     template <fixed_string Path, description_place D = description_place::inside, std::convertible_to<std::size_t>... Index>
@@ -4543,7 +4543,7 @@ public:
     /**
      * @brief Reads the whole message as cbor::schema::decode() does, and does not check the data of the message.
      *
-     * The checks and the errors of cbor::schema::unverified_path() apply; it also checks the nesting depth.
+     * The checks and the errors of cbor::schema::unverified_adopt() apply; it also checks the nesting depth.
      * It does not check the order of the references and of the items.
      *
      * @code{.example}
@@ -4553,7 +4553,7 @@ public:
      * @endcode
      *
      * @snippet doc_reference_schema.cpp unverified
-     * @see cbor::schema::unverified_path()
+     * @see cbor::schema::unverified_adopt()
      * @see cbor::schema::%decode()
      */
     template <description_place D = description_place::inside, owning_range_of_chars Encoded>
@@ -4747,7 +4747,7 @@ private:
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, Verified>, error> path_with_owner(std::shared_ptr<Encoded const> encoded)
     {
         detail::validity::throw_logic_error_if_null(encoded,
-                                                    "cbor::schema::path: the encoded data item is null");
+                                                    "cbor::schema::view: the encoded data item is null");
         std::string_view const bytes{std::span<char const>(*encoded)};
         return path_with_owner<Verified, D>(std::shared_ptr<void const>(std::move(encoded)), bytes);
     }
@@ -4756,7 +4756,7 @@ private:
     CBOR_ALWAYS_INLINE static std::expected<accessor<T, Verified>, error> path_with_owner(std::shared_ptr<void const> owner, std::string_view const encoded)
     {
         detail::validity::throw_logic_error_if_empty(
-            owner, "cbor::schema::path: the owner of the encoded data item is empty");
+            owner, "cbor::schema::view: the owner of the encoded data item is empty");
         auto const dir = detail::reflection::read_directory<T, Verified, D>(encoded);
         if (!dir) [[unlikely]]
             return std::unexpected(dir.error());

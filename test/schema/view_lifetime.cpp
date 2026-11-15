@@ -7,7 +7,7 @@ TEST_CASE("view: the view keeps the bytes alive after the accessor is gone")
 {
     std::optional<cbor::typed_array_view<double>> kept;
     {
-        auto const root = form<doubles>::path(encode_with_schema(doubles{{1.0, 2.0}}));
+        auto const root = form<doubles>::adopt(encode_with_schema(doubles{{1.0, 2.0}}));
         REQUIRE(root.has_value());
         auto v = root->view<"$.v">();
         REQUIRE(v.has_value());
@@ -27,7 +27,7 @@ TEST_CASE("view: a view and a sub-view keep the bytes alive after the parent is 
     std::optional<cbor::typed_array_view<double>> moved;
     std::optional<cbor::typed_array_view<double>> taken;
     {
-        auto const root = form<doubles>::path(encode_with_schema(doubles{{1.0, 2.0, 4.0}}));
+        auto const root = form<doubles>::adopt(encode_with_schema(doubles{{1.0, 2.0, 4.0}}));
         REQUIRE(root.has_value());
         auto v = root->view<"$.v">();
         REQUIRE(v.has_value());
@@ -37,7 +37,7 @@ TEST_CASE("view: a view and a sub-view keep the bytes alive after the parent is 
         auto m = std::move(*v).first(1);
         REQUIRE(m.has_value());
         moved.emplace(std::move(*m));
-        auto r = form<doubles>::path(encode_with_schema(doubles{{8.0}}));
+        auto r = form<doubles>::adopt(encode_with_schema(doubles{{8.0}}));
         REQUIRE(r.has_value());
         auto t = std::move(*r).view<"$.v">();
         REQUIRE(t.has_value());
@@ -62,7 +62,7 @@ TEST_CASE("view: a moved-from view and a moved-from accessor read no bytes")
     using V = cbor::typed_array_view<double>;
     std::optional<V> view;
     {
-        auto const root = form<doubles>::path(encode_with_schema(doubles{{1.0, 2.0}}));
+        auto const root = form<doubles>::adopt(encode_with_schema(doubles{{1.0, 2.0}}));
         REQUIRE(root.has_value());
         auto v = root->view<"$.v">();
         REQUIRE(v.has_value());
@@ -81,7 +81,7 @@ TEST_CASE("view: a moved-from view and a moved-from accessor read no bytes")
 
     std::optional<V> sliced;
     {
-        auto const root = form<doubles>::path(encode_with_schema(doubles{{1.0, 2.0}}));
+        auto const root = form<doubles>::adopt(encode_with_schema(doubles{{1.0, 2.0}}));
         REQUIRE(root.has_value());
         auto v = root->view<"$.v">();
         REQUIRE(v.has_value());
@@ -96,12 +96,12 @@ TEST_CASE("view: a moved-from view and a moved-from accessor read no bytes")
     CHECK_THROWS_AS((void)(*sliced)[0], std::logic_error);
 
     V assigned = [] {
-        auto const root = form<doubles>::path(encode_with_schema(doubles{{4.0}}));
+        auto const root = form<doubles>::adopt(encode_with_schema(doubles{{4.0}}));
         return *root->view<"$.v">();
     }();
     {
         V target = [] {
-            auto const root = form<doubles>::path(encode_with_schema(doubles{{8.0}}));
+            auto const root = form<doubles>::adopt(encode_with_schema(doubles{{8.0}}));
             return *root->view<"$.v">();
         }();
         target = std::move(assigned);
@@ -110,7 +110,7 @@ TEST_CASE("view: a moved-from view and a moved-from accessor read no bytes")
     CHECK(assigned.empty());
     CHECK_THROWS_AS((void)assigned.back(), std::logic_error);
 
-    auto root = form<doubles>::path(encode_with_schema(doubles{{1.0, 2.0}}));
+    auto root = form<doubles>::adopt(encode_with_schema(doubles{{1.0, 2.0}}));
     REQUIRE(root.has_value());
     {
         auto const taken = std::move(*root);
@@ -119,7 +119,7 @@ TEST_CASE("view: a moved-from view and a moved-from accessor read no bytes")
     CHECK_THROWS_AS((void)root->at_path<"$.v[0]">(), std::logic_error);
     CHECK_THROWS_AS((void)root->view<"$.v">(), std::logic_error);
 
-    auto list_root = form<doubles>::path(encode_with_schema(doubles{{1.0, 2.0}}));
+    auto list_root = form<doubles>::adopt(encode_with_schema(doubles{{1.0, 2.0}}));
     REQUIRE(list_root.has_value());
     auto list = list_root->at_path<"$.v">();
     REQUIRE(list.has_value());

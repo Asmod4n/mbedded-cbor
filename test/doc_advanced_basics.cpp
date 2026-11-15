@@ -104,7 +104,7 @@ TEST_CASE("doc advanced basics: a cut schema message is too_little_data")
     std::string const cut = bytes->substr(0, bytes->size() - 1);
     CHECK_EQ(schema::at_path<"$.level">(cut).error(), error::too_little_data);
     CHECK_EQ(schema::decode(std::string(cut)).error(), error::too_little_data);
-    CHECK_EQ(schema::path(std::string(cut)).error(), error::too_little_data);
+    CHECK_EQ(schema::adopt(std::string(cut)).error(), error::too_little_data);
 }
 
 // The row not_singular_query of the section "Every error value" names the call that gives it.

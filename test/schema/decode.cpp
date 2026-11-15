@@ -152,7 +152,7 @@ TEST_CASE("decode and at_path: every typed array gives its elements back")
     CHECK_EQ(std::bit_cast<std::uint32_t>(*read_leaf_with_copying_path<numbers, "$.f32[0]">(bytes)), 0x3f800000u);
     CHECK_EQ(std::bit_cast<std::uint64_t>(*read_leaf_with_copying_path<numbers, "$.f64[0]">(bytes)), 0x3ff0000000000000u);
     CHECK_EQ(read_leaf_with_copying_path<numbers, "$.f64[1]">(bytes).error(), error::index_out_of_bounds);
-    auto const root = form<numbers>::path(std::string(bytes));
+    auto const root = form<numbers>::adopt(std::string(bytes));
     REQUIRE(root.has_value());
     auto const list = root->at_path<"$.u32">();
     REQUIRE(list.has_value());
@@ -351,7 +351,7 @@ TEST_CASE("a message cut at any length is too_little_data")
         std::string const cut = whole.substr(0, n);
         CHECK_EQ(form<byte_fields>::decode(std::string(cut)).error(), error::too_little_data);
         CHECK_EQ(form<byte_fields>::decode(std::make_shared<std::string const>(cut), byte_fields{}).error(), error::too_little_data);
-        CHECK_EQ(form<byte_fields>::path(std::string(cut)).error(), error::too_little_data);
+        CHECK_EQ(form<byte_fields>::adopt(std::string(cut)).error(), error::too_little_data);
         CHECK_EQ(form<byte_fields>::at_path<"$.list[1]">(cut).error(), error::too_little_data);
         CHECK_EQ(form<byte_fields>::at_path<"$.list[]">(cut, 1uz).error(), error::too_little_data);
     }

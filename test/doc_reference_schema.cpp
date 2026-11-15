@@ -120,19 +120,19 @@ TEST_CASE("doc reference schema: path")
     std::string bytes = sample_bytes();
     // [path]
     // bytes: a std::string from schema<car>::encode(car{"Volvo", 5, ...})
-    auto const root = cbor::schema<car>::path(std::move(bytes));
+    auto const root = cbor::schema<car>::adopt(std::move(bytes));
     auto const make = root->at_path<"$.make">();  // "Volvo"
     // [path]
     REQUIRE(root.has_value());
     CHECK_EQ(make, "Volvo"sv);
 
     auto const owner = std::make_shared<std::string const>(sample_bytes());
-    auto const shared = cbor::schema<car>::path(owner);
+    auto const shared = cbor::schema<car>::view(owner);
     REQUIRE(shared.has_value());
     CHECK_EQ(shared->at_path<"$.seats">(), 5);
 
-    CHECK_EQ(cbor::schema<tire>::path(sample_bytes()).error(), error::incorrect_type);
-    CHECK_THROWS_AS(std::ignore = cbor::schema<car>::path(std::shared_ptr<std::string const>()), std::logic_error);
+    CHECK_EQ(cbor::schema<tire>::adopt(sample_bytes()).error(), error::incorrect_type);
+    CHECK_THROWS_AS(std::ignore = cbor::schema<car>::view(std::shared_ptr<std::string const>()), std::logic_error);
 }
 
 // schema.hpp, snippet at_path: the static at_path reads one number with no accessor; [] takes the index from the
@@ -163,7 +163,7 @@ TEST_CASE("doc reference schema: unverified")
     // [unverified]
     // bytes: from schema<car>::encode(car{"Volvo", 5, ...}), a peer that the program trusts wrote them
     auto const seats = cbor::schema<car>::unverified_at_path<"$.seats">(bytes);  // 5
-    auto const lane = cbor::schema<car>::unverified_path(std::string(bytes));
+    auto const lane = cbor::schema<car>::unverified_adopt(std::string(bytes));
     auto const diameter = lane->at_path<"$.tires[1].diameter">();               // 18
     // [unverified]
     CHECK_EQ(seats, 5);
@@ -196,10 +196,10 @@ TEST_CASE("doc reference schema: description")
     CHECK_EQ(data->size() + description.size(), sample_bytes().size());
     CHECK_EQ((cbor::schema<car>::at_path<"$.seats", apart>(*data)), 5);
     // The data form holds no description. So at_path with the description inside reads a message that is shorter than
-    // its table: the doc of schema::path gives too_little_data for that.
+    // its table: the doc of schema::adopt gives too_little_data for that.
     auto const refused = cbor::schema<car>::at_path<"$.seats">(*data).error();
     CHECK_EQ(refused, error::too_little_data);
-    auto const root = cbor::schema<car>::path<apart>(std::string(*data));
+    auto const root = cbor::schema<car>::adopt<apart>(std::string(*data));
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.tires[1].diameter">(), 18);
 }
@@ -252,7 +252,7 @@ TEST_CASE("doc reference schema: accessor")
     std::vector<std::uint16_t> seen;
     // [accessor]
     // bytes: from schema<car>::encode(car{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}})
-    auto const root = cbor::schema<car>::path(std::move(bytes));
+    auto const root = cbor::schema<car>::adopt(std::move(bytes));
     auto const tires = root->at_path<"$.tires">();
     auto const count = tires->size();                       // 2
     auto const second = tires->at_path<"@[1].diameter">();  // 18
@@ -288,7 +288,7 @@ TEST_CASE("doc reference schema: accessor of a variant member")
              "\x80\x9a\x00\x00\x00\x01\xc6\x1a\x00\x00\x00\x00"s);
     // [accessor variant]
     // home: struct { std::variant<dog, cat> pet; }; bytes: from schema<home>::encode(home{dog{{"rex"}, 3}})
-    auto const doc = cbor::schema<home>::path(std::string(*bytes));
+    auto const doc = cbor::schema<home>::adopt(std::string(*bytes));
     auto const pet = doc->at_path<"$.pet">();
     auto const held = pet->index();                         // 0
     auto const name = pet->get<dog>()->at_path<"@.name">();  // "rex"
@@ -315,7 +315,7 @@ TEST_CASE("doc reference schema: accessor of a variant member of values")
              "\x00\x00\x08\x00\x00\x00\x31\x00\x00\x00\x3b\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
              "\xf7\x7a\x00\x00\x00\x05\x77\x69\x64\x74\x68\x1b\x00\x00\x00\x00\x00\x00\x00\xf0\xd9\x07\x0e\xd8"
              "\x80\x9a\x00\x00\x00\x02\xc6\x1a\x00\x00\x00\x00\xc6\x3a\x00\x00\x00\x00"s);
-    auto const width = cbor::schema<property>::path(std::string(*bytes));
+    auto const width = cbor::schema<property>::adopt(std::string(*bytes));
     REQUIRE(width.has_value());
     auto const value = width->at_path<"$.value">();
     REQUIRE(value.has_value());
@@ -331,7 +331,7 @@ TEST_CASE("doc reference schema: fixed_element")
     std::string bytes = sample_bytes();
     // [fixed_element]
     // bytes: from schema<car>::encode(car{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}})
-    auto const root = cbor::schema<car>::path(std::move(bytes));
+    auto const root = cbor::schema<car>::adopt(std::move(bytes));
     auto const second = root->at_path<"$.tires[]">(1uz);
     auto const diameter = second->at_path<"@.diameter">();  // 18
     auto const seats = second->at_path<"$.seats">();        // 5
@@ -353,7 +353,7 @@ TEST_CASE("doc reference schema: typed_array_view")
     std::string bytes = sample_bytes();
     // [typed_array_view]
     // bytes: from schema<car>::encode(car{..., {1.0, 2.0, 3.0}}), the member track
-    auto const root = cbor::schema<car>::path(std::move(bytes));
+    auto const root = cbor::schema<car>::adopt(std::move(bytes));
     auto const track = root->view<"$.track">();
     double const sum = std::accumulate(track->begin(), track->end(), 0.0);  // 6
     auto const past = track->at(3);                                        // error::index_out_of_bounds

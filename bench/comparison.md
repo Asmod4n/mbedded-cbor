@@ -350,7 +350,7 @@ struct series {
 
 CBOR_DEFINE_TYPE_MEMBERS(series, cbor::tag{1900}, values);
 
-auto const root = cbor::schema<series>::path(std::move(bytes));
+auto const root = cbor::schema<series>::adopt(std::move(bytes));
 auto const values = root->view<"$.values">();
 double const sum = std::accumulate(values->begin(), values->end(), 0.0);
 ```

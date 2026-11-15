@@ -117,7 +117,7 @@ TEST_CASE("path: a path compiles where it names a part of the type")
 TEST_CASE("path: an accessor reads relative to the part it names")
 {
     std::string const bytes = encode_with_schema(sample_garage);
-    auto const opened = form<garage>::path(std::string(bytes));
+    auto const opened = form<garage>::adopt(std::string(bytes));
     REQUIRE(opened.has_value());
     auto const &root = *opened;
     auto const tires = root.at_path<"$.tires">();
@@ -148,7 +148,7 @@ TEST_CASE("path: an accessor reads relative to the part it names")
 // address sanitizer reports that read.
 TEST_CASE("path: the copying form outlives the message of the caller")
 {
-    auto const opened = form<ticket>::path(build_ticket_message());
+    auto const opened = form<ticket>::adopt(build_ticket_message());
     REQUIRE(opened.has_value());
     auto const &root = *opened;
     CHECK_EQ(root.at_path<"$.holder">(), sample_ticket.holder);
@@ -160,7 +160,7 @@ TEST_CASE("path: the copying form outlives the message of the caller")
 TEST_CASE("path: the root keeps the owner after the caller releases it")
 {
     auto owner = std::make_shared<std::string const>(build_ticket_message());
-    auto const opened = form<ticket>::path(std::move(owner));
+    auto const opened = form<ticket>::view(std::move(owner));
     REQUIRE(opened.has_value());
     auto const &root = *opened;
     auto const holder = root.at_path<"$.holder">();
@@ -178,7 +178,7 @@ TEST_CASE("path: an accessor gives the values of decode in every order")
     std::string const bytes = encode_with_schema(make_sample_lot());
     auto const decoded = *form<parking_lot>::decode(std::string(bytes));
     parking_lot const &back = *decoded;
-    auto lot = *form<parking_lot>::path(std::string(bytes));
+    auto lot = *form<parking_lot>::adopt(std::string(bytes));
     std::vector<std::size_t> order(back.cars.size());
     std::iota(order.begin(), order.end(), 0uz);
     for (std::size_t const i : order)
@@ -209,7 +209,7 @@ TEST_CASE("path: an accessor is not read through a temporary")
     CHECK_FALSE(temporary_lot_reads<D, "$.cars[].seats">);
     CHECK_FALSE(temporary_lot_reads<D, "$.cars[]">);
     CHECK_FALSE(temporary_car_reads<D>);
-    CHECK_THROWS_AS((void)form<parking_lot>::path(std::shared_ptr<std::string const>{}), std::logic_error);
+    CHECK_THROWS_AS((void)form<parking_lot>::view(std::shared_ptr<std::string const>{}), std::logic_error);
 }
 
 // The copying form keeps its copy: a text and a car accessor stay valid after the caller frees the message, while the
@@ -217,7 +217,7 @@ TEST_CASE("path: an accessor is not read through a temporary")
 TEST_CASE("path: the copying form keeps its copy after the caller frees the message")
 {
     auto bytes = std::make_unique<std::string>(encode_with_schema(make_sample_lot()));
-    auto lot = *form<parking_lot>::path(std::string(*bytes));
+    auto lot = *form<parking_lot>::adopt(std::string(*bytes));
     auto const make = *lot.at_path<"$.cars[].make">(3uz);
     auto const car = *lot.at_path<"$.cars[]">(4uz);
     bytes.reset();
@@ -240,7 +240,7 @@ TEST_CASE("decode and path: an rvalue string is moved, everything else is copied
 
     auto buffer = std::make_unique<std::string>(message);
     std::span<char const> const data(*buffer);
-    auto const moved = form<login>::path(std::move(*buffer));
+    auto const moved = form<login>::adopt(std::move(*buffer));
     REQUIRE(moved.has_value());
     auto const moved_name = moved->at_path<"$.name">();
     REQUIRE(moved_name.has_value());
@@ -250,7 +250,7 @@ TEST_CASE("decode and path: an rvalue string is moved, everything else is copied
     CHECK_EQ(*moved_name, name);
 
     std::string lvalue = message;
-    auto const copied = form<login>::path(std::string(lvalue));
+    auto const copied = form<login>::adopt(std::string(lvalue));
     REQUIRE(copied.has_value());
     auto const copied_name = copied->at_path<"$.name">();
     REQUIRE(copied_name.has_value());
@@ -263,7 +263,7 @@ TEST_CASE("decode and path: an rvalue string is moved, everything else is copied
     // Owner decision 2026-10-17: no form copies the input. A const string, a named string, a view and a literal
     // would need a copy, so none of them compiles.
     auto const takes = []<class S>(S &&) { return requires(S &&s) { form<login>::decode(std::forward<S>(s)); }; };
-    auto const opens = []<class S>(S &&) { return requires(S &&s) { form<login>::path(std::forward<S>(s)); }; };
+    auto const opens = []<class S>(S &&) { return requires(S &&s) { form<login>::adopt(std::forward<S>(s)); }; };
     CHECK_FALSE(opens(std::move(constant)));
     CHECK_FALSE(takes(std::move(constant)));
     CHECK_FALSE(takes(lvalue));
@@ -277,5 +277,5 @@ TEST_CASE("decode and path: an rvalue string is moved, everything else is copied
     REQUIRE(decoded.has_value());
     CHECK_EQ((*decoded)->name, name);
     CHECK_EQ(form<login>::decode(std::string()).error(), error::too_little_data);
-    CHECK_EQ(form<login>::path(std::string()).error(), error::too_little_data);
+    CHECK_EQ(form<login>::adopt(std::string()).error(), error::too_little_data);
 }

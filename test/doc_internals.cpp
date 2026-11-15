@@ -154,7 +154,7 @@ TEST_CASE("doc internals: a cut message gives too_little_data in a schema read")
         std::string const cut = bytes.substr(0, n);
         CAPTURE(n);
         CHECK_EQ(cbor::schema<doc_internals::reading>::at_path<"$.id">(cut).error(), error::too_little_data);
-        CHECK_EQ(cbor::schema<doc_internals::reading>::path(std::string(cut)).error(), error::too_little_data);
+        CHECK_EQ(cbor::schema<doc_internals::reading>::adopt(std::string(cut)).error(), error::too_little_data);
         CHECK_EQ(cbor::schema<doc_internals::reading>::decode(std::string(cut)).error(), error::too_little_data);
     }
 }

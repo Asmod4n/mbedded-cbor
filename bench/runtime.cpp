@@ -787,7 +787,7 @@ static std::uint64_t mb_variant()
     if (!v) [[unlikely]] std::abort();
     return std::get<bench_variant::cat>((**v).pet).toys.size() + (**v).street.size();
 #else
-    auto const root = cbor::schema<bench_variant::home>::path(*held);
+    auto const root = cbor::schema<bench_variant::home>::view(*held);
     if (!root) [[unlikely]] std::abort();
     auto const name = root->at_path<"$.pet">()->get<bench_variant::cat>()->at_path<"@.name">();
     if (!name) [[unlikely]] std::abort();

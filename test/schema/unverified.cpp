@@ -6,7 +6,7 @@ namespace schema_types
 
 
 template <class T>
-using unverified_root = std::remove_cvref_t<decltype(*form<T>::unverified_path(std::string()))>;
+using unverified_root = std::remove_cvref_t<decltype(*form<T>::unverified_adopt(std::string()))>;
 
 // Reads every kind of part through the unverified forms and returns nothing: the sweep below only needs each call
 // to return.
@@ -20,7 +20,7 @@ void unverified_reads(std::string const &bytes)
     (void)form<everything>::unverified_at_path<"$.gauges[].at.x">(bytes, 1uz);
     (void)form<everything>::unverified_at_path<"$.tires[].airPressure">(bytes, 1uz);
     (void)form<everything>::unverified_decode(owner);
-    auto const root = form<everything>::unverified_path(owner);
+    auto const root = form<everything>::unverified_view(owner);
     if (!root)
         return;
     (void)root->at_path<"$.text">();
@@ -55,7 +55,7 @@ TEST_CASE("unverified: the same results as the verified forms on a message that 
     CHECK_EQ(form<everything>::unverified_at_path<"$.gauges[].at.x">(bytes, 1uz), -6);
     CHECK_EQ(form<everything>::unverified_at_path<"$.tires[].airPressure">(bytes, 1uz), 3.0f);
     CHECK_EQ(form<everything>::unverified_at_path<"$.maybe">(bytes).value(), std::optional<std::int32_t>{-9});
-    auto const root = form<everything>::unverified_path(std::string(bytes));
+    auto const root = form<everything>::unverified_adopt(std::string(bytes));
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.text">(), "text"sv);
     CHECK_EQ(root->at_path<"$.names[1]">(), "bc"sv);
@@ -95,10 +95,10 @@ TEST_CASE("unverified: a forged type byte gives a value, not an error")
     CHECK_EQ(form<everything>::unverified_at_path<"$.flag">(root_tag), true);
     CHECK(form<everything>::unverified_decode(std::string(root_tag)).has_value());
     std::string const track_tag = forged("\xd8\x56\x5a"s, 1, '\x55');
-    auto const verified = form<everything>::path(std::string(track_tag));
+    auto const verified = form<everything>::adopt(std::string(track_tag));
     REQUIRE(verified.has_value());
     CHECK_EQ(verified->view<"$.track">().error(), error::incorrect_type);
-    auto const unverified = form<everything>::unverified_path(std::string(track_tag));
+    auto const unverified = form<everything>::unverified_adopt(std::string(track_tag));
     REQUIRE(unverified.has_value());
     CHECK_EQ(unverified->view<"$.track">()->at(0), 1.0);
     std::string const vector_head = forged("\xd9\x80\x69"s, 1, '\x81');
@@ -111,7 +111,7 @@ TEST_CASE("unverified: a forged type byte gives a value, not an error")
 TEST_CASE("unverified: a bound is checked as in the verified forms")
 {
     std::string const bytes = encode_with_schema(sample_everything);
-    CHECK_EQ(form<everything>::unverified_path(bytes.substr(0, 20)).error(), error::too_little_data);
+    CHECK_EQ(form<everything>::unverified_adopt(bytes.substr(0, 20)).error(), error::too_little_data);
     CHECK_EQ(form<everything>::unverified_decode(bytes.substr(0, 20)).error(), error::too_little_data);
     CHECK_EQ(form<everything>::unverified_at_path<"$.gauges[].at.x">(bytes, 2uz).error(),
              error::index_out_of_bounds);
@@ -200,7 +200,7 @@ TEST_CASE("unverified: a variant member reads as in the verified forms")
     auto const back = form<home>::unverified_decode(std::string(bytes));
     REQUIRE(back);
     CHECK_EQ(std::get<cat>((*back)->pet).toys, std::vector<std::string>{"ball", "mouse"});
-    auto const doc = form<home>::unverified_path(std::string(bytes));
+    auto const doc = form<home>::unverified_adopt(std::string(bytes));
     REQUIRE(doc);
     auto const pet = doc->at_path<"$.pet">();
     REQUIRE(pet);
@@ -211,7 +211,7 @@ TEST_CASE("unverified: a variant member reads as in the verified forms")
     REQUIRE_NE(at, std::string::npos);
     forged[at + 2] = '\xcf';
     CHECK_EQ(form<home>::unverified_decode(std::string(forged)).error(), error::incorrect_type);
-    auto const forged_doc = form<home>::unverified_path(std::string(forged));
+    auto const forged_doc = form<home>::unverified_adopt(std::string(forged));
     REQUIRE(forged_doc);
     CHECK_EQ(forged_doc->at_path<"$.pet">().error(), error::incorrect_type);
 }
@@ -222,7 +222,7 @@ TEST_CASE("unverified: value and text alternatives read as in the verified forms
 {
     for (setting const &s : make_sample_settings()) {
         auto const bytes = *form<setting>::encode(s);
-        auto const doc = form<setting>::unverified_path(std::string(bytes));
+        auto const doc = form<setting>::unverified_adopt(std::string(bytes));
         REQUIRE(doc.has_value());
         auto const v = doc->at_path<"$.value">();
         REQUIRE(v.has_value());
@@ -236,5 +236,5 @@ TEST_CASE("unverified: value and text alternatives read as in the verified forms
     std::size_t const at = forged.size() - form<setting>::fixed_size() - form<setting>::fixed_size<std::int32_t>();
     forged[at] = '\x1b';
     CHECK_EQ(form<setting>::unverified_decode(std::string(forged)).error(), error::incorrect_type);
-    CHECK_EQ(form<setting>::unverified_path(std::string(forged))->at_path<"$.value">().error(), error::incorrect_type);
+    CHECK_EQ(form<setting>::unverified_adopt(std::string(forged))->at_path<"$.value">().error(), error::incorrect_type);
 }
