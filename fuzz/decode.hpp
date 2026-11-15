@@ -97,7 +97,7 @@ inline void tree_encode(std::string_view const input)
     require(tree_again.has_value());
     std::string twice;
     require(cbor::encode(**tree_again, twice).has_value() && twice == out);
-    auto const pieces = cbor::encode_iov(**tree);
+    auto const pieces = cbor::encode_iov(*tree);
     require(pieces.has_value());
     auto const joined = test::join_pieces_into_bytes(**pieces);
     require(joined.has_value() && *joined == out);

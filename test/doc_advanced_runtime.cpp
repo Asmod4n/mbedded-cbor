@@ -379,7 +379,7 @@ TEST_CASE("doc advanced runtime: encode_iov")
     std::string const wire = bytes;
     auto const tree = cbor::decode(bytes);
     REQUIRE(tree.has_value());
-    auto const pieces = cbor::encode_iov(**tree);
+    auto const pieces = cbor::encode_iov(*tree);
     REQUIRE(pieces.has_value());
     auto const read = test::join_pieces_into_bytes(**pieces);
     REQUIRE(read.has_value());

@@ -264,6 +264,8 @@ class CBOR_OWNER owning
 
     friend struct detail::zone_owner;
 
+    friend class detail::encoding;
+
     template <class>
     friend class ref;
 

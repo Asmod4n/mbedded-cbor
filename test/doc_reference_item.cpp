@@ -216,7 +216,7 @@ TEST_CASE("doc reference item: encode_iov")
     // [encode_iov]
     // bytes: a std::string with [1, "a"]
     auto const tree = cbor::decode(bytes);
-    auto const pieces = cbor::encode_iov(**tree);  // 1 piece, the 4 bytes 82 01 61 61
+    auto const pieces = cbor::encode_iov(*tree);  // 1 piece, the 4 bytes 82 01 61 61
     // writev(fd, (*pieces)->data(), static_cast<int>((*pieces)->size()));
     // [encode_iov]
     REQUIRE(tree);

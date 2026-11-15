@@ -25,6 +25,9 @@ namespace
 {
 
 using iov_encoder = cbor::encoder<cbor::iov_writer>;
+constexpr std::size_t copybreak = CBOR_ENCODER_COPYBREAK;
+// RFC 8949 section 3: the longest head is the initial byte and an argument of 8 bytes.
+constexpr std::size_t longest_head_size = 1 + 8;
 using pieces = cbor::ref<std::span<iovec const>>;
 
 std::string join_pieces_into_bytes(pieces const &p)
@@ -73,7 +76,8 @@ std::string text_item(std::string_view const text)
 // keeps it. Otherwise the list holds a copy and the form gains nothing.
 TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form")
 {
-    for (std::size_t const size : {0uz, 31uz, 32uz, 33uz, 16383uz, 16384uz, 16385uz, 20000uz}) {
+    for (std::size_t const size :
+         {0uz, std::max(copybreak, 1uz) - 1, copybreak, copybreak + 1, 16383uz, 16384uz, 16385uz, 20000uz}) {
         CAPTURE(size);
         std::string const text(size, 'a');
         std::string const expected = copied([&](auto &e) { return e.text_string(std::string_view(text)); });
@@ -97,7 +101,7 @@ TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form"
             pieces const p = std::move(*finished);
             CHECK_EQ(join_pieces_into_bytes(p), expected);
             CHECK_EQ(sum_piece_lengths(p), expected.size());
-            if (size > cbor::detail::encoding::copybreak)
+            if (size > copybreak)
                 CHECK(std::ranges::any_of(*p, [&](iovec const &piece) { return piece.iov_len == text.size(); }));
         }
         {
@@ -110,7 +114,7 @@ TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form"
             pieces const p = std::move(*finished);
             CHECK_EQ(join_pieces_into_bytes(p), expected);
             CHECK_EQ(sum_piece_lengths(p), expected.size());
-            CHECK_EQ(points_into(p, owner->data()), size > cbor::detail::encoding::copybreak && size > 0);
+            CHECK_EQ(points_into(p, owner->data()), size > copybreak && size > 0);
         }
         {
             auto const read = test::make_lazy_from_copy(expected)->get<std::string_view>();
@@ -123,7 +127,7 @@ TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form"
             pieces const p = std::move(*finished);
             CHECK_EQ(join_pieces_into_bytes(p), expected);
             CHECK_EQ(sum_piece_lengths(p), expected.size());
-            CHECK_EQ(points_into(p, (**read).data()), size > cbor::detail::encoding::copybreak && size > 0);
+            CHECK_EQ(points_into(p, (**read).data()), size > copybreak && size > 0);
         }
     }
 }
@@ -131,7 +135,7 @@ TEST_CASE("encode_iov: every form of a text gives the bytes of the copying form"
 // The byte string forms follow the same rule as the text forms, through their own overloads.
 TEST_CASE("encode_iov: every form of a byte string gives the bytes of the copying form")
 {
-    for (std::size_t const size : {0uz, 31uz, 32uz, 33uz, 16384uz, 20000uz}) {
+    for (std::size_t const size : {0uz, std::max(copybreak, 1uz) - 1, copybreak, copybreak + 1, 16384uz, 20000uz}) {
         CAPTURE(size);
         std::vector<std::byte> const bytes = bytes_of(std::string(size, 'b'));
         std::string const expected =
@@ -155,7 +159,7 @@ TEST_CASE("encode_iov: every form of a byte string gives the bytes of the copyin
             REQUIRE(finished.has_value());
             pieces const p = std::move(*finished);
             CHECK_EQ(join_pieces_into_bytes(p), expected);
-            CHECK_EQ(points_into(p, owner->data()), size > cbor::detail::encoding::copybreak && size > 0);
+            CHECK_EQ(points_into(p, owner->data()), size > copybreak && size > 0);
         }
         {
             auto const read = test::make_lazy_from_copy(expected)->get<std::span<std::byte const>>();
@@ -167,7 +171,7 @@ TEST_CASE("encode_iov: every form of a byte string gives the bytes of the copyin
             REQUIRE(finished.has_value());
             pieces const p = std::move(*finished);
             CHECK_EQ(join_pieces_into_bytes(p), expected);
-            CHECK_EQ(points_into(p, (**read).data()), size > cbor::detail::encoding::copybreak && size > 0);
+            CHECK_EQ(points_into(p, (**read).data()), size > copybreak && size > 0);
         }
     }
 }
@@ -215,10 +219,10 @@ TEST_CASE("encode_iov: the second encoder on a writer that has finished is a wro
 TEST_CASE("encode_iov: a head and a float at each offset before the end of a block")
 {
     for (bool const fixed : {false, true}) {
-        for (std::size_t left = 1; left <= cbor::detail::encoding::item_size_max; ++left) {
+        for (std::size_t left = 1; left <= longest_head_size; ++left) {
             CAPTURE(fixed);
             CAPTURE(left);
-            std::size_t const fill = cbor::detail::encoding::block_size - left - 3;
+            std::size_t const fill = CBOR_ENCODER_BLOCK_SIZE - left - 3;
             std::string const text(fill, 'f');
             auto const write = [&](auto &e) -> std::expected<void, cbor::error> {
                 if (auto const r = e.text_string(std::string_view(text)); !r)
@@ -248,7 +252,7 @@ TEST_CASE("encode_iov: a head and a float at each offset before the end of a blo
 // across two blocks.
 TEST_CASE("encode_iov: texts at the free space of a block")
 {
-    std::size_t const free = cbor::detail::encoding::block_size - 3;
+    std::size_t const free = CBOR_ENCODER_BLOCK_SIZE - 3;
     for (std::size_t const size : {free - 1, free, free + 1}) {
         CAPTURE(size);
         std::string const text(size, 's');
@@ -274,7 +278,7 @@ TEST_CASE("encode_iov: texts at the free space of a block")
 TEST_CASE("encode_iov: the order of blocks and references")
 {
     auto const owner = std::make_shared<std::string const>(64, 'r');
-    std::string const fill(cbor::detail::encoding::block_size - 3, 'f');
+    std::string const fill(CBOR_ENCODER_BLOCK_SIZE - 3, 'f');
     auto const write = [&](auto &e) -> std::expected<void, cbor::error> {
         if (auto const r = e.text_string(std::string_view(fill)); !r)
             return r;
@@ -384,7 +388,7 @@ TEST_CASE("encode: a float is a double unless preferred serialization is on")
 TEST_CASE("encode_iov: more pieces than IOV_MAX are written in turns")
 {
     constexpr std::size_t strings = 1100;
-    auto const text = std::make_shared<std::string const>(std::string(cbor::detail::encoding::copybreak + 1, 'x'));
+    auto const text = std::make_shared<std::string const>(std::string(copybreak + 1, 'x'));
     cbor::iov_writer w;
     iov_encoder e{w};
     std::string expected;
@@ -433,4 +437,117 @@ TEST_CASE("encode_iov: sendmsg sends the bytes of encode")
     CHECK_EQ(received, expected);
     close(ends[0]);
     close(ends[1]);
+}
+
+namespace
+{
+
+std::string array_of_text_bytes_and_seven(std::size_t const size)
+{
+    std::string const text(size, 't');
+    std::vector<std::byte> const bytes = bytes_of(std::string(size, 'b'));
+    return copied([&](auto &e) -> std::expected<void, cbor::error> {
+        if (auto const r = e.array(3); !r)
+            return r;
+        if (auto const r = e.text_string(std::string_view(text)); !r)
+            return r;
+        if (auto const r = e.byte_string(std::span<std::byte const>(bytes)); !r)
+            return r;
+        return e.unsigned_integer(std::uint8_t{7});
+    });
+}
+
+std::vector<std::size_t> sizes_around_copybreak()
+{
+    return {0uz, std::max(copybreak, 1uz) - 1, copybreak, copybreak + 1, CBOR_ENCODER_BLOCK_SIZE + 1uz};
+}
+
+} // namespace
+
+// The overload for a tree that cbor::decode gave refers to its long strings and copies its short ones. Both overloads
+// must still send the bytes of cbor::encode, because a receiver sees only the bytes. Sizes around the copy limit and
+// past one block cover both paths and the change of block.
+TEST_CASE("encode_iov: both overloads give the bytes of encode for a decoded tree")
+{
+    for (std::size_t const size : sizes_around_copybreak()) {
+        CAPTURE(size);
+        std::string const input = array_of_text_bytes_and_seven(size);
+        auto const tree = cbor::decode(input);
+        REQUIRE(tree.has_value());
+        std::string expected;
+        REQUIRE(cbor::encode(**tree, expected).has_value());
+        auto const copied_pieces = cbor::encode_iov(**tree);
+        REQUIRE(copied_pieces.has_value());
+        CHECK_EQ(join_pieces_into_bytes(*copied_pieces), expected);
+        auto const referred_pieces = cbor::encode_iov(*tree);
+        REQUIRE(referred_pieces.has_value());
+        CHECK_EQ(join_pieces_into_bytes(*referred_pieces), expected);
+    }
+}
+
+// A string longer than the copy limit must be a piece that points at the bytes that the tree holds, or the overload
+// copies and gains nothing. A string at the limit must not point there, or the limit is not the one that holds. The
+// overload for item const & copies every string, so no piece of it points into the tree.
+TEST_CASE("encode_iov: a decoded tree is referred to above the copy limit and copied up to it")
+{
+    for (std::size_t const size : sizes_around_copybreak()) {
+        CAPTURE(size);
+        std::string const input = array_of_text_bytes_and_seven(size);
+        auto const tree = cbor::decode(input);
+        REQUIRE(tree.has_value());
+        auto const elements = (**tree).get<cbor::type::array>();
+        REQUIRE(elements.has_value());
+        REQUIRE_EQ(elements->size(), 3uz);
+        auto const text = (*elements)[0].get<cbor::type::text_string>();
+        auto const bytes = (*elements)[1].get<cbor::type::byte_string>();
+        REQUIRE(text.has_value());
+        REQUIRE(bytes.has_value());
+        auto const referred = cbor::encode_iov(*tree);
+        REQUIRE(referred.has_value());
+        bool const long_string = size > copybreak && size > 0;
+        CHECK_EQ(points_into(*referred, text->data()), long_string);
+        CHECK_EQ(points_into(*referred, bytes->data()), long_string);
+        auto const copied_pieces = cbor::encode_iov(**tree);
+        REQUIRE(copied_pieces.has_value());
+        CHECK_FALSE(points_into(*copied_pieces, text->data()));
+        CHECK_FALSE(points_into(*copied_pieces, bytes->data()));
+    }
+}
+
+// The pieces point into the tree, so the result must keep the tree alive when the caller has dropped it. A build with
+// AddressSanitizer reports the read if it does not.
+TEST_CASE("encode_iov: the pieces of a decoded tree outlive the tree")
+{
+    std::size_t const size = copybreak + CBOR_ENCODER_BLOCK_SIZE;
+    std::string const input = array_of_text_bytes_and_seven(size);
+    std::string expected;
+    std::expected<pieces, cbor::error> kept = std::unexpected(cbor::error::unsupported_value);
+    {
+        auto tree = cbor::decode(input);
+        REQUIRE(tree.has_value());
+        REQUIRE(cbor::encode(**tree, expected).has_value());
+        kept = cbor::encode_iov(*tree);
+        REQUIRE(kept.has_value());
+    }
+    CHECK_EQ(join_pieces_into_bytes(*kept), expected);
+}
+
+// The cycles overload walks the tree another way, through its own search. It must refer and copy as the other overload
+// does, and give the bytes of encode_cycles.
+TEST_CASE("encode_iov_cycles: the overload for a decoded tree gives the bytes of encode_cycles")
+{
+    for (std::size_t const size : sizes_around_copybreak()) {
+        CAPTURE(size);
+        std::string const input = array_of_text_bytes_and_seven(size);
+        auto const tree = cbor::decode(input);
+        REQUIRE(tree.has_value());
+        std::string expected;
+        REQUIRE(cbor::encode_cycles(**tree, expected).has_value());
+        auto const referred = cbor::encode_iov_cycles(*tree);
+        REQUIRE(referred.has_value());
+        CHECK_EQ(join_pieces_into_bytes(*referred), expected);
+        auto const text = (**tree).get<cbor::type::array>().value()[0].get<cbor::type::text_string>();
+        REQUIRE(text.has_value());
+        CHECK_EQ(points_into(*referred, text->data()), size > copybreak && size > 0);
+    }
 }

@@ -119,7 +119,13 @@ const>>, cbor::error>`. The pieces are for sending only. Hold the result
 until the call returns, or until the last completion of the request comes.
 The encoder writes into blocks of 16 KiB and copies each byte once.
 
-A text or a byte string of 32 bytes or more that the caller hands over
+`cbor::encode_iov(*tree)`, with the `cbor::owning<cbor::item>` that
+`cbor::decode` gives, does not copy a text or a byte string longer than
+`CBOR_ENCODER_COPYBREAK` bytes (31 by default): its piece points into the
+tree, and the result holds the tree alive. `cbor::encode_iov(**tree)`
+copies every string.
+
+A text or a byte string longer than `CBOR_ENCODER_COPYBREAK` bytes that the caller hands over
 with its owner is not copied. `std::string&&` and
 `std::vector<std::byte>&&` move into the result. A `std::shared_ptr` or a
 `cbor::ref` is kept. `cbor::encoder` over a `cbor::iov_writer` takes the

@@ -225,7 +225,8 @@ TEST_CASE("encoder: finish gives the size, and a call after it throws")
 // the caller handed over. It is a piece of its own, with no copy. Joined, the pieces are the bytes of the string target.
 TEST_CASE("encoder: the iov target gives the bytes of the string target in pieces")
 {
-    auto const text = std::make_shared<std::string const>(std::string(40, 'x'));
+    constexpr std::size_t longer_than_copybreak = CBOR_ENCODER_COPYBREAK + 9;
+    auto const text = std::make_shared<std::string const>(std::string(longer_than_copybreak, 'x'));
     cbor::iov_writer writer;
     cbor::encoder e(writer);
     REQUIRE(e.array(2).has_value());
@@ -239,7 +240,13 @@ TEST_CASE("encoder: the iov target gives the bytes of the string target in piece
         return static_cast<void const *>(piece.iov_base) == static_cast<void const *>(text->data());
     });
     CHECK(referenced);
-    CHECK_EQ(*joined, "\x82\x78\x28"s + *text + "\x18\x07"s);
+    std::string expected;
+    cbor::encoder copying(expected);
+    REQUIRE(copying.array(2).has_value());
+    REQUIRE(copying.text_string(std::string_view(*text)).has_value());
+    REQUIRE(copying.unsigned_integer(std::uint8_t{7}).has_value());
+    REQUIRE(copying.finish().has_value());
+    CHECK_EQ(*joined, expected);
 }
 
 // RFC 8742: a program writes a CBOR sequence item after item into one buffer of its own and keeps the bytes behind each
