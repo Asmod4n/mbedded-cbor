@@ -101,7 +101,7 @@ Each value is one enumerator of \fR\fBcbor::error\fP\fP\&.
 .IP "\(bu" 2
 \fRvalue_too_large\fP: the writer of an encode gives this error\&.
 .IP "\(bu" 2
-\fRnot_enough_memory\fP: the writer of an encode gives this error\&. A refused allocation in \fR\fBcbor::structs\fP\fP or \fRcbor::schema\fP decode gives it too\&.
+\fRnot_enough_memory\fP: the writer of an encode gives this error\&. A refused allocation throws \fRstd::bad_alloc\fP, as in the standard library\&.
 .IP "\(bu" 2
 \fRio_error\fP: the writer of an encode gives this error\&.
 .IP "\(bu" 2

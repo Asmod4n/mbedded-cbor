@@ -366,12 +366,13 @@ An error of \fRpath\fP, \fRat_path\fP or \fRdecode\fP can cost a walk over the m
 .IP "\(bu" 2
 \fRnesting_depth_exceeded\fP: a value that is nested too deep for \fRencode\fP or for \fRdecode\fP\&.
 .IP "\(bu" 2
-\fRnot_enough_memory\fP: an allocation of the owner in \fRpath\fP fails, or an allocation of the result in \fRdecode\fP fails\&.
-.IP "\(bu" 2
 \fRno_buffer_space\fP: a \fRstd::span<char>\fP is shorter than the message\&.
 .IP "\(bu" 2
 \fRvalue_too_large\fP: the message is longer than 2^32 - 1 bytes\&.
 .PP
+
+.PP
+A refused allocation of the owner or of the result throws \fRstd::bad_alloc\fP\&.
 
 .PP
 A null or empty owner throws \fRstd::logic_error\fP in \fRpath\fP, \fRdecode\fP and the unverified forms\&. A call on a moved-from accessor throws it too\&. \fRoperator[]\fP, \fRfront\fP and \fRback\fP of a typed array view throw it outside the view\&.
