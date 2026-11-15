@@ -161,12 +161,10 @@ Each step gives a \fR\fBcbor::error\fP\fP:
 \fRindefinite_length\fP: \fRelements()\fP or \fRentries()\fP of an array or a map of indefinite length, or \fRclone()\fP of such an item\&.
 .IP "\(bu" 2
 \fRnesting_depth_exceeded\fP: \fRclone()\fP of an item that nests too deep\&.
-.IP "\(bu" 2
-\fRnot_enough_memory\fP: an allocation of the owner in \fRadopt\fP fails\&.
 .PP
 
 .PP
-A wrong use throws \fRstd::logic_error\fP\&. It throws for a null \fRowner\fP in \fRview\fP, and for an empty \fRowner\fP in the form with \fRpart\fP\&. It throws for each member function of a lazy that holds no top-level item, for example a \fR\fBcbor::lazy\fP{}\fP\&.
+A refused allocation of the owner in \fRadopt\fP throws \fRstd::bad_alloc\fP\&. A wrong use throws \fRstd::logic_error\fP\&. It throws for a null \fRowner\fP in \fRview\fP, and for an empty \fRowner\fP in the form with \fRpart\fP\&. It throws for each member function of a lazy that holds no top-level item, for example a \fR\fBcbor::lazy\fP{}\fP\&.
 
 .PP
  

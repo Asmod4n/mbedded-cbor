@@ -76,13 +76,13 @@ The nesting depth counts the arrays, maps and tags around an item\&. The top-lev
 Nesting has no fixed limit\&. A reader that recurses gives \fR\fBcbor::error::nesting_depth_exceeded\fP\fP when a call comes within 16 KiB of the end of the stack of its thread\&. The bound is 32 KiB on Windows or with a sanitizer\&. \fR\fBcbor::item_size\fP\fP, \fR\fBcbor::sequence_reader\fP\fP and the child segments of a JSONPath do not recurse\&. So they read any depth\&. A deep value of a user type, read by \fR\fBcbor::structs\fP\fP or \fRcbor::schema\fP, is destroyed and copied by its own recursion\&. A thread with a smaller stack than the one that decoded the value can overflow there\&.
 .SH "MEMORY"
 .PP
-\fR\fBcbor::lazy::adopt\fP\fP moves a \fRstd::string\fP into a new \fRstd::shared_ptr<std::string const>\fP, which owns the bytes\&. Its allocation can fail with \fR\fBcbor::error::not_enough_memory\fP\fP\&. \fR\fBcbor::lazy::view\fP\fP takes an owner that you give\&.
+\fR\fBcbor::lazy::adopt\fP\fP moves a \fRstd::string\fP into a new \fRstd::shared_ptr<std::string const>\fP, which owns the bytes\&. A refused allocation throws \fRstd::bad_alloc\fP\&. \fR\fBcbor::lazy::view\fP\fP takes an owner that you give\&.
 
 .PP
 A text string or byte string comes back as a view into the bytes, in a \fR\fBcbor::ref\fP\fP\&. The \fR\fBcbor::ref\fP\fP holds the owner, so the view stays valid while the \fR\fBcbor::ref\fP\fP lives\&.
 
 .PP
-The decode calls of \fR\fBcbor::structs\fP<T>\fP and \fRcbor::schema<T>\fP take a target as their last argument\&. The target holds \fRstd::pmr\fP containers with a \fRstd::pmr::memory_resource\fP\&. Each element uses the allocator of its container\&. When the resource refuses, the call gives \fR\fBcbor::error::not_enough_memory\fP\fP\&. A \fRstd::bad_alloc\fP does not leave these calls\&.
+The decode calls of \fR\fBcbor::structs\fP<T>\fP and \fRcbor::schema<T>\fP take a target as their last argument\&. The target holds \fRstd::pmr\fP containers with a \fRstd::pmr::memory_resource\fP\&. Each element uses the allocator of its container\&. When the resource refuses, the call throws \fRstd::bad_alloc\fP, as a container of the standard library does\&.
 
 .PP
 A plain struct inside a \fRstd::pmr\fP container gets no allocator, so its members use the default resource\&. A step of a \fR\fBcbor::lazy\fP\fP, \fRget\fP and \fR\fBcbor::lazy::view\fP\fP allocate nothing\&. \fR\fBcbor::lazy::adopt\fP\fP allocates the \fRstd::shared_ptr\fP that holds the bytes\&. \fRclone\fP allocates its items\&. \fR\fBcbor::diagnostic_notation\fP\fP and the encoder into a \fRstd::string\fP allocate the string\&.

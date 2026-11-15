@@ -89,7 +89,7 @@ A \fRstd::string\fP lvalue, a \fRstd::string_view\fP alone and a \fRchar const *
 The forms without \fRtarget\fP start from \fRT{}\fP, so \fRT\fP must be default constructible\&. A null or empty owner throws \fRstd::logic_error\fP\&.
 
 .PP
-A \fRtarget\fP of \fRstd::pmr\fP containers sets the memory resource of each element\&. When the resource cannot give memory, the read gives \fRnot_enough_memory\fP\&. The decoder reserves no memory for a count that the input states\&. It makes each element when it reads that element\&.
+A \fRtarget\fP of \fRstd::pmr\fP containers sets the memory resource of each element\&. When the resource cannot give memory, the read throws \fRstd::bad_alloc\fP\&. The decoder reserves no memory for a count that the input states\&. It makes each element when it reads that element\&.
 .SH "TYPES"
 .PP
 \fRT\fP, and each member of a struct in \fRT\fP, has one of these C++ types\&. The CBOR item is on the right:
@@ -210,8 +210,6 @@ Each function gives a \fR\fBcbor::error\fP\fP in its \fRstd::expected\fP:
 \fRstring_length_exceeded\fP, \fRcontainer_elements_exceeded\fP, \fRnesting_depth_exceeded\fP: a string or a container is longer than a limit of the library, or the item nests too deep\&.
 .IP "\(bu" 2
 \fRsharedref_index_not_marked\fP, \fRsharedref_not_complete\fP: see SHARED VALUES\&.
-.IP "\(bu" 2
-\fRnot_enough_memory\fP: a refused allocation of \fRdecode\fP, or a refusal of a \fRstd::pmr\fP resource\&.
 .IP "\(bu" 2
 \fRno_buffer_space\fP: a \fRstd::span<char>\fP target that is too small\&.
 .IP "\(bu" 2

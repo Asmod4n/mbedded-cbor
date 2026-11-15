@@ -336,12 +336,10 @@ Each function gives \fRstd::expected\fP with a \fR\fBcbor::error\fP\fP\&. A miss
 \fRinadmissible_type_for_tag_content\fP: a tag on the way has content that its definition does not allow, for example tag 24 over a number\&.
 .IP "\(bu" 2
 \fRnodelist_too_long\fP: one step of a nodelist read selects more nodes than the top-level item has bytes\&.
-.IP "\(bu" 2
-\fRnot_enough_memory\fP: the allocation of the owner fails, in the form with an rvalue\&.
 .PP
 
 .PP
-A wrong use that the compiler cannot see throws \fRstd::logic_error\fP: a null or empty owner in a form that takes an owner, a moved-from query, and a \fR\fBcbor::lazy\fP{}\fP that holds no item in every form that takes a lazy\&.
+A refused allocation of the owner, in the form with an rvalue, throws \fRstd::bad_alloc\fP\&. A wrong use that the compiler cannot see throws \fRstd::logic_error\fP: a null or empty owner in a form that takes an owner, a moved-from query, and a \fR\fBcbor::lazy\fP{}\fP that holds no item in every form that takes a lazy\&.
 
 .PP
  
