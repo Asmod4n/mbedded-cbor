@@ -158,7 +158,8 @@ path that starts with `$` starts at the root. A path that starts with
 - a struct, a list or a map gives its accessor;
 - a `std::optional` of a type E gives a `std::optional` of the result of E.
 
-`size()` gives the count of a list or a map. `view<Path>()` gives a
+`size()` gives the count of the elements of a list, or of the pairs of a
+map, in the mapped bytes, as a `std::size_t`. `view<Path>()` gives a
 `cbor::typed_array_view` of a list of numbers. Only the root accessor has
 `view`.
 
@@ -183,7 +184,8 @@ at the root.
 numbers in the message. Each element is a value of `E`, read in little
 endian. An element is a value, not a reference. The view holds the owner
 of the bytes. It has `size`, `empty`, `begin`, `end`, `rbegin`, `rend`,
-`front`, `back`, `first`, `last`, `at` and `operator[]`.
+`front`, `back`, `first`, `last`, `at` and `operator[]`. `size` gives the
+count of the elements in the mapped bytes, as a `std::size_t`.
 
 - `at`, `first` and `last` give an index error as a value.
 - `operator[]`, `front` and `back` throw `std::logic_error` outside the

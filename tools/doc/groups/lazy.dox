@@ -92,22 +92,26 @@ reads as `42.0` for `double`. The bignum `2(h'05')` reads as `5` for
 
 @section lazy_loop THE COUNT, THE ELEMENTS AND THE PAIRS
 
-`size()` gives the count of the head of an array, a map or a typed
-array. It reads only the head. It gives a `std::expected` of
-`std::uint64_t`. `empty()` gives `true` when the count is 0.
+`size()` gives the count of an array, a map or a typed array. It reads
+only the head. It gives a `std::expected` of `std::uint64_t`. The count
+of an array or a map is the argument of its head, which RFC 8949 section 3
+allows up to 2^64 - 1. The head of a typed array holds the count of its
+bytes, and `size()` gives the count of whole elements in them (RFC 8746
+section 2). `empty()` gives `true` when the count is 0.
 
 `elements()` gives the elements of an array, or of a typed array, as a
 view. Each element is a `std::expected<cbor::lazy, cbor::error>`. The view
 reads one element at each step. It is a forward range, a sized range and
 a borrowed range, so the standard algorithms take it. It has no `front()`.
-Its `size()` gives the count of the head, and it gives exactly that many
-values.
+Its `size()` gives the same count as the `size()` of the lazy, a
+`std::uint64_t`, and it gives exactly that many values.
 
 `entries()` gives the pairs of a map, in the order of the bytes, as a
 view. Each element is a `std::expected` of a pair of lazy values, or of a
 `cbor::error`. The key is `first` and the value is `second`.
 A key that occurs twice occurs twice in the view. The view is a forward
-range, a sized range and a borrowed range.
+range, a sized range and a borrowed range. Its `size()` gives the count
+of pairs, the argument of the head of the map, as a `std::uint64_t`.
 
 An iterator holds the owner of the bytes. It stays valid after the lazy
 and the view end. When the iterator cannot step over an element, `*it`
