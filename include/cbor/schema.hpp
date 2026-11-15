@@ -893,10 +893,6 @@ class reflection
         std::meta::info const type = std::meta::dealias(^^T);
         if (annotated(type, ^^cbor::tag))
             return false;
-        for (std::meta::info const m :
-             std::meta::nonstatic_data_members_of(type, std::meta::access_context::unprivileged()))
-            if (annotated(m, ^^detail::key))
-                return false;
 #endif
         return true;
     }

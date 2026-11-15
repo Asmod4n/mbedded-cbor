@@ -1,6 +1,6 @@
 // On a build with reflection, a description must list exactly the public members that reflection reads with
 // unprivileged(). A described type takes no annotation: the description is the only list of members, keys and tag.
-// CBOR_TEST_CASE selects the case: 1 one member left out, 2 cbor::detail::key, 3 cbor::tag.
+// CBOR_TEST_CASE selects the case: 1 one member left out, 3 cbor::tag.
 #include <cbor/cbor.hpp>
 
 #include <expected>
@@ -9,11 +9,6 @@
 #if CBOR_TEST_CASE == 1
 struct t {
     int a;
-    int b;
-};
-#elif CBOR_TEST_CASE == 2
-struct t {
-    [[=cbor::detail::key("x")]] int a;
     int b;
 };
 #elif CBOR_TEST_CASE == 3
