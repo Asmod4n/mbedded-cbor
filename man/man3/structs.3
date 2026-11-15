@@ -164,7 +164,7 @@ With reflection, the entries are exactly the public data members of the type and
 .IP "\(bu" 2
 A member that comes twice, two members with one key, a key of \fRbool\fP or of a character type, a tag of a standard type (for example 1, 258 or a tag of RFC 8746), and an invalid tag do not compile\&.
 .IP "\(bu" 2
-An annotation \fR[[=cbor::key("x")]]\fP or \fR[[=\fBcbor::tag(n)\fP]]\fP on a type that \fR\fBcbor::structs\fP\fP reads does not compile\&.
+An annotation \fR[[=\fBcbor::tag(n)\fP]]\fP on a type that \fR\fBcbor::structs\fP\fP reads does not compile\&.
 .IP "\(bu" 2
 A class with a base class uses \fRCBOR_DEFINE_DERIVED_TYPE\fP or \fRCBOR_DEFINE_DERIVED_TYPE_MEMBERS\fP\&. These take the base class after the type\&.
 .IP "\(bu" 2

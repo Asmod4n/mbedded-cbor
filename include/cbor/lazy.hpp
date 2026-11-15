@@ -175,14 +175,14 @@ public:
      * message: {"id": 42}
      * call: auto const owner = std::make_shared<std::string const>(bytes)
      * result: shared_ptr to 6 bytes: a1 62 69 64 18 2a
-     * call: cbor::lazy::view(owner)->at("id")->get<std::int64_t>()
+     * call: cbor::lazy::view(owner)->at_key("id")->get<std::int64_t>()
      * result: 42
      * @endcode
      *
      * @throws std::logic_error an empty `owner` in the first form
      * @snippet doc_reference_lazy.cpp view
      * @see cbor::lazy::adopt()
-     * @see cbor::lazy::at()
+     * @see cbor::lazy::at_key()
      */
     template <borrowed_range_of_chars Encoded>
     static std::expected<lazy, error> view(std::shared_ptr<void const> owner, Encoded const &encoded);
@@ -207,64 +207,85 @@ public:
      * message: {"id": 42}
      * call: auto const doc2 = cbor::lazy::adopt(std::move(bytes))
      * result: lazy of {"id": 42}
-     * call: doc2->at("id")->get<std::int64_t>()
+     * call: doc2->at_key("id")->get<std::int64_t>()
      * result: 42
      * @endcode
      *
      * @retval not_enough_memory an allocation of the owner fails
      * @snippet doc_reference_lazy.cpp adopt
      * @see cbor::lazy::view()
-     * @see cbor::lazy::at()
+     * @see cbor::lazy::at_key()
      */
     template <owning_range_of_chars Encoded>
     static std::expected<lazy, error> adopt(Encoded &&encoded);
 
     /**
-     * @brief Gives the lazy of one child.
+     * @brief Gives the lazy of the value of one map key.
      *
-     * `at(key)` gives the value of the first pair of a map whose key is the text `key`.
-     * `at(cbor::key{n})` gives the value of the first pair whose key is the integer `n`; a bignum key that holds `n`
-     * matches too.
-     * `at(index)` gives the element of an array or of a typed array, counted from 0.
+     * `at_key(key)` with a text gives the value of the first pair of a map whose key is the text `key`.
+     * `at_key(n)` with an integer gives the value of the first pair whose key is the integer `n`; a bignum key that
+     * holds `n` matches too.
      * A text key does not match a byte string with the same bytes.
      * The call passes a tag that it does not interpret, and reads into a tag 24.
      * It reads no value; cbor::lazy::get() does.
      *
      * @code{.example}
      * bytes: a2 64 63 61 72 73 82 a1 62 68 70 05 a1 62 68 70 07 07 65 73 65 76 65 6e
-     * call: doc->at("cars")->at(1)->at("hp")->get<int>()
+     * call: doc->at_key("cars")->at(1)->at_key("hp")->get<int>()
      * result: 7
-     * call: doc->at(cbor::key{7})->get<std::string_view>()
+     * call: doc->at_key(7)->get<std::string_view>()
      * result: ref to "seven"
-     * call: doc->at("cars")->size()
+     * call: doc->at_key("cars")->size()
      * result: 2
-     * call: doc->at("cars")->at(0)->at("hp")->get<int>()
+     * call: doc->at_key("cars")->at(0)->at_key("hp")->get<int>()
      * result: 5
      * @endcode
      *
      * @retval key_not_found no pair has the key
-     * @retval index_out_of_bounds `index` is not less than the count
-     * @retval not_indexable a key on a value that is not a map, or an index on a value that is not an array
-     * @retval too_little_data, syntax_error, indefinite_length the bytes up to the child are broken
-     * @snippet doc_reference_lazy.cpp at
+     * @retval not_indexable the lazy is not a map
+     * @retval too_little_data, syntax_error, indefinite_length the bytes up to the value are broken
+     * @snippet doc_reference_lazy.cpp at_key
+     * @see cbor::lazy::at()
      * @see cbor::lazy::operator[]()
      * @see cbor::lazy::at_path()
      * @see cbor::lazy::get()
      * @see cbor::lazy::entries()
      */
-    std::expected<lazy, error> at(std::string_view key) const;
+    std::expected<lazy, error> at_key(std::string_view key) const;
 
-    std::expected<lazy, error> at(key k) const;
+    std::expected<lazy, error> at_key(std::int64_t key) const;
 
+    /**
+     * @brief Gives the lazy of one element of an array.
+     *
+     * `at(index)` gives the element of an array or of a typed array, counted from 0.
+     * The call passes a tag that it does not interpret, and reads into a tag 24.
+     * It reads no value; cbor::lazy::get() does.
+     *
+     * @code{.example}
+     * bytes: a2 64 63 61 72 73 82 a1 62 68 70 05 a1 62 68 70 07 07 65 73 65 76 65 6e
+     * call: doc->at_key("cars")->at(1)->at_key("hp")->get<int>()
+     * result: 7
+     * @endcode
+     *
+     * @retval index_out_of_bounds `index` is not less than the count
+     * @retval not_indexable the lazy is not an array
+     * @retval too_little_data, syntax_error, indefinite_length the bytes up to the child are broken
+     * @snippet doc_reference_lazy.cpp at
+     * @see cbor::lazy::at_key()
+     * @see cbor::lazy::operator[]()
+     * @see cbor::lazy::at_path()
+     * @see cbor::lazy::get()
+     */
     std::expected<lazy, error> at(std::size_t index) const;
 
     /**
-     * @brief Gives the same result as cbor::lazy::at() with the same argument.
+     * @brief Gives the same result as cbor::lazy::at_key() with a text key, or as cbor::lazy::at() with an index.
      *
      * It does not throw for a missing key or a wrong index.
      * The result is a `std::expected`, so `l["a"]["b"]` does not compile.
      * A path reads a chain (cbor::lazy::at_path()).
-     * The errors of cbor::lazy::at() apply.
+     * The errors of cbor::lazy::at_key() and cbor::lazy::at() apply.
      *
      * @code{.example}
      * message: {"cars": [5, 7]}
@@ -275,12 +296,11 @@ public:
      * @endcode
      *
      * @snippet doc_reference_lazy.cpp operator_subscript
+     * @see cbor::lazy::at_key()
      * @see cbor::lazy::at()
      * @see cbor::lazy::at_path()
      */
     std::expected<lazy, error> operator[](std::string_view key) const;
-
-    std::expected<lazy, error> operator[](key k) const;
 
     std::expected<lazy, error> operator[](std::size_t index) const;
 
@@ -313,7 +333,7 @@ public:
      * @retval nesting_depth_exceeded a descendant segment goes deeper than the stack of the thread holds
      * @throws std::logic_error a query that is empty or moved from
      * @snippet doc_reference_lazy.cpp at_path
-     * @see cbor::lazy::at()
+     * @see cbor::lazy::at_key()
      * @see cbor::lazy::get()
      */
     template <fixed_string Path>
@@ -367,9 +387,9 @@ public:
      *
      * @code{.example}
      * message: {"a": [], "b": [1]}
-     * call: doc->at("a")->empty()
+     * call: doc->at_key("a")->empty()
      * result: true
-     * call: doc->at("b")->empty()
+     * call: doc->at_key("b")->empty()
      * result: false
      * @endcode
      *
@@ -424,15 +444,15 @@ public:
      *
      * @code{.example}
      * message: {"name": "ann", "age": 300}
-     * call: auto const name = doc->at("name")->get<std::string_view>()
+     * call: auto const name = doc->at_key("name")->get<std::string_view>()
      * result: ref to "ann"
      * call: **name
      * result: "ann"
-     * call: doc->at("age")->get<std::int64_t>()
+     * call: doc->at_key("age")->get<std::int64_t>()
      * result: 300
-     * call: doc->at("age")->get<std::uint16_t>()
+     * call: doc->at_key("age")->get<std::uint16_t>()
      * result: 300
-     * call: doc->at("name")->type()
+     * call: doc->at_key("name")->type()
      * result: cbor::type::text_string
      * @endcode
      *
@@ -440,7 +460,7 @@ public:
      * @retval number_out_of_range the number does not fit `T`
      * @retval too_little_data a string is longer than the bytes that are left
      * @snippet doc_reference_lazy.cpp get
-     * @see cbor::lazy::at()
+     * @see cbor::lazy::at_key()
      * @see cbor::lazy::type()
      * @see cbor::lazy::clone()
      */
@@ -492,7 +512,7 @@ public:
      * @snippet doc_reference_lazy.cpp entries
      * @see cbor::lazy_entries
      * @see cbor::lazy::elements()
-     * @see cbor::lazy::at()
+     * @see cbor::lazy::at_key()
      */
     std::expected<lazy_entries, error> entries() const;
 
@@ -506,9 +526,9 @@ public:
      *
      * @code{.example}
      * message: {"a": [1, "x"]}
-     * call: doc->at("a")->clone()
+     * call: doc->at_key("a")->clone()
      * result: owning item of [1, "x"]
-     * call: (*doc->at("a")->clone())->type
+     * call: (*doc->at_key("a")->clone())->type
      * result: cbor::type::array
      * @endcode
      *
@@ -1544,16 +1564,14 @@ std::expected<lazy, error> lazy::value_of(std::expected<Iterator, error> found)
     return lazy{std::move(found->top_level), std::to_underlying(found->value), {}};
 }
 
-inline std::expected<lazy, error> lazy::at(std::string_view const key) const
+inline std::expected<lazy, error> lazy::at_key(std::string_view const key) const
 {
     return value_of(find(key));
 }
 
-inline std::expected<lazy, error> lazy::at(key const k) const
+inline std::expected<lazy, error> lazy::at_key(std::int64_t const key) const
 {
-    if (k.text != nullptr)
-        return at(std::string_view(k.text));
-    return value_of(find(k.number));
+    return value_of(find(key));
 }
 
 inline std::expected<lazy, error> lazy::at(std::size_t const index) const

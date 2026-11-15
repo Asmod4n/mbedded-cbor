@@ -94,37 +94,45 @@ inline std::optional<std::size_t> index_typed(std::string_view const partial, st
     return n;
 }
 
-template <bool Bracket>
-void lazy_index_candidates(value const &self, std::string_view const partial, candidate_taken const &taken)
+enum class child_form { index, key, subscript };
+
+template <child_form Form>
+void lazy_child_candidates(value const &self, std::string_view const partial, candidate_taken const &taken)
 {
     auto const *const l = held_if<cbor::lazy>(self);
     if (l == nullptr)
         return;
-    std::string_view const open = Bracket ? "[" : "at(";
-    std::string_view const close = Bracket ? "]" : ")";
+    constexpr bool bracket = Form == child_form::subscript;
+    std::string_view const open = bracket ? "[" : Form == child_form::key ? "at_key(" : "at(";
+    std::string_view const close = bracket ? "]" : ")";
     auto const called_with = [&](std::string const &argument) { return std::string(open) + argument + std::string(close); };
-    if (auto const elements = l->elements()) {
-        std::uint64_t const count = elements->size();
-        if (auto const typed = index_typed(partial, open); typed && *typed < count)
-            if (!taken(called_with(std::to_string(*typed))))
-                return;
-        for (std::uint64_t i = 0; i < count; ++i)
-            if (!taken(called_with(std::to_string(i))))
-                return;
-        return;
-    }
-    auto const entries = l->entries();
-    if (!entries)
-        return;
-    for (auto const e : *entries) {
-        if (!e)
+    if constexpr (Form != child_form::key) {
+        if (auto const elements = l->elements()) {
+            std::uint64_t const count = elements->size();
+            if (auto const typed = index_typed(partial, open); typed && *typed < count)
+                if (!taken(called_with(std::to_string(*typed))))
+                    return;
+            for (std::uint64_t i = 0; i < count; ++i)
+                if (!taken(called_with(std::to_string(i))))
+                    return;
             return;
-        if (auto const text = e->first.get<std::string_view>()) {
-            if (auto const quoted = console_string(**text); quoted && !taken(called_with(*quoted)))
+        }
+    }
+    if constexpr (Form != child_form::index) {
+        auto const entries = l->entries();
+        if (!entries)
+            return;
+        for (auto const e : *entries) {
+            if (!e)
                 return;
-        } else if (auto const number = e->first.get<std::int64_t>()) {
-            if (!taken(called_with("cbor::key{" + std::to_string(*number) + "}")))
-                return;
+            if (auto const text = e->first.get<std::string_view>()) {
+                if (auto const quoted = console_string(**text); quoted && !taken(called_with(*quoted)))
+                    return;
+            } else if constexpr (Form == child_form::key) {
+                if (auto const number = e->first.get<std::int64_t>())
+                    if (!taken(called_with(std::to_string(*number))))
+                        return;
+            }
         }
     }
 }

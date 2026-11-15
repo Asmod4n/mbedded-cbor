@@ -37,16 +37,17 @@ make a lazy, and a read of the second element gives `too_little_data`.
 
 @section lazy_steps STEPS IN A MAP OR AN ARRAY
 
-`at` gives the lazy of one child. `operator[]` gives the same result.
+`at_key` and `at` give the lazy of one child. `operator[]` gives the same
+result as `at_key` with a text, or as `at` with an index.
 
-- `at(key)`: the value of the first pair whose key is the text `key`. A
+- `at_key(key)`: the value of the first pair whose key is the text `key`. A
   text key does not match a byte string with the same bytes.
-- `at(cbor::key{n})`: the value of the first pair whose key is the
+- `at_key(n)`: the value of the first pair whose key is the
   integer `n`. A bignum key that holds `n` matches too.
 - `at(index)`: the element of an array or of a typed array, counted from
   0.
 
-A map with a key twice is no error. `at` gives the first pair.
+A map with a key twice is no error. `at_key` gives the first pair.
 
 A key under tag 28 or tag 29 is a tag. It matches no text key and no
 integer key. A key under tag 55799 matches as the key without the tag
@@ -123,7 +124,7 @@ the lazy and its owner end. The errors of `cbor::decode` apply.
 
 `clone` keeps tags 28 and 29 as tag items. A tag 55799 inside the
 top-level item stays a tag item, and `type()` gives `tag` there. `get`,
-`at` and a path read through such a tag to its content. They do not read
+`at_key`, `at` and a path read through such a tag to its content. They do not read
 through it where it is the content of a tag 2, a tag 3 or a typed array.
 There the content is not a byte string, as `cbor::decode` reads it.
 `clone` of a lazy that starts with a tag 55799 gives the content.

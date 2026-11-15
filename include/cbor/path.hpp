@@ -1,6 +1,6 @@
 /**
  * @file
- * Gives cbor::key, a map key for a lookup, and cbor::fixed_string, a
+ * Gives cbor::fixed_string, a
  * path as a template argument. Declares the checks of a valid path and
  * of a singular query.
  * https://www.rfc-editor.org/rfc/rfc9535
@@ -21,6 +21,9 @@
 namespace cbor
 {
 
+namespace detail
+{
+
 struct key {
     char const *text = nullptr;
     std::int64_t number = 0;
@@ -36,6 +39,8 @@ struct key {
     {
     }
 };
+
+} // namespace detail
 
 /**
  * @brief The type of a path at compile time.

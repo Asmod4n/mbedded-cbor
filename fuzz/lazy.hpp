@@ -70,12 +70,12 @@ inline void lazy_channels(std::string_view const input)
     }
     std::string_view const key = input.substr(0, 4);
     (void)root.at(0);
-    (void)root.at(cbor::key{0});
-    (void)root.at(cbor::key{-1});
-    (void)root.at("a");
-    if (auto const a = root.at(key))
+    (void)root.at_key(0);
+    (void)root.at_key(-1);
+    (void)root.at_key("a");
+    if (auto const a = root.at_key(key))
         if (auto const b = a->at(0))
-            (void)b->at(key);
+            (void)b->at_key(key);
 }
 
 // Two results of the same call on two forms of the same input: the same value or the same error code.
@@ -145,9 +145,7 @@ inline void lazy_forms(std::string_view const input)
     node_reads_compare(*owned, *borrowed);
     std::string_view const key = input.substr(0, 4);
     require_same_result((*owned)[key].and_then([](cbor::lazy const &l) { return l.type(); }),
-                        owned->at(key).and_then([](cbor::lazy const &l) { return l.type(); }));
-    require_same_result((*owned)[cbor::key{0}].and_then([](cbor::lazy const &l) { return l.type(); }),
-                        owned->at(cbor::key{0}).and_then([](cbor::lazy const &l) { return l.type(); }));
+                        owned->at_key(key).and_then([](cbor::lazy const &l) { return l.type(); }));
     require_same_result((*owned)[std::size_t{0}].and_then([](cbor::lazy const &l) { return l.type(); }),
                         owned->at(std::size_t{0}).and_then([](cbor::lazy const &l) { return l.type(); }));
     if (auto const elements = owned->elements()) {

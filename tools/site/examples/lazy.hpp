@@ -107,22 +107,40 @@ inline result lazy_at(call const &c)
         return std::unexpected(self.error());
     if (auto const ok = arguments_counted(c, 1); !ok) [[unlikely]]
         return std::unexpected(ok.error());
-    if (auto const key = text_argument(c, 0))
-        return value_of((*self)->at(*key));
-    if (auto const k = held_if<cbor::key>(c.arguments.front()))
-        return value_of((*self)->at(*k));
     auto const index = unsigned_argument(c, 0);
     if (!index) [[unlikely]]
-        return std::unexpected("at takes a text, a cbor::key or an index");
+        return std::unexpected("at takes an index");
     return value_of((*self)->at(static_cast<std::size_t>(*index)));
 }
 
-inline result key_made(call const &c)
+inline result lazy_at_key(call const &c)
 {
-    auto const n = integer_argument(c, 0);
-    if (!n || c.arguments.size() != 1) [[unlikely]]
-        return std::unexpected("cbor::key takes one integer");
-    return value_of(cbor::key{*n});
+    auto const self = self_of<cbor::lazy>(c);
+    if (!self) [[unlikely]]
+        return std::unexpected(self.error());
+    if (auto const ok = arguments_counted(c, 1); !ok) [[unlikely]]
+        return std::unexpected(ok.error());
+    if (auto const key = text_argument(c, 0))
+        return value_of((*self)->at_key(*key));
+    auto const number = integer_argument(c, 0);
+    if (!number) [[unlikely]]
+        return std::unexpected("at_key takes a text or an integer");
+    return value_of((*self)->at_key(*number));
+}
+
+inline result lazy_subscript(call const &c)
+{
+    auto const self = self_of<cbor::lazy>(c);
+    if (!self) [[unlikely]]
+        return std::unexpected(self.error());
+    if (auto const ok = arguments_counted(c, 1); !ok) [[unlikely]]
+        return std::unexpected(ok.error());
+    if (auto const key = text_argument(c, 0))
+        return value_of((*self)->operator[](*key));
+    auto const index = unsigned_argument(c, 0);
+    if (!index) [[unlikely]]
+        return std::unexpected("operator[] takes a text or an index");
+    return value_of((*self)->operator[](static_cast<std::size_t>(*index)));
 }
 
 inline result lazy_get(call const &c)
@@ -255,12 +273,11 @@ inline result string_shared(call const &c)
 inline constexpr entry lazy_functions[] = {
     {"std::move()", moved},
     {"std::make_shared()", string_shared},
-    {"cbor::key{}", key_made},
-    {"cbor::key()", key_made},
     {"cbor::lazy::adopt()", adopt},
     {"cbor::lazy::view()", lazy_view},
-    {.name = "cbor::lazy.at()", .run = lazy_at, .candidates = lazy_index_candidates<false>, .runnable = true},
-    {.name = "cbor::lazy.operator[]()", .run = lazy_at, .candidates = lazy_index_candidates<true>, .runnable = true},
+    {.name = "cbor::lazy.at()", .run = lazy_at, .candidates = lazy_child_candidates<child_form::index>, .runnable = true},
+    {.name = "cbor::lazy.at_key()", .run = lazy_at_key, .candidates = lazy_child_candidates<child_form::key>, .runnable = true},
+    {.name = "cbor::lazy.operator[]()", .run = lazy_subscript, .candidates = lazy_child_candidates<child_form::subscript>, .runnable = true},
     {.name = "cbor::lazy.get()", .run = lazy_get, .candidates = lazy_get_candidates, .runnable = true},
     {.name = "cbor::lazy.at_path()", .run = lazy_at_path, .candidates = lazy_at_path_candidates, .runnable = true},
     {.name = "cbor::lazy.size()", .run = lazy_member<&cbor::lazy::size>, .runnable = true},

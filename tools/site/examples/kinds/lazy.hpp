@@ -49,15 +49,6 @@ struct kind<cbor::type> {
 };
 
 template <>
-struct kind<cbor::key> {
-    static constexpr std::string_view name = "cbor::key";
-    static std::string text(cbor::key const k)
-    {
-        return "cbor::key{" + number_text(k.number) + "}";
-    }
-};
-
-template <>
 struct kind<std::string_view> {
     static constexpr std::string_view name = "std::string_view";
     static std::string text(std::string_view const v)

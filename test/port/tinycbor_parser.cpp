@@ -1055,7 +1055,7 @@ TEST_CASE("tinycbor parser: find a key in a map")
         CAPTURE(r.expected);
         auto const doc = cbor::lazy::adopt(std::string(r.data));
         REQUIRE(doc.has_value());
-        auto const value = doc->at("needle");
+        auto const value = doc->at_key("needle");
         CHECK_EQ(make_outcome_text(value), make_error_text(r.port));
         if (!value)
             continue;
@@ -1404,7 +1404,7 @@ TEST_CASE("tinycbor parser: validation of items that are not well-formed")
             auto const doc = cbor::lazy::adopt(std::string(r.data));
             REQUIRE(doc.has_value());
             auto const map = doc->at(std::size_t{0});
-            auto const value = map ? map->at("foobar") : map;
+            auto const value = map ? map->at_key("foobar") : map;
             CHECK_EQ(make_outcome_text(value), make_error_text(strict));
         }
     }
@@ -1641,7 +1641,7 @@ TEST_CASE("tinycbor parser: deep nesting")
         if (r.find != no_error) {
             auto const doc = cbor::lazy::adopt(std::string(r.data));
             REQUIRE(doc.has_value());
-            CHECK_EQ(make_outcome_text(doc->at("foo")), make_error_text(r.find));
+            CHECK_EQ(make_outcome_text(doc->at_key("foo")), make_error_text(r.find));
         }
     }
 }

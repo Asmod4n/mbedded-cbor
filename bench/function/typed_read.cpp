@@ -61,7 +61,7 @@ template <class T>
 void lazy_get(benchmark::State &state, std::string_view const message, T const expected)
 {
     auto const top = cbor::lazy::view(std::make_shared<std::string const>(message));
-    auto const value = top ? top->at("a") : std::unexpected(top.error());
+    auto const value = top ? top->at_key("a") : std::unexpected(top.error());
     auto const got = value ? value->template get<T>() : std::unexpected(value.error());
     bool const same = [&] {
         if (!got)
@@ -77,7 +77,7 @@ void lazy_get(benchmark::State &state, std::string_view const message, T const e
     }
     std::vector<cbor::lazy> lazies;
     for (std::size_t total = 0; total < cold_bytes(); total += message.size())
-        lazies.push_back(*cbor::lazy::view(std::make_shared<std::string const>(message))->at("a"));
+        lazies.push_back(*cbor::lazy::view(std::make_shared<std::string const>(message))->at_key("a"));
     for (auto _ : state) {
         for (cbor::lazy const &each : lazies) {
             auto r = each.template get<T>();

@@ -7,12 +7,12 @@ a C++ compiler: a loop or a new struct does not run here.
 
 ## Read a field by its key
 
-[at](lazy/at.md) goes to the value of a key. A text comes back as a view
+[at_key](lazy/at_key.md) goes to the value of a key. A text comes back as a view
 into the message.
 
 ```example
 message: {"user": {"id": 42, "name": "ann"}}
-call: doc->at("user")->at("name")->get<std::string_view>()
+call: doc->at_key("user")->at_key("name")->get<std::string_view>()
 result: ref to "ann"
 ```
 
@@ -22,7 +22,7 @@ result: ref to "ann"
 
 ```example
 message: {"tags": ["a", "b", "c"]}
-call: doc->at("tags")->at(1)->get<std::string_view>()
+call: doc->at_key("tags")->at(1)->get<std::string_view>()
 result: ref to "b"
 ```
 
@@ -65,15 +65,15 @@ exception.
 
 ```example
 message: {"user": {"id": 42, "name": "ann"}}
-call: doc->at("user")->at("name")->get<int>()
+call: doc->at_key("user")->at_key("name")->get<int>()
 result: unexpected cbor::error::incorrect_type
 ```
 
 ## What the console reads
 
-- A call on `doc` or on `bytes`: `doc->at("user")`.
+- A call on `doc` or on `bytes`: `doc->at_key("user")`.
 - `->` on a `std::expected`, `.` on a value.
 - `get<T>()` with a type: `int`, `double`, `std::string_view`.
 - `at_path<"…">()` with a JSONPath of RFC 9535.
-- `cbor::key{1}` for a key that is a number.
+- `at_key(1)` for a key that is a number.
 - The Tab key or the button ⇥ shows the names that fit.

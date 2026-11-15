@@ -210,7 +210,7 @@ std::string file_read(std::string const &path)
 // The value of an optional boolean member of a test. An absent member gives the default of the README.
 bool member_bool(cbor::lazy const &object, std::string_view const key, bool const absent)
 {
-    auto const member = object.at(key);
+    auto const member = object.at_key(key);
     if (!member) {
         REQUIRE_EQ(member.error(), error::key_not_found);
         return absent;
@@ -222,7 +222,7 @@ bool member_bool(cbor::lazy const &object, std::string_view const key, bool cons
 
 std::string member_bytes(cbor::lazy const &object, std::string_view const key)
 {
-    auto const member = object.at(key);
+    auto const member = object.at_key(key);
     REQUIRE(member.has_value());
     auto const bytes = member->get<std::span<std::byte const>>();
     REQUIRE(bytes.has_value());
@@ -241,14 +241,14 @@ std::vector<wg_vector> wg_vectors_of(std::string const &path)
     auto const top = test::make_lazy_from_copy(std::string_view(file));
     REQUIRE(top.has_value());
     bool const file_fail = member_bool(*top, "fail", false);
-    auto const tests = top->at("tests");
+    auto const tests = top->at_key("tests");
     REQUIRE(tests.has_value());
     auto const elements = tests->elements();
     REQUIRE(elements.has_value());
     std::vector<wg_vector> vectors;
     for (auto const t : *elements) {
         REQUIRE(t.has_value());
-        auto const description = t->at("description");
+        auto const description = t->at_key("description");
         REQUIRE(description.has_value());
         auto const text = description->get<std::string_view>();
         REQUIRE(text.has_value());
@@ -258,7 +258,7 @@ std::vector<wg_vector> wg_vectors_of(std::string const &path)
                     {},
                     member_bool(*t, "roundtrip", true),
                     member_bool(*t, "fail", file_fail)};
-        if (auto const decoded = t->at("decoded")) {
+        if (auto const decoded = t->at_key("decoded")) {
             std::string_view const rest = decoded->encoded();
             auto const end = cbor::item_size(rest);
             REQUIRE(end.has_value());
@@ -616,7 +616,7 @@ TEST_CASE("cbor-wg test vectors: indefinite length is refused")
     std::string const file = file_read(CBOR_TEST_VECTORS "/tests/rfc8949-appendixA/streaming.cbor");
     auto const top = test::make_lazy_from_copy(std::string_view(file));
     REQUIRE(top.has_value());
-    auto const tests = top->at("tests");
+    auto const tests = top->at_key("tests");
     REQUIRE(tests.has_value());
     CHECK_EQ(tests->at(1).error(), error::indefinite_length);
 

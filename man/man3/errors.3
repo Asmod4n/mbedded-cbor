@@ -188,7 +188,7 @@ A frame outside these bounds, such as the stack of a fiber or of a signal handle
 .nf
     // bytes: a std::string with {"a": 1}
     auto const doc = cbor::lazy::adopt(std::move(bytes));
-    auto const e = doc\->at("b")\&.error();                     // key_not_found
+    auto const e = doc\->at_key("b")\&.error();                     // key_not_found
     std::error_code const code{e};
     std::string const text = code\&.message();                 // "key not found"
 .fi

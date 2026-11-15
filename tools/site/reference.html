@@ -41,7 +41,7 @@ $endif$$if(console)$<div class="play" data-console>
 <div class="log" id="co-log" aria-live="polite"></div>
 <form id="co-form" autocomplete="off">
 <span class="prompt">»</span>
-<input id="co-line" value='doc-&gt;at("user")-&gt;at("name")-&gt;get&lt;std::string_view&gt;()' spellcheck="false" autocapitalize="off" autocorrect="off" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="co-completions" aria-label="A call on doc">
+<input id="co-line" value='doc-&gt;at_key("user")-&gt;at_key("name")-&gt;get&lt;std::string_view&gt;()' spellcheck="false" autocapitalize="off" autocorrect="off" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="co-completions" aria-label="A call on doc">
 <button class="complete" type="button" data-complete aria-label="Show the names that fit">⇥</button>
 <button class="run" type="submit">Run</button>
 </form>

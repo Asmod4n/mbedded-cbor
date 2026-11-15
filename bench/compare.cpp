@@ -450,10 +450,10 @@ static double lazy_sum(cbor::lazy const &l)
 static double lazy_field()
 {
     auto const v = cbor::lazy::view(plain)
-                       .and_then([](cbor::lazy const &l) { return l.at("cars"); })
+                       .and_then([](cbor::lazy const &l) { return l.at_key("cars"); })
                        .and_then([](cbor::lazy const &l) { return l.at(std::size_t{500}); })
-                       .and_then([](cbor::lazy const &l) { return l.at("engine"); })
-                       .and_then([](cbor::lazy const &l) { return l.at("cc"); });
+                       .and_then([](cbor::lazy const &l) { return l.at_key("engine"); })
+                       .and_then([](cbor::lazy const &l) { return l.at_key("cc"); });
     if (!v) [[unlikely]] std::abort();
     return num(v->get<std::uint64_t>());
 }
@@ -1135,11 +1135,11 @@ static T load()
     for (auto const &e : *els) {
         if (!e) [[unlikely]] std::abort();
         cbor::lazy const r = must(e);
-        cbor::lazy const u = must(r.at("user"));
-        auto const ratio = must(r.at("ratio")).get<double>();
-        Record x{must(must(r.at("id")).get<std::int64_t>()), must_text(must(r.at("text"))), User{must_text(must(u.at("name"))), must(must(u.at("followers")).get<std::uint64_t>())},
-                 ratio ? *ratio : 0.0, {}, must(must(r.at("neg")).get<std::int64_t>())};
-        auto const tags = must(must(r.at("tags")).elements());
+        cbor::lazy const u = must(r.at_key("user"));
+        auto const ratio = must(r.at_key("ratio")).get<double>();
+        Record x{must(must(r.at_key("id")).get<std::int64_t>()), must_text(must(r.at_key("text"))), User{must_text(must(u.at_key("name"))), must(must(u.at_key("followers")).get<std::uint64_t>())},
+                 ratio ? *ratio : 0.0, {}, must(must(r.at_key("neg")).get<std::int64_t>())};
+        auto const tags = must(must(r.at_key("tags")).elements());
         for (auto const &t : tags) x.tags.push_back(must_text(must(t)));
         rs.records.push_back(std::move(x));
     }

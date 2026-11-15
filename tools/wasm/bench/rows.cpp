@@ -50,12 +50,12 @@ __attribute__((export_name("rows_load"))) std::uint32_t rows_load(char const *co
 
 __attribute__((export_name("row_id"))) std::int32_t row_id(std::uint32_t const i)
 {
-    return static_cast<std::int32_t>(*row(i).at("id")->get<std::int64_t>());
+    return static_cast<std::int32_t>(*row(i).at_key("id")->get<std::int64_t>());
 }
 
 __attribute__((export_name("row_label"))) std::uint64_t row_label(std::uint32_t const i)
 {
-    auto const label = row(i).at("label")->get<std::string_view>();
+    auto const label = row(i).at_key("label")->get<std::string_view>();
     return packed(**label);
 }
 
@@ -63,8 +63,8 @@ __attribute__((export_name("rows_columns"))) void rows_columns(std::int32_t *con
 {
     for (std::uint32_t i = 0; i < row_offsets.size(); ++i) {
         cbor::lazy const r = row(i);
-        ids[i] = static_cast<std::int32_t>(*r.at("id")->get<std::int64_t>());
-        auto const label = r.at("label")->get<std::string_view>();
+        ids[i] = static_cast<std::int32_t>(*r.at_key("id")->get<std::int64_t>());
+        auto const label = r.at_key("label")->get<std::string_view>();
         std::string_view const s = **label;
         labels[2 * i] = static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(s.data()));
         labels[2 * i + 1] = static_cast<std::uint32_t>(s.size());
@@ -74,7 +74,7 @@ __attribute__((export_name("rows_columns"))) void rows_columns(std::int32_t *con
 __attribute__((export_name("row_find"))) std::int32_t row_find(std::int32_t const id)
 {
     for (std::uint32_t i = 0; i < row_offsets.size(); ++i)
-        if (*row(i).at("id")->get<std::int64_t>() == id)
+        if (*row(i).at_key("id")->get<std::int64_t>() == id)
             return static_cast<std::int32_t>(i);
     return -1;
 }

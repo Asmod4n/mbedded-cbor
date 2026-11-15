@@ -701,10 +701,10 @@ static std::uint64_t mb_path()
 {
     auto const l = cbor::lazy::view(*held);
 #if defined(DOC_twitter)
-    auto const v = l.and_then([](cbor::lazy const &d) { return d.at("statuses"); })
+    auto const v = l.and_then([](cbor::lazy const &d) { return d.at_key("statuses"); })
                        .and_then([](cbor::lazy const &s) { return s.at(50); })
-                       .and_then([](cbor::lazy const &s) { return s.at("user"); })
-                       .and_then([](cbor::lazy const &u) { return u.at("screen_name"); })
+                       .and_then([](cbor::lazy const &s) { return s.at_key("user"); })
+                       .and_then([](cbor::lazy const &u) { return u.at_key("screen_name"); })
                        .and_then([](cbor::lazy const &n) { return n.get<std::string_view>(); });
     if (!v) [[unlikely]] std::abort();
     return bytes_sum(**v);
@@ -715,8 +715,8 @@ static std::uint64_t mb_path()
     return std::bit_cast<std::uint64_t>(*v);
 #elif defined(DOC_records)
     auto const v = l.and_then([](cbor::lazy const &d) { return d.at(1000); })
-                       .and_then([](cbor::lazy const &r) { return r.at("user"); })
-                       .and_then([](cbor::lazy const &u) { return u.at("name"); })
+                       .and_then([](cbor::lazy const &r) { return r.at_key("user"); })
+                       .and_then([](cbor::lazy const &u) { return u.at_key("name"); })
                        .and_then([](cbor::lazy const &n) { return n.get<std::string_view>(); });
     if (!v) [[unlikely]] std::abort();
     return bytes_sum(**v);

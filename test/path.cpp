@@ -564,7 +564,7 @@ std::expected<comparable_t<T>, error> lazy_get(std::string const &doc, std::vect
     cbor::lazy node = *root;
     for (step const &s : steps) {
         auto const child = std::holds_alternative<std::int64_t>(s) ? test::select_element_by_index(node, std::get<std::int64_t>(s))
-                                                                   : node.at(std::get<std::string_view>(s));
+                                                                   : node.at_key(std::get<std::string_view>(s));
         if (!child)
             return std::unexpected(child.error());
         node = *child;
@@ -1139,8 +1139,8 @@ TEST_CASE("path: tag 55799 inside the item is skipped")
     CHECK_EQ(cbor::at_path<"$.a", int>(key), 7);
     auto const l = *test::make_lazy_from_copy(inner);
     CHECK(found(test::query("$.a[1]", l)) == A(2));
-    CHECK_EQ(l.at("a")->at(std::size_t{1})->get<int>(), 2);
-    CHECK_EQ(test::make_lazy_from_copy(leaf)->at("a")->get<int>(), 7);
+    CHECK_EQ(l.at_key("a")->at(std::size_t{1})->get<int>(), 2);
+    CHECK_EQ(test::make_lazy_from_copy(leaf)->at_key("a")->get<int>(), 7);
 }
 
 // RFC 8949 6.1: a generic decoder passes a tag it does not know and gives its content. The owner decided on 2026-10-10
@@ -1250,7 +1250,7 @@ TEST_CASE("path: a wildcard over a typed array whose content is no byte string")
 TEST_CASE("at_path: a path from a held lazy")
 {
     std::string const s("\xa2\x63pad\x82\x01\x02\x64" "cars\x82\xa1\x62hp\x05\xa1\x62hp\x07", 24);
-    auto const cars = test::make_lazy_from_copy(s)->at("cars");
+    auto const cars = test::make_lazy_from_copy(s)->at_key("cars");
     REQUIRE(cars.has_value());
     CHECK_EQ(*cars->at_path<"$[1].hp", std::int64_t>(), 7);
     CHECK_EQ(cars->at_path<"$[2].hp", std::int64_t>().error(), cbor::error::index_out_of_bounds);
@@ -1329,7 +1329,7 @@ TEST_CASE("path: the member at_path starts at the item of the lazy")
     CHECK_EQ(cbor::path::compile<cbor::lazy>("$.a.b[").error(), error::invalid_path);
     CHECK_EQ(cbor::path::compile<cbor::lazy>("$..b").error(), error::not_singular_query);
     CHECK_EQ(l.at_path(*cbor::path::compile<cbor::lazy>("$.a.c")).error(), error::key_not_found);
-    cbor::lazy const inner = *l.at("a");
+    cbor::lazy const inner = *l.at_key("a");
     CHECK_EQ(inner.at_path<"$.b[0]", int>(), 1);
     auto const text = inner.at_path<"$.b[2]", std::string_view>();
     CHECK_EQ(**text, "x"sv);

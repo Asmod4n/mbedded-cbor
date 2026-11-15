@@ -3,9 +3,9 @@
 // cause. CBOR_TEST_CASE selects the case. Case 1: a root with no description. Case 2: an inner struct with no
 // description. Case 3: a root with cbor::untagged. Case 4: two structs with one tag. Case 5: two members with one key.
 // Case 6: a public member that the description leaves out. Case 7: a class with a base class that the description does
-// not name. Case 8: cbor::tag on a described class. Case 9: cbor::key on a member of a described class. Case 10: a right
-// description, which compiles. Case 11: a class with a base class that CBOR_DEFINE_DERIVED_TYPE_MEMBERS names, which
-// compiles. Case 12: a class with a named base class whose description leaves out the member of the base, which
+// not name. Case 8: cbor::tag on a described class. Case 9: cbor::detail::key on a member of a described class.
+// Case 10: a right description, which compiles. Case 11: a class with a base class that
+// CBOR_DEFINE_DERIVED_TYPE_MEMBERS names, which compiles. Case 12: a class with a named base class whose description leaves out the member of the base, which
 // reflection finds.
 #include <cbor/cbor.hpp>
 
@@ -41,7 +41,7 @@ struct [[=cbor::tag(1650)]] root {
 };
 #elif CBOR_TEST_CASE == 9
 struct root {
-    [[=cbor::key("x")]] std::int32_t a;
+    [[=cbor::detail::key("x")]] std::int32_t a;
     inner i;
 };
 #else

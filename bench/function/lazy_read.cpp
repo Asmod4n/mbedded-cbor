@@ -37,7 +37,7 @@ std::vector<cbor::lazy> lazies_of(std::size_t const bytes)
 void lazy_read(benchmark::State &state)
 {
     auto const sample = cbor::lazy::view(std::make_shared<std::string const>(message));
-    if (!sample || sample->at("b")->at(1)->get<std::int64_t>() != 3 || sample->size() != 2) {
+    if (!sample || sample->at_key("b")->at(1)->get<std::int64_t>() != 3 || sample->size() != 2) {
         state.SkipWithError("the lazy of {\"a\": 1, \"b\": [2, 3]} does not give 3 at $.b[1] and size 2");
         return;
     }
@@ -45,8 +45,8 @@ void lazy_read(benchmark::State &state)
     for (auto _ : state) {
         std::int64_t sum = 0;
         for (cbor::lazy const &doc : lazies) {
-            sum += *doc.at("a")->get<std::int64_t>();
-            sum += *doc.at("b")->at(1)->get<std::int64_t>();
+            sum += *doc.at_key("a")->get<std::int64_t>();
+            sum += *doc.at_key("b")->at(1)->get<std::int64_t>();
             sum += static_cast<std::int64_t>(*doc.size());
             sum += static_cast<std::int64_t>(*doc.type());
         }

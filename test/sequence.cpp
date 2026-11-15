@@ -117,7 +117,7 @@ TEST_CASE("sequence: lazy, path and decode read each element")
         items.push_back(*l);
     }
     REQUIRE_EQ(items.size(), 2u);
-    auto const text = items[0].at("a");
+    auto const text = items[0].at_key("a");
     REQUIRE(text.has_value());
     auto const view = text->get<std::string_view>();
     REQUIRE(view.has_value());

@@ -396,7 +396,7 @@ TEST_CASE("qcbor BasicEncodeTest: a map with one boolean, inserted twice into an
     CHECK_EQ(test::hexlify(first), test::hexlify(as_string({0xa1, 0x18, 0x42, 0xf5})));
     auto const one = cbor::lazy::adopt(std::string(first));
     REQUIRE(one.has_value());
-    CHECK(one->at(cbor::key{66}).and_then([](cbor::lazy const &l) { return l.get<bool>(); }) == true);
+    CHECK(one->at_key(66).and_then([](cbor::lazy const &l) { return l.get<bool>(); }) == true);
 
     std::string const second = array_head(3) + encode_in_preferred_form(std::uint64_t{451}) + first + map_head(1) +
                                encode_in_preferred_form(std::int64_t{-70000}) + first;
@@ -406,12 +406,12 @@ TEST_CASE("qcbor BasicEncodeTest: a map with one boolean, inserted twice into an
     REQUIRE(two.has_value());
     CHECK(two->size() == 3u);
     CHECK(two->at(0).and_then([](cbor::lazy const &l) { return l.get<std::int64_t>(); }) == 451);
-    CHECK(two->at(1).and_then([](cbor::lazy const &l) { return l.at(cbor::key{66}); }).and_then([](cbor::lazy const &l) {
+    CHECK(two->at(1).and_then([](cbor::lazy const &l) { return l.at_key(66); }).and_then([](cbor::lazy const &l) {
         return l.get<bool>();
     }) == true);
-    auto const inner = two->at(2).and_then([](cbor::lazy const &l) { return l.at(cbor::key{-70000}); });
+    auto const inner = two->at(2).and_then([](cbor::lazy const &l) { return l.at_key(-70000); });
     CHECK(inner.and_then([](cbor::lazy const &l) { return l.size(); }) == 1u);
-    CHECK(inner.and_then([](cbor::lazy const &l) { return l.at(cbor::key{66}); }).and_then([](cbor::lazy const &l) {
+    CHECK(inner.and_then([](cbor::lazy const &l) { return l.at_key(66); }).and_then([](cbor::lazy const &l) {
         return l.get<bool>();
     }) == true);
 }
@@ -436,7 +436,7 @@ TEST_CASE("qcbor example.c: the car engine encodes and decodes back")
     auto const engine = cbor::lazy::adopt(std::move(out));
     REQUIRE(engine.has_value());
     auto field = [&engine](std::string_view const key) {
-        auto const f = engine->at(key);
+        auto const f = engine->at_key(key);
         REQUIRE(f.has_value());
         return *f;
     };

@@ -315,7 +315,7 @@ through a `std::shared_ptr`. Both forms read the bytes where they are.
 auto const doc = cbor::lazy::adopt(std::move(bytes)).value();
 
 int sum = 0;
-if (auto const samples = doc.at("samples")) {
+if (auto const samples = doc.at_key("samples")) {
     auto const elements = samples->elements().value();
     for (auto const &x : elements)
         if (x)

@@ -2344,12 +2344,7 @@ std::expected<T, error> at_path(std::string_view const encoded)
 
 inline std::expected<lazy, error> lazy::operator[](std::string_view const key) const
 {
-    return at(key);
-}
-
-inline std::expected<lazy, error> lazy::operator[](key const k) const
-{
-    return at(k);
+    return at_key(key);
 }
 
 inline std::expected<lazy, error> lazy::operator[](std::size_t const index) const

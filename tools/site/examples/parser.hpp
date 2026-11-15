@@ -281,7 +281,7 @@ struct parser {
             return std::unexpected(name + " is not known here");
         if (e->changes && constant) [[unlikely]]
             return std::unexpected(name + " changes its object, and the object is const");
-        if (runnable_only && !e->runnable && name != "std::move()" && name != "cbor::key{}") [[unlikely]]
+        if (runnable_only && !e->runnable && name != "std::move()") [[unlikely]]
             return std::unexpected(name + " is not run for a completion");
         return e->run(call{self, targs, args});
     }
