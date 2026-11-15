@@ -174,10 +174,9 @@ TEST_CASE("doc advanced schema: the description apart")
 {
     CHECK_GT(sizeof(tire), sizeof(std::uint16_t) + sizeof(float));
     std::string const bytes = *cbor::schema<car>::encode(sample);
-    constexpr auto apart = cbor::description_place::apart;
-    auto const data = cbor::schema<car>::encode<apart>(sample);
+    auto const data = cbor::static_dictionary<car>::encode(sample);
     REQUIRE(data.has_value());
-    auto const back = cbor::schema<car>::decode<apart>(std::string(*data));
+    auto const back = cbor::static_dictionary<car>::decode(std::string(*data));
     REQUIRE(back.has_value());
     CHECK_EQ((*back)->make, "Volvo");
     CHECK_EQ(std::bit_cast<std::uint32_t>((*back)->tires[1].pressure), 0x40100000u);

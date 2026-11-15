@@ -3,7 +3,8 @@
 namespace schema_types
 {
 
-
+// The forms of cbor::static_dictionary are a finite set. So each read form is called here on the data form, and the
+// tests below call the two forms of encode.
 template <class T>
 void check_description_apart(T const &value)
 {
@@ -13,15 +14,25 @@ void check_description_apart(T const &value)
     CHECK_EQ(data.size() + description.size(), inside.size());
     CHECK(std::ranges::equal(description, std::span(inside).subspan(8, description.size())));
     check_one_item(data);
-    CHECK_EQ(encode_again(form<T>::template decode<apart>(std::string(data))), inside);
-    CHECK_EQ(encode_again(form<T>::template unverified_decode<apart>(std::string(data))), inside);
+    CHECK_EQ(encode_again(cbor::static_dictionary<T>::decode(std::string(data))), inside);
+    CHECK_EQ(encode_again(cbor::static_dictionary<T>::unverified_decode(std::string(data))), inside);
     auto const owner = std::make_shared<std::string const>(data);
-    CHECK_EQ(encode_again(form<T>::template decode<apart>(owner)), inside);
-    CHECK_EQ(encode_again(form<T>::template decode<apart>(std::shared_ptr<void const>(owner), std::string_view(*owner))), inside);
-    CHECK_EQ(encode_again(form<T>::template decode<apart>(owner, T{})), inside);
-    CHECK(form<T>::template adopt<apart>(std::string(data)).has_value());
-    CHECK(form<T>::template view<apart>(owner).has_value());
-    CHECK(form<T>::template unverified_view<apart>(owner).has_value());
+    CHECK_EQ(encode_again(cbor::static_dictionary<T>::decode(owner)), inside);
+    CHECK_EQ(encode_again(cbor::static_dictionary<T>::decode(std::shared_ptr<void const>(owner), std::string_view(*owner))), inside);
+    CHECK_EQ(encode_again(cbor::static_dictionary<T>::decode(owner, T{})), inside);
+    CHECK(cbor::static_dictionary<T>::adopt(std::string(data)).has_value());
+    CHECK(cbor::static_dictionary<T>::view(owner).has_value());
+    CHECK(cbor::static_dictionary<T>::unverified_view(owner).has_value());
+    std::shared_ptr<void const> const borrowed(owner);
+    std::string_view const bytes(*owner);
+    CHECK_EQ(encode_again(cbor::static_dictionary<T>::decode(borrowed, bytes, T{})), inside);
+    CHECK_EQ(encode_again(cbor::static_dictionary<T>::unverified_decode(owner)), inside);
+    CHECK_EQ(encode_again(cbor::static_dictionary<T>::unverified_decode(owner, T{})), inside);
+    CHECK_EQ(encode_again(cbor::static_dictionary<T>::unverified_decode(borrowed, bytes)), inside);
+    CHECK_EQ(encode_again(cbor::static_dictionary<T>::unverified_decode(borrowed, bytes, T{})), inside);
+    CHECK(cbor::static_dictionary<T>::view(borrowed, bytes).has_value());
+    CHECK(cbor::static_dictionary<T>::unverified_view(borrowed, bytes).has_value());
+    CHECK(cbor::static_dictionary<T>::unverified_adopt(std::string(data)).has_value());
 }
 
 } // namespace schema_types
@@ -45,10 +56,10 @@ TEST_CASE("description apart: the data and the description together hold what th
 TEST_CASE("description apart: each read form reads the data form")
 {
     std::string const data = encode_data_apart(sample_everything);
-    CHECK_EQ((form<everything>::at_path<"$.big", apart>(data)), -5);
-    CHECK_EQ((form<everything>::at_path<"$.gauges[].at.x", apart>(data, 1uz)), -6);
-    CHECK_EQ((form<everything>::unverified_at_path<"$.tires[].airPressure", apart>(data, 1uz)), 3.0f);
-    auto const root = form<everything>::adopt<apart>(std::string(data));
+    CHECK_EQ((cbor::static_dictionary<everything>::at_path<"$.big">(data)), -5);
+    CHECK_EQ((cbor::static_dictionary<everything>::at_path<"$.gauges[].at.x">(data, 1uz)), -6);
+    CHECK_EQ((cbor::static_dictionary<everything>::unverified_at_path<"$.tires[].airPressure">(data, 1uz)), 3.0f);
+    auto const root = cbor::static_dictionary<everything>::adopt(std::string(data));
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.text">(), "text"sv);
     CHECK_EQ(root->at_path<"$.names[1]">(), "bc"sv);
@@ -63,7 +74,7 @@ TEST_CASE("description apart: each read form reads the data form")
         xs.push_back(*g.at_path<"@.at.x">());
     CHECK_EQ(xs, (std::vector<int>{3, -6}));
     CHECK_EQ(root->at_path<"$.tires[1].diameter">(), 18u);
-    auto const unverified = form<everything>::unverified_adopt<apart>(std::string(data));
+    auto const unverified = cbor::static_dictionary<everything>::unverified_adopt(std::string(data));
     REQUIRE(unverified.has_value());
     CHECK_EQ(unverified->at_path<"$.names[0]">(), "a"sv);
 }
@@ -73,19 +84,19 @@ TEST_CASE("description apart: every target of encode writes the same bytes")
 {
     std::string const data = encode_data_apart(sample_everything);
     std::string appended = "ab";
-    REQUIRE_EQ(form<everything>::encode<apart>(sample_everything, appended), data.size());
+    REQUIRE_EQ(cbor::static_dictionary<everything>::encode(sample_everything, appended), data.size());
     CHECK_EQ(appended, "ab" + data);
     std::vector<char> chars;
-    REQUIRE_EQ(form<everything>::encode<apart>(sample_everything, chars), data.size());
+    REQUIRE_EQ(cbor::static_dictionary<everything>::encode(sample_everything, chars), data.size());
     CHECK(std::ranges::equal(chars, data));
     std::vector<char> room(data.size() + 64);
-    REQUIRE_EQ(form<everything>::encode<apart>(sample_everything, std::span<char>(room)), data.size());
+    REQUIRE_EQ(cbor::static_dictionary<everything>::encode(sample_everything, std::span<char>(room)), data.size());
     CHECK(std::ranges::equal(std::span(room).first(data.size()), data));
     std::vector<char> exact(data.size());
-    REQUIRE_EQ(form<everything>::encode<apart>(sample_everything, std::span<char>(exact)), data.size());
+    REQUIRE_EQ(cbor::static_dictionary<everything>::encode(sample_everything, std::span<char>(exact)), data.size());
     CHECK(std::ranges::equal(exact, data));
     string_writer w;
-    REQUIRE_EQ(form<everything>::encode<apart>(sample_everything, w), data.size());
+    REQUIRE_EQ(cbor::static_dictionary<everything>::encode(sample_everything, w), data.size());
     CHECK_EQ(w.encoded, data);
 }
 
@@ -95,14 +106,14 @@ TEST_CASE("description apart: every target of encode writes the same bytes")
 TEST_CASE("description apart: one form read as the other is refused")
 {
     for (std::string const &inside : {encode_with_schema(sample_everything), encode_with_schema(empty{}), encode_with_schema(eighteen_entries{})}) {
-        auto const as_data = form<everything>::adopt<apart>(std::string(inside));
+        auto const as_data = cbor::static_dictionary<everything>::adopt(std::string(inside));
         REQUIRE_FALSE(as_data.has_value());
     }
     std::string const inside = encode_with_schema(sample_everything);
     std::string const data = encode_data_apart(sample_everything);
-    CHECK_EQ(form<everything>::adopt<apart>(std::string(inside)).error(), error::incorrect_type);
-    CHECK_EQ(form<everything>::decode<apart>(std::string(inside)).error(), error::incorrect_type);
-    CHECK_EQ((form<everything>::at_path<"$.big", apart>(inside)).error(), error::incorrect_type);
+    CHECK_EQ(cbor::static_dictionary<everything>::adopt(std::string(inside)).error(), error::incorrect_type);
+    CHECK_EQ(cbor::static_dictionary<everything>::decode(std::string(inside)).error(), error::incorrect_type);
+    CHECK_EQ((cbor::static_dictionary<everything>::at_path<"$.big">(inside)).error(), error::incorrect_type);
     // The data form holds no description. So read as the form with the description inside it is shorter than its table:
     // the doc of schema::adopt gives too_little_data for that.
     for (auto const e : {form<everything>::adopt(std::string(data)).error(),
@@ -118,21 +129,21 @@ TEST_CASE("description apart: the checks of the message hold for the data form")
 {
     std::string const data = encode_data_apart(sample_everything);
     for (std::size_t n = 0; n < data.size(); ++n) {
-        CHECK_FALSE(form<everything>::decode<apart>(data.substr(0, n)).has_value());
-        CHECK_FALSE(form<everything>::adopt<apart>(data.substr(0, n)).has_value());
+        CHECK_FALSE(cbor::static_dictionary<everything>::decode(data.substr(0, n)).has_value());
+        CHECK_FALSE(cbor::static_dictionary<everything>::adopt(data.substr(0, n)).has_value());
     }
     std::size_t const directory = data.find('\x5a');
     REQUIRE_EQ(directory, 8u);
     std::string entry = data;
     for (std::size_t k = 0; k < sizeof(std::uint32_t); ++k)
         entry[directory + 5 + k] = '\xff';
-    CHECK_FALSE(form<everything>::decode<apart>(std::string(entry)).has_value());
+    CHECK_FALSE(cbor::static_dictionary<everything>::decode(std::string(entry)).has_value());
     std::uint32_t const length = (std::uint32_t{static_cast<unsigned char>(data[directory + 3])} << 8) |
                                  static_cast<unsigned char>(data[directory + 4]);
     std::string filler = data;
     REQUIRE_EQ(filler[directory + 5 + length], '\xf7');
     filler[directory + 5 + length] = '\xf6';
-    CHECK_EQ(form<everything>::adopt<apart>(std::string(filler)).error(), error::incorrect_type);
+    CHECK_EQ(cbor::static_dictionary<everything>::adopt(std::string(filler)).error(), error::incorrect_type);
 }
 
 // The unverified forms read the data form inside its bounds: every changed byte and every cut. A message read as the
@@ -141,9 +152,9 @@ TEST_CASE("description apart: the unverified forms stay inside the input")
 {
     std::string const data = encode_data_apart(sample_everything);
     auto const reads = [](std::string const &bytes) {
-        (void)form<everything>::unverified_at_path<"$.gauges[].at.x", apart>(bytes, 1uz);
-        (void)form<everything>::unverified_decode<apart>(std::string(bytes));
-        if (auto const root = form<everything>::unverified_adopt<apart>(std::string(bytes))) {
+        (void)cbor::static_dictionary<everything>::unverified_at_path<"$.gauges[].at.x">(bytes, 1uz);
+        (void)cbor::static_dictionary<everything>::unverified_decode(std::string(bytes));
+        if (auto const root = cbor::static_dictionary<everything>::unverified_adopt(std::string(bytes))) {
             (void)root->at_path<"$.names[1]">();
             (void)root->at_path<"$.tires[1].diameter">();
             if (auto const track = root->view<"$.track">())
@@ -166,9 +177,9 @@ TEST_CASE("description apart: the unverified forms stay inside the input")
 TEST_CASE("description apart: a value variant reads back from the data form")
 {
     for (setting const &s : make_sample_settings()) {
-        auto const data = form<setting>::encode<apart>(s);
+        auto const data = cbor::static_dictionary<setting>::encode(s);
         REQUIRE(data.has_value());
-        auto const back = form<setting>::decode<apart>(std::string(*data));
+        auto const back = cbor::static_dictionary<setting>::decode(std::string(*data));
         REQUIRE(back.has_value());
         CHECK(((*back)->value == s.value));
     }

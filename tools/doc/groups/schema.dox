@@ -212,20 +212,20 @@ the bytes is read in place too.
 
 @section schema_apart STORE THE DESCRIPTION APART
 
-Each call takes `cbor::description_place` as a template argument. The
-default is `inside`, and the message holds the description of its
-structs.
+The forms of `cbor::schema<T>` write and read a message that holds the
+description of its structs.
 
-With `cbor::description_place::apart`, `encode` writes the message
-without the description. Each read form reads such a message only with
-`apart`. A read with `apart` of a message that has the description gives
-`incorrect_type`.
+`cbor::static_dictionary<T>` has the same forms with the same arguments.
+Its `encode` writes the message without the description, and its read
+forms read such a message. The description is then a static dictionary
+of Packed CBOR. A read by `cbor::static_dictionary<T>` of a message that
+has the description gives `incorrect_type`.
 
 `cbor::schema<T>::description()` gives the description. It is the same
-in every message of `T`. The size of a message written with `apart` plus
-the size of `description()` is the size of the message with the
-description. A generic decoder of Packed CBOR does not read a message
-written with `apart`.
+in every message of `T`. The size of a message that
+`cbor::static_dictionary<T>::encode` writes plus the size of
+`description()` is the size of the message with the description. A
+generic decoder of Packed CBOR does not read such a message.
 
 @section schema_unverified READ A MESSAGE FROM A PEER YOU TRUST
 
@@ -326,8 +326,8 @@ does not have it yet.
 - that the directory lies inside the message;
 - the tag of the struct of the root.
 
-With `cbor::description_place::apart`, the message holds no keys. `adopt` and `view`
-then check the start of the message, the count of the table and the tag
+A message of `cbor::static_dictionary<T>` holds no keys. Its `adopt` and
+`view` then check the start of the message, the count of the table and the tag
 of the root.
 
 Each `at_path` of an accessor checks at each read:

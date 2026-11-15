@@ -26,16 +26,6 @@ inline std::expected<std::vector<std::size_t>, fault> indexes_read(call const &c
     return out;
 }
 
-template <class F>
-result placed(call const &c, std::size_t const at, F const &f)
-{
-    if (c.template_arguments.size() <= at || c.template_arguments[at] == "cbor::description_place::inside")
-        return f.template operator()<cbor::description_place::inside>();
-    if (c.template_arguments[at] == "cbor::description_place::apart")
-        return f.template operator()<cbor::description_place::apart>();
-    return std::unexpected(c.template_arguments[at] + " is not a cbor::description_place");
-}
-
 template <cbor::fixed_string P, cbor::fixed_string... Rest, class F>
 result path_chosen(std::string_view const path, F const &f)
 {
@@ -95,11 +85,11 @@ result accessor_view(call const &c)
     });
 }
 
-template <class T, bool Verified, cbor::fixed_string... Paths>
+template <template <class> class Form, class T, bool Verified, cbor::fixed_string... Paths>
 result schema_at_path(call const &c)
 {
-    if (c.template_arguments.empty() || c.template_arguments.size() > 2) [[unlikely]]
-        return std::unexpected("at_path takes a path and a cbor::description_place: at_path<\"$.a\">(bytes)");
+    if (c.template_arguments.size() != 1) [[unlikely]]
+        return std::unexpected("at_path takes one path: at_path<\"$.a\">(bytes)");
     auto const encoded = text_argument(c, 0);
     if (!encoded) [[unlikely]]
         return std::unexpected(encoded.error());
@@ -107,57 +97,47 @@ result schema_at_path(call const &c)
     if (!i) [[unlikely]]
         return std::unexpected(i.error());
     std::string_view const name = Verified ? "at_path" : "unverified_at_path";
-    return placed(c, 1, [&]<cbor::description_place D>() -> result {
-        return path_chosen<Paths...>(c.template_arguments.front(), [&]<cbor::fixed_string P>() -> result {
-            if constexpr (Verified) {
-                if (i->empty()) {
-                    if constexpr (requires { cbor::schema<T>::template at_path<P, D>(*encoded); })
-                        return value_of(cbor::schema<T>::template at_path<P, D>(*encoded));
-                } else if (i->size() == 1) {
-                    if constexpr (requires {
-                                      cbor::schema<T>::template at_path<P, D>(*encoded, std::size_t{});
-                                  })
-                        return value_of(cbor::schema<T>::template at_path<P, D>(*encoded, i->front()));
-                }
-            } else {
-                if (i->empty()) {
-                    if constexpr (requires { cbor::schema<T>::template unverified_at_path<P, D>(*encoded); })
-                        return value_of(cbor::schema<T>::template unverified_at_path<P, D>(*encoded));
-                } else if (i->size() == 1) {
-                    if constexpr (requires {
-                                      cbor::schema<T>::template unverified_at_path<P, D>(*encoded,
-                                                                                         std::size_t{});
-                                  })
-                        return value_of(
-                            cbor::schema<T>::template unverified_at_path<P, D>(*encoded, i->front()));
-                }
+    return path_chosen<Paths...>(c.template_arguments.front(), [&]<cbor::fixed_string P>() -> result {
+        if constexpr (Verified) {
+            if (i->empty()) {
+                if constexpr (requires { Form<T>::template at_path<P>(*encoded); })
+                    return value_of(Form<T>::template at_path<P>(*encoded));
+            } else if (i->size() == 1) {
+                if constexpr (requires { Form<T>::template at_path<P>(*encoded, std::size_t{}); })
+                    return value_of(Form<T>::template at_path<P>(*encoded, i->front()));
             }
-            return std::unexpected(compile_refused(name, P.view(), i->size()));
-        });
+        } else {
+            if (i->empty()) {
+                if constexpr (requires { Form<T>::template unverified_at_path<P>(*encoded); })
+                    return value_of(Form<T>::template unverified_at_path<P>(*encoded));
+            } else if (i->size() == 1) {
+                if constexpr (requires { Form<T>::template unverified_at_path<P>(*encoded, std::size_t{}); })
+                    return value_of(Form<T>::template unverified_at_path<P>(*encoded, i->front()));
+            }
+        }
+        return std::unexpected(compile_refused(name, P.view(), i->size()));
     });
 }
 
-template <class T>
+template <template <class> class Form, class T>
 result schema_encode(call const &c)
 {
-    if (c.template_arguments.size() > 1) [[unlikely]]
-        return std::unexpected("encode takes one cbor::description_place");
+    if (!c.template_arguments.empty()) [[unlikely]]
+        return std::unexpected("encode takes no template argument");
     if (c.arguments.empty() || c.arguments.size() > 2) [[unlikely]]
         return std::unexpected("encode takes a value and an optional std::string target");
     auto const v = member_converted<T>(c.arguments.front(), 0);
     if (!v) [[unlikely]]
         return std::unexpected(v.error());
-    return placed(c, 0, [&]<cbor::description_place D>() -> result {
-        if (c.arguments.size() == 1)
-            return value_of(cbor::schema<T>::template encode<D>(*v));
-        auto *const target = changed_if<std::string>(c.arguments[1]);
-        if (target == nullptr) [[unlikely]]
-            return std::unexpected("the argument 2 is not a std::string");
-        return value_of(cbor::schema<T>::template encode<D>(*v, *target));
-    });
+    if (c.arguments.size() == 1)
+        return value_of(Form<T>::encode(*v));
+    auto *const target = changed_if<std::string>(c.arguments[1]);
+    if (target == nullptr) [[unlikely]]
+        return std::unexpected("the argument 2 is not a std::string");
+    return value_of(Form<T>::encode(*v, *target));
 }
 
-template <class T, bool Verified>
+template <template <class> class Form, class T, bool Verified>
 result schema_decode(call const &c)
 {
     if (auto const ok = arguments_counted(c, 1); !ok) [[unlikely]]
@@ -165,36 +145,31 @@ result schema_decode(call const &c)
     auto const bytes = argument_of<std::string>(c, 0, "a std::string");
     if (!bytes) [[unlikely]]
         return std::unexpected(bytes.error());
-    return placed(c, 0, [&]<cbor::description_place D>() -> result {
-        if constexpr (Verified)
-            return value_of(cbor::schema<T>::template decode<D>(std::string(**bytes)));
-        else
-            return value_of(cbor::schema<T>::template unverified_decode<D>(std::string(**bytes)));
-    });
+    if constexpr (Verified)
+        return value_of(Form<T>::decode(std::string(**bytes)));
+    else
+        return value_of(Form<T>::unverified_decode(std::string(**bytes)));
 }
 
-template <class T, bool Verified>
+template <template <class> class Form, class T, bool Verified>
 result schema_path(call const &c)
 {
     if (auto const ok = arguments_counted(c, 1); !ok) [[unlikely]]
         return std::unexpected(ok.error());
-    if (auto const *const owner = held_if<std::shared_ptr<std::string const>>(c.arguments.front()))
-        return placed(c, 0, [&]<cbor::description_place D>() -> result {
-            if constexpr (Verified)
-                return value_of(cbor::schema<T>::template view<D>(*owner));
-            else
-                return value_of(cbor::schema<T>::template unverified_view<D>(*owner));
-        });
+    if (auto const *const owner = held_if<std::shared_ptr<std::string const>>(c.arguments.front())) {
+        if constexpr (Verified)
+            return value_of(Form<T>::view(*owner));
+        else
+            return value_of(Form<T>::unverified_view(*owner));
+    }
     auto const bytes =
         argument_of<std::string>(c, 0, "a std::string or a std::shared_ptr<std::string const>");
     if (!bytes) [[unlikely]]
         return std::unexpected(bytes.error());
-    return placed(c, 0, [&]<cbor::description_place D>() -> result {
-        if constexpr (Verified)
-            return value_of(cbor::schema<T>::template adopt<D>(std::string(**bytes)));
-        else
-            return value_of(cbor::schema<T>::template unverified_adopt<D>(std::string(**bytes)));
-    });
+    if constexpr (Verified)
+        return value_of(Form<T>::adopt(std::string(**bytes)));
+    else
+        return value_of(Form<T>::unverified_adopt(std::string(**bytes)));
 }
 
 template <class T>
@@ -496,12 +471,6 @@ inline result value_get(call const &c)
                            "get<std::int64_t>() or get<std::string>()");
 }
 
-template <cbor::description_place D>
-result place_read(call const &)
-{
-    return value_of(D);
-}
-
 inline constexpr entry schema_functions[] = {
     {"tire{}", aggregate_made<tire, std::uint16_t, float>},
     {"point{}", aggregate_made<point, float, float>},
@@ -512,24 +481,26 @@ inline constexpr entry schema_functions[] = {
     {"std::string.operator[]()", string_index},
     {"std::span<char const>.size()", span_size},
     {"std::accumulate()", accumulated},
-    {"cbor::description_place::inside", place_read<cbor::description_place::inside>},
-    {"cbor::description_place::apart", place_read<cbor::description_place::apart>},
-    {"cbor::schema<tire>::encode()", schema_encode<tire>},
-    {"cbor::schema<point>::encode()", schema_encode<point>},
-    {"cbor::schema<car>::encode()", schema_encode<car>},
-    {"cbor::schema<car>::decode()", schema_decode<car, true>},
-    {"cbor::schema<tire>::decode()", schema_decode<tire, true>},
-    {"cbor::schema<car>::unverified_decode()", schema_decode<car, false>},
-    {"cbor::schema<car>::view()", schema_path<car, true>},
-    {"cbor::schema<tire>::view()", schema_path<tire, true>},
-    {"cbor::schema<car>::unverified_view()", schema_path<car, false>},
+    {"cbor::schema<tire>::encode()", schema_encode<cbor::schema, tire>},
+    {"cbor::schema<point>::encode()", schema_encode<cbor::schema, point>},
+    {"cbor::schema<car>::encode()", schema_encode<cbor::schema, car>},
+    {"cbor::schema<car>::decode()", schema_decode<cbor::schema, car, true>},
+    {"cbor::schema<tire>::decode()", schema_decode<cbor::schema, tire, true>},
+    {"cbor::schema<car>::unverified_decode()", schema_decode<cbor::schema, car, false>},
+    {"cbor::schema<car>::view()", schema_path<cbor::schema, car, true>},
+    {"cbor::schema<tire>::view()", schema_path<cbor::schema, tire, true>},
+    {"cbor::schema<car>::unverified_view()", schema_path<cbor::schema, car, false>},
     {"cbor::schema<car>::at_path()",
-     schema_at_path<car, true, "$.seats", "$.make", "$.tires[1].diameter", "$.tires[].diameter",
+     schema_at_path<cbor::schema, car, true, "$.seats", "$.make", "$.tires[1].diameter", "$.tires[].diameter",
                     "$.tires[].pressure", "$.track[2]">},
     {"cbor::schema<car>::unverified_at_path()",
-     schema_at_path<car, false, "$.seats", "$.tires[1].diameter", "$.tires[].diameter">},
-    {"cbor::schema<tire>::at_path()", schema_at_path<tire, true, "$.diameter", "$.pressure">},
-    {"cbor::schema<point>::at_path()", schema_at_path<point, true, "$.x", "$.y">},
+     schema_at_path<cbor::schema, car, false, "$.seats", "$.tires[1].diameter", "$.tires[].diameter">},
+    {"cbor::schema<tire>::at_path()", schema_at_path<cbor::schema, tire, true, "$.diameter", "$.pressure">},
+    {"cbor::schema<point>::at_path()", schema_at_path<cbor::schema, point, true, "$.x", "$.y">},
+    {"cbor::static_dictionary<car>::encode()", schema_encode<cbor::static_dictionary, car>},
+    {"cbor::static_dictionary<car>::decode()", schema_decode<cbor::static_dictionary, car, true>},
+    {"cbor::static_dictionary<car>::view()", schema_path<cbor::static_dictionary, car, true>},
+    {"cbor::static_dictionary<car>::at_path()", schema_at_path<cbor::static_dictionary, car, true, "$.seats">},
     {"cbor::schema<car>::description()", schema_description<car>},
     {"cbor::schema<tire>::fixed_size()", fixed_size_read<tire>},
     {"cbor::schema<car>::fixed_size()", fixed_size_read<car>},
@@ -560,11 +531,11 @@ inline constexpr entry schema_functions[] = {
     {"cbor::schema<car>::accessor<cbor::fixed_element<tire>>.at_path()",
      accessor_at_path<cbor::schema<car>::accessor<cbor::fixed_element<tire>>, "@.diameter", "@.pressure",
                       "$.seats">},
-    {"cbor::schema<home>::view()", schema_path<home, true>},
+    {"cbor::schema<home>::view()", schema_path<cbor::schema, home, true>},
     {"cbor::schema<home>::accessor<home>.at_path()", accessor_at_path<cbor::schema<home>::accessor<home>, "$.pet">},
     {"cbor::schema<home>::accessor<std::variant<dog, cat>>.index()", pet_index},
     {"cbor::schema<home>::accessor<std::variant<dog, cat>>.get()", pet_get},
-    {"cbor::schema<property>::view()", schema_path<property, true>},
+    {"cbor::schema<property>::view()", schema_path<cbor::schema, property, true>},
     {"cbor::schema<property>::accessor<property>.at_path()",
      accessor_at_path<cbor::schema<property>::accessor<property>, "$.value", "$.name">},
     {"cbor::schema<property>::accessor<std::variant<bool, std::int64_t, std::string>>.index()", value_index},

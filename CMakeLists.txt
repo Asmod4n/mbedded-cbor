@@ -128,7 +128,7 @@ if(PROJECT_IS_TOP_LEVEL AND BUILD_TESTING)
 
 	set(CBOR_TEST_SCHEMA_SOURCES test/schema/layout.cpp test/schema/encode.cpp test/schema/roundtrip.cpp test/schema/path.cpp test/schema/at_path.cpp
 		test/schema/decode.cpp test/schema/schema.cpp test/schema/view.cpp test/schema/view_lifetime.cpp test/schema/attack.cpp test/schema/unverified.cpp
-		test/schema/apart.cpp test/schema/golden.cpp test/schema/list_range.cpp test/schema/vector_range.cpp test/schema_depth.cpp)
+		test/schema/static_dictionary.cpp test/schema/golden.cpp test/schema/list_range.cpp test/schema/vector_range.cpp test/schema_depth.cpp)
 	set(CBOR_TEST_SCHEMA_GROUPS 4)
 	set(CBOR_TEST_SCHEMA_LAYOUT_SOURCES test/schema_layout.cpp)
 	set(CBOR_TEST_BATCH_0_SOURCES test/path.cpp test/path/edn_literals.cpp test/path/edn_comments.cpp test/path/edn_numbers.cpp test/path/filter_depth.cpp test/path/equality.cpp test/doc_path.cpp test/doc_advanced_path.cpp test/allocation.cpp test/self_described.cpp test/value.cpp test/string.cpp test/diagnostic_notation.cpp test/item_size.cpp)

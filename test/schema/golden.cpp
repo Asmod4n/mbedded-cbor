@@ -11,7 +11,7 @@ std::string golden_line(std::string_view const name)
     unsigned seed = 0;
     golden_fill(value, seed);
     auto const inside = form<T>::encode(value);
-    auto const data = form<T>::template encode<cbor::description_place::apart>(value);
+    auto const data = cbor::static_dictionary<T>::encode(value);
     if (!inside || !data)
         return std::string(name) + " no encoding\n";
     auto const description = form<T>::description();

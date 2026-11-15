@@ -69,8 +69,8 @@ nlohmann::json, cbor2 and CBOR::XS.
   members in one line.
 - **Trusted peers.** The `unverified_` forms of `cbor::schema` skip the
   checks of the data and keep every check of a bound.
-- **Description apart.** `cbor::schema` can store the description of a
-  struct once and the data of each message apart from it.
+- **Static dictionary.** `cbor::static_dictionary` stores the description
+  of a struct once and the data of each message apart from it.
 - **Limits.** A reader that recurses stops where the stack of its
   thread ends, so the depth follows the stack. String length and element count
   are constants of the build. Memory grows with the items that were read.

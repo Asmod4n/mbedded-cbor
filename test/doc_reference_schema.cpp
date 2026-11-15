@@ -179,27 +179,26 @@ TEST_CASE("doc reference schema: unverified")
     CHECK_EQ((*back)->make, "Volvo");
 }
 
-// schema.hpp, snippet description: the data form and the description together have the size of the message, the data
-// form reads with apart. A read without apart refuses it.
+// schema.hpp, snippet description of cbor::static_dictionary: the data form and the description together have the
+// size of the message, and cbor::static_dictionary reads the data form. cbor::schema refuses it.
 TEST_CASE("doc reference schema: description")
 {
     // [description]
-    constexpr auto apart = cbor::description_place::apart;
-    auto const data = cbor::schema<car>::encode<apart>(car{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}});
+    auto const data = cbor::static_dictionary<car>::encode(car{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}});
     auto const description = cbor::schema<car>::description();
     std::size_t const size = data->size() + description.size();          // the size of the message
-    auto const seats = cbor::schema<car>::at_path<"$.seats", apart>(*data);  // 5
+    auto const seats = cbor::static_dictionary<car>::at_path<"$.seats">(*data);  // 5
     // [description]
     REQUIRE(data.has_value());
     CHECK_EQ(size, sample_bytes().size());
     CHECK_EQ(seats, 5);
     CHECK_EQ(data->size() + description.size(), sample_bytes().size());
-    CHECK_EQ((cbor::schema<car>::at_path<"$.seats", apart>(*data)), 5);
+    CHECK_EQ((cbor::static_dictionary<car>::at_path<"$.seats">(*data)), 5);
     // The data form holds no description. So at_path with the description inside reads a message that is shorter than
     // its table: the doc of schema::adopt gives too_little_data for that.
     auto const refused = cbor::schema<car>::at_path<"$.seats">(*data).error();
     CHECK_EQ(refused, error::too_little_data);
-    auto const root = cbor::schema<car>::adopt<apart>(std::string(*data));
+    auto const root = cbor::static_dictionary<car>::adopt(std::string(*data));
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.tires[1].diameter">(), 18);
 }
