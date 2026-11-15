@@ -27,6 +27,8 @@
 #include <utility>
 #include <vector>
 
+#include "decode.hpp"
+#include "encode.hpp"
 #include "error.hpp"
 #include "validity.hpp"
 #include "head.hpp"
@@ -36,6 +38,8 @@
 
 namespace cbor
 {
+
+std::expected<owning<item>, error> parse_edn(std::string_view text);
 
 namespace detail
 {
@@ -530,6 +534,38 @@ class extended_diagnostic_notation
                              : static_cast<double>(mantissa) / powers[static_cast<std::size_t>(-exponent)];
     }
 
+    static constexpr std::expected<void, error> append_bignum(std::string &out, std::string_view const digits, int const base,
+                                                              bool const negative)
+    {
+        constexpr int byte_bits = std::numeric_limits<std::uint8_t>::digits;
+        constexpr unsigned byte_mask = std::numeric_limits<std::uint8_t>::max();
+        std::vector<std::uint8_t> magnitude;
+        for (char const c : digits) {
+            unsigned carry = static_cast<unsigned>(hex_digit_value(c));
+            for (std::uint8_t &b : magnitude) {
+                unsigned const x = b * static_cast<unsigned>(base) + carry;
+                b = static_cast<std::uint8_t>(x & byte_mask);
+                carry = x >> byte_bits;
+            }
+            for (; carry != 0; carry >>= byte_bits)
+                magnitude.push_back(static_cast<std::uint8_t>(carry & byte_mask));
+        }
+        if (negative)
+            for (std::uint8_t &b : magnitude)
+                if (b-- != 0)
+                    break;
+        while (!magnitude.empty() && magnitude.back() == 0)
+            magnitude.pop_back();
+        auto const tag = negative ? rfc8949::tag_number::negative_bignum : rfc8949::tag_number::unsigned_bignum;
+        if (auto const r = append_head(out, major_type::tag, std::to_underlying(tag), no_indicator); !r) [[unlikely]]
+            return r;
+        if (auto const r = append_head(out, major_type::byte_string, magnitude.size(), no_indicator); !r) [[unlikely]]
+            return r;
+        for (std::uint8_t const b : magnitude | std::views::reverse)
+            out.push_back(static_cast<char>(b));
+        return {};
+    }
+
     static constexpr std::expected<std::size_t, error> parse_number(std::string_view const text, std::size_t at,
                                                                     std::string &out)
     {
@@ -628,8 +664,13 @@ class extended_diagnostic_notation
             return std::unexpected(next.error());
         int const indicator = next->indicator;
         if (!real) {
-            if (overflow) [[unlikely]]
-                return std::unexpected(error::invalid_path);
+            if (overflow) {
+                if (indicator != no_indicator) [[unlikely]]
+                    return std::unexpected(error::invalid_path);
+                if (auto const r = append_bignum(out, text.substr(first, at - first), base, negative); !r) [[unlikely]]
+                    return std::unexpected(r.error());
+                return next->at;
+            }
             if (negative && mantissa != 0) {
                 if (auto const r = append_head(out, major_type::negative_integer, mantissa - 1, indicator); !r) [[unlikely]]
                     return std::unexpected(r.error());
@@ -1303,6 +1344,10 @@ class extended_diagnostic_notation
     friend class cbor::path;
 
     friend std::expected<std::string, error> cbor::diagnostic_notation(std::string_view encoded);
+
+    friend std::expected<owning<item>, error> cbor::parse_edn(std::string_view text);
+
+    friend std::expected<std::string, error> item::to_edn() const;
 };
 
 }
@@ -1354,6 +1399,47 @@ inline std::expected<std::string, error> diagnostic_notation(std::string_view co
     if (auto const one = detail::validity::check_one_data_item(d.encoded); !one) [[unlikely]]
         return std::unexpected(one.error());
     return out;
+}
+
+/**
+ * @brief Reads the extended diagnostic notation (EDN) in @p text into a tree.
+ *
+ * The text holds one item, with white space and comments around it, in the notation of RFC 8949 section 8 and of
+ * draft-ietf-cbor-edn-literals. JSON text is EDN text. The tree is the one that cbor::decode() gives for the CBOR of
+ * the item; cbor::encode() writes it, and item::to_edn() gives the text back.
+ *
+ * @retval syntax_error the text is not one item of the notation, or text follows the item
+ * @retval nesting_depth_exceeded the item is deeper than the stack of the thread holds
+ * @retval string_length_exceeded a string is longer than `limits::string_length`
+ * @retval container_elements_exceeded an array or a map holds more than `limits::container_elements` items
+ * @see item::to_edn()
+ *
+ * @ingroup tools
+ */
+inline std::expected<owning<item>, error> parse_edn(std::string_view const text)
+{
+    using edn = detail::extended_diagnostic_notation;
+    auto const start = edn::optional_space_end(text, 0);
+    if (!start) [[unlikely]]
+        return std::unexpected(error::syntax_error);
+    std::string bytes;
+    edn::backpatches patches;
+    auto const next = edn::parse_literal({text, *start}, bytes, patches);
+    if (!next) [[unlikely]]
+        return std::unexpected(next.error() == error::invalid_path ? error::syntax_error : next.error());
+    patches.apply(bytes);
+    auto const end = edn::optional_space_end(text, *next);
+    if (!end || *end != text.size()) [[unlikely]]
+        return std::unexpected(error::syntax_error);
+    return decode(bytes);
+}
+
+inline std::expected<std::string, error> item::to_edn() const
+{
+    std::string bytes;
+    if (auto const r = encode(bytes, *this); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    return diagnostic_notation(bytes);
 }
 
 }

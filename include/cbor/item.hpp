@@ -127,6 +127,19 @@ public:
     }
 
     /**
+     * @brief Gives the text of the item in the extended diagnostic notation (EDN).
+     *
+     * The text is the one of cbor::encode() of the item, in the notation of RFC 8949 section 8 and of
+     * draft-ietf-cbor-edn-literals. cbor::parse_edn() reads it back. The function is defined in
+     * `<cbor/diagnostic_notation.hpp>`.
+     *
+     * @retval unsupported_value the tree holds a `shared_reference`
+     * @retval nesting_depth_exceeded the tree is deeper than the stack of the thread holds
+     * @see cbor::parse_edn()
+     */
+    std::expected<std::string, error> to_edn() const;
+
+    /**
      * @brief Gives the value of the node as `T`, as cbor::lazy::get() reads it.
      *
      * | T | Reads |
