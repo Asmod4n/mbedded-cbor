@@ -129,9 +129,9 @@ void render(cbor::item const &i, std::string &out);
 
 cbor::item const &value_of(cbor::item const &map, std::string_view const key)
 {
-    auto const pairs = *map.get<cbor::type::map>();
-    auto const at = std::ranges::find(pairs | std::views::stride(2), key, [](cbor::item const &k) { return *k.get<cbor::type::text_string>(); });
-    return *std::ranges::next(at.base());
+    auto const pairs = *map.get<std::ranges::chunk_view<std::span<cbor::item const>>>();
+    auto const at = std::ranges::find(pairs, key, [](auto const pair) { return *pair[0].template get<std::string_view>(); });
+    return (*at)[1];
 }
 
 void render_children(std::span<cbor::item const> const children, std::string &out)
@@ -142,35 +142,35 @@ void render_children(std::span<cbor::item const> const children, std::string &ou
 
 void render(cbor::item const &i, std::string &out)
 {
-    if (auto const s = i.get<cbor::type::text_string>()) {
-        escaped_append(out, *s);
+    switch (i.type()) {
+    case cbor::type::text_string:
+        escaped_append(out, *i.get<std::string_view>());
+        return;
+    case cbor::type::unsigned_integer:
+        out += std::to_string(*i.get<std::uint64_t>());
+        return;
+    case cbor::type::array:
+        render_children(*i.get<std::span<cbor::item const>>(), out);
+        return;
+    case cbor::type::tag:
+        break;
+    default:
         return;
     }
-    if (auto const u = i.get<cbor::type::unsigned_integer>()) {
-        out += std::to_string(*u);
-        return;
-    }
-    if (auto const a = i.get<cbor::type::array>()) {
-        render_children(*a, out);
-        return;
-    }
-    auto const t = i.get<cbor::type::tag>();
-    if (!t)
-        return;
-    auto const [number, content] = *t;
+    auto const [number, content] = *i.get<std::pair<std::uint64_t, cbor::item const *>>();
     cbor::item const &m = *content;
     if (number == epoch_time) {
-        std::string const d = date_of(*content->get<cbor::type::unsigned_integer>());
+        std::string const d = date_of(*content->get<std::uint64_t>());
         out += "<time datetime=\"" + d + "\">" + d + "</time>";
     } else if (number == ui_table) {
         out += "<table><thead><tr>";
-        for (cbor::item const &h : *value_of(m, "head").get<cbor::type::array>()) {
+        for (cbor::item const &h : *value_of(m, "head").get<std::span<cbor::item const>>()) {
             out += "<th>";
             render(h, out);
             out += "</th>";
         }
         out += "</tr></thead><tbody>";
-        for (cbor::item const &row : *value_of(m, "rows").get<cbor::type::array>()) {
+        for (cbor::item const &row : *value_of(m, "rows").get<std::span<cbor::item const>>()) {
             out += "<tr>";
             for (std::string_view const key : {"name", "amount", "time"}) {
                 out += "<td>";

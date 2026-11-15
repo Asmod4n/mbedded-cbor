@@ -225,10 +225,10 @@ TEST_CASE("bignum: tag 28 around a bignum that fits is a tag over the integer")
     REQUIRE(tree.has_value());
     auto const elements = list_children_of_item(**tree);
     REQUIRE_EQ(elements.size(), 2u);
-    auto const mark = elements[0]->get<cbor::type::tag>();
+    auto const mark = elements[0]->get<std::pair<std::uint64_t, cbor::item const *>>();
     REQUIRE(mark.has_value());
-    CHECK_EQ(mark->second->get<cbor::type::unsigned_integer>(), 1u);
-    CHECK_EQ(elements[1]->get<cbor::type::tag>().value().first, 29u);
+    CHECK_EQ(mark->second->get<std::uint64_t>(), 1u);
+    CHECK_EQ(elements[1]->get<std::pair<std::uint64_t, cbor::item const *>>().value().first, 29u);
     CHECK_EQ(*l->at(1)->type(), cbor::type::tag);
     CHECK_EQ(*l->at(1)->get<std::int64_t>(), 0);
     std::string again;

@@ -43,6 +43,7 @@
 #include <memory>
 #include <optional>
 #include <set>
+#include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
@@ -153,9 +154,11 @@ TEST_CASE("cbor2 decoder: test_integer")
         REQUIRE(tree.has_value());
         CHECK_EQ((*tree)->type(), r.type);
         if (r.type == cbor::type::unsigned_integer)
-            CHECK_EQ((*tree)->get<cbor::type::unsigned_integer>().value(), r.argument);
+            CHECK_EQ((*tree)->get<std::uint64_t>().value(), r.argument);
+        else if (r.argument <= static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
+            CHECK_EQ((*tree)->get<std::int64_t>().value(), -1 - static_cast<std::int64_t>(r.argument));
         else
-            CHECK_EQ((*tree)->get<cbor::type::negative_integer>().value(), r.argument);
+            CHECK_EQ((*tree)->get<std::int64_t>().error(), cbor::error::number_out_of_range);
     }
 
     // 18446744073709551616 and -18446744073709551617: tag 2 and tag 3 over the byte string 01 00 00 00 00 00 00 00 00
@@ -174,11 +177,11 @@ TEST_CASE("cbor2 decoder: test_integer")
         auto const tree = cbor::decode(unhexlify(r.payload));
         REQUIRE(tree.has_value());
         REQUIRE_EQ((*tree)->type(), r.type);
-        auto const tag = r.type == cbor::type::unsigned_bignum ? (*tree)->get<cbor::type::unsigned_bignum>()
-                                                                : (*tree)->get<cbor::type::negative_bignum>();
+        auto const tag = r.type == cbor::type::unsigned_bignum ? (*tree)->get<std::pair<std::uint64_t, cbor::item const *>>()
+                                                                : (*tree)->get<std::pair<std::uint64_t, cbor::item const *>>();
         REQUIRE(tag.has_value());
         CHECK_EQ(tag->first, r.tag);
-        auto const magnitude = tag->second->get<cbor::type::byte_string>();
+        auto const magnitude = tag->second->get<std::span<std::byte const>>();
         REQUIRE(magnitude.has_value());
         std::string const m(reinterpret_cast<char const *>(magnitude->data()), magnitude->size());
         CHECK_EQ(hexlify(m), "010000000000000000");
@@ -267,9 +270,9 @@ TEST_CASE("cbor2 decoder: test_float")
         auto const tree = cbor::decode(unhexlify(r.payload));
         REQUIRE(tree.has_value());
         REQUIRE_EQ((*tree)->type(), r.type);
-        double const got = r.type == cbor::type::half_float     ? (*tree)->get<cbor::type::half_float>().value()
-                           : r.type == cbor::type::single_float ? (*tree)->get<cbor::type::single_float>().value()
-                                                                : (*tree)->get<cbor::type::double_float>().value();
+        double const got = r.type == cbor::type::half_float     ? (*tree)->get<double>().value()
+                           : r.type == cbor::type::single_float ? (*tree)->get<double>().value()
+                                                                : (*tree)->get<double>().value();
         CHECK_EQ(std::bit_cast<std::uint64_t>(got), std::bit_cast<std::uint64_t>(r.expected));
     }
 }
@@ -354,7 +357,7 @@ TEST_CASE("cbor2 decoder: test_string_invalid_utf8")
         INFO("payload: ", hexlify(payload.substr(0, 16)));
         auto const tree = cbor::decode(payload);
         REQUIRE(tree.has_value());
-        CHECK_EQ((*tree)->get<cbor::type::text_string>()->size(), length);
+        CHECK_EQ((*tree)->get<std::string_view>()->size(), length);
     }
     // The indefinite string 7f6198ff: decode.hpp: "@retval indefinite_length a string, an array or a map has an
     // indefinite length". The error comes before the content is read; RFC 8949 3.2.3 lets a decoder refuse
@@ -520,7 +523,7 @@ TEST_CASE("cbor2 decoder: test_simple_value")
         auto const tree = cbor::decode(unhexlify(r.payload));
         REQUIRE(tree.has_value());
         CHECK_EQ((*tree)->type(), cbor::type::simple_value);
-        CHECK_EQ((*tree)->get<cbor::type::simple_value>().value(), cbor::simple_value{r.value});
+        CHECK_EQ((*tree)->get<cbor::simple_value>().value(), cbor::simple_value{r.value});
     }
     check_decoded({{"A1F86301", M(test::simple{99}, 1)}});
 }
@@ -695,17 +698,17 @@ TEST_CASE("cbor2 decoder: test_fraction, test_bigfloat")
     // so it stays a tag 2 node.
     auto const tree = cbor::decode(unhexlify("c482384dc252011f1fe37d0c70ff50456ba8b891997b07d6"));
     REQUIRE(tree.has_value());
-    auto const tag = (*tree)->get<cbor::type::tag>();
+    auto const tag = (*tree)->get<std::pair<std::uint64_t, cbor::item const *>>();
     REQUIRE(tag.has_value());
     CHECK_EQ(tag->first, 4u);
-    auto const pair = tag->second->get<cbor::type::array>();
+    auto const pair = tag->second->get<std::span<cbor::item const>>();
     REQUIRE(pair.has_value());
     REQUIRE_EQ(pair->size(), 2u);
-    CHECK_EQ((*pair)[0].get<cbor::type::negative_integer>().value(), 77u);
-    auto const mantissa = (*pair)[1].get<cbor::type::unsigned_bignum>();
+    CHECK_EQ((*pair)[0].get<std::int64_t>().value(), -78);
+    auto const mantissa = (*pair)[1].get<std::pair<std::uint64_t, cbor::item const *>>();
     REQUIRE(mantissa.has_value());
     CHECK_EQ(mantissa->first, 2u);
-    auto const magnitude = mantissa->second->get<cbor::type::byte_string>();
+    auto const magnitude = mantissa->second->get<std::span<std::byte const>>();
     REQUIRE(magnitude.has_value());
     CHECK_EQ(hexlify(std::string(reinterpret_cast<char const *>(magnitude->data()), magnitude->size())),
              "011f1fe37d0c70ff50456ba8b891997b07d6");
@@ -840,12 +843,12 @@ TEST_CASE("cbor2 decoder: TestSharedReference read by cbor::decode")
     // [28([28("a"), "b"]), 29(0)] the second element names the first.
     auto const cyclic = cbor::decode(unhexlify("d81c81d81d00"));
     REQUIRE(cyclic.has_value());
-    CHECK_EQ((*cyclic)->get<cbor::type::array>().value()[0].get<cbor::type::shared_reference>().value().second,
+    CHECK_EQ((*cyclic)->get<std::span<cbor::item const>>().value()[0].get<std::pair<std::uint64_t, cbor::item const *>>().value().second,
              &**cyclic);
     auto const shared = cbor::decode(unhexlify("82d81c82d81c61616162d81d00"));
     REQUIRE(shared.has_value());
-    auto const elements = (*shared)->get<cbor::type::array>().value();
-    CHECK_EQ(elements[1].get<cbor::type::shared_reference>().value().second, &elements[0]);
+    auto const elements = (*shared)->get<std::span<cbor::item const>>().value();
+    CHECK_EQ(elements[1].get<std::pair<std::uint64_t, cbor::item const *>>().value().second, &elements[0]);
 }
 
 // Upstream: TestSharedReference.test_nested_shareable_in_array, test_object_hook and test_tag_hook, and

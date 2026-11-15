@@ -427,8 +427,12 @@ TEST_CASE("tinycbor parser: integers")
         REQUIRE(tree.has_value());
         cbor::item const &node = **tree;
         CHECK_EQ(node.type(), r.negative ? cbor::type::negative_integer : cbor::type::unsigned_integer);
-        auto const raw = r.negative ? node.get<cbor::type::negative_integer>() : node.get<cbor::type::unsigned_integer>();
-        CHECK_EQ(raw.value_or(0), r.raw);
+        if (!r.negative)
+            CHECK_EQ(node.get<std::uint64_t>().value_or(0), r.raw);
+        else if (r.raw <= static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
+            CHECK_EQ(node.get<std::int64_t>().value_or(0), -1 - static_cast<std::int64_t>(r.raw));
+        else
+            CHECK_EQ(node.get<std::int64_t>().error(), error::number_out_of_range);
         auto const as_int64 = cbor::at_path<"$", std::int64_t>(r.data);
         auto const as_int = cbor::at_path<"$", int>(r.data);
         bool const in_int = r.in_int64 && r.value >= std::numeric_limits<int>::min() &&
@@ -488,7 +492,7 @@ TEST_CASE("tinycbor parser: half floats")
         auto const tree = cbor::decode(data);
         REQUIRE(tree.has_value());
         CHECK_EQ((*tree)->type(), cbor::type::half_float);
-        double const value = (*tree)->get<cbor::type::half_float>().value_or(0);
+        double const value = (*tree)->get<double>().value_or(0);
         if (std::isnan(r.value))
             CHECK_EQ(std::bit_cast<std::uint64_t>(value), test::ieee754::bits_of_half_nan_widened_to_double(
                                                               static_cast<std::uint16_t>(r.raw)));
@@ -510,11 +514,11 @@ TEST_CASE("tinycbor parser: floats")
         CHECK_EQ((*tree)->type(), r.type);
         double value = 0;
         if (r.type == cbor::type::half_float)
-            value = (*tree)->get<cbor::type::half_float>().value_or(0);
+            value = (*tree)->get<double>().value_or(0);
         else if (r.type == cbor::type::single_float)
-            value = (*tree)->get<cbor::type::single_float>().value_or(0);
+            value = (*tree)->get<double>().value_or(0);
         else
-            value = (*tree)->get<cbor::type::double_float>().value_or(0);
+            value = (*tree)->get<double>().value_or(0);
         CHECK_EQ(std::bit_cast<std::uint64_t>(value), std::bit_cast<std::uint64_t>(r.value));
     }
 }
@@ -888,9 +892,9 @@ TEST_CASE("tinycbor parser: string length")
         REQUIRE_EQ(make_outcome_text(tree), make_error_text(no_error));
         cbor::item const &node = **tree;
         if (node.type() == cbor::type::text_string)
-            CHECK_EQ(node.get<cbor::type::text_string>()->size(), r.expected);
+            CHECK_EQ(node.get<std::string_view>()->size(), r.expected);
         else
-            CHECK_EQ(node.get<cbor::type::byte_string>()->size(), r.expected);
+            CHECK_EQ(node.get<std::span<std::byte const>>()->size(), r.expected);
     }
 }
 
@@ -1063,7 +1067,7 @@ TEST_CASE("tinycbor parser: find a key in a map")
         CHECK_EQ(value->type().value_or(cbor::type::null), cbor::type::tag);
         auto const tree = value->to_item();
         REQUIRE_EQ(make_outcome_text(tree), make_error_text(no_error));
-        CHECK_EQ((*tree)->get<cbor::type::tag>().value_or(std::pair<std::uint64_t, cbor::item const *>{}).first, 42u);
+        CHECK_EQ((*tree)->get<std::pair<std::uint64_t, cbor::item const *>>().value_or(std::pair<std::uint64_t, cbor::item const *>{}).first, 42u);
         auto const text = value->get<std::string_view>();
         REQUIRE_EQ(make_outcome_text(text), make_error_text(no_error));
         CHECK_EQ(**text, "haystack"sv);

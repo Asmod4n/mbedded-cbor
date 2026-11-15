@@ -48,6 +48,21 @@ struct kind<std::span<cbor::item const>> {
 };
 
 template <>
+struct kind<std::ranges::chunk_view<std::span<cbor::item const>>> {
+    static constexpr std::string_view name = "std::ranges::chunk_view<std::span<cbor::item const>>";
+    static std::string text(std::ranges::chunk_view<std::span<cbor::item const>> const &v)
+    {
+        std::string out = "chunk_view of " + number_text(v.size()) + (v.size() == 1 ? " pair" : " pairs");
+        char const *separator = ": ";
+        for (auto const pair : v) {
+            out += separator + item_notation(pair[0]) + ": " + item_notation(pair[1]);
+            separator = ", ";
+        }
+        return out;
+    }
+};
+
+template <>
 struct kind<std::pair<std::uint64_t, cbor::item const *>> {
     static constexpr std::string_view name = "std::pair<std::uint64_t, cbor::item const *>";
     static std::string text(std::pair<std::uint64_t, cbor::item const *> const &v)

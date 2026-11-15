@@ -20,6 +20,7 @@
 #include <iterator>
 #include <memory>
 #include <numeric>
+#include <ranges>
 #include <string>
 #include <vector>
 
@@ -515,7 +516,7 @@ static cbor::item const &untagged(cbor::item const &i)
 {
     cbor::item const *at = &i;
     while (at->type() == cbor::type::tag) {
-        auto const t = at->get<cbor::type::tag>();
+        auto const t = at->get<std::pair<std::uint64_t, cbor::item const *>>();
         if (!t) [[unlikely]] std::abort();
         at = t->second;
     }
@@ -527,11 +528,11 @@ static cbor::item const &untagged(cbor::item const &i)
 #if defined(OP_ITEM_FIELD)
 static cbor::item const &member(cbor::item const &m, std::string_view const key)
 {
-    auto const entries = untagged(m).get<cbor::type::map>();
+    auto const entries = untagged(m).get<std::ranges::chunk_view<std::span<cbor::item const>>>();
     if (!entries) [[unlikely]] std::abort();
-    for (std::size_t i = 0; i + 1 < entries->size(); i += 2)
-        if ((*entries)[i].get<cbor::type::text_string>().value_or(std::string_view{}) == key)
-            return untagged((*entries)[i + 1]);
+    for (auto const pair : *entries)
+        if (pair[0].get<std::string_view>().value_or(std::string_view{}) == key)
+            return untagged(pair[1]);
     std::abort();
 }
 #endif
@@ -541,23 +542,22 @@ static double item_sum(cbor::item const &tagged)
 {
     cbor::item const &i = untagged(tagged);
     switch (i.type()) {
-    case cbor::type::text_string: return bytes_sum(*i.get<cbor::type::text_string>());
-    case cbor::type::unsigned_integer: return double(*i.get<cbor::type::unsigned_integer>());
-    case cbor::type::negative_integer: return -1.0 - double(*i.get<cbor::type::negative_integer>());
-    case cbor::type::half_float: return *i.get<cbor::type::half_float>();
-    case cbor::type::single_float: return *i.get<cbor::type::single_float>();
-    case cbor::type::double_float: return *i.get<cbor::type::double_float>();
+    case cbor::type::text_string: return bytes_sum(*i.get<std::string_view>());
+    case cbor::type::unsigned_integer: return double(*i.get<std::uint64_t>());
+    case cbor::type::negative_integer: return double(*i.get<std::int64_t>());
+    case cbor::type::half_float: return *i.get<double>();
+    case cbor::type::single_float: return *i.get<double>();
+    case cbor::type::double_float: return *i.get<double>();
     case cbor::type::false_value: return 0;
     case cbor::type::true_value: return 1;
     case cbor::type::array: {
         double s = 0;
-        for (auto const &x : *i.get<cbor::type::array>()) s += item_sum(x);
+        for (auto const &x : *i.get<std::span<cbor::item const>>()) s += item_sum(x);
         return s;
     }
     case cbor::type::map: {
-        auto const e = *i.get<cbor::type::map>();
         double s = 0;
-        for (std::size_t k = 1; k < e.size(); k += 2) s += item_sum(e[k]);
+        for (auto const pair : *i.get<std::ranges::chunk_view<std::span<cbor::item const>>>()) s += item_sum(pair[1]);
         return s;
     }
     default: std::abort();
@@ -571,9 +571,9 @@ static double item_field()
 {
     auto const tree = cbor::decode(*plain);
     if (!tree) [[unlikely]] std::abort();
-    auto const cars = member(**tree, "cars").get<cbor::type::array>();
+    auto const cars = member(**tree, "cars").get<std::span<cbor::item const>>();
     if (!cars) [[unlikely]] std::abort();
-    return double(*member(member((*cars)[500], "engine"), "cc").get<cbor::type::unsigned_integer>());
+    return double(*member(member((*cars)[500], "engine"), "cc").get<std::uint64_t>());
 }
 #endif
 

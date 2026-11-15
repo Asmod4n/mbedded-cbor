@@ -1332,10 +1332,10 @@ TEST_CASE("lazy: two threads read one root lazy" * doctest::skip(!test::threads_
                 bool const reference = [&] {
                     if (!named)
                         return false;
-                    auto const tag = (*named)->get<cbor::type::tag>();
+                    auto const tag = (*named)->get<std::pair<std::uint64_t, cbor::item const *>>();
                     if (!tag || tag->first != 29)
                         return false;
-                    auto const mark = tag->second->get<cbor::type::unsigned_integer>();
+                    auto const mark = tag->second->get<std::uint64_t>();
                     return mark && *mark == 0;
                 }();
                 right[t] = {text.has_value() && **text == "hello", index == 0u, reference, count == 4, pairs == 1,
@@ -2004,7 +2004,7 @@ TEST_CASE("lazy: a read through a temporary lazy keeps the bytes alive")
     CHECK_EQ(types, std::vector{cbor::type::text_string, cbor::type::array});
     auto const copy = cbor::lazy::adopt(message())->to_item();
     REQUIRE(copy.has_value());
-    CHECK_EQ((*copy)->get<cbor::type::array>()->size(), 2u);
+    CHECK_EQ((*copy)->get<std::span<cbor::item const>>()->size(), 2u);
 }
 
 // A map or an array whose count claims more items than its bytes can hold gives too_little_data before any item is read.

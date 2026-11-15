@@ -5,12 +5,15 @@
 #include "cbor/query.hpp"
 #include "cbor/rfc8746.hpp"
 
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <expected>
 #include <memory>
 #include <optional>
+#include <ranges>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -95,45 +98,56 @@ void js_value_built(cbor::item const &i)
 {
     switch (i.type()) {
     case cbor::type::unsigned_integer:
-        return value_number(static_cast<double>(i.get<cbor::type::unsigned_integer>().value()));
+        return value_number(static_cast<double>(i.get<std::uint64_t>().value()));
     case cbor::type::negative_integer:
-        return value_number(-1.0 - static_cast<double>(i.get<cbor::type::negative_integer>().value()));
+        return value_number(i.visit([](auto const v) -> double {
+            if constexpr (std::same_as<decltype(v), cbor::int128 const>)
+                return static_cast<double>(v);
+            else
+                return 0;
+        }));
     case cbor::type::text_string: {
-        std::string_view const s = i.get<cbor::type::text_string>().value();
+        std::string_view const s = i.get<std::string_view>().value();
         return value_string(s.data(), s.size());
     }
     case cbor::type::array:
         array_begin();
-        for (auto const &e : i.get<cbor::type::array>().value())
+        for (auto const &e : i.get<std::span<cbor::item const>>().value())
             js_value_built(e);
         return container_end();
     case cbor::type::map: {
-        std::span<cbor::item const> const children = i.get<cbor::type::map>().value();
         object_begin();
-        for (std::size_t k = 0; k < children.size(); k += 2) {
-            cbor::item const &key = children[k];
-            if (auto const s = key.get<cbor::type::text_string>())
-                key_string(s->data(), s->size());
-            else if (auto const u = key.get<cbor::type::unsigned_integer>())
-                key_number(static_cast<double>(*u));
-            else
-                key_number(static_cast<double>(key.get<cbor::type::negative_integer>().value()));
-            js_value_built(children[k + 1]);
+        for (auto const pair : i.get<std::ranges::chunk_view<std::span<cbor::item const>>>().value()) {
+            cbor::item const &key = pair[0];
+            if (key.type() == cbor::type::text_string) {
+                std::string_view const s = *key.get<std::string_view>();
+                key_string(s.data(), s.size());
+            } else if (key.type() == cbor::type::unsigned_integer) {
+                key_number(static_cast<double>(*key.get<std::uint64_t>()));
+            } else {
+                key_number(key.visit([](auto const v) -> double {
+                    if constexpr (std::same_as<decltype(v), cbor::int128 const>)
+                        return static_cast<double>(v);
+                    else
+                        return 0;
+                }));
+            }
+            js_value_built(pair[1]);
         }
         return container_end();
     }
     case cbor::type::tag:
-        return js_value_built(*i.get<cbor::type::tag>().value().second);
+        return js_value_built(*i.get<std::pair<std::uint64_t, cbor::item const *>>().value().second);
     case cbor::type::false_value:
         return value_bool(0);
     case cbor::type::true_value:
         return value_bool(1);
     case cbor::type::half_float:
-        return value_number(i.get<cbor::type::half_float>().value());
+        return value_number(i.get<double>().value());
     case cbor::type::single_float:
-        return value_number(i.get<cbor::type::single_float>().value());
+        return value_number(i.get<double>().value());
     case cbor::type::double_float:
-        return value_number(i.get<cbor::type::double_float>().value());
+        return value_number(i.get<double>().value());
     default:
         return value_null();
     }

@@ -13,9 +13,14 @@
 
 #include <algorithm>
 #include <array>
+#include <concepts>
 #include <cstddef>
+#include <cstdint>
+#include <ranges>
 #include <span>
 #include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace fuzz
@@ -84,29 +89,29 @@ inline void tree_encode(std::string_view const input)
 }
 
 // The nodes of a tree, reached through the elements, the pairs, the tag contents and the embedded item of each tag
-// 24, not through a shared_reference. A shared_reference points into the tree, so this walk ends on a cycle.
+// 24, not through a shared_reference and not into the byte string of a typed array. A shared_reference points into the tree, so this walk ends on a cycle.
 inline std::vector<cbor::item const *> nodes_of(cbor::owning<cbor::item> const &tree)
 {
     std::vector<cbor::item const *> nodes{&*tree};
     for (std::size_t i = 0; i < nodes.size(); ++i) {
         cbor::item const &n = *nodes[i];
-        if (auto const t = n.get<cbor::type::tag>(); t && t->first == 24)
+        if (n.type() == cbor::type::tag && n.get<std::pair<std::uint64_t, cbor::item const *>>()->first == 24)
             if (auto const embedded = cbor::encoded_cbor_data_item(tree, n))
                 nodes.push_back(&embedded->get());
-        if (auto const a = n.get<cbor::type::array>())
-            for (cbor::item const &c : *a)
-                nodes.push_back(&c);
-        else if (auto const m = n.get<cbor::type::map>())
-            for (cbor::item const &c : *m)
-                nodes.push_back(&c);
-        else if (auto const t = n.get<cbor::type::tag>())
-            nodes.push_back(t->second);
-        else if (auto const u = n.get<cbor::type::unsigned_bignum>())
-            nodes.push_back(u->second);
-        else if (auto const v = n.get<cbor::type::negative_bignum>())
-            nodes.push_back(v->second);
-        else if (auto const w = n.get<cbor::type::typed_array>())
-            nodes.push_back(w->second);
+        n.visit([&nodes](auto const value) {
+            using V = std::remove_cvref_t<decltype(value)>;
+            if constexpr (std::same_as<V, std::span<cbor::item const>>) {
+                for (cbor::item const &c : value)
+                    nodes.push_back(&c);
+            } else if constexpr (std::same_as<V, std::ranges::chunk_view<std::span<cbor::item const>>>) {
+                for (auto const pair : value) {
+                    nodes.push_back(&pair[0]);
+                    nodes.push_back(&pair[1]);
+                }
+            } else if constexpr (std::same_as<V, std::pair<std::uint64_t, cbor::item const *>>) {
+                nodes.push_back(value.second);
+            }
+        });
     }
     return nodes;
 }
@@ -131,9 +136,9 @@ inline void resolving_decode(std::string_view const input)
     require(nodes.size() <= plain_nodes);
     bool shared = false;
     for (cbor::item const *const n : nodes)
-        if (auto const r = n->get<cbor::type::shared_reference>()) {
+        if (n->type() == cbor::type::shared_reference) {
             shared = true;
-            require(std::ranges::find(nodes, r->second) != nodes.end());
+            require(std::ranges::find(nodes, n->get<std::pair<std::uint64_t, cbor::item const *>>()->second) != nodes.end());
         }
     if (shared) {
         std::array<char, 1 << 16> bounded;

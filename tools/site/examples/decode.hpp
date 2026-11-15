@@ -25,13 +25,20 @@ inline std::expected<cbor::item const *, fault> node_of(value const &v)
     return std::unexpected("the value is not a cbor::item");
 }
 
-template <class F, std::size_t... I>
-result type_typed(std::size_t const i, F const f, std::index_sequence<I...>)
+template <class F>
+result item_typed(std::string_view const name, F const f)
 {
-    result out = std::unexpected("not a cbor::type");
-    static_cast<void>(
-        ((i == I ? (out = f(std::integral_constant<cbor::type, static_cast<cbor::type>(I)>{}), true) : false) || ...));
-    return out;
+    if (name == "cbor::simple_value")
+        return f(type_tag<cbor::simple_value>{});
+    if (name == "cbor::typed_array")
+        return f(type_tag<cbor::typed_array>{});
+    if (name == "std::span<cbor::item const>")
+        return f(type_tag<std::span<cbor::item const>>{});
+    if (name == "std::ranges::chunk_view<std::span<cbor::item const>>")
+        return f(type_tag<std::ranges::chunk_view<std::span<cbor::item const>>>{});
+    if (name == "std::pair<std::uint64_t, cbor::item const *>")
+        return f(type_tag<std::pair<std::uint64_t, cbor::item const *>>{});
+    return typed(name, f);
 }
 
 inline result item_get(call const &c)
@@ -43,17 +50,14 @@ inline result item_get(call const &c)
         return std::unexpected(node.error());
     if (auto const ok = arguments_counted(c, 0); !ok) [[unlikely]]
         return std::unexpected(ok.error());
-    constexpr std::string_view prefix = "cbor::type::";
-    if (c.template_arguments.size() != 1 || !c.template_arguments.front().starts_with(prefix)) [[unlikely]]
-        return std::unexpected("get takes one cbor::type: get<cbor::type::array>()");
-    auto const found = std::ranges::find(type_names, std::string_view(c.template_arguments.front()).substr(prefix.size()));
-    if (found == std::end(type_names)) [[unlikely]]
-        return std::unexpected(c.template_arguments.front() + " is not a cbor::type");
-    return type_typed(static_cast<std::size_t>(found - std::begin(type_names)),
-                      [&]<cbor::type K>(std::integral_constant<cbor::type, K>) -> result {
-                          return expected_view_of(*c.self, (*node)->template get<K>());
-                      },
-                      std::make_index_sequence<std::size(type_names)>{});
+    if (c.template_arguments.size() != 1) [[unlikely]]
+        return std::unexpected("get takes one type: get<std::int64_t>()");
+    return item_typed(c.template_arguments.front(), [&]<class T>(type_tag<T>) -> result {
+        if constexpr (std::is_same_v<T, cbor::nodelist> || std::is_same_v<T, cbor::lazy>)
+            return std::unexpected("get does not take " + c.template_arguments.front());
+        else
+            return expected_view_of(*c.self, (*node)->template get<T>());
+    });
 }
 
 inline result item_type_of(call const &c)
@@ -312,7 +316,8 @@ inline constexpr entry decode_functions[] = {
     {.name = "cbor::item const *.operator*()", .run = item_pointer_star, .runnable = true},
     {.name = "cbor::item const *.get()", .run = item_get, .candidates = item_get_candidates, .runnable = true},
     {.name = "cbor::item.get()", .run = item_get, .candidates = item_get_candidates, .runnable = true},
-    {.name = "cbor::item.type", .run = item_type_of, .runnable = true},
+    {.name = "cbor::item.type()", .run = item_type_of, .runnable = true},
+    {.name = "std::ranges::chunk_view<std::span<cbor::item const>>.size()", .run = view_size<std::ranges::chunk_view<std::span<cbor::item const>>>, .runnable = true},
     {.name = "cbor::item const *.additional_information", .run = item_additional_information, .runnable = true},
     {.name = "cbor::item.additional_information", .run = item_additional_information, .runnable = true},
     {.name = "std::span<cbor::item const>.size()", .run = view_size<std::span<cbor::item const>>, .runnable = true},

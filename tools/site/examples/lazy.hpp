@@ -291,7 +291,7 @@ inline constexpr entry lazy_functions[] = {
     {.name = "cbor::nodelist.size()", .run = view_size<cbor::nodelist>, .runnable = true},
     {.name = "cbor::nodelist.operator[]()", .run = nodelist_index, .candidates = indexes_candidates<cbor::nodelist>, .runnable = true},
     {.name = "cbor::owning<cbor::item>.operator->()", .run = owning_item_arrow, .runnable = true},
-    {.name = "cbor::item const *.type", .run = item_type, .runnable = true},
+    {.name = "cbor::item const *.type()", .run = item_type, .runnable = true},
     {"cbor::ref<std::string_view>.operator*()", ref_star<std::string_view>},
     {"cbor::ref<std::span<std::byte const>>.operator*()", ref_star<std::span<std::byte const>>},
 };

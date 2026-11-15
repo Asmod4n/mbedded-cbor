@@ -82,6 +82,7 @@
 #include <initializer_list>
 #include <limits>
 #include <memory>
+#include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
@@ -147,21 +148,26 @@ std::expected<std::uint64_t, error> count_pieces(std::expected<cbor::lazy, error
 
 std::span<cbor::item const> elements_of(cbor::item const &node)
 {
-    auto const a = node.get<cbor::type::array>();
+    auto const a = node.get<std::span<cbor::item const>>();
     REQUIRE(a.has_value());
     return *a;
 }
 
-std::span<cbor::item const> entries_of(cbor::item const &node)
+std::vector<cbor::item> entries_of(cbor::item const &node)
 {
-    auto const m = node.get<cbor::type::map>();
+    auto const m = node.get<std::ranges::chunk_view<std::span<cbor::item const>>>();
     REQUIRE(m.has_value());
-    return *m;
+    std::vector<cbor::item> entries;
+    for (auto const pair : *m) {
+        entries.push_back(pair[0]);
+        entries.push_back(pair[1]);
+    }
+    return entries;
 }
 
 std::string text_in(cbor::item const &node)
 {
-    auto const t = node.get<cbor::type::text_string>();
+    auto const t = node.get<std::string_view>();
     REQUIRE(t.has_value());
     return std::string(*t);
 }
@@ -286,7 +292,7 @@ TEST_CASE("qcbor IntegerValuesParseTest: a negative integer below INT64_MIN does
     auto const tree = cbor::decode(too_small);
     REQUIRE(tree.has_value());
     CHECK((**tree).type() == cbor::type::negative_integer);
-    CHECK((**tree).get<cbor::type::negative_integer>() == std::uint64_t{0x8000000000000000});
+    CHECK((**tree).get<std::int64_t>() == std::unexpected(error::number_out_of_range));
 }
 
 // ShortBufferParseTest: every truncation of the integer array is incomplete. RFC 8949 Appendix F calls this "too
@@ -335,21 +341,21 @@ TEST_CASE("qcbor EmptyMapsAndArraysTest: empty arrays and maps decode at each le
     REQUIRE(tree.has_value());
     auto const top = elements_of(**tree);
     REQUIRE_EQ(top.size(), 3u);
-    CHECK(top[0].get<cbor::type::unsigned_integer>() == 0u);
+    CHECK(top[0].get<std::uint64_t>() == 0u);
     CHECK(elements_of(top[1]).empty());
     auto const inner = elements_of(top[2]);
     REQUIRE_EQ(inner.size(), 4u);
     CHECK(elements_of(inner[0]).empty());
     REQUIRE_EQ(elements_of(inner[1]).size(), 1u);
-    CHECK(elements_of(inner[1])[0].get<cbor::type::unsigned_integer>() == 0u);
+    CHECK(elements_of(inner[1])[0].get<std::uint64_t>() == 0u);
     CHECK(entries_of(inner[2]).empty());
     auto const three = entries_of(inner[3]);
     REQUIRE_EQ(three.size(), 6u);
-    CHECK(three[0].get<cbor::type::unsigned_integer>() == 1u);
+    CHECK(three[0].get<std::uint64_t>() == 1u);
     CHECK(entries_of(three[1]).empty());
-    CHECK(three[2].get<cbor::type::unsigned_integer>() == 2u);
+    CHECK(three[2].get<std::uint64_t>() == 2u);
     CHECK(entries_of(three[3]).empty());
-    CHECK(three[4].get<cbor::type::unsigned_integer>() == 3u);
+    CHECK(three[4].get<std::uint64_t>() == 3u);
     CHECK(elements_of(three[5]).empty());
 }
 
@@ -415,7 +421,7 @@ TEST_CASE("qcbor ParseMapTest: a map with nested array and map decodes")
     auto const top = entries_of(**tree);
     REQUIRE_EQ(top.size(), 6u);
     CHECK_EQ(text_in(top[0]), "first integer");
-    CHECK(top[1].get<cbor::type::unsigned_integer>() == 42u);
+    CHECK(top[1].get<std::uint64_t>() == 42u);
     CHECK_EQ(text_in(top[2]), "an array of two strings");
     auto const strings = elements_of(top[3]);
     REQUIRE_EQ(strings.size(), 2u);
@@ -425,15 +431,15 @@ TEST_CASE("qcbor ParseMapTest: a map with nested array and map decodes")
     auto const inner = entries_of(top[5]);
     REQUIRE_EQ(inner.size(), 8u);
     CHECK_EQ(text_in(inner[0]), "bytes 1");
-    auto const b1 = inner[1].get<cbor::type::byte_string>();
+    auto const b1 = inner[1].get<std::span<std::byte const>>();
     REQUIRE(b1.has_value());
     CHECK_EQ(as_string(*b1), "xxxx");
     CHECK_EQ(text_in(inner[2]), "bytes 2");
-    auto const b2 = inner[3].get<cbor::type::byte_string>();
+    auto const b2 = inner[3].get<std::span<std::byte const>>();
     REQUIRE(b2.has_value());
     CHECK_EQ(as_string(*b2), "yyyy");
     CHECK_EQ(text_in(inner[4]), "another int");
-    CHECK(inner[5].get<cbor::type::unsigned_integer>() == 98u);
+    CHECK(inner[5].get<std::uint64_t>() == 98u);
     CHECK_EQ(text_in(inner[6]), "text 2");
     CHECK_EQ(text_in(inner[7]), "lies, damn lies and statistics");
 
@@ -487,7 +493,7 @@ TEST_CASE("qcbor SimpleValueDecodeTests: simple values decode, and the reserved 
 {
     auto simple_of = [](std::string const &in) {
         return cbor::decode(in).and_then(
-            [](cbor::owning<cbor::item> const &t) { return t->get<cbor::type::simple_value>(); });
+            [](cbor::owning<cbor::item> const &t) { return t->get<cbor::simple_value>(); });
     };
     auto const f = cbor::decode(as_string({0xf4}));
     REQUIRE(f.has_value());
@@ -845,7 +851,7 @@ TEST_CASE("qcbor DateParseTest: an epoch date on an integer reads into sys_secon
     // decoder to forward tags).
     auto const text = cbor::decode(as_string({0xc0, 0x6a, '1', '9', '8', '5', '-', '0', '4', '-', '1', '2'}));
     REQUIRE(text.has_value());
-    auto const tagged = (**text).get<cbor::type::tag>();
+    auto const tagged = (**text).get<std::pair<std::uint64_t, cbor::item const *>>();
     REQUIRE(tagged.has_value());
     CHECK_EQ(tagged->first, 0u);
     CHECK_EQ(text_in(*tagged->second), "1985-04-12");
@@ -853,16 +859,16 @@ TEST_CASE("qcbor DateParseTest: an epoch date on an integer reads into sys_secon
     // Row 5: 15(22(1(1400000001))). Upstream reads the date under the two tags. The tree keeps all three tags.
     auto const nested = cbor::decode(as_string({0xcf, 0xd8, 0x16, 0xc1, 0x1a, 0x53, 0x72, 0x4e, 0x01}));
     REQUIRE(nested.has_value());
-    auto const t15 = (**nested).get<cbor::type::tag>();
+    auto const t15 = (**nested).get<std::pair<std::uint64_t, cbor::item const *>>();
     REQUIRE(t15.has_value());
     CHECK_EQ(t15->first, 15u);
-    auto const t22 = t15->second->get<cbor::type::tag>();
+    auto const t22 = t15->second->get<std::pair<std::uint64_t, cbor::item const *>>();
     REQUIRE(t22.has_value());
     CHECK_EQ(t22->first, 22u);
-    auto const t1 = t22->second->get<cbor::type::tag>();
+    auto const t1 = t22->second->get<std::pair<std::uint64_t, cbor::item const *>>();
     REQUIRE(t1.has_value());
     CHECK_EQ(t1->first, 1u);
-    CHECK(t1->second->get<cbor::type::unsigned_integer>() == 1400000001u);
+    CHECK(t1->second->get<std::uint64_t>() == 1400000001u);
 }
 
 // DateParseTest, rows 7 to 13: tag 1 on a float. Upstream reads 1.1 as 1 second and a fraction of 0.1, and gives
@@ -906,11 +912,11 @@ TEST_CASE("qcbor BignumParseTest: bignums larger than 64 bits keep their bytes")
     });
     auto magnitude_of = [](cbor::item const &node, cbor::type const kind) {
         CHECK(node.type() == kind);
-        auto const b = kind == cbor::type::unsigned_bignum ? node.get<cbor::type::unsigned_bignum>()
-                                                            : node.get<cbor::type::negative_bignum>();
+        auto const b = kind == cbor::type::unsigned_bignum ? node.get<std::pair<std::uint64_t, cbor::item const *>>()
+                                                            : node.get<std::pair<std::uint64_t, cbor::item const *>>();
         REQUIRE(b.has_value());
         CHECK_EQ(b->first, kind == cbor::type::unsigned_bignum ? 2u : 3u);
-        auto const bytes = b->second->get<cbor::type::byte_string>();
+        auto const bytes = b->second->get<std::span<std::byte const>>();
         REQUIRE(bytes.has_value());
         return as_string(*bytes);
     };
@@ -922,9 +928,9 @@ TEST_CASE("qcbor BignumParseTest: bignums larger than 64 bits keep their bytes")
     CHECK_EQ(magnitude_of(top[1], cbor::type::negative_bignum), magnitude);
     auto const map = entries_of(top[2]);
     REQUIRE_EQ(map.size(), 8u);
-    CHECK(map[0].get<cbor::type::negative_integer>() == 63u);
+    CHECK(map[0].get<std::int64_t>() == -64);
     CHECK_EQ(magnitude_of(map[1], cbor::type::negative_bignum), magnitude);
-    CHECK(map[2].get<cbor::type::unsigned_integer>() == 64u);
+    CHECK(map[2].get<std::uint64_t>() == 64u);
     CHECK_EQ(magnitude_of(map[3], cbor::type::unsigned_bignum), magnitude);
     CHECK_EQ(text_in(map[4]), "BN+");
     CHECK_EQ(magnitude_of(map[5], cbor::type::unsigned_bignum), magnitude);
@@ -1196,7 +1202,7 @@ TEST_CASE("qcbor OptTagParseTest: a large tag number and four nested tags decode
     std::uint64_t const large = 0x9192939495969798u;
     auto const one = cbor::decode(as_string({0xdb, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x80}));
     REQUIRE(one.has_value());
-    auto const t = (**one).get<cbor::type::tag>();
+    auto const t = (**one).get<std::pair<std::uint64_t, cbor::item const *>>();
     REQUIRE(t.has_value());
     CHECK_EQ(t->first, large);
     CHECK(elements_of(*t->second).empty());
@@ -1206,7 +1212,7 @@ TEST_CASE("qcbor OptTagParseTest: a large tag number and four nested tags decode
     REQUIRE(four.has_value());
     cbor::item const *at = &**four;
     for (std::uint64_t const number : {large, std::uint64_t{136}, std::uint64_t{6}, std::uint64_t{7}}) {
-        auto const tag = at->get<cbor::type::tag>();
+        auto const tag = at->get<std::pair<std::uint64_t, cbor::item const *>>();
         REQUIRE(tag.has_value());
         CHECK_EQ(tag->first, number);
         at = tag->second;

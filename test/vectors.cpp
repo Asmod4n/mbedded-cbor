@@ -159,13 +159,13 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
             CHECK_EQ(it.type(), cbor::type::negative_integer);
             break;
         case cbor::major_type::byte_string: {
-            auto const b = it.get<cbor::type::byte_string>();
+            auto const b = it.get<std::span<std::byte const>>();
             REQUIRE(b.has_value());
             CHECK(std::ranges::equal(*b, std::as_bytes(std::span(after_head))));
             break;
         }
         case cbor::major_type::text_string: {
-            auto const t = it.get<cbor::type::text_string>();
+            auto const t = it.get<std::string_view>();
             REQUIRE(t.has_value());
             CHECK_EQ(*t, after_head);
             break;
@@ -176,6 +176,11 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
             CHECK_EQ(list_children_of_item(it).size(), it.type() == cbor::type::map ? 2 * argument : argument);
             break;
         case cbor::major_type::tag: {
+            // RFC 8746 2: the content of a typed array is a byte string, and get<cbor::typed_array> gives its bytes.
+            if (it.type() == cbor::type::typed_array) {
+                CHECK_EQ(static_cast<std::uint8_t>(after_head.front()) >> 5, 2u);
+                break;
+            }
             std::string content;
             REQUIRE(cbor::encode(*read_tag_content_of_item(it), content).has_value());
             CHECK_EQ(static_cast<std::uint8_t>(content.front()) >> 5, static_cast<std::uint8_t>(after_head.front()) >> 5);
@@ -376,13 +381,13 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
         return value{negative{read_argument_of_item(it)}};
     case cbor::major_type::byte_string: {
         std::string b;
-        auto const content = it.get<cbor::type::byte_string>().value();
+        auto const content = it.get<std::span<std::byte const>>().value();
         for (std::byte const x : content)
             b.push_back(static_cast<char>(x));
         return value{bytes{std::move(b)}};
     }
     case cbor::major_type::text_string:
-        return value{std::string(it.get<cbor::type::text_string>().value())};
+        return value{std::string(it.get<std::string_view>().value())};
     case cbor::major_type::array: {
         auto const elements = l.elements();
         if (!elements)

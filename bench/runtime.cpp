@@ -11,7 +11,9 @@
 #include <memory>
 #include <numeric>
 #include <optional>
+#include <ranges>
 #include <span>
+#include <type_traits>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -28,84 +30,47 @@
 #if defined(ARM_READ) || defined(ARM_MB_TREE) || defined(ARM_MB_DECODE) || defined(ARM_MB_PATH_ALL)
 static std::uint64_t item_tree_sum(cbor::item const &it);
 
-template <cbor::type K>
-static std::uint64_t children_sum(cbor::item const &it)
-{
-    std::span<cbor::item const> const children = it.get<K>().value();
-    std::uint64_t s = K == cbor::type::array ? children.size() : children.size() / 2;
-    for (cbor::item const &child : children)
-        s += item_tree_sum(child);
-    return s;
-}
-
-template <cbor::type K>
-static std::uint64_t tag_sum(cbor::item const &it)
-{
-    std::pair<std::uint64_t, cbor::item const *> const tag = it.get<K>().value();
-    std::uint64_t const number = tag.first;
-    cbor::item const *const content = tag.second;
-    return number + item_tree_sum(*content);
-}
-
-template <cbor::type K>
-static std::uint64_t float_sum(cbor::item const &it)
-{
-    return std::bit_cast<std::uint64_t>(it.get<K>().value());
-}
-
-template <cbor::type K>
-static std::uint64_t simple_sum(cbor::item const &it)
-{
-    return std::to_underlying(it.get<K>().value());
-}
-
 static std::uint64_t item_tree_sum(cbor::item const &it)
 {
-    switch (it.type()) {
-    case cbor::type::text_string: {
-        std::string_view const t = it.get<cbor::type::text_string>().value();
-        return t.size() + bytes_sum(t);
-    }
-    case cbor::type::byte_string: {
-        std::span<std::byte const> const b = it.get<cbor::type::byte_string>().value();
-        return b.size() + bytes_sum(std::string_view(reinterpret_cast<char const *>(b.data()), b.size()));
-    }
-    case cbor::type::array:
-        return children_sum<cbor::type::array>(it);
-    case cbor::type::map:
-        return children_sum<cbor::type::map>(it);
-    case cbor::type::tag:
-        return tag_sum<cbor::type::tag>(it);
-    case cbor::type::unsigned_bignum:
-        return tag_sum<cbor::type::unsigned_bignum>(it);
-    case cbor::type::negative_bignum:
-        return tag_sum<cbor::type::negative_bignum>(it);
-    case cbor::type::typed_array:
-        return tag_sum<cbor::type::typed_array>(it);
-    case cbor::type::shared_reference:
-        return it.get<cbor::type::shared_reference>().value().first;
-    case cbor::type::half_float:
-        return float_sum<cbor::type::half_float>(it);
-    case cbor::type::single_float:
-        return float_sum<cbor::type::single_float>(it);
-    case cbor::type::double_float:
-        return float_sum<cbor::type::double_float>(it);
-    case cbor::type::false_value:
-        return simple_sum<cbor::type::false_value>(it);
-    case cbor::type::true_value:
-        return simple_sum<cbor::type::true_value>(it);
-    case cbor::type::null:
-        return simple_sum<cbor::type::null>(it);
-    case cbor::type::undefined:
-        return simple_sum<cbor::type::undefined>(it);
-    case cbor::type::simple_value:
-        return simple_sum<cbor::type::simple_value>(it);
-    case cbor::type::unsigned_integer:
-        return it.get<cbor::type::unsigned_integer>().value();
-    case cbor::type::negative_integer:
-        return it.get<cbor::type::negative_integer>().value();
-    }
-    std::unreachable();
+    if (it.type() == cbor::type::shared_reference)
+        return it.get<std::pair<std::uint64_t, cbor::item const *>>().value().first;
+    return it.visit([](auto const v) -> std::uint64_t {
+        using V = std::remove_cvref_t<decltype(v)>;
+        if constexpr (std::is_same_v<V, std::string_view>) {
+            return v.size() + bytes_sum(v);
+        } else if constexpr (std::is_same_v<V, std::span<std::byte const>>) {
+            return v.size() + bytes_sum(std::string_view(reinterpret_cast<char const *>(v.data()), v.size()));
+        } else if constexpr (std::is_same_v<V, std::span<cbor::item const>>) {
+            std::uint64_t s = v.size();
+            for (cbor::item const &child : v)
+                s += item_tree_sum(child);
+            return s;
+        } else if constexpr (std::is_same_v<V, std::ranges::chunk_view<std::span<cbor::item const>>>) {
+            std::uint64_t s = v.size();
+            for (auto const pair : v)
+                s += item_tree_sum(pair[0]) + item_tree_sum(pair[1]);
+            return s;
+        } else if constexpr (std::is_same_v<V, std::pair<std::uint64_t, cbor::item const *>>) {
+            return v.first + item_tree_sum(*v.second);
+        } else if constexpr (std::is_same_v<V, cbor::typed_array>) {
+            return v.tag + v.bytes.size() +
+                   bytes_sum(std::string_view(reinterpret_cast<char const *>(v.bytes.data()), v.bytes.size()));
+        } else if constexpr (std::is_same_v<V, double>) {
+            return std::bit_cast<std::uint64_t>(v);
+        } else if constexpr (std::is_same_v<V, bool>) {
+            return v ? 21 : 20;
+        } else if constexpr (std::is_same_v<V, std::nullptr_t>) {
+            return 22;
+        } else if constexpr (std::is_same_v<V, cbor::simple_value>) {
+            return std::to_underlying(v);
+        } else if constexpr (std::is_same_v<V, cbor::int128>) {
+            return static_cast<std::uint64_t>(-1 - v);
+        } else if constexpr (std::is_same_v<V, std::uint64_t>) {
+            return v;
+        } else {
+            return 0;
+        }
+    });
 }
 #endif
 

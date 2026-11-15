@@ -230,10 +230,18 @@ void indexes_candidates(value const &self, std::string_view const partial, candi
             return;
 }
 
+constexpr std::string_view item_read_types[] = {
+    "cbor::simple_value", "cbor::typed_array", "std::span<cbor::item const>",
+    "std::ranges::chunk_view<std::span<cbor::item const>>", "std::pair<std::uint64_t, cbor::item const *>",
+};
+
 inline void item_get_candidates(value const &, std::string_view, candidate_taken const &taken)
 {
-    for (std::string_view const t : type_names)
-        if (!taken("get<cbor::type::" + std::string(t) + ">()"))
+    for (std::string_view const t : lazy_read_types)
+        if (!taken("get<" + std::string(t) + ">()"))
+            return;
+    for (std::string_view const t : item_read_types)
+        if (!taken("get<" + std::string(t) + ">()"))
             return;
 }
 

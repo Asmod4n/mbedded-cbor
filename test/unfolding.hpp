@@ -4,6 +4,7 @@
 #include <cbor/item.hpp>
 
 #include <cstddef>
+#include <ranges>
 #include <set>
 #include <span>
 #include <string>
@@ -23,8 +24,8 @@ class bisimilarity
 
     static cbor::item const &resolved(cbor::item const &i)
     {
-        if (auto const r = i.get<cbor::type::shared_reference>())
-            return *r->second;
+        if (i.type() == cbor::type::shared_reference)
+            return *i.get<std::pair<std::uint64_t, cbor::item const *>>()->second;
         return i;
     }
 
@@ -46,12 +47,22 @@ class bisimilarity
         return true;
     }
 
-    template <cbor::type K>
     bool tags_hold(cbor::item const &a, cbor::item const &b)
     {
-        auto const l = a.get<K>().value();
-        auto const r = b.get<K>().value();
+        auto const l = a.get<std::pair<std::uint64_t, cbor::item const *>>().value();
+        auto const r = b.get<std::pair<std::uint64_t, cbor::item const *>>().value();
         return l.first == r.first && holds(*l.second, *r.second);
+    }
+
+    bool all_pairs_hold(std::ranges::chunk_view<std::span<cbor::item const>> const l,
+                        std::ranges::chunk_view<std::span<cbor::item const>> const r)
+    {
+        if (l.size() != r.size())
+            return false;
+        for (auto x = l.begin(), y = r.begin(); x != l.end(); ++x, ++y)
+            if (!holds((*x)[0], (*y)[0]) || !holds((*x)[1], (*y)[1]))
+                return false;
+        return true;
     }
 
 public:
@@ -65,13 +76,12 @@ public:
             return false;
         switch (a.type()) {
         case cbor::type::array:
-            return all_hold(a.get<cbor::type::array>().value(), b.get<cbor::type::array>().value());
+            return all_hold(a.get<std::span<cbor::item const>>().value(), b.get<std::span<cbor::item const>>().value());
         case cbor::type::map:
-            return all_hold(a.get<cbor::type::map>().value(), b.get<cbor::type::map>().value());
+            return all_pairs_hold(a.get<std::ranges::chunk_view<std::span<cbor::item const>>>().value(),
+                                  b.get<std::ranges::chunk_view<std::span<cbor::item const>>>().value());
         case cbor::type::tag:
-            return tags_hold<cbor::type::tag>(a, b);
-        case cbor::type::typed_array:
-            return tags_hold<cbor::type::typed_array>(a, b);
+            return tags_hold(a, b);
         default:
             return bytes_of(a) == bytes_of(b);
         }

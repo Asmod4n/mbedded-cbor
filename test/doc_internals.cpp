@@ -90,7 +90,7 @@ TEST_CASE("doc internals: a text of the item tree is a copy")
     auto const owner = std::make_shared<std::string const>(bytes);
     auto const tree = cbor::lazy::view(owner)->to_item();
     REQUIRE(tree.has_value());
-    auto const text = (*tree)->get<cbor::type::text_string>();
+    auto const text = (*tree)->get<std::string_view>();
     REQUIRE(text.has_value());
     CHECK_EQ(*text, std::string(40, 'a'));
     CHECK((text->data() < owner->data() || text->data() >= std::to_address(owner->end())));
