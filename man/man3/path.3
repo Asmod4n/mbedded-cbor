@@ -236,7 +236,7 @@ A singular query (RFC 9535, section 2\&.3\&.5\&.1) has a name or an index in eac
 \fRat_path\fP with a typed result or a node reads a singular query only\&. \fRlazy\&.at_path<Path>()\fP with another path stops at a \fRstatic_assert\fP that names \fR\fBcbor::nodelist\fP\fP\&. \fRcbor::path::compile<T>\fP with such a path and a \fRT\fP that is not \fR\fBcbor::nodelist\fP\fP gives \fRnot_singular_query\fP\&.
 
 .PP
-A path that selects many nodes reads only into a \fR\fBcbor::nodelist\fP\fP: a wildcard, a descendant segment, a slice, a filter or several selectors\&. A \fR\fBcbor::nodelist\fP\fP is a \fRstd::vector<\fBcbor::lazy\fP>\fP\&. It gives every match as a \fR\fBcbor::lazy\fP\fP that holds the owner of the bytes\&. It also reads a singular path\&. A path that selects nothing gives an empty nodelist and no error\&. A node can be any CBOR item: a map, an array or a tag\&. Read it on with a step, \fRget\fP, \fRtype()\fP or \fRclone()\fP\&.
+A path that selects many nodes reads only into a \fR\fBcbor::nodelist\fP\fP: a wildcard, a descendant segment, a slice, a filter or several selectors\&. A \fR\fBcbor::nodelist\fP\fP is a \fRstd::vector<\fBcbor::lazy\fP>\fP\&. It gives every match as a \fR\fBcbor::lazy\fP\fP that holds the owner of the bytes\&. It also reads a singular path\&. A path that selects nothing gives an empty nodelist and no error\&. A node can be any CBOR item: a map, an array or a tag\&. Read it on with a step, \fRget\fP, \fRtype()\fP or \fRto_item()\fP\&.
 
 .PP
 The compiler parses a compile-time path once\&. At run time it is a set of constant arrays\&. A run-time path is checked once, in \fRcompile\fP: the grammar, the singular path for a \fRT\fP that is not \fR\fBcbor::nodelist\fP\fP, and the segments against the nesting depth\&. The type \fRT\fP of a typed read is checked at compile time in both\&. Everything about the data is checked at each call\&.
@@ -285,7 +285,7 @@ The limits are the constants of \fR\fBcbor::limits\fP\fP\&.
 .IP "\(bu" 2
 \fRcontainer_elements\fP: every array and map that the walk reads is checked, that is the containers on the way and the target\&. A container that it only skips does not count\&.
 .IP "\(bu" 2
-\fRnesting_depth_exceeded\fP comes where the stack of the thread ends, in the steps that recurse: a filter, a group in parentheses, a function call or a literal that is nested deeper than the stack holds, a descendant segment that goes deeper than the stack holds, and \fRclone()\fP of a node that is deeper than the stack holds\&. A path of child segments does not recurse\&. An item that a typed read only skips can be of any depth\&.
+\fRnesting_depth_exceeded\fP comes where the stack of the thread ends, in the steps that recurse: a filter, a group in parentheses, a function call or a literal that is nested deeper than the stack holds, a descendant segment that goes deeper than the stack holds, and \fRto_item()\fP of a node that is deeper than the stack holds\&. A path of child segments does not recurse\&. An item that a typed read only skips can be of any depth\&.
 .PP
 
 .PP

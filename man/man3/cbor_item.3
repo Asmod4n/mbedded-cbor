@@ -2,7 +2,7 @@
 .ad l
 .nh
 .SH NAME
-cbor::item \- One node of a tree from \fBcbor::decode()\fP or \fR\fBlazy::clone\fP\fP\&.  
+cbor::item \- One node of a tree from \fBcbor::decode()\fP or \fR\fBlazy::to_item\fP\fP\&.  
 
 .SH SYNOPSIS
 .br
@@ -29,7 +29,7 @@ cbor::item \- One node of a tree from \fBcbor::decode()\fP or \fR\fBlazy::clone\
 .in -1c
 .SH "DESCRIPTION"
 .PP 
-One node of a tree from \fBcbor::decode()\fP or \fR\fBlazy::clone\fP\fP\&. 
+One node of a tree from \fBcbor::decode()\fP or \fR\fBlazy::to_item\fP\fP\&. 
 
 \fRtype\fP gives the kind of the node\&. \fRadditional_information\fP gives the low 5 bits of the initial byte (RFC 8949 3)\&. \fBcbor::item::get()\fP gives the value\&. The constructor is private: only a decode makes an item\&. An item owns no memory and has no destructor to run\&. The tree owns every node and every string\&. An item gives no error\&. \fRtype\fP and \fRadditional_information\fP are data members\&.
 
