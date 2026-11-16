@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <map>
 #include <set>
+#include <unordered_map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -138,4 +139,5 @@ BENCHMARK(structs_decode_records)->Arg(26)->Arg(1662);
 BENCHMARK(structs_decode_container<std::map<std::uint64_t, std::uint64_t>>)->Name("structs_decode_map")->Arg(26)->Arg(1662);
 BENCHMARK(structs_decode_container<std::set<std::uint64_t>>)->Name("structs_decode_set")->Arg(26)->Arg(1662);
 BENCHMARK(structs_decode_container<std::multimap<std::uint64_t, std::uint64_t>>)->Name("structs_decode_multimap")->Arg(26)->Arg(1662);
+BENCHMARK(structs_decode_container<std::unordered_multimap<std::uint64_t, std::uint64_t>>)->Name("structs_decode_unordered_multimap")->Arg(26)->Arg(1662);
 BENCHMARK_MAIN();

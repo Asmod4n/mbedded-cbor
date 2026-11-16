@@ -594,7 +594,19 @@ class generic
                 auto key = detail::pfr::make_element<typename U::key_type>(out);
                 if (auto const r = read_generic(d, key); !r) [[unlikely]]
                     return r;
-                if (auto const r = detail::validity::check_key_unique(out.contains(key)); !r) [[unlikely]]
+                auto at = [&] {
+                    if constexpr (requires { out.lower_bound(key); })
+                        return out.lower_bound(key);
+                    else
+                        return out.find(key);
+                }();
+                bool const seen = [&] {
+                    if constexpr (requires { out.lower_bound(key); })
+                        return at != out.end() && !out.key_comp()(key, at->first);
+                    else
+                        return at != out.end();
+                }();
+                if (auto const r = detail::validity::check_key_unique(seen); !r) [[unlikely]]
                     return r;
                 auto const values = d.decode_head();
                 if (!values) [[unlikely]]
@@ -609,7 +621,10 @@ class generic
                     auto value = detail::pfr::make_element<typename U::mapped_type>(out);
                     if (auto const r = read_generic(d, value); !r) [[unlikely]]
                         return r;
-                    out.emplace(key, std::move(value));
+                    if constexpr (requires { out.lower_bound(key); })
+                        out.emplace_hint(at, key, std::move(value));
+                    else
+                        at = out.emplace_hint(at, key, std::move(value));
                 }
             }
             return {};
