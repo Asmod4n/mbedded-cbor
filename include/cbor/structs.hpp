@@ -4,13 +4,11 @@
  * same type. Writes a struct as a map with one key for each member
  * that holds a value. Finds the members by reflection, by Boost.PFR or
  * in describe_members. Writes std::chrono times and dates, sets and
- * arrays of numbers under their standard tags. Reads values marked as
- * shareable.
+ * arrays of numbers under their standard tags.
  * https://www.rfc-editor.org/rfc/rfc8949
  * https://www.rfc-editor.org/rfc/rfc8943#section-2.1
  * https://www.rfc-editor.org/rfc/rfc8746#section-2
  * https://github.com/input-output-hk/cbor-sets-spec/blob/master/CBOR_SETS.md
- * http://cbor.schmorp.de/value-sharing
  */
 #pragma once
 
@@ -60,7 +58,6 @@
 #include "head.hpp"
 #include "ref.hpp"
 #include "schema.hpp"
-#include "shared.hpp"
 
 namespace cbor
 {
@@ -435,7 +432,7 @@ class generic
 #endif
 
     template <class U, std::size_t I = 0>
-    static std::expected<void, error> read_variant(detail::value_sharing::sharing_decoder &d,
+    static std::expected<void, error> read_variant(detail::heads::decoder<true> &d,
                                                    detail::heads::head const &h, U &out)
     {
         if constexpr (I == std::variant_size_v<U>) {
@@ -449,44 +446,19 @@ class generic
     }
 
     template <class U>
-    static std::expected<void, error> read_generic(detail::value_sharing::sharing_decoder &d, U &out)
+    static std::expected<void, error> read_generic(detail::heads::decoder<true> &d, U &out)
     {
-        using marked_value = detail::value_sharing::sharing_decoder::marked_value;
-        std::size_t const first_mark = d.marked_values.size();
-        auto h = d.decode_head();
+        auto const h = d.decode_head();
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
-        while (h->major == major_type::tag &&
-               h->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
-            d.marked_values.push_back(marked_value::open);
-            h = d.decode_head();
-            if (!h) [[unlikely]]
-                return std::unexpected(h.error());
-        }
-        if (h->major == major_type::tag && h->argument == std::to_underlying(rfc8949::tag_number::sharedref))
-            [[unlikely]] {
-            auto const n = d.decode_head();
-            if (!n) [[unlikely]]
-                return std::unexpected(n.error());
-            if (error const e = detail::validity::check_tag_content(h->argument, n->major).error_or(error{});
-                e != error{}) [[unlikely]]
-                return std::unexpected(e);
-            auto const index = detail::value_sharing::check_sharedref_index(n->argument, d.marked_values.size());
-            if (!index) [[unlikely]]
-                return std::unexpected(index.error());
-            if (d.marked_values[std::to_underlying(*index)] == marked_value::in_skipped_member) [[unlikely]]
-                return std::unexpected(error::sharedref_not_complete);
-            return std::unexpected(error::incorrect_type);
-        }
-        if (auto const r = read_generic_value(d, *h, out); !r)
+        if (h->major == major_type::tag && detail::validity::tag_refused_by_value_types(h->argument))
             [[unlikely]]
-            return r;
-        std::ranges::fill(std::span(d.marked_values).subspan(first_mark, d.marked_values.size() - first_mark), marked_value::value_member);
-        return {};
+            return std::unexpected(error::invalid_tag);
+        return read_generic_value(d, *h, out);
     }
 
     template <class U>
-    static std::expected<void, error> read_generic_value(detail::value_sharing::sharing_decoder &d,
+    static std::expected<void, error> read_generic_value(detail::heads::decoder<true> &d,
                                                          detail::heads::head const &h, U &out)
     {
         if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
@@ -695,7 +667,7 @@ class generic
     }
 
     template <class U>
-    static std::expected<void, error> read_epoch(detail::value_sharing::sharing_decoder &d, U &out)
+    static std::expected<void, error> read_epoch(detail::heads::decoder<true> &d, U &out)
     {
         using rep = std::chrono::seconds::rep;
         auto const h = d.decode_head();
@@ -721,7 +693,7 @@ class generic
 
 #if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
     template <class U, std::size_t N>
-    static std::expected<void, error> parse_text(detail::value_sharing::sharing_decoder &d, U &out,
+    static std::expected<void, error> parse_text(detail::heads::decoder<true> &d, U &out,
                                                  std::array<char const *, N> const &formats)
     {
         auto const h = d.decode_head();
@@ -749,7 +721,7 @@ class generic
 #endif
 
     template <class U>
-    static std::expected<void, error> read_tag_content(detail::value_sharing::sharing_decoder &d, U &out,
+    static std::expected<void, error> read_tag_content(detail::heads::decoder<true> &d, U &out,
                                                        detail::heads::head const &tag)
     {
         if constexpr (is_sys_time<U>) {
@@ -890,7 +862,7 @@ class generic
     }
 
     template <class U>
-    static std::expected<void, error> read_struct(detail::value_sharing::sharing_decoder &d,
+    static std::expected<void, error> read_struct(detail::heads::decoder<true> &d,
                                                   detail::heads::head const &first, U &out)
     {
         static_assert(detail::pfr::struct_readable<U>());
@@ -938,9 +910,6 @@ class generic
                         return std::unexpected(b.error());
                 } else if (k->major == major_type::array || k->major == major_type::map ||
                            k->major == major_type::tag) [[unlikely]] {
-                    if (k->major == major_type::tag &&
-                        k->argument == std::to_underlying(rfc8949::tag_number::shareable))
-                        d.mark();
                     std::uint64_t const items =
                         k->major == major_type::tag     ? 1
                         : k->major == major_type::array ? k->argument
@@ -951,7 +920,7 @@ class generic
                         [[unlikely]]
                         return std::unexpected(p.error());
                     for (std::uint64_t i = 0; i < items; ++i)
-                        if (auto const e = detail::well_formedness::skip_item(d, d); !e) [[unlikely]]
+                        if (auto const e = detail::well_formedness::skip_item(d); !e) [[unlikely]]
                             return e;
                 }
             }
@@ -963,7 +932,7 @@ class generic
                      (static_cast<void>(r = read_member(std::integral_constant<std::size_t, I>{})), true)));
             }(std::make_index_sequence<count>());
             if (!matched) {
-                if (auto const s = detail::well_formedness::skip_item(d, d); !s) [[unlikely]]
+                if (auto const s = detail::well_formedness::skip_item(d); !s) [[unlikely]]
                     return s;
             } else if (!r) [[unlikely]] {
                 return r;
@@ -1499,8 +1468,7 @@ public:
      * @retval indefinite_length a head uses indefinite length
      * @retval nesting_depth_exceeded the item is deeper than the stack of the thread holds
      * @retval inadmissible_type_for_tag_content a tag has content that its definition does not allow
-     * @retval sharedref_index_not_marked, sharedref_not_complete a tag 29 that names no
-     * shared value that the decode holds
+     * @retval invalid_tag a value under tag 28 or tag 29
      * @retval string_length_exceeded a string is longer than `limits::string_length`
      * @retval container_elements_exceeded the count of an array or a map is greater than `limits::container_elements`
      * @throws std::bad_alloc a refused allocation
@@ -1569,7 +1537,6 @@ public:
      * A struct is a map, and its keys come in the order of RFC 8949 4.2.1.
      * The second form appends to `out` and returns the count of bytes that it appended.
      * `out` is a `std::string`, a container of `char`, a `std::span<char>` or a writer.
-     * The function writes no shared value (tag 28, tag 29).
      * A type that `structs` does not take does not compile.
      *
      * @code{.example}
@@ -1674,7 +1641,7 @@ private:
 
     static std::expected<T, error> read(std::string_view const encoded, T out)
     {
-        detail::value_sharing::sharing_decoder d{{encoded}, {}};
+        detail::heads::decoder<true> d{encoded};
         if (auto const r = detail::generic::read_generic(d, out); !r) [[unlikely]]
             return std::unexpected(r.error());
         return out;

@@ -60,8 +60,8 @@ enum class error {
     inadmissible_type_for_tag_content,
     /** A tag 29 names no tag 28 before it. */
     sharedref_index_not_marked,
-    /** `structs` decode meets a tag 29 that names a tag 28 in a skipped member. */
-    sharedref_not_complete,
+    /** `structs` or `%schema` meets a tag 28 or a tag 29 where it reads a value. */
+    invalid_tag,
     /** `decode` meets a tag 29 that names a tag 28 whose content is only tags 28 and this tag 29. */
     sharedref_not_defined,
     /** cbor::encode() meets a `shared_reference`. */
@@ -177,8 +177,8 @@ public:
             return "inadmissible type for tag content";
         case error::sharedref_index_not_marked:
             return "sharedref index not marked";
-        case error::sharedref_not_complete:
-            return "sharedref not complete";
+        case error::invalid_tag:
+            return "invalid tag";
         case error::sharedref_not_defined:
             return "sharedref not defined";
         case error::unsupported_value:

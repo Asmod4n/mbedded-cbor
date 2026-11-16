@@ -21,7 +21,7 @@ constexpr std::array every_error{
     error::nesting_depth_exceeded,
     error::inadmissible_type_for_tag_content,
     error::sharedref_index_not_marked,
-    error::sharedref_not_complete,
+    error::invalid_tag,
     error::sharedref_not_defined,
     error::unsupported_value,
     error::not_indexable,

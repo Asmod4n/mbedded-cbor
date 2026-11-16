@@ -1,5 +1,5 @@
 #include "rfc8746.hpp"
-#include "small_stack.hpp"
+#include "embedded_cbor.hpp"
 #include "reference.hpp"
 #include <cbor/diagnostic_notation.hpp>
 #include <cbor/encode.hpp>
@@ -464,53 +464,95 @@ TEST_CASE("structs: only public members are written and read")
 namespace
 {
 
-struct pair_marks {
+struct value_kinds {
     std::uint64_t a;
     std::vector<std::optional<std::uint64_t>> b;
-    bool operator==(pair_marks const &) const = default;
+    bool operator==(value_kinds const &) const = default;
 };
 
-struct named_pair {
-    std::vector<std::string> b;
-    std::uint64_t a;
-    bool operator==(named_pair const &) const = default;
+struct inner_number {
+    std::uint64_t n;
+    bool operator==(inner_number const &) const = default;
+};
+
+struct seconds_member {
+    std::chrono::sys_seconds a;
 };
 
 } // namespace
 
-// The owner decided on 2026-10-13 that an eager decode keeps one table of the tags 28 of one call. A tag 28 on a plain
-// member is allowed and keeps the value. A tag 29 needs a member that can share a value; no plain member can, so it
-// gives incorrect_type. A tag 29 to a mark in a skipped member gives sharedref_not_complete and a forward index
-// sharedref_index_not_marked. A key that no member has is skipped, whatever its type (owner, 2026-11-08). A skipped key
-// 28("a") and its skipped value 28(1) mark values in a skipped member. So a later 29(1) gives sharedref_not_complete; a
-// skipped key 29(0) and its value leave the member a without a key, so key_not_found. A typed array holds no tag, so the
-// marks stand in a vector of std::optional, which is a plain array.
-TEST_CASE("structs: the table of tags 28 and 29 of one decode")
+// Tags 28 and 29 mark and name a shared value (value sharing, cbor.schmorp.de). A C++ value has no form for
+// either, so structs refuses both where it reads a value, with invalid_tag (owner, 2026-11-16). RFC 8949 3
+// lets the argument of a head take 1, 2, 4 or 8 bytes, and each width must give the same error. The member
+// kinds are a number, a text, an optional, an element of an array, a key and a value of a map, a variant, a
+// nested struct and the root.
+TEST_CASE("structs: a value under tag 28 or tag 29 is invalid_tag")
 {
-    using marked_numbers = std::vector<std::optional<std::uint64_t>>;
-    auto const marked =
-        cbor::structs<pair_marks>::decode("\xa2\x61\x61\xd8\x1c\x02\x61\x62\x81\xd8\x1c\x03"s);
-    REQUIRE(marked.has_value());
-    CHECK(**marked == pair_marks{2, {3}});
-    CHECK_EQ(cbor::structs<pair_marks>::decode(
-                 "\xa2\xd8\x1c\x61\x61\xd8\x1c\x01\x61\x62\x82\xd8\x1d\x01\xd8\x1d\x01"s)
-                 .error(),
-             error::sharedref_not_complete);
-    CHECK_EQ(cbor::structs<named_pair>::decode("\xa2\x61\x62\x81\xd8\x1c\x61\x61\xd8\x1d\x00\x07"s).error(),
-             error::key_not_found);
-    CHECK_EQ(cbor::structs<marked_numbers>::decode("\x81\xd8\x1d\x00"s).error(),
-             error::sharedref_index_not_marked);
-    CHECK_EQ(
-        cbor::structs<pair_marks>::decode("\xa3\x61\x63\xd8\x1c\x00\x61\x61\x02\x61\x62\x81\xd8\x1d\x00"s)
-            .error(),
-        error::sharedref_not_complete);
-    CHECK_EQ(cbor::structs<pair_marks>::decode(
-                 "\xa3\x61\x63\xd8\x1c\x00\x61\x61\xd8\x1c\x02\x61\x62\x81\xd8\x1d\x01"s)
-                 .error(),
-             error::incorrect_type);
-    CHECK_EQ(cbor::structs<pair_marks>::decode("\xa2\x61\x61\x02\x61\x62\x81\xd8\x1d\x18\x1d"s).error(),
-             error::sharedref_index_not_marked);
-    CHECK_EQ(cbor::structs<pair_marks>::decode("\xa2\x61\x61\x02\x61\x62\x81\xd8\x1d\x61x"s).error(),
+    for (std::string const width : {"_0", "_1", "_2", "_3"}) {
+        CAPTURE(width);
+        auto const bytes = [&width](std::string const &before, std::string const &after) {
+            return test::bytes_of_embedded_cbor("<<" + before + "28" + width + after).value();
+        };
+        auto const reference = [&width](std::string const &before, std::string const &after) {
+            return test::bytes_of_embedded_cbor("<<" + before + "29" + width + after).value();
+        };
+        CHECK_EQ(cbor::structs<value_kinds>::decode(bytes(R"({"a": )", R"((1), "b": []}>>)")).error(),
+                 error::invalid_tag);
+        CHECK_EQ(cbor::structs<value_kinds>::decode(reference(R"({"a": )", R"((0), "b": []}>>)")).error(),
+                 error::invalid_tag);
+        CHECK_EQ(cbor::structs<value_kinds>::decode(bytes(R"({"a": 1, "b": [)", "(2)]}>>")).error(),
+                 error::invalid_tag);
+        CHECK_EQ(cbor::structs<value_kinds>::decode(reference(R"({"a": 1, "b": [)", "(0)]}>>")).error(),
+                 error::invalid_tag);
+        CHECK_EQ(cbor::structs<value_kinds>::decode(bytes(R"({"a": 1, "b": [)", "(null)]}>>")).error(),
+                 error::invalid_tag);
+        CHECK_EQ(cbor::structs<std::string>::decode(bytes("", R"(("x")>>)")).error(), error::invalid_tag);
+        CHECK_EQ(cbor::structs<std::string>::decode(reference("", R"(("x")>>)")).error(), error::invalid_tag);
+        CHECK_EQ(cbor::structs<std::uint64_t>::decode(bytes("", "(5)>>")).error(), error::invalid_tag);
+        CHECK_EQ(cbor::structs<std::uint64_t>::decode(bytes("", "(28(5))>>")).error(), error::invalid_tag);
+        CHECK_EQ((cbor::structs<std::map<std::string, std::uint64_t>>::decode(bytes("{", R"(("k"): 1}>>)"))
+                      .error()),
+                 error::invalid_tag);
+        CHECK_EQ(
+            (cbor::structs<std::map<std::string, std::uint64_t>>::decode(reference(R"({"k": )", "(0)}>>"))
+                 .error()),
+            error::invalid_tag);
+        CHECK_EQ(
+            (cbor::structs<std::variant<std::uint64_t, std::string>>::decode(bytes("", "(1)>>")).error()),
+            error::invalid_tag);
+        CHECK_EQ(cbor::structs<std::vector<inner_number>>::decode(bytes("[", R"(({"n": 1})]>>)")).error(),
+                 error::invalid_tag);
+        CHECK_EQ(cbor::structs<seconds_member>::decode(bytes(R"({"a": )", "(1(5))}>>")).error(),
+                 error::invalid_tag);
+    }
+}
+
+// The owner decided on 2026-11-16 that a tag 28 or 29 is an error only where structs reads a value. A key
+// that no member has is skipped with its value, whatever its type (owner, 2026-11-08). So a key 28("a"), a
+// key 29(0) and the values under a key "x" that no member has are skipped in every width of the head, and the
+// members read their values.
+TEST_CASE("structs: a tag 28 or tag 29 in a skipped entry is skipped")
+{
+    for (std::string const width : {"_0", "_1", "_2", "_3"}) {
+        CAPTURE(width);
+        std::string const edn = "<<{28" + width + R"(("a"): 28)" + width + "(1), 29" + width + "(0): 29" +
+                                width + R"((0), "x": [28)" + width + "(1), 29" + width +
+                                R"((0)], "a": 2, "b": [3]}>>)";
+        auto const read = cbor::structs<value_kinds>::decode(test::bytes_of_embedded_cbor(edn).value());
+        REQUIRE(read.has_value());
+        CHECK(**read == value_kinds{2, {3}});
+    }
+}
+
+// The check for tags 28 and 29 stands where structs reads a value and meets a tag head. The content of a tag
+// that structs reads, such as tag 1, is read by the reader of that tag, which keeps its own error. So a tag
+// 28 under tag 1 gives incorrect_type into a number and inadmissible_type_for_tag_content into
+// std::chrono::sys_seconds.
+TEST_CASE("structs: a tag 28 inside the content of tag 1 keeps the error of tag 1")
+{
+    std::string const bytes = test::bytes_of_embedded_cbor(R"(<<{"a": 1(28(5))}>>)").value();
+    CHECK_EQ(cbor::structs<value_kinds>::decode(std::string(bytes)).error(), error::incorrect_type);
+    CHECK_EQ(cbor::structs<seconds_member>::decode(std::string(bytes)).error(),
              error::inadmissible_type_for_tag_content);
 }
 
@@ -978,33 +1020,6 @@ TEST_CASE("structs: an integer key written as a bignum that fits")
 }
 
 
-
-// A tag 29 into a member that is no shared pointer gives incorrect_type, also inside the value that its mark is still
-// reading. Nothing is decoded twice. A forward index names no mark. A tag 28 counts one level of nesting, as in a
-// tree decode.
-TEST_CASE("structs: a tag 29 into a plain member is incorrect_type")
-{
-    using numbers = std::vector<std::optional<std::uint64_t>>;
-    CHECK_EQ(cbor::structs<std::vector<numbers>>::decode("\xd8\x1c\x81\xd8\x1d\x00"s).error(), error::incorrect_type);
-    CHECK_EQ(cbor::structs<std::map<std::uint64_t, numbers>>::decode("\xd8\x1c\xa1\x01\xd8\x1d\x00"s).error(),
-             error::incorrect_type);
-    CHECK_EQ(cbor::structs<std::vector<std::vector<numbers>>>::decode(
-                 "\xd8\x1c\x81\xd8\x1c\x82\xd8\x1d\x00\xd8\x1d\x01"s)
-                 .error(),
-             error::incorrect_type);
-    CHECK_EQ(cbor::structs<std::uint64_t>::decode("\xd8\x1c\xd8\x1d\x00"s).error(), error::incorrect_type);
-    CHECK_EQ(cbor::structs<numbers>::decode("\x82\xd8\x1d\x00\xd8\x1c\x01"s).error(), error::sharedref_index_not_marked);
-    CHECK_EQ(cbor::structs<std::vector<numbers>>::decode("\x83\xd8\x1c\x82\x01\x02\xd8\x1d\x00\xd8\x1d\x00"s)
-                 .error(),
-             error::incorrect_type);
-    // A chain of marks is read in a loop. The loop marks each tag 28 and does not recurse. A chain of any length gives
-    // its value, also on a small stack.
-    std::string chain;
-    for (std::size_t i = 0; i < test::levels_beyond_small_stack; ++i)
-        chain += "\xd8\x1c"s;
-    chain += "\x05"s;
-    test::run_on_small_stack([&chain] { CHECK_EQ(cbor::structs<std::uint64_t>::decode(std::string(chain)), 5u); });
-}
 
 namespace
 {

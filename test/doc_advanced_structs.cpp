@@ -1,3 +1,4 @@
+#include "embedded_cbor.hpp"
 #include "reference.hpp"
 #include <cbor/describe.hpp>
 #include <cbor/diagnostic_notation.hpp>
@@ -277,19 +278,22 @@ TEST_CASE("doc advanced structs: a variant takes the first alternative that acce
     CHECK_EQ(std::get<std::uint8_t>(**back), 42u);
 }
 
-// The section "Shared values" says that decode accepts a tag 28 on any member. A tag 29 only where a member can share a
-// value; a plain member gives incorrect_type.
-TEST_CASE("doc advanced structs: a tag 29 into a plain member is incorrect_type")
+// The section "Tags 28 and 29" says that decode gives invalid_tag for a value under tag 28 or tag 29, and
+// skips them in an entry whose key no member has.
+TEST_CASE("doc advanced structs: a value under tag 28 or tag 29 is invalid_tag")
 {
-    auto const marked = cbor::structs<std::vector<std::string>>::decode("\x82\xd8\x1c\x61x\x61y"s);
-    REQUIRE(marked.has_value());
-    CHECK_EQ(**marked, std::vector<std::string>{"x", "y"});
-    CHECK_EQ(cbor::structs<std::vector<std::string>>::decode("\x82\xd8\x1c\x61x\xd8\x1d\x00"s).error(),
-             error::incorrect_type);
-    CHECK_EQ(cbor::structs<std::vector<std::string>>::decode("\x81\xd8\x1d\x00"s).error(),
-             error::sharedref_index_not_marked);
-    CHECK_EQ(cbor::structs<person>::decode("\xa3\x61z\xd8\x1c\x01\x64name\xd8\x1d\x00\x63" "age\x01"s).error(),
-             error::sharedref_not_complete);
+    CHECK_EQ(cbor::structs<std::vector<std::string>>::decode(
+                 test::bytes_of_embedded_cbor(R"(<<[28("x"), "y"]>>)").value())
+                 .error(),
+             error::invalid_tag);
+    CHECK_EQ(cbor::structs<std::vector<std::string>>::decode(
+                 test::bytes_of_embedded_cbor(R"(<<["x", 29(0)]>>)").value())
+                 .error(),
+             error::invalid_tag);
+    auto const skipped = cbor::structs<person>::decode(
+        test::bytes_of_embedded_cbor(R"(<<{"z": 28(1), "name": "ann", "age": 30}>>)").value());
+    REQUIRE(skipped.has_value());
+    CHECK_EQ((*skipped)->name, "ann");
 }
 
 // The section "A memory budget" shows a std::pmr target, and that a refused allocation throws std::bad_alloc.

@@ -1,3 +1,4 @@
+#include "embedded_cbor.hpp"
 #include "reference.hpp"
 #include "owned_copy.hpp"
 #include <cbor/encode.hpp>
@@ -46,11 +47,12 @@ TEST_CASE("doc advanced comparison: iterate an array")
     CHECK_EQ(sum, 6);
 }
 
-// The section "Shared values" shows that a lazy reads tag 29 as a plain tag over its index. That structs refuses a tag
-// 29 into a member that cannot share.
+// The section "Shared values" shows that a lazy reads tag 29 as a plain tag over its index, and that structs
+// refuses a value under tag 28 or tag 29.
 TEST_CASE("doc advanced comparison: shared values")
 {
-    auto const owner = std::make_shared<std::string const>("\x82\xd8\x1c\x61x\xd8\x1d\x00"s);
+    auto const owner =
+        std::make_shared<std::string const>(test::bytes_of_embedded_cbor(R"(<<[28("x"), 29(0)]>>)").value());
     // begin shared
     auto const second = cbor::lazy::view(owner)->at(1);
     // second->type() is cbor::type::tag, and second->get<std::uint64_t>() is 0
@@ -59,11 +61,10 @@ TEST_CASE("doc advanced comparison: shared values")
     CHECK_EQ(second->get<std::uint64_t>(), 0u);
     // begin shared-structs
     auto const v = cbor::structs<std::vector<std::string>>::decode(owner);
-    // v.error() is cbor::error::incorrect_type
+    // v.error() is cbor::error::invalid_tag
     // end shared-structs
-    CHECK_EQ(v.error(), error::incorrect_type);
+    CHECK_EQ(v.error(), error::invalid_tag);
 }
-
 
 namespace doc_advanced_comparison
 {

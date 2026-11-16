@@ -852,21 +852,19 @@ TEST_CASE("cbor2 decoder: TestSharedReference read by cbor::decode")
 }
 
 // Upstream: TestSharedReference.test_nested_shareable_in_array, test_object_hook and test_tag_hook, and
-// TestDecoderReuse, read into C++ values. structs.hpp: "Reads values marked as shareable". The value sharing
-// specification numbers the shared values in the order of their tags 28.
+// TestDecoderReuse, read into C++ values. cbor::structs reads no shared value: error.hpp, "invalid_tag:
+// structs or schema meets a tag 28 or a tag 29 where it reads a value". The upstream rows stay as upstream
+// data.
 TEST_CASE("cbor2 decoder: TestSharedReference read by cbor::structs")
 {
-    // TestDecoderReuse.test_decoder_reuse_resets_shared_refs: each decode starts with no shared value.
-    auto const first = cbor::structs<std::string>::decode(unhexlify("d81c6b66697273745f76616c7565"));
-    REQUIRE(first.has_value());
-    CHECK_EQ(**first, "first_value");
-    CHECK_EQ(cbor::structs<std::uint64_t>::decode(unhexlify("d81d00")).error_or(error{}),
-             error::sharedref_index_not_marked);
+    // TestDecoderReuse.test_decoder_reuse_resets_shared_refs.
+    CHECK_EQ(cbor::structs<std::string>::decode(unhexlify("d81c6b66697273745f76616c7565")).error_or(error{}),
+             error::invalid_tag);
+    CHECK_EQ(cbor::structs<std::uint64_t>::decode(unhexlify("d81d00")).error_or(error{}), error::invalid_tag);
 
-    // TestSharedReference.test_bad_reference: no value is marked, so the index 5 names none. error.hpp:
-    // "sharedref_index_not_marked: A tag 29 names no tag 28 before it."
+    // TestSharedReference.test_bad_reference.
     auto const bad = cbor::structs<std::uint64_t>::decode(unhexlify("d81d05"));
-    CHECK_EQ(bad.error_or(error{}), error::sharedref_index_not_marked);
+    CHECK_EQ(bad.error_or(error{}), error::invalid_tag);
 }
 
 // Upstream: TestStringReference. Tags 25 and 256 are the string references of the IANA registry. cbor::decode

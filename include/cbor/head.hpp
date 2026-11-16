@@ -41,7 +41,6 @@ class encoding;
 class extended_diagnostic_notation;
 class generic;
 class reflection;
-class value_sharing;
 class well_formedness;
 
 }
@@ -721,8 +720,6 @@ class heads
     friend class detail::encoding;
 
     friend class detail::well_formedness;
-
-    friend class detail::value_sharing;
 
     friend class detail::extended_diagnostic_notation;
 

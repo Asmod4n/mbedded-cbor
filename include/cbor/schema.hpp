@@ -71,6 +71,9 @@ template <std::uint64_t Number, class T>
 struct tagged_item {
     static_assert(!has_describe_members<T> && !(std::is_class_v<T> && std::is_aggregate_v<T> && !std::ranges::range<T>),
                   "the tag wrapper takes content that is not a struct; a struct carries its tag in cbor::describe_members.");
+    static_assert(
+        !detail::validity::tag_refused_by_value_types(Number),
+        "the tag wrapper takes no tag 28 and no tag 29; structs and schema read no value under them.");
     static constexpr std::uint64_t number = Number;
     T content;
 };
@@ -890,6 +893,11 @@ class reflection
                           "cbor::describe_members takes a tag that no standard type has.");
             static_assert(!describe_members<U>::tag.has_value() || !tag_invalid(describe_members<U>::tag->number),
                           "cbor::describe_members takes a tag that the IANA registry calls always invalid.");
+            static_assert(
+                !describe_members<U>::tag.has_value() ||
+                    !detail::validity::tag_refused_by_value_types(describe_members<U>::tag->number),
+                "cbor::describe_members takes no tag 28 and no tag 29; structs and schema read no value "
+                "under them.");
         }
         static_assert(members_of_class<U>(), "cbor::describe_members lists a member of another class.");
         if constexpr (members_of_class<U>()) {

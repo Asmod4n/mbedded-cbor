@@ -17,6 +17,7 @@
 #include <variant>
 #include <vector>
 
+#include "embedded_cbor.hpp"
 #include "item_head.hpp"
 #include "small_stack.hpp"
 #include "unfolding.hpp"
@@ -514,23 +515,19 @@ TEST_CASE("value sharing: lazy, at_path, decode and diagnostic notation read tag
     CHECK_EQ(cbor::diagnostic_notation("\x83\xd8\x1c\x05\xd8\x1d\x00\xd8\x1d\x07"sv), "[28(5), 29(0), 29(7)]");
 }
 
-// The eager table of one struct decode, for each form of the head of tag 29 and of its index: a forward index is
-// sharedref_index_not_marked. A tag 29 into a plain member is incorrect_type. A vector of std::optional is a plain
-// array; a vector of numbers is a typed array, which holds no tag.
-TEST_CASE("value sharing: an eager decode reads every form of a tag 29")
+// The owner decided on 2026-11-16 that a struct decode reads no shared value: a tag 28 or a tag 29 where it
+// reads a value is invalid_tag, for each width of the head and of the index. A vector of std::optional is a
+// plain array; a vector of numbers is a typed array, which holds no tag.
+TEST_CASE("value sharing: a struct decode refuses every form of a tag 28 and a tag 29")
 {
     using marked_numbers = std::vector<std::optional<std::uint64_t>>;
-    for (std::size_t const bytes : {1uz, 2uz, 4uz, 8uz}) {
-        CAPTURE(bytes);
-        std::string const reference = head_of(6, 29, bytes) + head_of(0, 0, bytes);
-        CHECK_EQ(cbor::structs<marked_numbers>::decode("\x81"s + reference).error(),
-                 error::sharedref_index_not_marked);
-        CHECK_EQ(cbor::structs<marked_numbers>::decode("\x82"s + head_of(6, 28, bytes) + "\x05"s + reference)
-                     .error(),
-                 error::incorrect_type);
-        auto const marked = cbor::structs<marked_numbers>::decode("\x81"s + head_of(6, 28, bytes) + "\x05"s);
-        REQUIRE(marked.has_value());
-        CHECK((**marked == marked_numbers{5}));
+    for (std::string const width : {"_0", "_1", "_2", "_3"}) {
+        CAPTURE(width);
+        std::string const marked = test::bytes_of_embedded_cbor("<<[28" + width + "(5)]>>").value();
+        std::string const named =
+            test::bytes_of_embedded_cbor("<<[28" + width + "(5), 29" + width + "(0" + width + ")]>>").value();
+        CHECK_EQ(cbor::structs<marked_numbers>::decode(std::string(marked)).error(), error::invalid_tag);
+        CHECK_EQ(cbor::structs<marked_numbers>::decode(std::string(named)).error(), error::invalid_tag);
     }
 }
 

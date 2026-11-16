@@ -1023,10 +1023,7 @@ std::expected<bool, error> detail::validity::keys_equivalent(First const &first,
         else
             return message.encoded;
     };
-    auto const skip = [](detail::heads::decoder<true> &d) {
-        detail::well_formedness::no_marks none;
-        return detail::well_formedness::skip_item(d, none);
-    };
+    auto const skip = [](detail::heads::decoder<true> &d) { return detail::well_formedness::skip_item(d); };
     auto const resolve = []<class Message>(Message const &message, offset const at) -> offset {
         if constexpr (std::same_as<Message, std::string_view>)
             return at;

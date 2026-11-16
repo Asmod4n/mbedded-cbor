@@ -580,6 +580,12 @@ public:
         return {};
     }
 
+    static constexpr bool tag_refused_by_value_types(std::uint64_t const tag)
+    {
+        return tag == std::to_underlying(rfc8949::tag_number::shareable) ||
+               tag == std::to_underlying(rfc8949::tag_number::sharedref);
+    }
+
     CBOR_ALWAYS_INLINE static constexpr std::size_t typed_array_element_size(std::uint64_t const tag)
     {
         std::uint64_t const f = tag >> std::to_underlying(rfc8746::bit_field::f) & 1;

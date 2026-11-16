@@ -1,16 +1,13 @@
 // Checks the index of a sharedref (tag 29) against the count of values
-// marked as shareable (tag 28). Gives a decoder that keeps a record of
-// each mark.
+// marked as shareable (tag 28).
 // http://cbor.schmorp.de/value-sharing
 #pragma once
 
 #include <cstddef>
 #include <cstdint>
 #include <expected>
-#include <vector>
 
 #include "error.hpp"
-#include "head.hpp"
 #include "validity.hpp"
 
 namespace cbor
@@ -18,8 +15,6 @@ namespace cbor
 
 namespace detail
 {
-
-class generic;
 
 class value_sharing
 {
@@ -33,27 +28,8 @@ public:
             return std::unexpected(error::sharedref_index_not_marked);
         return index{static_cast<std::size_t>(argument)};
     }
-
-private:
-    struct sharing_decoder;
-
-    friend class detail::generic;
-
-    template <class>
-    friend class cbor::structs;
 };
 
 }
-
-struct detail::value_sharing::sharing_decoder : detail::heads::decoder<true> {
-    enum class marked_value : std::uint8_t { in_skipped_member, open, value_member };
-
-    std::vector<marked_value> marked_values;
-
-    void mark()
-    {
-        marked_values.push_back(marked_value::in_skipped_member);
-    }
-};
 
 }
