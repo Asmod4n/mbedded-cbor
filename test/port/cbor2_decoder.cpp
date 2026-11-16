@@ -950,17 +950,20 @@ TEST_CASE("cbor2 decoder: test_object_hook")
 }
 
 // Upstream: TestAllowDuplicateKeys.test_default_allows_duplicates. cbor2 keeps the last value of a key by default.
-// cbor::decode gives every pair (item.hpp: "map | each key and its value one after the other"), as the second
-// option of RFC 8949 5.6 lets it. cbor::structs refuses the map (structs.hpp: "@retval duplicate_key a key that
-// comes twice"), as the first option of RFC 8949 5.6 lets it.
+// cbor::decode gives every pair (item.hpp: "map | each key and its value one after the other"). cbor::structs keeps
+// the last value of a repeated key, as cbor2 does by default. cbor2 with allow_duplicate_keys=False raises an error;
+// the library has no such mode, so that row is not ported.
 TEST_CASE("cbor2 decoder: TestAllowDuplicateKeys")
 {
     check_decoded({{"a2616101616102", M("a", 1, "a", 2)}});
 
-    // test_raises_on_duplicate[definite]: cbor2 with allow_duplicate_keys=False raises the error.
-    auto const definite = cbor::structs<std::map<std::string, int>>::decode(unhexlify("a2616101616102"));
-    REQUIRE_FALSE(definite.has_value());
-    CHECK_EQ(definite.error(), error::duplicate_key);
+    auto const tree = cbor::parse_edn(R"({"a": 1, "a": 2})");
+    REQUIRE(tree.has_value());
+    std::string repeated;
+    REQUIRE(cbor::encode(repeated, **tree).has_value());
+    auto const last = cbor::structs<std::map<std::string, int>>::decode(std::move(repeated));
+    REQUIRE(last.has_value());
+    CHECK_EQ(**last, std::map<std::string, int>{{"a", 2}});
 
     // test_raises_on_duplicate[indefinite]: structs.hpp: "@retval indefinite_length a head uses indefinite length".
     auto const indefinite = cbor::structs<std::map<std::string, int>>::decode(unhexlify("bf616101616102ff"));

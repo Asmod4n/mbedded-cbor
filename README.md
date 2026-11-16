@@ -114,9 +114,9 @@ makes. These are the checks of mbedded-cbor.
 - **Shared references.** A reference of tag 29 names an item that tag
   28 marked before it; else the read gives `sharedref_not_defined` or
   `sharedref_index_not_marked`.
-- **Duplicate keys.** `cbor::decode` and `cbor::structs` refuse a map
-  that holds a key twice with `duplicate_key`. A `cbor::lazy` does not
-  check; its reads give the first match.
+- **Duplicate keys.** A repeated key gives every entry in `cbor::decode`,
+  the last value in `cbor::structs` (a struct member is read again), and
+  the first match in `cbor::lazy`.
 - **UTF-8.** No reader checks that a text string is UTF-8. C++ has many
   ways to check UTF-8, and the application uses its own.
 - **Limits.** See Features: the depth follows the stack, the string

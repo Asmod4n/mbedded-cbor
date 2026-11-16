@@ -1,6 +1,8 @@
 #include "rfc8746.hpp"
 #include "small_stack.hpp"
 #include "reference.hpp"
+#include <cbor/diagnostic_notation.hpp>
+#include <cbor/encode.hpp>
 #include <cbor/schema.hpp>
 #include <cbor/structs.hpp>
 
@@ -38,6 +40,16 @@ using cbor::error;
 
 namespace
 {
+
+// The input of a test is written in EDN and encoded by the library: cbor::parse_edn reads it, cbor::encode writes it.
+std::string encoded_edn(std::string_view const edn)
+{
+    auto const tree = cbor::parse_edn(edn);
+    REQUIRE(tree.has_value());
+    std::string out;
+    REQUIRE(cbor::encode(out, **tree).has_value());
+    return out;
+}
 
 template <class T>
 void round_trip(std::string const &bytes, T const &expected)
@@ -203,22 +215,37 @@ TEST_CASE("structs: an unknown key is skipped, a missing key is an error")
     CHECK_EQ(**zero, 0u);
 }
 
-// RFC 8949 5.6 names two ways for a repeated key. The owner decided on 2026-10-14 that an eager decode takes the first:
-// it rejects the map with duplicate_key. A struct member took the first entry with no error before this test changed,
-// and the last one before that. A key that no member has is not read, so it is no duplicate. A std::map gives
-// duplicate_key on a repeated key since the owner decision of 2026-10-16. The key 1 in one byte and the key 1 in two
-// bytes are the same key (RFC 8949 5.6).
-TEST_CASE("structs: a repeated key of a member is duplicate_key")
+struct inner_ab {
+    std::uint64_t a;
+    std::optional<std::uint64_t> b;
+    bool operator==(inner_ab const &) const = default;
+};
+
+struct outer_m {
+    inner_ab m;
+    bool operator==(outer_m const &) const = default;
+};
+
+// The owner decided on 2026-11-16 that no decode checks a map for a repeated key. The declaration of decode says that a
+// repeated key reads its member again: a number keeps the last value, a struct member is read again into the same
+// object, so the keys of both maps stay. A key that no member has is not read. The key 1 in one byte and the key 1 in
+// two bytes are the same key (RFC 8949 5.6), so the map keeps the last value.
+TEST_CASE("structs: a repeated key reads its member again")
 {
-    CHECK_EQ(cbor::structs<pair_ab>::decode("\xa3\x61\x61\x01\x61\x61\x02\x61\x62\x80"s).error(),
-             error::duplicate_key);
-    CHECK_EQ(cbor::structs<std::map<std::string, std::string>>::decode("\xa2\x61\x61\x61\x41\x61\x61\x61\x42"s)
-                 .error(),
-             error::duplicate_key);
-    CHECK(cbor::structs<pair_ab>::decode("\xa4\x61\x61\x01\x61\x62\xd8\x47\x40\x61x\x01\x61x\x02"s)
-              .has_value());
-    CHECK_EQ(cbor::structs<std::map<std::uint64_t, std::uint64_t>>::decode("\xa2\x01\x00\x18\x01\x05"s).error(),
-             error::duplicate_key);
+    auto const scalar = cbor::structs<pair_ab>::decode(encoded_edn(R"({"a": 1, "a": 2, "b": 71(h'')})"));
+    REQUIRE(scalar.has_value());
+    CHECK_EQ(**scalar, pair_ab{2, {}});
+    auto const merged = cbor::structs<outer_m>::decode(encoded_edn(R"({"m": {"a": 1, "b": 2}, "m": {"a": 3}})"));
+    REQUIRE(merged.has_value());
+    CHECK_EQ(**merged, outer_m{{3, 2}});
+    auto const text_map =
+        cbor::structs<std::map<std::string, std::string>>::decode(encoded_edn(R"({"a": "A", "a": "B"})"));
+    REQUIRE(text_map.has_value());
+    CHECK_EQ(**text_map, std::map<std::string, std::string>{{"a", "B"}});
+    CHECK(cbor::structs<pair_ab>::decode(encoded_edn(R"({"a": 1, "b": 71(h''), "x": 1, "x": 2})")).has_value());
+    auto const wide = cbor::structs<std::map<std::uint64_t, std::uint64_t>>::decode(encoded_edn("{1: 0, 1_0: 5}"));
+    REQUIRE(wide.has_value());
+    CHECK_EQ(**wide, std::map<std::uint64_t, std::uint64_t>{{1, 5}});
 }
 
 // RFC 8428 6, the CBOR form of the example in 5.1.2: the integer labels come from the keys of the struct.
@@ -572,12 +599,18 @@ TEST_CASE("structs: a double that a float cannot hold is number_out_of_range")
 template <class M>
 void map_keys_check()
 {
-    CHECK_EQ(cbor::structs<M>::decode("\xa3\x01\x05\x02\x06\x01\x07"s).error(), error::duplicate_key);
-    CHECK_EQ(cbor::structs<M>::decode("\xa2\x02\x06\x02\x06"s).error(), error::duplicate_key);
-    for (std::string const &bytes : {"\xa3\x01\x05\x02\x06\x03\x07"s, "\xa3\x03\x07\x01\x05\x02\x06"s,
-                                     "\xa3\x02\x06\x03\x07\x01\x05"s, "\xa3\x01\x05\x03\x07\x02\x06"s,
-                                     "\xa3\x02\x06\x01\x05\x03\x07"s, "\xa3\x03\x07\x02\x06\x01\x05"s}) {
-        auto const read = cbor::structs<M>::decode(std::string(bytes));
+    auto const repeated = cbor::structs<M>::decode(encoded_edn("{1: 5, 2: 6, 1: 7}"));
+    REQUIRE(repeated.has_value());
+    CHECK_EQ((*repeated)->size(), 2u);
+    CHECK_EQ((*repeated)->at(1), 7);
+    CHECK_EQ((*repeated)->at(2), 6);
+    auto const same = cbor::structs<M>::decode(encoded_edn("{2: 6, 2: 6}"));
+    REQUIRE(same.has_value());
+    CHECK_EQ((*same)->size(), 1u);
+    CHECK_EQ((*same)->at(2), 6);
+    for (std::string_view const edn : {"{1: 5, 2: 6, 3: 7}", "{3: 7, 1: 5, 2: 6}", "{2: 6, 3: 7, 1: 5}",
+                                       "{1: 5, 3: 7, 2: 6}", "{2: 6, 1: 5, 3: 7}", "{3: 7, 2: 6, 1: 5}"}) {
+        auto const read = cbor::structs<M>::decode(encoded_edn(edn));
         REQUIRE(read.has_value());
         CHECK_EQ((*read)->size(), 3u);
         CHECK_EQ((*read)->at(1), 5);
@@ -586,11 +619,29 @@ void map_keys_check()
     }
 }
 
-// RFC 8949 5.6: a map with a repeated key is not valid. The owner decided on 2026-10-16 that every map container with
-// unique keys gives duplicate_key in decode. A struct member does the same. No entry is kept silently. The keys 1, 2 and
-// 3 in every order are distinct and decode.
-TEST_CASE("structs: a map container gives duplicate_key on a repeated key")
+// A map type with no insert_or_assign: decode erases the key and emplaces the value, so it keeps the last value too.
+struct emplace_map {
+    using key_type = int;
+    using mapped_type = int;
+    std::map<int, int> entries;
+    auto begin() const { return entries.begin(); }
+    auto end() const { return entries.end(); }
+    std::size_t size() const { return entries.size(); }
+    int at(int const key) const { return entries.at(key); }
+    void clear() { entries.clear(); }
+    std::size_t erase(int const key) { return entries.erase(key); }
+    template <class K, class V>
+    auto emplace(K &&key, V &&value)
+    {
+        return entries.emplace(std::forward<K>(key), std::forward<V>(value));
+    }
+};
+
+// The declaration of decode says that a map container keeps the last value of a repeated key (owner, 2026-11-16).
+// The keys 1, 2 and 3 in every order are distinct and decode.
+TEST_CASE("structs: a map container keeps the last value of a repeated key")
 {
+    map_keys_check<emplace_map>();
     map_keys_check<std::map<int, int>>();
     map_keys_check<std::unordered_map<int, int>>();
 #if __has_include(<flat_map>)
@@ -623,25 +674,26 @@ TEST_CASE("structs: every standard container that encode writes decodes")
         standard_containers{{1, 2}, {3}, {true}, {4, 5}, {6, 6}, {{1, 2}, {1, 3}}});
 }
 
-// RFC 8949 5.6 makes a map with a repeated key invalid. So a multimap is a map from each key to the array of its values.
-// A repeated key gives duplicate_key, as for std::map. A value that is not an array, and an empty array, which encode
-// never writes, give incorrect_type. The bytes are written by hand from RFC 8949 3.1. The bytes 0xa0 to 0xa2 are maps of
-// 0 to 2 pairs. The bytes 0x80 to 0x82 are arrays of 0 to 2 items.
+// A multimap is a map from each key to the array of its values. A repeated key appends its values (the declaration of
+// decode, owner 2026-11-16). A value that is not an array, and an empty array, which encode never writes, give
+// incorrect_type.
 template <class M>
 void multimap_check()
 {
-    round_trip("\xa0"s, M{});
-    round_trip("\xa1\x01\x81\x02"s, M{{1, 2}});
-    auto const back = cbor::structs<M>::decode("\xa2\x01\x82\x02\x03\x02\x81\x04"s);
+    round_trip(encoded_edn("{}"), M{});
+    round_trip(encoded_edn("{1: [2]}"), M{{1, 2}});
+    auto const back = cbor::structs<M>::decode(encoded_edn("{1: [2, 3], 2: [4]}"));
     REQUIRE(back.has_value());
     CHECK_EQ((**back), M{{1, 2}, {1, 3}, {2, 4}});
     auto const again = cbor::structs<M>::encode(M{{1, 2}, {1, 3}});
     REQUIRE(again.has_value());
-    CHECK((*again == "\xa1\x01\x82\x02\x03"s || *again == "\xa1\x01\x82\x03\x02"s));
-    CHECK_EQ(cbor::structs<M>::decode("\xa2\x01\x81\x02\x01\x81\x03"s).error(), error::duplicate_key);
-    CHECK_EQ(cbor::structs<M>::decode("\xa1\x01\x02"s).error(), error::incorrect_type);
-    CHECK_EQ(cbor::structs<M>::decode("\xa1\x01\x80"s).error(), error::incorrect_type);
-    CHECK_EQ(cbor::structs<M>::decode("\x81\x82\x01\x02"s).error(), error::incorrect_type);
+    CHECK((*again == encoded_edn("{1: [2, 3]}") || *again == encoded_edn("{1: [3, 2]}")));
+    auto const repeated = cbor::structs<M>::decode(encoded_edn("{1: [2], 1: [3]}"));
+    REQUIRE(repeated.has_value());
+    CHECK_EQ((**repeated), M{{1, 2}, {1, 3}});
+    CHECK_EQ(cbor::structs<M>::decode(encoded_edn("{1: 2}")).error(), error::incorrect_type);
+    CHECK_EQ(cbor::structs<M>::decode(encoded_edn("{1: []}")).error(), error::incorrect_type);
+    CHECK_EQ(cbor::structs<M>::decode(encoded_edn("[[1, 2]]")).error(), error::incorrect_type);
 }
 
 // RFC 8949 5.6 refuses two equal keys in a map, so a std::multimap goes as one key with the array of its values. The
@@ -1014,20 +1066,18 @@ TEST_CASE("structs: tag 1 with a float into sys_seconds")
 
 // CBOR_SETS.md (refs/CBOR_SETS.md): tag 258 on an array is a set. The library writes the order of the
 // container, as it never sorts at run time; std::set holds -1 before 1 and "aa" before "b". A decode takes
-// any order. A duplicate item makes the set not valid, and the owner decided that it gives duplicate_key, as
-// a repeated key of a map does.
+// any order. A repeated item is kept once (the declaration of decode, owner 2026-11-16).
 TEST_CASE("structs: std::set is tag 258")
 {
-    round_trip("\xd9\x01\x02\x82\x20\x01"s, std::set<int>{-1, 1});
-    round_trip("\xd9\x01\x02\x82\x62"
-               "aa\x61"
-               "b"s,
-               std::set<std::string>{"aa", "b"});
-    auto const any_order = cbor::structs<std::set<int>>::decode("\xd9\x01\x02\x82\x02\x01"s);
+    round_trip(encoded_edn("258([-1, 1])"), std::set<int>{-1, 1});
+    round_trip(encoded_edn(R"(258(["aa", "b"]))"), std::set<std::string>{"aa", "b"});
+    auto const any_order = cbor::structs<std::set<int>>::decode(encoded_edn("258([2, 1])"));
     REQUIRE(any_order.has_value());
     CHECK(**any_order == std::set<int>{1, 2});
-    CHECK_EQ(cbor::structs<std::set<int>>::decode("\xd9\x01\x02\x82\x01\x01"s).error(), error::duplicate_key);
-    CHECK_EQ(cbor::structs<std::set<int>>::decode("\x82\x01\x02"s).error(), error::incorrect_type);
+    auto const repeated = cbor::structs<std::set<int>>::decode(encoded_edn("258([1, 1])"));
+    REQUIRE(repeated.has_value());
+    CHECK(**repeated == std::set<int>{1});
+    CHECK_EQ(cbor::structs<std::set<int>>::decode(encoded_edn("[1, 2]")).error(), error::incorrect_type);
 }
 
 // RFC 8746 2.1: a typed array is its tag over a byte string of the elements, here little endian. The owner decided on

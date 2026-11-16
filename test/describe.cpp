@@ -1,5 +1,6 @@
 #include "reference.hpp"
 #include <cbor/describe.hpp>
+#include <cbor/diagnostic_notation.hpp>
 #include <cbor/encode.hpp>
 #include <cbor/schema.hpp>
 #include <cbor/structs.hpp>
@@ -674,15 +675,17 @@ TEST_CASE("describe: a key that no entry has is skipped")
     CHECK_EQ((*read)->exp, 1444064944);
 }
 
-// RFC 8949 5.6: a repeated key in a map of a described struct gives duplicate_key, as the owner decided on
-// 2026-10-14 for every eager decode.
-TEST_CASE("describe: a repeated key of a member is duplicate_key")
+// The declaration of decode says that a repeated key reads its member again (owner, 2026-11-16): a described struct
+// keeps the last value. The input is written in EDN and encoded by the library.
+TEST_CASE("describe: a repeated key reads its member again")
 {
-    CHECK_EQ(cbor::structs<describe_test::doors>::decode("\xda\x00\x02\x71\x01\xa2\x65"
-                                                         "count\x04\x65"
-                                                         "count\x05"s)
-                 .error(),
-             cbor::error::duplicate_key);
+    auto const tree = cbor::parse_edn(R"(160001({"count": 4, "count": 5}))");
+    REQUIRE(tree.has_value());
+    std::string bytes;
+    REQUIRE(cbor::encode(bytes, **tree).has_value());
+    auto const read = cbor::structs<describe_test::doors>::decode(std::move(bytes));
+    REQUIRE(read.has_value());
+    CHECK_EQ((*read)->count, 5u);
 }
 
 // A description with no entry is a tag over an empty map. A type alias names a type whose name holds a comma,

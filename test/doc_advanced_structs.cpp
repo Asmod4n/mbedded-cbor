@@ -1,5 +1,6 @@
 #include "reference.hpp"
 #include <cbor/describe.hpp>
+#include <cbor/diagnostic_notation.hpp>
 #include <cbor/encode.hpp>
 #include <cbor/schema.hpp>
 #include <cbor/structs.hpp>
@@ -230,8 +231,13 @@ TEST_CASE("doc advanced structs: unknown, repeated and missing keys")
     auto const extra = cbor::structs<person>::decode(encode_in_preferred_form(M("name"s, "x"s, "age"s, 1, "z"s, 2)));
     REQUIRE(extra.has_value());
     CHECK_EQ((*extra)->name, "x");
-    CHECK_EQ(cbor::structs<person>::decode(encode_in_preferred_form(M("name"s, "x"s, "age"s, 1, "age"s, 2))).error(),
-             error::duplicate_key);
+    auto const tree = cbor::parse_edn(R"({"name": "x", "age": 1, "age": 2})");
+    REQUIRE(tree.has_value());
+    std::string repeated;
+    REQUIRE(cbor::encode(repeated, **tree).has_value());
+    auto const again = cbor::structs<person>::decode(std::move(repeated));
+    REQUIRE(again.has_value());
+    CHECK_EQ((*again)->age, 2u);
     CHECK_EQ(cbor::structs<person>::decode(encode_in_preferred_form(M("name"s, "x"s))).error(), error::key_not_found);
     for (value const &key : {A(), M(), value{tagged{1000, V(1)}}, A(1, M("a"s, A())), value{tagged{28, V(1)}}}) {
         auto const skipped = cbor::structs<person>::decode(encode_in_preferred_form(M("name"s, "x"s, key, 0, "age"s, 1)));

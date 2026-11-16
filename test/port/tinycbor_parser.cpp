@@ -1528,23 +1528,6 @@ TEST_CASE("tinycbor parser: strict validation of a byte after the item")
     }
 }
 
-// strictValidation, the rows of CborValidateStrictMode on keys that are not unique. cbor::structs gives duplicate_key
-// for "a key that comes twice" (structs.hpp). The row with arrays as keys differs from upstream: every item can be a
-// key (owner decision), but the key type std::string holds no array, so the first key is an item of another type and
-// gives incorrect_type (structs.hpp) before a second key is read. With std::vector<std::string> as the key type the
-// two keys are read, and the second gives duplicate_key, as upstream intends.
-TEST_CASE("tinycbor parser: strict validation of keys that are not unique")
-{
-    CHECK_EQ(make_outcome_text(cbor::structs<std::map<std::int64_t, std::int64_t>>::decode("\xa2\0\1\0\2"s)),
-             make_error_text(error::duplicate_key));
-    CHECK_EQ(make_outcome_text(cbor::structs<std::map<std::string, std::int64_t>>::decode("\xa2\x61z\1\x61z\2"s)),
-             make_error_text(error::duplicate_key));
-    CHECK_EQ(make_outcome_text(cbor::structs<std::map<std::string, std::int64_t>>::decode("\xa2\x81\x65Hello\1\x81\x65Hello\2"s)),
-             make_error_text(error::incorrect_type));
-    CHECK_EQ(make_outcome_text(cbor::structs<std::map<std::vector<std::string>, std::int64_t>>::decode(
-                 "\xa2\x81\x65Hello\1\x81\x65Hello\2"s)),
-             make_error_text(error::duplicate_key));
-}
 
 // incompleteData: each prefix of an item that ends before the last byte but one is too little data. A prefix that
 // holds a complete indefinite-length head gives indefinite_length in cbor::decode() and cbor::item_size(), so these

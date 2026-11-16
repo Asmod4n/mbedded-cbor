@@ -140,8 +140,13 @@ TEST_CASE("doc reference structs: decode errors")
     CHECK_EQ(cbor::structs<int>::decode(test::encode_in_preferred_form(test::V("x"s))).error(), cbor::error::incorrect_type);
     CHECK_EQ(cbor::structs<std::uint8_t>::decode(test::encode_in_preferred_form(test::V(256))).error(),
              cbor::error::number_out_of_range);
-    CHECK_EQ(cbor::structs<person>::decode(test::encode_in_preferred_form(test::M("age"s, 1, "age"s, 2, "name"s, "a"s))).error(),
-             cbor::error::duplicate_key);
+    auto const tree = cbor::parse_edn(R"({"age": 1, "age": 2, "name": "a"})");
+    REQUIRE(tree.has_value());
+    std::string repeated;
+    REQUIRE(cbor::encode(repeated, **tree).has_value());
+    auto const again = cbor::structs<person>::decode(std::move(repeated));
+    REQUIRE(again.has_value());
+    CHECK_EQ((*again)->age, 2);
 }
 
 // structs.hpp, the comment of decode: an empty owner is a wrong use and throws std::logic_error.
