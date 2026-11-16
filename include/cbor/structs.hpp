@@ -650,7 +650,12 @@ class generic
                 !r) [[unlikely]]
                 return r;
             out.clear();
+            if constexpr (requires { out.reserve(std::size_t{}); })
+                out.reserve(static_cast<std::size_t>(
+                    std::min<std::uint64_t>(h.argument, d.encoded.size() / least_encoded_size<E>())));
             for (std::uint64_t i = 0; i < h.argument; ++i) {
+                if (!detail::validity::bytes_fit(least_encoded_size<E>(), d.encoded.size())) [[unlikely]]
+                    return std::unexpected(error::too_little_data);
                 if constexpr (requires {
                                   { out.emplace_back() } -> std::same_as<E &>;
                                   requires !detail::pfr::uses_allocator_aggregate<E, decltype(out.get_allocator())>();
@@ -797,6 +802,62 @@ class generic
                 out[i] = detail::reflection::read_typed_array_element<E>(
                     elements.subspan(i * sizeof(E)).template first<sizeof(E)>());
             return {};
+        }
+    }
+
+    template <class U, std::size_t I>
+    static consteval std::size_t least_key_size()
+    {
+        constexpr map_key key = detail::pfr::key_of<I, U>();
+        if constexpr (key.major == major_type::text_string)
+            return detail::heads::head_size(key.text.size()) + key.text.size();
+        else
+            return detail::heads::head_size(key.argument);
+    }
+
+    template <class U>
+    static consteval std::size_t least_encoded_size()
+    {
+        constexpr std::size_t one_head = detail::heads::initial_byte_size;
+        if constexpr (detail::is_std_variant<U>) {
+            return [&]<std::size_t... I>(std::index_sequence<I...>) {
+                return std::min({least_encoded_size<std::variant_alternative_t<I, U>>()...});
+            }(std::make_index_sequence<std::variant_size_v<U>>());
+        } else if constexpr (is_tagged_standard_type<U>) {
+            std::size_t tag_head = detail::heads::head_size(tag_of_standard_type<U>());
+            if constexpr (is_sys_time<U>)
+                tag_head = std::min(tag_head, detail::heads::head_size(std::to_underlying(rfc8949::tag_number::standard_date_time_string)));
+            else if constexpr (std::same_as<U, std::chrono::year_month_day>)
+                tag_head = std::min(tag_head, detail::heads::head_size(std::to_underlying(rfc8943::tag_number::full_date_string)));
+            if constexpr (is_typed_array<U> && is_std_array<U>) {
+                constexpr std::size_t content = std::tuple_size_v<U> * sizeof(typename U::value_type);
+                return tag_head + detail::heads::head_size(content) + content;
+            } else {
+                return tag_head + one_head;
+            }
+        } else if constexpr (is_tagged_item<U>) {
+            return detail::heads::head_size(U::number) + least_encoded_size<std::remove_cvref_t<decltype(std::declval<U &>().content)>>();
+        } else if constexpr (is_std_tuple<U> || is_std_array<U>) {
+            return [&]<std::size_t... I>(std::index_sequence<I...>) {
+                return (detail::heads::head_size(std::tuple_size_v<U>) + ... +
+                        least_encoded_size<std::tuple_element_t<I, U>>());
+            }(std::make_index_sequence<std::tuple_size_v<U>>());
+        } else if constexpr (std::is_class_v<U> && !detail::reflection::is_optional<U> && !is_basic_string<U> &&
+                             !std::same_as<U, std::string_view> && !std::same_as<U, std::span<std::byte const>> &&
+                             !detail::reflection::is_wide_integer<U> && !detail::reflection::is_map<U> &&
+                             !requires(U const &c) { typename U::value_type; c.size(); }) {
+            std::size_t tag_head = 0;
+            if constexpr (constexpr std::optional<std::uint64_t> tag = detail::reflection::tag_number_of<U>(); tag.has_value())
+                tag_head = detail::heads::head_size(*tag);
+            return [&]<std::size_t... I>(std::index_sequence<I...>) {
+                return ((tag_head + one_head) + ... +
+                        (detail::reflection::is_optional<std::remove_cvref_t<decltype(detail::pfr::get<I>(std::declval<U &>()))>>
+                             ? std::size_t{0}
+                             : least_key_size<U, I>() +
+                                   least_encoded_size<std::remove_cvref_t<decltype(detail::pfr::get<I>(std::declval<U &>()))>>()));
+            }(std::make_index_sequence<detail::pfr::tuple_size_v<U>>());
+        } else {
+            return one_head;
         }
     }
 
@@ -1393,6 +1454,10 @@ public:
      * A byte after the item is not read.
      * A repeated key reads its member or map value again: a number, a string or a container keeps the last value,
      * a struct member is read again into the same object, a multimap appends the values, a set keeps one element.
+     * A container reserves storage for at most as many elements as the bytes left after its head can hold, by the
+     * least encoding of one element. While an item is read, each open container holds no more than that; the open
+     * containers are at most as many as the nesting of the input, which the stack limit bounds. After a decode that
+     * succeeds, each container holds storage for no more elements than it read.
      *
      * @code{.example}
      * message: {"name": "ann", "age": 30}

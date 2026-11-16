@@ -751,17 +751,23 @@ TEST_CASE("structs: decode reserves no more than the remaining bytes and lets st
     CHECK_THROWS_AS(static_cast<void>(cbor::structs<large_elements>::decode(std::move(many))), std::bad_alloc);
 }
 
-// An array head of 2^20 elements stood before 4 MiB of input. decode reserved min(2^20, 4 MiB / 4096) = 1024 elements of
-// 4096 bytes. It did so before it read the first element. The allocator refuses more than 512 such elements, so the
-// decode ended with not_enough_memory. Memory now grows only with the elements that were read, and the first element, a
-// null, ends the read with incorrect_type.
-TEST_CASE("structs: decode allocates nothing for the count of an array head")
+// A count reserves as many elements as the bytes left can hold (RULES.md, owner 2026-11-16). An array head of 2^20
+// elements of std::array<std::uint64_t, 512> stands before 4 MiB of nulls. One element is at least 4101 bytes: the
+// typed array tag, the head of 4096 bytes and the bytes. So the bytes left can hold 1022 elements, and decode reserves
+// them. The allocator of the test refuses more than 512 elements, and the std::bad_alloc reaches the caller.
+TEST_CASE("structs: decode reserves the elements that the bytes left can hold")
 {
-    std::string message = "\xa1\x61v\x9a\x00\x10\x00\x00"s;
-    message += std::string(std::size_t{1} << 22, '\xf6');
-    auto const r = cbor::structs<large_elements>::decode(std::move(message));
-    REQUIRE_FALSE(r.has_value());
-    CHECK_EQ(r.error(), error::incorrect_type);
+    constexpr std::size_t claimed = std::size_t{1} << 20;
+    constexpr std::size_t nulls = std::size_t{1} << 22;
+    std::string claim = "{\"v\": [null";
+    for (std::size_t i = 1; i < claimed; ++i)
+        claim += ", null";
+    claim += "]}";
+    std::string const full = encoded_edn(claim);
+    std::string message = full.substr(0, full.size() - claimed);
+    message.append(nulls, encoded_edn("null").front());
+    REQUIRE_EQ(message.size(), full.size() - claimed + nulls);
+    CHECK_THROWS_AS(static_cast<void>(cbor::structs<large_elements>::decode(std::move(message))), std::bad_alloc);
 }
 
 struct one_int {
@@ -829,6 +835,82 @@ class counting_resource : public std::pmr::memory_resource
 public:
     std::size_t allocations = 0;
 };
+
+// A resource that records the largest single allocation it gives.
+class largest_allocation_resource : public std::pmr::memory_resource
+{
+    void *do_allocate(std::size_t const bytes, std::size_t const alignment) override
+    {
+        largest = std::max(largest, bytes);
+        return std::pmr::new_delete_resource()->allocate(bytes, alignment);
+    }
+
+    void do_deallocate(void *const p, std::size_t const bytes, std::size_t const alignment) override
+    {
+        std::pmr::new_delete_resource()->deallocate(p, bytes, alignment);
+    }
+
+    bool do_is_equal(std::pmr::memory_resource const &other) const noexcept override
+    {
+        return this == &other;
+    }
+
+public:
+    std::size_t largest = 0;
+};
+
+struct point_xy {
+    std::uint64_t x;
+    std::uint64_t y;
+};
+
+// The declaration of decode bounds the storage that a container reserves: the count of an array head reserves at
+// most as many elements as the bytes left can hold (RULES.md). A point_xy is at least 7 bytes: a map head and two
+// pairs of a key head, one key byte and a value byte. The head claims 70 points and 70 bytes follow, so the head
+// passes the check of the bytes left, but the bytes hold only 10 points. The vector may then hold storage for 10
+// points and no more. The test reads the largest allocation that the vector asks of its resource; libstdc++ asks for
+// the count that reserve gets.
+TEST_CASE("structs: an array head reserves no more elements than the bytes left can hold")
+{
+    constexpr std::size_t claimed = 70;
+    constexpr std::size_t present = 10;
+    std::string all_zeros = "[0";
+    for (std::size_t i = 1; i < claimed; ++i)
+        all_zeros += ", 0";
+    all_zeros += "]";
+    std::string const claim = encoded_edn(all_zeros);
+    std::string const head_of_claim = claim.substr(0, claim.size() - claimed);
+    std::string input = head_of_claim;
+    for (std::size_t i = 0; i < present; ++i)
+        input += encoded_edn(R"({"x": 0, "y": 0})");
+    REQUIRE_EQ(input.size() - head_of_claim.size(), claimed);
+    largest_allocation_resource resource;
+    std::pmr::vector<point_xy> target(&resource);
+    auto const owner = std::make_shared<std::string const>(input);
+    auto const read = cbor::structs<std::pmr::vector<point_xy>>::decode(owner, std::string_view(*owner), std::move(target));
+    REQUIRE_FALSE(read.has_value());
+    CHECK_EQ(read.error(), error::too_little_data);
+    CHECK_GT(resource.largest, 0u);
+    CHECK_LE(resource.largest, present * sizeof(point_xy));
+}
+
+struct tree_node {
+    std::vector<tree_node> children;
+    bool operator==(tree_node const &) const = default;
+};
+
+// A recursive type nests its own vector. Each level reserves by the bytes left of that level, and a decode that
+// succeeds gives the same tree. A tree whose last byte is cut gives too_little_data.
+TEST_CASE("structs: a recursive type decodes and a cut tree gives too_little_data")
+{
+    std::string const bytes = encoded_edn(
+        R"({"children": [{"children": []}, {"children": [{"children": []}, {"children": []}]}]})");
+    tree_node const expected{{tree_node{}, tree_node{{tree_node{}, tree_node{}}}}};
+    auto const read = cbor::structs<tree_node>::decode(std::string(bytes));
+    REQUIRE(read.has_value());
+    CHECK_EQ(**read, expected);
+    CHECK_EQ(cbor::structs<tree_node>::decode(bytes.substr(0, bytes.size() - 1)).error(), error::too_little_data);
+}
 
 struct pmr_person {
     std::pmr::string name;
