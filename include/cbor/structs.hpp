@@ -652,9 +652,9 @@ class generic
             out.clear();
             if constexpr (requires { out.reserve(std::size_t{}); })
                 out.reserve(static_cast<std::size_t>(
-                    std::min<std::uint64_t>(h.argument, d.encoded.size() / least_encoded_size<E>())));
+                    std::min<std::uint64_t>(h.argument, d.encoded.size() / min_encoded_size<E>())));
             for (std::uint64_t i = 0; i < h.argument; ++i) {
-                if (!detail::validity::bytes_fit(least_encoded_size<E>(), d.encoded.size())) [[unlikely]]
+                if (!detail::validity::bytes_fit(min_encoded_size<E>(), d.encoded.size())) [[unlikely]]
                     return std::unexpected(error::too_little_data);
                 if constexpr (requires {
                                   { out.emplace_back() } -> std::same_as<E &>;
@@ -806,7 +806,7 @@ class generic
     }
 
     template <class U, std::size_t I>
-    static consteval std::size_t least_key_size()
+    static consteval std::size_t min_key_size()
     {
         constexpr map_key key = detail::pfr::key_of<I, U>();
         if constexpr (key.major == major_type::text_string)
@@ -816,12 +816,12 @@ class generic
     }
 
     template <class U>
-    static consteval std::size_t least_encoded_size()
+    static consteval std::size_t min_encoded_size()
     {
         constexpr std::size_t one_head = detail::heads::initial_byte_size;
         if constexpr (detail::is_std_variant<U>) {
             return [&]<std::size_t... I>(std::index_sequence<I...>) {
-                return std::min({least_encoded_size<std::variant_alternative_t<I, U>>()...});
+                return std::min({min_encoded_size<std::variant_alternative_t<I, U>>()...});
             }(std::make_index_sequence<std::variant_size_v<U>>());
         } else if constexpr (is_tagged_standard_type<U>) {
             std::size_t tag_head = detail::heads::head_size(tag_of_standard_type<U>());
@@ -836,11 +836,11 @@ class generic
                 return tag_head + one_head;
             }
         } else if constexpr (is_tagged_item<U>) {
-            return detail::heads::head_size(U::number) + least_encoded_size<std::remove_cvref_t<decltype(std::declval<U &>().content)>>();
+            return detail::heads::head_size(U::number) + min_encoded_size<std::remove_cvref_t<decltype(std::declval<U &>().content)>>();
         } else if constexpr (is_std_tuple<U> || is_std_array<U>) {
             return [&]<std::size_t... I>(std::index_sequence<I...>) {
                 return (detail::heads::head_size(std::tuple_size_v<U>) + ... +
-                        least_encoded_size<std::tuple_element_t<I, U>>());
+                        min_encoded_size<std::tuple_element_t<I, U>>());
             }(std::make_index_sequence<std::tuple_size_v<U>>());
         } else if constexpr (std::is_class_v<U> && !detail::reflection::is_optional<U> && !is_basic_string<U> &&
                              !std::same_as<U, std::string_view> && !std::same_as<U, std::span<std::byte const>> &&
@@ -853,8 +853,8 @@ class generic
                 return ((tag_head + one_head) + ... +
                         (detail::reflection::is_optional<std::remove_cvref_t<decltype(detail::pfr::get<I>(std::declval<U &>()))>>
                              ? std::size_t{0}
-                             : least_key_size<U, I>() +
-                                   least_encoded_size<std::remove_cvref_t<decltype(detail::pfr::get<I>(std::declval<U &>()))>>()));
+                             : min_key_size<U, I>() +
+                                   min_encoded_size<std::remove_cvref_t<decltype(detail::pfr::get<I>(std::declval<U &>()))>>()));
             }(std::make_index_sequence<detail::pfr::tuple_size_v<U>>());
         } else {
             return one_head;
