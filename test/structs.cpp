@@ -661,8 +661,9 @@ TEST_CASE("structs: every standard container that encode writes decodes")
         standard_containers{{1, 2}, {3}, {true}, {4, 5}, {6, 6}, {{1, 2}, {1, 3}}});
 }
 
-// A multimap is a map from each key to the array of its values. A repeated key gives duplicate_key, as for std::map.
-// A value that is not an array, and an empty array, which encode never writes, give incorrect_type.
+// A multimap is a map from each key to the array of its values. A repeated key gives duplicate_key in an ordered
+// multimap, as for std::map; an unordered multimap appends the values, because the check there costs time (owner,
+// 2026-11-16). A value that is not an array, and an empty array, which encode never writes, give incorrect_type.
 template <class M>
 void multimap_check()
 {
@@ -674,7 +675,13 @@ void multimap_check()
     auto const again = cbor::structs<M>::encode(M{{1, 2}, {1, 3}});
     REQUIRE(again.has_value());
     CHECK((*again == encoded_edn("{1: [2, 3]}") || *again == encoded_edn("{1: [3, 2]}")));
-    CHECK_EQ(cbor::structs<M>::decode(encoded_edn("{1: [2], 1: [3]}")).error(), error::duplicate_key);
+    if constexpr (requires(M const &m) { m.lower_bound(1); }) {
+        CHECK_EQ(cbor::structs<M>::decode(encoded_edn("{1: [2], 1: [3]}")).error(), error::duplicate_key);
+    } else {
+        auto const appended = cbor::structs<M>::decode(encoded_edn("{1: [2], 1: [3]}"));
+        REQUIRE(appended.has_value());
+        CHECK_EQ(**appended, M{{1, 2}, {1, 3}});
+    }
     CHECK_EQ(cbor::structs<M>::decode(encoded_edn("{1: 2}")).error(), error::incorrect_type);
     CHECK_EQ(cbor::structs<M>::decode(encoded_edn("{1: []}")).error(), error::incorrect_type);
     CHECK_EQ(cbor::structs<M>::decode(encoded_edn("[[1, 2]]")).error(), error::incorrect_type);

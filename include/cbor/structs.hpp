@@ -598,16 +598,13 @@ class generic
                     if constexpr (requires { out.lower_bound(key); })
                         return out.lower_bound(key);
                     else
-                        return out.find(key);
+                        return out.end();
                 }();
-                bool const seen = [&] {
-                    if constexpr (requires { out.lower_bound(key); })
-                        return at != out.end() && !out.key_comp()(key, at->first);
-                    else
-                        return at != out.end();
-                }();
-                if (auto const r = detail::validity::check_key_unique(seen); !r) [[unlikely]]
-                    return r;
+                if constexpr (requires { out.lower_bound(key); })
+                    if (auto const r = detail::validity::check_key_unique(at != out.end() &&
+                                                                          !out.key_comp()(key, at->first));
+                        !r) [[unlikely]]
+                        return r;
                 auto const values = d.decode_head();
                 if (!values) [[unlikely]]
                     return std::unexpected(values.error());
@@ -1477,6 +1474,7 @@ public:
      * A form with `target` reads into the containers of `target`, with their allocator.
      * The other forms start from `T{}`.
      * A byte after the item is not read.
+     * A repeated key gives `duplicate_key`, except in an unordered multimap, which appends the values of each repeat.
      * A container reserves storage for at most as many elements as the bytes left after its head can hold, by the
      * least encoding of one element. While an item is read, each open container holds no more than that; the open
      * containers are at most as many as the nesting of the input, which the stack limit bounds. After a decode that
