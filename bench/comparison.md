@@ -276,7 +276,7 @@ bool const same = v[0] == v[1];
 
 ### mbedded-cbor
 
-Tags 28 and 29 are plain tags in a lazy, in a path and in `clone`. `cbor::decode` resolves them: the second element is a `shared_reference` to the first. `cbor::structs` decode reads a tag 29 into no plain member. No writer of the library adds them by itself. `encode` of an item writes a tag 28 or 29 that the item holds (`mbedded-cbor-decode(3)`).
+Tags 28 and 29 are plain tags in a lazy, in a path and in `clone`. `cbor::decode` resolves them: the second element is a `shared_reference` to the first. `cbor::structs` decode gives `invalid_tag` for a value under tag 28 or 29. No writer of the library adds them by itself. `encode` of an item writes a tag 28 or 29 that the item holds (`mbedded-cbor-decode(3)`).
 
 ```cpp
 // owner: a std::shared_ptr<std::string const> with [28("x"), 29(0)]
@@ -284,7 +284,7 @@ auto const second = cbor::lazy::view(owner)->at(1);
 // second->type() is cbor::type::tag, and second->get<std::uint64_t>() is 0
 
 auto const v = cbor::structs<std::vector<std::string>>::decode(owner);
-// v.error() is cbor::error::incorrect_type
+// v.error() is cbor::error::invalid_tag
 ```
 
 ### nlohmann/json

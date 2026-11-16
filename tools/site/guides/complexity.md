@@ -56,7 +56,6 @@ Proof.
    - `checked_add`, `check_pending_items`, `check_definite_length`,
      `check_argument` and `check_simple_value` (include/cbor/validity.hpp) are each a
      fixed number of compares and arithmetic steps.
-   - `marks.mark` of `detail::well_formedness::no_marks` does nothing.
    So the time is O(i), and O(n) because i is at most n.
 6. The memory of the call is its local variables: `pending`, `added`, a
    head and the decoder, which holds a `std::string_view`. Their number

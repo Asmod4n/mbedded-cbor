@@ -72,7 +72,8 @@ A lazy, `clone`, `at_path`, `cbor::path::query` and `cbor::diagnostic_notation`
 read tag 28 and tag 29 as tags over their content. They resolve nothing,
 check no index and give no error of their own. A step and `get` pass both
 tags, as they pass every tag that they do not interpret.
-`cbor::structs<T>::%decode` resolves them with a table for one call.
+`cbor::structs<T>::%decode` and `cbor::schema<T>` read no value under them
+and give `invalid_tag`.
 
 Tag 55799 (RFC 8949, section 3.4.6) marks bytes as CBOR.
 `cbor::decode` reads one leading tag 55799 as its content, so the root of

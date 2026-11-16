@@ -24,7 +24,7 @@ Each value is one enumerator of `cbor::error`.
 - `nesting_depth_exceeded`: a reader that recurses reaches the end of the stack of its thread (`cbor::limits`).
 - `inadmissible_type_for_tag_content`: a tag has content that its definition does not allow.
 - `sharedref_index_not_marked`: a tag 29 names no tag 28 before it.
-- `sharedref_not_complete`: `cbor::structs` %decode meets a tag 29 that names a tag 28 in a skipped member.
+- `invalid_tag`: `cbor::structs` or `cbor::schema` meets a tag 28 or a tag 29 where it reads a value.
 - `sharedref_not_defined`: `cbor::decode` meets a tag 29 that names a tag 28 whose content is only tags 28 and this tag 29.
 - `unsupported_value`: `cbor::encode()` meets a `shared_reference`; `cbor::encode()` writes no tag 29; `cbor::encode_cycles()` writes it.
 - `not_indexable`: a key or an index meets an item that is not a map or an array.

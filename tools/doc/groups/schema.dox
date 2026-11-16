@@ -364,6 +364,10 @@ message. The walk checks whether the message ends too early.
 - `incorrect_type`: a message of another struct or layout, a wrong tag of
   a struct, a wrong head of a field, a variant item whose head names no
   alternative, or `get<A>()` of another alternative.
+- `invalid_tag`: a head of tag 28 or tag 29 in the place of the packing
+  prefix, of the tag of a struct or of the head of a field. The forms
+  that skip the checks of the data compare the head of a variant item,
+  so they give it there too.
 - `index_out_of_bounds`: an index past the end of a list.
 - `unpopulated_table_index` and `syntax_error`: a reference or a
   directory entry that is broken.

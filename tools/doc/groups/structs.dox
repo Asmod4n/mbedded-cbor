@@ -32,8 +32,7 @@ appended. `out` is a `std::string`, a container of `char`, a
 type has only the form `encode(value)`. A `std::span<char>` that is too
 small for the bytes gives `no_buffer_space`.
 
-The keys of a struct come in the order of RFC 8949 section 4.2.1. The
-functions write no shared value (tag 28 and tag 29).
+The keys of a struct come in the order of RFC 8949 section 4.2.1.
 
 The encoder writes a float or a double in the shortest width that holds its
 value exactly (RFC 8949 section 4.1). A NaN keeps its bits:
@@ -133,6 +132,7 @@ CBOR item is on the right:
   invalid.
 - `std::vector`, `std::deque`, `std::list` and other containers: an array.
 - `cbor::tagged_item<N, E>`: tag N on the item of `E`. `E` is not a struct.
+  N is not 28 or 29.
 - A struct: a map. See KEYS AND DESCRIPTIONS.
 
 @section structs_keys KEYS AND DESCRIPTIONS
@@ -189,23 +189,20 @@ map or a tag is such a key. So a program reads the
 bytes of a newer program that added members. A new member of type
 `std::optional` also reads the bytes of an older program.
 
-@section structs_shared SHARED VALUES
+@section structs_shared TAGS 28 AND 29
 
-`%decode` reads tag 28 and tag 29 of value sharing (cbor.schmorp.de). It uses
-a table that lasts for one call. `encode` writes no shared value.
-
-- A tag 28 is allowed on each member. It keeps the value.
-- No member takes a tag 29. A tag 29 gives an error:
-  `sharedref_index_not_marked` when no tag 28 comes before the index of the
-  tag 29; `sharedref_not_complete` when that tag 28 is in a member that
-  `%decode` skips; `incorrect_type` for any other tag 29.
+Tag 28 and tag 29 of value sharing (cbor.schmorp.de) mark and name a shared
+value. `%decode` gives `invalid_tag` where it reads a value and meets one of
+them. An entry whose key no member has is skipped with its tags 28 and 29.
+`cbor::tagged_item<N, E>` and `cbor::describe_members` do not compile with
+tag 28 or tag 29.
 
 @section structs_errors ERRORS
 
 Each function gives a `cbor::error` in its `std::expected`:
 
 - `incorrect_type`: an item of another major type; a missing or another tag
-  on a struct with a tag; a tag 29; a variant with no alternative that
+  on a struct with a tag; a variant with no alternative that
   accepts the item; a plain array for a `std::vector` or `std::array` of a
   number type; an array of another count for a `std::tuple` or a
   `std::array`.
@@ -224,7 +221,8 @@ Each function gives a `cbor::error` in its `std::expected`:
 - `string_length_exceeded`, `container_elements_exceeded`,
   `nesting_depth_exceeded`: a string or a container is longer than a limit
   of the library, or the item nests too deep.
-- `sharedref_index_not_marked`, `sharedref_not_complete`: see SHARED VALUES.
+- `invalid_tag`: a tag 28 or a tag 29 where a value is read; see TAGS 28
+  AND 29.
 - `no_buffer_space`: a `std::span<char>` target that is too small.
 - `value_too_large`: the size of the bytes does not fit in `std::size_t`.
 
