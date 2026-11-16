@@ -1,4 +1,3 @@
-#include "embedded_cbor.hpp"
 #include "reference.hpp"
 #include <cbor/describe.hpp>
 #include <cbor/diagnostic_notation.hpp>
@@ -232,10 +231,7 @@ TEST_CASE("doc advanced structs: unknown, repeated and missing keys")
     auto const extra = cbor::structs<person>::decode(encode_in_preferred_form(M("name"s, "x"s, "age"s, 1, "z"s, 2)));
     REQUIRE(extra.has_value());
     CHECK_EQ((*extra)->name, "x");
-    auto const tree = cbor::parse_edn(R"({"name": "x", "age": 1, "age": 2})");
-    REQUIRE(tree.has_value());
-    std::string repeated;
-    REQUIRE(cbor::encode(repeated, **tree).has_value());
+    std::string repeated = cbor::diag2cbor(R"({"name": "x", "age": 1, "age": 2})").value();
     CHECK_EQ(cbor::structs<person>::decode(std::move(repeated)).error(), error::duplicate_key);
     CHECK_EQ(cbor::structs<person>::decode(encode_in_preferred_form(M("name"s, "x"s))).error(), error::key_not_found);
     for (value const &key : {A(), M(), value{tagged{1000, V(1)}}, A(1, M("a"s, A())), value{tagged{28, V(1)}}}) {
@@ -283,15 +279,15 @@ TEST_CASE("doc advanced structs: a variant takes the first alternative that acce
 TEST_CASE("doc advanced structs: a value under tag 28 or tag 29 is invalid_tag")
 {
     CHECK_EQ(cbor::structs<std::vector<std::string>>::decode(
-                 test::bytes_of_embedded_cbor(R"(<<[28("x"), "y"]>>)").value())
+                 cbor::diag2cbor(R"([28("x"), "y"])").value())
                  .error(),
              error::invalid_tag);
     CHECK_EQ(cbor::structs<std::vector<std::string>>::decode(
-                 test::bytes_of_embedded_cbor(R"(<<["x", 29(0)]>>)").value())
+                 cbor::diag2cbor(R"(["x", 29(0)])").value())
                  .error(),
              error::invalid_tag);
     auto const skipped = cbor::structs<person>::decode(
-        test::bytes_of_embedded_cbor(R"(<<{"z": 28(1), "name": "ann", "age": 30}>>)").value());
+        cbor::diag2cbor(R"({"z": 28(1), "name": "ann", "age": 30})").value());
     REQUIRE(skipped.has_value());
     CHECK_EQ((*skipped)->name, "ann");
 }

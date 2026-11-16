@@ -1,6 +1,6 @@
-#include "embedded_cbor.hpp"
 #include "reference.hpp"
 #include "owned_copy.hpp"
+#include <cbor/diagnostic_notation.hpp>
 #include <cbor/encode.hpp>
 #include <cbor/schema.hpp>
 #include <cbor/structs.hpp>
@@ -52,7 +52,7 @@ TEST_CASE("doc advanced comparison: iterate an array")
 TEST_CASE("doc advanced comparison: shared values")
 {
     auto const owner =
-        std::make_shared<std::string const>(test::bytes_of_embedded_cbor(R"(<<[28("x"), 29(0)]>>)").value());
+        std::make_shared<std::string const>(cbor::diag2cbor(R"([28("x"), 29(0)])").value());
     // begin shared
     auto const second = cbor::lazy::view(owner)->at(1);
     // second->type() is cbor::type::tag, and second->get<std::uint64_t>() is 0

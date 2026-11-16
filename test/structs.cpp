@@ -1,5 +1,4 @@
 #include "rfc8746.hpp"
-#include "embedded_cbor.hpp"
 #include "reference.hpp"
 #include <cbor/diagnostic_notation.hpp>
 #include <cbor/encode.hpp>
@@ -40,16 +39,6 @@ using cbor::error;
 
 namespace
 {
-
-// The input of a test is written in EDN and encoded by the library: cbor::parse_edn reads it, cbor::encode writes it.
-std::string encoded_edn(std::string_view const edn)
-{
-    auto const tree = cbor::parse_edn(edn);
-    REQUIRE(tree.has_value());
-    std::string out;
-    REQUIRE(cbor::encode(out, **tree).has_value());
-    return out;
-}
 
 template <class T>
 void round_trip(std::string const &bytes, T const &expected)
@@ -231,14 +220,14 @@ struct outer_m {
 // read, so it is no duplicate. The key 1 in one byte and the key 1 in two bytes are the same key (RFC 8949 5.6).
 TEST_CASE("structs: a repeated key is duplicate_key")
 {
-    CHECK_EQ(cbor::structs<pair_ab>::decode(encoded_edn(R"({"a": 1, "a": 2, "b": 71(h'')})")).error(),
+    CHECK_EQ(cbor::structs<pair_ab>::decode(cbor::diag2cbor(R"({"a": 1, "a": 2, "b": 71(h'')})").value()).error(),
              error::duplicate_key);
-    CHECK_EQ(cbor::structs<outer_m>::decode(encoded_edn(R"({"m": {"a": 1, "b": 2}, "m": {"a": 3}})")).error(),
+    CHECK_EQ(cbor::structs<outer_m>::decode(cbor::diag2cbor(R"({"m": {"a": 1, "b": 2}, "m": {"a": 3}})").value()).error(),
              error::duplicate_key);
-    CHECK_EQ(cbor::structs<std::map<std::string, std::string>>::decode(encoded_edn(R"({"a": "A", "a": "B"})")).error(),
+    CHECK_EQ(cbor::structs<std::map<std::string, std::string>>::decode(cbor::diag2cbor(R"({"a": "A", "a": "B"})").value()).error(),
              error::duplicate_key);
-    CHECK(cbor::structs<pair_ab>::decode(encoded_edn(R"({"a": 1, "b": 71(h''), "x": 1, "x": 2})")).has_value());
-    CHECK_EQ(cbor::structs<std::map<std::uint64_t, std::uint64_t>>::decode(encoded_edn("{1: 0, 1_0: 5}")).error(),
+    CHECK(cbor::structs<pair_ab>::decode(cbor::diag2cbor(R"({"a": 1, "b": 71(h''), "x": 1, "x": 2})").value()).has_value());
+    CHECK_EQ(cbor::structs<std::map<std::uint64_t, std::uint64_t>>::decode(cbor::diag2cbor("{1: 0, 1_0: 5}").value()).error(),
              error::duplicate_key);
 }
 
@@ -491,38 +480,38 @@ TEST_CASE("structs: a value under tag 28 or tag 29 is invalid_tag")
     for (std::string const width : {"_0", "_1", "_2", "_3"}) {
         CAPTURE(width);
         auto const bytes = [&width](std::string const &before, std::string const &after) {
-            return test::bytes_of_embedded_cbor("<<" + before + "28" + width + after).value();
+            return cbor::diag2cbor(before + "28" + width + after).value();
         };
         auto const reference = [&width](std::string const &before, std::string const &after) {
-            return test::bytes_of_embedded_cbor("<<" + before + "29" + width + after).value();
+            return cbor::diag2cbor(before + "29" + width + after).value();
         };
-        CHECK_EQ(cbor::structs<value_kinds>::decode(bytes(R"({"a": )", R"((1), "b": []}>>)")).error(),
+        CHECK_EQ(cbor::structs<value_kinds>::decode(bytes(R"({"a": )", R"((1), "b": []})")).error(),
                  error::invalid_tag);
-        CHECK_EQ(cbor::structs<value_kinds>::decode(reference(R"({"a": )", R"((0), "b": []}>>)")).error(),
+        CHECK_EQ(cbor::structs<value_kinds>::decode(reference(R"({"a": )", R"((0), "b": []})")).error(),
                  error::invalid_tag);
-        CHECK_EQ(cbor::structs<value_kinds>::decode(bytes(R"({"a": 1, "b": [)", "(2)]}>>")).error(),
+        CHECK_EQ(cbor::structs<value_kinds>::decode(bytes(R"({"a": 1, "b": [)", "(2)]}")).error(),
                  error::invalid_tag);
-        CHECK_EQ(cbor::structs<value_kinds>::decode(reference(R"({"a": 1, "b": [)", "(0)]}>>")).error(),
+        CHECK_EQ(cbor::structs<value_kinds>::decode(reference(R"({"a": 1, "b": [)", "(0)]}")).error(),
                  error::invalid_tag);
-        CHECK_EQ(cbor::structs<value_kinds>::decode(bytes(R"({"a": 1, "b": [)", "(null)]}>>")).error(),
+        CHECK_EQ(cbor::structs<value_kinds>::decode(bytes(R"({"a": 1, "b": [)", "(null)]}")).error(),
                  error::invalid_tag);
-        CHECK_EQ(cbor::structs<std::string>::decode(bytes("", R"(("x")>>)")).error(), error::invalid_tag);
-        CHECK_EQ(cbor::structs<std::string>::decode(reference("", R"(("x")>>)")).error(), error::invalid_tag);
-        CHECK_EQ(cbor::structs<std::uint64_t>::decode(bytes("", "(5)>>")).error(), error::invalid_tag);
-        CHECK_EQ(cbor::structs<std::uint64_t>::decode(bytes("", "(28(5))>>")).error(), error::invalid_tag);
-        CHECK_EQ((cbor::structs<std::map<std::string, std::uint64_t>>::decode(bytes("{", R"(("k"): 1}>>)"))
+        CHECK_EQ(cbor::structs<std::string>::decode(bytes("", R"(("x"))")).error(), error::invalid_tag);
+        CHECK_EQ(cbor::structs<std::string>::decode(reference("", R"(("x"))")).error(), error::invalid_tag);
+        CHECK_EQ(cbor::structs<std::uint64_t>::decode(bytes("", "(5)")).error(), error::invalid_tag);
+        CHECK_EQ(cbor::structs<std::uint64_t>::decode(bytes("", "(28(5))")).error(), error::invalid_tag);
+        CHECK_EQ((cbor::structs<std::map<std::string, std::uint64_t>>::decode(bytes("{", R"(("k"): 1})"))
                       .error()),
                  error::invalid_tag);
         CHECK_EQ(
-            (cbor::structs<std::map<std::string, std::uint64_t>>::decode(reference(R"({"k": )", "(0)}>>"))
+            (cbor::structs<std::map<std::string, std::uint64_t>>::decode(reference(R"({"k": )", "(0)}"))
                  .error()),
             error::invalid_tag);
         CHECK_EQ(
-            (cbor::structs<std::variant<std::uint64_t, std::string>>::decode(bytes("", "(1)>>")).error()),
+            (cbor::structs<std::variant<std::uint64_t, std::string>>::decode(bytes("", "(1)")).error()),
             error::invalid_tag);
-        CHECK_EQ(cbor::structs<std::vector<inner_number>>::decode(bytes("[", R"(({"n": 1})]>>)")).error(),
+        CHECK_EQ(cbor::structs<std::vector<inner_number>>::decode(bytes("[", R"(({"n": 1})])")).error(),
                  error::invalid_tag);
-        CHECK_EQ(cbor::structs<seconds_member>::decode(bytes(R"({"a": )", "(1(5))}>>")).error(),
+        CHECK_EQ(cbor::structs<seconds_member>::decode(bytes(R"({"a": )", "(1(5))}")).error(),
                  error::invalid_tag);
     }
 }
@@ -535,10 +524,10 @@ TEST_CASE("structs: a tag 28 or tag 29 in a skipped entry is skipped")
 {
     for (std::string const width : {"_0", "_1", "_2", "_3"}) {
         CAPTURE(width);
-        std::string const edn = "<<{28" + width + R"(("a"): 28)" + width + "(1), 29" + width + "(0): 29" +
+        std::string const edn = "{28" + width + R"(("a"): 28)" + width + "(1), 29" + width + "(0): 29" +
                                 width + R"((0), "x": [28)" + width + "(1), 29" + width +
-                                R"((0)], "a": 2, "b": [3]}>>)";
-        auto const read = cbor::structs<value_kinds>::decode(test::bytes_of_embedded_cbor(edn).value());
+                                R"((0)], "a": 2, "b": [3]})";
+        auto const read = cbor::structs<value_kinds>::decode(cbor::diag2cbor(edn).value());
         REQUIRE(read.has_value());
         CHECK(**read == value_kinds{2, {3}});
     }
@@ -550,7 +539,7 @@ TEST_CASE("structs: a tag 28 or tag 29 in a skipped entry is skipped")
 // std::chrono::sys_seconds.
 TEST_CASE("structs: a tag 28 inside the content of tag 1 keeps the error of tag 1")
 {
-    std::string const bytes = test::bytes_of_embedded_cbor(R"(<<{"a": 1(28(5))}>>)").value();
+    std::string const bytes = cbor::diag2cbor(R"({"a": 1(28(5))})").value();
     CHECK_EQ(cbor::structs<value_kinds>::decode(std::string(bytes)).error(), error::incorrect_type);
     CHECK_EQ(cbor::structs<seconds_member>::decode(std::string(bytes)).error(),
              error::inadmissible_type_for_tag_content);
@@ -635,11 +624,11 @@ TEST_CASE("structs: a double that a float cannot hold is number_out_of_range")
 template <class M>
 void map_keys_check()
 {
-    CHECK_EQ(cbor::structs<M>::decode(encoded_edn("{1: 5, 2: 6, 1: 7}")).error(), error::duplicate_key);
-    CHECK_EQ(cbor::structs<M>::decode(encoded_edn("{2: 6, 2: 6}")).error(), error::duplicate_key);
+    CHECK_EQ(cbor::structs<M>::decode(cbor::diag2cbor("{1: 5, 2: 6, 1: 7}").value()).error(), error::duplicate_key);
+    CHECK_EQ(cbor::structs<M>::decode(cbor::diag2cbor("{2: 6, 2: 6}").value()).error(), error::duplicate_key);
     for (std::string_view const edn : {"{1: 5, 2: 6, 3: 7}", "{3: 7, 1: 5, 2: 6}", "{2: 6, 3: 7, 1: 5}",
                                        "{1: 5, 3: 7, 2: 6}", "{2: 6, 1: 5, 3: 7}", "{3: 7, 2: 6, 1: 5}"}) {
-        auto const read = cbor::structs<M>::decode(encoded_edn(edn));
+        auto const read = cbor::structs<M>::decode(cbor::diag2cbor(edn).value());
         REQUIRE(read.has_value());
         CHECK_EQ((*read)->size(), 3u);
         CHECK_EQ((*read)->at(1), 5);
@@ -709,24 +698,24 @@ TEST_CASE("structs: every standard container that encode writes decodes")
 template <class M>
 void multimap_check()
 {
-    round_trip(encoded_edn("{}"), M{});
-    round_trip(encoded_edn("{1: [2]}"), M{{1, 2}});
-    auto const back = cbor::structs<M>::decode(encoded_edn("{1: [2, 3], 2: [4]}"));
+    round_trip(cbor::diag2cbor("{}").value(), M{});
+    round_trip(cbor::diag2cbor("{1: [2]}").value(), M{{1, 2}});
+    auto const back = cbor::structs<M>::decode(cbor::diag2cbor("{1: [2, 3], 2: [4]}").value());
     REQUIRE(back.has_value());
     CHECK_EQ((**back), M{{1, 2}, {1, 3}, {2, 4}});
     auto const again = cbor::structs<M>::encode(M{{1, 2}, {1, 3}});
     REQUIRE(again.has_value());
-    CHECK((*again == encoded_edn("{1: [2, 3]}") || *again == encoded_edn("{1: [3, 2]}")));
+    CHECK((*again == cbor::diag2cbor("{1: [2, 3]}").value() || *again == cbor::diag2cbor("{1: [3, 2]}").value()));
     if constexpr (requires(M const &m) { m.lower_bound(1); }) {
-        CHECK_EQ(cbor::structs<M>::decode(encoded_edn("{1: [2], 1: [3]}")).error(), error::duplicate_key);
+        CHECK_EQ(cbor::structs<M>::decode(cbor::diag2cbor("{1: [2], 1: [3]}").value()).error(), error::duplicate_key);
     } else {
-        auto const appended = cbor::structs<M>::decode(encoded_edn("{1: [2], 1: [3]}"));
+        auto const appended = cbor::structs<M>::decode(cbor::diag2cbor("{1: [2], 1: [3]}").value());
         REQUIRE(appended.has_value());
         CHECK_EQ(**appended, M{{1, 2}, {1, 3}});
     }
-    CHECK_EQ(cbor::structs<M>::decode(encoded_edn("{1: 2}")).error(), error::incorrect_type);
-    CHECK_EQ(cbor::structs<M>::decode(encoded_edn("{1: []}")).error(), error::incorrect_type);
-    CHECK_EQ(cbor::structs<M>::decode(encoded_edn("[[1, 2]]")).error(), error::incorrect_type);
+    CHECK_EQ(cbor::structs<M>::decode(cbor::diag2cbor("{1: 2}").value()).error(), error::incorrect_type);
+    CHECK_EQ(cbor::structs<M>::decode(cbor::diag2cbor("{1: []}").value()).error(), error::incorrect_type);
+    CHECK_EQ(cbor::structs<M>::decode(cbor::diag2cbor("[[1, 2]]").value()).error(), error::incorrect_type);
 }
 
 // RFC 8949 5.6 refuses two equal keys in a map, so a std::multimap goes as one key with the array of its values. The
@@ -796,9 +785,9 @@ TEST_CASE("structs: decode reserves the elements that the bytes left can hold")
     for (std::size_t i = 1; i < claimed; ++i)
         claim += ", null";
     claim += "]}";
-    std::string const full = encoded_edn(claim);
+    std::string const full = cbor::diag2cbor(claim).value();
     std::string message = full.substr(0, full.size() - claimed);
-    message.append(nulls, encoded_edn("null").front());
+    message.append(nulls, cbor::diag2cbor("null").value().front());
     REQUIRE_EQ(message.size(), full.size() - claimed + nulls);
     CHECK_THROWS_AS(static_cast<void>(cbor::structs<large_elements>::decode(std::move(message))), std::bad_alloc);
 }
@@ -911,11 +900,11 @@ TEST_CASE("structs: an array head reserves no more elements than the bytes left 
     for (std::size_t i = 1; i < claimed; ++i)
         all_zeros += ", 0";
     all_zeros += "]";
-    std::string const claim = encoded_edn(all_zeros);
+    std::string const claim = cbor::diag2cbor(all_zeros).value();
     std::string const head_of_claim = claim.substr(0, claim.size() - claimed);
     std::string input = head_of_claim;
     for (std::size_t i = 0; i < present; ++i)
-        input += encoded_edn(R"({"x": 0, "y": 0})");
+        input += cbor::diag2cbor(R"({"x": 0, "y": 0})").value();
     REQUIRE_EQ(input.size() - head_of_claim.size(), claimed);
     largest_allocation_resource resource;
     std::pmr::vector<point_xy> target(&resource);
@@ -936,8 +925,8 @@ struct tree_node {
 // succeeds gives the same tree. A tree whose last byte is cut gives too_little_data.
 TEST_CASE("structs: a recursive type decodes and a cut tree gives too_little_data")
 {
-    std::string const bytes = encoded_edn(
-        R"({"children": [{"children": []}, {"children": [{"children": []}, {"children": []}]}]})");
+    std::string const bytes = cbor::diag2cbor(
+        R"({"children": [{"children": []}, {"children": [{"children": []}, {"children": []}]}]})").value();
     tree_node const expected{{tree_node{}, tree_node{{tree_node{}, tree_node{}}}}};
     auto const read = cbor::structs<tree_node>::decode(std::string(bytes));
     REQUIRE(read.has_value());
@@ -1157,13 +1146,13 @@ TEST_CASE("structs: tag 1 with a float into sys_seconds")
 // any order. A repeated item makes the set not valid and gives duplicate_key, as a repeated key of a map does.
 TEST_CASE("structs: std::set is tag 258")
 {
-    round_trip(encoded_edn("258([-1, 1])"), std::set<int>{-1, 1});
-    round_trip(encoded_edn(R"(258(["aa", "b"]))"), std::set<std::string>{"aa", "b"});
-    auto const any_order = cbor::structs<std::set<int>>::decode(encoded_edn("258([2, 1])"));
+    round_trip(cbor::diag2cbor("258([-1, 1])").value(), std::set<int>{-1, 1});
+    round_trip(cbor::diag2cbor(R"(258(["aa", "b"]))").value(), std::set<std::string>{"aa", "b"});
+    auto const any_order = cbor::structs<std::set<int>>::decode(cbor::diag2cbor("258([2, 1])").value());
     REQUIRE(any_order.has_value());
     CHECK(**any_order == std::set<int>{1, 2});
-    CHECK_EQ(cbor::structs<std::set<int>>::decode(encoded_edn("258([1, 1])")).error(), error::duplicate_key);
-    CHECK_EQ(cbor::structs<std::set<int>>::decode(encoded_edn("[1, 2]")).error(), error::incorrect_type);
+    CHECK_EQ(cbor::structs<std::set<int>>::decode(cbor::diag2cbor("258([1, 1])").value()).error(), error::duplicate_key);
+    CHECK_EQ(cbor::structs<std::set<int>>::decode(cbor::diag2cbor("[1, 2]").value()).error(), error::incorrect_type);
 }
 
 // RFC 8746 2.1: a typed array is its tag over a byte string of the elements, here little endian. The owner decided on

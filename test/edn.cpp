@@ -9,6 +9,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace
 {
@@ -40,16 +41,22 @@ std::string encoded(cbor::item const &node)
     return out;
 }
 
-// The bytes of a vector, made by the parser from the EDN literal h'...' of its hex text.
-std::string bytes_of(cbor::item const &vector)
+// The bytes of a hex text, made by the parser from the EDN literal h'...'.
+std::string bytes_of_hex(std::string_view const hex)
 {
-    auto const hex = member_of(vector, "hex");
-    REQUIRE(hex.has_value());
-    auto const literal = cbor::parse_edn("h'" + std::string(*hex->get<std::string_view>()) + "'");
+    auto const literal = cbor::parse_edn("h'" + std::string(hex) + "'");
     REQUIRE(literal.has_value());
     auto const bytes = (*literal)->get<std::span<std::byte const>>();
     REQUIRE(bytes.has_value());
     return std::string(reinterpret_cast<char const *>(bytes->data()), bytes->size());
+}
+
+// The bytes of a vector, made from its hex text.
+std::string bytes_of(cbor::item const &vector)
+{
+    auto const hex = member_of(vector, "hex");
+    REQUIRE(hex.has_value());
+    return bytes_of_hex(*hex->get<std::string_view>());
 }
 
 bool round_trips(cbor::item const &vector)
@@ -132,4 +139,72 @@ TEST_CASE("parse_edn: a text that is not one item gives syntax_error")
         REQUIRE_FALSE(tree.has_value());
         CHECK_EQ(tree.error(), cbor::error::syntax_error);
     }
+}
+
+// RFC 8949 section 3: the encoding indicators _0 to _3 put the argument in 1, 2, 4 and 8 bytes after the initial
+// byte. diag2cbor must write the width that the text gives, and diagnostic_notation must give the text back, or the
+// two functions do not agree on the head.
+TEST_CASE("diag2cbor: an encoding indicator gives the width of the head")
+{
+    for (auto const &[text, size] : {std::pair<std::string_view, std::size_t>{"1_0", 2}, {"1_1", 3}, {"1_2", 5},
+                                     {"1_3", 9}}) {
+        CAPTURE(text);
+        auto const bytes = cbor::diag2cbor(text);
+        REQUIRE(bytes.has_value());
+        CHECK_EQ(bytes->size(), size);
+        CHECK_EQ(cbor::item_size(*bytes), bytes->size());
+        CHECK_EQ(cbor::diagnostic_notation(*bytes), text);
+    }
+}
+
+// RFC 8949 Appendix A gives the diagnostic notation of the vectors. diag2cbor must give the exact bytes of each
+// vector that round-trips, and the bytes must be one item.
+TEST_CASE("diag2cbor: the diagnostic notation of RFC 8949 Appendix A gives the bytes of the vector")
+{
+    auto const vectors = read_vectors();
+    auto const all = vectors->get<std::span<cbor::item const>>();
+    REQUIRE(all.has_value());
+    std::size_t checked = 0;
+    for (cbor::item const &vector : *all) {
+        auto const diagnostic = member_of(vector, "diagnostic");
+        if (!diagnostic || !round_trips(vector))
+            continue;
+        std::string_view const text = *diagnostic->get<std::string_view>();
+        CAPTURE(text);
+        auto const bytes = cbor::diag2cbor(text);
+        REQUIRE(bytes.has_value());
+        CHECK_EQ(*bytes, bytes_of(vector));
+        CHECK_EQ(cbor::item_size(*bytes), bytes->size());
+        ++checked;
+    }
+    CHECK_GT(checked, 0u);
+}
+
+// diag2cbor gives one item. A text that is not one item, and a text with an indefinite length, which the reader
+// does not write, must be refused with syntax_error.
+TEST_CASE("diag2cbor: a text that is not one item gives syntax_error")
+{
+    for (std::string_view const text : {"", "[1,", "1 2", "{1:}", "h'0'", "[_ 1]"}) {
+        CAPTURE(text);
+        auto const bytes = cbor::diag2cbor(text);
+        REQUIRE_FALSE(bytes.has_value());
+        CHECK_EQ(bytes.error(), cbor::error::syntax_error);
+    }
+}
+
+// diag2cbor does not check validity: the declaration says that a tag content and a text string stay as written.
+// parse_edn decodes the bytes, so it refuses the tags that diag2cbor gives.
+TEST_CASE("diag2cbor: bytes that are not valid stay as written")
+{
+    for (auto const &[text, hex] : {std::pair<std::string_view, std::string_view>{"64(1)", "d84001"},
+                                    {"24(<<1, 2>>)", "d818420102"},
+                                    {"\"\xff\"", "61ff"}}) {
+        CAPTURE(hex);
+        auto const bytes = cbor::diag2cbor(text);
+        REQUIRE(bytes.has_value());
+        CHECK_EQ(*bytes, bytes_of_hex(hex));
+        CHECK_EQ(cbor::item_size(*bytes), bytes->size());
+    }
+    CHECK_EQ(cbor::parse_edn("64(1)").error(), cbor::error::inadmissible_type_for_tag_content);
+    CHECK_EQ(cbor::parse_edn("24(<<1, 2>>)").error(), cbor::error::syntax_error);
 }

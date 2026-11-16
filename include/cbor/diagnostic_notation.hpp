@@ -40,6 +40,7 @@ namespace cbor
 {
 
 std::expected<owning<item>, error> parse_edn(std::string_view text);
+std::expected<std::string, error> diag2cbor(std::string_view text);
 
 namespace detail
 {
@@ -979,6 +980,16 @@ class extended_diagnostic_notation
         return parse_number(text, at, out);
     }
 
+    static constexpr std::expected<std::size_t, error> parse_literal(literal_cursor const cursor, std::string &out)
+    {
+        backpatches patches;
+        auto const next = parse_literal(cursor, out, patches);
+        if (!next) [[unlikely]]
+            return next;
+        patches.apply(out);
+        return next;
+    }
+
     static constexpr std::expected<detail::validity::offset, error>
     append_deterministically_encoded(std::string &out, std::string_view const encoded,
                                      detail::validity::offset const at)
@@ -1345,7 +1356,7 @@ class extended_diagnostic_notation
 
     friend std::expected<std::string, error> cbor::diagnostic_notation(std::string_view encoded);
 
-    friend std::expected<owning<item>, error> cbor::parse_edn(std::string_view text);
+    friend std::expected<std::string, error> cbor::diag2cbor(std::string_view text);
 
     friend std::expected<std::string, error> item::to_edn() const;
 };
@@ -1402,36 +1413,70 @@ inline std::expected<std::string, error> diagnostic_notation(std::string_view co
 }
 
 /**
- * @brief Reads the extended diagnostic notation (EDN) in @p text into a tree.
+ * @brief Gives the CBOR bytes that the extended diagnostic notation (EDN) in @p text writes.
  *
  * The text holds one item, with white space and comments around it, in the notation of RFC 8949 section 8 and of
- * draft-ietf-cbor-edn-literals. JSON text is EDN text. The tree is the one that cbor::decode() gives for the CBOR of
- * the item; cbor::encode() writes it, and item::to_edn() gives the text back.
+ * draft-ietf-cbor-edn-literals. The bytes are one well-formed item. Each head has the width that its encoding
+ * indicator gives, for example `1_1`, and else the preferred width. Embedded CBOR `<<...>>` holds its bytes as they
+ * are written, also a CBOR sequence or no item.
+ * The call does not check validity: a repeated key, a tag content as written, such as `64(1)` or `29(0)`, and a text
+ * string that is not UTF-8 stay in the bytes. cbor::parse_edn() gives the tree and checks it.
  *
- * @retval syntax_error the text is not one item of the notation, or text follows the item
+ * @code{.example}
+ * call: cbor::diag2cbor("[1, 1_1]")
+ * result: 5 bytes: 82 01 19 00 01
+ * @endcode
+ *
+ * @retval syntax_error the text is not one item of the notation, text follows the item, or the text uses
+ * indefinite length
  * @retval nesting_depth_exceeded the item is deeper than the stack of the thread holds
- * @retval string_length_exceeded a string is longer than `limits::string_length`
- * @retval container_elements_exceeded an array or a map holds more than `limits::container_elements` items
- * @see item::to_edn()
+ * @see cbor::parse_edn()
+ * @see cbor::diagnostic_notation()
  *
  * @ingroup tools
  */
-inline std::expected<owning<item>, error> parse_edn(std::string_view const text)
+inline std::expected<std::string, error> diag2cbor(std::string_view const text)
 {
     using edn = detail::extended_diagnostic_notation;
     auto const start = edn::optional_space_end(text, 0);
     if (!start) [[unlikely]]
         return std::unexpected(error::syntax_error);
     std::string bytes;
-    edn::backpatches patches;
-    auto const next = edn::parse_literal({text, *start}, bytes, patches);
+    auto const next = edn::parse_literal({text, *start}, bytes);
     if (!next) [[unlikely]]
         return std::unexpected(next.error() == error::invalid_path ? error::syntax_error : next.error());
-    patches.apply(bytes);
     auto const end = edn::optional_space_end(text, *next);
     if (!end || *end != text.size()) [[unlikely]]
         return std::unexpected(error::syntax_error);
-    return decode(bytes);
+    return bytes;
+}
+
+/**
+ * @brief Reads the extended diagnostic notation (EDN) in @p text into a tree.
+ *
+ * The text holds one item, with white space and comments around it, in the notation of RFC 8949 section 8 and of
+ * draft-ietf-cbor-edn-literals. JSON text is EDN text. The tree is the one that cbor::decode() gives for the bytes
+ * of cbor::diag2cbor(); cbor::encode() writes it, and item::to_edn() gives the text back.
+ *
+ * @retval syntax_error the text is not one item of the notation, text follows the item, or the content of a tag 24
+ * is not one item
+ * @retval nesting_depth_exceeded the item is deeper than the stack of the thread holds
+ * @retval string_length_exceeded a string is longer than `limits::string_length`, where a build sets that limit
+ * @retval container_elements_exceeded an array or a map holds more than `limits::container_elements` items, where a
+ * build sets that limit
+ * @retval sharedref_index_not_marked a tag 29 whose index names no tag 28 before it
+ * @retval sharedref_not_defined a tag 29 that names a tag 28 whose content is only tags 28 and this tag 29, as in
+ * `28(29(0))`
+ * @retval inadmissible_type_for_tag_content a tag 29 over an item that is not an unsigned integer, or a typed array
+ * (RFC 8746) whose content is not a byte string of whole elements
+ * @see cbor::diag2cbor()
+ * @see item::to_edn()
+ *
+ * @ingroup tools
+ */
+inline std::expected<owning<item>, error> parse_edn(std::string_view const text)
+{
+    return diag2cbor(text).and_then(decode);
 }
 
 inline std::expected<std::string, error> item::to_edn() const

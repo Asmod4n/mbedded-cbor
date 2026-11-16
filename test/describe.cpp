@@ -679,10 +679,7 @@ TEST_CASE("describe: a key that no entry has is skipped")
 // encoded by the library.
 TEST_CASE("describe: a repeated key of a member is duplicate_key")
 {
-    auto const tree = cbor::parse_edn(R"(160001({"count": 4, "count": 5}))");
-    REQUIRE(tree.has_value());
-    std::string bytes;
-    REQUIRE(cbor::encode(bytes, **tree).has_value());
+    std::string bytes = cbor::diag2cbor(R"(160001({"count": 4, "count": 5}))").value();
     CHECK_EQ(cbor::structs<describe_test::doors>::decode(std::move(bytes)).error(), cbor::error::duplicate_key);
 }
 

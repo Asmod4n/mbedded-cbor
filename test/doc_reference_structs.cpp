@@ -140,10 +140,7 @@ TEST_CASE("doc reference structs: decode errors")
     CHECK_EQ(cbor::structs<int>::decode(test::encode_in_preferred_form(test::V("x"s))).error(), cbor::error::incorrect_type);
     CHECK_EQ(cbor::structs<std::uint8_t>::decode(test::encode_in_preferred_form(test::V(256))).error(),
              cbor::error::number_out_of_range);
-    auto const tree = cbor::parse_edn(R"({"age": 1, "age": 2, "name": "a"})");
-    REQUIRE(tree.has_value());
-    std::string repeated;
-    REQUIRE(cbor::encode(repeated, **tree).has_value());
+    std::string repeated = cbor::diag2cbor(R"({"age": 1, "age": 2, "name": "a"})").value();
     CHECK_EQ(cbor::structs<person>::decode(std::move(repeated)).error(), cbor::error::duplicate_key);
 }
 

@@ -1,4 +1,4 @@
-#include "embedded_cbor.hpp"
+#include <cbor/diagnostic_notation.hpp>
 #include "types.hpp"
 
 namespace schema_types
@@ -464,7 +464,7 @@ struct long_code {
 };
 
 // A test of a field that holds a tag 28 or 29 replaces one part of the EDN of a message and reads the bytes
-// back as EDN embedded CBOR. The replacement has the same width in bytes, so each other field stays at its
+// back with cbor::diag2cbor. The replacement has the same width in bytes, so each other field stays at its
 // offset.
 std::string message_with_part_replaced(std::string const &bytes, std::string_view const part,
                                        std::string_view const replacement)
@@ -474,7 +474,7 @@ std::string message_with_part_replaced(std::string const &bytes, std::string_vie
     REQUIRE_NE(at, std::string::npos);
     REQUIRE_EQ(edn.find(part, at + 1), std::string::npos);
     edn.replace(at, part.size(), replacement);
-    std::string out = test::bytes_of_embedded_cbor("<<" + edn + ">>").value();
+    std::string out = cbor::diag2cbor(edn).value();
     REQUIRE_EQ(out.size(), bytes.size());
     return out;
 }

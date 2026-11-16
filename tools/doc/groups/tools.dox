@@ -8,6 +8,8 @@ function reads the bytes that the caller passes. Include `<cbor/cbor.hpp>`.
 gives the items of a CBOR sequence (RFC 8742) one by one.
 `cbor::sequence_reader` does the same for a sequence whose bytes arrive in
 pieces. `cbor::diagnostic_notation` prints an item as text.
+`cbor::diag2cbor` and `cbor::parse_edn` read such text back, as bytes and as a
+tree.
 
 @section tools_size ITEM SIZE
 
@@ -97,6 +99,28 @@ hold exactly one item. A byte after the item gives `syntax_error`.
 The bytes `a1 61 61 83 01 f9 41 00 41 01` give the text
 `{"a": [1, 2.5, h'01']}`.
 
+@section tools_read READ DIAGNOSTIC NOTATION
+
+`cbor::diag2cbor(text)` gives the CBOR bytes that `text` writes, as a
+`std::expected<std::string, cbor::error>`. `cbor::parse_edn(text)` gives the
+tree of the same bytes, as `cbor::decode` gives it. The text holds one item
+in the extended diagnostic notation (EDN) of RFC 8949 section 8 and of
+draft-ietf-cbor-edn-literals, with white space and comments around it. JSON
+text is EDN text.
+
+- A head carries the width that its encoding indicator gives, else the
+  preferred width. The text `1_1` gives the bytes `19 00 01`.
+- Embedded CBOR `<<...>>` keeps its bytes as they are written, also a CBOR
+  sequence or no item.
+- `diag2cbor` does not check validity. A repeated key, a tag content as
+  written, such as `64(1)`, and a text string that is not UTF-8 stay in the
+  bytes. `parse_edn` decodes the bytes and gives the errors of
+  `cbor::decode`.
+- The reader writes no indefinite length. The text `[_ 1]` gives
+  `syntax_error`.
+
+The text `[1, 1_1]` gives the bytes `82 01 19 00 01`.
+
 @section tools_errors ERRORS
 
 Each function gives a `std::expected` with a `cbor::error`. A wrong use
@@ -106,16 +130,22 @@ and a call on a `cbor::sequence_reader` that was moved from.
 - `too_little_data`: the bytes end before the item ends, or a count is
   larger than the bytes that are left.
 - `syntax_error`: a head is not well-formed, or bytes follow the item in
-  `diagnostic_notation`.
+  `diagnostic_notation`. In `diag2cbor` and `parse_edn`: the text is not one
+  item of the notation, text follows the item, or the text uses indefinite
+  length; in `parse_edn` also the content of a tag 24 that is not one item.
 - `indefinite_length`: a head uses indefinite length, in `item_size` and in
   `sequence_reader`.
 - `string_length_exceeded`: a string is longer than `limits::string_length`,
-  in `item_size` and in `diagnostic_notation`.
+  in `item_size`, in `diagnostic_notation` and in `parse_edn`.
 - `container_elements_exceeded`: the count of an array or a map is greater
-  than `limits::container_elements`, in `item_size` and in
-  `diagnostic_notation`.
-- `nesting_depth_exceeded`: `diagnostic_notation` of an item that is deeper
-  than the stack of the thread holds.
+  than `limits::container_elements`, in `item_size`, in
+  `diagnostic_notation` and in `parse_edn`.
+- `nesting_depth_exceeded`: `diagnostic_notation` of an item, or
+  `diag2cbor` and `parse_edn` of a text, that is deeper than the stack of
+  the thread holds.
+- `sharedref_index_not_marked`, `sharedref_not_defined` and
+  `inadmissible_type_for_tag_content`: in `parse_edn`, as `cbor::decode`
+  gives them.
 
 @manonly
 .SH "EXAMPLES"

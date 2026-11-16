@@ -255,11 +255,9 @@ class path
         constexpr std::expected<std::size_t, error> parse_literal(std::string_view const text, std::size_t const at)
         {
             std::string literal;
-            detail::extended_diagnostic_notation::backpatches patches;
-            auto const next = detail::extended_diagnostic_notation::parse_literal({text, at}, literal, patches);
+            auto const next = detail::extended_diagnostic_notation::parse_literal({text, at}, literal);
             if (!next) [[unlikely]]
                 return next;
-            patches.apply(literal);
             if (auto const r = detail::extended_diagnostic_notation::append_deterministically_encoded(
                     keys, literal, detail::validity::offset{});
                 !r) [[unlikely]]

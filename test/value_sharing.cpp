@@ -17,7 +17,7 @@
 #include <variant>
 #include <vector>
 
-#include "embedded_cbor.hpp"
+#include <cbor/diagnostic_notation.hpp>
 #include "item_head.hpp"
 #include "small_stack.hpp"
 #include "unfolding.hpp"
@@ -523,9 +523,9 @@ TEST_CASE("value sharing: a struct decode refuses every form of a tag 28 and a t
     using marked_numbers = std::vector<std::optional<std::uint64_t>>;
     for (std::string const width : {"_0", "_1", "_2", "_3"}) {
         CAPTURE(width);
-        std::string const marked = test::bytes_of_embedded_cbor("<<[28" + width + "(5)]>>").value();
+        std::string const marked = cbor::diag2cbor("[28" + width + "(5)]").value();
         std::string const named =
-            test::bytes_of_embedded_cbor("<<[28" + width + "(5), 29" + width + "(0" + width + ")]>>").value();
+            cbor::diag2cbor("[28" + width + "(5), 29" + width + "(0" + width + ")]").value();
         CHECK_EQ(cbor::structs<marked_numbers>::decode(std::string(marked)).error(), error::invalid_tag);
         CHECK_EQ(cbor::structs<marked_numbers>::decode(std::string(named)).error(), error::invalid_tag);
     }
