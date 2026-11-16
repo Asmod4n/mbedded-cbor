@@ -144,9 +144,7 @@ TEST_CASE("doc reference structs: decode errors")
     REQUIRE(tree.has_value());
     std::string repeated;
     REQUIRE(cbor::encode(repeated, **tree).has_value());
-    auto const again = cbor::structs<person>::decode(std::move(repeated));
-    REQUIRE(again.has_value());
-    CHECK_EQ((*again)->age, 2);
+    CHECK_EQ(cbor::structs<person>::decode(std::move(repeated)).error(), cbor::error::duplicate_key);
 }
 
 // structs.hpp, the comment of decode: an empty owner is a wrong use and throws std::logic_error.

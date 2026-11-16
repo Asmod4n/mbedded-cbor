@@ -675,17 +675,15 @@ TEST_CASE("describe: a key that no entry has is skipped")
     CHECK_EQ((*read)->exp, 1444064944);
 }
 
-// The declaration of decode says that a repeated key reads its member again (owner, 2026-11-16): a described struct
-// keeps the last value. The input is written in EDN and encoded by the library.
-TEST_CASE("describe: a repeated key reads its member again")
+// RFC 8949 5.6: a repeated key in a map of a described struct gives duplicate_key. The input is written in EDN and
+// encoded by the library.
+TEST_CASE("describe: a repeated key of a member is duplicate_key")
 {
     auto const tree = cbor::parse_edn(R"(160001({"count": 4, "count": 5}))");
     REQUIRE(tree.has_value());
     std::string bytes;
     REQUIRE(cbor::encode(bytes, **tree).has_value());
-    auto const read = cbor::structs<describe_test::doors>::decode(std::move(bytes));
-    REQUIRE(read.has_value());
-    CHECK_EQ((*read)->count, 5u);
+    CHECK_EQ(cbor::structs<describe_test::doors>::decode(std::move(bytes)).error(), cbor::error::duplicate_key);
 }
 
 // A description with no entry is a tag over an empty map. A type alias names a type whose name holds a comma,

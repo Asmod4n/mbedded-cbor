@@ -594,6 +594,8 @@ class generic
                 auto key = detail::pfr::make_element<typename U::key_type>(out);
                 if (auto const r = read_generic(d, key); !r) [[unlikely]]
                     return r;
+                if (auto const r = detail::validity::check_key_unique(out.contains(key)); !r) [[unlikely]]
+                    return r;
                 auto const values = d.decode_head();
                 if (!values) [[unlikely]]
                     return std::unexpected(values.error());
@@ -626,11 +628,15 @@ class generic
                 auto value = detail::pfr::make_element<typename U::mapped_type>(out);
                 if (auto const r = read_generic(d, value); !r) [[unlikely]]
                     return r;
-                if constexpr (requires { out.insert_or_assign(std::move(key), std::move(value)); }) {
-                    out.insert_or_assign(std::move(key), std::move(value));
-                } else {
-                    out.erase(key);
-                    out.emplace(std::move(key), std::move(value));
+                if constexpr (requires { out.try_emplace(std::move(key), std::move(value)); }) {
+                    if (auto const r = detail::validity::check_key_unique(
+                            !out.try_emplace(std::move(key), std::move(value)).second);
+                        !r) [[unlikely]]
+                        return r;
+                } else if (auto const r = detail::validity::check_key_unique(
+                               !out.emplace(std::move(key), std::move(value)).second);
+                           !r) [[unlikely]] {
+                    return r;
                 }
             }
             return {};
@@ -773,7 +779,9 @@ class generic
                 auto element = detail::pfr::make_element<typename U::value_type>(out);
                 if (auto const r = read_generic(d, element); !r) [[unlikely]]
                     return r;
-                out.insert(std::move(element));
+                if (auto const r = detail::validity::check_key_unique(!out.insert(std::move(element)).second);
+                    !r) [[unlikely]]
+                    return r;
             }
             return {};
         } else {
@@ -888,6 +896,8 @@ class generic
         std::bitset<count> found;
         auto const read_member =
             [&]<std::size_t I>(std::integral_constant<std::size_t, I>) -> std::expected<void, error> {
+            if (auto const unique = detail::validity::check_key_unique(found.test(I)); !unique) [[unlikely]]
+                return unique;
             found.set(I);
             return read_generic(d, detail::pfr::get<I>(out));
         };
@@ -1452,8 +1462,6 @@ public:
      * A form with `target` reads into the containers of `target`, with their allocator.
      * The other forms start from `T{}`.
      * A byte after the item is not read.
-     * A repeated key reads its member or map value again: a number, a string or a container keeps the last value,
-     * a struct member is read again into the same object, a multimap appends the values, a set keeps one element.
      * A container reserves storage for at most as many elements as the bytes left after its head can hold, by the
      * least encoding of one element. While an item is read, each open container holds no more than that; the open
      * containers are at most as many as the nesting of the input, which the stack limit bounds. After a decode that
@@ -1472,6 +1480,7 @@ public:
      * @retval incorrect_type an item of another type, or a missing or other tag
      * @retval number_out_of_range a number that the type cannot hold
      * @retval key_not_found no key for a member that is not `std::optional`
+     * @retval duplicate_key a key that comes twice
      * @retval too_little_data the input ends inside the item
      * @retval syntax_error a head is not well-formed
      * @retval indefinite_length a head uses indefinite length
