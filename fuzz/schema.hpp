@@ -429,14 +429,15 @@ void compare_all(T const &native, std::string_view message);
 // The errors that an unverified form may give on raw input (the comment of cbor::schema::unverified_adopt in
 // schema.hpp): it skips the checks of the data and keeps every check of a bound, so it never raises and never reads
 // outside the input. The head of a variant item chooses the alternative, so a type with a variant member also gives
-// incorrect_type.
+// incorrect_type, and invalid_tag for a tag 28 or a tag 29 in the place of that head.
 template <class T>
 bool unverified_error(cbor::error const e)
 {
     using enum cbor::error;
-    return e == too_little_data || e == index_out_of_bounds || e == unpopulated_table_index || e == syntax_error ||
-           e == nesting_depth_exceeded || e == not_enough_memory || e == string_length_exceeded ||
-           e == container_elements_exceeded || (std::is_same_v<T, garage> && e == incorrect_type);
+    return e == too_little_data || e == index_out_of_bounds || e == unpopulated_table_index ||
+           e == syntax_error || e == nesting_depth_exceeded || e == not_enough_memory ||
+           e == string_length_exceeded || e == container_elements_exceeded ||
+           (std::is_same_v<T, garage> && (e == incorrect_type || e == invalid_tag));
 }
 
 // The unverified forms on raw input give a value or one of their errors, and every leaf path reads inside the

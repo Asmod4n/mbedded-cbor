@@ -1,3 +1,4 @@
+#include "embedded_cbor.hpp"
 #include "types.hpp"
 
 namespace schema_types
@@ -453,6 +454,106 @@ TEST_CASE("decode: a text item before the record of a class alternative")
         REQUIRE(back.has_value());
         CHECK_EQ((*back)->note, s.note);
     }
+}
+
+namespace schema_types
+{
+
+struct long_code {
+    char code[24];
+};
+
+// A test of a field that holds a tag 28 or 29 replaces one part of the EDN of a message and reads the bytes
+// back as EDN embedded CBOR. The replacement has the same width in bytes, so each other field stays at its
+// offset.
+std::string message_with_part_replaced(std::string const &bytes, std::string_view const part,
+                                       std::string_view const replacement)
+{
+    std::string edn = cbor::diagnostic_notation(bytes).value();
+    std::size_t const at = edn.find(part);
+    REQUIRE_NE(at, std::string::npos);
+    REQUIRE_EQ(edn.find(part, at + 1), std::string::npos);
+    edn.replace(at, part.size(), replacement);
+    std::string out = test::bytes_of_embedded_cbor("<<" + edn + ">>").value();
+    REQUIRE_EQ(out.size(), bytes.size());
+    return out;
+}
+
+} // namespace schema_types
+
+CBOR_DEFINE_TYPE_MEMBERS(long_code, cbor::tag{1751}, code);
+
+// Tags 28 and 29 mark and name a shared value, and schema reads no value under them (owner, 2026-11-16).
+// schema compares each head at a fixed offset and decodes no tag. Where the compare fails and a whole head of
+// tag 28 or 29 stands in the field, the error is invalid_tag. Each row puts a tag 28 head of the same width
+// into one kind of field: the packing prefix, the tag of the root and of a member struct, the head of a
+// number, a reference into the table, the head of a text, of a typed array, of an array of fixed structs and
+// of a fixed text.
+TEST_CASE("decode and at_path: a tag 28 in the place of a head is invalid_tag")
+{
+    std::string const bytes = encode_with_schema(sample_everything);
+    auto const with = [&bytes](std::string_view const part, std::string_view const replacement) {
+        return message_with_part_replaced(bytes, part, replacement);
+    };
+    std::string const prefix = with("113(", "28_0(");
+    CHECK_EQ(form<everything>::decode(std::string(prefix)).error(), error::invalid_tag);
+    CHECK_EQ(read_leaf_with_copying_path<everything, "$.flag">(prefix).error(), error::invalid_tag);
+    std::string const root = with("1660(", "28_1(");
+    CHECK_EQ(form<everything>::decode(std::string(root)).error(), error::invalid_tag);
+    CHECK_EQ(read_leaf_with_copying_path<everything, "$.flag">(root).error(), error::invalid_tag);
+    CHECK_EQ(form<everything>::at_path<"$.flag">(root).error(), error::invalid_tag);
+    std::string const member = with("[1501(132([_2 1800_2", "[28_1(132([_2 1800_2");
+    CHECK_EQ(form<everything>::decode(std::string(member)).error(), error::invalid_tag);
+    CHECK_EQ(read_leaf_with_copying_path<everything, "$.engines[0].cc">(member).error(), error::invalid_tag);
+    std::string const number = with("1800_2", "28_0(1800_1)");
+    CHECK_EQ(form<everything>::decode(std::string(number)).error(), error::invalid_tag);
+    CHECK_EQ(read_leaf_with_copying_path<everything, "$.engines[0].cc">(number).error(), error::invalid_tag);
+    std::string const reference = with("6(0_2)", "28_1(0_1)");
+    CHECK_EQ(form<everything>::decode(std::string(reference)).error(), error::invalid_tag);
+    CHECK_EQ(read_leaf_with_copying_path<everything, "$.text">(reference).error(), error::invalid_tag);
+    std::string const text = with(R"("text"_2)", R"(28_0("text"_1))");
+    CHECK_EQ(form<everything>::decode(std::string(text)).error(), error::invalid_tag);
+    CHECK_EQ(read_leaf_with_copying_path<everything, "$.text">(text).error(), error::invalid_tag);
+    std::string const typed_array = with("86(", "28_0(");
+    CHECK_EQ(form<everything>::decode(std::string(typed_array)).error(), error::invalid_tag);
+    CHECK_EQ(read_leaf_with_copying_path<everything, "$.track[0]">(typed_array).error(), error::invalid_tag);
+    std::string const fixed_array = with("32873([simple(5)", "28_1([simple(5)");
+    CHECK_EQ(form<everything>::decode(std::string(fixed_array)).error(), error::invalid_tag);
+    CHECK_EQ(read_leaf_with_copying_path<everything, "$.tires[0].diameter">(fixed_array).error(),
+             error::invalid_tag);
+    long_code code{};
+    std::ranges::fill(code.code, 'a');
+    std::string const tagged_text = message_with_part_replaced(
+        encode_with_schema(code), '"' + std::string(24, 'a') + '"', "28_0(\"" + std::string(23, 'a') + "\")");
+    CHECK_EQ(form<long_code>::decode(std::string(tagged_text)).error(), error::invalid_tag);
+    CHECK_EQ(read_leaf_with_copying_path<long_code, "$.code">(tagged_text).error(), error::invalid_tag);
+}
+
+// A head of tag 28 takes at least two bytes (RFC 8949 3: the argument 28 does not fit in the initial byte). A
+// field of one byte cannot hold it. So a bool field that holds the first byte of such a head gives
+// incorrect_type. The bytes after it hold the rest of the head, and the next field changes too; the bool is
+// read first.
+TEST_CASE("decode and at_path: the first byte of a tag 28 head in a one-byte field is incorrect_type")
+{
+    std::string const bytes =
+        message_with_part_replaced(encode_with_schema(sample_everything), "true, 6(0_2)", "28_0(0_1), 0_0");
+    CHECK_EQ(form<everything>::decode(std::string(bytes)).error(), error::incorrect_type);
+    CHECK_EQ(read_leaf_with_copying_path<everything, "$.flag">(bytes).error(), error::incorrect_type);
+}
+
+// The head of a variant item chooses the alternative, so the unverified forms compare it too (schema.hpp, the
+// comment of unverified_adopt). A tag 28 in the place of the tag of an alternative is invalid_tag in the
+// verified and in the unverified forms.
+TEST_CASE("decode and unverified_decode: a tag 28 in the place of the tag of a variant item is invalid_tag")
+{
+    std::string const bytes =
+        message_with_part_replaced(*form<home>::encode(make_home_with_cat()), "1741(", "28_1(");
+    CHECK_EQ(form<home>::decode(std::string(bytes)).error(), error::invalid_tag);
+    CHECK_EQ(form<home>::unverified_decode(std::string(bytes)).error(), error::invalid_tag);
+    CHECK_EQ(read_leaf_with_copying_path<home, "$.pet">(bytes).error(), error::invalid_tag);
+    auto const doc = form<home>::unverified_adopt(std::string(bytes));
+    REQUIRE(doc.has_value());
+    CHECK_EQ(doc->at_path<"$.pet">().error(), error::invalid_tag);
 }
 
 #if defined(__STDCPP_FLOAT128_T__)

@@ -2088,6 +2088,15 @@ class reflection
         return std::ranges::equal(field.template first<head>(), expected);
     }
 
+    static constexpr error error_of_refused_field(std::span<char const> const field)
+    {
+        auto const h = detail::heads::read_raw_head<false>(std::string_view(field.begin(), field.end()),
+                                                           detail::validity::offset{});
+        if (h && h->major == major_type::tag && detail::validity::tag_refused_by_value_types(h->argument))
+            return error::invalid_tag;
+        return error::incorrect_type;
+    }
+
     struct reference {
         std::size_t data;
         std::size_t length;
@@ -2116,7 +2125,7 @@ class reflection
             if (field[0] != reference_tag_byte ||
                 (info & static_cast<unsigned char>(~(1 << rfc8949::additional_information_bits))) != std::to_underlying(rfc8949::additional_information::four_byte_argument))
                 [[unlikely]]
-                return std::unexpected(error::incorrect_type);
+                return std::unexpected(error_of_refused_field(field));
         std::size_t const m = 2 * std::size_t{detail::heads::read_unsigned<std::uint32_t>(field.subspan<2, sizeof(std::uint32_t)>())} + ((info >> rfc8949::additional_information_bits) & 1);
         if constexpr (Verified)
             if (m < fillers) [[unlikely]]
@@ -2134,7 +2143,8 @@ class reflection
             return std::unexpected(fits.error());
         if constexpr (Verified)
             if (!std::ranges::equal(std::span<char const>(encoded).subspan(item).template first<head.size()>(), head)) [[unlikely]]
-                return std::unexpected(error::incorrect_type);
+                return std::unexpected(
+                    error_of_refused_field(std::span<char const>(encoded).subspan(item, end - item)));
         std::size_t const length = detail::heads::read_unsigned<std::uint32_t>(
             std::span<char const>(encoded).subspan(item + head.size()).template first<sizeof(std::uint32_t)>());
         if (auto const fits = detail::validity::check_bytes_left(length, end - item - data); !fits)
@@ -2188,7 +2198,8 @@ class reflection
                                     std::to_underlying(rfc8949::additional_information::four_byte_argument))};
             if constexpr (Verified)
                 if (!std::ranges::equal(std::span<char const>(encoded).subspan(item).template first<head.size()>(), head)) [[unlikely]]
-                    return std::unexpected(error::incorrect_type);
+                    return std::unexpected(
+                        error_of_refused_field(std::span<char const>(encoded).subspan(item, end - item)));
             std::size_t const size =
                 detail::heads::read_unsigned<std::uint32_t>(std::span<char const>(encoded).subspan(item + head.size()).template first<sizeof(std::uint32_t)>());
             if (auto const fits = detail::validity::check_bytes_left(size, end - item - typed_array_head);
@@ -2211,7 +2222,8 @@ class reflection
                     detail::heads::initial_byte(Major,
                                         std::to_underlying(rfc8949::additional_information::four_byte_argument)))
                     [[unlikely]]
-                    return std::unexpected(error::incorrect_type);
+                    return std::unexpected(
+                        error_of_refused_field(std::span<char const>(encoded).subspan(item, end - item)));
             std::size_t const length =
                 detail::heads::read_unsigned<std::uint32_t>(std::span<char const>(encoded).subspan(item + detail::heads::initial_byte_size).template first<sizeof(std::uint32_t)>());
             auto const size = detail::validity::checked_mul(length, element);
@@ -2275,6 +2287,9 @@ class reflection
                       error const fault = error::incorrect_type)
     {
         if constexpr (K == std::variant_size_v<V>) {
+            if (fault == error::incorrect_type)
+                return std::unexpected(
+                    error_of_refused_field(std::span<char const>(encoded).subspan(item, end - item)));
             return std::unexpected(fault);
         } else {
             using A = std::remove_cv_t<std::variant_alternative_t<K, V>>;
@@ -2357,7 +2372,8 @@ class reflection
             return std::unexpected(fits.error());
         if constexpr (Verified)
             if (!packing_prefix_valid<T, D>(encoded)) [[unlikely]]
-                return std::unexpected(error::incorrect_type);
+                return std::unexpected(
+                    error_of_refused_field(std::span<char const>(encoded.substr(0, prefix.size()))));
         std::size_t const length =
             detail::heads::read_unsigned<std::uint32_t>(std::span<char const>(encoded)
                                                     .subspan(prefix.size() + detail::heads::initial_byte_size)
@@ -2625,7 +2641,7 @@ class reflection
                 constexpr std::size_t n = fixed_length<U>::value;
                 if constexpr (Verified)
                     if (!fixed_length_head_valid<Root, U>(field)) [[unlikely]]
-                        return std::unexpected(error::incorrect_type);
+                        return std::unexpected(error_of_refused_field(field));
                 return std::string_view(field.template last<n>());
             } else if constexpr (is_inline_optional<U>) {
                 using E = typename U::value_type;
@@ -2699,7 +2715,7 @@ class reflection
             } else {
                 if constexpr (Verified)
                     if (!fixed_head_valid<U>(field)) [[unlikely]]
-                        return std::unexpected(error::incorrect_type);
+                        return std::unexpected(error_of_refused_field(field));
                 return read_fixed_value<U>(field);
             }
         } else if constexpr (path[At] == '.') {
@@ -2708,7 +2724,7 @@ class reflection
             using M = describe::member_t<U, m>;
             if constexpr (Verified)
                 if (!class_tag_valid<Root, U>(field)) [[unlikely]]
-                    return std::unexpected(error::incorrect_type);
+                    return std::unexpected(error_of_refused_field(field));
             return walk_path<Root, M, Path, end, Verified>(
                 encoded, field.template subspan<member_offset<U, m, Root>(), fixed_size<M, Root>()>(), floor,
                 indexes);
@@ -2719,7 +2735,7 @@ class reflection
                 constexpr std::size_t n = fixed_length<U>::value;
                 if constexpr (Verified)
                     if (!fixed_length_head_valid<Root, U>(field)) [[unlikely]]
-                        return std::unexpected(error::incorrect_type);
+                        return std::unexpected(error_of_refused_field(field));
                 auto const position = detail::validity::check_index(i, n);
                 if (!position) [[unlikely]]
                     return std::unexpected(position.error());
@@ -2751,7 +2767,7 @@ class reflection
                               "The elements must lie inside the field.");
                 if constexpr (Verified)
                     if (!fixed_length_head_valid<Root, U>(field)) [[unlikely]]
-                        return std::unexpected(error::incorrect_type);
+                        return std::unexpected(error_of_refused_field(field));
                 auto const elements = field.template subspan<head, n * fixed_size<E, Root>()>();
                 if constexpr (close == At + 1) {
                     auto const position =
@@ -2918,7 +2934,7 @@ class reflection
             if constexpr (has_describe_members<U>) {
                 if constexpr (Verified)
                     if (!class_tag_valid<Root, U>(field)) [[unlikely]]
-                        return std::unexpected(error::incorrect_type);
+                        return std::unexpected(error_of_refused_field(field));
                 std::expected<void, error> done;
                 for_each_field<U>([&] CBOR_ALWAYS_INLINE(auto i) {
                     constexpr std::size_t I = decltype(i)::value;
@@ -2943,7 +2959,7 @@ class reflection
             } else if constexpr (is_fixed_string<U>) {
                 if constexpr (Verified)
                     if (!fixed_length_head_valid<Root, U>(field)) [[unlikely]]
-                        return std::unexpected(error::incorrect_type);
+                        return std::unexpected(error_of_refused_field(field));
                 auto const text = field.template last<fixed_length<U>::value>();
                 std::ranges::transform(text, std::ranges::begin(out), [](char const c) {
                     return static_cast<typename fixed_length<U>::element>(c);
@@ -2954,7 +2970,7 @@ class reflection
                 constexpr std::size_t n = fixed_length<U>::value;
                 if constexpr (Verified)
                     if (!fixed_length_head_valid<Root, U>(field)) [[unlikely]]
-                        return std::unexpected(error::incorrect_type);
+                        return std::unexpected(error_of_refused_field(field));
                 std::expected<void, error> done;
                 auto const elements = field.template subspan<detail::heads::head_size(n), n * fixed_size<E, Root>()>();
                 auto const read_element = [&]<std::size_t I>() {
@@ -3140,7 +3156,7 @@ class reflection
             } else {
                 if constexpr (Verified)
                     if (!fixed_head_valid<U>(field)) [[unlikely]]
-                        return std::unexpected(error::incorrect_type);
+                        return std::unexpected(error_of_refused_field(field));
                 out = read_fixed_value<U>(field);
                 return {};
             }
@@ -3151,7 +3167,7 @@ class reflection
         {
             if constexpr (Verified)
                 if (!class_tag_valid<Root, U>(field)) [[unlikely]]
-                    return std::unexpected(error::incorrect_type);
+                    return std::unexpected(error_of_refused_field(field));
             std::expected<void, error> done;
             for_each_field<U>([&](auto i) {
                 constexpr std::size_t I = decltype(i)::value;
@@ -3226,7 +3242,7 @@ class reflection
         auto const field = std::span<char const>(encoded).subspan(root).template first<fixed_size<T, T>()>();
         if constexpr (Verified)
             if (!class_tag_valid<T, T>(field)) [[unlikely]]
-                return std::unexpected(error::incorrect_type);
+                return std::unexpected(error_of_refused_field(field));
         constexpr std::size_t fillers = fillers_of<T>();
         decode_cursor<Verified> c{encoded, *dir, 0, dir->at + sizeof(std::uint32_t) * dir->count + fillers, root};
         if constexpr (std::is_same_v<Target, T>) {
@@ -3820,6 +3836,7 @@ public:
      * @retval index_out_of_bounds an index past the end of a list
      * @retval incorrect_type a wrong head or tag on the path; a variant item whose head names no alternative;
      * `get<A>()` of another alternative
+     * @retval invalid_tag a tag 28 or a tag 29 where the path reads a head
      * @retval unpopulated_table_index, syntax_error a broken reference
      * @snippet doc_reference_schema.cpp accessor
      * @snippet doc_reference_schema.cpp accessor variant
@@ -4240,6 +4257,7 @@ public:
      *
      * @retval too_little_data the message is shorter than its table and root, or its end is missing
      * @retval incorrect_type a message of another layout, or a wrong tag of the root
+     * @retval invalid_tag a tag 28 or a tag 29 in the place of the packing prefix or of the tag of the root
      * @throws std::bad_alloc an allocation of the owner fails (the rvalue form)
      * @snippet doc_reference_schema.cpp path
      * @see cbor::schema::accessor
@@ -4342,6 +4360,7 @@ public:
      * @retval too_little_data the message is shorter than its table and root
      * @retval incorrect_type a message of another struct, or a wrong head; a variant item whose head names no
      * alternative
+     * @retval invalid_tag a tag 28 or a tag 29 in the place of a head
      * @retval syntax_error, unpopulated_table_index a broken directory
      * @retval inadmissible_type_for_tag_content a typed array whose length is not a multiple of its element size
      * @retval nesting_depth_exceeded a variant item, like a list, a map and an optional, is one level deeper than
@@ -4447,6 +4466,7 @@ public:
      * @retval unpopulated_table_index, syntax_error a reference or a directory entry outside the table or the items
      * @retval incorrect_type a variant item whose head names no alternative. The head chooses the alternative, so
      * these forms compare it too
+     * @retval invalid_tag a tag 28 or a tag 29 in the place of the head of a variant item
      * @throws std::bad_alloc an allocation of the owner fails (the rvalue form)
      * @snippet doc_reference_schema.cpp unverified
      * @see cbor::schema::unverified_at_path()
@@ -4741,7 +4761,8 @@ private:
         auto const root = std::span<char const>(encoded).subspan(encoded.size() - fixed_size()).template first<fixed_size()>();
         if constexpr (Verified)
             if (!detail::reflection::class_tag_valid<T, T>(root)) [[unlikely]]
-                return std::unexpected(detail::reflection::too_little_data_if_truncated<T, D>(encoded, error::incorrect_type));
+                return std::unexpected(detail::reflection::too_little_data_if_truncated<T, D>(
+                    encoded, detail::reflection::error_of_refused_field(root)));
         return accessor<T, Verified>(std::move(owner), encoded, root, *dir);
     }
 
