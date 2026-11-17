@@ -1453,6 +1453,10 @@ public:
      * A form with `target` reads into the containers of `target`, with their allocator.
      * The other forms start from `T{}`.
      * A byte after the item is not read.
+     * A tag 55799 (RFC 8949, section 3.4.6) has no semantics. `decode` reads through any number of them to
+     * their content. It does not read through one where it is the content of a tag 2, a tag 3 or a typed
+     * array. There the content is not a byte string. A key under tag 55799 matches as the key without the
+     * tag.
      * A repeated key gives `duplicate_key`, except in an unordered multimap, which appends the values of each repeat.
      * A container reserves storage for at most as many elements as the bytes left after its head can hold, by the
      * least encoding of one element. While an item is read, each open container holds no more than that; the open

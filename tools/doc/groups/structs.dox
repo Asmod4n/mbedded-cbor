@@ -160,7 +160,9 @@ the same description.
 The tag is `cbor::tag{n}`, or `cbor::untagged` for a map with no tag. A
 struct whose description has a tag carries that tag. `%decode` gives
 `incorrect_type` when the tag is missing or is another tag. An untagged
-struct gives `incorrect_type` for a tag in front of its map.
+struct gives `incorrect_type` for a tag in front of its map. A tag 55799
+has no semantics (RFC 8949, section 3.4.6), so `%decode` reads through it
+in front of a map, as in front of every other item.
 
 The rules for a description are these:
 
@@ -170,7 +172,7 @@ The rules for a description are these:
   type and of its public bases. Another list does not compile.
 - A member that comes twice, two members with one key, a key of `bool` or
   of a character type, a tag of a standard type (for example 1, 258 or a tag
-  of RFC 8746), and an invalid tag do not compile.
+  of RFC 8746), tag 55799 and an invalid tag do not compile.
 - An annotation `[[=cbor::tag(n)]]` on a type that
   `cbor::structs` reads does not compile.
 - A class with a base class uses `CBOR_DEFINE_DERIVED_TYPE` or
@@ -195,7 +197,7 @@ Tag 28 and tag 29 of value sharing (cbor.schmorp.de) mark and name a shared
 value. `%decode` gives `invalid_tag` where it reads a value and meets one of
 them. An entry whose key no member has is skipped with its tags 28 and 29.
 `cbor::tagged_item<N, E>` and `cbor::describe_members` do not compile with
-tag 28 or tag 29.
+tag 28, tag 29 or tag 55799.
 
 @section structs_errors ERRORS
 

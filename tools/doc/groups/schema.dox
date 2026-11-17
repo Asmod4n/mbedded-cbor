@@ -296,6 +296,9 @@ table and a rump.
   items of the variant members.
 - The rump is the root record. It stands at the end of the message.
 
+Every read form skips one leading tag 55799 (RFC 8949, section 3.4.6). So
+a message under that tag reads as the message.
+
 A record starts with its class tag. A reference to its record function
 follows. The first eight references are tags 128 to 135. Later references
 are tag 6 on an array of two. Then an array with a count of 4 bytes holds
