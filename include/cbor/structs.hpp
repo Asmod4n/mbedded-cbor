@@ -458,12 +458,15 @@ class generic
     template <class U>
     static std::expected<void, error> read_generic(detail::heads::decoder<true> &d, U &out)
     {
-        auto const h = decode_head_through_self_described_cbor(d);
+        auto const h = d.decode_head();
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
-        if (h->major == major_type::tag && detail::validity::tag_refused_by_value_types(h->argument))
-            [[unlikely]]
-            return std::unexpected(error::invalid_tag);
+        if (h->major == major_type::tag) [[unlikely]] {
+            if (detail::validity::is_self_described_cbor_tag(h->argument))
+                return read_generic(d, out);
+            if (detail::validity::tag_refused_by_value_types(h->argument))
+                return std::unexpected(error::invalid_tag);
+        }
         return read_generic_value(d, *h, out);
     }
 
