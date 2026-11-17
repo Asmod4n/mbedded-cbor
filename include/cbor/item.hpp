@@ -54,6 +54,21 @@ template <class T>
 concept view_result =
     std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>;
 
+namespace detail
+{
+
+template <class Item, std::size_t ItemsPerPair>
+using pairs_of_items = std::ranges::stride_view<std::ranges::adjacent_view<std::span<Item const>, ItemsPerPair>>;
+
+template <class T, class Item, std::size_t ItemsPerPair>
+constexpr bool is_pairs_of_items = false;
+
+template <class Item, std::size_t ItemsPerPair>
+constexpr bool is_pairs_of_items<pairs_of_items<Item, ItemsPerPair>, Item, ItemsPerPair> = true;
+
+
+}
+
 /**
  * @brief One node of a tree from cbor::decode() or `lazy::to_item`.
  *
@@ -85,21 +100,6 @@ concept view_result =
  *
  * @ingroup decode
  */
-namespace detail
-{
-
-template <class Item, std::size_t ItemsPerPair>
-using pairs_of_items = std::ranges::stride_view<std::ranges::adjacent_view<std::span<Item const>, ItemsPerPair>>;
-
-template <class T, class Item, std::size_t ItemsPerPair>
-constexpr bool is_pairs_of_items = false;
-
-template <class Item, std::size_t ItemsPerPair>
-constexpr bool is_pairs_of_items<pairs_of_items<Item, ItemsPerPair>, Item, ItemsPerPair> = true;
-
-
-}
-
 struct item {
 private:
     cbor::type const m_type;
