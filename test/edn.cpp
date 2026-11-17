@@ -26,11 +26,11 @@ cbor::owning<cbor::item> read_vectors()
 
 std::optional<cbor::item> member_of(cbor::item const &object, std::string_view const key)
 {
-    auto const pairs = object.get<std::ranges::chunk_view<std::span<cbor::item const>>>();
+    auto const pairs = object.get<std::ranges::zip_view<std::ranges::stride_view<std::span<cbor::item const>>, std::ranges::stride_view<std::span<cbor::item const>>>>();
     REQUIRE(pairs.has_value());
     for (auto const pair : *pairs)
-        if (pair[0].get<std::string_view>() == key)
-            return pair[1];
+        if (std::get<0>(pair).get<std::string_view>() == key)
+            return std::get<1>(pair);
     return std::nullopt;
 }
 

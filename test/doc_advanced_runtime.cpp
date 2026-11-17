@@ -168,8 +168,8 @@ TEST_CASE("doc advanced runtime: clone and decode")
     CHECK_EQ((*tree)->get<item_pairs>().error(), error::incorrect_type);
     cbor::item const &pairs = (*(*tree)->get<std::span<cbor::item const>>())[1];
     CHECK_EQ(pairs.get<item_pairs>()->size(), 1u);
-    CHECK_EQ((*pairs.get<item_pairs>())[0][0].get<std::string_view>(), "a"sv);
-    CHECK_EQ((*pairs.get<item_pairs>())[0][1].get<std::uint64_t>(), 2u);
+    CHECK_EQ(std::get<0>((*pairs.get<item_pairs>())[0]).get<std::string_view>(), "a"sv);
+    CHECK_EQ(std::get<1>((*pairs.get<item_pairs>())[0]).get<std::uint64_t>(), 2u);
     auto const cut = std::make_shared<std::string const>("\x82\x01"s);
     CHECK_EQ(cbor::lazy::view(cut)->to_item().error(), error::too_little_data);
     CHECK_EQ(test::make_lazy_from_copy("\x9b\x80\x00\x00\x00\x00\x00\x00\x00\x01"s)->to_item().error(), error::too_little_data);

@@ -54,13 +54,13 @@ class bisimilarity
         return l.first == r.first && holds(*l.second, *r.second);
     }
 
-    bool all_pairs_hold(std::ranges::chunk_view<std::span<cbor::item const>> const l,
-                        std::ranges::chunk_view<std::span<cbor::item const>> const r)
+    bool all_pairs_hold(std::ranges::zip_view<std::ranges::stride_view<std::span<cbor::item const>>, std::ranges::stride_view<std::span<cbor::item const>>> const l,
+                        std::ranges::zip_view<std::ranges::stride_view<std::span<cbor::item const>>, std::ranges::stride_view<std::span<cbor::item const>>> const r)
     {
         if (l.size() != r.size())
             return false;
         for (auto x = l.begin(), y = r.begin(); x != l.end(); ++x, ++y)
-            if (!holds((*x)[0], (*y)[0]) || !holds((*x)[1], (*y)[1]))
+            if (!holds(std::get<0>(*x), std::get<0>(*y)) || !holds(std::get<1>(*x), std::get<1>(*y)))
                 return false;
         return true;
     }
@@ -78,8 +78,8 @@ public:
         case cbor::type::array:
             return all_hold(a.get<std::span<cbor::item const>>().value(), b.get<std::span<cbor::item const>>().value());
         case cbor::type::map:
-            return all_pairs_hold(a.get<std::ranges::chunk_view<std::span<cbor::item const>>>().value(),
-                                  b.get<std::ranges::chunk_view<std::span<cbor::item const>>>().value());
+            return all_pairs_hold(a.get<std::ranges::zip_view<std::ranges::stride_view<std::span<cbor::item const>>, std::ranges::stride_view<std::span<cbor::item const>>>>().value(),
+                                  b.get<std::ranges::zip_view<std::ranges::stride_view<std::span<cbor::item const>>, std::ranges::stride_view<std::span<cbor::item const>>>>().value());
         case cbor::type::tag:
             return tags_hold(a, b);
         default:

@@ -103,10 +103,10 @@ inline std::vector<cbor::item const *> nodes_of(cbor::owning<cbor::item> const &
             if constexpr (std::same_as<V, std::span<cbor::item const>>) {
                 for (cbor::item const &c : value)
                     nodes.push_back(&c);
-            } else if constexpr (std::same_as<V, std::ranges::chunk_view<std::span<cbor::item const>>>) {
+            } else if constexpr (std::same_as<V, std::ranges::zip_view<std::ranges::stride_view<std::span<cbor::item const>>, std::ranges::stride_view<std::span<cbor::item const>>>>) {
                 for (auto const pair : value) {
-                    nodes.push_back(&pair[0]);
-                    nodes.push_back(&pair[1]);
+                    nodes.push_back(&std::get<0>(pair));
+                    nodes.push_back(&std::get<1>(pair));
                 }
             } else if constexpr (std::same_as<V, std::pair<std::uint64_t, cbor::item const *>>) {
                 nodes.push_back(value.second);

@@ -45,10 +45,10 @@ static std::uint64_t item_tree_sum(cbor::item const &it)
             for (cbor::item const &child : v)
                 s += item_tree_sum(child);
             return s;
-        } else if constexpr (std::is_same_v<V, std::ranges::chunk_view<std::span<cbor::item const>>>) {
+        } else if constexpr (std::is_same_v<V, std::ranges::zip_view<std::ranges::stride_view<std::span<cbor::item const>>, std::ranges::stride_view<std::span<cbor::item const>>>>) {
             std::uint64_t s = v.size();
             for (auto const pair : v)
-                s += item_tree_sum(pair[0]) + item_tree_sum(pair[1]);
+                s += item_tree_sum(std::get<0>(pair)) + item_tree_sum(std::get<1>(pair));
             return s;
         } else if constexpr (std::is_same_v<V, std::pair<std::uint64_t, cbor::item const *>>) {
             return v.first + item_tree_sum(*v.second);

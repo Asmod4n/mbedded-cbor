@@ -393,11 +393,11 @@ inline value value_of(cbor::item const &it)
         return {std::move(a)};
     }
     case cbor::type::map: {
-        auto const pairs = it.get<std::ranges::chunk_view<std::span<cbor::item const>>>().value();
+        auto const pairs = it.get<std::ranges::zip_view<std::ranges::stride_view<std::span<cbor::item const>>, std::ranges::stride_view<std::span<cbor::item const>>>>().value();
         map m;
         m.reserve(pairs.size());
         for (auto const pair : pairs)
-            m.push_back(entry{value_of(pair[0]), value_of(pair[1])});
+            m.push_back(entry{value_of(std::get<0>(pair)), value_of(std::get<1>(pair))});
         return {std::move(m)};
     }
     case cbor::type::tag:

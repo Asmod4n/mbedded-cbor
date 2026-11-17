@@ -88,11 +88,15 @@ concept view_result =
 namespace detail
 {
 
+template <class Item>
+using pairs_of_items = std::ranges::zip_view<std::ranges::stride_view<std::span<Item const>>, std::ranges::stride_view<std::span<Item const>>>;
+
 template <class T, class Item>
-constexpr bool is_chunk_view_of_items = false;
+constexpr bool is_pairs_of_items = false;
 
 template <class Item>
-constexpr bool is_chunk_view_of_items<std::ranges::chunk_view<std::span<Item const>>, Item> = true;
+constexpr bool is_pairs_of_items<pairs_of_items<Item>, Item> = true;
+
 
 }
 
@@ -157,7 +161,7 @@ public:
      * | `std::string_view`, `std::span<std::byte const>` | a text, a byte string |
      * | `cbor::typed_array` | a typed array (RFC 8746): its tag number and its bytes |
      * | `std::span<item const>` | an array: its elements |
-     * | `std::ranges::chunk_view<std::span<item const>>` | a map: each key and its value as one chunk of two items |
+     * | `std::ranges::zip_view` of two `std::ranges::stride_view<std::span<item const>>` | a map: each key and its value as one pair |
      * | `std::pair<std::uint64_t, item const *>` | a tag, a bignum or a shared reference: the tag number or the index, and the content or the target |
      *
      * A negative integer gives its value, -1 minus the argument (RFC 8949 3.1).
@@ -169,8 +173,8 @@ public:
      * message: {"a": -500}
      * call: auto const tree = cbor::decode(bytes)
      * result: owning item of {"a": -500}
-     * call: auto const map = *(*tree)->get<std::ranges::chunk_view<std::span<cbor::item const>>>()
-     * result: chunk_view of 1 pair: "a": -500
+     * call: auto const map = *(*tree)->get<std::ranges::zip_view<std::ranges::stride_view<std::span<cbor::item const>>, std::ranges::stride_view<std::span<cbor::item const>>>>()
+     * result: zip_view of 1 pair: "a": -500
      * call: map[0][0].get<std::string_view>()
      * result: "a"
      * call: map[0][1].get<std::int64_t>()
@@ -195,7 +199,7 @@ public:
 #endif
                   ) ||
                  view_result<T> || std::same_as<T, std::span<item const>> ||
-                 detail::is_chunk_view_of_items<T, item> ||
+                 detail::is_pairs_of_items<T, item> ||
                  std::same_as<T, std::pair<std::uint64_t, item const *>>)
     std::expected<T, error> get() const
     {
@@ -267,10 +271,10 @@ public:
             if (node.m_type != cbor::type::array) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
             return node.via.array;
-        } else if constexpr (std::same_as<T, std::ranges::chunk_view<std::span<item const>>>) {
+        } else if constexpr (std::same_as<T, detail::pairs_of_items<item>>) {
             if (node.m_type != cbor::type::map) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            return std::ranges::chunk_view(node.via.map, rfc8949::data_items_per_pair);
+            return pair_keys_with_values(node.via.map);
         } else {
             switch (node.m_type) {
             case cbor::type::tag:
@@ -295,7 +299,7 @@ public:
      * | `half_float`, `single_float`, `double_float` | `double` |
      * | `byte_string`, `text_string` | `std::span<std::byte const>`, `std::string_view` |
      * | `array` | `std::span<item const>`: the elements |
-     * | `map` | `std::ranges::chunk_view<std::span<item const>>`: each key and its value as one chunk of two items |
+     * | `map` | a `std::ranges::zip_view` of two `std::ranges::stride_view<std::span<item const>>`: each key and its value as one pair |
      * | `false_value`, `true_value` | `bool` |
      * | `null` | `std::nullptr_t` |
      * | `undefined`, `simple_value` | `cbor::simple_value` |
@@ -329,7 +333,7 @@ public:
                           std::same_as<std::invoke_result_t<F, std::span<std::byte const>>, result> &&
                           std::same_as<std::invoke_result_t<F, std::string_view>, result> &&
                           std::same_as<std::invoke_result_t<F, std::span<item const>>, result> &&
-                          std::same_as<std::invoke_result_t<F, std::ranges::chunk_view<std::span<item const>>>, result> &&
+                          std::same_as<std::invoke_result_t<F, detail::pairs_of_items<item>>, result> &&
                           std::same_as<std::invoke_result_t<F, bool>, result> &&
                           std::same_as<std::invoke_result_t<F, std::nullptr_t>, result> &&
                           std::same_as<std::invoke_result_t<F, simple_value>, result> &&
@@ -353,7 +357,7 @@ public:
         case cbor::type::array:
             return std::invoke(std::forward<F>(f), via.array);
         case cbor::type::map:
-            return std::invoke(std::forward<F>(f), std::ranges::chunk_view(via.map, rfc8949::data_items_per_pair));
+            return std::invoke(std::forward<F>(f), pair_keys_with_values(via.map));
         case cbor::type::false_value:
         case cbor::type::true_value:
             return std::invoke(std::forward<F>(f), m_type == cbor::type::true_value);
@@ -410,7 +414,17 @@ private:
     template <bool>
     friend struct detail::tree_decoder;
 
+    template <class Item>
+    static constexpr detail::pairs_of_items<Item> pair_keys_with_values(std::span<Item const> map);
+
     friend class detail::encoding;
 };
+
+template <class Item>
+constexpr detail::pairs_of_items<Item> item::pair_keys_with_values(std::span<Item const> const map)
+{
+    return detail::pairs_of_items<Item>(std::ranges::stride_view(map, rfc8949::data_items_per_pair),
+                                        std::ranges::stride_view(map.subspan(std::min<std::size_t>(map.size(), 1)), rfc8949::data_items_per_pair));
+}
 
 }

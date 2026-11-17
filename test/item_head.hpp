@@ -18,7 +18,7 @@
 #include <doctest/doctest.h>
 
 using item_pair = std::pair<std::uint64_t, cbor::item const *>;
-using item_pairs = std::ranges::chunk_view<std::span<cbor::item const>>;
+using item_pairs = std::ranges::zip_view<std::ranges::stride_view<std::span<cbor::item const>>, std::ranges::stride_view<std::span<cbor::item const>>>;
 
 // The argument of the head that cbor::encode writes for the item. A float has no value as an argument, and the argument
 // of a negative integer can be larger than an int64_t holds, so both are read back from the encoding.
@@ -97,8 +97,8 @@ inline std::vector<cbor::item const *> list_children_of_item(cbor::item const &c
             children.push_back(&child);
     else
         for (auto const pair : *map) {
-            children.push_back(&pair[0]);
-            children.push_back(&pair[1]);
+            children.push_back(&std::get<0>(pair));
+            children.push_back(&std::get<1>(pair));
         }
     return children;
 }

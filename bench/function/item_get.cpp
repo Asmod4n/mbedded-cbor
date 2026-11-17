@@ -177,8 +177,8 @@ std::uint64_t scalars_sum(Item const &it)
         }
         case cbor::type::map: {
             std::uint64_t s = 0;
-            for (auto const pair : it.template get<std::ranges::chunk_view<std::span<Item const>>>().value())
-                s += scalars_sum(pair[0]) + scalars_sum(pair[1]);
+            for (auto const pair : it.template get<std::ranges::zip_view<std::ranges::stride_view<std::span<Item const>>, std::ranges::stride_view<std::span<Item const>>>>().value())
+                s += scalars_sum(std::get<0>(pair)) + scalars_sum(std::get<1>(pair));
             return s;
         }
         default:
@@ -275,10 +275,10 @@ std::uint64_t tree_sum(Item const &it)
                 for (Item const &child : value)
                     s += tree_sum(child);
                 return s;
-            } else if constexpr (std::is_same_v<V, std::ranges::chunk_view<std::span<Item const>>>) {
+            } else if constexpr (std::is_same_v<V, std::ranges::zip_view<std::ranges::stride_view<std::span<Item const>>, std::ranges::stride_view<std::span<Item const>>>>) {
                 std::uint64_t s = 0;
                 for (auto const pair : value)
-                    s += tree_sum(pair[0]) + tree_sum(pair[1]);
+                    s += tree_sum(std::get<0>(pair)) + tree_sum(std::get<1>(pair));
                 return s;
             } else if constexpr (std::is_same_v<V, std::pair<std::uint64_t, Item const *>>)
                 return value.first + tree_sum(*value.second);

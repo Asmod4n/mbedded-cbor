@@ -528,11 +528,11 @@ static cbor::item const &untagged(cbor::item const &i)
 #if defined(OP_ITEM_FIELD)
 static cbor::item const &member(cbor::item const &m, std::string_view const key)
 {
-    auto const entries = untagged(m).get<std::ranges::chunk_view<std::span<cbor::item const>>>();
+    auto const entries = untagged(m).get<std::ranges::zip_view<std::ranges::stride_view<std::span<cbor::item const>>, std::ranges::stride_view<std::span<cbor::item const>>>>();
     if (!entries) [[unlikely]] std::abort();
     for (auto const pair : *entries)
-        if (pair[0].get<std::string_view>().value_or(std::string_view{}) == key)
-            return untagged(pair[1]);
+        if (std::get<0>(pair).get<std::string_view>().value_or(std::string_view{}) == key)
+            return untagged(std::get<1>(pair));
     std::abort();
 }
 #endif
@@ -557,7 +557,7 @@ static double item_sum(cbor::item const &tagged)
     }
     case cbor::type::map: {
         double s = 0;
-        for (auto const pair : *i.get<std::ranges::chunk_view<std::span<cbor::item const>>>()) s += item_sum(pair[1]);
+        for (auto const pair : *i.get<std::ranges::zip_view<std::ranges::stride_view<std::span<cbor::item const>>, std::ranges::stride_view<std::span<cbor::item const>>>>()) s += item_sum(std::get<1>(pair));
         return s;
     }
     default: std::abort();

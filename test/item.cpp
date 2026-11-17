@@ -1260,7 +1260,7 @@ void check_result(std::expected<T, error> const &got, std::expected<E, error> co
 }
 
 using pair = std::pair<std::uint64_t, cbor::item const *>;
-using pairs = std::ranges::chunk_view<std::span<cbor::item const>>;
+using pairs = std::ranges::zip_view<std::ranges::stride_view<std::span<cbor::item const>>, std::ranges::stride_view<std::span<cbor::item const>>>;
 
 template <class T>
 void check_integer(cbor::type const kind, cbor::item const &it)
@@ -1341,8 +1341,8 @@ void check_every_type(cbor::type const kind, cbor::item const &it, cbor::item co
     check_result(map, kind == cbor::type::map ? std::expected<int, error>(0) : std::unexpected(error::incorrect_type));
     if (map) {
         REQUIRE_EQ(map->size(), 1u);
-        CHECK_EQ((*map)[0][0].get<int>().value(), 1);
-        CHECK_EQ((*map)[0][1].get<int>().value(), 2);
+        CHECK_EQ(std::get<0>((*map)[0]).get<int>().value(), 1);
+        CHECK_EQ(std::get<1>((*map)[0]).get<int>().value(), 2);
     }
 
     // RFC 8949 3.4: the tag 1 sample has the number 1; a bignum has the number 2 or 3 (3.4.3); the shared reference

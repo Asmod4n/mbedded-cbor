@@ -86,10 +86,10 @@ TEST_CASE("doc reference item: item::get")
     // [get]
     // bytes: a std::string with {"a": -3}
     auto const tree = cbor::decode(bytes);
-    auto const pairs = *(*tree)->get<std::ranges::chunk_view<std::span<cbor::item const>>>();
-    auto const key = pairs[0][0].get<std::string_view>();     // "a"
-    auto const value = pairs[0][1].get<std::int64_t>();       // -3
-    auto const other = pairs[0][1].get<std::uint64_t>();      // number_out_of_range
+    auto const pairs = *(*tree)->get<std::ranges::zip_view<std::ranges::stride_view<std::span<cbor::item const>>, std::ranges::stride_view<std::span<cbor::item const>>>>();
+    auto const key = std::get<0>(pairs[0]).get<std::string_view>();     // "a"
+    auto const value = std::get<1>(pairs[0]).get<std::int64_t>();       // -3
+    auto const other = std::get<1>(pairs[0]).get<std::uint64_t>();      // number_out_of_range
     // [get]
     REQUIRE(tree);
     REQUIRE_EQ(pairs.size(), 1u);
