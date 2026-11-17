@@ -175,11 +175,11 @@ public:
      * result: owning item of {"a": -500}
      * call: auto const map = *(*tree)->get<std::ranges::stride_view<std::ranges::adjacent_view<std::span<cbor::item const>, 2>>>()
      * result: stride_view of 1 pair: "a": -500
-     * call: map[0][0].get<std::string_view>()
+     * call: std::get<0>(map[0]).get<std::string_view>()
      * result: "a"
-     * call: map[0][1].get<std::int64_t>()
+     * call: std::get<1>(map[0]).get<std::int64_t>()
      * result: -500
-     * call: map[0][1].get<std::uint64_t>()
+     * call: std::get<1>(map[0]).get<std::uint64_t>()
      * result: error number_out_of_range
      * @endcode
      *
