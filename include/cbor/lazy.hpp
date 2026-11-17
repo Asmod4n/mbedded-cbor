@@ -1010,11 +1010,8 @@ std::expected<bool, error> detail::validity::keys_equivalent(First const &first,
             return message.encoded;
     };
     auto const skip = [](detail::heads::decoder<true> &d) { return detail::well_formedness::skip_item(d); };
-    auto const resolve = []<class Message>(Message const &message, offset const at) -> offset {
-        if constexpr (std::same_as<Message, std::string_view>)
-            return at;
-        else
-            return detail::heads::self_described_cbor_content_at(message.encoded, at);
+    auto const resolve = [&encoded_of]<class Message>(Message const &message, offset const at) -> offset {
+        return detail::heads::self_described_cbor_content_at(encoded_of(message), at);
     };
     std::string_view const a = encoded_of(first);
     std::string_view const b = encoded_of(second);

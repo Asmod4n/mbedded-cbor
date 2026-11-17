@@ -2,6 +2,7 @@
 #include "small_stack.hpp"
 #include "reference.hpp"
 #include "owned_copy.hpp"
+#include <cbor/diagnostic_notation.hpp>
 
 #include <algorithm>
 #include <array>
@@ -1137,6 +1138,27 @@ TEST_CASE("path: an absolute query in a filter is evaluated once")
     CHECK(found(test::query("$.a[?$.a[?@ == $.b]]", s)) == A(1, 2, 3));
     CHECK(found(test::query("$.a[?$.c]", s)) == A());
     CHECK(found(test::query<"$.a[?@ > $.b]">(s)) == A(3));
+}
+
+// A key in a path is an EDN literal, compared with each key of the map by RFC 8949 5.6.1. Tag 55799 has no meaning
+// beyond the self-description (RFC 8949 3.4.6), so the compare reads through it on the key of the document and on the
+// literal alike. Before, the literal 55799(1.5) found no key 1.5, while the literal 1.5 found the key 55799(1.5).
+TEST_CASE("path: tag 55799 is read through on both sides of a key compare")
+{
+    for (std::string_view const edn : {R"({1.5: "x"})", R"({55799(1.5): "x"})"}) {
+        CAPTURE(edn);
+        auto const l = *test::make_lazy_from_copy(cbor::diag2cbor(edn).value());
+        auto const text_of = [](std::expected<cbor::lazy, error> const &node) {
+            REQUIRE(node.has_value());
+            auto const text = node->get<std::string_view>();
+            REQUIRE(text.has_value());
+            return std::string(**text);
+        };
+        CHECK_EQ(text_of(l.at_path<"$[55799(1.5)]">()), "x");
+        CHECK_EQ(text_of(l.at_path<"$[1.5]">()), "x");
+        CHECK_EQ(text_of(l.at_path(*cbor::path::compile<cbor::lazy>("$[55799(1.5)]"))), "x");
+        CHECK_EQ(text_of(l.at_path(*cbor::path::compile<cbor::lazy>("$[1.5]"))), "x");
+    }
 }
 
 // Tag 55799 was skipped only in front of the top-level item, so a path through 55799 inside the item gave not_indexable
