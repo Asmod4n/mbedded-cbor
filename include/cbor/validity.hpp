@@ -384,21 +384,30 @@ public:
         return {};
     }
 
+    static constexpr std::uint64_t count_enclosed_data_items(major_type const major, std::uint64_t const argument)
+    {
+        switch (major) {
+        case major_type::array:
+            return argument;
+        case major_type::map:
+            return checked_mul(argument, std::uint64_t{rfc8949::data_items_per_pair})
+                .value_or(std::numeric_limits<std::uint64_t>::max());
+        case major_type::tag:
+            return 1;
+        default:
+            return 0;
+        }
+    }
+
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
     check_pending_items(major_type const major, std::uint8_t const info, std::uint64_t const argument,
                         std::size_t const bytes_left)
     {
         if (info == std::to_underlying(rfc8949::additional_information::indefinite_length))
             return {};
-        if (major == major_type::array)
-            return check_bytes_left(argument, bytes_left);
-        if (major == major_type::map) {
-            auto const items = checked_mul(argument, std::uint64_t{rfc8949::data_items_per_pair});
-            if (!items) [[unlikely]]
-                return std::unexpected(error::too_little_data);
-            return check_bytes_left(*items, bytes_left);
-        }
-        return {};
+        if (major != major_type::array && major != major_type::map)
+            return {};
+        return check_bytes_left(count_enclosed_data_items(major, argument), bytes_left);
     }
 
     [[noreturn]] static void throw_logic_error(char const *const what)
