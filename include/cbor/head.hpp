@@ -397,21 +397,25 @@ class heads
         }
 
         template <class T>
+        [[gnu::noinline, gnu::cold]] std::expected<T, error> decode_value_of_bignum(std::uint64_t const tag)
+        {
+            auto const read = decode_bignum(tag);
+            if (!read) [[unlikely]]
+                return std::unexpected(read.error());
+            if (!*read) [[unlikely]]
+                return std::unexpected(error::number_out_of_range);
+            return decode_value<T>(**read);
+        }
+
+        template <class T>
             requires(std::integral<T> || std::same_as<T, double> || std::same_as<T, simple_value> ||
                      std::same_as<T, std::nullptr_t> || std::same_as<T, std::string_view> ||
                      std::same_as<T, std::span<std::byte const>>)
-        CBOR_ALWAYS_INLINE std::expected<T, error> decode_value(head h)
+        CBOR_ALWAYS_INLINE std::expected<T, error> decode_value(head const h)
         {
-            if constexpr ((std::integral<T> && !std::same_as<T, bool>) || std::same_as<T, double>) {
-                if (is_bignum(h.major, h.argument)) [[unlikely]] {
-                    auto const read = decode_bignum(h.argument);
-                    if (!read) [[unlikely]]
-                        return std::unexpected(read.error());
-                    if (!*read) [[unlikely]]
-                        return std::unexpected(error::number_out_of_range);
-                    h = **read;
-                }
-            }
+            if constexpr ((std::integral<T> && !std::same_as<T, bool>) || std::same_as<T, double>)
+                if (is_bignum(h.major, h.argument)) [[unlikely]]
+                    return decode_value_of_bignum<T>(h.argument);
             if constexpr (std::integral<T> && !std::same_as<T, bool>) {
                 bool const negative = h.major == major_type::negative_integer;
                 if (h.major != major_type::unsigned_integer && !negative) [[unlikely]]
