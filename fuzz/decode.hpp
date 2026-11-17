@@ -103,7 +103,7 @@ inline std::vector<cbor::item const *> nodes_of(cbor::owning<cbor::item> const &
             if constexpr (std::same_as<V, std::span<cbor::item const>>) {
                 for (cbor::item const &c : value)
                     nodes.push_back(&c);
-            } else if constexpr (std::same_as<V, std::ranges::zip_view<std::ranges::stride_view<std::span<cbor::item const>>, std::ranges::stride_view<std::span<cbor::item const>>>>) {
+            } else if constexpr (std::same_as<V, std::ranges::stride_view<std::ranges::adjacent_view<std::span<cbor::item const>, 2>>>) {
                 for (auto const pair : value) {
                     nodes.push_back(&std::get<0>(pair));
                     nodes.push_back(&std::get<1>(pair));

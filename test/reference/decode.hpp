@@ -121,7 +121,7 @@ inline std::expected<value, error> make_value_from_item(cbor::item const &it)
     }
     case cbor::type::map: {
         map m;
-        for (auto const pair : it.get<std::ranges::zip_view<std::ranges::stride_view<std::span<cbor::item const>>, std::ranges::stride_view<std::span<cbor::item const>>>>().value()) {
+        for (auto const pair : it.get<std::ranges::stride_view<std::ranges::adjacent_view<std::span<cbor::item const>, 2>>>().value()) {
             auto k = make_value_from_item(std::get<0>(pair));
             if (!k)
                 return std::unexpected(k.error());

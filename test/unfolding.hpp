@@ -54,8 +54,8 @@ class bisimilarity
         return l.first == r.first && holds(*l.second, *r.second);
     }
 
-    bool all_pairs_hold(std::ranges::zip_view<std::ranges::stride_view<std::span<cbor::item const>>, std::ranges::stride_view<std::span<cbor::item const>>> const l,
-                        std::ranges::zip_view<std::ranges::stride_view<std::span<cbor::item const>>, std::ranges::stride_view<std::span<cbor::item const>>> const r)
+    bool all_pairs_hold(std::ranges::stride_view<std::ranges::adjacent_view<std::span<cbor::item const>, 2>> const l,
+                        std::ranges::stride_view<std::ranges::adjacent_view<std::span<cbor::item const>, 2>> const r)
     {
         if (l.size() != r.size())
             return false;
@@ -78,8 +78,8 @@ public:
         case cbor::type::array:
             return all_hold(a.get<std::span<cbor::item const>>().value(), b.get<std::span<cbor::item const>>().value());
         case cbor::type::map:
-            return all_pairs_hold(a.get<std::ranges::zip_view<std::ranges::stride_view<std::span<cbor::item const>>, std::ranges::stride_view<std::span<cbor::item const>>>>().value(),
-                                  b.get<std::ranges::zip_view<std::ranges::stride_view<std::span<cbor::item const>>, std::ranges::stride_view<std::span<cbor::item const>>>>().value());
+            return all_pairs_hold(a.get<std::ranges::stride_view<std::ranges::adjacent_view<std::span<cbor::item const>, 2>>>().value(),
+                                  b.get<std::ranges::stride_view<std::ranges::adjacent_view<std::span<cbor::item const>, 2>>>().value());
         case cbor::type::tag:
             return tags_hold(a, b);
         default:

@@ -177,7 +177,7 @@ std::uint64_t scalars_sum(Item const &it)
         }
         case cbor::type::map: {
             std::uint64_t s = 0;
-            for (auto const pair : it.template get<std::ranges::zip_view<std::ranges::stride_view<std::span<Item const>>, std::ranges::stride_view<std::span<Item const>>>>().value())
+            for (auto const pair : it.template get<std::ranges::stride_view<std::ranges::adjacent_view<std::span<Item const>, 2>>>().value())
                 s += scalars_sum(std::get<0>(pair)) + scalars_sum(std::get<1>(pair));
             return s;
         }
@@ -275,7 +275,7 @@ std::uint64_t tree_sum(Item const &it)
                 for (Item const &child : value)
                     s += tree_sum(child);
                 return s;
-            } else if constexpr (std::is_same_v<V, std::ranges::zip_view<std::ranges::stride_view<std::span<Item const>>, std::ranges::stride_view<std::span<Item const>>>>) {
+            } else if constexpr (std::is_same_v<V, std::ranges::stride_view<std::ranges::adjacent_view<std::span<Item const>, 2>>>) {
                 std::uint64_t s = 0;
                 for (auto const pair : value)
                     s += tree_sum(std::get<0>(pair)) + tree_sum(std::get<1>(pair));

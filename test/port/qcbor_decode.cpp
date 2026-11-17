@@ -155,7 +155,7 @@ std::span<cbor::item const> elements_of(cbor::item const &node)
 
 std::vector<cbor::item> entries_of(cbor::item const &node)
 {
-    auto const m = node.get<std::ranges::zip_view<std::ranges::stride_view<std::span<cbor::item const>>, std::ranges::stride_view<std::span<cbor::item const>>>>();
+    auto const m = node.get<std::ranges::stride_view<std::ranges::adjacent_view<std::span<cbor::item const>, 2>>>();
     REQUIRE(m.has_value());
     std::vector<cbor::item> entries;
     for (auto const pair : *m) {

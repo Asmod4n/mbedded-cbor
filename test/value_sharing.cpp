@@ -603,12 +603,12 @@ TEST_CASE("value sharing: cbor::decode reads each case of the model")
     // {28("a"): 29(0)}: a value refers to its own key.
     auto const key = cbor::decode("\xa1\xd8\x1c\x61\x61\xd8\x1d\x00"sv);
     REQUIRE(key.has_value());
-    auto const pairs = (*key)->get<std::ranges::zip_view<std::ranges::stride_view<std::span<cbor::item const>>, std::ranges::stride_view<std::span<cbor::item const>>>>().value();
+    auto const pairs = (*key)->get<std::ranges::stride_view<std::ranges::adjacent_view<std::span<cbor::item const>, 2>>>().value();
     CHECK_EQ(target_of(std::get<1>(pairs[0])), &std::get<0>(pairs[0]));
     // 28({29(0): 1}): a map that holds itself as its key.
     auto const own_key = cbor::decode("\xd8\x1c\xa1\xd8\x1d\x00\x01"sv);
     REQUIRE(own_key.has_value());
-    CHECK_EQ(target_of(std::get<0>((*own_key)->get<std::ranges::zip_view<std::ranges::stride_view<std::span<cbor::item const>>, std::ranges::stride_view<std::span<cbor::item const>>>>().value()[0])), &**own_key);
+    CHECK_EQ(target_of(std::get<0>((*own_key)->get<std::ranges::stride_view<std::ranges::adjacent_view<std::span<cbor::item const>, 2>>>().value()[0])), &**own_key);
 }
 
 // RFC 8949 3: an argument can stand in each width. The tag 29 and its index are read in each width. The largest index

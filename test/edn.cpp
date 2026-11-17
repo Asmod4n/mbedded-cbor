@@ -26,7 +26,7 @@ cbor::owning<cbor::item> read_vectors()
 
 std::optional<cbor::item> member_of(cbor::item const &object, std::string_view const key)
 {
-    auto const pairs = object.get<std::ranges::zip_view<std::ranges::stride_view<std::span<cbor::item const>>, std::ranges::stride_view<std::span<cbor::item const>>>>();
+    auto const pairs = object.get<std::ranges::stride_view<std::ranges::adjacent_view<std::span<cbor::item const>, 2>>>();
     REQUIRE(pairs.has_value());
     for (auto const pair : *pairs)
         if (std::get<0>(pair).get<std::string_view>() == key)
