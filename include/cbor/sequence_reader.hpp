@@ -158,14 +158,9 @@ class sequence_reader
                 state = phase::string_content;
                 continue;
             case major_type::array:
-                children = h->argument;
-                break;
             case major_type::map:
-                children = detail::validity::checked_mul(h->argument, rfc8949::data_items_per_pair)
-                               .value_or(std::numeric_limits<std::uint64_t>::max());
-                break;
             case major_type::tag:
-                children = 1;
+                children = detail::validity::count_enclosed_data_items(h->major, h->argument);
                 break;
             default:
                 break;
