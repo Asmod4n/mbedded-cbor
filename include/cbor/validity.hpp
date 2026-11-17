@@ -586,6 +586,11 @@ public:
         return {};
     }
 
+    CBOR_ALWAYS_INLINE static constexpr bool is_self_described_cbor_tag(std::uint64_t const tag)
+    {
+        return tag == std::to_underlying(rfc8949::tag_number::self_described_cbor);
+    }
+
     static constexpr bool tag_refused_by_value_types(std::uint64_t const tag)
     {
         return tag == std::to_underlying(rfc8949::tag_number::shareable) ||

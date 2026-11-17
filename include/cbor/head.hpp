@@ -693,8 +693,7 @@ class heads
     static constexpr std::string_view self_described_cbor_content(std::string_view const encoded)
     {
         auto const h = read_raw_head<false>(encoded, detail::validity::offset{});
-        if (h && h->major == major_type::tag &&
-            h->argument == std::to_underlying(rfc8949::tag_number::self_described_cbor))
+        if (h && h->major == major_type::tag && detail::validity::is_self_described_cbor_tag(h->argument))
             return detail::validity::subspan(encoded, h->at);
         return encoded;
     }
@@ -705,7 +704,7 @@ class heads
         for (;;) {
             auto const h = read_raw_head<false>(encoded, at);
             if (!h || h->major != major_type::tag ||
-                h->argument != std::to_underlying(rfc8949::tag_number::self_described_cbor))
+                !detail::validity::is_self_described_cbor_tag(h->argument))
                 return at;
             at = h->at;
         }
