@@ -277,7 +277,7 @@ class heads
 
     template <class E>
         requires std::same_as<E, char> || std::same_as<E, std::byte>
-    CBOR_ALWAYS_INLINE static std::optional<std::uint64_t> convert_magnitude_to_integer(std::span<E const> const magnitude)
+    static std::optional<std::uint64_t> convert_magnitude_to_integer(std::span<E const> const magnitude)
     {
         std::span<E const> const digits = magnitude_without_leading_zeros(magnitude);
         if (!detail::validity::check_magnitude_size(digits.size(), sizeof(std::uint64_t)))
@@ -294,7 +294,7 @@ class heads
 
     template <class E>
         requires std::same_as<E, char> || std::same_as<E, std::byte>
-    CBOR_ALWAYS_INLINE static std::optional<head> convert_bignum_to_integer(std::uint64_t const tag, std::span<E const> const magnitude)
+    static std::optional<head> convert_bignum_to_integer(std::uint64_t const tag, std::span<E const> const magnitude)
     {
         return convert_magnitude_to_integer(magnitude).transform(
             [tag](std::uint64_t const n) { return make_integer_head_of_bignum(tag, n); });
@@ -394,7 +394,7 @@ class heads
             return string;
         }
 
-        CBOR_ALWAYS_INLINE std::expected<std::optional<std::uint64_t>, error> decode_bignum_magnitude(std::uint64_t const tag)
+        std::expected<std::optional<std::uint64_t>, error> decode_bignum_magnitude(std::uint64_t const tag)
         {
             auto const r = decode_head();
             if (!r) [[unlikely]]
@@ -408,7 +408,7 @@ class heads
             return convert_magnitude_to_integer(std::span(*bytes));
         }
 
-        CBOR_ALWAYS_INLINE std::expected<std::optional<head>, error> decode_bignum(std::uint64_t const tag)
+        std::expected<std::optional<head>, error> decode_bignum(std::uint64_t const tag)
         {
             return decode_bignum_magnitude(tag).transform([tag](std::optional<std::uint64_t> const n) {
                 return n.transform([tag](std::uint64_t const v) { return make_integer_head_of_bignum(tag, v); });
