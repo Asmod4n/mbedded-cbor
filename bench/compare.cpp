@@ -451,10 +451,10 @@ static double lazy_sum(cbor::lazy const &l)
 static double lazy_field()
 {
     auto const v = cbor::lazy::view(plain)
-                       .and_then([](cbor::lazy const &l) { return l.at_key("cars"); })
+                       .and_then([](cbor::lazy const &l) { return l.at("cars"); })
                        .and_then([](cbor::lazy const &l) { return l.at(std::size_t{500}); })
-                       .and_then([](cbor::lazy const &l) { return l.at_key("engine"); })
-                       .and_then([](cbor::lazy const &l) { return l.at_key("cc"); });
+                       .and_then([](cbor::lazy const &l) { return l.at("engine"); })
+                       .and_then([](cbor::lazy const &l) { return l.at("cc"); });
     if (!v) [[unlikely]] std::abort();
     return num(v->get<std::uint64_t>());
 }
@@ -1135,11 +1135,11 @@ static T load()
     for (auto const &e : *els) {
         if (!e) [[unlikely]] std::abort();
         cbor::lazy const r = must(e);
-        cbor::lazy const u = must(r.at_key("user"));
-        auto const ratio = must(r.at_key("ratio")).get<double>();
-        Record x{must(must(r.at_key("id")).get<std::int64_t>()), must_text(must(r.at_key("text"))), User{must_text(must(u.at_key("name"))), must(must(u.at_key("followers")).get<std::uint64_t>())},
-                 ratio ? *ratio : 0.0, {}, must(must(r.at_key("neg")).get<std::int64_t>())};
-        auto const tags = must(must(r.at_key("tags")).elements());
+        cbor::lazy const u = must(r.at("user"));
+        auto const ratio = must(r.at("ratio")).get<double>();
+        Record x{must(must(r.at("id")).get<std::int64_t>()), must_text(must(r.at("text"))), User{must_text(must(u.at("name"))), must(must(u.at("followers")).get<std::uint64_t>())},
+                 ratio ? *ratio : 0.0, {}, must(must(r.at("neg")).get<std::int64_t>())};
+        auto const tags = must(must(r.at("tags")).elements());
         for (auto const &t : tags) x.tags.push_back(must_text(must(t)));
         rs.records.push_back(std::move(x));
     }
@@ -1396,7 +1396,7 @@ static double op()
     return item_read();
 #elif defined(OP_ITEM_ENCODE)
     std::string out;
-    auto const n = cbor::encode(**item_source, out);
+    auto const n = cbor::encode(out, **item_source);
     if (!n) [[unlikely]] std::abort();
     benchmark::DoNotOptimize(out.data());
     return double(out.size());
@@ -1462,7 +1462,7 @@ static double check()
 #if defined(OP_STRUCTS_ENCODE)
     out = *cbor::structs<T>::encode(*encoded_source);
 #else
-    if (!cbor::encode(**item_source, out)) std::abort();
+    if (!cbor::encode(out, **item_source)) std::abort();
 #endif
     written_bytes = out.size();
     auto const l = cbor::structs<T>::decode(std::make_shared<std::string const>(std::move(out)));
@@ -1503,7 +1503,7 @@ int main(int argc, char **argv)
 #if defined(OP_MB_ENCODE) || defined(OP_FB_ENCODE) || defined(OP_CP_ENCODE) || defined(OP_STRUCTS_ENCODE)
     encoded_source = &data;
 #endif
-    if (!S::encode(data, msg)) std::abort();
+    if (!S::encode(msg, data)) std::abort();
     held = std::make_shared<std::string const>(msg);
 #if defined(DS_CARS)
     plain = std::make_shared<std::string const>(*cbor::structs<T>::encode(data));

@@ -1,0 +1,224 @@
+{
+ "what": "README table: carsales, compare.cpp",
+ "context": {
+  "resolved_march": "sapphirerapids",
+  "compilers": [
+   "g++-16 (Debian 16.2.0-4) 16.2.0"
+  ],
+  "binaries": {
+   "g++-16.CP_ENCODE": {
+    "binary": "g++-16.CP_ENCODE",
+    "comment": "String dump of section '.comment':\n  [     0]  GCC: (Debian 16.2.0-4) 16.2.0",
+    "libraries": {
+     "libbenchmark.so.1.9.1": "/usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1",
+     "libstdc++.so.6": "/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.36",
+     "libc.so.6": "/usr/lib/x86_64-linux-gnu/libc.so.6",
+     "libm.so.6": "/usr/lib/x86_64-linux-gnu/libm.so.6"
+    }
+   }
+  },
+  "libc": "ldd (Debian GLIBC 2.43-7) 2.43",
+  "level_two_cache": "2048K",
+  "kernel": "6.18.44-fc-v553",
+  "scheduler": "no sched_ext state (kernel default)",
+  "virtualization": "docker ",
+  "host_in_container": "no",
+  "host_user": "root 0",
+  "container": "podman mbedded-cbor-sid-bench, user 65534, network none",
+  "cpu": {
+   "model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+   "flags_sha256": "19139faa5b3c177a2d253ee9520b13713aee71074562456de06d1ba7833e7890",
+   "cpus": 4,
+   "l3": "266240K"
+  },
+  "uid": 65534,
+  "priority": "nice -10 granted",
+  "threads": 1,
+  "pinned": false,
+  "cpu_left_to_the_machine": "each bench process is single-threaded on 4 cpus",
+  "gate_before_build": [
+   "gate: vmstat 1 5",
+   "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+   " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+   " 0  0      0 14064376  69576 1911888    0    0  1331  6243 1139    4 14  1 84  0  0  0",
+   " 0  0      0 14071628  69576 1911876    0    0     0     4  175  114  0  0 100  0  0  0",
+   " 0  0      0 14089440  69576 1911876    0    0     0     0   57   54  0  0 100  0  0  0",
+   " 0  0      0 14104856  69576 1911876    0    0     0     0   97   98  0  0 100  0  0  0",
+   " 0  0      0 14110228  69576 1911876    0    0     0     0   90  105  0  0 100  0  0  0",
+   "gate: ps --sort=-pcpu (top 7)",
+   "  PID USER     %CPU  NI COMMAND",
+   "  100 root      2.1   0 claude",
+   "   12 root      0.0   0 kworker/u16:0-kvfree_rcu_reclaim",
+   "    1 root      0.0   0 process_api",
+   "   44 root      0.0   0 kworker/u16:2-events_unbound",
+   "   31 root      0.0   - migration/3",
+   "   21 root      0.0   - migration/1",
+   "   26 root      0.0   - migration/2",
+   "gate: busy 0.0% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough"
+  ],
+  "gate_before_runs": [
+   "gate: vmstat 1 5",
+   "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+   " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+   " 1  0      0 14005948  69604 1914292    0    0  1257  5915 1130    3 17  2 81  0  0  0",
+   " 0  0      0 13891648  69604 1914064    0    0     0     0  248  268  0  0 100  0  0  0",
+   " 0  0      0 14030784  69604 1914064    0    0     0     0  176  237  0  0 100  0  0  0",
+   " 0  0      0 14046204  69604 1914064    0    0     0     0  202  246  0  0 100  0  0  0",
+   " 0  0      0 14055088  69604 1914064    0    0     0     0  162  215  0  0 100  0  0  0",
+   "gate: ps --sort=-pcpu (top 7)",
+   "  PID USER     %CPU  NI COMMAND",
+   "  100 root      2.0   0 claude",
+   "    1 root      0.0   0 process_api",
+   "   12 root      0.0   0 kworker/u16:0-flush-254:0",
+   "   44 root      0.0   0 kworker/u16:2-ext4-rsv-conversion",
+   "   31 root      0.0   - migration/3",
+   "   21 root      0.0   - migration/1",
+   "   26 root      0.0   - migration/2",
+   "gate: busy 0.0% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough"
+  ],
+  "steal_limit_percent": 3,
+  "rounds_detail": [
+   {
+    "round": 1,
+    "attempt": 1,
+    "wall_s": 3.893450975418091,
+    "kept": true,
+    "steal_percent_of_cpu_time": 0.3194888178913738
+   },
+   {
+    "round": 2,
+    "attempt": 2,
+    "wall_s": 3.93165922164917,
+    "kept": true,
+    "steal_percent_of_cpu_time": 0.6297229219143576
+   },
+   {
+    "round": 3,
+    "attempt": 3,
+    "wall_s": 4.286344051361084,
+    "kept": true,
+    "steal_percent_of_cpu_time": 0.23255813953488372
+   }
+  ],
+  "failed": [],
+  "stderr_of_runs": "",
+  "packages": [
+   "libbenchmark-dev 1.9.1-1+b2",
+   "libc6 2.43-7",
+   "libcapnp-dev 1.5.0-2",
+   "libflatbuffers-dev 23.5.26+dfsg-4+b2",
+   "libjsoncons-dev 1.5.0-2",
+   "libstdc++6 16.2.0-4",
+   "libtinycbor-dev 7.0-1"
+  ],
+  "flags": "-O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG",
+  "rounds": 3,
+  "min_time": "0.2s",
+  "warnings": {
+   "g++-16": "-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -Wnull-dereference "
+  },
+  "commit": "6bea1c0056694bd0605a56589b5a06c97c2b9d0b-dirty"
+ },
+ "results": {
+  "CP_ENCODE": {
+   "unit": "ns",
+   "repetitions": [
+    85906.70018974568,
+    83825.05972558547,
+    76388.30284819886
+   ],
+   "median": 83825.05972558547,
+   "spread": 0.12460543023795245
+  },
+  "CP_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    214.146888071536,
+    221.51161196500163,
+    222.58260163811522
+   ],
+   "median": 221.51161196500163,
+   "spread": 0.03939218376015452
+  },
+  "CP_READ": {
+   "unit": "ns",
+   "repetitions": [
+    238008.05458852337,
+    184531.62508205857,
+    170103.79060082263
+   ],
+   "median": 184531.62508205857,
+   "spread": 0.39919312643096605
+  },
+  "FB_ENCODE": {
+   "unit": "ns",
+   "repetitions": [
+    241966.94893222532,
+    297941.51467705297,
+    247226.4565483398
+   ],
+   "median": 247226.4565483398,
+   "spread": 0.23133145246422093
+  },
+  "FB_FIELD_V": {
+   "unit": "ns",
+   "repetitions": [
+    56978.12909331046,
+    59436.45336414263,
+    64476.97619047349
+   ],
+   "median": 59436.45336414263,
+   "spread": 0.13160921947581872
+  },
+  "FB_READ_V": {
+   "unit": "ns",
+   "repetitions": [
+    81976.13402734649,
+    91005.89247668056,
+    101063.95352994076
+   ],
+   "median": 91005.89247668056,
+   "spread": 0.23284605610001985
+  },
+  "MB_ENCODE": {
+   "unit": "ns",
+   "repetitions": [
+    30981.7728677713,
+    31367.45684167895,
+    27479.873891991996
+   ],
+   "median": 30981.7728677713,
+   "spread": 0.1414701888722949
+  },
+  "MB_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    20.02260293069961,
+    21.946288130562465,
+    18.21378923985833
+   ],
+   "median": 20.02260293069961,
+   "spread": 0.20492709350869642
+  },
+  "MB_FIELD_AA": {
+   "unit": "ns",
+   "repetitions": [
+    16.761460072489633,
+    16.88537543795264,
+    15.897248524619421
+   ],
+   "median": 16.761460072489633,
+   "spread": 0.06215710296048682
+  },
+  "MB_READ": {
+   "unit": "ns",
+   "repetitions": [
+    74479.67081417669,
+    79749.29641692514,
+    68648.79161436009
+   ],
+   "median": 74479.67081417669,
+   "spread": 0.1616999300573707
+  }
+ }
+}

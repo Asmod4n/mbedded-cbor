@@ -1,0 +1,620 @@
+{
+ "what": "kinds table: carsales (bench/cars.json), bench/compare.cpp, bench/kinds-table.sh",
+ "context": {
+  "resolved_march": "sapphirerapids",
+  "compilers": [
+   "g++-16 (Debian 16.2.0-4) 16.2.0"
+  ],
+  "binaries": {
+   "g++-16.FB_ENCODE": {
+    "binary": "g++-16.FB_ENCODE",
+    "comment": "String dump of section '.comment':\n  [     0]  GCC: (Debian 16.2.0-4) 16.2.0",
+    "libraries": {
+     "libbenchmark.so.1.9.1": "/usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1",
+     "libstdc++.so.6": "/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.36",
+     "libc.so.6": "/usr/lib/x86_64-linux-gnu/libc.so.6",
+     "libm.so.6": "/usr/lib/x86_64-linux-gnu/libm.so.6"
+    }
+   }
+  },
+  "libc": "ldd (Debian GLIBC 2.43-7) 2.43",
+  "level_two_cache": "2048K",
+  "kernel": "6.18.44-fc-v553",
+  "scheduler": "no sched_ext state (kernel default)",
+  "virtualization": "docker ",
+  "host_in_container": "no",
+  "host_user": "root 0",
+  "container": "podman mbedded-cbor-sid-bench, user 65534, network none",
+  "cpu": {
+   "model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+   "flags_sha256": "19139faa5b3c177a2d253ee9520b13713aee71074562456de06d1ba7833e7890",
+   "cpus": 4,
+   "l3": "266240K"
+  },
+  "uid": 65534,
+  "priority": "nice -10 granted",
+  "threads": 1,
+  "pinned": false,
+  "cpu_left_to_the_machine": "each bench process is single-threaded on 4 cpus",
+  "gate_before_build": [
+   "gate: vmstat 1 5",
+   "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+   " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+   " 0  0      0 14164728  69640 1913648    0    0   754  3720 1065    2 42  2 55  0  1  0",
+   " 0  0      0 14164604  69640 1913652    0    0     0     4  149  124  0  0 100  0  0  0",
+   " 0  0      0 14164604  69640 1913652    0    0     0     0   39   32  0  0 100  0  0  0",
+   " 0  0      0 14164604  69640 1913652    0    0     0     0   72   82  0  0 100  0  0  0",
+   " 0  0      0 14164604  69640 1913652    0    0     0     0  130  125  0  0 100  0  0  0",
+   "gate: ps --sort=-pcpu (top 7)",
+   "  PID USER     %CPU  NI COMMAND",
+   "  100 root      1.5   0 claude",
+   "    1 root      0.0   0 process_api",
+   "   12 root      0.0   0 kworker/u16:0-ext4-rsv-conversion",
+   "   44 root      0.0   0 kworker/u16:2-events_unbound",
+   "   92 root      0.0   0 environment-man",
+   "   31 root      0.0   - migration/3",
+   "   21 root      0.0   - migration/1",
+   "gate: busy 0.0% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough"
+  ],
+  "gate_before_runs": [
+   "gate: vmstat 1 5",
+   "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+   " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+   " 0  0      0 13971596  69640 1925936    0    0   676  3399 1062    2 47  2 50  0  1  0",
+   " 0  0      0 13991680  69640 1925784    0    0     0     0  195  152  0  0 100  0  0  0",
+   " 0  0      0 14021824  69640 1925784    0    0     0     0  169  172  0  0 100  0  0  0",
+   " 0  0      0 14037952  69640 1925784    0    0     0     0   72   89  0  0 100  0  0  0",
+   " 0  0      0 14051332  69640 1925784    0    0     0   448  140  126  0  0 100  0  0  0",
+   "gate: ps --sort=-pcpu (top 7)",
+   "  PID USER     %CPU  NI COMMAND",
+   "  100 root      1.4   0 claude",
+   "    1 root      0.0   0 process_api",
+   "   12 root      0.0   0 kworker/u16:0-kvfree_rcu_reclaim",
+   "   44 root      0.0   0 kworker/u16:2-ext4-rsv-conversion",
+   "   92 root      0.0   0 environment-man",
+   "   31 root      0.0   - migration/3",
+   "   21 root      0.0   - migration/1",
+   "gate: busy 0.0% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough"
+  ],
+  "steal_limit_percent": 3,
+  "rounds_detail": [
+   {
+    "round": 1,
+    "attempt": 1,
+    "wall_s": 7.363956928253174,
+    "kept": true,
+    "steal_percent_of_cpu_time": 0.2363268062120189
+   },
+   {
+    "round": 2,
+    "attempt": 2,
+    "wall_s": 7.354007959365845,
+    "kept": true,
+    "steal_percent_of_cpu_time": 0.4377104377104377
+   },
+   {
+    "round": 3,
+    "attempt": 3,
+    "wall_s": 7.127122163772583,
+    "kept": true,
+    "steal_percent_of_cpu_time": 0.5237430167597765
+   }
+  ],
+  "failed": [],
+  "stderr_of_runs": "",
+  "packages": [
+   "libbenchmark-dev 1.9.1-1+b2",
+   "libc6 2.43-7",
+   "libcapnp-dev 1.5.0-2",
+   "libflatbuffers-dev 23.5.26+dfsg-4+b2",
+   "libjsoncons-dev 1.5.0-2",
+   "libstdc++6 16.2.0-4",
+   "libtinycbor-dev 7.0-1"
+  ],
+  "flags": "-O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG",
+  "rounds": 3,
+  "min_time": "0.1s",
+  "warnings": {
+   "g++-16": "-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -Wnull-dereference "
+  },
+  "commit": "6bea1c0056694bd0605a56589b5a06c97c2b9d0b-dirty"
+ },
+ "results": {
+  "g++-16.FB_ENCODE": {
+   "unit": "ns",
+   "repetitions": [
+    229860.83645667284,
+    234834.70307171883,
+    252562.8530403648
+   ],
+   "median": 234834.70307171883,
+   "spread": 0.09876417807246218,
+   "check": 33191310.68737028,
+   "expected": 33191310.68737028,
+   "bytes_written": 134312,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.FB_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    2.600699740599858,
+    2.6496346574443352,
+    3.3604604336938233
+   ],
+   "median": 2.6496346574443352,
+   "spread": 0.2921370280595039,
+   "check": 7008.0,
+   "expected": 7008.0,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.FB_FIELD_V": {
+   "unit": "ns",
+   "repetitions": [
+    59287.375806467295,
+    59954.76896395601,
+    59270.028948555046
+   ],
+   "median": 59287.375806467295,
+   "spread": 0.01155288815524802,
+   "check": 7008.0,
+   "expected": 7008.0,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.FB_READ": {
+   "unit": "ns",
+   "repetitions": [
+    26166.66710501678,
+    23668.80884873254,
+    25235.883645517322
+   ],
+   "median": 25235.883645517322,
+   "spread": 0.10553375424374178,
+   "check": 33191310.68737028,
+   "expected": 33191310.68737028,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.FB_READ_V": {
+   "unit": "ns",
+   "repetitions": [
+    88199.03113986278,
+    91865.72348477227,
+    121091.51445868233
+   ],
+   "median": 91865.72348477227,
+   "spread": 0.37293474649012714,
+   "check": 33191310.68737028,
+   "expected": 33191310.68737028,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.ITEM_ENCODE": {
+   "unit": "ns",
+   "repetitions": [
+    648888.5502176145,
+    631646.2129634432,
+    631193.5774059345
+   ],
+   "median": 631646.2129634432,
+   "spread": 0.028034145854909376,
+   "check": 33191310.68737028,
+   "expected": 33191310.68737028,
+   "bytes_written": 440957,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.ITEM_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    1770272.7249996997,
+    1855311.1267593382,
+    1891385.5806424122
+   ],
+   "median": 1855311.1267593382,
+   "spread": 0.06841480068712746,
+   "check": 7008.0,
+   "expected": 7008.0,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.ITEM_READ": {
+   "unit": "ns",
+   "repetitions": [
+    2099156.583331781,
+    2056648.6818180156,
+    2221719.6249982864
+   ],
+   "median": 2099156.583331781,
+   "spread": 0.08026210049367943,
+   "check": 33191310.68737028,
+   "expected": 33191310.68737028,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.JC_ITEM_ENCODE": {
+   "unit": "ns",
+   "repetitions": [
+    1627286.5697675475,
+    1723541.2365593102,
+    1774578.2054788994
+   ],
+   "median": 1723541.2365593102,
+   "spread": 0.09051364304714449,
+   "check": 33191310.68737028,
+   "expected": 33191310.68737028,
+   "bytes_written": 422954,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.JC_ITEM_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    9324050.250000937,
+    6324109.260869749,
+    8743676.285722097
+   ],
+   "median": 8743676.285722097,
+   "spread": 0.4743657747492189,
+   "check": 7008.0,
+   "expected": 7008.0,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.JC_ITEM_READ": {
+   "unit": "ns",
+   "repetitions": [
+    6740282.904762094,
+    6558569.476196463,
+    6666712.999996586
+   ],
+   "median": 6666712.999996586,
+   "spread": 0.027706259608156536,
+   "check": 33191310.68737028,
+   "expected": 33191310.68737028,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.JC_PATH_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    6578156.350008158,
+    6473391.863644131,
+    7047519.000005433
+   ],
+   "median": 6578156.350008158,
+   "spread": 0.08869031080687617,
+   "check": 7008.0,
+   "expected": 7008.0,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.JC_PATH_READ": {
+   "unit": "ns",
+   "repetitions": [
+    11161826.800002929,
+    9582108.785707531,
+    10172111.857140666
+   ],
+   "median": 10172111.857140666,
+   "spread": 0.16486120640288182,
+   "check": 33191310.68737028,
+   "expected": 33191310.68737028,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.JC_STRUCT_ENCODE": {
+   "unit": "ns",
+   "repetitions": [
+    1483636.7999985095,
+    1866301.6851826762,
+    1741039.2098762165
+   ],
+   "median": 1741039.2098762165,
+   "spread": 0.2579235599875598,
+   "check": 33191310.68737028,
+   "expected": 33191310.68737028,
+   "bytes_written": 422954,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.JC_STRUCT_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    7830568.333335779,
+    10773998.235288886,
+    7696137.611118401
+   ],
+   "median": 7830568.333335779,
+   "spread": 0.3999227638190854,
+   "check": 7008.0,
+   "expected": 7008.0,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.JC_STRUCT_READ": {
+   "unit": "ns",
+   "repetitions": [
+    7775537.352940506,
+    7962314.882353679,
+    13398602.000001524
+   ],
+   "median": 7962314.882353679,
+   "spread": 0.7231737681685138,
+   "check": 33191310.68737028,
+   "expected": 33191310.68737028,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.LAZY_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    129340.83914900683,
+    133951.9763704989,
+    135813.28917900036
+   ],
+   "median": 133951.9763704989,
+   "spread": 0.05004181256731255,
+   "check": 7008.0,
+   "expected": 7008.0,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.LAZY_READ": {
+   "unit": "ns",
+   "repetitions": [
+    2710485.6170218284,
+    3054465.2500015427,
+    3785487.000001808
+   ],
+   "median": 3054465.2500015427,
+   "spread": 0.39660840707988987,
+   "check": 33191310.68737028,
+   "expected": 33191310.68737028,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.MB_ENCODE": {
+   "unit": "ns",
+   "repetitions": [
+    27870.731960922185,
+    26875.687419630205,
+    38511.223918589465
+   ],
+   "median": 27870.731960922185,
+   "spread": 0.4329391214179912,
+   "check": 33191310.68737028,
+   "expected": 33191310.68737028,
+   "bytes_written": 155849,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.MB_ENCODE_AA": {
+   "unit": "ns",
+   "repetitions": [
+    27114.71145377056,
+    30597.17536889758,
+    25423.489650229665
+   ],
+   "median": 27114.71145377056,
+   "spread": 0.2035002192793458,
+   "check": 33191310.68737028,
+   "expected": 33191310.68737028,
+   "bytes_written": 155849,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.MB_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    15.19125171424034,
+    14.87943596489847,
+    17.909897016755426
+   ],
+   "median": 15.19125171424034,
+   "spread": 0.2036677370705453,
+   "check": 7008.0,
+   "expected": 7008.0,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.MB_FIELD_AA": {
+   "unit": "ns",
+   "repetitions": [
+    14.860656418559469,
+    16.657328045347153,
+    16.1474497975936
+   ],
+   "median": 16.1474497975936,
+   "spread": 0.12090122913708057,
+   "check": 7008.0,
+   "expected": 7008.0,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.MB_FIELD_UNVERIFIED": {
+   "unit": "ns",
+   "repetitions": [
+    8.6434307005162,
+    6.372892302546031,
+    7.08342022965238
+   ],
+   "median": 7.08342022965238,
+   "spread": 0.35628067919225104,
+   "check": 7008.0,
+   "expected": 7008.0,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.MB_READ": {
+   "unit": "ns",
+   "repetitions": [
+    71815.51653941086,
+    73107.63333343214,
+    81094.48462108489
+   ],
+   "median": 73107.63333343214,
+   "spread": 0.129205616401602,
+   "check": 33191310.68737028,
+   "expected": 33191310.68737028,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.MB_READ_AA": {
+   "unit": "ns",
+   "repetitions": [
+    75993.79918650188,
+    84372.39830003085,
+    84813.6668472548
+   ],
+   "median": 84372.39830003085,
+   "spread": 0.11606035959733307,
+   "check": 33191310.68737028,
+   "expected": 33191310.68737028,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.MB_READ_UNVERIFIED": {
+   "unit": "ns",
+   "repetitions": [
+    42746.110608026764,
+    45218.84047222606,
+    45717.449389793575
+   ],
+   "median": 45218.84047222606,
+   "spread": 0.06951132487849931,
+   "check": 33191310.68737028,
+   "expected": 33191310.68737028,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.PATH_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    134306.91440331476,
+    124230.86478225821,
+    117900.36280991662
+   ],
+   "median": 124230.86478225821,
+   "spread": 0.13915607384388973,
+   "check": 7008.0,
+   "expected": 7008.0,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.PATH_READ": {
+   "unit": "ns",
+   "repetitions": [
+    6612686.761898312,
+    7508599.714280232,
+    6763354.952378601
+   ],
+   "median": 6763354.952378601,
+   "spread": 0.13548395450153294,
+   "check": 33191310.68737028,
+   "expected": 33191310.68737028,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.STRUCTS_ENCODE": {
+   "unit": "ns",
+   "repetitions": [
+    428676.71884026926,
+    427231.18559564854,
+    479120.3065132709
+   ],
+   "median": 428676.71884026926,
+   "spread": 0.12145443185585392,
+   "check": 33191310.68737028,
+   "expected": 33191310.68737028,
+   "bytes_written": 440957,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.STRUCTS_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    792555.3535911222,
+    806459.1491721878,
+    862217.3609465471
+   ],
+   "median": 806459.1491721878,
+   "spread": 0.08789544735239208,
+   "check": 7008.0,
+   "expected": 7008.0,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.STRUCTS_READ": {
+   "unit": "ns",
+   "repetitions": [
+    997015.4695127616,
+    903403.0416662139,
+    832742.8114275141
+   ],
+   "median": 903403.0416662139,
+   "spread": 0.1972669782686518,
+   "check": 33191310.68737028,
+   "expected": 33191310.68737028,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.TC_FIELD": {
+   "unit": "ns",
+   "repetitions": [
+    889411.472221645,
+    831644.6742849491,
+    838423.4905655454
+   ],
+   "median": 838423.4905655454,
+   "spread": 0.0694609124820813,
+   "check": 7008.0,
+   "expected": 7008.0,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.TC_READ": {
+   "unit": "ns",
+   "repetitions": [
+    2026769.5797099515,
+    1915243.7272747525,
+    2121974.8450708003
+   ],
+   "median": 2026769.5797099515,
+   "spread": 0.10793984851745764,
+   "check": 33191310.68737028,
+   "expected": 33191310.68737028,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  }
+ },
+ "check_failures": []
+}
