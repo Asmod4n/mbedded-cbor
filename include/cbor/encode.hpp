@@ -65,17 +65,6 @@ class schema;
 std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &root);
 
 /**
- * @brief Writes the tree at `root` with tags 28 and 29 for each cycle into a list of `struct iovec` pieces.
- *
- * The bytes are those of cbor::encode_cycles(), and its errors.
- *
- * @see cbor::encode()
- *
- * @ingroup decode
- */
-std::expected<ref<std::span<iovec const>>, error> encode_iov_cycles(item const &root);
-
-/**
  * @brief Writes the tree that `root` owns into a list of `struct iovec` pieces, and refers to its long strings.
  *
  * A byte or text string longer than `CBOR_ENCODER_COPYBREAK` bytes is a piece that points into the tree; a shorter
@@ -96,15 +85,6 @@ std::expected<ref<std::span<iovec const>>, error> encode_iov_cycles(item const &
  */
 std::expected<ref<std::span<iovec const>>, error> encode_iov(owning<item> const &root);
 
-/**
- * @brief Writes the tree that `root` owns with tags 28 and 29 for each cycle, and refers to its long strings.
- *
- * The bytes are those of cbor::encode_cycles(), and its errors. The pieces are those of
- * cbor::encode_iov(owning<item> const &).
- *
- * @ingroup decode
- */
-std::expected<ref<std::span<iovec const>>, error> encode_iov_cycles(owning<item> const &root);
 #endif
 
 namespace detail
@@ -251,9 +231,7 @@ private:
 
 #if __has_include(<sys/uio.h>)
     friend std::expected<ref<std::span<iovec const>>, error> cbor::encode_iov(item const &root);
-    friend std::expected<ref<std::span<iovec const>>, error> cbor::encode_iov_cycles(item const &root);
     friend std::expected<ref<std::span<iovec const>>, error> cbor::encode_iov(owning<item> const &root);
-    friend std::expected<ref<std::span<iovec const>>, error> cbor::encode_iov_cycles(owning<item> const &root);
 #endif
 
     template <class>
@@ -323,41 +301,6 @@ private:
 template <class Target>
     requires detail::encoding::is_target_v<std::remove_reference_t<Target>>
 std::expected<std::size_t, error> encode(Target &&out, item const &root);
-
-/**
- * @brief Writes the tree at `root` with tags 28 and 29 for each cycle and gives the count of bytes written.
- *
- * A `shared_reference` stands for the item it names.
- * A walk before the write finds each item that a depth-first walk reaches again while it is inside that item.
- * Such an item gets a tag 28, and each edge that reaches it again is a tag 29 with the index of that mark, in its
- * shortest head.
- * A value that two references reach without a cycle is written in full each time.
- * Every other item is written as cbor::encode() writes it.
- *
- * @code{.example}
- * bytes: d8 1c 81 d8 1d 00
- * call: auto const tree = cbor::decode(bytes)
- * result: owning item of 28([29(0)])
- * call: std::string out;
- * result: ""
- * call: cbor::encode_cycles(out, **tree)
- * result: 6
- * call: out
- * result: 6 bytes: d8 1c 81 d8 1d 00
- * @endcode
- *
- * @retval no_buffer_space the span is too short
- * @retval nesting_depth_exceeded the tree, or the path through its references, is deeper than the limit
- * @retval amplification_limit_breach the output would be larger than `cbor::limits::amplification_activation_threshold`
- * and than `cbor::limits::maximum_amplification` times the tree; nothing is written
- * @retval value_too_large, not_enough_memory, io_error the error of a writer, from its `std::errc`
- * @see cbor::encode()
- *
- * @ingroup decode
- */
-template <class Target>
-    requires detail::encoding::is_target_v<std::remove_reference_t<Target>>
-std::expected<std::size_t, error> encode_cycles(Target &&out, item const &root);
 
 template <class Writer>
 struct detail::encoding::binary_writer {
@@ -907,13 +850,6 @@ std::expected<std::size_t, error> encode(Target &&out, item const &root)
     return detail::encoding::encode_into<false>(std::forward<Target>(out), root);
 }
 
-template <class Target>
-    requires detail::encoding::is_target_v<std::remove_reference_t<Target>>
-std::expected<std::size_t, error> encode_cycles(Target &&out, item const &root)
-{
-    return detail::encoding::encode_into<true>(std::forward<Target>(out), root);
-}
-
 #if __has_include(<sys/uio.h>)
 template <bool Cycles>
 std::expected<ref<std::span<iovec const>>, error> detail::encoding::encode_iov_of(item const &root)
@@ -941,19 +877,10 @@ inline std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &
     return detail::encoding::encode_iov_of<false>(root);
 }
 
-inline std::expected<ref<std::span<iovec const>>, error> encode_iov_cycles(item const &root)
-{
-    return detail::encoding::encode_iov_of<true>(root);
-}
-
 inline std::expected<ref<std::span<iovec const>>, error> encode_iov(owning<item> const &root)
 {
     return detail::encoding::encode_iov_of<false>(root);
 }
 
-inline std::expected<ref<std::span<iovec const>>, error> encode_iov_cycles(owning<item> const &root)
-{
-    return detail::encoding::encode_iov_of<true>(root);
-}
 #endif
 }
