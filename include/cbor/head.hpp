@@ -382,7 +382,7 @@ class heads
             return string;
         }
 
-        CBOR_ALWAYS_INLINE std::expected<std::optional<head>, error> decode_bignum(std::uint64_t const tag)
+        CBOR_ALWAYS_INLINE std::expected<std::string_view, error> decode_bignum_content(std::uint64_t const tag)
         {
             auto const r = decode_head();
             if (!r) [[unlikely]]
@@ -390,47 +390,52 @@ class heads
             if (error const c = detail::validity::check_tag_content(tag, r->major).error_or(error{});
                 c != error{}) [[unlikely]]
                 return std::unexpected(c);
-            auto const bytes = decode_string(r->argument);
+            return decode_string(r->argument);
+        }
+
+        CBOR_ALWAYS_INLINE std::expected<std::optional<head>, error> decode_bignum(std::uint64_t const tag)
+        {
+            return decode_bignum_content(tag).transform(
+                [tag](std::string_view const bytes) { return convert_bignum_to_integer(tag, std::span(bytes)); });
+        }
+
+        template <class T>
+        std::expected<T, error> decode_bignum_value(std::uint64_t const tag)
+        {
+            auto const bytes = decode_bignum_content(tag);
             if (!bytes) [[unlikely]]
                 return std::unexpected(bytes.error());
-            return convert_bignum_to_integer(tag, std::span(*bytes));
+            auto const h = convert_bignum_to_integer(tag, std::span(*bytes));
+            if (!h) [[unlikely]]
+                return std::unexpected(error::number_out_of_range);
+            return integer_value<T>(h->major == major_type::negative_integer, h->argument);
+        }
+
+        template <class T>
+        CBOR_ALWAYS_INLINE static std::expected<T, error> integer_value(bool const negative, std::uint64_t const argument)
+        {
+            if (error const c = detail::validity::check_number_range<T>(negative, argument).error_or(error{});
+                c != error{}) [[unlikely]]
+                return std::unexpected(c);
+            return negative ? subtract_argument_from_minus_one<T>(argument) : static_cast<T>(argument);
         }
 
         template <class T>
             requires(std::integral<T> || std::same_as<T, double> || std::same_as<T, simple_value> ||
                      std::same_as<T, std::nullptr_t> || std::same_as<T, std::string_view> ||
                      std::same_as<T, std::span<std::byte const>>)
-        CBOR_ALWAYS_INLINE std::expected<T, error> decode_value(head h)
+        CBOR_ALWAYS_INLINE std::expected<T, error> decode_value(head const h)
         {
-            if constexpr ((std::integral<T> && !std::same_as<T, bool>) || std::same_as<T, double>) {
-                if (is_bignum(h.major, h.argument)) [[unlikely]] {
-                    auto const read = decode_bignum(h.argument);
-                    if (!read) [[unlikely]]
-                        return std::unexpected(read.error());
-                    if (!*read) [[unlikely]]
-                        return std::unexpected(error::number_out_of_range);
-                    h = **read;
-                }
-            }
+            if constexpr ((std::integral<T> && !std::same_as<T, bool>) || std::same_as<T, double>)
+                if (is_bignum(h.major, h.argument)) [[unlikely]]
+                    return decode_bignum_value<T>(h.argument);
             if constexpr (std::integral<T> && !std::same_as<T, bool>) {
-                bool const negative = h.major == major_type::negative_integer;
-                if (h.major != major_type::unsigned_integer && !negative) [[unlikely]]
+                if (h.major != major_type::unsigned_integer && h.major != major_type::negative_integer) [[unlikely]]
                     return std::unexpected(error::incorrect_type);
-                if (error const c = detail::validity::check_number_range<T>(negative, h.argument).error_or(error{});
-                    c != error{}) [[unlikely]]
-                    return std::unexpected(c);
-                return negative ? subtract_argument_from_minus_one<T>(h.argument) : static_cast<T>(h.argument);
+                return integer_value<T>(h.major == major_type::negative_integer, h.argument);
             } else if constexpr (std::same_as<T, double>) {
-                if (h.major == major_type::unsigned_integer || h.major == major_type::negative_integer) {
-                    bool const negative = h.major == major_type::negative_integer;
-                    if (error const c =
-                            detail::validity::check_number_range<double>(negative, h.argument).error_or(error{});
-                        c != error{}) [[unlikely]]
-                        return std::unexpected(c);
-                    if (!negative)
-                        return static_cast<double>(h.argument);
-                    return subtract_argument_from_minus_one<double>(h.argument);
-                }
+                if (h.major == major_type::unsigned_integer || h.major == major_type::negative_integer)
+                    return integer_value<double>(h.major == major_type::negative_integer, h.argument);
                 if (h.major != major_type::simple) [[unlikely]]
                     return std::unexpected(error::incorrect_type);
                 switch (static_cast<rfc8949::simple_information>(h.info)) {
