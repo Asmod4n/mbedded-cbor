@@ -133,7 +133,7 @@ TEST_CASE("doc reference lazy: at_key")
     CHECK_EQ(first.error(), cbor::error::not_indexable);
 }
 
-// lazy.hpp, snippet at: an index; the two errors of the example.
+// lazy.hpp, snippet at: an index; an integer key that the map does not hold gives key_not_found; an index past the end.
 TEST_CASE("doc reference lazy: at")
 {
     std::string bytes = test::encode_in_preferred_form(test::M("cars"s, test::A(test::M("hp"s, 5), test::M("hp"s, 7))));
@@ -142,11 +142,11 @@ TEST_CASE("doc reference lazy: at")
     auto const doc = cbor::lazy::adopt(std::move(bytes));
     auto const cars = doc->at_key("cars");
     auto const hp = cars->at(1)->at_key("hp")->get<int>();  // 7
-    auto const first = doc->at(0);                           // not_indexable
+    auto const first = doc->at(0);                           // key_not_found
     auto const past = cars->at(5);                           // index_out_of_bounds
     // [at]
     CHECK_EQ(hp.value(), 7);
-    CHECK_EQ(first.error(), cbor::error::not_indexable);
+    CHECK_EQ(first.error(), cbor::error::key_not_found);
     CHECK_EQ(past.error(), cbor::error::index_out_of_bounds);
 }
 

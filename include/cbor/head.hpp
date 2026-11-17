@@ -275,6 +275,22 @@ class heads
         std::uint64_t argument;
     };
 
+    template <class Integer>
+        requires std::numeric_limits<Integer>::is_integer
+    CBOR_ALWAYS_INLINE static constexpr head preferred_head_of_integer(Integer const n)
+    {
+        detail::validity::throw_logic_error_if(!detail::validity::check_integer_argument_range(n).has_value(),
+                                               "cbor::detail::heads: the integer is outside -2^64 to 2^64-1");
+        if constexpr (std::numeric_limits<Integer>::is_signed) {
+            if (n < 0) {
+                std::uint64_t const argument = static_cast<std::uint64_t>(-1 - n);
+                return {major_type::negative_integer, preferred_argument_info(argument), argument};
+            }
+        }
+        std::uint64_t const argument = static_cast<std::uint64_t>(n);
+        return {major_type::unsigned_integer, preferred_argument_info(argument), argument};
+    }
+
     template <class E>
         requires std::same_as<E, char> || std::same_as<E, std::byte>
     CBOR_ALWAYS_INLINE static std::optional<head> convert_bignum_to_integer(std::uint64_t const tag, std::span<E const> const magnitude)

@@ -4,6 +4,7 @@
 #include "threads.hpp"
 #include "owned_copy.hpp"
 #include "item_head.hpp"
+#include <cbor/diagnostic_notation.hpp>
 
 #include <bit>
 #include <algorithm>
@@ -113,25 +114,110 @@ TEST_CASE("lazy: access errors")
     CHECK_EQ(lazy_of(three).at(99).error(), error::index_out_of_bounds);
     CHECK_EQ(lazy_of(three).at_key("invalid").error(), error::not_indexable);
     CHECK_EQ(lazy_of(scalar).at_key("key").error(), error::not_indexable);
-    CHECK_EQ(lazy_of(one).at(0).error(), error::not_indexable);
+    CHECK_EQ(lazy_of(one).at(0).error(), error::key_not_found);
     CHECK_EQ(lazy_of(three).at_key(0).error(), error::not_indexable);
     CHECK_EQ(lazy_of(scalar).at(0).error(), error::not_indexable);
     CHECK_EQ(lazy_of(empty_map).at_key(0).error(), error::key_not_found);
 }
 
-// at(std::size_t) reads an array and at_key reads a map, as std::vector::at and std::map::at do. A
-// literal index chooses the array form, so at(1) never reads the map key 1.
-TEST_CASE("lazy: at(std::size_t) reads an array, at_key(std::int64_t) reads a map")
+namespace
 {
-    std::string const both =
-        "\x82\xa1\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x63one\x1b\x00\x00\x00\x00\x00\x00\x00\x07"s;
-    cbor::lazy const root = lazy_of(both);
+
+cbor::lazy lazy_of_edn(std::string_view const edn)
+{
+    auto const bytes = cbor::diag2cbor(edn);
+    REQUIRE(bytes.has_value());
+    return lazy_of(*bytes);
+}
+
+template <class Argument>
+constexpr bool at_accepts = requires(cbor::lazy const &l, Argument const argument) { l.at(argument); };
+
+} // namespace
+
+// The owner decided that at is the one step of a lazy: an integer reads the integer key of a map and the element of an
+// array, as the path $[n] does (RFC 9535 2.3.3 for the array). So at(1) on a map reads the key 1, and the same number
+// never reads two different things in one node.
+TEST_CASE("lazy: at reads an integer key of a map and an element of an array")
+{
+    cbor::lazy const root = lazy_of_edn(R"([{1: "one"}, 7])");
     CHECK(value_at(at(root, 1)) == V(7));
-    CHECK(value_at(at_key(at(root, 0), 1)) == V("one"s));
-    CHECK_EQ(at(root, 0).at(1).error(), error::not_indexable);
+    CHECK(value_at(at(at(root, 0), 1)) == V("one"s));
+    CHECK_EQ(at(root, 0).at(0).error(), error::key_not_found);
     CHECK_EQ(root.at_key(1).error(), error::not_indexable);
-    CHECK(value_at(at_key(lazy_of("\xa1\x20\x65minus"s), -1)) == V("minus"s));
+    CHECK(value_at(*lazy_of_edn(R"({-1: "minus"})").at(-1)) == V("minus"s));
     CHECK_EQ(root.at(std::numeric_limits<std::size_t>::max()).error(), error::index_out_of_bounds);
+}
+
+// Each integer type is an exact match of the template, so a literal and a std::size_t loop variable both pass with no
+// conversion. bool and the character types do not compile: at('a') would read the key 97, and a program that writes it
+// means a text. A double and a null pointer are no integer.
+TEST_CASE("lazy: at takes every integer type and no bool, character, float or null pointer")
+{
+    cbor::lazy const map = lazy_of_edn(R"({0: "zero", 1: "one", -1: "minus one", "a": "text"})");
+    cbor::lazy const array = lazy_of_edn(R"(["first", "second"])");
+    std::size_t const i = 1;
+    CHECK(value_at(*map.at(0)) == V("zero"s));
+    CHECK(value_at(*map.at(1)) == V("one"s));
+    CHECK(value_at(*map.at(-1)) == V("minus one"s));
+    CHECK(value_at(*map.at(i)) == V("one"s));
+    CHECK(value_at(*array.at(0)) == V("first"s));
+    CHECK(value_at(*array.at(1)) == V("second"s));
+    CHECK(value_at(*array.at(i)) == V("second"s));
+    CHECK_EQ(array.at(-1).error(), error::index_out_of_bounds);
+    CHECK(at_accepts<int>);
+    CHECK(at_accepts<std::size_t>);
+    CHECK(at_accepts<std::int64_t>);
+    CHECK(at_accepts<std::uint64_t>);
+    CHECK(at_accepts<signed char>);
+    CHECK(at_accepts<unsigned char>);
+    CHECK_FALSE(at_accepts<bool>);
+    CHECK_FALSE(at_accepts<char>);
+    CHECK_FALSE(at_accepts<wchar_t>);
+    CHECK_FALSE(at_accepts<char8_t>);
+    CHECK_FALSE(at_accepts<char16_t>);
+    CHECK_FALSE(at_accepts<char32_t>);
+    CHECK_FALSE(at_accepts<double>);
+    CHECK_FALSE(at_accepts<std::nullptr_t>);
+}
+
+// RFC 8949 3.1 gives an integer key the range -2^64 to 2^64-1. at_key(std::int64_t) reached only -2^63 to 2^63-1. An
+// unsigned 64-bit argument reaches the keys up to 2^64-1, and cbor::int128 the keys down to -2^64. A number outside the
+// range is no CBOR integer, so no key matches it and no element has it as index.
+TEST_CASE("lazy: at reaches every integer key of RFC 8949 3.1")
+{
+    cbor::lazy const map = lazy_of_edn(
+        R"({9223372036854775808: "2^63", 18446744073709551615: "2^64-1", -9223372036854775809: "-2^63-1", )"
+        R"(-18446744073709551616: "-2^64"})");
+    CHECK(value_at(*map.at(std::uint64_t{1} << 63)) == V("2^63"s));
+    CHECK(value_at(*map.at(std::numeric_limits<std::uint64_t>::max())) == V("2^64-1"s));
+#ifdef CBOR_HAS_INT128
+    cbor::lazy const array = lazy_of_edn("[1, 2, 3]");
+    cbor::int128 const two_to_64 = cbor::int128{1} << 64;
+    CHECK(value_at(*map.at(-two_to_64)) == V("-2^64"s));
+    CHECK(value_at(*map.at(-(cbor::int128{1} << 63) - 1)) == V("-2^63-1"s));
+    CHECK(value_at(*map.at(two_to_64 - 1)) == V("2^64-1"s));
+    CHECK(value_at(*map.at(cbor::uint128{std::numeric_limits<std::uint64_t>::max()})) == V("2^64-1"s));
+    CHECK_EQ(map.at(-two_to_64 - 1).error(), error::key_not_found);
+    CHECK_EQ(map.at(two_to_64).error(), error::key_not_found);
+    CHECK_EQ(map.at(cbor::uint128{1} << 64).error(), error::key_not_found);
+    CHECK_EQ(array.at(-two_to_64 - 1).error(), error::index_out_of_bounds);
+    CHECK_EQ(array.at(two_to_64).error(), error::index_out_of_bounds);
+    CHECK_EQ(array.at(cbor::uint128{1} << 64).error(), error::index_out_of_bounds);
+    CHECK(value_at(*array.at(cbor::int128{2})) == V(3));
+#endif
+}
+
+// A negative index is an error on an array and on a typed array (RFC 8746), as an index past the end is. Only the path
+// $[-1] counts from the end. A scalar has no element and no key.
+TEST_CASE("lazy: at with a negative index on an array and on a typed array")
+{
+    CHECK_EQ(lazy_of_edn("[1, 2, 3]").at(-1).error(), error::index_out_of_bounds);
+    cbor::lazy const typed = lazy_of_edn("64(h'010203')");
+    CHECK_EQ(typed.at(-1).error(), error::index_out_of_bounds);
+    CHECK(value_at(*typed.at(2)) == V(3));
+    CHECK_EQ(lazy_of_edn("1").at(-1).error(), error::not_indexable);
+    CHECK_EQ(lazy_of_edn("1").at(1).error(), error::not_indexable);
 }
 
 // Ported from test.rb: 'lazy: deep nesting + wide maps'.

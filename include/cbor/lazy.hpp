@@ -244,20 +244,29 @@ public:
     std::expected<lazy, error> at_key(std::int64_t key) const;
 
     /**
-     * @brief Gives the lazy of one element of an array.
+     * @brief Gives the lazy of the value of an integer key of a map, or of one element of an array.
      *
-     * `at(index)` gives the element of an array or of a typed array, counted from 0.
+     * On a map, `at(n)` gives the value of the first pair whose key is the integer `n` (RFC 8949 3.1, major type 0 or
+     * 1); a bignum key that holds `n` matches too.
+     * On an array or a typed array, `at(i)` gives the element `i`, counted from 0.
+     * Every integer type passes, also cbor::int128 and cbor::uint128, so the call reaches every key from -2^64 to
+     * 2^64-1. `bool` and the character types do not compile.
      * The call passes a tag that it does not interpret, and reads into a tag 24.
      * It reads no value; cbor::lazy::get() does.
      *
      * @code{.example}
-     * bytes: a2 64 63 61 72 73 82 a1 62 68 70 05 a1 62 68 70 07 07 65 73 65 76 65 6e
-     * call: doc->at_key("cars")->at(1)->at_key("hp")->get<int>()
-     * result: 7
+     * message: {"key": [1, 2, 3], 7: "seven"}
+     * call: doc->at_key("key")->at(1)->get<int>()
+     * result: 2
+     * call: doc->at(7)->get<std::string_view>()
+     * result: ref to "seven"
+     * call: doc->at_key("key")->at(-1)
+     * result: error index_out_of_bounds
      * @endcode
      *
-     * @retval index_out_of_bounds `index` is not less than the count
-     * @retval not_indexable the lazy is not an array
+     * @retval key_not_found no pair of the map has the key, or `n` is outside -2^64 to 2^64-1
+     * @retval index_out_of_bounds `i` is negative or not less than the count
+     * @retval not_indexable the lazy is not a map, an array or a typed array
      * @retval too_little_data, syntax_error, indefinite_length the bytes up to the child are broken
      * @snippet doc_reference_lazy.cpp at
      * @see cbor::lazy::at_key()
@@ -265,7 +274,11 @@ public:
      * @see cbor::lazy::at_path()
      * @see cbor::lazy::get()
      */
-    std::expected<lazy, error> at(std::size_t index) const;
+    template <class Integer>
+        requires(std::integral<Integer> && !std::same_as<Integer, bool> && !std::same_as<Integer, char> &&
+                 !std::same_as<Integer, wchar_t> && !std::same_as<Integer, char8_t> &&
+                 !std::same_as<Integer, char16_t> && !std::same_as<Integer, char32_t>)
+    std::expected<lazy, error> at(Integer key_or_index) const;
 
     /**
      * @brief Gives the same result as cbor::lazy::at_key() with a text key, or as cbor::lazy::at() with an index.
@@ -560,15 +573,21 @@ private:
     static std::expected<lazy, error> select_index(resolved const &found, Index i);
 
     template <class Key, class Entries = lazy_entries>
-        requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
+        requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t> ||
+                 std::same_as<Key, detail::heads::head>
     static std::expected<typename Entries::iterator, error> find_key(resolved found, Key key);
 
     template <class Iterator, class Last, class Key>
-        requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
+        requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t> ||
+                 std::same_as<Key, detail::heads::head>
     static std::expected<std::pair<Iterator, bool>, error> find_key(Iterator first, Last last, Key key);
 
     static std::expected<bool, error> integer_key_equivalent(detail::heads::decoder<true> const &probe, detail::heads::head const &k,
                                                              std::int64_t key);
+
+    static std::expected<bool, error> integer_key_equivalent(detail::heads::decoder<true> const &probe,
+                                                             detail::heads::head const &k,
+                                                             detail::heads::head const &key);
 
     template <class Iterator>
     static std::expected<lazy, error> value_of(std::expected<Iterator, error> found);
@@ -1334,7 +1353,8 @@ std::expected<lazy, error> lazy::adopt(Encoded &&encoded)
 }
 
 template <class Key, class Entries>
-    requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
+    requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t> ||
+             std::same_as<Key, detail::heads::head>
 std::expected<typename Entries::iterator, error> lazy::find_key(resolved found, Key const key)
 {
     if (detail::heads::is_typed_array(found.h)) [[unlikely]]
@@ -1354,7 +1374,8 @@ std::expected<typename Entries::iterator, error> lazy::find_key(resolved found, 
 }
 
 template <class Iterator, class Last, class Key>
-    requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t>
+    requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t> ||
+             std::same_as<Key, detail::heads::head>
 std::expected<std::pair<Iterator, bool>, error> lazy::find_key(Iterator it, Last const last, Key const key)
 {
     for (; it != last; ++it) {
@@ -1395,8 +1416,13 @@ std::expected<std::pair<Iterator, bool>, error> lazy::find_key(Iterator it, Last
 inline std::expected<bool, error> lazy::integer_key_equivalent(detail::heads::decoder<true> const &probe,
                                                                detail::heads::head const &k, std::int64_t const key)
 {
-    std::uint64_t const magnitude =
-        key < 0 ? ~static_cast<std::uint64_t>(key) : static_cast<std::uint64_t>(key);
+    return integer_key_equivalent(probe, k, detail::heads::preferred_head_of_integer(key));
+}
+
+CBOR_ALWAYS_INLINE inline std::expected<bool, error>
+lazy::integer_key_equivalent(detail::heads::decoder<true> const &probe, detail::heads::head const &k,
+                             detail::heads::head const &key)
+{
     detail::heads::head n = k;
     if (detail::heads::is_bignum(k.major, k.argument)) [[unlikely]] {
         detail::heads::decoder<true> d = probe;
@@ -1407,8 +1433,7 @@ inline std::expected<bool, error> lazy::integer_key_equivalent(detail::heads::de
             return false;
         n = **read;
     }
-    return n.argument == magnitude &&
-           n.major == (key < 0 ? major_type::negative_integer : major_type::unsigned_integer);
+    return n.argument == key.argument && n.major == key.major;
 }
 
 template <class Entries>
@@ -1555,13 +1580,31 @@ inline std::expected<lazy, error> lazy::at_key(std::int64_t const key) const
     return value_of(find(key));
 }
 
-inline std::expected<lazy, error> lazy::at(std::size_t const index) const
+template <class Integer>
+    requires(std::integral<Integer> && !std::same_as<Integer, bool> && !std::same_as<Integer, char> &&
+             !std::same_as<Integer, wchar_t> && !std::same_as<Integer, char8_t> &&
+             !std::same_as<Integer, char16_t> && !std::same_as<Integer, char32_t>)
+std::expected<lazy, error> lazy::at(Integer const key_or_index) const
 {
     throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
-    auto const found = resolve(*this);
+    auto found = resolve(*this);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
-    return select_index(*found, index);
+    bool const argument_fits = detail::validity::check_integer_argument_range(key_or_index).has_value();
+    if (found->h.major == major_type::map) {
+        if (!argument_fits) [[unlikely]]
+            return std::unexpected(error::key_not_found);
+        return value_of(find_key(std::move(*found), detail::heads::preferred_head_of_integer(key_or_index)));
+    }
+    bool negative = false;
+    if constexpr (std::is_signed_v<Integer>)
+        negative = key_or_index < 0;
+    if (!argument_fits || negative) [[unlikely]] {
+        if (found->h.major == major_type::array || detail::heads::is_typed_array(found->h))
+            return std::unexpected(error::index_out_of_bounds);
+        return std::unexpected(error::not_indexable);
+    }
+    return select_index(*found, static_cast<std::uint64_t>(key_or_index));
 }
 
 template <class T>

@@ -718,6 +718,22 @@ public:
         return index{static_cast<std::uint64_t>(i)};
     }
 
+    template <class Integer>
+        requires std::numeric_limits<Integer>::is_integer
+    CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
+    check_integer_argument_range(Integer const n)
+    {
+        if constexpr (sizeof(Integer) > sizeof(std::uint64_t)) {
+            constexpr Integer largest_argument = std::numeric_limits<std::uint64_t>::max();
+            if (n > largest_argument) [[unlikely]]
+                return std::unexpected(error::number_out_of_range);
+            if constexpr (std::numeric_limits<Integer>::is_signed)
+                if (n < -largest_argument - 1) [[unlikely]]
+                    return std::unexpected(error::number_out_of_range);
+        }
+        return {};
+    }
+
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_count(std::size_t const count,
                                                                                std::size_t const size)
     {

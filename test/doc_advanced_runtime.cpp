@@ -65,7 +65,7 @@ TEST_CASE("doc advanced runtime: steps and searches")
     CHECK_EQ(doc["cars"]->at(1)->at_key("hp")->get<std::int64_t>(), 7);
     CHECK_EQ(doc.at_key("cars")->at(5).error(), error::index_out_of_bounds);
     CHECK_EQ(doc.at_key("bus").error(), error::key_not_found);
-    CHECK_EQ(doc.at(0).error(), error::not_indexable);
+    CHECK_EQ(doc.at(0).error(), error::key_not_found);
 }
 
 // The section "Steps and searches in a map or an array" states that a byte string is not a text key. That a repeated key
