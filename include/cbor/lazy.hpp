@@ -941,9 +941,9 @@ detail::canonical_ids::intern_key(Message const &message, validity::offset const
         if (!read) [[unlikely]]
             return std::unexpected(read.error());
         if (*read) {
-            bool const negative = h->argument == std::to_underlying(rfc8949::tag_number::negative_bignum);
-            return scalar(negative ? kind::negative_integer : kind::positive_integer, **read, {},
-                          validity::distance(encoded, d.encoded));
+            detail::heads::head const r = **read;
+            return scalar(r.major == major_type::negative_integer ? kind::negative_integer : kind::positive_integer,
+                          r.argument, {}, validity::distance(encoded, d.encoded));
         }
     }
     switch (h->major) {
@@ -1044,18 +1044,16 @@ std::expected<bool, error> detail::validity::keys_equivalent(First const &first,
         return std::unexpected(c);
     if (h->major != k->major || detail::heads::is_bignum(h->major, h->argument)) [[unlikely]] {
         auto const integer_of = [](std::string_view const encoded, detail::heads::raw_head const n)
-            -> std::expected<std::optional<std::pair<bool, std::uint64_t>>, error> {
+            -> std::expected<std::optional<detail::heads::head>, error> {
             if (n.major == major_type::unsigned_integer || n.major == major_type::negative_integer)
-                return std::pair{n.major == major_type::negative_integer, n.argument};
+                return detail::heads::head{n.major, n.info, n.argument};
             if (!detail::heads::is_bignum(n.major, n.argument))
                 return std::nullopt;
             detail::heads::decoder<true> d{subspan(encoded, n.at)};
             auto const read = d.decode_bignum(n.argument);
             if (!read) [[unlikely]]
                 return std::unexpected(read.error());
-            if (!*read)
-                return std::nullopt;
-            return std::pair{n.argument == std::to_underlying(rfc8949::tag_number::negative_bignum), **read};
+            return *read;
         };
         auto const x_value = integer_of(a, *h);
         if (!x_value) [[unlikely]]
@@ -1064,7 +1062,7 @@ std::expected<bool, error> detail::validity::keys_equivalent(First const &first,
         if (!y_value) [[unlikely]]
             return std::unexpected(y_value.error());
         if (*x_value && *y_value)
-            return **x_value == **y_value;
+            return (*x_value)->major == (*y_value)->major && (*x_value)->argument == (*y_value)->argument;
         if (h->major != k->major)
             return false;
     }
@@ -1399,16 +1397,18 @@ inline std::expected<bool, error> lazy::integer_key_equivalent(detail::heads::de
 {
     std::uint64_t const magnitude =
         key < 0 ? ~static_cast<std::uint64_t>(key) : static_cast<std::uint64_t>(key);
+    detail::heads::head n = k;
     if (detail::heads::is_bignum(k.major, k.argument)) [[unlikely]] {
         detail::heads::decoder<true> d = probe;
         auto const read = d.decode_bignum(k.argument);
         if (!read) [[unlikely]]
             return std::unexpected(read.error());
-        bool const negative = k.argument == std::to_underlying(rfc8949::tag_number::negative_bignum);
-        return *read && negative == (key < 0) && **read == magnitude;
+        if (!*read)
+            return false;
+        n = **read;
     }
-    return k.argument == magnitude &&
-           k.major == (key < 0 ? major_type::negative_integer : major_type::unsigned_integer);
+    return n.argument == magnitude &&
+           n.major == (key < 0 ? major_type::negative_integer : major_type::unsigned_integer);
 }
 
 template <class Entries>
@@ -1531,9 +1531,8 @@ inline std::expected<cbor::type, error> lazy::type() const
         return std::unexpected(read.error());
     if (!*read)
         return detail::heads::type_of(h->major, h->info, h->argument);
-    return h->argument == std::to_underlying(rfc8949::tag_number::negative_bignum)
-               ? cbor::type::negative_integer
-               : cbor::type::unsigned_integer;
+    detail::heads::head const r = **read;
+    return detail::heads::type_of(r.major, r.info, r.argument);
 }
 
 template <class Iterator>

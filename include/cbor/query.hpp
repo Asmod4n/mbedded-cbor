@@ -1335,11 +1335,7 @@ path::integer_of(detail::heads::head const &n, detail::heads::decoder<true> cons
         return std::unexpected(read.error());
     if (!*read)
         return std::pair{n, content};
-    return std::pair{detail::heads::head{n.argument == std::to_underlying(rfc8949::tag_number::negative_bignum)
-                                     ? major_type::negative_integer
-                                     : major_type::unsigned_integer,
-                                 0, **read},
-                     d};
+    return std::pair{**read, d};
 }
 
 inline std::partial_ordering path::compare_numbers(exact_number const &a, exact_number const &b)

@@ -200,10 +200,8 @@ std::expected<bool, error> tree_decoder<Resolve>::decode_bignum(std::pmr::vector
         d = before;
         return false;
     }
-    into.emplace_back(item{tag == std::to_underlying(rfc8949::tag_number::negative_bignum)
-                               ? cbor::type::negative_integer
-                               : cbor::type::unsigned_integer,
-                           detail::heads::preferred_argument_info(**read), {.u64 = **read}});
+    detail::heads::head const r = **read;
+    into.emplace_back(item{detail::heads::type_of(r.major, r.info, r.argument), r.info, {.u64 = r.argument}});
     return true;
 }
 

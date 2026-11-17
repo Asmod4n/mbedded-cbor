@@ -585,17 +585,14 @@ inline detail::encoding::head_parts detail::encoding::head_of(item const &node)
         break;
     case cbor::type::unsigned_bignum:
     case cbor::type::negative_bignum:
-        if (node.via.tag.content->m_type == cbor::type::byte_string) {
-            std::span<std::byte const> const magnitude =
-                detail::heads::magnitude_without_leading_zeros(node.via.tag.content->via.bin);
-            if (detail::validity::check_magnitude_size(magnitude.size(), sizeof(std::uint64_t))) {
-                head.major = node.m_type == cbor::type::negative_bignum ? major_type::negative_integer
-                                                                      : major_type::unsigned_integer;
-                head.argument = detail::heads::magnitude_value(magnitude);
-                head.info = detail::heads::preferred_argument_info(head.argument);
+        if (node.via.tag.content->m_type == cbor::type::byte_string)
+            if (auto const r = detail::heads::convert_bignum_to_integer(node.via.tag.number,
+                                                                          node.via.tag.content->via.bin)) {
+                head.major = r->major;
+                head.info = r->info;
+                head.argument = r->argument;
                 break;
             }
-        }
         head.argument = node.via.tag.number;
         break;
     case cbor::type::tag:

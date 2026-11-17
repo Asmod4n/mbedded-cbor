@@ -902,28 +902,26 @@ class generic
             auto k = decode_head_through_self_described_cbor(d);
             if (!k) [[unlikely]]
                 return std::unexpected(k.error());
+            detail::heads::head key = *k;
             std::string_view text;
-            if (detail::heads::is_bignum(k->major, k->argument)) [[unlikely]] {
-                auto const read = d.decode_bignum(k->argument);
+            if (detail::heads::is_bignum(key.major, key.argument)) [[unlikely]] {
+                auto const read = d.decode_bignum(key.argument);
                 if (!read) [[unlikely]]
                     return std::unexpected(read.error());
                 if (*read)
-                    k = detail::heads::head{k->argument == std::to_underlying(rfc8949::tag_number::negative_bignum)
-                                        ? major_type::negative_integer
-                                        : major_type::unsigned_integer,
-                                    detail::heads::preferred_argument_info(**read), **read};
-            } else if (k->major == major_type::text_string) {
-                auto const t = d.decode_string(k->argument);
+                    key = **read;
+            } else if (key.major == major_type::text_string) {
+                auto const t = d.decode_string(key.argument);
                 if (!t) [[unlikely]]
                     return std::unexpected(t.error());
                 text = *t;
-            } else if (k->major != major_type::unsigned_integer && k->major != major_type::negative_integer) {
-                if (k->major == major_type::byte_string) {
-                    if (auto const b = d.decode_string(k->argument); !b) [[unlikely]]
+            } else if (key.major != major_type::unsigned_integer && key.major != major_type::negative_integer) {
+                if (key.major == major_type::byte_string) {
+                    if (auto const b = d.decode_string(key.argument); !b) [[unlikely]]
                         return std::unexpected(b.error());
-                } else if (k->major == major_type::array || k->major == major_type::map ||
-                           k->major == major_type::tag) [[unlikely]] {
-                    std::uint64_t const items = detail::validity::count_enclosed_data_items(k->major, k->argument);
+                } else if (key.major == major_type::array || key.major == major_type::map ||
+                           key.major == major_type::tag) [[unlikely]] {
+                    std::uint64_t const items = detail::validity::count_enclosed_data_items(key.major, key.argument);
                     if (auto const p = detail::validity::check_bytes_left(items, d.encoded.size()); !p)
                         [[unlikely]]
                         return std::unexpected(p.error());
@@ -936,7 +934,7 @@ class generic
             bool const matched = [&]<std::size_t... I>(std::index_sequence<I...>) {
                 return (
                     false || ... ||
-                    (key_matches<U, I>(*k, text) &&
+                    (key_matches<U, I>(key, text) &&
                      (static_cast<void>(r = read_member(std::integral_constant<std::size_t, I>{})), true)));
             }(std::make_index_sequence<count>());
             if (!matched) {
