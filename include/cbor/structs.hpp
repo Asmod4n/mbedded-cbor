@@ -258,6 +258,13 @@ class generic
     static constexpr bool is_sys_time<std::chrono::sys_time<D>> = true;
 
     template <class U>
+    static constexpr bool is_whole_seconds = false;
+
+    template <class R>
+        requires std::signed_integral<R> && (sizeof(R) <= sizeof(std::int64_t))
+    static constexpr bool is_whole_seconds<std::chrono::sys_time<std::chrono::duration<R>>> = true;
+
+    template <class U>
     static constexpr bool is_set = false;
 
     template <class K, class C, class A>
@@ -312,8 +319,7 @@ class generic
             if (tag == std::to_underlying(rfc8949::tag_number::standard_date_time_string))
                 return true;
 #endif
-            return std::same_as<typename U::duration, std::chrono::seconds> &&
-                   tag == tag_of_standard_type<U>();
+            return tag == tag_of_standard_type<U>();
         } else if constexpr (std::same_as<U, std::chrono::year_month_day>) {
 #if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
             if (tag == std::to_underlying(rfc8943::tag_number::full_date_string))
@@ -679,25 +685,26 @@ class generic
     template <class U>
     static std::expected<void, error> read_epoch(detail::heads::decoder<true> &d, U &out)
     {
-        using rep = std::chrono::seconds::rep;
+        using D = typename U::duration;
         auto const h = decode_head_through_self_described_cbor(d);
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
-        rep seconds = 0;
+        std::expected<D, error> ticks;
         if (h->major == major_type::simple) {
             if (!head_accepted<double>(*h)) [[unlikely]]
                 return std::unexpected(error::inadmissible_type_for_tag_content);
-            auto const whole =
-                detail::validity::check_whole_number<rep>(detail::ieee754::decode_float(h->info, h->argument));
-            if (!whole) [[unlikely]]
-                return std::unexpected(whole.error());
-            seconds = *whole;
+            ticks = detail::validity::check_epoch_ticks<D>(detail::ieee754::decode_float(h->info, h->argument));
         } else if (h->major != major_type::unsigned_integer && h->major != major_type::negative_integer) [[unlikely]] {
             return std::unexpected(error::inadmissible_type_for_tag_content);
-        } else if (auto const r = read_integer<rep>(*h, seconds); !r) [[unlikely]] {
-            return r;
+        } else {
+            std::int64_t seconds = 0;
+            if (auto const r = read_integer<std::int64_t>(*h, seconds); !r) [[unlikely]]
+                return r;
+            ticks = detail::validity::check_epoch_ticks<D>(seconds);
         }
-        out = U{std::chrono::seconds{seconds}};
+        if (!ticks) [[unlikely]]
+            return std::unexpected(ticks.error());
+        out = U{*ticks};
         return {};
     }
 
@@ -739,10 +746,7 @@ class generic
             if (tag.argument == std::to_underlying(rfc8949::tag_number::standard_date_time_string))
                 return parse_text(d, out, date_time_formats);
 #endif
-            if constexpr (std::same_as<typename U::duration, std::chrono::seconds>)
-                return read_epoch(d, out);
-            else
-                return std::unexpected(error::incorrect_type);
+            return read_epoch(d, out);
         } else if constexpr (std::same_as<U, std::chrono::year_month_day>) {
 #if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
             if (tag.argument == std::to_underlying(rfc8943::tag_number::full_date_string))
@@ -1170,10 +1174,13 @@ class generic
     template <class U>
     static std::expected<std::size_t, error> tag_content_size(U const &value)
     {
-        if constexpr (is_sys_time<U>) {
-            static_assert(std::same_as<typename U::duration, std::chrono::seconds>,
-                          "cbor::structs writes tag 1 from std::chrono::sys_seconds only.");
+        if constexpr (is_whole_seconds<U>) {
             return generic_size(value.time_since_epoch().count());
+        } else if constexpr (is_sys_time<U>) {
+            auto const seconds = detail::validity::check_epoch_seconds(value.time_since_epoch());
+            if (!seconds) [[unlikely]]
+                return std::unexpected(seconds.error());
+            return generic_size(*seconds);
         } else if constexpr (std::same_as<U, std::chrono::year_month_day>) {
             if (!value.ok()) [[unlikely]]
                 detail::validity::throw_logic_error(
@@ -1344,8 +1351,13 @@ class generic
     static std::expected<std::size_t, error> write_tag_content(std::span<char> const out, std::size_t at,
                                                                U const &value)
     {
-        if constexpr (is_sys_time<U>) {
+        if constexpr (is_whole_seconds<U>) {
             return write_generic(out, at, value.time_since_epoch().count());
+        } else if constexpr (is_sys_time<U>) {
+            auto const seconds = detail::validity::check_epoch_seconds(value.time_since_epoch());
+            if (!seconds) [[unlikely]]
+                return std::unexpected(seconds.error());
+            return write_generic(out, at, *seconds);
         } else if constexpr (std::same_as<U, std::chrono::year_month_day>) {
             return write_generic(out, at, std::chrono::sys_days{value}.time_since_epoch().count());
         } else if constexpr (is_set<U>) {
@@ -1396,8 +1408,8 @@ class generic
  * | `std::span<std::byte const>` | a byte string |
  * | `std::vector`, `std::array` of `std::byte`, an integer, `float`, `double` | an RFC 8746 typed array |
  * | `std::set`, `std::flat_set` | tag 258 on an array |
- * | `std::chrono::sys_seconds` | tag 1 on an integer; `decode` also takes a float whose value is a whole number |
- * | `std::chrono::year_month_day` | tag 100 on an integer of days |
+ * | `std::chrono::sys_time<D>`, D a second or finer | tag 1 on the integer seconds; a fraction of a second as a `double` of seconds. `decode` takes an integer or a float that D holds exactly; else `number_out_of_range`. `decode` also takes tag 0 where the C++ library has `std::chrono::parse` |
+ * | `std::chrono::year_month_day` | tag 100 on an integer of days; `decode` also takes tag 1004 where the C++ library has `std::chrono::parse` |
  * | `std::optional<E>` | the item of E, or `null`; no key when empty |
  * | `std::variant<E...>` | the item of the alternative |
  * | `std::tuple<E...>`, `std::array<E, N>` | an array of that count |

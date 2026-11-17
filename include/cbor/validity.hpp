@@ -45,6 +45,7 @@
 #include <string_view>
 #include <system_error>
 #include <utility>
+#include <variant>
 #if __has_include(<stdckdint.h>)
 #include <stdckdint.h>
 #endif
@@ -785,6 +786,76 @@ public:
         if (!(value >= low && value < -low && value == std::trunc(value))) [[unlikely]]
             return std::unexpected(error::number_out_of_range);
         return static_cast<T>(value);
+    }
+
+    template <class P>
+    static constexpr double seconds_of_ticks(double const ticks)
+    {
+        return ticks * P::num / P::den;
+    }
+
+    template <class P>
+    static constexpr double ticks_of_seconds(double const seconds)
+    {
+        return seconds * P::den / P::num;
+    }
+
+    template <class D>
+        requires(std::ratio_divide<std::ratio<1>, typename D::period>::den == 1)
+    static constexpr std::expected<D, error> check_epoch_ticks(std::int64_t const seconds)
+    {
+        using rep = typename D::rep;
+        constexpr auto ticks_per_second = std::ratio_divide<std::ratio<1>, typename D::period>::num;
+        if constexpr (std::floating_point<rep>) {
+            return D{static_cast<rep>(seconds) * ticks_per_second};
+        } else {
+            if (std::cmp_greater(seconds, std::numeric_limits<rep>::max() / ticks_per_second) ||
+                std::cmp_less(seconds, std::numeric_limits<rep>::min() / ticks_per_second)) [[unlikely]]
+                return std::unexpected(error::number_out_of_range);
+            return D{static_cast<rep>(static_cast<rep>(seconds) * static_cast<rep>(ticks_per_second))};
+        }
+    }
+
+    template <class D>
+        requires(std::ratio_divide<std::ratio<1>, typename D::period>::den == 1)
+    static std::expected<D, error> check_epoch_ticks(double const seconds)
+    {
+        using rep = typename D::rep;
+        using P = typename D::period;
+        if constexpr (std::floating_point<rep>) {
+            if (!std::isfinite(seconds)) [[unlikely]]
+                return std::unexpected(error::number_out_of_range);
+            return D{static_cast<rep>(ticks_of_seconds<P>(seconds))};
+        } else {
+            auto const ticks = check_whole_number<rep>(std::round(ticks_of_seconds<P>(seconds)));
+            if (!ticks) [[unlikely]]
+                return std::unexpected(ticks.error());
+            if (seconds_of_ticks<P>(static_cast<double>(*ticks)) != seconds) [[unlikely]]
+                return std::unexpected(error::number_out_of_range);
+            return D{*ticks};
+        }
+    }
+
+    template <class D>
+        requires(std::ratio_divide<std::ratio<1>, typename D::period>::den == 1)
+    static std::expected<std::variant<std::int64_t, double>, error> check_epoch_seconds(D const ticks)
+    {
+        using rep = typename D::rep;
+        if constexpr (std::integral<rep>) {
+            constexpr auto ticks_per_second =
+                static_cast<rep>(std::ratio_divide<std::ratio<1>, typename D::period>::num);
+            if (ticks.count() % ticks_per_second == 0 && std::in_range<std::int64_t>(ticks.count() / ticks_per_second))
+                return static_cast<std::int64_t>(ticks.count() / ticks_per_second);
+        }
+        double const seconds = seconds_of_ticks<typename D::period>(static_cast<double>(ticks.count()));
+        if constexpr (std::floating_point<rep>) {
+            if (auto const whole = check_whole_number<std::int64_t>(seconds); whole)
+                return *whole;
+        }
+        auto const back = check_epoch_ticks<D>(seconds);
+        if (!back || *back != ticks) [[unlikely]]
+            return std::unexpected(error::number_out_of_range);
+        return seconds;
     }
 
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>

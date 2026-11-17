@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -104,6 +105,10 @@ inline void decode_target(std::string_view const input)
     round_trip<double>(input);
     round_trip<float>(input);
     round_trip<std::vector<std::string>>(input);
+    round_trip<std::chrono::sys_seconds>(input);
+    round_trip<std::chrono::sys_time<std::chrono::milliseconds>>(input);
+    round_trip<std::chrono::sys_time<std::chrono::nanoseconds>>(input);
+    round_trip<std::chrono::sys_time<std::chrono::duration<double>>>(input);
 }
 
 } // namespace fuzz::structs

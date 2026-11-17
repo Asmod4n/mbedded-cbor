@@ -1108,9 +1108,11 @@ TEST_CASE("structs: the tags that each standard library type accepts")
 {
 #if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
     tags_accepted<std::chrono::sys_seconds>({0, 1});
+    tags_accepted<std::chrono::sys_time<std::chrono::milliseconds>>({0, 1});
     tags_accepted<std::chrono::year_month_day>({100, 1004});
 #else
     tags_accepted<std::chrono::sys_seconds>({1});
+    tags_accepted<std::chrono::sys_time<std::chrono::milliseconds>>({1});
     tags_accepted<std::chrono::year_month_day>({100});
 #endif
     tags_accepted<std::set<int>>({258});
@@ -1142,6 +1144,60 @@ TEST_CASE("structs: sys_seconds is tag 1 and year_month_day is tag 100")
              error::number_out_of_range);
     for (std::string const &content : {"\x61x"s, "\x41\x33"s, "\xc0\x00"s, "\xf5"s, "\x80"s})
         CHECK_EQ(cbor::structs<sys_seconds>::decode("\xc1" + content).error(), error::inadmissible_type_for_tag_content);
+}
+
+// RFC 8949 3.4.2: tag 1 holds an integer or a float of seconds. The owner decided on 2026-11-17 that a
+// std::chrono::sys_time of any precision of a second or finer reads tag 1 when its duration holds the value exactly.
+// Each case of the owner's doc is one check. An inexact fraction, an integer out of range and a float that is not
+// finite give number_out_of_range.
+TEST_CASE("structs: tag 1 with a fraction of a second")
+{
+    using namespace std::chrono;
+    auto const tag1 = [](std::string_view const diag) { return cbor::diag2cbor(diag).value(); };
+    auto const ms = cbor::structs<sys_time<milliseconds>>::decode(tag1("1(1.5)"));
+    REQUIRE(ms.has_value());
+    CHECK_EQ((*ms)->time_since_epoch().count(), 1500);
+    CHECK_EQ(cbor::structs<sys_seconds>::decode(tag1("1(1.5)")).error(), error::number_out_of_range);
+    auto const fractional = cbor::structs<sys_time<duration<double>>>::decode(tag1("1(1.5)"));
+    REQUIRE(fractional.has_value());
+    CHECK_EQ((*fractional)->time_since_epoch().count(), 1.5);
+    auto const ns = cbor::structs<sys_time<nanoseconds>>::decode(tag1("1(1)"));
+    REQUIRE(ns.has_value());
+    CHECK_EQ((*ns)->time_since_epoch().count(), 1000000000);
+    CHECK_EQ(cbor::structs<sys_time<nanoseconds>>::decode(tag1("1(9223372037)")).error(), error::number_out_of_range);
+    for (std::string_view const diag : {"1(NaN)", "1(Infinity)", "1(-Infinity)"}) {
+        CAPTURE(diag);
+        CHECK_EQ(cbor::structs<sys_time<milliseconds>>::decode(tag1(diag)).error(), error::number_out_of_range);
+        CHECK_EQ(cbor::structs<sys_time<duration<double>>>::decode(tag1(diag)).error(), error::number_out_of_range);
+    }
+}
+
+// A whole number of seconds is written as the integer and any other value as a double in preferred serialization
+// (RFC 8949 4.2.2). What encode writes, decode reads back to the same value. 1001 ms is 1.001 s, which no double
+// holds exactly; the back-check of the owner's review reads it back as 1001 ms.
+TEST_CASE("structs: tag 1 of each precision round trips")
+{
+    using namespace std::chrono;
+    auto const tag1 = [](std::string_view const diag) { return cbor::diag2cbor(diag).value(); };
+    round_trip(tag1("1(1700000000)"), sys_seconds{seconds{1700000000}});
+    round_trip(tag1("1(1.5)"), sys_time<milliseconds>{milliseconds{1500}});
+    round_trip(tag1("1(1.001)"), sys_time<milliseconds>{milliseconds{1001}});
+    round_trip(tag1("1(-2)"), sys_time<milliseconds>{milliseconds{-2000}});
+    round_trip(tag1("1(1700000000)"), sys_time<nanoseconds>{nanoseconds{1700000000000000000}});
+    round_trip(tag1("1(0.5)"), sys_time<nanoseconds>{nanoseconds{500000000}});
+    round_trip(tag1("1(1.5)"), sys_time<duration<double>>{duration<double>{1.5}});
+    round_trip(tag1("1(2)"), sys_time<duration<double>>{duration<double>{2.0}});
+}
+
+// The owner's review of 2026-11-17: a double has 53 bits, so nanoseconds near the present time with a fraction of a
+// second have no exact double of seconds. encode gives number_out_of_range and writes no value that reads back as
+// another time.
+TEST_CASE("structs: tag 1 that a double cannot hold gives number_out_of_range on encode")
+{
+    using namespace std::chrono;
+    CHECK_EQ(cbor::structs<sys_time<nanoseconds>>::encode(sys_time<nanoseconds>{nanoseconds{1700000000000000001}})
+                 .error(),
+             error::number_out_of_range);
 }
 
 // RFC 8949 3.4.2 reads a nonnegative value of tag 1 as POSIX time. It leaves a negative value and a value that is not
