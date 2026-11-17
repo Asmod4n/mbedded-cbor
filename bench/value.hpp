@@ -393,7 +393,7 @@ inline value value_of(cbor::item const &it)
         return {std::move(a)};
     }
     case cbor::type::map: {
-        auto const pairs = it.get<std::ranges::stride_view<std::ranges::adjacent_view<std::span<cbor::item const>, 2>>>().value();
+        auto const pairs = it.get<cbor::pairs>().value();
         map m;
         m.reserve(pairs.size());
         for (auto const pair : pairs)

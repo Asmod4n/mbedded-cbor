@@ -891,13 +891,13 @@ public:
         return id_of({of, number, {}, first, items.size()});
     }
 
-    std::uint64_t id_of(std::vector<std::pair<std::uint64_t, std::uint64_t>> pairs)
+    std::uint64_t id_of(std::vector<std::pair<std::uint64_t, std::uint64_t>> key_value_pairs)
     {
-        std::ranges::sort(pairs);
-        if (std::ranges::adjacent_find(pairs, {}, &std::pair<std::uint64_t, std::uint64_t>::first) != pairs.end())
+        std::ranges::sort(key_value_pairs);
+        if (std::ranges::adjacent_find(key_value_pairs, {}, &std::pair<std::uint64_t, std::uint64_t>::first) != key_value_pairs.end())
             mark_unequal();
         std::size_t const first = children.size();
-        for (auto const &[key, value] : pairs) {
+        for (auto const &[key, value] : key_value_pairs) {
             children.push_back(key);
             children.push_back(value);
         }
@@ -991,7 +991,7 @@ detail::canonical_ids::intern_key(Message const &message, validity::offset const
             !r) [[unlikely]]
             return std::unexpected(r.error());
         std::vector<std::uint64_t> items;
-        std::vector<std::pair<std::uint64_t, std::uint64_t>> pairs;
+        std::vector<std::pair<std::uint64_t, std::uint64_t>> key_value_pairs;
         validity::offset next = h->at;
         for (std::uint64_t i = 0; i < h->argument; ++i) {
             auto const key = intern_key(message, next);
@@ -1006,10 +1006,10 @@ detail::canonical_ids::intern_key(Message const &message, validity::offset const
             if (!value) [[unlikely]]
                 return std::unexpected(value.error());
             next = value->second;
-            pairs.emplace_back(key->first, value->first);
+            key_value_pairs.emplace_back(key->first, value->first);
         }
         if (map)
-            return std::pair{id_of(std::move(pairs)), next};
+            return std::pair{id_of(std::move(key_value_pairs)), next};
         return std::pair{id_of(kind::array, 0, items), next};
     }
     case major_type::tag: {

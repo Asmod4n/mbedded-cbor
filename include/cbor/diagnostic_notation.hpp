@@ -1038,7 +1038,7 @@ class extended_diagnostic_notation
             if (auto const r = append_head(out, h->major, h->argument, no_indicator); !r) [[unlikely]]
                 return std::unexpected(r.error());
             std::size_t const start = out.size();
-            std::vector<encoded_pair> pairs;
+            std::vector<encoded_pair> key_value_pairs;
             std::uint64_t count = 0;
             for (; count < h->argument; ++count) {
                 std::size_t const key_at = out.size();
@@ -1052,7 +1052,7 @@ class extended_diagnostic_notation
                     if (!second) [[unlikely]]
                         return second;
                     next = *second;
-                    pairs.push_back({key_at - start, value_at - start, out.size() - start});
+                    key_value_pairs.push_back({key_at - start, value_at - start, out.size() - start});
                 }
             }
             if (map) {
@@ -1060,14 +1060,14 @@ class extended_diagnostic_notation
                 auto const key = [&region](encoded_pair const &p) {
                     return std::string_view(std::span(region).subspan(p.key, p.value - p.key));
                 };
-                std::ranges::sort(pairs, {}, key);
+                std::ranges::sort(key_value_pairs, {}, key);
                 if (error const c =
-                        detail::validity::check_key_unique(std::ranges::adjacent_find(pairs, {}, key) != pairs.end())
+                        detail::validity::check_key_unique(std::ranges::adjacent_find(key_value_pairs, {}, key) != key_value_pairs.end())
                             .error_or(error{});
                     c != error{}) [[unlikely]]
                     return std::unexpected(c);
                 out.resize(start);
-                for (encoded_pair const &p : pairs)
+                for (encoded_pair const &p : key_value_pairs)
                     out += std::string_view(std::span(region).subspan(p.key, p.end - p.key));
             }
             return next;

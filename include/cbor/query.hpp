@@ -1464,7 +1464,7 @@ detail::canonical_ids::intern_value(lazy::top_level_item const &source, validity
             return c->first;
         };
         std::vector<std::uint64_t> items;
-        std::vector<std::pair<std::uint64_t, std::uint64_t>> pairs;
+        std::vector<std::pair<std::uint64_t, std::uint64_t>> key_value_pairs;
         for (std::uint64_t i = 0; i < h.argument; ++i) {
             auto const key = child();
             if (!key) [[unlikely]]
@@ -1476,10 +1476,10 @@ detail::canonical_ids::intern_value(lazy::top_level_item const &source, validity
             auto const value = child();
             if (!value) [[unlikely]]
                 return std::unexpected(value.error());
-            pairs.emplace_back(*key, *value);
+            key_value_pairs.emplace_back(*key, *value);
         }
         if (map)
-            return done(id_of(std::move(pairs)));
+            return done(id_of(std::move(key_value_pairs)));
         return done(id_of(kind::array, 0, items));
     }
     case major_type::tag: {
