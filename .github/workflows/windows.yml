@@ -1,6 +1,16 @@
 name: windows
 
 on:
+  push:
+    paths:
+      - 'include/**'
+      - 'test/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - 'third_party/**'
+      - 'test-vectors/**'
+      - 'cbor-test-vectors/**'
+      - '.github/workflows/windows.yml'
   workflow_call:
   workflow_dispatch:
 
