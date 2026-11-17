@@ -2,8 +2,13 @@
 #include "reference.hpp"
 #include "owned_copy.hpp"
 #include "item_head.hpp"
+#include <cbor/decode.hpp>
+#include <cbor/diagnostic_notation.hpp>
+#include <cbor/query.hpp>
 
 #include <cstdint>
+#include <expected>
+#include <limits>
 #include <string>
 #include <string_view>
 
@@ -250,4 +255,149 @@ TEST_CASE("bignum: a key that fits 64 bits is the same key as the integer")
           test::query("$[1]", *test::make_lazy_from_copy("\xa1\x01\x61\x61"s)));
     CHECK(test::query("$[-1]", *test::make_lazy_from_copy("\xa1\xc3\x40\x61\x61"s)) ==
           test::query("$[-1]", *test::make_lazy_from_copy("\xa1\x20\x61\x61"s)));
+}
+
+namespace
+{
+
+std::string encode_edn(std::string const &edn)
+{
+    auto bytes = cbor::diag2cbor(edn);
+    REQUIRE(bytes.has_value());
+    return std::move(*bytes);
+}
+
+template <class T>
+void check_read(std::expected<T, error> const &got, std::expected<T, error> const &expected)
+{
+    REQUIRE_EQ(got.has_value(), expected.has_value());
+    if (expected)
+        CHECK_EQ(*got, *expected);
+    else
+        CHECK_EQ(got.error(), expected.error());
+}
+
+bool holds_text_v(std::expected<cbor::lazy, error> const &node)
+{
+    if (!node)
+        return false;
+    auto const text = node->get<std::string_view>();
+    return text.has_value() && *text.value() == "v";
+}
+
+std::size_t count_nodes(std::string const &path, cbor::lazy const &doc)
+{
+    auto const query = cbor::path::compile<cbor::nodelist>(path);
+    REQUIRE(query.has_value());
+    auto const nodes = doc.at_path(*query);
+    REQUIRE(nodes.has_value());
+    return nodes->size();
+}
+
+} // namespace
+
+// RFC 8949 3.4.3: the value of a bignum is n for tag 2 and -1 - n for tag 3, and leading zeros of n do not count.
+// Appendix A gives the ends of 64 bits. Each reader of a bignum computes that value in its own place, so the test asks
+// every reader for each value. A double holds a bignum only where binary64 holds it exactly (lazy::get): 53
+// significant bits. 2^64 - 1 and 2^53 + 1 need more; -2^63 and -2^64 do not. A content that is not a byte string is
+// invalid (RFC 8949 3.4.3). decode and type() keep such a tag, and get refuses it (the bignum content decision of
+// test/bignum.cpp:186). An index in a path is an I-JSON integer (RFC 9535 2.1), so the row of -2^63 and the row of
+// 2^53 + 1 have no index form.
+TEST_CASE("bignum: every reader gives the value of a bignum")
+{
+    struct row {
+        std::string edn;
+        std::expected<std::int64_t, error> as_int64;
+        std::expected<std::uint64_t, error> as_uint64;
+        std::expected<double, error> as_double;
+        cbor::type type;
+        std::uint64_t argument;
+        std::string number;
+    };
+    auto const out_of_range = std::unexpected(error::number_out_of_range);
+    auto const not_bytes = std::unexpected(error::inadmissible_type_for_tag_content);
+    constexpr std::int64_t largest_index = (std::int64_t{1} << 53) - 1;
+    row const rows[] = {
+        {"2(h'')", 0, 0u, 0.0, cbor::type::unsigned_integer, 0, "0"},
+        {"3(h'')", -1, out_of_range, -1.0, cbor::type::negative_integer, 0, "-1"},
+        {"2(h'000000000000000001')", 1, 1u, 1.0, cbor::type::unsigned_integer, 1, "1"},
+        {"2(h'ffffffffffffffff')", out_of_range, std::numeric_limits<std::uint64_t>::max(), out_of_range,
+         cbor::type::unsigned_integer, std::numeric_limits<std::uint64_t>::max(), "18446744073709551615"},
+        {"3(h'7fffffffffffffff')", std::numeric_limits<std::int64_t>::min(), out_of_range, -9223372036854775808.0,
+         cbor::type::negative_integer, 0x7fffffffffffffffu, "-9223372036854775808"},
+        {"3(h'ffffffffffffffff')", out_of_range, out_of_range, -18446744073709551616.0, cbor::type::negative_integer,
+         std::numeric_limits<std::uint64_t>::max(), "-18446744073709551616"},
+        {"2(h'010000000000000000')", out_of_range, out_of_range, out_of_range, cbor::type::unsigned_bignum, 2, ""},
+        {"2(h'20000000000001')", 9007199254740993, 9007199254740993u, out_of_range, cbor::type::unsigned_integer,
+         9007199254740993u, "9007199254740993"},
+        {"2(1)", not_bytes, not_bytes, not_bytes, cbor::type::unsigned_bignum, 2, ""},
+        {"2(\"a\")", not_bytes, not_bytes, not_bytes, cbor::type::unsigned_bignum, 2, ""},
+    };
+    for (row const &r : rows) {
+        CAPTURE(r.edn);
+        std::string const encoded = encode_edn(r.edn);
+        auto const doc = test::make_lazy_from_copy(encoded);
+        REQUIRE(doc.has_value());
+        check_read(doc->get<std::int64_t>(), r.as_int64);
+        check_read(doc->get<std::uint64_t>(), r.as_uint64);
+        check_read(doc->get<double>(), r.as_double);
+        CHECK_EQ(doc->type().value(), r.type);
+        auto const tree = cbor::decode(encoded);
+        REQUIRE(tree.has_value());
+        CHECK_EQ((*tree)->type(), r.type);
+        CHECK_EQ(read_argument_of_item(**tree), r.argument);
+        if (r.number.empty())
+            continue;
+        if (r.as_int64) {
+            auto const keyed = test::make_lazy_from_copy(encode_edn("{" + r.edn + ": \"v\"}"));
+            REQUIRE(keyed.has_value());
+            CHECK(holds_text_v(keyed->at_key(*r.as_int64)));
+            if (*r.as_int64 >= -largest_index && *r.as_int64 <= largest_index) {
+                auto const index = cbor::path::compile<cbor::lazy>("$[" + r.number + "]");
+                REQUIRE(index.has_value());
+                CHECK(holds_text_v(keyed->at_path(*index)));
+            }
+        }
+        auto const list = test::make_lazy_from_copy(encode_edn("[" + r.edn + "]"));
+        REQUIRE(list.has_value());
+        CHECK_EQ(count_nodes("$[?@ == " + r.number + "]", *list), 1u);
+        CHECK_EQ(count_nodes("$[?@ >= " + r.number + "]", *list), 1u);
+        auto const maps = test::make_lazy_from_copy(encode_edn("[{" + r.edn + ": 0}]"));
+        REQUIRE(maps.has_value());
+        CHECK_EQ(count_nodes("$[?@ == {" + r.number + ": 0}]", *maps), 1u);
+        auto const plain = test::make_lazy_from_copy(encode_edn("{" + r.number + ": \"v\"}"));
+        REQUIRE(plain.has_value());
+        auto const key = cbor::path::compile<cbor::lazy>("$[" + r.edn + "]");
+        REQUIRE(key.has_value());
+        CHECK(holds_text_v(plain->at_path(*key)));
+    }
+}
+
+// lazy::type() reads the head of the content of a tag 2 or 3 to decide between an integer and a tag. A content
+// whose head is cut is an error of the input, and type() gives it.
+TEST_CASE("bignum: type() gives the error of a cut content head")
+{
+    std::string const encoded = encode_edn("2(h'01')");
+    CHECK_EQ(test::make_lazy_from_copy(encoded.substr(0, 1))->type().error(), error::too_little_data);
+}
+
+// RFC 8949 3.4.3: encode writes a bignum that fits 64 bits as the integer, the preferred form. A tree has such a
+// bignum over a byte string only where a tag 28 stood between the tag 2 or 3 and the bytes, because decode reads a
+// bignum over a byte string as the integer. Decode drops the tag 28 today. A magnitude that does not fit stays a
+// bignum.
+TEST_CASE("bignum: encode writes a bignum that fits 64 bits as the integer")
+{
+    struct row {
+        std::string_view edn;
+        std::string_view written;
+    };
+    for (row const r : {row{"2(28(h'05'))", "5"}, row{"3(28(h'00'))", "-1"},
+                        row{"2(28(h'010000000000000000'))", "2(h'010000000000000000')"}}) {
+        CAPTURE(r.edn);
+        auto const tree = cbor::decode(encode_edn(std::string(r.edn)));
+        REQUIRE(tree.has_value());
+        std::string again;
+        REQUIRE(cbor::encode(again, **tree).has_value());
+        CHECK_EQ(again, encode_edn(std::string(r.written)));
+    }
 }

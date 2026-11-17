@@ -1008,6 +1008,39 @@ TEST_CASE("structs: an integer key written as a bignum that fits")
     CHECK(**back == integer_order{10, 20, 30});
 }
 
+// RFC 8949 3.4.3: 2(h'18') is the integer 24. The key reader of structs computes the value of a bignum in its own
+// place, so the same key written in EDN must name the member of 24.
+TEST_CASE("structs: the bignum key 2(h'18') names the member of 24")
+{
+    auto const back = cbor::structs<integer_order>::decode(cbor::diag2cbor("{2(h'18'): 10, -1: 20, 1: 30}").value());
+    REQUIRE(back.has_value());
+    CHECK(**back == integer_order{10, 20, 30});
+}
+
+#ifdef CBOR_HAS_INT128
+namespace
+{
+
+struct wide_member {
+    cbor::uint128 v;
+};
+
+} // namespace
+
+// RFC 8949 3.4.3: a member of 128 bits reads a bignum up to 16 significant bytes. 2^64 is the first value past 64
+// bits, and 2^128 is the first value past 128 bits.
+TEST_CASE("structs: a member of 128 bits reads a bignum up to 16 significant bytes")
+{
+    auto const fits = cbor::structs<wide_member>::decode(cbor::diag2cbor(R"({"v": 2(h'010000000000000000')})").value());
+    REQUIRE(fits.has_value());
+    CHECK((**fits).v == static_cast<cbor::uint128>(1) << 64);
+    CHECK_EQ(cbor::structs<wide_member>::decode(
+                 cbor::diag2cbor(R"({"v": 2(h'0100000000000000000000000000000000')})").value())
+                 .error(),
+             error::number_out_of_range);
+}
+#endif
+
 
 
 namespace
