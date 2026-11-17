@@ -431,6 +431,16 @@ class generic
     }
 #endif
 
+    static std::expected<detail::heads::head, error>
+    decode_head_through_self_described_cbor(detail::heads::decoder<true> &d)
+    {
+        auto h = d.decode_head();
+        while (h && h->major == major_type::tag && detail::validity::is_self_described_cbor_tag(h->argument))
+            [[unlikely]]
+            h = d.decode_head();
+        return h;
+    }
+
     template <class U, std::size_t I = 0>
     static std::expected<void, error> read_variant(detail::heads::decoder<true> &d,
                                                    detail::heads::head const &h, U &out)
@@ -448,7 +458,7 @@ class generic
     template <class U>
     static std::expected<void, error> read_generic(detail::heads::decoder<true> &d, U &out)
     {
-        auto const h = d.decode_head();
+        auto const h = decode_head_through_self_described_cbor(d);
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
         if (h->major == major_type::tag && detail::validity::tag_refused_by_value_types(h->argument))
@@ -577,7 +587,7 @@ class generic
                                                                           !out.key_comp()(key, at->first));
                         !r) [[unlikely]]
                         return r;
-                auto const values = d.decode_head();
+                auto const values = decode_head_through_self_described_cbor(d);
                 if (!values) [[unlikely]]
                     return std::unexpected(values.error());
                 if (values->major != major_type::array || values->argument == 0) [[unlikely]]
@@ -670,7 +680,7 @@ class generic
     static std::expected<void, error> read_epoch(detail::heads::decoder<true> &d, U &out)
     {
         using rep = std::chrono::seconds::rep;
-        auto const h = d.decode_head();
+        auto const h = decode_head_through_self_described_cbor(d);
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
         rep seconds = 0;
@@ -696,7 +706,7 @@ class generic
     static std::expected<void, error> parse_text(detail::heads::decoder<true> &d, U &out,
                                                  std::array<char const *, N> const &formats)
     {
-        auto const h = d.decode_head();
+        auto const h = decode_head_through_self_described_cbor(d);
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
         if (h->major != major_type::text_string) [[unlikely]]
@@ -739,7 +749,7 @@ class generic
                 return parse_text(d, out, full_date_formats);
 #endif
             std::chrono::days::rep days = 0;
-            auto const h = d.decode_head();
+            auto const h = decode_head_through_self_described_cbor(d);
             if (!h) [[unlikely]]
                 return std::unexpected(h.error());
             if (auto const r = read_integer<std::chrono::days::rep>(*h, days); !r) [[unlikely]]
@@ -749,7 +759,7 @@ class generic
             out = std::chrono::year_month_day{std::chrono::sys_days{std::chrono::days{days}}};
             return {};
         } else if constexpr (is_set<U>) {
-            auto const h = d.decode_head();
+            auto const h = decode_head_through_self_described_cbor(d);
             if (!h) [[unlikely]]
                 return std::unexpected(h.error());
             if (h->major != major_type::array) [[unlikely]]
@@ -871,7 +881,7 @@ class generic
         if constexpr (constexpr std::optional<std::uint64_t> tag = detail::reflection::tag_number_of<U>(); tag.has_value()) {
             if (first.major != major_type::tag || first.argument != *tag) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            h = d.decode_head();
+            h = decode_head_through_self_described_cbor(d);
             if (!h) [[unlikely]]
                 return std::unexpected(h.error());
         }
@@ -886,7 +896,7 @@ class generic
             return read_generic(d, detail::pfr::get<I>(out));
         };
         for (std::uint64_t entry = 0; entry < h->argument; ++entry) {
-            auto k = d.decode_head();
+            auto k = decode_head_through_self_described_cbor(d);
             if (!k) [[unlikely]]
                 return std::unexpected(k.error());
             std::string_view text;

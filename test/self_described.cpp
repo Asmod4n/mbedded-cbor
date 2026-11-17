@@ -1,12 +1,18 @@
 #include "reference.hpp"
 #include "owned_copy.hpp"
+#include <cbor/diagnostic_notation.hpp>
 #include <cbor/sequence.hpp>
+#include <cbor/structs.hpp>
 
+#include <chrono>
 #include <cstdint>
+#include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
+#include <version>
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
@@ -20,7 +26,25 @@ value tag(std::uint64_t const number, value content)
     return {tagged{number, std::move(content)}};
 }
 
+struct reading {
+    std::uint64_t a;
+};
+
+struct tagged_reading {
+    std::uint64_t a;
+};
+
+template <class T>
+std::expected<cbor::ref<T>, error> decode_edn_with_structs(std::string_view const edn)
+{
+    auto bytes = cbor::diag2cbor(edn);
+    REQUIRE(bytes.has_value());
+    return cbor::structs<T>::decode(std::move(*bytes));
+}
+
 } // namespace
+
+CBOR_DEFINE_TYPE_MEMBERS(tagged_reading, cbor::tag{1900}, a);
 
 // RFC 8949 3.4.6: the semantics of the tag content enclosed in tag number 55799 is exactly identical to the
 // semantics of the tag content itself. So decode gives the tag content and no tag.
@@ -236,4 +260,111 @@ TEST_CASE("RFC 9277: the header of CBOR-Labeled Non-CBOR Data ends after 12 byte
     auto const v = decode_wire_into_value(file);
     REQUIRE(v.has_value());
     CHECK(*v == tag(55801, tag(1668546817, {bytes{"BOR"}})));
+}
+
+// RFC 8949 3.4.6: tag 55799 "does not impart any special semantics on the data item that it encloses". get reads
+// through any number of them (lazy.dox), so structs reads through them as well, in every width of the argument.
+TEST_CASE("self-described CBOR: structs reads a number through tags 55799")
+{
+    for (std::string_view const edn : {"55799(1)"sv, "55799_2(1)"sv, "55799_3(1)"sv, "55799(55799(1))"sv}) {
+        CAPTURE(edn);
+        auto const r = decode_edn_with_structs<std::uint64_t>(edn);
+        REQUIRE(r.has_value());
+        CHECK_EQ(**r, 1u);
+    }
+}
+
+// A key under tag 55799 matches as the key without it (lazy.dox), and a value under it is the value. So both maps
+// decode as {"a": 1}.
+TEST_CASE("self-described CBOR: structs reads a key and a value of a struct through tag 55799")
+{
+    for (std::string_view const edn : {R"({"a": 55799(1)})"sv, R"({55799("a"): 1})"sv}) {
+        CAPTURE(edn);
+        auto const r = decode_edn_with_structs<reading>(edn);
+        REQUIRE(r.has_value());
+        CHECK_EQ((*r)->a, 1u);
+    }
+}
+
+// Each place in structs that decodes a head by itself reads through tag 55799: the content of a standard tag, the
+// array of a set, a key of a map, the values array of a multimap and the map of a tagged struct.
+TEST_CASE("self-described CBOR: structs reads through tag 55799 in every place that takes an item")
+{
+    SUBCASE("the content of tag 1")
+    {
+        auto const time = decode_edn_with_structs<std::chrono::sys_seconds>("1(55799(0))");
+        REQUIRE(time.has_value());
+        CHECK_EQ(**time, std::chrono::sys_seconds{});
+    }
+    SUBCASE("the content of tag 100")
+    {
+        auto const days = decode_edn_with_structs<std::chrono::year_month_day>("100(55799(0))");
+        REQUIRE(days.has_value());
+        CHECK_EQ(**days, std::chrono::year_month_day{std::chrono::sys_days{}});
+    }
+    SUBCASE("the array of a set")
+    {
+        auto const set = decode_edn_with_structs<std::set<int>>("258(55799([1]))");
+        REQUIRE(set.has_value());
+        CHECK_EQ(**set, std::set<int>{1});
+    }
+    SUBCASE("a key of a map")
+    {
+        auto const map = decode_edn_with_structs<std::map<std::string, int>>(R"({55799("a"): 1})");
+        REQUIRE(map.has_value());
+        CHECK_EQ(**map, std::map<std::string, int>{{"a", 1}});
+    }
+    SUBCASE("the values array of a multimap")
+    {
+        auto const multimap = decode_edn_with_structs<std::multimap<std::string, int>>(R"({"a": 55799([1, 2])})");
+        REQUIRE(multimap.has_value());
+        CHECK_EQ(**multimap, std::multimap<std::string, int>{{"a", 1}, {"a", 2}});
+    }
+    SUBCASE("the map of a tagged struct")
+    {
+        auto const tagged = decode_edn_with_structs<tagged_reading>(R"(1900(55799({"a": 1})))");
+        REQUIRE(tagged.has_value());
+        CHECK_EQ((*tagged)->a, 1u);
+    }
+}
+
+#if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
+// The text of tag 0 and of tag 1004 is an item as well, so structs reads it through tag 55799.
+TEST_CASE("self-described CBOR: structs reads the text of a date through tag 55799")
+{
+    SUBCASE("tag 0")
+    {
+        auto const time = decode_edn_with_structs<std::chrono::sys_seconds>(R"(0(55799("1970-01-01T00:00:00Z")))");
+        REQUIRE(time.has_value());
+        CHECK_EQ(**time, std::chrono::sys_seconds{});
+    }
+    SUBCASE("tag 1004")
+    {
+        auto const date = decode_edn_with_structs<std::chrono::year_month_day>(R"(1004(55799("1970-01-01")))");
+        REQUIRE(date.has_value());
+        CHECK_EQ(**date, std::chrono::year_month_day{std::chrono::sys_days{}});
+    }
+}
+#endif
+
+// The content of a tag 2, a tag 3 or a typed array is the exception of lazy.dox: a tag 55799 there is not a byte
+// string. So structs gives for 2(55799(h'01')) what it gives for 2("a"), and for 64(55799(h'01')) what it gives for
+// 64("a").
+TEST_CASE("self-described CBOR: structs does not read through tag 55799 in a bignum or a typed array")
+{
+#ifdef CBOR_HAS_INT128
+    for (std::string_view const tag : {"2"sv, "3"sv}) {
+        CAPTURE(tag);
+        auto const through = decode_edn_with_structs<cbor::int128>(std::string(tag) + "(55799(h'01'))");
+        auto const text = decode_edn_with_structs<cbor::int128>(std::string(tag) + R"(("a"))");
+        REQUIRE_FALSE(through.has_value());
+        REQUIRE_FALSE(text.has_value());
+        CHECK_EQ(through.error(), text.error());
+    }
+#endif
+    auto const through = decode_edn_with_structs<std::vector<std::uint8_t>>("64(55799(h'01'))");
+    auto const text = decode_edn_with_structs<std::vector<std::uint8_t>>(R"(64("a"))");
+    REQUIRE_FALSE(through.has_value());
+    REQUIRE_FALSE(text.has_value());
+    CHECK_EQ(through.error(), text.error());
 }
