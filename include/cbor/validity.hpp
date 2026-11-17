@@ -44,6 +44,8 @@
 #endif
 #include <string_view>
 #include <system_error>
+#include <numeric>
+#include <optional>
 #include <utility>
 #include <variant>
 #if __has_include(<stdckdint.h>)
@@ -53,6 +55,7 @@
 #include "rfc8746.hpp"
 #include "error.hpp"
 #include "rfc8949.hpp"
+#include "rfc9581.hpp"
 
 #define CBOR_ALWAYS_INLINE [[gnu::always_inline]]
 #define CBOR_NEVER_INLINE [[gnu::noinline]]
@@ -800,24 +803,49 @@ public:
         return seconds * P::den / P::num;
     }
 
+    static constexpr std::uint64_t decimal_radix = 10;
+
+    static constexpr auto fraction_keys =
+        std::to_array({rfc9581::map_key::milliseconds, rfc9581::map_key::microseconds,
+                       rfc9581::map_key::nanoseconds, rfc9581::map_key::picoseconds,
+                       rfc9581::map_key::femtoseconds, rfc9581::map_key::attoseconds});
+
+    static constexpr std::uint64_t fractions_per_second(rfc9581::map_key const key)
+    {
+        std::uint64_t per_second = 1;
+        for (auto i = std::to_underlying(key); i < 0; ++i)
+            per_second *= decimal_radix;
+        return per_second;
+    }
+
+    template <class P>
+    static constexpr std::optional<rfc9581::map_key> fraction_key_of_period()
+    {
+        if constexpr (P::num == 1) {
+            for (rfc9581::map_key const key : fraction_keys)
+                if (std::cmp_equal(fractions_per_second(key), P::den))
+                    return key;
+        }
+        return std::nullopt;
+    }
+
     template <class D>
-        requires(std::ratio_divide<std::ratio<1>, typename D::period>::den == 1)
     static constexpr std::expected<D, error> check_epoch_ticks(std::int64_t const seconds)
     {
         using rep = typename D::rep;
-        constexpr auto ticks_per_second = std::ratio_divide<std::ratio<1>, typename D::period>::num;
+        using F = std::ratio_divide<std::ratio<1>, typename D::period>;
         if constexpr (std::floating_point<rep>) {
-            return D{static_cast<rep>(seconds) * ticks_per_second};
+            return D{static_cast<rep>(static_cast<rep>(seconds) * F::num / F::den)};
         } else {
-            if (std::cmp_greater(seconds, std::numeric_limits<rep>::max() / ticks_per_second) ||
-                std::cmp_less(seconds, std::numeric_limits<rep>::min() / ticks_per_second)) [[unlikely]]
+            if (seconds % F::den != 0 ||
+                std::cmp_greater(seconds / F::den, std::numeric_limits<rep>::max() / F::num) ||
+                std::cmp_less(seconds / F::den, std::numeric_limits<rep>::min() / F::num)) [[unlikely]]
                 return std::unexpected(error::number_out_of_range);
-            return D{static_cast<rep>(static_cast<rep>(seconds) * static_cast<rep>(ticks_per_second))};
+            return D{static_cast<rep>(static_cast<rep>(seconds / F::den) * static_cast<rep>(F::num))};
         }
     }
 
     template <class D>
-        requires(std::ratio_divide<std::ratio<1>, typename D::period>::den == 1)
     static std::expected<D, error> check_epoch_ticks(double const seconds)
     {
         using rep = typename D::rep;
@@ -837,25 +865,131 @@ public:
     }
 
     template <class D>
-        requires(std::ratio_divide<std::ratio<1>, typename D::period>::den == 1)
-    static std::expected<std::variant<std::int64_t, double>, error> check_epoch_seconds(D const ticks)
+    static std::expected<D, error> check_extended_time_ticks(std::int64_t const seconds, std::uint64_t const fraction,
+                                                             rfc9581::map_key const key)
     {
         using rep = typename D::rep;
-        if constexpr (std::integral<rep>) {
-            constexpr auto ticks_per_second =
-                static_cast<rep>(std::ratio_divide<std::ratio<1>, typename D::period>::num);
-            if (ticks.count() % ticks_per_second == 0 && std::in_range<std::int64_t>(ticks.count() / ticks_per_second))
-                return static_cast<std::int64_t>(ticks.count() / ticks_per_second);
-        }
-        double const seconds = seconds_of_ticks<typename D::period>(static_cast<double>(ticks.count()));
+        using P = typename D::period;
+        std::uint64_t const per_second = fractions_per_second(key);
+        std::uint64_t const carry = fraction / per_second;
+        std::uint64_t const rest = fraction % per_second;
+        if (std::cmp_greater(carry, std::numeric_limits<std::int64_t>::max() - std::max<std::int64_t>(seconds, 0)))
+            [[unlikely]]
+            return std::unexpected(error::number_out_of_range);
+        std::int64_t const whole = seconds + static_cast<std::int64_t>(carry);
         if constexpr (std::floating_point<rep>) {
+            return D{static_cast<rep>(ticks_of_seconds<P>(static_cast<double>(whole)) +
+                                      ticks_of_seconds<P>(static_cast<double>(rest) / static_cast<double>(per_second)))};
+        } else {
+            auto const base = check_epoch_ticks<D>(whole);
+            if (!base) [[unlikely]]
+                return base;
+            auto const den = static_cast<std::uint64_t>(P::den);
+            std::uint64_t const common = std::gcd(per_second, den);
+            auto const numerator = checked_mul(rest, den / common);
+            auto const denominator = checked_mul(per_second / common, static_cast<std::uint64_t>(P::num));
+            if (!numerator || !denominator || *numerator % *denominator != 0 ||
+                !std::in_range<rep>(*numerator / *denominator)) [[unlikely]]
+                return std::unexpected(error::number_out_of_range);
+            auto const part = static_cast<rep>(*numerator / *denominator);
+            if (base->count() > std::numeric_limits<rep>::max() - part) [[unlikely]]
+                return std::unexpected(error::number_out_of_range);
+            return D{static_cast<rep>(base->count() + part)};
+        }
+    }
+
+    static constexpr std::expected<std::int64_t, error> check_seconds_of_days(std::int64_t const days)
+    {
+        constexpr std::int64_t seconds_per_day = std::chrono::days::period::num;
+        if (days > std::numeric_limits<std::int64_t>::max() / seconds_per_day ||
+            days < std::numeric_limits<std::int64_t>::min() / seconds_per_day) [[unlikely]]
+            return std::unexpected(error::number_out_of_range);
+        return days * seconds_per_day;
+    }
+
+    static constexpr std::expected<std::optional<rfc9581::map_key>, error>
+    check_extended_time_key(major_type const major, std::uint64_t const argument)
+    {
+        if (major == major_type::unsigned_integer) {
+            if (std::cmp_equal(argument, std::to_underlying(rfc9581::map_key::base_time)) ||
+                std::cmp_equal(argument, std::to_underlying(rfc9581::map_key::timescale_critical)))
+                return static_cast<rfc9581::map_key>(argument);
+            return std::unexpected(error::inadmissible_type_for_tag_content);
+        }
+        if (major != major_type::negative_integer) [[unlikely]]
+            return std::unexpected(error::inadmissible_type_for_tag_content);
+        if (!std::in_range<std::int64_t>(argument))
+            return std::nullopt;
+        auto const key = static_cast<rfc9581::map_key>(-1 - static_cast<std::int64_t>(argument));
+        if (key == rfc9581::map_key::timescale_elective || key == rfc9581::map_key::timescale_elective_first ||
+            std::ranges::contains(fraction_keys, key))
+            return key;
+        return std::nullopt;
+    }
+
+    static constexpr std::expected<void, error> check_extended_time_entry_once(bool const seen)
+    {
+        if (seen) [[unlikely]]
+            return std::unexpected(error::inadmissible_type_for_tag_content);
+        return {};
+    }
+
+    static constexpr std::expected<void, error> check_timescale(major_type const major, std::uint64_t const argument)
+    {
+        if (major != major_type::unsigned_integer || argument != std::to_underlying(rfc9581::timescale::utc))
+            [[unlikely]]
+            return std::unexpected(error::inadmissible_type_for_tag_content);
+        return {};
+    }
+
+    static constexpr std::expected<void, error>
+    check_extended_time_map(major_type const major, std::uint8_t const info, std::uint64_t const argument,
+                            std::size_t const bytes_left)
+    {
+        if (major != major_type::map ||
+            info == std::to_underlying(rfc8949::additional_information::indefinite_length)) [[unlikely]]
+            return std::unexpected(error::inadmissible_type_for_tag_content);
+        return check_bytes_left(count_enclosed_data_items(major, argument), bytes_left);
+    }
+
+    template <class D>
+    using epoch_seconds = std::conditional_t<fraction_key_of_period<typename D::period>().has_value() &&
+                                                 std::integral<typename D::rep>,
+                                             std::variant<std::int64_t, double, std::pair<std::int64_t, D>>,
+                                             std::variant<std::int64_t, double>>;
+
+    template <class D>
+    static std::expected<epoch_seconds<D>, error> check_epoch_seconds(D const ticks)
+    {
+        using rep = typename D::rep;
+        using P = typename D::period;
+        if constexpr (std::integral<rep>) {
+            if (ticks.count() % P::den == 0) {
+                auto const whole = ticks.count() / P::den;
+                if (std::cmp_greater(whole, std::numeric_limits<std::int64_t>::max() / P::num) ||
+                    std::cmp_less(whole, std::numeric_limits<std::int64_t>::min() / P::num)) [[unlikely]]
+                    return std::unexpected(error::number_out_of_range);
+                return static_cast<std::int64_t>(whole) * static_cast<std::int64_t>(P::num);
+            }
+            if constexpr (fraction_key_of_period<P>().has_value()) {
+                auto seconds = static_cast<std::int64_t>(ticks.count() / P::den);
+                auto fraction = static_cast<std::int64_t>(ticks.count() % P::den);
+                if (fraction < 0) {
+                    fraction += P::den;
+                    --seconds;
+                }
+                return std::pair{seconds, D{static_cast<rep>(fraction)}};
+            }
+            return std::unexpected(error::number_out_of_range);
+        } else {
+            double const seconds = seconds_of_ticks<P>(static_cast<double>(ticks.count()));
             if (auto const whole = check_whole_number<std::int64_t>(seconds); whole)
                 return *whole;
+            auto const back = check_epoch_ticks<D>(seconds);
+            if (!back || *back != ticks) [[unlikely]]
+                return std::unexpected(error::number_out_of_range);
+            return seconds;
         }
-        auto const back = check_epoch_ticks<D>(seconds);
-        if (!back || *back != ticks) [[unlikely]]
-            return std::unexpected(error::number_out_of_range);
-        return seconds;
     }
 
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>

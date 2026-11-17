@@ -11,6 +11,7 @@
 #include "rfc4648.hpp"
 #include "rfc8746.hpp"
 #include "rfc8943.hpp"
+#include "rfc9581.hpp"
 #include "cbor_sets.hpp"
 #include "notable_tags.hpp"
 #include "packed_cbor.hpp"

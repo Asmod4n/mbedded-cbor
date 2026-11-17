@@ -52,6 +52,7 @@
 #endif
 
 #include "item_size.hpp"
+#include "rfc9581.hpp"
 #include "encode.hpp"
 #include "error.hpp"
 #include "validity.hpp"
@@ -245,6 +246,12 @@ class generic
     static constexpr bool is_tagged_item<tagged_item<N, E>> = true;
 
     template <class U>
+    static constexpr bool is_std_pair = false;
+
+    template <class F, class S>
+    static constexpr bool is_std_pair<std::pair<F, S>> = true;
+
+    template <class U>
     static constexpr bool is_std_vector = false;
 
     template <class E, class A>
@@ -254,8 +261,15 @@ class generic
     static constexpr bool is_sys_time = false;
 
     template <class D>
-        requires std::ratio_less_equal_v<typename D::period, std::ratio<1>>
+        requires std::signed_integral<typename D::rep> || std::floating_point<typename D::rep>
     static constexpr bool is_sys_time<std::chrono::sys_time<D>> = true;
+
+    template <class U>
+    static constexpr bool is_duration = false;
+
+    template <class R, class P>
+        requires std::signed_integral<R> || std::floating_point<R>
+    static constexpr bool is_duration<std::chrono::duration<R, P>> = true;
 
     template <class U>
     static constexpr bool is_whole_seconds = false;
@@ -292,6 +306,8 @@ class generic
     {
         if constexpr (is_sys_time<U>)
             return std::to_underlying(rfc8949::tag_number::epoch_based_date_time);
+        else if constexpr (is_duration<U>)
+            return std::to_underlying(rfc9581::tag_number::duration);
         else if constexpr (std::same_as<U, std::chrono::year_month_day>)
             return std::to_underlying(rfc8943::tag_number::days_since_epoch_date);
         else if constexpr (is_set<U>)
@@ -302,7 +318,11 @@ class generic
 
     template <class U>
     static constexpr bool is_tagged_standard_type =
-        is_sys_time<U> || std::same_as<U, std::chrono::year_month_day> || is_set<U> || is_typed_array<U>;
+        is_sys_time<U> || is_duration<U> || std::same_as<U, std::chrono::year_month_day> || is_set<U> ||
+        is_typed_array<U>;
+
+    template <class U>
+    static constexpr bool is_extended_time = (is_sys_time<U> && !is_whole_seconds<U>) || is_duration<U>;
 
 #if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
     static constexpr auto date_time_formats =
@@ -319,7 +339,8 @@ class generic
             if (tag == std::to_underlying(rfc8949::tag_number::standard_date_time_string))
                 return true;
 #endif
-            return tag == tag_of_standard_type<U>();
+            return tag == tag_of_standard_type<U>() || tag == std::to_underlying(rfc9581::tag_number::extended_time) ||
+                   tag == std::to_underlying(rfc8943::tag_number::days_since_epoch_date);
         } else if constexpr (std::same_as<U, std::chrono::year_month_day>) {
 #if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
             if (tag == std::to_underlying(rfc8943::tag_number::full_date_string))
@@ -682,6 +703,96 @@ class generic
         }
     }
 
+    template <class D>
+    static std::expected<D, error> read_extended_time(detail::heads::decoder<true> &d)
+    {
+        auto const h = decode_head_through_self_described_cbor(d);
+        if (!h) [[unlikely]]
+            return std::unexpected(h.error());
+        if (auto const r = detail::validity::check_extended_time_map(h->major, h->info, h->argument, d.encoded.size());
+            !r) [[unlikely]]
+            return std::unexpected(r.error());
+        std::optional<std::variant<std::int64_t, double>> base;
+        std::optional<std::pair<std::uint64_t, rfc9581::map_key>> fraction;
+        bool timescale = false;
+        for (std::uint64_t entry = 0; entry < h->argument; ++entry) {
+            auto const k = decode_head_through_self_described_cbor(d);
+            if (!k) [[unlikely]]
+                return std::unexpected(k.error());
+            std::optional<rfc9581::map_key> key;
+            if (k->major == major_type::text_string) {
+                if (auto const t = d.decode_string(k->argument); !t) [[unlikely]]
+                    return std::unexpected(t.error());
+            } else {
+                auto const known = detail::validity::check_extended_time_key(k->major, k->argument);
+                if (!known) [[unlikely]]
+                    return std::unexpected(known.error());
+                key = *known;
+            }
+            if (!key) {
+                if (auto const s = detail::well_formedness::skip_item(d); !s) [[unlikely]]
+                    return std::unexpected(s.error());
+                continue;
+            }
+            auto const v = decode_head_through_self_described_cbor(d);
+            if (!v) [[unlikely]]
+                return std::unexpected(v.error());
+            if (*key == rfc9581::map_key::base_time) {
+                if (auto const r = detail::validity::check_extended_time_entry_once(base.has_value()); !r) [[unlikely]]
+                    return std::unexpected(r.error());
+                if (v->major == major_type::simple) {
+                    if (!head_accepted<double>(*v)) [[unlikely]]
+                        return std::unexpected(error::inadmissible_type_for_tag_content);
+                    base = detail::ieee754::decode_float(v->info, v->argument);
+                } else if (v->major != major_type::unsigned_integer && v->major != major_type::negative_integer)
+                    [[unlikely]] {
+                    return std::unexpected(error::inadmissible_type_for_tag_content);
+                } else {
+                    std::int64_t seconds = 0;
+                    if (auto const r = read_integer<std::int64_t>(*v, seconds); !r) [[unlikely]]
+                        return std::unexpected(r.error());
+                    base = seconds;
+                }
+            } else if (std::ranges::contains(detail::validity::fraction_keys, *key)) {
+                if (auto const r = detail::validity::check_extended_time_entry_once(fraction.has_value()); !r)
+                    [[unlikely]]
+                    return std::unexpected(r.error());
+                if (v->major != major_type::unsigned_integer) [[unlikely]]
+                    return std::unexpected(error::inadmissible_type_for_tag_content);
+                fraction = std::pair{v->argument, *key};
+            } else {
+                if (auto const r = detail::validity::check_extended_time_entry_once(timescale); !r) [[unlikely]]
+                    return std::unexpected(r.error());
+                if (auto const r = detail::validity::check_timescale(v->major, v->argument); !r) [[unlikely]]
+                    return std::unexpected(r.error());
+                timescale = true;
+            }
+        }
+        if (!base || (fraction && !std::holds_alternative<std::int64_t>(*base))) [[unlikely]]
+            return std::unexpected(error::inadmissible_type_for_tag_content);
+        if (fraction)
+            return detail::validity::check_extended_time_ticks<D>(std::get<std::int64_t>(*base), fraction->first,
+                                                                  fraction->second);
+        return std::visit([](auto const seconds) { return detail::validity::check_epoch_ticks<D>(seconds); }, *base);
+    }
+
+    template <class U>
+    static std::expected<void, error> read_epoch_days(detail::heads::decoder<true> &d, U &out)
+    {
+        auto const h = decode_head_through_self_described_cbor(d);
+        if (!h) [[unlikely]]
+            return std::unexpected(h.error());
+        std::int64_t days = 0;
+        if (auto const r = read_integer<std::int64_t>(*h, days); !r) [[unlikely]]
+            return r;
+        auto const ticks = detail::validity::check_seconds_of_days(days).and_then(
+            [](std::int64_t const seconds) { return detail::validity::check_epoch_ticks<typename U::duration>(seconds); });
+        if (!ticks) [[unlikely]]
+            return std::unexpected(ticks.error());
+        out = U{*ticks};
+        return {};
+    }
+
     template <class U>
     static std::expected<void, error> read_epoch(detail::heads::decoder<true> &d, U &out)
     {
@@ -742,11 +853,26 @@ class generic
                                                        detail::heads::head const &tag)
     {
         if constexpr (is_sys_time<U>) {
+            if (tag.argument == std::to_underlying(rfc8949::tag_number::epoch_based_date_time)) [[likely]]
+                return read_epoch(d, out);
 #if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
             if (tag.argument == std::to_underlying(rfc8949::tag_number::standard_date_time_string))
                 return parse_text(d, out, date_time_formats);
 #endif
-            return read_epoch(d, out);
+            if (tag.argument == std::to_underlying(rfc9581::tag_number::extended_time)) {
+                auto const ticks = read_extended_time<typename U::duration>(d);
+                if (!ticks) [[unlikely]]
+                    return std::unexpected(ticks.error());
+                out = U{*ticks};
+                return {};
+            }
+            return read_epoch_days(d, out);
+        } else if constexpr (is_duration<U>) {
+            auto const ticks = read_extended_time<U>(d);
+            if (!ticks) [[unlikely]]
+                return std::unexpected(ticks.error());
+            out = *ticks;
+            return {};
         } else if constexpr (std::same_as<U, std::chrono::year_month_day>) {
 #if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
             if (tag.argument == std::to_underlying(rfc8943::tag_number::full_date_string))
@@ -1029,6 +1155,8 @@ class generic
         } else if constexpr (std::is_floating_point_v<U>) {
             static_assert(std::same_as<U, float> || std::same_as<U, double>, "cbor::structs reads and writes float and double only.");
             return float_size(value);
+        } else if constexpr (is_extended_time<U>) {
+            return extended_time_size(value);
         } else if constexpr (is_tagged_standard_type<U>) {
             auto const content = tag_content_size(value);
             if (!content) [[unlikely]]
@@ -1172,15 +1300,92 @@ class generic
     }
 
     template <class U>
+    static auto duration_of(U const &value)
+    {
+        if constexpr (is_duration<U>)
+            return value;
+        else
+            return value.time_since_epoch();
+    }
+
+    template <class U, class S>
+    static constexpr std::uint64_t extended_time_tag(S const &seconds)
+    {
+        if constexpr (is_duration<U>)
+            return std::to_underlying(rfc9581::tag_number::duration);
+        else if (seconds.index() == 2)
+            return std::to_underlying(rfc9581::tag_number::extended_time);
+        else
+            return std::to_underlying(rfc8949::tag_number::epoch_based_date_time);
+    }
+
+    template <class U>
+    static std::expected<std::size_t, error> extended_time_size(U const &value)
+    {
+        auto const seconds = detail::validity::check_epoch_seconds(duration_of(value));
+        if (!seconds) [[unlikely]]
+            return std::unexpected(seconds.error());
+        std::uint64_t const tag = extended_time_tag<U>(*seconds);
+        std::size_t size = detail::heads::head_size(tag);
+        if (tag != std::to_underlying(rfc8949::tag_number::epoch_based_date_time))
+            size += detail::heads::head_size(seconds->index() == 2 ? rfc8949::data_items_per_pair : 1) +
+                    detail::heads::head_size(std::to_underlying(rfc9581::map_key::base_time));
+        auto const content = std::visit(
+            [](auto const &s) -> std::expected<std::size_t, error> {
+                if constexpr (is_std_pair<std::remove_cvref_t<decltype(s)>>) {
+                    constexpr auto key = *detail::validity::fraction_key_of_period<typename U::period>();
+                    return generic_size(s.first).and_then([&](std::size_t const n) {
+                        return generic_size(std::to_underlying(key)).and_then([&](std::size_t const m) {
+                            return generic_size(s.second.count()).transform(
+                                [&](std::size_t const f) { return n + m + f; });
+                        });
+                    });
+                } else {
+                    return generic_size(s);
+                }
+            },
+            *seconds);
+        if (!content) [[unlikely]]
+            return content;
+        return size + *content;
+    }
+
+    template <class U>
+    static std::expected<std::size_t, error> write_extended_time(std::span<char> const out, std::size_t at,
+                                                                 U const &value)
+    {
+        auto const seconds = detail::validity::check_epoch_seconds(duration_of(value));
+        if (!seconds) [[unlikely]]
+            return std::unexpected(seconds.error());
+        std::uint64_t const tag = extended_time_tag<U>(*seconds);
+        at += detail::heads::write_head(out, at, major_type::tag, tag);
+        if (tag != std::to_underlying(rfc8949::tag_number::epoch_based_date_time)) {
+            at += detail::heads::write_head(out, at, major_type::map,
+                                            seconds->index() == 2 ? rfc8949::data_items_per_pair : 1);
+            auto const key = write_generic(out, at, std::to_underlying(rfc9581::map_key::base_time));
+            if (!key) [[unlikely]]
+                return key;
+            at = *key;
+        }
+        return std::visit(
+            [&](auto const &s) -> std::expected<std::size_t, error> {
+                if constexpr (is_std_pair<std::remove_cvref_t<decltype(s)>>) {
+                    constexpr auto key = *detail::validity::fraction_key_of_period<typename U::period>();
+                    return write_generic(out, at, s.first)
+                        .and_then([&](std::size_t const w) { return write_generic(out, w, std::to_underlying(key)); })
+                        .and_then([&](std::size_t const w) { return write_generic(out, w, s.second.count()); });
+                } else {
+                    return write_generic(out, at, s);
+                }
+            },
+            *seconds);
+    }
+
+    template <class U>
     static std::expected<std::size_t, error> tag_content_size(U const &value)
     {
         if constexpr (is_whole_seconds<U>) {
             return generic_size(value.time_since_epoch().count());
-        } else if constexpr (is_sys_time<U>) {
-            auto const seconds = detail::validity::check_epoch_seconds(value.time_since_epoch());
-            if (!seconds) [[unlikely]]
-                return std::unexpected(seconds.error());
-            return generic_size(*seconds);
         } else if constexpr (std::same_as<U, std::chrono::year_month_day>) {
             if (!value.ok()) [[unlikely]]
                 detail::validity::throw_logic_error(
@@ -1263,6 +1468,8 @@ class generic
             at += detail::heads::write_head(out, at, major_type::byte_string, value.size());
             std::ranges::copy(value, std::as_writable_bytes(out.subspan(at, value.size())).begin());
             return at + value.size();
+        } else if constexpr (is_extended_time<U>) {
+            return write_extended_time(out, at, value);
         } else if constexpr (is_tagged_standard_type<U>) {
             at += detail::heads::write_head(out, at, major_type::tag, tag_of_standard_type<U>());
             return write_tag_content(out, at, value);
@@ -1353,11 +1560,6 @@ class generic
     {
         if constexpr (is_whole_seconds<U>) {
             return write_generic(out, at, value.time_since_epoch().count());
-        } else if constexpr (is_sys_time<U>) {
-            auto const seconds = detail::validity::check_epoch_seconds(value.time_since_epoch());
-            if (!seconds) [[unlikely]]
-                return std::unexpected(seconds.error());
-            return write_generic(out, at, *seconds);
         } else if constexpr (std::same_as<U, std::chrono::year_month_day>) {
             return write_generic(out, at, std::chrono::sys_days{value}.time_since_epoch().count());
         } else if constexpr (is_set<U>) {
@@ -1408,7 +1610,8 @@ class generic
  * | `std::span<std::byte const>` | a byte string |
  * | `std::vector`, `std::array` of `std::byte`, an integer, `float`, `double` | an RFC 8746 typed array |
  * | `std::set`, `std::flat_set` | tag 258 on an array |
- * | `std::chrono::sys_time<D>`, D a second or finer | tag 1 on the integer seconds; a fraction of a second as a `double` of seconds. `decode` takes an integer or a float that D holds exactly; else `number_out_of_range`. `decode` also takes tag 0 where the C++ library has `std::chrono::parse` |
+ * | `std::chrono::sys_time<D>`, any period, an integral or floating rep | whole seconds: tag 1 on the integer; an integral rep of a millisecond to an attosecond: tag 1001 (RFC 9581) with the seconds and the fraction; a floating rep: tag 1 on the `double` when it is exact. `decode` also takes tag 0 where the C++ library has `std::chrono::parse`, tag 1001 and tag 100. A value that D cannot hold exactly gives `number_out_of_range` |
+ * | `std::chrono::duration<R, P>` | tag 1002 (RFC 9581) with the seconds and the fraction |
  * | `std::chrono::year_month_day` | tag 100 on an integer of days; `decode` also takes tag 1004 where the C++ library has `std::chrono::parse` |
  * | `std::optional<E>` | the item of E, or `null`; no key when empty |
  * | `std::variant<E...>` | the item of the alternative |
@@ -1681,6 +1884,7 @@ void copy_views_into_zone(T &value, string_saver &zone)
     } else if constexpr (std::is_same_v<T, typed_array>) {
         detail::copy_views_into_zone(value.bytes, zone);
     } else if constexpr (std::is_arithmetic_v<T> || std::is_enum_v<T> || detail::generic::is_sys_time<T> ||
+                         detail::generic::is_duration<T> ||
                          std::is_same_v<T, std::nullptr_t> ||
                          requires { typename T::traits_type; typename T::allocator_type; }) {
     } else if constexpr (requires { typename T::value_type; value.has_value(); *value; }) {

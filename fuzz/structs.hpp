@@ -109,6 +109,11 @@ inline void decode_target(std::string_view const input)
     round_trip<std::chrono::sys_time<std::chrono::milliseconds>>(input);
     round_trip<std::chrono::sys_time<std::chrono::nanoseconds>>(input);
     round_trip<std::chrono::sys_time<std::chrono::duration<double>>>(input);
+    round_trip<std::chrono::sys_time<std::chrono::minutes>>(input);
+    round_trip<std::chrono::sys_days>(input);
+    round_trip<std::chrono::milliseconds>(input);
+    round_trip<std::chrono::nanoseconds>(input);
+    round_trip<std::chrono::duration<double>>(input);
 }
 
 } // namespace fuzz::structs

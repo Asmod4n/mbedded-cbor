@@ -1107,12 +1107,12 @@ void tags_accepted(std::vector<std::uint64_t> const &accepted)
 TEST_CASE("structs: the tags that each standard library type accepts")
 {
 #if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
-    tags_accepted<std::chrono::sys_seconds>({0, 1});
-    tags_accepted<std::chrono::sys_time<std::chrono::milliseconds>>({0, 1});
+    tags_accepted<std::chrono::sys_seconds>({0, 1, 100});
+    tags_accepted<std::chrono::sys_time<std::chrono::milliseconds>>({0, 1, 100});
     tags_accepted<std::chrono::year_month_day>({100, 1004});
 #else
-    tags_accepted<std::chrono::sys_seconds>({1});
-    tags_accepted<std::chrono::sys_time<std::chrono::milliseconds>>({1});
+    tags_accepted<std::chrono::sys_seconds>({1, 100});
+    tags_accepted<std::chrono::sys_time<std::chrono::milliseconds>>({1, 100});
     tags_accepted<std::chrono::year_month_day>({100});
 #endif
     tags_accepted<std::set<int>>({258});
@@ -1147,7 +1147,7 @@ TEST_CASE("structs: sys_seconds is tag 1 and year_month_day is tag 100")
 }
 
 // RFC 8949 3.4.2: tag 1 holds an integer or a float of seconds. The owner decided on 2026-11-17 that a
-// std::chrono::sys_time of any precision of a second or finer reads tag 1 when its duration holds the value exactly.
+// std::chrono::sys_time of any period reads tag 1 when its duration holds the value exactly.
 // Each case of the owner's doc is one check. An inexact fraction, an integer out of range and a float that is not
 // finite give number_out_of_range.
 TEST_CASE("structs: tag 1 with a fraction of a second")
@@ -1172,32 +1172,136 @@ TEST_CASE("structs: tag 1 with a fraction of a second")
     }
 }
 
-// A whole number of seconds is written as the integer and any other value as a double in preferred serialization
-// (RFC 8949 4.2.2). What encode writes, decode reads back to the same value. 1001 ms is 1.001 s, which no double
-// holds exactly; the back-check of the owner's review reads it back as 1001 ms.
-TEST_CASE("structs: tag 1 of each precision round trips")
+// The owner's plan 2 of 2026-11-17: a whole number of seconds is written as tag 1 with the integer. A sys_time with an
+// integral rep and a period of 10^-3k s writes the rest as tag 1001 {1: s, -3k: f} with 0 <= f < 10^3k (RFC 9581
+// 3.3, refs/rfc9581.txt:269-312). A floating rep writes tag 1 with the double. What encode writes, decode reads back to
+// the same value. Nanoseconds near the present time with a fraction have no exact double, and tag 1001 carries them.
+TEST_CASE("structs: sys_time of each precision round trips through tag 1 and tag 1001")
 {
     using namespace std::chrono;
-    auto const tag1 = [](std::string_view const diag) { return cbor::diag2cbor(diag).value(); };
-    round_trip(tag1("1(1700000000)"), sys_seconds{seconds{1700000000}});
-    round_trip(tag1("1(1.5)"), sys_time<milliseconds>{milliseconds{1500}});
-    round_trip(tag1("1(1.001)"), sys_time<milliseconds>{milliseconds{1001}});
-    round_trip(tag1("1(-2)"), sys_time<milliseconds>{milliseconds{-2000}});
-    round_trip(tag1("1(1700000000)"), sys_time<nanoseconds>{nanoseconds{1700000000000000000}});
-    round_trip(tag1("1(0.5)"), sys_time<nanoseconds>{nanoseconds{500000000}});
-    round_trip(tag1("1(1.5)"), sys_time<duration<double>>{duration<double>{1.5}});
-    round_trip(tag1("1(2)"), sys_time<duration<double>>{duration<double>{2.0}});
+    auto const item = [](std::string_view const diag) { return cbor::diag2cbor(diag).value(); };
+    round_trip(item("1(1700000000)"), sys_seconds{seconds{1700000000}});
+    round_trip(item("1001({1: 1, -3: 500})"), sys_time<milliseconds>{milliseconds{1500}});
+    round_trip(item("1001({1: 1, -3: 1})"), sys_time<milliseconds>{milliseconds{1001}});
+    round_trip(item("1001({1: -2, -3: 500})"), sys_time<milliseconds>{milliseconds{-1500}});
+    round_trip(item("1(-2)"), sys_time<milliseconds>{milliseconds{-2000}});
+    round_trip(item("1(1700000000)"), sys_time<nanoseconds>{nanoseconds{1700000000000000000}});
+    round_trip(item("1001({1: 0, -9: 500000000})"), sys_time<nanoseconds>{nanoseconds{500000000}});
+    round_trip(item("1001({1: 1700000000, -9: 1})"), sys_time<nanoseconds>{nanoseconds{1700000000000000001}});
+    round_trip(item("1001({1: 1, -6: 2})"), sys_time<microseconds>{microseconds{1000002}});
+    round_trip(item("1(1.5)"), sys_time<duration<double>>{duration<double>{1.5}});
+    round_trip(item("1(2)"), sys_time<duration<double>>{duration<double>{2.0}});
+    round_trip(item("1(180)"), sys_time<minutes>{minutes{3}});
+    round_trip(item("1(-3600)"), sys_time<hours>{hours{-1}});
+    round_trip(item("1(172800)"), sys_days{days{2}});
 }
 
-// The owner's review of 2026-11-17: a double has 53 bits, so nanoseconds near the present time with a fraction of a
-// second have no exact double of seconds. encode gives number_out_of_range and writes no value that reads back as
-// another time.
-TEST_CASE("structs: tag 1 that a double cannot hold gives number_out_of_range on encode")
+// The owner's review of plan 2: an integral rep with a period that is no decimal fraction of a second has only whole
+// seconds to write. Its other values give number_out_of_range on encode.
+TEST_CASE("structs: sys_time with a period that tag 1001 cannot carry gives number_out_of_range on encode")
 {
     using namespace std::chrono;
-    CHECK_EQ(cbor::structs<sys_time<nanoseconds>>::encode(sys_time<nanoseconds>{nanoseconds{1700000000000000001}})
-                 .error(),
+    using thirds = duration<std::int64_t, std::ratio<1, 3>>;
+    CHECK_EQ(cbor::structs<sys_time<thirds>>::encode(sys_time<thirds>{thirds{1}}).error(), error::number_out_of_range);
+    auto const whole = cbor::structs<sys_time<thirds>>::encode(sys_time<thirds>{thirds{3}});
+    REQUIRE(whole.has_value());
+    CHECK_EQ(*whole, cbor::diag2cbor("1(1)").value());
+}
+
+// RFC 9581 3 (refs/rfc9581.txt:180-247): key 1 is the base time, a fraction key adds to it, and a fraction of 10^3k or
+// more carries into the seconds (RFC 9581 3.3 names the invariant of C timespec). Key 13, -1 or -13 with the value 0 is
+// UTC. A negative key or a text key that the library does not read is elective and ignored.
+TEST_CASE("structs: tag 1001 into sys_time")
+{
+    using namespace std::chrono;
+    auto const decode_ms = [](std::string_view const diag) {
+        return cbor::structs<sys_time<milliseconds>>::decode(cbor::diag2cbor(diag).value());
+    };
+    auto const carried = decode_ms("1001({1: 1, -3: 1500})");
+    REQUIRE(carried.has_value());
+    CHECK_EQ((*carried)->time_since_epoch().count(), 2500);
+    for (std::string_view const diag : {"1001({1: 1, 13: 0})", "1001({1: 1, -1: 0})", "1001({1: 1, -13: 0})",
+                                        "1001({1: 1, -2: 5, \"x\": [1]})", "1001({-9: 0, 1: 1})"}) {
+        CAPTURE(diag);
+        auto const r = decode_ms(diag);
+        REQUIRE(r.has_value());
+        CHECK_EQ((*r)->time_since_epoch().count(), 1000);
+    }
+    auto const fine = cbor::structs<sys_time<nanoseconds>>::decode(cbor::diag2cbor("1001({1: 1, -3: 5})").value());
+    REQUIRE(fine.has_value());
+    CHECK_EQ((*fine)->time_since_epoch().count(), 1005000000);
+    auto const fractional =
+        cbor::structs<sys_time<duration<double>>>::decode(cbor::diag2cbor("1001({1: 1.5})").value());
+    REQUIRE(fractional.has_value());
+    CHECK_EQ((*fractional)->time_since_epoch().count(), 1.5);
+    CHECK_EQ(decode_ms("1001({1: 1, -6: 1})").error(), error::number_out_of_range);
+    CHECK_EQ(cbor::structs<sys_seconds>::decode(cbor::diag2cbor("1001({1: 1, -3: 1})").value()).error(),
              error::number_out_of_range);
+    CHECK_EQ(decode_ms("1001({1: 9223372036854775807, -3: 1000})").error(), error::number_out_of_range);
+}
+
+// RFC 9581 3: the map has exactly one base time, at most one fraction key and at most one timescale key (3.3, 3.4). A
+// fraction needs an integer under key 1. An unsigned key that the library does not implement (4, 5, 10, 11 and
+// unknown ones) is critical and is an error. A timescale other than UTC (TAI is 1) gives another time than POSIX time.
+TEST_CASE("structs: tag 1001 that the library cannot read gives inadmissible_type_for_tag_content")
+{
+    using namespace std::chrono;
+    for (std::string_view const diag :
+         {"1001({1: 1, 4: 0})", "1001({1: 1, 5: 0})", "1001({1: 1, 10: 0})", "1001({1: 1, 11: 0})",
+          "1001({1: 1, 99: 0})", "1001({1: 1, 13: 1})", "1001({1: 1, -1: 1})", "1001({1: 1, 13: \"TAI\"})",
+          "1001({1: 1, -3: 1, -6: 1})", "1001({1: 1.5, -3: 1})", "1001({-3: 1})", "1001({})",
+          "1001({1: 1, 1: 2})", "1001({1: 1, 13: 0, -1: 0})", "1001({1: 1, -3: -1})", "1001([1])",
+          "1001({1: \"1\"})", "1001({h'01': 1, 1: 1})"}) {
+        CAPTURE(diag);
+        CHECK_EQ(cbor::structs<sys_time<milliseconds>>::decode(cbor::diag2cbor(diag).value()).error(),
+                 error::inadmissible_type_for_tag_content);
+    }
+}
+
+// RFC 8943 2: tag 100 holds days since 1970-01-01. A sys_time takes it as days * 86400 seconds. A count of days whose
+// seconds do not fit 64 bits gives number_out_of_range.
+TEST_CASE("structs: tag 100 into sys_time")
+{
+    using namespace std::chrono;
+    auto const days_in = cbor::structs<sys_days>::decode(cbor::diag2cbor("100(-3)").value());
+    REQUIRE(days_in.has_value());
+    CHECK_EQ((*days_in)->time_since_epoch().count(), -3);
+    auto const seconds_in = cbor::structs<sys_seconds>::decode(cbor::diag2cbor("100(2)").value());
+    REQUIRE(seconds_in.has_value());
+    CHECK_EQ((*seconds_in)->time_since_epoch().count(), 172800);
+    CHECK_EQ(cbor::structs<sys_seconds>::decode(cbor::diag2cbor("100(9223372036854775807)").value()).error(),
+             error::number_out_of_range);
+    CHECK_EQ(cbor::structs<sys_seconds>::decode(cbor::diag2cbor("100(-106751991167301)").value()).error(),
+             error::number_out_of_range);
+    CHECK_EQ(cbor::structs<sys_days>::decode(cbor::diag2cbor("1(86401)").value()).error(), error::number_out_of_range);
+}
+
+struct duration_member {
+    std::chrono::milliseconds a;
+    bool operator==(duration_member const &) const = default;
+};
+
+// RFC 9581 4 (refs/rfc9581.txt:558-591): a duration is tag 1002 with the map of tag 1001. The owner's review of plan 2:
+// a duration is always tag 1002, and decode takes only tag 1002. A std::chrono::duration has a private member, so it
+// is read as a duration and never as a struct.
+TEST_CASE("structs: std::chrono::duration is tag 1002")
+{
+    using namespace std::chrono;
+    auto const item = [](std::string_view const diag) { return cbor::diag2cbor(diag).value(); };
+    round_trip(item("1002({1: 5})"), seconds{5});
+    round_trip(item("1002({1: 1, -3: 500})"), milliseconds{1500});
+    round_trip(item("1002({1: -2, -3: 500})"), milliseconds{-1500});
+    round_trip(item("1002({1: 1, -9: 1})"), nanoseconds{1000000001});
+    round_trip(item("1002({1: 1.5})"), duration<double>{1.5});
+    round_trip(item("1002({1: 120})"), minutes{2});
+    round_trip(item(R"({"a": 1002({1: 1, -3: 500})})"), duration_member{milliseconds{1500}});
+    for (std::string_view const diag : {"1(5)", "5", "{1: 5}", "1001({1: 5})"}) {
+        CAPTURE(diag);
+        CHECK_EQ(cbor::structs<seconds>::decode(item(diag)).error(), error::incorrect_type);
+    }
+    CHECK_EQ(cbor::structs<seconds>::decode(item("1002({1: 1, -3: 1})")).error(), error::number_out_of_range);
+    CHECK_EQ(cbor::structs<seconds>::decode(item("1002({1: 1, 4: 0})")).error(),
+             error::inadmissible_type_for_tag_content);
 }
 
 // RFC 8949 3.4.2 reads a nonnegative value of tag 1 as POSIX time. It leaves a negative value and a value that is not
