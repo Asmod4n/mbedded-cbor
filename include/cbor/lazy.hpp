@@ -259,7 +259,7 @@ public:
      * call: doc->at(7)->get<std::string_view>()
      * result: ref to "seven"
      * call: doc->at("key")->at(-1)
-     * result: error index_out_of_bounds
+     * result: unexpected cbor::error::index_out_of_bounds
      * @endcode
      *
      * @retval key_not_found no pair of the map has the key, or `n` is outside -2^64 to 2^64-1

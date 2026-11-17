@@ -180,7 +180,7 @@ public:
      * call: std::get<1>(map[0]).get<std::int64_t>()
      * result: -500
      * call: std::get<1>(map[0]).get<std::uint64_t>()
-     * result: error number_out_of_range
+     * result: unexpected cbor::error::number_out_of_range
      * @endcode
      *
      * @retval incorrect_type the node is of another kind
@@ -310,16 +310,6 @@ public:
      * `f` gives one return type for every alternative, as std::visit requires; another `f` does not compile.
      * visit exists where cbor::int128 exists.
      * A view and a pointer that `f` receives point into the tree.
-     *
-     * @code{.example}
-     * message: [1, -2]
-     * call: auto const tree = cbor::decode(bytes)
-     * result: owning item of [1, -2]
-     * call: auto const elements = *(*tree)->get<std::span<cbor::item const>>()
-     * result: span of 2 items: 1, -2
-     * call: elements[1].visit([](auto const v) { return std::is_same_v<decltype(v), cbor::int128 const>; })
-     * result: true
-     * @endcode
      *
      * @snippet doc_reference_item.cpp visit
      * @see cbor::item::get()
