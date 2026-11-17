@@ -230,6 +230,10 @@ class path
                 std::to_chars(decimal_text.data(), std::to_address(decimal_text.end()), rfc9535::exact_integer_max)
                     .ptr));
         }();
+        bool const fraction_or_exponent_follows =
+            digits_end < text.size() && (text[digits_end] == '.' || text[digits_end] == 'e' || text[digits_end] == 'E');
+        if (digits_end - digits_at > exact_integer_digits && !fraction_or_exponent_follows) [[unlikely]]
+            return std::unexpected(error::invalid_path);
         if (digits_end == digits_at || digits_end - digits_at > exact_integer_digits ||
             (text[digits_at] == '0' && (digits_end > digits_at + 1 || negative)))
             return std::nullopt;
