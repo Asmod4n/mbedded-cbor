@@ -1325,9 +1325,7 @@ path::integer_of(detail::heads::head const &n, detail::heads::decoder<true> cons
 {
     if (!detail::heads::is_bignum(n.major, n.argument))
         return std::pair{n, content};
-    auto const c = detail::heads::read_raw_head<true>(content.encoded, detail::validity::offset{});
-    if (!c || c->major != major_type::byte_string ||
-        !detail::validity::check_definite_length(c->major, c->info).has_value())
+    if (!detail::heads::starts_with_definite_byte_string(content.encoded).value_or(false))
         return std::pair{n, content};
     detail::heads::decoder<true> d = content;
     auto const read = d.decode_bignum(n.argument);

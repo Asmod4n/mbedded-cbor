@@ -188,9 +188,7 @@ std::expected<void, error> tree_decoder<Resolve>::decode_scalar(item &node, deta
 template <bool Resolve>
 std::expected<bool, error> tree_decoder<Resolve>::decode_bignum(std::pmr::vector<item> &into, std::uint64_t const tag)
 {
-    auto const next = detail::heads::read_raw_head<true>(d.encoded, detail::validity::offset{});
-    if (!next || next->major != major_type::byte_string ||
-        !detail::validity::check_definite_length(next->major, next->info).has_value())
+    if (!detail::heads::starts_with_definite_byte_string(d.encoded).value_or(false))
         return false;
     detail::heads::decoder<true> const before = d;
     auto const read = d.decode_bignum(tag);

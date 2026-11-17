@@ -686,6 +686,15 @@ class heads
         return raw_head{major, info, argument, detail::validity::next(at, initial_byte_size + size)};
     }
 
+    static std::expected<bool, error> starts_with_definite_byte_string(std::string_view const encoded)
+    {
+        auto const c = read_raw_head<true>(encoded, detail::validity::offset{});
+        if (!c) [[unlikely]]
+            return std::unexpected(c.error());
+        return c->major == major_type::byte_string &&
+               detail::validity::check_definite_length(c->major, c->info).has_value();
+    }
+
     CBOR_ALWAYS_INLINE static constexpr std::string_view self_described_cbor_content(std::string_view const encoded)
     {
         if (encoded.empty() ||

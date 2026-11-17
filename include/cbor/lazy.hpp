@@ -1519,11 +1519,11 @@ inline std::expected<cbor::type, error> lazy::type() const
         return std::unexpected(definite.error());
     if (!detail::heads::is_bignum(h->major, h->argument)) [[likely]]
         return detail::heads::type_of(h->major, h->info, h->argument);
-    auto const c = detail::heads::read_raw_head<true>(top_level.encoded, h->at);
+    auto const c =
+        detail::heads::starts_with_definite_byte_string(detail::validity::subspan(top_level.encoded, h->at));
     if (!c) [[unlikely]]
         return std::unexpected(c.error());
-    if (c->major != major_type::byte_string ||
-        !detail::validity::check_definite_length(c->major, c->info).has_value())
+    if (!*c)
         return detail::heads::type_of(h->major, h->info, h->argument);
     detail::heads::decoder<true> d{detail::validity::subspan(top_level.encoded, h->at)};
     auto const read = d.decode_bignum(h->argument);
