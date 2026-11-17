@@ -1,0 +1,2468 @@
+{
+ "name": "typed-array-tag-decode",
+ "what": "bench/function/decode.cpp as written; one typed array tag check (validity::is_typed_array_tag) in place of three range checks",
+ "method": "three binaries built in one container (a, aa = a built again, b); six rounds, the order alternates a b aa then aa b a; each run as nobody with --benchmark_enable_random_interleaving=true, 9 repetitions of at least 0.1 s; estimator: the minimum of each arm over its 54 repetitions; noise: aa over a; byte check: no bytes written by the function",
+ "bench": "bench/function/decode.cpp",
+ "commit_a": "a6d8843da78d98408949cd3049264e619f59bff4",
+ "commit_b": "69d6c2c27d0cb8c19248339500f677e6068d3646",
+ "worktree": "0 changed paths in the worktree",
+ "byte_check": "no bytes written by the function",
+ "seconds": "build_seconds 4 run_seconds 45 ",
+ "flags": "g++-16 -std=c++26 -O2 -march=x86-64-v3 -DNDEBUG -falign-functions=64 -falign-loops=64 -fPIE -pie -Wall -Wextra -Werror",
+ "compiler": "g++-16 (Debian 16.2.0-4) 16.2.0",
+ "kernel": "6.18.44-fc-v553",
+ "cpu": {
+  "model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "cpus": 4,
+  "flags_sha256": "ae9f839fa7c6323929634098882cab5803964f1cf45312c2987278fcf8224929"
+ },
+ "user": "nobody",
+ "priority": "nice 0 of the bench process (asked -10: nice: cannot set niceness: Permission denied), container limited to 3 of 4 cpus, not pinned",
+ "threads": 1,
+ "context": {
+  "date": "2026-11-17T04:52:22+00:00",
+  "host_name": "f0cf01083360",
+  "executable": "/w/out/a",
+  "num_cpus": 4,
+  "mhz_per_cpu": 2100,
+  "cpu_scaling_enabled": false,
+  "caches": [
+   {
+    "type": "Data",
+    "level": 1,
+    "size": 49152,
+    "num_sharing": 1
+   },
+   {
+    "type": "Instruction",
+    "level": 1,
+    "size": 32768,
+    "num_sharing": 1
+   },
+   {
+    "type": "Unified",
+    "level": 2,
+    "size": 2097152,
+    "num_sharing": 1
+   },
+   {
+    "type": "Unified",
+    "level": 3,
+    "size": 272629760,
+    "num_sharing": 4
+   }
+  ],
+  "load_avg": [
+   1.06152,
+   0.434082,
+   0.188477
+  ],
+  "library_version": "1.9.1",
+  "library_build_type": "debug",
+  "json_schema_version": 1
+ },
+ "cells": {
+  "decode_tag_24": {
+   "a": {
+    "rounds": {
+     "1": [
+      {
+       "real_ns": null,
+       "real_time": 113.59587399999782,
+       "cpu_time": 113.45681500000002,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 103.0710850000105,
+       "cpu_time": 102.56828000000002,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 114.85436299994944,
+       "cpu_time": 113.446041,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 109.81606100006047,
+       "cpu_time": 107.86988799999997,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 105.14823500000148,
+       "cpu_time": 104.98992299999976,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 105.320825999911,
+       "cpu_time": 104.64087499999985,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 100.91128099998059,
+       "cpu_time": 100.91168699999997,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 105.30405899999096,
+       "cpu_time": 105.02074600000012,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 102.35660099999677,
+       "cpu_time": 102.31396799999982,
+       "time_unit": "ms",
+       "iterations": 1
+      }
+     ],
+     "2": [
+      {
+       "real_ns": null,
+       "real_time": 103.33803499997885,
+       "cpu_time": 103.32678200000001,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 107.88191799997549,
+       "cpu_time": 107.78458900000001,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 107.23358300003838,
+       "cpu_time": 107.23430199999997,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 102.90393499997208,
+       "cpu_time": 102.80260600000003,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 101.85453799999777,
+       "cpu_time": 101.79184699999988,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 102.18888700001116,
+       "cpu_time": 102.11666800000008,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 115.0160950001009,
+       "cpu_time": 114.57355400000013,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 108.01555700004428,
+       "cpu_time": 105.97513400000014,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 102.39192500000627,
+       "cpu_time": 102.215202,
+       "time_unit": "ms",
+       "iterations": 1
+      }
+     ],
+     "3": [
+      {
+       "real_ns": null,
+       "real_time": 102.3631650000425,
+       "cpu_time": 101.36637900000001,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 100.67300800005796,
+       "cpu_time": 99.933453,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 100.98575200004234,
+       "cpu_time": 100.89708000000009,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 102.99506599994857,
+       "cpu_time": 102.83903699999985,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 109.00735699999586,
+       "cpu_time": 108.24567900000015,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 104.79061000000911,
+       "cpu_time": 104.47190399999995,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 102.75222900008885,
+       "cpu_time": 102.66445999999996,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 102.14181399999234,
+       "cpu_time": 102.01666200000004,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 119.3516929999987,
+       "cpu_time": 118.45943100000022,
+       "time_unit": "ms",
+       "iterations": 1
+      }
+     ],
+     "4": [
+      {
+       "real_ns": null,
+       "real_time": 101.86221949999208,
+       "cpu_time": 101.8384705,
+       "time_unit": "ms",
+       "iterations": 2
+      },
+      {
+       "real_ns": null,
+       "real_time": 109.82505249995711,
+       "cpu_time": 109.67251700000003,
+       "time_unit": "ms",
+       "iterations": 2
+      },
+      {
+       "real_ns": null,
+       "real_time": 100.69227449997697,
+       "cpu_time": 100.66362600000001,
+       "time_unit": "ms",
+       "iterations": 2
+      },
+      {
+       "real_ns": null,
+       "real_time": 104.4425169999954,
+       "cpu_time": 104.35400550000007,
+       "time_unit": "ms",
+       "iterations": 2
+      },
+      {
+       "real_ns": null,
+       "real_time": 102.40126049995979,
+       "cpu_time": 102.32503649999991,
+       "time_unit": "ms",
+       "iterations": 2
+      },
+      {
+       "real_ns": null,
+       "real_time": 102.88864500000727,
+       "cpu_time": 101.99320199999984,
+       "time_unit": "ms",
+       "iterations": 2
+      },
+      {
+       "real_ns": null,
+       "real_time": 106.19196250002005,
+       "cpu_time": 105.9353354999999,
+       "time_unit": "ms",
+       "iterations": 2
+      },
+      {
+       "real_ns": null,
+       "real_time": 103.74022150000428,
+       "cpu_time": 103.14299500000001,
+       "time_unit": "ms",
+       "iterations": 2
+      },
+      {
+       "real_ns": null,
+       "real_time": 102.17897150005228,
+       "cpu_time": 102.1496045000001,
+       "time_unit": "ms",
+       "iterations": 2
+      }
+     ],
+     "5": [
+      {
+       "real_ns": null,
+       "real_time": 112.03719299999193,
+       "cpu_time": 112.030873,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 110.03388600011021,
+       "cpu_time": 110.01356700000004,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 104.46261000004142,
+       "cpu_time": 101.9174049999999,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 100.19418999991103,
+       "cpu_time": 100.195884,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 106.48818799995752,
+       "cpu_time": 106.37445700000004,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 100.62374899996485,
+       "cpu_time": 100.61524199999994,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 99.25392499997088,
+       "cpu_time": 99.2542059999999,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 99.80435800002851,
+       "cpu_time": 99.66033699999998,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 100.5824549999943,
+       "cpu_time": 100.56750200000009,
+       "time_unit": "ms",
+       "iterations": 1
+      }
+     ],
+     "6": [
+      {
+       "real_ns": null,
+       "real_time": 103.6552360000087,
+       "cpu_time": 103.31203599999999,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 109.91753899998002,
+       "cpu_time": 109.72373400000002,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 107.34085599995069,
+       "cpu_time": 107.34263999999999,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 104.90949099994396,
+       "cpu_time": 103.12364800000007,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 105.9297310000602,
+       "cpu_time": 105.37705900000005,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 107.47343800005638,
+       "cpu_time": 106.88443800000003,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 105.94825300006505,
+       "cpu_time": 105.91682600000007,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 106.22470599992084,
+       "cpu_time": 106.18690499999994,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 103.0390980000675,
+       "cpu_time": 103.00632300000024,
+       "time_unit": "ms",
+       "iterations": 1
+      }
+     ]
+    },
+    "minimum": 99.25392499997088,
+    "median": 104.09136924999984,
+    "spread": 0.20248839529553853,
+    "halves_disagree": 0.014297500074556213,
+    "time_unit": "ms"
+   },
+   "aa": {
+    "rounds": {
+     "1": [
+      {
+       "real_ns": null,
+       "real_time": 104.46866299992053,
+       "cpu_time": 104.47045500000002,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 119.77424500003053,
+       "cpu_time": 119.70949600000003,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 108.96579400002793,
+       "cpu_time": 108.93695999999997,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 101.60118399994644,
+       "cpu_time": 101.60256300000003,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 104.16421399997944,
+       "cpu_time": 104.14779099999993,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 103.59461600000941,
+       "cpu_time": 103.52694699999998,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 103.64556599995467,
+       "cpu_time": 103.64690900000006,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 109.32184600005712,
+       "cpu_time": 107.04294800000014,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 102.32129299993176,
+       "cpu_time": 102.28764300000037,
+       "time_unit": "ms",
+       "iterations": 1
+      }
+     ],
+     "2": [
+      {
+       "real_ns": null,
+       "real_time": 108.10427500007336,
+       "cpu_time": 108.105908,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 130.4741210000202,
+       "cpu_time": 130.475722,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 142.26437199999964,
+       "cpu_time": 142.20475400000004,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 103.58623599995553,
+       "cpu_time": 103.58693699999999,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 119.97131999999056,
+       "cpu_time": 113.11338100000002,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 104.57489100008388,
+       "cpu_time": 104.30686700000003,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 105.56212000005871,
+       "cpu_time": 105.12360600000004,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 106.05520199999319,
+       "cpu_time": 105.56590999999993,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 108.98661400005949,
+       "cpu_time": 108.7904949999996,
+       "time_unit": "ms",
+       "iterations": 1
+      }
+     ],
+     "3": [
+      {
+       "real_ns": null,
+       "real_time": 114.94142599997303,
+       "cpu_time": 112.45766800000001,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 101.33000999996966,
+       "cpu_time": 101.29703699999992,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 119.78201499994157,
+       "cpu_time": 119.04476400000009,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 108.9556840000796,
+       "cpu_time": 108.7937619999999,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 108.692456999961,
+       "cpu_time": 107.59273400000002,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 122.12676000001466,
+       "cpu_time": 122.0636100000001,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 114.28729099998236,
+       "cpu_time": 114.07116599999978,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 106.76380500001414,
+       "cpu_time": 106.68709800000009,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 139.60274200007916,
+       "cpu_time": 138.50960700000005,
+       "time_unit": "ms",
+       "iterations": 1
+      }
+     ],
+     "4": [
+      {
+       "real_ns": null,
+       "real_time": 100.3799049999543,
+       "cpu_time": 100.35036700000002,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 109.2470849999927,
+       "cpu_time": 109.19924200000003,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 106.08447099991736,
+       "cpu_time": 105.8624760000001,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 100.83799300002738,
+       "cpu_time": 100.76929700000004,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 117.78057300000455,
+       "cpu_time": 117.29578699999999,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 104.75517999998374,
+       "cpu_time": 104.61712600000017,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 106.37800799997876,
+       "cpu_time": 106.13563500000024,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 107.14644999995926,
+       "cpu_time": 106.10525800000015,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 112.37471300000834,
+       "cpu_time": 110.59373900000003,
+       "time_unit": "ms",
+       "iterations": 1
+      }
+     ],
+     "5": [
+      {
+       "real_ns": null,
+       "real_time": 99.21209200001613,
+       "cpu_time": 99.20814349999999,
+       "time_unit": "ms",
+       "iterations": 2
+      },
+      {
+       "real_ns": null,
+       "real_time": 102.18132450000894,
+       "cpu_time": 102.162733,
+       "time_unit": "ms",
+       "iterations": 2
+      },
+      {
+       "real_ns": null,
+       "real_time": 101.05431250002539,
+       "cpu_time": 100.96435650000002,
+       "time_unit": "ms",
+       "iterations": 2
+      },
+      {
+       "real_ns": null,
+       "real_time": 129.8342434999995,
+       "cpu_time": 129.61309649999998,
+       "time_unit": "ms",
+       "iterations": 2
+      },
+      {
+       "real_ns": null,
+       "real_time": 102.47735050000983,
+       "cpu_time": 102.22109099999999,
+       "time_unit": "ms",
+       "iterations": 2
+      },
+      {
+       "real_ns": null,
+       "real_time": 104.68386999997392,
+       "cpu_time": 104.67096499999995,
+       "time_unit": "ms",
+       "iterations": 2
+      },
+      {
+       "real_ns": null,
+       "real_time": 100.96568950001483,
+       "cpu_time": 100.96634250000002,
+       "time_unit": "ms",
+       "iterations": 2
+      },
+      {
+       "real_ns": null,
+       "real_time": 102.91562650002106,
+       "cpu_time": 102.91193800000009,
+       "time_unit": "ms",
+       "iterations": 2
+      },
+      {
+       "real_ns": null,
+       "real_time": 100.26747399996339,
+       "cpu_time": 100.26296050000005,
+       "time_unit": "ms",
+       "iterations": 2
+      }
+     ],
+     "6": [
+      {
+       "real_ns": null,
+       "real_time": 100.1795240000547,
+       "cpu_time": 100.05376700000002,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 101.76962599996386,
+       "cpu_time": 101.7154899999999,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 100.21681000000626,
+       "cpu_time": 100.21704899999995,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 100.87881200001902,
+       "cpu_time": 100.87864499999999,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 100.98392499992315,
+       "cpu_time": 100.98371700000008,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 125.56172899996909,
+       "cpu_time": 111.37380100000004,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 105.47055600000022,
+       "cpu_time": 105.31472500000017,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 108.60330899993187,
+       "cpu_time": 108.57920300000012,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 100.61974399991414,
+       "cpu_time": 100.60744800000032,
+       "time_unit": "ms",
+       "iterations": 1
+      }
+     ]
+    },
+    "minimum": 99.21209200001613,
+    "median": 105.51633800002946,
+    "spread": 0.4339418626509408,
+    "halves_disagree": 0.02134737769619033,
+    "time_unit": "ms"
+   },
+   "b": {
+    "rounds": {
+     "1": [
+      {
+       "real_ns": null,
+       "real_time": 105.94580999998016,
+       "cpu_time": 105.21767500000001,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 110.20474800000102,
+       "cpu_time": 110.20540600000007,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 104.02249399999164,
+       "cpu_time": 104.02307300000002,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 102.73492100009207,
+       "cpu_time": 102.49226,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 107.42021300006854,
+       "cpu_time": 107.33743099999992,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 101.03529100001651,
+       "cpu_time": 101.00318600000003,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 101.21854899989557,
+       "cpu_time": 101.16197400000004,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 105.56122299999515,
+       "cpu_time": 105.45223600000008,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 117.9375850000497,
+       "cpu_time": 116.696503,
+       "time_unit": "ms",
+       "iterations": 1
+      }
+     ],
+     "2": [
+      {
+       "real_ns": null,
+       "real_time": 133.1077090000008,
+       "cpu_time": 125.92593300000001,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 110.77996599999551,
+       "cpu_time": 108.89524600000006,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 112.86563699991348,
+       "cpu_time": 112.64237800000004,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 131.93254300006174,
+       "cpu_time": 131.72132599999998,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 114.35690400003296,
+       "cpu_time": 111.50007699999986,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 104.84314500001801,
+       "cpu_time": 103.40826299999995,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 106.5491080000811,
+       "cpu_time": 104.16785000000006,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 113.44789500003571,
+       "cpu_time": 104.17154099999992,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 106.06437000001279,
+       "cpu_time": 105.2680269999997,
+       "time_unit": "ms",
+       "iterations": 1
+      }
+     ],
+     "3": [
+      {
+       "real_ns": null,
+       "real_time": 102.82279099999414,
+       "cpu_time": 101.98498400000001,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 162.02028600002905,
+       "cpu_time": 161.96914400000003,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 101.59253299991633,
+       "cpu_time": 101.583943,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 102.24256300000434,
+       "cpu_time": 101.833212,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 100.89935799999239,
+       "cpu_time": 100.89955800000006,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 100.99483999999848,
+       "cpu_time": 100.9430010000001,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 103.95435199995973,
+       "cpu_time": 102.7484620000001,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 101.69986300002165,
+       "cpu_time": 101.67230599999976,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 101.57059499999832,
+       "cpu_time": 101.42248799999987,
+       "time_unit": "ms",
+       "iterations": 1
+      }
+     ],
+     "4": [
+      {
+       "real_ns": null,
+       "real_time": 107.30327699991449,
+       "cpu_time": 107.0747,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 109.56376699994053,
+       "cpu_time": 108.49979000000002,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 102.41598900006466,
+       "cpu_time": 102.41845599999988,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 101.71264899997823,
+       "cpu_time": 101.70341500000002,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 103.46361799997794,
+       "cpu_time": 103.46571000000004,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 103.75813799998923,
+       "cpu_time": 103.71189800000025,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 102.53063799996198,
+       "cpu_time": 102.0590509999999,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 106.10906099998374,
+       "cpu_time": 105.68746900000025,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 102.5453600000219,
+       "cpu_time": 102.40961300000029,
+       "time_unit": "ms",
+       "iterations": 1
+      }
+     ],
+     "5": [
+      {
+       "real_ns": null,
+       "real_time": 101.50778199999877,
+       "cpu_time": 101.46566100000001,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 109.53433399993173,
+       "cpu_time": 108.463308,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 104.24395500001538,
+       "cpu_time": 103.56423299999994,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 101.49230399997577,
+       "cpu_time": 100.95323,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 100.7817500000101,
+       "cpu_time": 100.7824300000002,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 95.3957149999951,
+       "cpu_time": 95.38605300000013,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 120.7758240000203,
+       "cpu_time": 119.220506,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 127.18570200001977,
+       "cpu_time": 127.13826799999994,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 103.49635099998977,
+       "cpu_time": 103.07178500000003,
+       "time_unit": "ms",
+       "iterations": 1
+      }
+     ],
+     "6": [
+      {
+       "real_ns": null,
+       "real_time": 104.23244399999021,
+       "cpu_time": 104.23356500000001,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 102.56323099997644,
+       "cpu_time": 102.46167699999998,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 165.13146800002687,
+       "cpu_time": 164.80609999999984,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 116.65740199998709,
+       "cpu_time": 116.47363699999991,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 101.50765700007014,
+       "cpu_time": 101.42295399999979,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 105.86087199999383,
+       "cpu_time": 105.8620990000001,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 109.74465399999644,
+       "cpu_time": 108.77235499999993,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 103.6223930000233,
+       "cpu_time": 102.82427100000024,
+       "time_unit": "ms",
+       "iterations": 1
+      },
+      {
+       "real_ns": null,
+       "real_time": 103.34910300002775,
+       "cpu_time": 103.35059599999985,
+       "time_unit": "ms",
+       "iterations": 1
+      }
+     ]
+    },
+    "minimum": 95.3957149999951,
+    "median": 104.12746899999092,
+    "spread": 0.7310155702489922,
+    "halves_disagree": 0.057692769533700394,
+    "time_unit": "ms"
+   },
+   "aa_over_a": -0.0004214745155394217,
+   "b_over_a": -0.03887211513274569
+  },
+  "decode_map": {
+   "a": {
+    "rounds": {
+     "1": [
+      {
+       "real_ns": null,
+       "real_time": 48.870914666660305,
+       "cpu_time": 48.839251666666655,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.79544400000183,
+       "cpu_time": 45.778199666666666,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 49.740556666696044,
+       "cpu_time": 49.72499966666666,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 48.03365766664077,
+       "cpu_time": 47.99968466666667,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 47.34630699999798,
+       "cpu_time": 47.24982366666668,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 47.000595666645495,
+       "cpu_time": 45.678024666666744,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 50.61889600002208,
+       "cpu_time": 50.04111733333335,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 47.30732066665647,
+       "cpu_time": 47.273736000000035,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.439205666677175,
+       "cpu_time": 45.40136700000004,
+       "time_unit": "ms",
+       "iterations": 3
+      }
+     ],
+     "2": [
+      {
+       "real_ns": null,
+       "real_time": 46.83019833335796,
+       "cpu_time": 46.80470933333333,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.9396910000199,
+       "cpu_time": 45.915513000000004,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 47.84512633333785,
+       "cpu_time": 47.78767399999998,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 48.548310333330846,
+       "cpu_time": 48.17154866666666,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.33551133332973,
+       "cpu_time": 45.29644100000007,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 46.518520333317305,
+       "cpu_time": 46.44476933333334,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 46.356648999979676,
+       "cpu_time": 46.24643733333326,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.44844333334671,
+       "cpu_time": 45.219430666666675,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 46.40689933330577,
+       "cpu_time": 45.809070666666656,
+       "time_unit": "ms",
+       "iterations": 3
+      }
+     ],
+     "3": [
+      {
+       "real_ns": null,
+       "real_time": 46.54678233331803,
+       "cpu_time": 46.34160700000001,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.83004100000684,
+       "cpu_time": 45.78965200000002,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.726481666633845,
+       "cpu_time": 45.64409499999999,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 44.83714666666098,
+       "cpu_time": 44.83768833333335,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.73661200000364,
+       "cpu_time": 45.69890633333329,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 55.208683666667945,
+       "cpu_time": 54.98187833333335,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 52.41304899997582,
+       "cpu_time": 52.10786466666669,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 49.35528266666248,
+       "cpu_time": 49.19733933333337,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 47.64317533332966,
+       "cpu_time": 47.59041700000003,
+       "time_unit": "ms",
+       "iterations": 3
+      }
+     ],
+     "4": [
+      {
+       "real_ns": null,
+       "real_time": 45.47689933330427,
+       "cpu_time": 45.47753133333334,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.118607666646916,
+       "cpu_time": 45.085811666666665,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 46.08986599998843,
+       "cpu_time": 45.666568000000005,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.240425333342195,
+       "cpu_time": 45.21658733333334,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 44.968283000002884,
+       "cpu_time": 44.81947133333335,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 52.303034666654945,
+       "cpu_time": 52.064401999999994,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 51.3002330000063,
+       "cpu_time": 49.61413033333336,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 47.55689199998869,
+       "cpu_time": 47.53375200000002,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.521497333311345,
+       "cpu_time": 45.52194366666666,
+       "time_unit": "ms",
+       "iterations": 3
+      }
+     ],
+     "5": [
+      {
+       "real_ns": null,
+       "real_time": 49.064901333319234,
+       "cpu_time": 49.06609600000001,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.80299666664208,
+       "cpu_time": 45.79826133333335,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 46.3722906666438,
+       "cpu_time": 46.372755000000005,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.665618666665374,
+       "cpu_time": 45.59622566666666,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 44.746646666681045,
+       "cpu_time": 44.747007,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.66976366667556,
+       "cpu_time": 45.66342466666666,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.89844133333069,
+       "cpu_time": 45.828291,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.07487299997592,
+       "cpu_time": 45.00450933333334,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 46.13528666664024,
+       "cpu_time": 45.937256000000055,
+       "time_unit": "ms",
+       "iterations": 3
+      }
+     ],
+     "6": [
+      {
+       "real_ns": null,
+       "real_time": 47.70208333331993,
+       "cpu_time": 47.35051866666668,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 47.13443066664998,
+       "cpu_time": 46.78520000000001,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 47.837996666695894,
+       "cpu_time": 47.588231666666665,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 49.28944666664847,
+       "cpu_time": 45.53459066666665,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 46.760280000019826,
+       "cpu_time": 46.03550966666669,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 47.239534666649284,
+       "cpu_time": 47.12256800000003,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 46.69327766669085,
+       "cpu_time": 46.62192366666673,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.68513833332114,
+       "cpu_time": 45.629144,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 47.189812000018115,
+       "cpu_time": 46.926935333333326,
+       "time_unit": "ms",
+       "iterations": 3
+      }
+     ]
+    },
+    "minimum": 44.746646666681045,
+    "median": 46.532651333317666,
+    "spread": 0.23380605652796493,
+    "halves_disagree": 0.0020224979237901675,
+    "time_unit": "ms"
+   },
+   "aa": {
+    "rounds": {
+     "1": [
+      {
+       "real_ns": null,
+       "real_time": 46.41369566665313,
+       "cpu_time": 46.372035000000004,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 47.42404599998432,
+       "cpu_time": 46.90807300000001,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 50.159518333316555,
+       "cpu_time": 49.37551133333336,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 47.415975333327275,
+       "cpu_time": 47.10552766666668,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 48.39040599999104,
+       "cpu_time": 48.38251,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 52.46794833336329,
+       "cpu_time": 51.51901000000003,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.097554666654105,
+       "cpu_time": 45.08393366666663,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.1980980000144,
+       "cpu_time": 45.11951400000003,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 46.46571233331542,
+       "cpu_time": 45.97196833333343,
+       "time_unit": "ms",
+       "iterations": 3
+      }
+     ],
+     "2": [
+      {
+       "real_ns": null,
+       "real_time": 45.961776666634556,
+       "cpu_time": 45.91488766666668,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 46.89578600001217,
+       "cpu_time": 46.825374666666654,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 46.20955533334836,
+       "cpu_time": 46.210347000000006,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 46.0820526666339,
+       "cpu_time": 45.800905333333326,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.02253566666544,
+       "cpu_time": 44.86348166666672,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.1487116666461,
+       "cpu_time": 44.99907166666669,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 46.34737466669018,
+       "cpu_time": 46.296354666666595,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 46.40111266667191,
+       "cpu_time": 46.15418400000016,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 47.9049229999949,
+       "cpu_time": 47.19032066666662,
+       "time_unit": "ms",
+       "iterations": 3
+      }
+     ],
+     "3": [
+      {
+       "real_ns": null,
+       "real_time": 45.61237833331688,
+       "cpu_time": 45.605139,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.80485266664406,
+       "cpu_time": 45.793580999999996,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 46.03983566664738,
+       "cpu_time": 46.04027833333333,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.11672800000118,
+       "cpu_time": 45.109166000000016,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 50.067320000001324,
+       "cpu_time": 49.801147333333326,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 47.95876199996959,
+       "cpu_time": 47.32959766666667,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.20112566668407,
+       "cpu_time": 45.17882133333336,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 55.21615033334607,
+       "cpu_time": 54.98139299999997,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 49.05747633332188,
+       "cpu_time": 49.04957333333337,
+       "time_unit": "ms",
+       "iterations": 3
+      }
+     ],
+     "4": [
+      {
+       "real_ns": null,
+       "real_time": 45.73020066667747,
+       "cpu_time": 45.66501566666667,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.75370100000479,
+       "cpu_time": 45.723665000000004,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 48.0806366666684,
+       "cpu_time": 47.314643999999994,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 49.062513000005005,
+       "cpu_time": 49.01085900000002,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 46.034513666654675,
+       "cpu_time": 45.97749566666664,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 46.79180366667879,
+       "cpu_time": 46.6209866666667,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 50.37009399999685,
+       "cpu_time": 46.84786066666668,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 48.03738833334137,
+       "cpu_time": 47.896927333333394,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 55.929668333305926,
+       "cpu_time": 51.53277999999991,
+       "time_unit": "ms",
+       "iterations": 3
+      }
+     ],
+     "5": [
+      {
+       "real_ns": null,
+       "real_time": 44.114403666677994,
+       "cpu_time": 44.11234099999998,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 44.05238533335402,
+       "cpu_time": 43.82037499999995,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 44.811357333325454,
+       "cpu_time": 44.745077333333334,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 51.14721233333815,
+       "cpu_time": 50.62370333333337,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.57057533334804,
+       "cpu_time": 45.47374566666665,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 44.4652833333142,
+       "cpu_time": 44.465712666666626,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 44.77525799999663,
+       "cpu_time": 44.768812333333265,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.21988499997557,
+       "cpu_time": 45.207709000000044,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 44.41916299996743,
+       "cpu_time": 44.41950533333338,
+       "time_unit": "ms",
+       "iterations": 3
+      }
+     ],
+     "6": [
+      {
+       "real_ns": null,
+       "real_time": 58.432775000028414,
+       "cpu_time": 56.79368800000001,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.40866633332522,
+       "cpu_time": 45.38324333333333,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 48.485145000010256,
+       "cpu_time": 48.468323,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.453929000018434,
+       "cpu_time": 45.412976000000015,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 46.32601433331729,
+       "cpu_time": 46.309221333333305,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 46.34172566666924,
+       "cpu_time": 46.33135833333335,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 49.003697666648804,
+       "cpu_time": 48.95624833333338,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 49.12907533336389,
+       "cpu_time": 49.12660766666669,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 49.61280899999565,
+       "cpu_time": 49.609277666666635,
+       "time_unit": "ms",
+       "iterations": 3
+      }
+     ]
+    },
+    "minimum": 44.05238533335402,
+    "median": 46.34455016667971,
+    "spread": 0.32643838824742066,
+    "halves_disagree": 0.022022651576528274,
+    "time_unit": "ms"
+   },
+   "b": {
+    "rounds": {
+     "1": [
+      {
+       "real_ns": null,
+       "real_time": 46.24771100001605,
+       "cpu_time": 45.84745533333333,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 44.85198433333911,
+       "cpu_time": 44.816269999999996,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 51.682567666640956,
+       "cpu_time": 51.678076999999995,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.20513266667573,
+       "cpu_time": 45.20193466666671,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.26693866663815,
+       "cpu_time": 45.25519833333328,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.21253766665723,
+       "cpu_time": 45.20331633333333,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.756707000009555,
+       "cpu_time": 45.757858999999996,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 48.97169266666879,
+       "cpu_time": 47.573467666666666,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 46.09817866666314,
+       "cpu_time": 46.09832599999993,
+       "time_unit": "ms",
+       "iterations": 3
+      }
+     ],
+     "2": [
+      {
+       "real_ns": null,
+       "real_time": 66.68656900001224,
+       "cpu_time": 66.66492550000001,
+       "time_unit": "ms",
+       "iterations": 2
+      },
+      {
+       "real_ns": null,
+       "real_time": 52.55865199995924,
+       "cpu_time": 52.44274100000001,
+       "time_unit": "ms",
+       "iterations": 2
+      },
+      {
+       "real_ns": null,
+       "real_time": 49.937528000043585,
+       "cpu_time": 49.90209299999998,
+       "time_unit": "ms",
+       "iterations": 2
+      },
+      {
+       "real_ns": null,
+       "real_time": 49.97091949996957,
+       "cpu_time": 48.92480599999999,
+       "time_unit": "ms",
+       "iterations": 2
+      },
+      {
+       "real_ns": null,
+       "real_time": 46.52240749999237,
+       "cpu_time": 46.52301599999997,
+       "time_unit": "ms",
+       "iterations": 2
+      },
+      {
+       "real_ns": null,
+       "real_time": 50.42816349998702,
+       "cpu_time": 48.55013649999995,
+       "time_unit": "ms",
+       "iterations": 2
+      },
+      {
+       "real_ns": null,
+       "real_time": 46.600855500003036,
+       "cpu_time": 46.107538000000005,
+       "time_unit": "ms",
+       "iterations": 2
+      },
+      {
+       "real_ns": null,
+       "real_time": 46.12075099998947,
+       "cpu_time": 45.78604349999993,
+       "time_unit": "ms",
+       "iterations": 2
+      },
+      {
+       "real_ns": null,
+       "real_time": 48.033165999981975,
+       "cpu_time": 47.656487999999996,
+       "time_unit": "ms",
+       "iterations": 2
+      }
+     ],
+     "3": [
+      {
+       "real_ns": null,
+       "real_time": 46.11135066666824,
+       "cpu_time": 46.08875033333334,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.44866800002486,
+       "cpu_time": 45.41790600000002,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 44.78652033333219,
+       "cpu_time": 44.71008333333334,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 58.28970266664631,
+       "cpu_time": 58.20143699999999,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.33853933332921,
+       "cpu_time": 45.32272599999998,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 44.71968766665668,
+       "cpu_time": 44.7110593333333,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.57171333332614,
+       "cpu_time": 45.56488833333342,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 44.56712933332104,
+       "cpu_time": 44.56700433333335,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 47.798680666649794,
+       "cpu_time": 47.76014699999998,
+       "time_unit": "ms",
+       "iterations": 3
+      }
+     ],
+     "4": [
+      {
+       "real_ns": null,
+       "real_time": 51.50165333331339,
+       "cpu_time": 51.48582199999999,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 51.00677566667855,
+       "cpu_time": 50.75650333333331,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 49.972812666662016,
+       "cpu_time": 49.80421466666666,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 47.36679699999513,
+       "cpu_time": 47.36730333333332,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 48.35532333330169,
+       "cpu_time": 48.345338,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 47.57275899999058,
+       "cpu_time": 47.53915633333339,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 49.5263896666908,
+       "cpu_time": 48.622233999999985,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 50.94748433331612,
+       "cpu_time": 50.701356666666605,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 51.593110666658504,
+       "cpu_time": 51.49674299999995,
+       "time_unit": "ms",
+       "iterations": 3
+      }
+     ],
+     "5": [
+      {
+       "real_ns": null,
+       "real_time": 45.456560333339745,
+       "cpu_time": 45.42613233333333,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.43852500000867,
+       "cpu_time": 45.40713300000002,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 46.65817366666639,
+       "cpu_time": 46.63406933333332,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 46.35759400002826,
+       "cpu_time": 46.35483566666668,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.737666333328285,
+       "cpu_time": 45.604938333333386,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.904389666664734,
+       "cpu_time": 45.888615000000044,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 44.754326333342455,
+       "cpu_time": 44.75496099999998,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.48797500001456,
+       "cpu_time": 45.2563666666667,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 44.49561133333191,
+       "cpu_time": 44.45481566666672,
+       "time_unit": "ms",
+       "iterations": 3
+      }
+     ],
+     "6": [
+      {
+       "real_ns": null,
+       "real_time": 45.99740733332661,
+       "cpu_time": 45.898621999999996,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 44.93619666664017,
+       "cpu_time": 44.936745,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 44.74479266665791,
+       "cpu_time": 44.742375999999986,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 44.90305899999688,
+       "cpu_time": 44.82837799999999,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 47.38931666664333,
+       "cpu_time": 47.385124666666705,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 46.67679266666861,
+       "cpu_time": 46.66474033333335,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 45.817345666667585,
+       "cpu_time": 45.77060900000007,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 46.49787300002117,
+       "cpu_time": 46.35982133333331,
+       "time_unit": "ms",
+       "iterations": 3
+      },
+      {
+       "real_ns": null,
+       "real_time": 46.0366326666796,
+       "cpu_time": 45.92698066666667,
+       "time_unit": "ms",
+       "iterations": 3
+      }
+     ]
+    },
+    "minimum": 44.49561133333191,
+    "median": 46.184231000002754,
+    "spread": 0.49872239085424064,
+    "halves_disagree": 0.0016073045823186138,
+    "time_unit": "ms"
+   },
+   "aa_over_a": -0.015515382381580456,
+   "b_over_a": -0.005610148515018509
+  }
+ }
+}
