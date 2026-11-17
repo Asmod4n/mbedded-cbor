@@ -1,5 +1,4 @@
-// The bench of lazy::to_item (lazy.hpp), which decodes the item of a lazy into a tree of cbor::item. TO_ITEM_FORM
-// selects this name. Without it the earlier name lazy::clone is used.
+// The bench of lazy::to_item (lazy.hpp), which decodes the item of a lazy into a tree of cbor::item.
 // lazy_to_item_element: each element of an array of 16 maps, an item that stands inside its message, so to_item
 // reads only its part. lazy_to_item_top: the whole array, the control row.
 // Each iteration clones every lazy of a buffer of COLD_BYTES bytes of messages.
@@ -40,11 +39,7 @@ std::string message_of()
 
 auto tree_of(cbor::lazy const &l)
 {
-#ifdef TO_ITEM_FORM
     return l.to_item();
-#else
-    return l.clone();
-#endif
 }
 
 void run(benchmark::State &state, bool const inside)
