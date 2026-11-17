@@ -98,8 +98,8 @@ void cbor_wg(std::filesystem::path const &root)
         auto const top = test::make_lazy_from_copy(std::string_view(file));
         if (!top)
             continue;
-        auto const file_fail = top->at_key("fail").and_then([](cbor::lazy const &l) { return l.get<bool>(); });
-        auto const tests = top->at_key("tests").and_then([](cbor::lazy const &l) { return l.elements(); });
+        auto const file_fail = top->at("fail").and_then([](cbor::lazy const &l) { return l.get<bool>(); });
+        auto const tests = top->at("tests").and_then([](cbor::lazy const &l) { return l.elements(); });
         if (!tests)
             continue;
         int n = 0;
@@ -107,10 +107,10 @@ void cbor_wg(std::filesystem::path const &root)
             ++n;
             if (!t)
                 break;
-            auto const fail = t->at_key("fail").and_then([](cbor::lazy const &l) { return l.get<bool>(); });
+            auto const fail = t->at("fail").and_then([](cbor::lazy const &l) { return l.get<bool>(); });
             if (fail ? *fail : (file_fail && *file_fail))
                 continue;
-            auto const encoded = t->at_key("encoded").and_then(
+            auto const encoded = t->at("encoded").and_then(
                 [](cbor::lazy const &l) { return l.get<std::span<std::byte const>>(); });
             if (!encoded)
                 continue;

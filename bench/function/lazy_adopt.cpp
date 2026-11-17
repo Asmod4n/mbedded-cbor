@@ -39,7 +39,7 @@ auto lazy_of(Encoded &&encoded)
 void lazy_adopt(benchmark::State &state)
 {
     auto const sample = lazy_of(std::string(message));
-    if (!sample || sample->at_key("b")->at(1)->get<std::int64_t>() != 3) {
+    if (!sample || sample->at("b")->at(1)->get<std::int64_t>() != 3) {
         state.SkipWithError("the lazy of {\"a\": 1, \"b\": [2, 3]} does not give 3 at $.b[1]");
         return;
     }

@@ -62,9 +62,9 @@ TEST_CASE("doc advanced runtime: steps and searches")
     CHECK_EQ(*doc.size(), 2u);
     CHECK_FALSE(*doc.empty());
     CHECK_EQ(*doc["cars"]->size(), 2u);
-    CHECK_EQ(doc["cars"]->at(1)->at_key("hp")->get<std::int64_t>(), 7);
-    CHECK_EQ(doc.at_key("cars")->at(5).error(), error::index_out_of_bounds);
-    CHECK_EQ(doc.at_key("bus").error(), error::key_not_found);
+    CHECK_EQ(doc["cars"]->at(1)->at("hp")->get<std::int64_t>(), 7);
+    CHECK_EQ(doc.at("cars")->at(5).error(), error::index_out_of_bounds);
+    CHECK_EQ(doc.at("bus").error(), error::key_not_found);
     CHECK_EQ(doc.at(0).error(), error::key_not_found);
 }
 
@@ -72,10 +72,10 @@ TEST_CASE("doc advanced runtime: steps and searches")
 // gives the first pair.
 TEST_CASE("doc advanced runtime: keys")
 {
-    CHECK_EQ(test::make_lazy_from_copy("\xa1\x41" "a\x01"s)->at_key("a").error(), error::key_not_found);
-    CHECK_EQ(test::make_lazy_from_copy("\xa1\xd8\x1c\x61" "a\x01"s)->at_key("a").error(), error::key_not_found);
+    CHECK_EQ(test::make_lazy_from_copy("\xa1\x41" "a\x01"s)->at("a").error(), error::key_not_found);
+    CHECK_EQ(test::make_lazy_from_copy("\xa1\xd8\x1c\x61" "a\x01"s)->at("a").error(), error::key_not_found);
     auto const twice = *test::make_lazy_from_copy("\xa2\x61" "a\x01\x61" "a\x02"s);
-    CHECK_EQ(twice.at_key("a")->get<std::int64_t>(), 1);
+    CHECK_EQ(twice.at("a")->get<std::int64_t>(), 1);
     CHECK_EQ(twice["a"]->get<std::int64_t>(), 1);
     CHECK_EQ(twice.at_path<"$.a", std::int64_t>(), 1);
 }
@@ -128,7 +128,7 @@ TEST_CASE("doc advanced runtime: an algorithm over elements")
 {
     auto const people = *test::make_lazy_from_copy(encode_in_preferred_form(A(M("age"s, 31), M("age"s, 20), M("age"s, 40))));
     CHECK_EQ(std::ranges::count_if(*people.elements(), [](std::expected<cbor::lazy, cbor::error> const &e) {
-                 auto const age = e->at_key("age");
+                 auto const age = e->at("age");
                  return age && age->get<std::int64_t>().value_or(0) > 30;
              }),
              2);

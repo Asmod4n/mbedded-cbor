@@ -163,7 +163,7 @@ public:
      * message: {"id": 42}
      * call: auto const owner = std::make_shared<std::string const>(bytes)
      * result: shared_ptr to 6 bytes: a1 62 69 64 18 2a
-     * call: cbor::lazy::view(owner)->at_key("id")->get<std::int64_t>()
+     * call: cbor::lazy::view(owner)->at("id")->get<std::int64_t>()
      * result: 42
      * @endcode
      *
@@ -195,7 +195,7 @@ public:
      * message: {"id": 42}
      * call: auto const doc2 = cbor::lazy::adopt(std::move(bytes))
      * result: lazy of {"id": 42}
-     * call: doc2->at_key("id")->get<std::int64_t>()
+     * call: doc2->at("id")->get<std::int64_t>()
      * result: 42
      * @endcode
      *
@@ -210,7 +210,7 @@ public:
     /**
      * @brief Gives the lazy of the value of one map key.
      *
-     * `at_key(key)` with a text gives the value of the first pair of a map whose key is the text `key`.
+     * `at(key)` with a text gives the value of the first pair of a map whose key is the text `key`.
      * `at_key(n)` with an integer gives the value of the first pair whose key is the integer `n`; a bignum key that
      * holds `n` matches too.
      * A text key does not match a byte string with the same bytes.
@@ -219,13 +219,13 @@ public:
      *
      * @code{.example}
      * bytes: a2 64 63 61 72 73 82 a1 62 68 70 05 a1 62 68 70 07 07 65 73 65 76 65 6e
-     * call: doc->at_key("cars")->at(1)->at_key("hp")->get<int>()
+     * call: doc->at("cars")->at(1)->at("hp")->get<int>()
      * result: 7
      * call: doc->at_key(7)->get<std::string_view>()
      * result: ref to "seven"
-     * call: doc->at_key("cars")->size()
+     * call: doc->at("cars")->size()
      * result: 2
-     * call: doc->at_key("cars")->at(0)->at_key("hp")->get<int>()
+     * call: doc->at("cars")->at(0)->at("hp")->get<int>()
      * result: 5
      * @endcode
      *
@@ -239,7 +239,7 @@ public:
      * @see cbor::lazy::get()
      * @see cbor::lazy::entries()
      */
-    std::expected<lazy, error> at_key(std::string_view key) const;
+    std::expected<lazy, error> at(std::string_view key) const;
 
     std::expected<lazy, error> at_key(std::int64_t key) const;
 
@@ -256,11 +256,11 @@ public:
      *
      * @code{.example}
      * message: {"key": [1, 2, 3], 7: "seven"}
-     * call: doc->at_key("key")->at(1)->get<int>()
+     * call: doc->at("key")->at(1)->get<int>()
      * result: 2
      * call: doc->at(7)->get<std::string_view>()
      * result: ref to "seven"
-     * call: doc->at_key("key")->at(-1)
+     * call: doc->at("key")->at(-1)
      * result: error index_out_of_bounds
      * @endcode
      *
@@ -281,12 +281,12 @@ public:
     std::expected<lazy, error> at(Integer key_or_index) const;
 
     /**
-     * @brief Gives the same result as cbor::lazy::at_key() with a text key, or as cbor::lazy::at() with an index.
+     * @brief Gives the same result as cbor::lazy::at() with a text key or an index.
      *
      * It does not throw for a missing key or a wrong index.
      * The result is a `std::expected`, so `l["a"]["b"]` does not compile.
      * A path reads a chain (cbor::lazy::at_path()).
-     * The errors of cbor::lazy::at_key() and cbor::lazy::at() apply.
+     * The errors of cbor::lazy::at() apply.
      *
      * @code{.example}
      * message: {"cars": [5, 7]}
@@ -389,9 +389,9 @@ public:
      *
      * @code{.example}
      * message: {"a": [], "b": [1]}
-     * call: doc->at_key("a")->empty()
+     * call: doc->at("a")->empty()
      * result: true
-     * call: doc->at_key("b")->empty()
+     * call: doc->at("b")->empty()
      * result: false
      * @endcode
      *
@@ -446,15 +446,15 @@ public:
      *
      * @code{.example}
      * message: {"name": "ann", "age": 300}
-     * call: auto const name = doc->at_key("name")->get<std::string_view>()
+     * call: auto const name = doc->at("name")->get<std::string_view>()
      * result: ref to "ann"
      * call: **name
      * result: "ann"
-     * call: doc->at_key("age")->get<std::int64_t>()
+     * call: doc->at("age")->get<std::int64_t>()
      * result: 300
-     * call: doc->at_key("age")->get<std::uint16_t>()
+     * call: doc->at("age")->get<std::uint16_t>()
      * result: 300
-     * call: doc->at_key("name")->type()
+     * call: doc->at("name")->type()
      * result: cbor::type::text_string
      * @endcode
      *
@@ -528,9 +528,9 @@ public:
      *
      * @code{.example}
      * message: {"a": [1, "x"]}
-     * call: doc->at_key("a")->to_item()
+     * call: doc->at("a")->to_item()
      * result: owning item of [1, "x"]
-     * call: (*doc->at_key("a")->to_item())->type()
+     * call: (*doc->at("a")->to_item())->type()
      * result: cbor::type::array
      * @endcode
      *
@@ -1570,7 +1570,7 @@ std::expected<lazy, error> lazy::value_of(std::expected<Iterator, error> found)
     return lazy{std::move(found->top_level), std::to_underlying(found->value), {}};
 }
 
-inline std::expected<lazy, error> lazy::at_key(std::string_view const key) const
+inline std::expected<lazy, error> lazy::at(std::string_view const key) const
 {
     return value_of(find(key));
 }

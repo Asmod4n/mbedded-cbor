@@ -446,15 +446,15 @@ TEST_CASE("qcbor ParseMapTest: a map with nested array and map decodes")
     auto const doc = lazy_of(valid_map_encoded);
     REQUIRE(doc.has_value());
     CHECK(doc->size() == 3u);
-    CHECK(read_as<std::int64_t>(doc->at_key("first integer")) == 42);
-    CHECK(count_pieces(doc->at_key("an array of two strings")) == 2u);
-    auto const map = doc->at_key("map in a map");
+    CHECK(read_as<std::int64_t>(doc->at("first integer")) == 42);
+    CHECK(count_pieces(doc->at("an array of two strings")) == 2u);
+    auto const map = doc->at("map in a map");
     CHECK(count_pieces(map) == 4u);
     REQUIRE(map.has_value());
-    CHECK(bytes_of(map->at_key("bytes 1")) == std::string("xxxx"));
-    CHECK(bytes_of(map->at_key("bytes 2")) == std::string("yyyy"));
-    CHECK(read_as<std::int64_t>(map->at_key("another int")) == 98);
-    CHECK(text_of(map->at_key("text 2")) == std::string("lies, damn lies and statistics"));
+    CHECK(bytes_of(map->at("bytes 1")) == std::string("xxxx"));
+    CHECK(bytes_of(map->at("bytes 2")) == std::string("yyyy"));
+    CHECK(read_as<std::int64_t>(map->at("another int")) == 98);
+    CHECK(text_of(map->at("text 2")) == std::string("lies, damn lies and statistics"));
 }
 
 // ParseMapTest with pValidMapIndefEncoded (NestedMapTestIndefLen uses the same form): upstream decodes it.
@@ -537,9 +537,9 @@ TEST_CASE("qcbor SimpleValueDecodeTests: simple values are found by key")
     CHECK(read_as<cbor::simple_value>(doc->at_key(5)) == cbor::simple_value{0});
     CHECK(read_as<cbor::simple_value>(doc->at_key(6)) == cbor::simple_value{19});
     CHECK(read_as<cbor::simple_value>(doc->at_key(7)) == cbor::simple_value{32});
-    CHECK(read_as<cbor::simple_value>(doc->at_key("@")) == cbor::simple_value{255});
+    CHECK(read_as<cbor::simple_value>(doc->at("@")) == cbor::simple_value{255});
     CHECK(doc->at_key(99).error_or(error{}) == error::key_not_found);
-    CHECK(doc->at_key("xx").error_or(error{}) == error::key_not_found);
+    CHECK(doc->at("xx").error_or(error{}) == error::key_not_found);
     CHECK(read_as<cbor::simple_value>(doc->at_key(15)) == std::unexpected(error::incorrect_type));
 }
 
@@ -945,8 +945,8 @@ TEST_CASE("qcbor BignumParseTest: bignums larger than 64 bits keep their bytes")
           cbor::type::negative_bignum);
     CHECK(map_at->at_key(64).and_then([](cbor::lazy const &l) { return l.type(); }) ==
           cbor::type::unsigned_bignum);
-    CHECK(map_at->at_key("BN+").and_then([](cbor::lazy const &l) { return l.type(); }) == cbor::type::unsigned_bignum);
-    CHECK(map_at->at_key("BN-").and_then([](cbor::lazy const &l) { return l.type(); }) == cbor::type::negative_bignum);
+    CHECK(map_at->at("BN+").and_then([](cbor::lazy const &l) { return l.type(); }) == cbor::type::unsigned_bignum);
+    CHECK(map_at->at("BN-").and_then([](cbor::lazy const &l) { return l.type(); }) == cbor::type::negative_bignum);
 }
 
 namespace

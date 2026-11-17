@@ -26,7 +26,7 @@ TEST_CASE("doc readme: read a message")
     auto const doc = cbor::lazy::adopt(std::move(bytes)).value();
 
     int sum = 0;
-    if (auto const samples = doc.at_key("samples")) {
+    if (auto const samples = doc.at("samples")) {
         auto const elements = samples->elements().value();
         for (auto const &x : elements)
             if (x)

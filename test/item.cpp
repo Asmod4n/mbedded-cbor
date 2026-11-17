@@ -211,7 +211,7 @@ TEST_CASE("decode: a child decoded through two paths has one content")
     REQUIRE(entries.has_value());
     auto const entry = *entries->begin();
     REQUIRE(entry.has_value());
-    auto const value = top_level->at_key("k");
+    auto const value = top_level->at("k");
     REQUIRE(value.has_value());
     auto const by_key = item_of(value->to_item());
     auto const by_entry = item_of(entry->second.to_item());

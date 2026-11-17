@@ -168,7 +168,7 @@ TEST_CASE("doc advanced path: to_item of a node")
 TEST_CASE("doc advanced path: a typed read from a lazy")
 {
     std::string const bytes = encode_in_preferred_form(M("cars"s, A(M("hp"s, 5), M("hp"s, 7, "make"s, "kia"s))));
-    auto const cars = test::make_lazy_from_copy(bytes)->at_key("cars");
+    auto const cars = test::make_lazy_from_copy(bytes)->at("cars");
     REQUIRE(cars.has_value());
     CHECK_EQ(cars->at_path<"$[1].hp", std::int64_t>(), 7);
     auto const make = cars->at_path<"$[1].make", std::string_view>();

@@ -182,11 +182,11 @@ TEST_CASE(
         auto const l = *test::make_lazy_from_copy(doc);
         CHECK_EQ(cbor::at_path<"$.n", int>(doc), 1);
         CHECK_EQ(l.at_path<"$.n", int>(), 1);
-        CHECK_EQ(l.at_key("n")->get<int>(), 1);
+        CHECK_EQ(l.at("n")->get<int>(), 1);
         CHECK(test::read_value_at_path("$.n", l) == V(1));
         CHECK(test::query("$.n", l) == A(1));
         CHECK_EQ(test::read_value_at_path("$.a", l).error(), wanted);
-        CHECK_EQ(test::make_value_from_item(*l.at_key("a")).error(), wanted);
+        CHECK_EQ(test::make_value_from_item(*l.at("a")).error(), wanted);
     }
     std::string const two = "\x82\x63xyz\x83\x01\x02\x03"s;
     auto const l = *test::make_lazy_from_copy("\x82\x82\x63xyz\x83\x01\x02\x03\x05"s);
@@ -224,8 +224,8 @@ TEST_CASE("doc advanced basics: a string limit is checked at get")
 TEST_CASE("doc advanced basics: a skip does not count")
 {
     std::string const bytes = encode_in_preferred_form(M("a"s, "xyz"s, "n"s, 1));
-    CHECK_EQ(test::make_lazy_from_copy(bytes)->at_key("n")->get<std::int64_t>(), 1);
-    CHECK_EQ(test::make_lazy_from_copy(bytes)->at_key("a")->get<std::string_view>().error(),
+    CHECK_EQ(test::make_lazy_from_copy(bytes)->at("n")->get<std::int64_t>(), 1);
+    CHECK_EQ(test::make_lazy_from_copy(bytes)->at("a")->get<std::string_view>().error(),
              error::string_length_exceeded);
     CHECK_EQ(cbor::item_size(bytes).error(), error::string_length_exceeded);
     CHECK_EQ(test::make_value_from_item(*test::make_lazy_from_copy(bytes)).error(), error::string_length_exceeded);

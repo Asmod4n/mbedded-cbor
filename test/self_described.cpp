@@ -110,14 +110,14 @@ TEST_CASE("self-described CBOR: lazy reads through a leading tag 55799")
     std::string const document = "\xd9\xd9\xf7\xa1\x61\x61\x82\x05\x06"s;
     auto const l = test::make_lazy_from_copy(document);
     REQUIRE(l.has_value());
-    auto const a = l->at_key("a"sv);
+    auto const a = l->at("a"sv);
     REQUIRE(a.has_value());
     auto const second = a->at(1);
     REQUIRE(second.has_value());
     CHECK_EQ(second->get<std::uint64_t>().value(), 6u);
     auto const owned = cbor::lazy::adopt(std::string(document));
     REQUIRE(owned.has_value());
-    CHECK_EQ(owned->at_key("a"sv)->at(0)->get<std::uint64_t>().value(), 5u);
+    CHECK_EQ(owned->at("a"sv)->at(0)->get<std::uint64_t>().value(), 5u);
 }
 
 // tools/doc/groups/lazy.dox, from the former runtime guide: lazy::view and lazy::adopt read one leading tag 55799 as its
@@ -150,11 +150,11 @@ TEST_CASE("self-described CBOR: type() of a second tag 55799 and of a tag 55799 
         CHECK_EQ(element->get<std::int64_t>().value(), 1);
         CHECK_EQ((cbor::at_path<"$[0]", std::int64_t>("\x81" + head + "\x01")).value(), 1);
         std::string const map = "\xa1" + head + "\x61k\x01";
-        CHECK_EQ(cbor::lazy::adopt(std::string(map))->at_key("k"sv)->get<std::int64_t>().value(), 1);
+        CHECK_EQ(cbor::lazy::adopt(std::string(map))->at("k"sv)->get<std::int64_t>().value(), 1);
         CHECK_EQ((cbor::at_path<"$.k", std::int64_t>(map)).value(), 1);
         std::string const embedded = "\xa1\x61\x61\xd8\x18" + std::string(1, static_cast<char>(0x40 + head.size() + 3)) +
                                      head + "\x82\x01\x02";
-        CHECK_EQ(cbor::lazy::adopt(std::string(embedded))->at_key("a"sv)->at(1)->get<std::int64_t>().value(), 2);
+        CHECK_EQ(cbor::lazy::adopt(std::string(embedded))->at("a"sv)->at(1)->get<std::int64_t>().value(), 2);
         CHECK_EQ((cbor::at_path<"$.a[1]", std::int64_t>(embedded)).value(), 2);
     }
 }

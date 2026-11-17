@@ -74,7 +74,7 @@ TEST_CASE("doc advanced basics: the error values")
     owner = owner_of("\x9f\x01\xff"s);
     CHECK_EQ(cbor::lazy::view(owner)->at(0).error(), error::indefinite_length);
     owner = owner_of(encode_in_preferred_form(M("a"s, 1)));
-    CHECK_EQ(cbor::lazy::view(owner)->at_key("b").error(), error::key_not_found);
+    CHECK_EQ(cbor::lazy::view(owner)->at("b").error(), error::key_not_found);
     owner = owner_of(encode_in_preferred_form(V(1)));
     CHECK_EQ(cbor::lazy::view(owner)->at(0).error(), error::not_indexable);
     owner = owner_of(encode_in_preferred_form(V("a"s)));
@@ -186,7 +186,7 @@ TEST_CASE("doc advanced basics: a lazy moved out of the expected to another thre
     CHECK_EQ(read, 2);
     auto const plain = *test::make_lazy_from_copy(encode_in_preferred_form(M("a"s, 1)));
     std::int64_t other = 0;
-    std::thread([&] { other = *plain.at_key("a")->get<std::int64_t>(); }).join();
+    std::thread([&] { other = *plain.at("a")->get<std::int64_t>(); }).join();
     CHECK_EQ(other, 1);
     auto const tagged = *test::make_lazy_from_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
     std::int64_t content = -1;
@@ -201,7 +201,7 @@ TEST_CASE("doc advanced basics: a lazy holds the owner")
     std::optional<cbor::lazy> keep;
     {
         std::string bytes = message();
-        keep = *cbor::lazy::adopt(std::move(bytes))->at_key("tags");
+        keep = *cbor::lazy::adopt(std::move(bytes))->at("tags");
     }
     CHECK(*keep->at(1)->get<std::string_view>() == "b"sv);
 }
@@ -210,7 +210,7 @@ TEST_CASE("doc advanced basics: a lazy holds the owner")
 // constructor of std::shared_ptr makes an owner from an object that holds the bytes.
 TEST_CASE("doc advanced basics: owners")
 {
-    auto const name = test::make_lazy_from_copy(encode_in_preferred_form(M("a"s, "xyz"s)))->at_key("a")->get<std::string_view>();
+    auto const name = test::make_lazy_from_copy(encode_in_preferred_form(M("a"s, "xyz"s)))->at("a")->get<std::string_view>();
     REQUIRE(name.has_value());
     CHECK_EQ(**name, "xyz"sv);
     CHECK_EQ((*name)->size(), 3u);
