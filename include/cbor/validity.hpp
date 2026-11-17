@@ -555,6 +555,13 @@ public:
         return {};
     }
 
+    CBOR_ALWAYS_INLINE static constexpr bool is_typed_array_tag(std::uint64_t const tag)
+    {
+        return tag >= std::to_underlying(rfc8746::tag_number::typed_array_first) &&
+               tag <= std::to_underlying(rfc8746::tag_number::typed_array_last) &&
+               tag != std::to_underlying(rfc8746::tag_number::typed_array_reserved);
+    }
+
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error>
     check_tag_content(std::uint64_t const tag, major_type const content)
     {
@@ -569,8 +576,7 @@ public:
             admitted = major_type::unsigned_integer;
             break;
         default:
-            if (tag < std::to_underlying(rfc8746::tag_number::typed_array_first) ||
-                tag > std::to_underlying(rfc8746::tag_number::typed_array_last))
+            if (!is_typed_array_tag(tag))
                 return {};
             admitted = major_type::byte_string;
             break;
@@ -605,9 +611,7 @@ public:
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_typed_array(std::uint64_t const tag,
                                                                                      std::uint64_t const size)
     {
-        if (tag < std::to_underlying(rfc8746::tag_number::typed_array_first) ||
-            tag > std::to_underlying(rfc8746::tag_number::typed_array_last) ||
-            tag == std::to_underlying(rfc8746::tag_number::typed_array_reserved)) [[unlikely]]
+        if (!is_typed_array_tag(tag)) [[unlikely]]
             return std::unexpected(error::incorrect_type);
         return check_whole_elements(size, typed_array_element_size(tag));
     }

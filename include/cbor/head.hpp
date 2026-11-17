@@ -477,7 +477,7 @@ class heads
 
     static constexpr bool is_typed_array(head const h)
     {
-        return h.major == major_type::tag && detail::validity::check_typed_array(h.argument, 0).has_value();
+        return h.major == major_type::tag && detail::validity::is_typed_array_tag(h.argument);
     }
 
     static constexpr bool is_floating_point(major_type const major, std::uint8_t const info)
@@ -531,9 +531,7 @@ class heads
                 return cbor::type::unsigned_bignum;
             if (argument == std::to_underlying(rfc8949::tag_number::negative_bignum))
                 return cbor::type::negative_bignum;
-            if (argument >= std::to_underlying(rfc8746::tag_number::typed_array_first) &&
-                argument <= std::to_underlying(rfc8746::tag_number::typed_array_last) &&
-                argument != std::to_underlying(rfc8746::tag_number::typed_array_reserved))
+            if (detail::validity::is_typed_array_tag(argument))
                 return cbor::type::typed_array;
             return cbor::type::tag;
         case major_type::simple:
@@ -598,7 +596,7 @@ class heads
         return tag != std::to_underlying(rfc8949::tag_number::unsigned_bignum) &&
                tag != std::to_underlying(rfc8949::tag_number::negative_bignum) &&
                tag != std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item) &&
-               !detail::validity::check_typed_array(tag, 0).has_value();
+               !detail::validity::is_typed_array_tag(tag);
     }
 
     static constexpr std::expected<head, error>

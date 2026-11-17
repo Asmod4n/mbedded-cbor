@@ -208,3 +208,16 @@ TEST_CASE("diag2cbor: bytes that are not valid stay as written")
     CHECK_EQ(cbor::parse_edn("64(1)").error(), cbor::error::inadmissible_type_for_tag_content);
     CHECK_EQ(cbor::parse_edn("24(<<1, 2>>)").error(), cbor::error::syntax_error);
 }
+
+// RFC 8746 reserves tag 76 (the little-endian sint8 form "MUST NOT be used"), so it is no typed array: its content
+// has no rule, and the notation prints it as a plain tag over its content, as it prints any tag it does not know.
+TEST_CASE("diagnostic_notation: tag 76 is a plain tag")
+{
+    for (std::string_view const text : {"76(h'01')", "76(1)"}) {
+        CAPTURE(text);
+        auto const bytes = cbor::diag2cbor(text);
+        REQUIRE(bytes.has_value());
+        CHECK_EQ(cbor::diagnostic_notation(*bytes), text);
+        CHECK(cbor::parse_edn(text).has_value());
+    }
+}
