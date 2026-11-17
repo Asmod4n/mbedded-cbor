@@ -58,13 +58,33 @@ inline constexpr bool is_view<typed_array> = true;
 template <class T>
 concept copied_value = std::same_as<T, std::string> || std::same_as<T, std::vector<std::byte>>;
 
-template <class R>
-concept owning_range_of_chars = std::ranges::contiguous_range<R> && !std::ranges::borrowed_range<R> && !std::is_const_v<R> &&
-                       std::same_as<std::ranges::range_value_t<R>, char>;
+namespace detail
+{
+
+template <class T>
+concept byte_like = std::same_as<T, char> || std::same_as<T, unsigned char> || std::same_as<T, std::byte>;
+
+}
 
 template <class R>
-concept borrowed_range_of_chars = std::ranges::contiguous_range<R> && std::ranges::borrowed_range<R> &&
-                         std::same_as<std::ranges::range_value_t<R>, char>;
+concept owning_range_of_bytes = std::ranges::contiguous_range<R> && !std::ranges::borrowed_range<R> && !std::is_const_v<R> &&
+                       detail::byte_like<std::ranges::range_value_t<R>>;
+
+template <class R>
+concept borrowed_range_of_bytes = std::ranges::contiguous_range<R> && std::ranges::borrowed_range<R> &&
+                         detail::byte_like<std::ranges::range_value_t<R>>;
+
+namespace detail
+{
+
+template <std::ranges::contiguous_range R>
+    requires byte_like<std::ranges::range_value_t<R>>
+std::string_view chars_of(R const &bytes) noexcept
+{
+    return {reinterpret_cast<char const *>(std::ranges::data(bytes)), std::ranges::size(bytes)};
+}
+
+}
 
 template <class T>
 class owning;

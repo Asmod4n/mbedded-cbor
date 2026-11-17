@@ -7,6 +7,7 @@
 
 #include "item_head.hpp"
 #include "reference.hpp"
+#include <cbor/structs.hpp>
 
 #include <algorithm>
 #include <array>
@@ -1686,4 +1687,49 @@ TEST_CASE("item visit: the smallest negative integer")
 }
 #endif
 
+}
+
+namespace
+{
+
+struct bytes_item {
+    std::uint64_t a;
+    std::vector<std::uint64_t> b;
+    bool operator==(bytes_item const &) const = default;
+};
+
+std::vector<std::uint8_t> unsigned_bytes_of_bytes_item(std::string const &bytes)
+{
+    std::vector<std::uint8_t> out(bytes.size());
+    std::ranges::transform(std::as_bytes(std::span(bytes)), out.begin(),
+                           [](std::byte const b) { return std::to_integer<std::uint8_t>(b); });
+    return out;
+}
+
+} // namespace
+
+// A byte range reads as the std::string of the same bytes. The bytes come from the encoder of the library, and the
+// test reads them as std::vector<std::uint8_t> and as std::span<std::byte const>, the forms that other CBOR libraries take.
+TEST_CASE("decode, item_size, diagnostic_notation: a range of bytes reads as the std::string of the same bytes")
+{
+    auto const encoded = cbor::structs<bytes_item>::encode(bytes_item{1, {2, 3}});
+    REQUIRE(encoded.has_value());
+    auto const u = unsigned_bytes_of_bytes_item(*encoded);
+    auto const b = std::as_bytes(std::span(*encoded));
+    auto const text = cbor::diagnostic_notation(*encoded);
+    REQUIRE(text.has_value());
+    CHECK_EQ(cbor::diagnostic_notation(u).value(), *text);
+    CHECK_EQ(cbor::diagnostic_notation(b).value(), *text);
+    CHECK_EQ(cbor::item_size(u).value(), encoded->size());
+    CHECK_EQ(cbor::item_size(b).value(), encoded->size());
+    auto const from_u = cbor::decode(u);
+    auto const from_b = cbor::decode(b);
+    REQUIRE(from_u.has_value());
+    REQUIRE(from_b.has_value());
+    std::string out_u;
+    std::string out_b;
+    REQUIRE(cbor::encode(out_u, **from_u).has_value());
+    REQUIRE(cbor::encode(out_b, **from_b).has_value());
+    CHECK_EQ(out_u, *encoded);
+    CHECK_EQ(out_b, *encoded);
 }

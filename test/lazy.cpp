@@ -1,6 +1,7 @@
 #include "rfc8746.hpp"
 #include "small_stack.hpp"
 #include "reference.hpp"
+#include <cbor/structs.hpp>
 #include "threads.hpp"
 #include "owned_copy.hpp"
 #include "item_head.hpp"
@@ -1582,7 +1583,7 @@ TEST_CASE("lazy size refuses a count that the bytes cannot hold")
     }
     auto const pair = test::make_lazy_from_copy("\x82\x01\x02"s);
     REQUIRE(pair.has_value());
-    CHECK_EQ(pair->size().value(), 2);
+    CHECK_EQ(pair->size().value(), std::size_t{2});
 }
 
 // Found by fuzz-path on the input d0. RFC 8949 3.4: a tag is followed by its content, so d0 alone ends before its
@@ -2208,4 +2209,39 @@ TEST_CASE("lazy: the count of a typed array is its whole elements, not its bytes
     auto const elements = doc.elements();
     REQUIRE(elements.has_value());
     CHECK_EQ(elements->size(), 3u);
+}
+
+namespace
+{
+
+struct bytes_lazy {
+    std::uint64_t a;
+    std::vector<std::uint64_t> b;
+    bool operator==(bytes_lazy const &) const = default;
+};
+
+std::vector<std::uint8_t> unsigned_bytes_of_bytes_lazy(std::string const &bytes)
+{
+    std::vector<std::uint8_t> out(bytes.size());
+    std::ranges::transform(std::as_bytes(std::span(bytes)), out.begin(),
+                           [](std::byte const b) { return std::to_integer<std::uint8_t>(b); });
+    return out;
+}
+
+} // namespace
+
+// A byte range reads as the std::string of the same bytes. The bytes come from the encoder of the library, and the
+// test reads them as std::vector<std::uint8_t> and as std::span<std::byte const>, the forms that other CBOR libraries take.
+TEST_CASE("lazy: view and adopt read a range of bytes as the std::string of the same bytes")
+{
+    auto const encoded = cbor::structs<bytes_lazy>::encode(bytes_lazy{1, {2, 3}});
+    REQUIRE(encoded.has_value());
+    auto const owner = std::make_shared<std::string const>(*encoded);
+    auto const b = std::as_bytes(std::span(*owner));
+    auto const from_b = cbor::lazy::view(owner, b);
+    REQUIRE(from_b.has_value());
+    CHECK_EQ(from_b->size().value(), std::size_t{2});
+    auto const from_u = cbor::lazy::adopt(unsigned_bytes_of_bytes_lazy(*encoded));
+    REQUIRE(from_u.has_value());
+    CHECK_EQ(from_u->size().value(), std::size_t{2});
 }

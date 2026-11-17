@@ -18,6 +18,7 @@
 #include <memory_resource>
 #include <span>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -445,6 +446,17 @@ inline std::expected<owning<item>, error> decode(std::string_view const encoded)
     if (!decoded) [[unlikely]]
         return std::unexpected(decoded.error());
     return decoded->tree;
+}
+
+/**
+ * @brief Reads one data item from a range of bytes.
+ * @ingroup decode
+ */
+template <borrowed_range_of_bytes Encoded>
+    requires(!std::is_array_v<std::remove_cvref_t<Encoded>>)
+std::expected<owning<item>, error> decode(Encoded &&encoded)
+{
+    return decode(detail::chars_of(encoded));
 }
 
 }

@@ -1,4 +1,5 @@
 #include "reference.hpp"
+#include <format>
 
 #include <array>
 #include <cstddef>
@@ -99,4 +100,12 @@ TEST_CASE("error: an error copied from std::errc compares equal to that std::err
              cbor::category());
     for (error const e : every_error)
         CHECK(std::error_code(e) == e);
+}
+
+// std::format gives a cbor::error as the message of its std::error_code, for each member of the finite set.
+TEST_CASE("error: std::format writes the message of the error_code")
+{
+    CHECK_EQ(std::format("{}", error::key_not_found), "key not found");
+    for (error const e : every_error)
+        CHECK_EQ(std::format("{}", e), std::error_code{e}.message());
 }

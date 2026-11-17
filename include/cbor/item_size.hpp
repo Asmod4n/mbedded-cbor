@@ -11,11 +11,13 @@
 #include <cstdint>
 #include <expected>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 
 #include "error.hpp"
 #include "validity.hpp"
 #include "head.hpp"
+#include "ref.hpp"
 
 namespace cbor
 {
@@ -156,6 +158,17 @@ inline std::expected<std::size_t, error> item_size(std::string_view const encode
     if (auto const r = detail::well_formedness::skip_item(d); !r) [[unlikely]]
         return std::unexpected(r.error());
     return std::to_underlying(detail::validity::distance(encoded, d.encoded));
+}
+
+/**
+ * @brief Gives the size in bytes of the first data item in a range of bytes.
+ * @ingroup tools
+ */
+template <borrowed_range_of_bytes Encoded>
+    requires(!std::is_array_v<std::remove_cvref_t<Encoded>>)
+std::expected<std::size_t, error> item_size(Encoded &&encoded)
+{
+    return item_size(detail::chars_of(encoded));
 }
 
 }

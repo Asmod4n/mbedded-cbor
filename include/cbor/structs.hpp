@@ -1483,7 +1483,7 @@ public:
      * @see cbor::structs::encode()
      * @see cbor::ref
      */
-    template <owning_range_of_chars Encoded>
+    template <owning_range_of_bytes Encoded>
     static std::expected<ref<T>, error> decode(Encoded &&encoded)
     {
         return decode(std::make_shared<Encoded const>(std::move(encoded)));
@@ -1493,7 +1493,7 @@ public:
      * @brief Reads one item into a `T` from the bytes that @p encoded owns.
      * @throws std::logic_error @p encoded is null
      */
-    template <owning_range_of_chars Encoded>
+    template <owning_range_of_bytes Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded)
     {
         detail::pfr::check_default_constructible<T>();
@@ -1505,12 +1505,12 @@ public:
      * @param target the value whose containers and allocator the read uses
      * @throws std::logic_error @p encoded is null
      */
-    template <owning_range_of_chars Encoded>
+    template <owning_range_of_bytes Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded, T &&target)
     {
         detail::validity::throw_logic_error_if_null(encoded,
                                                     "cbor::structs::decode: the encoded data item is null");
-        std::string_view const bytes{std::span<char const>(*encoded)};
+        std::string_view const bytes = detail::chars_of(*encoded);
         return decode(std::shared_ptr<void const>(std::move(encoded)), bytes, std::move(target));
     }
 
@@ -1518,7 +1518,7 @@ public:
      * @brief Reads one item into a `T` from bytes that @p owner keeps alive.
      * @throws std::logic_error @p owner is empty
      */
-    template <borrowed_range_of_chars Encoded>
+    template <borrowed_range_of_bytes Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
         detail::pfr::check_default_constructible<T>();
@@ -1530,11 +1530,11 @@ public:
      * @param target the value whose containers and allocator the read uses
      * @throws std::logic_error @p owner is empty
      */
-    template <borrowed_range_of_chars Encoded>
+    template <borrowed_range_of_bytes Encoded>
     static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded,
                                                T &&target)
     {
-        return decode_with_owner(std::move(owner), std::string_view(std::span<char const>(encoded)),
+        return decode_with_owner(std::move(owner), detail::chars_of(encoded),
                             std::move(target));
     }
 

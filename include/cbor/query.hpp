@@ -95,10 +95,21 @@ template <fixed_string Path, class T>
 std::expected<T, error> at_path(std::string_view encoded);
 
 /**
+ * @brief Reads a scalar at a path in a range of bytes.
+ * @ingroup path
+ */
+template <fixed_string Path, class T, borrowed_range_of_bytes Encoded>
+    requires(is_singular_query_v<Path> && scalar_result<T> && !std::is_array_v<std::remove_cvref_t<Encoded>>)
+std::expected<T, error> at_path(Encoded &&encoded)
+{
+    return at_path<Path, T>(detail::chars_of(encoded));
+}
+
+/**
  * @brief Reads a view at a path in bytes that `owner` keeps alive.
  * @ingroup path
  */
-template <fixed_string Path, class T, borrowed_range_of_chars Encoded>
+template <fixed_string Path, class T, borrowed_range_of_bytes Encoded>
     requires(is_singular_query_v<Path> && view_result<T>)
 std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded);
 
@@ -106,7 +117,7 @@ std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded 
  * @brief Reads a view at a path in the bytes of `*owner`.
  * @ingroup path
  */
-template <fixed_string Path, class T, owning_range_of_chars Encoded>
+template <fixed_string Path, class T, owning_range_of_bytes Encoded>
     requires(is_singular_query_v<Path> && view_result<T>)
 std::expected<ref<T>, error> at_path(std::shared_ptr<Encoded const> owner);
 
@@ -115,7 +126,7 @@ std::expected<ref<T>, error> at_path(std::shared_ptr<Encoded const> owner);
  * @ingroup path
  * @throws std::bad_alloc an allocation of the owner fails
  */
-template <fixed_string Path, class T, owning_range_of_chars Encoded>
+template <fixed_string Path, class T, owning_range_of_bytes Encoded>
     requires(is_singular_query_v<Path> && view_result<T>)
 std::expected<ref<T>, error> at_path(Encoded &&encoded);
 
@@ -999,7 +1010,7 @@ class path
         requires(is_singular_query_v<Path> && scalar_result<T>)
     friend std::expected<T, error> at_path(std::string_view encoded);
 
-    template <fixed_string Path, class T, borrowed_range_of_chars Encoded>
+    template <fixed_string Path, class T, borrowed_range_of_bytes Encoded>
         requires(is_singular_query_v<Path> && view_result<T>)
     friend std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded);
 
@@ -1185,7 +1196,7 @@ private:
     template <scalar_result T>
     friend std::expected<T, error> at_path(std::string_view encoded, query<T> const &e);
 
-    template <view_result T, borrowed_range_of_chars Encoded>
+    template <view_result T, borrowed_range_of_bytes Encoded>
     friend std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded,
                                                        query<T> const &e);
     /// @endcond
@@ -1205,24 +1216,35 @@ std::expected<T, error> at_path(std::string_view const encoded, path::query<T> c
 }
 
 /**
+ * @brief Reads a scalar at a query in a range of bytes.
+ * @ingroup path
+ */
+template <scalar_result T, borrowed_range_of_bytes Encoded>
+    requires(!std::is_array_v<std::remove_cvref_t<Encoded>>)
+std::expected<T, error> at_path(Encoded &&encoded, path::query<T> const &e)
+{
+    return at_path(detail::chars_of(encoded), e);
+}
+
+/**
  * @brief Reads a view at a query in bytes that `owner` keeps alive.
  * @ingroup path
  */
-template <view_result T, borrowed_range_of_chars Encoded>
+template <view_result T, borrowed_range_of_bytes Encoded>
 std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded,
                                             path::query<T> const &e)
 {
     detail::validity::throw_logic_error_if_empty(
         owner, "cbor::at_path: the owner of the encoded data item is empty");
     return path::apply_query(e, std::move(owner),
-                                 std::string_view(std::span<char const>(encoded)));
+                                 detail::chars_of(encoded));
 }
 
 /**
  * @brief Gives the lazy or the nodelist at a query in bytes that `owner` keeps alive.
  * @ingroup path
  */
-template <class T, borrowed_range_of_chars Encoded>
+template <class T, borrowed_range_of_bytes Encoded>
     requires(std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
 std::expected<T, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded,
                                 typename path::query<T> const &e)
@@ -1234,13 +1256,13 @@ std::expected<T, error> at_path(std::shared_ptr<void const> owner, Encoded const
  * @brief Reads the result of a query in the bytes of `*owner`.
  * @ingroup path
  */
-template <class T, owning_range_of_chars Encoded>
+template <class T, owning_range_of_bytes Encoded>
     requires(view_result<T> || std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
 std::expected<typename path::query<T>::result_type, error> at_path(std::shared_ptr<Encoded const> owner,
                                                                        path::query<T> const &e)
 {
     detail::validity::throw_logic_error_if_null(owner, "cbor::at_path: the encoded data item is null");
-    std::string_view const bytes{std::span<char const>(*owner)};
+    std::string_view const bytes = detail::chars_of(*owner);
     return at_path(std::move(owner), bytes, e);
 }
 
@@ -1249,7 +1271,7 @@ std::expected<typename path::query<T>::result_type, error> at_path(std::shared_p
  * @ingroup path
  * @throws std::bad_alloc an allocation of the owner fails
  */
-template <class T, owning_range_of_chars Encoded>
+template <class T, owning_range_of_bytes Encoded>
     requires(view_result<T> || std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
 std::expected<typename path::query<T>::result_type, error> at_path(Encoded &&encoded,
                                                                        path::query<T> const &e)
@@ -2304,26 +2326,26 @@ std::expected<T, error> at_path(std::string_view const encoded)
     return path::walk_query<Path, T>(encoded);
 }
 
-template <fixed_string Path, class T, borrowed_range_of_chars Encoded>
+template <fixed_string Path, class T, borrowed_range_of_bytes Encoded>
     requires(is_singular_query_v<Path> && view_result<T>)
 std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded)
 {
     detail::validity::throw_logic_error_if_empty(
         owner, "cbor::at_path: the owner of the encoded data item is empty");
     return path::walk_query<Path, T>(std::move(owner),
-                                         std::string_view(std::span<char const>(encoded)));
+                                         detail::chars_of(encoded));
 }
 
-template <fixed_string Path, class T, owning_range_of_chars Encoded>
+template <fixed_string Path, class T, owning_range_of_bytes Encoded>
     requires(is_singular_query_v<Path> && view_result<T>)
 std::expected<ref<T>, error> at_path(std::shared_ptr<Encoded const> owner)
 {
     detail::validity::throw_logic_error_if_null(owner, "cbor::at_path: the encoded data item is null");
-    std::string_view const bytes{std::span<char const>(*owner)};
+    std::string_view const bytes = detail::chars_of(*owner);
     return at_path<Path, T>(std::move(owner), bytes);
 }
 
-template <fixed_string Path, class T, owning_range_of_chars Encoded>
+template <fixed_string Path, class T, owning_range_of_bytes Encoded>
     requires(is_singular_query_v<Path> && view_result<T>)
 std::expected<ref<T>, error> at_path(Encoded &&encoded)
 {

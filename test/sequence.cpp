@@ -1,4 +1,7 @@
 #include "reference.hpp"
+#include <cbor/structs.hpp>
+#include <span>
+#include <cstddef>
 #include "owned_copy.hpp"
 #include <cbor/sequence.hpp>
 
@@ -194,4 +197,47 @@ TEST_CASE("sequence: a loop over 100000 items reads each item once")
     auto const elements = elements_of(held(std::string(100000, '\x00')));
     CHECK_EQ(elements.size(), 100000u);
     CHECK(std::ranges::all_of(elements, [](auto const &e) { return e.has_value() && e->size() == 1; }));
+}
+
+namespace
+{
+
+struct bytes_sequence {
+    std::uint64_t a;
+    std::vector<std::uint64_t> b;
+    bool operator==(bytes_sequence const &) const = default;
+};
+
+std::vector<std::uint8_t> unsigned_bytes_of_bytes_sequence(std::string const &bytes)
+{
+    std::vector<std::uint8_t> out(bytes.size());
+    std::ranges::transform(std::as_bytes(std::span(bytes)), out.begin(),
+                           [](std::byte const b) { return std::to_integer<std::uint8_t>(b); });
+    return out;
+}
+
+} // namespace
+
+// A byte range reads as the std::string of the same bytes. The bytes come from the encoder of the library, and the
+// test reads them as std::vector<std::uint8_t> and as std::span<std::byte const>, the forms that other CBOR libraries take.
+TEST_CASE("sequence: a range of bytes gives the elements of the std::string of the same bytes")
+{
+    auto const first = cbor::structs<bytes_sequence>::encode(bytes_sequence{1, {2}});
+    auto const second = cbor::structs<bytes_sequence>::encode(bytes_sequence{3, {}});
+    REQUIRE(first.has_value());
+    REQUIRE(second.has_value());
+    std::string const both = *first + *second;
+    std::vector<std::string_view> expected;
+    for (auto const e : cbor::sequence{std::make_shared<std::string const>(both)})
+        expected.push_back(e.value());
+    auto const u = std::make_shared<std::vector<std::uint8_t> const>(unsigned_bytes_of_bytes_sequence(both));
+    std::vector<std::string_view> from_u;
+    for (auto const e : cbor::sequence{u})
+        from_u.push_back(e.value());
+    CHECK((std::ranges::equal(from_u, expected)));
+    auto const owner = std::make_shared<std::string const>(both);
+    std::vector<std::string_view> from_b;
+    for (auto const e : cbor::sequence{owner, std::as_bytes(std::span(*owner))})
+        from_b.push_back(e.value());
+    CHECK((std::ranges::equal(from_b, expected)));
 }

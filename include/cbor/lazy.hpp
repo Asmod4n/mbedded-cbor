@@ -175,13 +175,13 @@ public:
      * @see cbor::lazy::adopt()
      * @see cbor::lazy::at()
      */
-    template <borrowed_range_of_chars Encoded>
+    template <borrowed_range_of_bytes Encoded>
     static std::expected<lazy, error> view(std::shared_ptr<void const> owner, Encoded const &encoded);
     /**
      * @brief Makes the lazy of the top-level item in `*owner`, in place.
      * @throws std::logic_error a null `owner`
      */
-    template <owning_range_of_chars Encoded>
+    template <owning_range_of_bytes Encoded>
     static std::expected<lazy, error> view(std::shared_ptr<Encoded const> owner);
     /**
      * @brief Makes the lazy of the top-level item in @p encoded, and moves the bytes into a new owner.
@@ -207,7 +207,7 @@ public:
      * @see cbor::lazy::view()
      * @see cbor::lazy::at()
      */
-    template <owning_range_of_chars Encoded>
+    template <owning_range_of_bytes Encoded>
     static std::expected<lazy, error> adopt(Encoded &&encoded);
 
     /**
@@ -1330,25 +1330,25 @@ inline void lazy::throw_logic_error_if_no_top_level(char const *const message) c
     detail::validity::throw_logic_error_if(top_level.encoded.data() == nullptr, message);
 }
 
-template <borrowed_range_of_chars Encoded>
+template <borrowed_range_of_bytes Encoded>
 CBOR_ALWAYS_INLINE inline std::expected<lazy, error> lazy::view(std::shared_ptr<void const> owner, Encoded const &encoded)
 {
     detail::validity::throw_logic_error_if_empty(
         owner, "cbor::lazy::view: the owner of the encoded data item is empty");
     std::string_view const content =
-        detail::heads::self_described_cbor_content(std::string_view(std::span<char const>(encoded)));
+        detail::heads::self_described_cbor_content(detail::chars_of(encoded));
     return lazy{lazy::top_level_item{std::move(owner), content}, 0, {}};
 }
 
-template <owning_range_of_chars Encoded>
+template <owning_range_of_bytes Encoded>
 CBOR_ALWAYS_INLINE inline std::expected<lazy, error> lazy::view(std::shared_ptr<Encoded const> owner)
 {
     detail::validity::throw_logic_error_if_null(owner, "cbor::lazy::view: the encoded data item is null");
-    std::string_view const bytes{std::span<char const>(*owner)};
+    std::string_view const bytes = detail::chars_of(*owner);
     return view(std::shared_ptr<void const>(std::move(owner)), bytes);
 }
 
-template <owning_range_of_chars Encoded>
+template <owning_range_of_bytes Encoded>
 std::expected<lazy, error> lazy::adopt(Encoded &&encoded)
 {
     return view(std::make_shared<Encoded const>(std::move(encoded)));

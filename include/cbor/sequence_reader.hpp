@@ -281,37 +281,37 @@ public:
     sequence_reader &operator=(sequence_reader &&other) = default;
 
     /** @brief Copies the bytes of a view to the end of the sequence. */
-    template <borrowed_range_of_chars Piece>
+    template <borrowed_range_of_bytes Piece>
         requires(!std::is_array_v<Piece>)
     void feed(Piece const piece)
     {
-        bytes_feed(std::string_view(std::span<char const>(piece)));
+        bytes_feed(detail::chars_of(piece));
     }
 
     /** @brief Copies the bytes of a container to the end of the sequence. */
-    template <owning_range_of_chars Piece>
+    template <owning_range_of_bytes Piece>
         requires(!std::is_array_v<Piece>)
     void feed(Piece const &piece)
     {
-        bytes_feed(std::string_view(std::span<char const>(piece)));
+        bytes_feed(detail::chars_of(piece));
     }
 
     /** @brief Takes a container by move and holds it as the next bytes of the sequence. */
-    template <owning_range_of_chars Piece>
+    template <owning_range_of_bytes Piece>
     void feed(Piece &&piece)
     {
         feed(std::make_shared<Piece const>(std::move(piece)));
     }
 
     /** @brief Holds the bytes of @p piece as the next bytes of the sequence, without a copy. */
-    template <owning_range_of_chars Piece>
+    template <owning_range_of_bytes Piece>
     void feed(std::shared_ptr<Piece const> piece)
     {
         throw_logic_error_if_moved_from();
         detail::validity::throw_logic_error_if_null(piece, "cbor::sequence_reader::feed: the piece is null");
         if (failure != error{}) [[unlikely]]
             return;
-        std::string_view const bytes{std::span<char const>(*piece)};
+        std::string_view const bytes = detail::chars_of(*piece);
         push_piece(held_piece{std::move(piece), bytes});
     }
 

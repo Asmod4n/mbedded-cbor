@@ -1414,6 +1414,17 @@ inline std::expected<std::string, error> diagnostic_notation(std::string_view co
 }
 
 /**
+ * @brief Writes the first data item in a range of bytes in diagnostic notation.
+ * @ingroup tools
+ */
+template <borrowed_range_of_bytes Encoded>
+    requires(!std::is_array_v<std::remove_cvref_t<Encoded>>)
+std::expected<std::string, error> diagnostic_notation(Encoded &&encoded)
+{
+    return diagnostic_notation(detail::chars_of(encoded));
+}
+
+/**
  * @brief Gives the CBOR bytes that the extended diagnostic notation (EDN) in @p text writes.
  *
  * The text holds one item, with white space and comments around it, in the notation of RFC 8949 section 8 and of
@@ -1550,7 +1561,7 @@ consteval auto operator""_edn()
  */
 inline std::expected<owning<item>, error> parse_edn(std::string_view const text)
 {
-    return diag2cbor(text).and_then(decode);
+    return diag2cbor(text).and_then([](std::string const &bytes) { return decode(std::string_view(bytes)); });
 }
 
 inline std::expected<std::string, error> item::to_edn() const

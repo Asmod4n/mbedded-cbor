@@ -14,6 +14,7 @@
 #error "mbedded-cbor needs the clang frontend: on Windows build with clang-cl"
 #endif
 
+#include <format>
 #include <string>
 #include <system_error>
 #include <type_traits>
@@ -327,3 +328,23 @@ inline std::error_code make_error_code(error const e) noexcept
  */
 template <>
 struct std::is_error_code_enum<cbor::error> : std::true_type {};
+
+/**
+ * @brief Formats a cbor::error as the message of its `std::error_code`.
+ *
+ * @code{.example}
+ * message: {}
+ * call: std::format("{}", cbor::error::key_not_found)
+ * result: "key not found"
+ * @endcode
+ *
+ * @ingroup errors
+ */
+template <>
+struct std::formatter<cbor::error> : std::formatter<std::string>
+{
+    auto format(cbor::error const e, std::format_context &ctx) const
+    {
+        return std::formatter<std::string>::format(std::error_code{e}.message(), ctx);
+    }
+};

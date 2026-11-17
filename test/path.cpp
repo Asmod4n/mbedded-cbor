@@ -1,6 +1,7 @@
 #include "hex.hpp"
 #include "small_stack.hpp"
 #include "reference.hpp"
+#include <cbor/structs.hpp>
 #include "owned_copy.hpp"
 #include <cbor/diagnostic_notation.hpp>
 
@@ -1578,4 +1579,41 @@ TEST_CASE("path: the compile mode and the run-time mode give the same nodelist o
     same_in_both_modes<"$[?$[?$.a]]">(messages);
     same_in_both_modes<"$[?@[?@ == $[0]]]">(messages);
     same_in_both_modes<"$..[?@[1:]]">(messages);
+}
+
+namespace
+{
+
+struct bytes_path {
+    std::uint64_t a;
+    std::vector<std::uint64_t> b;
+    bool operator==(bytes_path const &) const = default;
+};
+
+std::vector<std::uint8_t> unsigned_bytes_of_bytes_path(std::string const &bytes)
+{
+    std::vector<std::uint8_t> out(bytes.size());
+    std::ranges::transform(std::as_bytes(std::span(bytes)), out.begin(),
+                           [](std::byte const b) { return std::to_integer<std::uint8_t>(b); });
+    return out;
+}
+
+} // namespace
+
+// A byte range reads as the std::string of the same bytes. The bytes come from the encoder of the library, and the
+// test reads them as std::vector<std::uint8_t> and as std::span<std::byte const>, the forms that other CBOR libraries take.
+TEST_CASE("at_path: a range of bytes reads as the std::string of the same bytes")
+{
+    auto const encoded = cbor::structs<bytes_path>::encode(bytes_path{1, {2, 3}});
+    REQUIRE(encoded.has_value());
+    auto const u = unsigned_bytes_of_bytes_path(*encoded);
+    auto const b = std::as_bytes(std::span(*encoded));
+    auto const expected = cbor::at_path<"$.b[1]", int>(*encoded);
+    REQUIRE(expected.has_value());
+    CHECK_EQ((cbor::at_path<"$.b[1]", int>(u)).value(), *expected);
+    CHECK_EQ((cbor::at_path<"$.b[1]", int>(b)).value(), *expected);
+    auto const q = cbor::path::compile<int>("$.b[1]");
+    REQUIRE(q.has_value());
+    CHECK_EQ(cbor::at_path(u, *q).value(), *expected);
+    CHECK_EQ(cbor::at_path(b, *q).value(), *expected);
 }

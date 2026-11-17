@@ -57,11 +57,11 @@ public:
      * @brief Makes a sequence that owns the bytes.
      * @throws std::logic_error the pointer @p e is null
      */
-    template <owning_range_of_chars Encoded>
+    template <owning_range_of_bytes Encoded>
     explicit sequence(std::shared_ptr<Encoded const> e)
     {
         detail::validity::throw_logic_error_if_null(e, "cbor::sequence: the encoded data items are null");
-        encoded = std::string_view(std::span<char const>(*e));
+        encoded = detail::chars_of(*e);
         owner = std::move(e);
     }
 
@@ -69,9 +69,9 @@ public:
      * @brief Makes a sequence over bytes that @p o owns.
      * @throws std::logic_error the owner @p o owns nothing
      */
-    template <borrowed_range_of_chars Encoded>
+    template <borrowed_range_of_bytes Encoded>
     sequence(std::shared_ptr<void const> o, Encoded const &e)
-        : owner(std::move(o)), encoded(std::span<char const>(e))
+        : owner(std::move(o)), encoded(detail::chars_of(e))
     {
         detail::validity::throw_logic_error_if_empty(
             owner, "cbor::sequence: the owner of the encoded data items is empty");

@@ -1,5 +1,6 @@
 #include "rfc8746.hpp"
 #include "reference.hpp"
+#include <cstddef>
 #include <cbor/diagnostic_notation.hpp>
 #include <cbor/encode.hpp>
 #include <cbor/schema.hpp>
@@ -1413,4 +1414,23 @@ TEST_CASE("structs: the count of bytes appended is a std::size_t")
 {
     CHECK((std::is_same_v<decltype(cbor::structs<pair_ab>::encode(std::declval<std::string &>(), std::declval<pair_ab const &>())),
                           std::expected<std::size_t, cbor::error>>));
+}
+
+// A byte range reads as the std::string of the same bytes. The bytes come from the encoder of the library, and the
+// test reads them as std::vector<std::uint8_t> and as std::span<std::byte const>, the forms that other CBOR libraries take.
+TEST_CASE("structs: decode reads a range of bytes as the std::string of the same bytes")
+{
+    pair_ab const value{1, {2, 3}};
+    auto const encoded = cbor::structs<pair_ab>::encode(value);
+    REQUIRE(encoded.has_value());
+    std::vector<std::uint8_t> u(encoded->size());
+    std::ranges::transform(std::as_bytes(std::span(*encoded)), u.begin(),
+                           [](std::byte const b) { return std::to_integer<std::uint8_t>(b); });
+    auto const from_u = cbor::structs<pair_ab>::decode(std::move(u));
+    REQUIRE(from_u.has_value());
+    CHECK((**from_u == value));
+    auto const owner = std::make_shared<std::string const>(*encoded);
+    auto const from_b = cbor::structs<pair_ab>::decode(owner, std::as_bytes(std::span(*owner)));
+    REQUIRE(from_b.has_value());
+    CHECK((**from_b == value));
 }
