@@ -74,6 +74,9 @@ struct tagged_item {
     static_assert(
         !detail::validity::tag_refused_by_value_types(Number),
         "the tag wrapper takes no tag 28 and no tag 29; structs and schema read no value under them.");
+    static_assert(!detail::validity::is_self_described_cbor_tag(Number),
+                  "the tag wrapper takes no tag 55799; it has no semantics (RFC 8949 3.4.6), and structs reads "
+                  "through it.");
     static constexpr std::uint64_t number = Number;
     T content;
 };
@@ -898,6 +901,11 @@ class reflection
                     !detail::validity::tag_refused_by_value_types(describe_members<U>::tag->number),
                 "cbor::describe_members takes no tag 28 and no tag 29; structs and schema read no value "
                 "under them.");
+            static_assert(
+                !describe_members<U>::tag.has_value() ||
+                    !detail::validity::is_self_described_cbor_tag(describe_members<U>::tag->number),
+                "cbor::describe_members takes no tag 55799; it has no semantics (RFC 8949 3.4.6), and structs "
+                "reads through it.");
         }
         static_assert(members_of_class<U>(), "cbor::describe_members lists a member of another class.");
         if constexpr (members_of_class<U>()) {
