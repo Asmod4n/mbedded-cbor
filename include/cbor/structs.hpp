@@ -923,12 +923,7 @@ class generic
                         return std::unexpected(b.error());
                 } else if (k->major == major_type::array || k->major == major_type::map ||
                            k->major == major_type::tag) [[unlikely]] {
-                    std::uint64_t const items =
-                        k->major == major_type::tag     ? 1
-                        : k->major == major_type::array ? k->argument
-                                                        : detail::validity::checked_mul(
-                                                              k->argument, rfc8949::data_items_per_pair)
-                                                              .value_or(std::numeric_limits<std::uint64_t>::max());
+                    std::uint64_t const items = detail::validity::count_enclosed_data_items(k->major, k->argument);
                     if (auto const p = detail::validity::check_bytes_left(items, d.encoded.size()); !p)
                         [[unlikely]]
                         return std::unexpected(p.error());
