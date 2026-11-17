@@ -48,10 +48,10 @@ A struct is written as a map\&. Each public data member is one entry, and its ke
 \fR\fBcbor::structs\fP<T>::encode(value)\fP gives \fRstd::expected<std::string, \fBcbor::error\fP>\fP, the bytes of the item\&.
 
 .PP
-\fR\fBcbor::structs\fP<T>::encode(value, target)\fP appends the bytes to \fRtarget\fP\&. It gives \fRstd::expected<std::size_t, \fBcbor::error\fP>\fP, the count of bytes that it appended\&. The target is a \fRstd::string\fP, a container of \fRchar\fP, a \fRstd::span<char>\fP, or a writer of the program\&. A \fRstd::span<char>\fP that is too small for the bytes gives \fRno_buffer_space\fP\&.
+\fR\fBcbor::structs\fP<T>::encode(out, value)\fP appends the bytes to \fRout\fP\&. It gives \fRstd::expected<std::size_t, \fBcbor::error\fP>\fP, the count of bytes that it appended\&. \fRout\fP is a \fRstd::string\fP, a container of \fRchar\fP, a \fRstd::span<char>\fP, or a writer of the program\&. A \fRT\fP that is itself such a type has only the form \fRencode(value)\fP\&. A \fRstd::span<char>\fP that is too small for the bytes gives \fRno_buffer_space\fP\&.
 
 .PP
-The keys of a struct come in the order of RFC 8949 section 4\&.2\&.1\&. The functions write no shared value (tag 28 and tag 29)\&.
+The keys of a struct come in the order of RFC 8949 section 4\&.2\&.1\&.
 
 .PP
 The encoder writes a float or a double in the shortest width that holds its value exactly (RFC 8949 section 4\&.1)\&. A NaN keeps its bits:
@@ -130,7 +130,7 @@ Where the standard library has \fRstd::chrono::parse\fP, \fRdecode\fP also takes
 .IP "\(bu" 2
 \fRstd::vector\fP, \fRstd::deque\fP, \fRstd::list\fP and other containers: an array\&.
 .IP "\(bu" 2
-\fRcbor::tagged_item<N, E>\fP: tag N on the item of \fRE\fP\&. \fRE\fP is not a struct\&.
+\fRcbor::tagged_item<N, E>\fP: tag N on the item of \fRE\fP\&. \fRE\fP is not a struct\&. N is not 28 or 29\&.
 .IP "\(bu" 2
 A struct: a map\&. See KEYS AND DESCRIPTIONS\&.
 .PP
@@ -151,7 +151,7 @@ The key of a member is its name, as a text string\&. A description sets another 
 Each macro writes a specialization of \fR\fBcbor::describe_members\fP<T>\fP\&. It has a \fRtag\fP member of type \fRstd::optional<\fBcbor::tag\fP>\fP and a \fRmembers\fP member that is a \fRstd::tuple\fP of \fR\fBcbor::member\fP\fP entries\&. \fRcbor::schema<T>\fP reads the same description\&.
 
 .PP
-The tag is \fR\fBcbor::tag\fP{n}\fP, or \fRcbor::untagged\fP for a map with no tag\&. A struct whose description has a tag carries that tag\&. \fRdecode\fP gives \fRincorrect_type\fP when the tag is missing or is another tag\&. An untagged struct gives \fRincorrect_type\fP for a tag in front of its map\&.
+The tag is \fR\fBcbor::tag\fP{n}\fP, or \fRcbor::untagged\fP for a map with no tag\&. A struct whose description has a tag carries that tag\&. \fRdecode\fP gives \fRincorrect_type\fP when the tag is missing or is another tag\&. An untagged struct gives \fRincorrect_type\fP for a tag in front of its map\&. A tag 55799 has no semantics (RFC 8949, section 3\&.4\&.6), so \fRdecode\fP reads through it in front of a map, as in front of every other item\&.
 
 .PP
 The rules for a description are these:
@@ -162,7 +162,7 @@ Each entry names a public, non-static data member of the type, or of a public ba
 .IP "\(bu" 2
 With reflection, the entries are exactly the public data members of the type and of its public bases\&. Another list does not compile\&.
 .IP "\(bu" 2
-A member that comes twice, two members with one key, a key of \fRbool\fP or of a character type, a tag of a standard type (for example 1, 258 or a tag of RFC 8746), and an invalid tag do not compile\&.
+A member that comes twice, two members with one key, a key of \fRbool\fP or of a character type, a tag of a standard type (for example 1, 258 or a tag of RFC 8746), tag 55799 and an invalid tag do not compile\&.
 .IP "\(bu" 2
 An annotation \fR[[=\fBcbor::tag(n)\fP]]\fP on a type that \fR\fBcbor::structs\fP\fP reads does not compile\&.
 .IP "\(bu" 2
@@ -175,23 +175,16 @@ A class with no default constructor cannot use the forms without \fRtarget\fP\&.
 .SH "INPUT FROM OTHER PROGRAMS"
 .PP
 \fRdecode\fP reads the entries of a map in any order\&. It skips an entry whose key no member has, whatever the type of its key or of its value\&. An array, a map or a tag is such a key\&. So a program reads the bytes of a newer program that added members\&. A new member of type \fRstd::optional\fP also reads the bytes of an older program\&.
-.SH "SHARED VALUES"
+.SH "TAGS 28 AND 29"
 .PP
-\fRdecode\fP reads tag 28 and tag 29 of value sharing (cbor\&.schmorp\&.de)\&. It uses a table that lasts for one call\&. \fRencode\fP writes no shared value\&.
-
-.PP
-.IP "\(bu" 2
-A tag 28 is allowed on each member\&. It keeps the value\&.
-.IP "\(bu" 2
-No member takes a tag 29\&. A tag 29 gives an error: \fRsharedref_index_not_marked\fP when no tag 28 comes before the index of the tag 29; \fRsharedref_not_complete\fP when that tag 28 is in a member that \fRdecode\fP skips; \fRincorrect_type\fP for any other tag 29\&.
-.PP
+Tag 28 and tag 29 of value sharing (cbor\&.schmorp\&.de) mark and name a shared value\&. \fRdecode\fP gives \fRinvalid_tag\fP where it reads a value and meets one of them\&. An entry whose key no member has is skipped with its tags 28 and 29\&. \fRcbor::tagged_item<N, E>\fP and \fR\fBcbor::describe_members\fP\fP do not compile with tag 28, tag 29 or tag 55799\&.
 .SH "ERRORS"
 .PP
 Each function gives a \fR\fBcbor::error\fP\fP in its \fRstd::expected\fP:
 
 .PP
 .IP "\(bu" 2
-\fRincorrect_type\fP: an item of another major type; a missing or another tag on a struct with a tag; a tag 29; a variant with no alternative that accepts the item; a plain array for a \fRstd::vector\fP or \fRstd::array\fP of a number type; an array of another count for a \fRstd::tuple\fP or a \fRstd::array\fP\&.
+\fRincorrect_type\fP: an item of another major type; a missing or another tag on a struct with a tag; a variant with no alternative that accepts the item; a plain array for a \fRstd::vector\fP or \fRstd::array\fP of a number type; an array of another count for a \fRstd::tuple\fP or a \fRstd::array\fP\&.
 .IP "\(bu" 2
 \fRnumber_out_of_range\fP: an integer that the C++ type cannot hold; a binary64 that a \fRfloat\fP cannot hold exactly; a float under tag 1 whose value is not a whole number\&.
 .IP "\(bu" 2
@@ -209,7 +202,7 @@ Each function gives a \fR\fBcbor::error\fP\fP in its \fRstd::expected\fP:
 .IP "\(bu" 2
 \fRstring_length_exceeded\fP, \fRcontainer_elements_exceeded\fP, \fRnesting_depth_exceeded\fP: a string or a container is longer than a limit of the library, or the item nests too deep\&.
 .IP "\(bu" 2
-\fRsharedref_index_not_marked\fP, \fRsharedref_not_complete\fP: see SHARED VALUES\&.
+\fRinvalid_tag\fP: a tag 28 or a tag 29 where a value is read; see TAGS 28 AND 29\&.
 .IP "\(bu" 2
 \fRno_buffer_space\fP: a \fRstd::span<char>\fP target that is too small\&.
 .IP "\(bu" 2

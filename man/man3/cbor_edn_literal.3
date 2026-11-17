@@ -1,0 +1,30 @@
+.TH "cbor::edn_literal< N >" 3 "Version 0.9.0" "mbedded-cbor" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+cbor::edn_literal \- Holds the CBOR bytes of one item that the literal \fR"\&.\&.\&."_edn\fP read from its EDN text at compile time\&.  
+
+.SH SYNOPSIS
+.br
+.PP
+.PP
+\fR#include <cbor/diagnostic_notation\&.hpp>\fP
+.SH "DESCRIPTION"
+.PP 
+
+.SS "template<std::size_t N>
+.br
+class cbor::edn_literal< N >"Holds the CBOR bytes of one item that the literal \fR"\&.\&.\&."_edn\fP read from its EDN text at compile time\&. 
+
+Only the literal makes one, so the bytes are always one well-formed item, as \fBcbor::diag2cbor()\fP writes it\&. \fBcbor::lazy::at()\fP takes it as a key or an index\&.
+
+.PP
+\fBSee also\fP
+.RS 4
+\fBcbor::lazy::at()\fP 
+
+.PP
+\fBcbor::diag2cbor()\fP 
+.RE
+.PP
+

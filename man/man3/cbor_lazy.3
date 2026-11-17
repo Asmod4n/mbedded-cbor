@@ -17,23 +17,23 @@ cbor::lazy \- A position in one top-level item: the owner of the bytes, the byte
 .br
 .RI "Gives the bytes from the position of the lazy to the end of its top-level bytes\&. "
 .ti -1c
-.RI "std::expected< lazy, \fBerror\fP > \fBat_key\fP (std::string_view key) const"
+.RI "std::expected< lazy, \fBerror\fP > \fBat\fP (std::string_view key) const"
 .br
-.RI "Gives the lazy of the value of one map key\&. "
+.RI "Gives the lazy of the value of a text key of a map\&. "
 .ti -1c
-.RI "std::expected< lazy, \fBerror\fP > \fBat_key\fP (std::int64_t key) const"
+.RI "template<class Integer>"
 .br
+requires (std::integral<Integer> && !std::same_as<Integer, bool> && !std::same_as<Integer, char> && !std::same_as<Integer,
+.br
+ wchar_t> && !std::same_as<Integer, char8_t> && !std::same_as<Integer, char16_t> && !std::same_as<Integer, char32_t>)
+.br
+std::expected< lazy, \fBerror\fP > \fBat\fP (Integer key_or_index) const
+.br
+.RI "Gives the lazy of the value of an integer key of a map, or of one element of an array\&. "
 .ti -1c
-.RI "std::expected< lazy, \fBerror\fP > \fBat\fP (std::size_t index) const"
+.RI "template<std::size_t N> std::expected< lazy, \fBerror\fP > \fBat\fP (\fBedn_literal\fP< N > const &key) const"
 .br
-.RI "Gives the lazy of one element of an array\&. "
-.ti -1c
-.RI "std::expected< lazy, \fBerror\fP > \fBoperator[]\fP (std::string_view key) const"
-.br
-.RI "Gives the same result as \fBcbor::lazy::at_key()\fP with a text key, or as \fBcbor::lazy::at()\fP with an index\&. "
-.ti -1c
-.RI "std::expected< lazy, \fBerror\fP > \fBoperator[]\fP (std::size_t index) const"
-.br
+.RI "Gives the lazy of the value of a key of any kind, written as an EDN literal \fR"\&.\&.\&."_edn\fP\&. "
 .ti -1c
 .RI "template<\fBfixed_string\fP Path>"
 .br
@@ -73,7 +73,7 @@ std::expected< typename E::result_type, \fBerror\fP > \fBat_path\fP (E const &e)
 .ti -1c
 .RI "std::expected< std::uint64_t, \fBerror\fP > \fBsize\fP () const"
 .br
-.RI "Gives the count of the head: the elements of an array, the pairs of a map, or the elements of a typed array\&. "
+.RI "Gives the count of the head of an array or a map, or the count of the elements of a typed array\&. "
 .ti -1c
 .RI "std::expected< bool, \fBerror\fP > \fBempty\fP () const"
 .br
@@ -99,9 +99,9 @@ std::expected< std::conditional_t< view_result< T >, \fBref\fP< T >, T >, \fBerr
 .br
 .RI "Gives the pairs of a map, in the order of the bytes, as a view\&. "
 .ti -1c
-.RI "std::expected< \fBowning\fP< \fBitem\fP >, \fBerror\fP > \fBto_item\fP () const"
+.RI "std::expected< \fBowning\fP< item >, \fBerror\fP > \fBto_item\fP () const"
 .br
-.RI "Decodes the whole item at the lazy into a tree of \fBcbor::item\fP, as \fBcbor::decode()\fP does, except that tags 28 and 29 stay tag nodes, and that a tag 55799 inside the top-level item stays a tag node\&. "
+.RI "Decodes the whole item at the lazy into a tree of cbor::item, as \fBcbor::decode()\fP does, except that tags 28 and 29 stay tag nodes, and that a tag 55799 inside the top-level item stays a tag node\&. "
 .in -1c
 .SS "Static Public Member Functions"
 

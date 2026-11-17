@@ -54,6 +54,7 @@ auto \fBview\fP (this Self &&self, Index const \&.\&.\&. indexes)
 .ti -1c
 .RI "std::size_t \fBsize\fP () const"
 .br
+.RI "Gives the count of the elements of a list, or of the pairs of a map, in the mapped bytes\&. "
 .ti -1c
 .RI "template<class Self>"
 .br
@@ -120,7 +121,7 @@ template<class U = T, bool Verified = true>
 .br
 class cbor::schema< T >::accessor< U, Verified >"Reads the part \fRU\fP of a message of \fRT\fP\&. 
 
-A path that starts with \fR@\fP starts at \fRU\fP\&. A path that starts with \fR$\fP starts at the root\&. The result is a \fRstd::expected\fP: the value of a number, \fRbool\fP or enum; a \fRstd::string_view\fP of a text; the accessor of a struct, a list or a map\&. Every result holds the owner of the bytes\&. The accessor of a \fRstd::variant<A\&.\&.\&.>\fP member has \fRindex()\fP and \fRget<A>()\fP\&. \fRindex()\fP gives the index of the alternative that the head of its item names\&. \fRget<A>()\fP gives a class alternative as its accessor, a number, \fRbool\fP or enum as its value, and a text or byte string as a \fRstd::string_view\fP into the message\&. Another alternative gives \fRincorrect_type\fP\&. A path ends at a variant member: \fR$\&.pet\&.name\fP does not compile\&. \fRview\fP gives a \fBcbor::typed_array_view\fP of a list of numbers\&. It exists on the root accessor only\&. \fRsize()\fP gives the count of a list or a map\&. An accessor of a vector of fixed-size structs is a random access range of \fRfixed_element\fP accessors\&. \fR\fBat_path\fP\fP on a temporary does not compile\&.
+A path that starts with \fR@\fP starts at \fRU\fP\&. A path that starts with \fR$\fP starts at the root\&. The result is a \fRstd::expected\fP: the value of a number, \fRbool\fP or enum; a \fRstd::string_view\fP of a text; the accessor of a struct, a list or a map\&. Every result holds the owner of the bytes\&. The accessor of a \fRstd::variant<A\&.\&.\&.>\fP member has \fRindex()\fP and \fRget<A>()\fP\&. \fRindex()\fP gives the index of the alternative that the head of its item names\&. \fRget<A>()\fP gives a class alternative as its accessor, a number, \fRbool\fP or enum as its value, and a text or byte string as a \fRstd::string_view\fP into the message\&. Another alternative gives \fRincorrect_type\fP\&. A path ends at a variant member: \fR$\&.pet\&.name\fP does not compile\&. \fRview\fP gives a \fBcbor::typed_array_view\fP of a list of numbers\&. It exists on the root accessor only\&. \fR\fBsize()\fP\fP gives the count of a list or a map\&. An accessor of a vector of fixed-size structs is a random access range of \fRfixed_element\fP accessors\&. \fR\fBat_path\fP\fP on a temporary does not compile\&.
 
 .PP
 .PP
@@ -193,6 +194,8 @@ result: unexpected cbor::error::incorrect_type
 \fIindex_out_of_bounds\fP an index past the end of a list 
 .br
 \fIincorrect_type\fP a wrong head or tag on the path; a variant item whose head names no alternative; \fRget<A>()\fP of another alternative 
+.br
+\fIinvalid_tag\fP a tag 28 or a tag 29 where the path reads a head 
 .br
 \fIunpopulated_table_index,syntax_error\fP a broken reference 
 .PP

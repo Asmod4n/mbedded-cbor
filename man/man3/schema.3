@@ -25,14 +25,10 @@ schema \- structs as Packed CBOR, with fields at fixed offsets
 .RI "class \fBcbor::schema< T >::accessor< fixed_element< S >, Verified >\fP"
 .br
 .RI "Reads one element of type \fRS\fP in a vector of fixed-size structs\&. "
-.in -1c
-.SS "Enumerations"
-
-.in +1c
 .ti -1c
-.RI "enum class \fBcbor::description_place\fP { \fBinside\fP, \fBapart\fP }"
+.RI "class \fBcbor::static_dictionary< T >\fP"
 .br
-.RI "Tells if a message holds the description of its structs (\fRinside\fP) or not (\fRapart\fP)\&. "
+.RI "Writes and reads a message of \fRT\fP without its description: the description is a static dictionary (draft-ietf-cbor-packed-19, section 3)\&. "
 .in -1c
 .SH "DESCRIPTION"
 .PP 
@@ -120,7 +116,7 @@ The CBOR head of an item chooses its alternative\&. Two alternatives whose items
 .IP "\(bu" 2
 \fRencode(value)\fP gives a \fRstd::expected<std::string, \fBcbor::error\fP>\fP\&.
 .IP "\(bu" 2
-\fRencode(value, target)\fP appends the message to \fRtarget\fP\&. It gives the count of bytes that it appended\&. \fRtarget\fP is a \fRstd::string\fP, a container of \fRchar\fP, a \fRstd::span<char>\fP or a message writer\&.
+\fRencode(out, value)\fP appends the message to \fRout\fP\&. It gives the count of bytes that it appended\&. \fRout\fP is a \fRstd::string\fP, a container of \fRchar\fP, a \fRstd::span<char>\fP or a message writer\&.
 .IP "\(bu" 2
 A \fRstd::span<char>\fP that is shorter than the message gives \fRno_buffer_space\fP\&.
 .PP
@@ -173,7 +169,7 @@ a \fRstd::optional\fP of a type E gives a \fRstd::optional\fP of the result of E
 .PP
 
 .PP
-\fRsize()\fP gives the count of a list or a map\&. \fRview<Path>()\fP gives a \fR\fBcbor::typed_array_view\fP\fP of a list of numbers\&. Only the root accessor has \fRview\fP\&.
+\fRsize()\fP gives the count of the elements of a list, or of the pairs of a map, in the mapped bytes, as a \fRstd::size_t\fP\&. \fRview<Path>()\fP gives a \fR\fBcbor::typed_array_view\fP\fP of a list of numbers\&. Only the root accessor has \fRview\fP\&.
 
 .PP
 A \fRstd::string_view\fP stays valid while an accessor of the same owner lives\&. Keep the accessor in a variable\&. \fRat_path\fP on a temporary accessor does not compile\&. A call on an accessor that was moved from throws \fRstd::logic_error\fP\&.
@@ -185,7 +181,7 @@ A \fRstd::variant\fP member has \fRindex()\fP, which gives the index of the held
 A list of fixed-size structs gives a random access range of element accessors\&. In an element, \fR@\fP reads a member of the element\&. \fR$\fP starts at the root\&.
 .SH "READ A LIST OF NUMBERS"
 .PP
-\fRtyped_array_view<E>\fP is a random access, sized range over a list of numbers in the message\&. Each element is a value of \fRE\fP, read in little endian\&. An element is a value, not a reference\&. The view holds the owner of the bytes\&. It has \fRsize\fP, \fRempty\fP, \fRbegin\fP, \fRend\fP, \fRrbegin\fP, \fRrend\fP, \fRfront\fP, \fRback\fP, \fRfirst\fP, \fRlast\fP, \fRat\fP and \fRoperator[]\fP\&.
+\fRtyped_array_view<E>\fP is a random access, sized range over a list of numbers in the message\&. Each element is a value of \fRE\fP, read in little endian\&. An element is a value, not a reference\&. The view holds the owner of the bytes\&. It has \fRsize\fP, \fRempty\fP, \fRbegin\fP, \fRend\fP, \fRrbegin\fP, \fRrend\fP, \fRfront\fP, \fRback\fP, \fRfirst\fP, \fRlast\fP, \fRat\fP and \fRoperator[]\fP\&. \fRsize\fP gives the count of the elements in the mapped bytes, as a \fRstd::size_t\fP\&.
 
 .PP
 .IP "\(bu" 2
@@ -209,13 +205,13 @@ The forms with a \fRtarget\fP take the start value\&. A \fRstd::pmr\fP container
 .PP
 .SH "STORE THE DESCRIPTION APART"
 .PP
-Each call takes \fR\fBcbor::description_place\fP\fP as a template argument\&. The default is \fRinside\fP, and the message holds the description of its structs\&.
+The forms of \fRcbor::schema<T>\fP write and read a message that holds the description of its structs\&.
 
 .PP
-With \fRcbor::description_place::apart\fP, \fRencode\fP writes the message without the description\&. Each read form reads such a message only with \fRapart\fP\&. A read with \fRapart\fP of a message that has the description gives \fRincorrect_type\fP\&.
+\fR\fBcbor::static_dictionary\fP<T>\fP has the same forms with the same arguments\&. Its \fRencode\fP writes the message without the description, and its read forms read such a message\&. The description is then a static dictionary of Packed CBOR\&. A read by \fR\fBcbor::static_dictionary\fP<T>\fP of a message that has the description gives \fRincorrect_type\fP\&.
 
 .PP
-\fRcbor::schema<T>::description()\fP gives the description\&. It is the same in every message of \fRT\fP\&. The size of a message written with \fRapart\fP plus the size of \fRdescription()\fP is the size of the message with the description\&. A generic decoder of Packed CBOR does not read a message written with \fRapart\fP\&.
+\fRcbor::schema<T>::description()\fP gives the description\&. It is the same in every message of \fRT\fP\&. The size of a message that \fR\fBcbor::static_dictionary\fP<T>::encode\fP writes plus the size of \fRdescription()\fP is the size of the message with the description\&. A generic decoder of Packed CBOR does not read such a message\&.
 .SH "READ A MESSAGE FROM A PEER YOU TRUST"
 .PP
 \fRunverified_adopt\fP, \fRunverified_view\fP, \fRunverified_at_path\fP and \fRunverified_decode\fP take the same arguments as \fRadopt\fP, \fRview\fP, \fRat_path\fP and \fRdecode\fP\&. They check each bound of the message, so no read leaves the message\&. They do not check the data of the message\&. A wrong byte gives a wrong value, not an error\&.
@@ -297,6 +293,9 @@ The rump is the root record\&. It stands at the end of the message\&.
 .PP
 
 .PP
+Every read form skips one leading tag 55799 (RFC 8949, section 3\&.4\&.6)\&. So a message under that tag reads as the message\&.
+
+.PP
 A record starts with its class tag\&. A reference to its record function follows\&. The first eight references are tags 128 to 135\&. Later references are tag 6 on an array of two\&. Then an array with a count of 4 bytes holds the fields\&. Each field has a head of fixed width\&. A field of variable size is \fR6(N)\fP, a reference with a 4-byte \fRN\fP into the table\&.
 
 .PP
@@ -323,7 +322,7 @@ the tag of the struct of the root\&.
 .PP
 
 .PP
-With \fRcbor::description_place::apart\fP, the message holds no keys\&. \fRadopt\fP and \fRview\fP then check the start of the message, the count of the table and the tag of the root\&.
+A message of \fR\fBcbor::static_dictionary\fP<T>\fP holds no keys\&. Its \fRadopt\fP and \fRview\fP then check the start of the message, the count of the table and the tag of the root\&.
 
 .PP
 Each \fRat_path\fP of an accessor checks at each read:
@@ -357,6 +356,8 @@ An error of \fRadopt\fP, \fRview\fP, \fRat_path\fP or \fRdecode\fP can cost a wa
 \fRtoo_little_data\fP: the message ends too early\&. \fRadopt\fP, \fRview\fP, \fRat_path\fP and \fRdecode\fP give this error also where another check fails first\&. A message that is shorter than its table and root gives it in \fRadopt\fP and \fRview\fP\&.
 .IP "\(bu" 2
 \fRincorrect_type\fP: a message of another struct or layout, a wrong tag of a struct, a wrong head of a field, a variant item whose head names no alternative, or \fRget<A>()\fP of another alternative\&.
+.IP "\(bu" 2
+\fRinvalid_tag\fP: a head of tag 28 or tag 29 in the place of the packing prefix, of the tag of a struct or of the head of a field\&. The forms that skip the checks of the data compare the head of a variant item, so they give it there too\&.
 .IP "\(bu" 2
 \fRindex_out_of_bounds\fP: an index past the end of a list\&.
 .IP "\(bu" 2

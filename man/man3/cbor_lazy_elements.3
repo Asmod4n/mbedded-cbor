@@ -21,6 +21,7 @@ cbor::lazy_elements \- The elements of one array, from \fBcbor::lazy::elements()
 .ti -1c
 .RI "std::uint64_t \fBsize\fP () const"
 .br
+.RI "Gives the count of the elements\&. "
 .ti -1c
 .RI "void \fBfront\fP () const =delete"
 .br
@@ -29,7 +30,7 @@ cbor::lazy_elements \- The elements of one array, from \fBcbor::lazy::elements()
 .PP 
 The elements of one array, from \fBcbor::lazy::elements()\fP\&. 
 
-It is a forward range, a sized range and a borrowed range\&. \fRsize()\fP gives the count of the head\&. \fR*it\fP gives the lazy of the element, or the error of the element\&. An iterator holds the owner of the bytes, so it stays valid after the lazy and the view end\&. \fRfront()\fP does not compile\&. When the iterator cannot step over an element, \fR*it\fP gives \fRtoo_little_data\fP or another error of the bytes, and each later position gives that error\&. The view gives at most \fRsize()\fP values\&.
+It is a forward range, a sized range and a borrowed range\&. \fR*it\fP gives the lazy of the element, or the error of the element\&. An iterator holds the owner of the bytes, so it stays valid after the lazy and the view end\&. \fRfront()\fP does not compile\&. When the iterator cannot step over an element, \fR*it\fP gives \fRtoo_little_data\fP or another error of the bytes, and each later position gives that error\&. The view gives at most \fR\fBsize()\fP\fP values\&.
 
 .PP
 .PP
@@ -49,7 +50,7 @@ result: 3
     auto const people = cbor::lazy::adopt(std::move(bytes));
     auto const view = *people\->elements();  // 3 elements
     auto const older = std::ranges::count_if(view, [](std::expected<cbor::lazy, cbor::error> const &e) {
-        return e && e\->at_key("age")\->get<int>()\&.value_or(0) > 30;
+        return e && e\->at("age")\->get<int>()\&.value_or(0) > 30;
     });  // 2
 .fi
 .PP

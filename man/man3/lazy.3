@@ -105,19 +105,19 @@ A \fR\fBcbor::ref\fP\fP views the bytes and keeps their owner alive\&. Nothing i
 The binary16 float \fR1\&.5\fP (\fRf9 3e 00\fP) reads as \fR1\&.5\fP\&. The integer \fR42\fP reads as \fR42\&.0\fP for \fRdouble\fP\&. The bignum \fR2(h'05')\fP reads as \fR5\fP for \fRstd::int64_t\fP\&.
 .SH "THE COUNT, THE ELEMENTS AND THE PAIRS"
 .PP
-\fRsize()\fP gives the count of the head of an array, a map or a typed array\&. It reads only the head\&. It gives a \fRstd::expected\fP of \fRstd::uint64_t\fP\&. \fRempty()\fP gives \fRtrue\fP when the count is 0\&.
+\fRsize()\fP gives the count of an array, a map or a typed array\&. It reads only the head\&. It gives a \fRstd::expected\fP of \fRstd::uint64_t\fP\&. The count of an array or a map is the argument of its head, which RFC 8949 section 3 allows up to 2^64 - 1\&. The head of a typed array holds the count of its bytes, and \fRsize()\fP gives the count of whole elements in them (RFC 8746 section 2)\&. \fRempty()\fP gives \fRtrue\fP when the count is 0\&.
 
 .PP
-\fRelements()\fP gives the elements of an array, or of a typed array, as a view\&. Each element is a \fRstd::expected<\fBcbor::lazy\fP, \fBcbor::error\fP>\fP\&. The view reads one element at each step\&. It is a forward range, a sized range and a borrowed range, so the standard algorithms take it\&. It has no \fRfront()\fP\&. Its \fRsize()\fP gives the count of the head, and it gives exactly that many values\&.
+\fRelements()\fP gives the elements of an array, or of a typed array, as a view\&. Each element is a \fRstd::expected<\fBcbor::lazy\fP, \fBcbor::error\fP>\fP\&. The view reads one element at each step\&. It is a forward range, a sized range and a borrowed range, so the standard algorithms take it\&. It has no \fRfront()\fP\&. Its \fRsize()\fP gives the same count as the \fRsize()\fP of the lazy, a \fRstd::uint64_t\fP, and it gives exactly that many values\&.
 
 .PP
-\fRentries()\fP gives the pairs of a map, in the order of the bytes, as a view\&. Each element is a \fRstd::expected\fP of a pair of lazy values, or of a \fR\fBcbor::error\fP\fP\&. The key is \fRfirst\fP and the value is \fRsecond\fP\&. A key that occurs twice occurs twice in the view\&. The view is a forward range, a sized range and a borrowed range\&.
+\fRentries()\fP gives the pairs of a map, in the order of the bytes, as a view\&. Each element is a \fRstd::expected\fP of a pair of lazy values, or of a \fR\fBcbor::error\fP\fP\&. The key is \fRfirst\fP and the value is \fRsecond\fP\&. A key that occurs twice occurs twice in the view\&. The view is a forward range, a sized range and a borrowed range\&. Its \fRsize()\fP gives the count of pairs, the argument of the head of the map, as a \fRstd::uint64_t\fP\&.
 
 .PP
 An iterator holds the owner of the bytes\&. It stays valid after the lazy and the view end\&. When the iterator cannot step over an element, \fR*it\fP gives \fRtoo_little_data\fP or another error of the bytes\&. Each later position gives that error\&.
 .SH "COPY ONE ITEM TO A TREE"
 .PP
-\fRto_item()\fP gives a \fRstd::expected<\fBcbor::owning\fP<\fBcbor::item\fP>, \fBcbor::error\fP>\fP\&. It reads the whole item at the lazy, checks every head, and builds one \fR\fBcbor::item\fP\fP for each data item\&. The tree copies each text and byte string\&. It does not view the bytes of the lazy, and it stays valid after the lazy and its owner end\&. The errors of \fR\fBcbor::decode\fP\fP apply\&.
+\fRto_item()\fP gives a \fRstd::expected<\fBcbor::owning\fP<cbor::item>, \fBcbor::error\fP>\fP\&. It reads the whole item at the lazy, checks every head, and builds one \fRcbor::item\fP for each data item\&. The tree copies each text and byte string\&. It does not view the bytes of the lazy, and it stays valid after the lazy and its owner end\&. The errors of \fR\fBcbor::decode\fP\fP apply\&.
 
 .PP
 \fRto_item\fP keeps tags 28 and 29 as tag items\&. A tag 55799 inside the top-level item stays a tag item, and \fRtype()\fP gives \fRtag\fP there\&. \fRget\fP, \fRat_key\fP, \fRat\fP and a path read through such a tag to its content\&. They do not read through it where it is the content of a tag 2, a tag 3 or a typed array\&. There the content is not a byte string, as \fR\fBcbor::decode\fP\fP reads it\&. \fRto_item\fP of a lazy that starts with a tag 55799 gives the content\&.
@@ -174,8 +174,8 @@ A refused allocation of the owner in \fRadopt\fP throws \fRstd::bad_alloc\fP\&. 
 .nf
     // bytes: a std::string with {"name": "ann", "scores": [4, 5, 6]}
     auto const doc = cbor::lazy::adopt(std::move(bytes));
-    auto const name = doc\->at_key("name")\->get<std::string_view>();  // a ref to "ann"
-    auto const scores = doc\->at_key("scores");
+    auto const name = doc\->at("name")\->get<std::string_view>();  // a ref to "ann"
+    auto const scores = doc\->at("scores");
     auto const count = scores\->size();                             // 3
     auto const elements = scores\->elements();
     int total = 0;

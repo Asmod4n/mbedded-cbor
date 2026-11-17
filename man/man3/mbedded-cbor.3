@@ -20,7 +20,7 @@ Each group has its own man page\&. Use the group that fits your task\&.
 
 .PP
 .IP "\(bu" 2
-\fRmbedded-cbor-decode(3)\fP: \fR\fBcbor::item\fP\fP, \fR\fBcbor::decode\fP\fP and \fR\fBcbor::encode\fP\fP\&. A decoded tree and the encoder\&. Use it for a tree that lives on after the bytes are gone, and for CBOR that you write item by item\&.
+\fRmbedded-cbor-decode(3)\fP: \fRcbor::item\fP, \fR\fBcbor::decode\fP\fP and \fR\fBcbor::encode\fP\fP\&. A decoded tree and its encode\&. Use it for a tree that lives on after the bytes are gone\&.
 .IP "\(bu" 2
 \fRmbedded-cbor-lazy(3)\fP: \fR\fBcbor::lazy\fP\fP\&. It reads a message in place, step by step\&. Use it for a message whose shape you learn while you read it\&.
 .IP "\(bu" 2
@@ -58,7 +58,7 @@ A limit stops input that holds a string or a container that is too large\&. Each
 .PP
 
 .PP
-\fR\fBcbor::encode_cycles\fP\fP writes a value that two references reach twice\&. So each level of such references doubles the output\&. Past the activation threshold, the output may be \fRmaximum_amplification\fP times the tree at most\&. Past that, \fR\fBcbor::encode_cycles\fP\fP gives \fR\fBcbor::error::amplification_limit_breach\fP\fP and writes nothing\&. The check runs at each node\&. So it can stop before the whole tree is counted\&.
+\fRcbor::encode_cycles\fP writes a value that two references reach twice\&. So each level of such references doubles the output\&. Past the activation threshold, the output may be \fRmaximum_amplification\fP times the tree at most\&. Past that, \fRcbor::encode_cycles\fP gives \fR\fBcbor::error::amplification_limit_breach\fP\fP and writes nothing\&. The check runs at each node\&. So it can stop before the whole tree is counted\&.
 
 .PP
 A value that does not fit \fRstd::size_t\fP does not compile\&. A limit at its default has no check in the program\&. Every translation unit of one program uses the same values\&. A different value in one translation unit breaks the one definition rule\&.
@@ -85,10 +85,10 @@ A text string or byte string comes back as a view into the bytes, in a \fR\fBcbo
 The decode calls of \fR\fBcbor::structs\fP<T>\fP and \fRcbor::schema<T>\fP take a target as their last argument\&. The target holds \fRstd::pmr\fP containers with a \fRstd::pmr::memory_resource\fP\&. Each element uses the allocator of its container\&. When the resource refuses, the call throws \fRstd::bad_alloc\fP, as a container of the standard library does\&.
 
 .PP
-A plain struct inside a \fRstd::pmr\fP container gets no allocator, so its members use the default resource\&. A step of a \fR\fBcbor::lazy\fP\fP, \fRget\fP and \fR\fBcbor::lazy::view\fP\fP allocate nothing\&. \fR\fBcbor::lazy::adopt\fP\fP allocates the \fRstd::shared_ptr\fP that holds the bytes\&. \fRclone\fP allocates its items\&. \fR\fBcbor::diagnostic_notation\fP\fP and the encoder into a \fRstd::string\fP allocate the string\&.
+A plain struct inside a \fRstd::pmr\fP container gets no allocator, so its members use the default resource\&. A step of a \fR\fBcbor::lazy\fP\fP, \fRget\fP and \fR\fBcbor::lazy::view\fP\fP allocate nothing\&. \fR\fBcbor::lazy::adopt\fP\fP allocates the \fRstd::shared_ptr\fP that holds the bytes\&. \fRclone\fP allocates its items\&. \fR\fBcbor::diagnostic_notation\fP\fP and \fR\fBcbor::encode\fP\fP into a \fRstd::string\fP allocate the string\&.
 
 .PP
-The target of the encoder chooses where the bytes go\&. A container of bytes, a fixed span, a \fR\fBcbor::iov_writer\fP\fP and a writer of your own are targets\&. The encoder allocates nothing when it writes into a fixed span\&. \fR\fBcbor::item_size\fP\fP and the iterator of \fR\fBcbor::sequence\fP\fP allocate nothing\&. Other calls take no allocator\&. A refused allocation there throws \fRstd::bad_alloc\fP\&.
+The target of \fR\fBcbor::encode\fP\fP chooses where the bytes go\&. A container of bytes, a fixed span and a writer of your own are targets\&. \fR\fBcbor::encode\fP\fP allocates nothing when it writes into a fixed span\&. \fR\fBcbor::item_size\fP\fP and the iterator of \fR\fBcbor::sequence\fP\fP allocate nothing\&. Other calls take no allocator\&. A refused allocation there throws \fRstd::bad_alloc\fP\&.
 .SH "SEE ALSO"
 .PP
 \fRmbedded-cbor-decode(3)\fP, \fRmbedded-cbor-lazy(3)\fP, \fRmbedded-cbor-path(3)\fP, \fRmbedded-cbor-structs(3)\fP, \fRmbedded-cbor-schema(3)\fP, \fRmbedded-cbor-ref(3)\fP, \fRmbedded-cbor-tools(3)\fP, \fRmbedded-cbor-errors(3)\fP\&.

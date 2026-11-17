@@ -37,9 +37,13 @@ cbor::structs \- Writes a C++ value as CBOR and reads it back\&.
 .br
 .RI "Writes \fRvalue\fP as one CBOR item in preferred serialization, into a new \fRstd::string\fP\&. "
 .ti -1c
-.RI "template<class Target> static std::expected< std::size_t, \fBerror\fP > \fBencode\fP (T const &value, Target &&target)"
+.RI "template<class Target>"
 .br
-.RI "Appends \fRvalue\fP as one CBOR item in preferred serialization to \fRtarget\fP\&. "
+requires (detail::encoding::is_target_v<std::remove_reference_t<Target>> && !detail::encoding::is_target_v<T>)
+.br
+static std::expected< std::size_t, \fBerror\fP > \fBencode\fP (Target &&out, T const &value)
+.br
+.RI "Appends \fRvalue\fP as one CBOR item in preferred serialization to \fRout\fP\&. "
 .in -1c
 .SH "DESCRIPTION"
 .PP 

@@ -26,7 +26,7 @@ errors \- the error values of the library and the limits of a build
 
 .in +1c
 .ti -1c
-.RI "enum class \fBcbor::error\fP { \fBerror::too_little_data\fP = 1, \fBerror::syntax_error\fP, \fBerror::indefinite_length\fP, \fBerror::nesting_depth_exceeded\fP, \fBerror::inadmissible_type_for_tag_content\fP, \fBerror::sharedref_index_not_marked\fP, \fBerror::sharedref_not_complete\fP, \fBerror::sharedref_not_defined\fP, \fBerror::reserved_simple_value\fP, \fBerror::unsupported_value\fP, \fBerror::not_indexable\fP, \fBerror::index_out_of_bounds\fP, \fBerror::key_not_found\fP, \fBerror::invalid_path\fP, \fBerror::incorrect_type\fP, \fBerror::number_out_of_range\fP, \fBerror::cyclic_data_structure\fP, \fBerror::unpopulated_table_index\fP, \fBerror::nodelist_too_long\fP, \fBerror::duplicate_key\fP, \fBerror::no_buffer_space\fP, \fBerror::value_too_large\fP, \fBerror::not_enough_memory\fP, \fBerror::io_error\fP, \fBerror::string_length_exceeded\fP, \fBerror::container_elements_exceeded\fP, \fBerror::not_singular_query\fP, \fBerror::amplification_limit_breach\fP }"
+.RI "enum class \fBcbor::error\fP { \fBerror::too_little_data\fP = 1, \fBerror::syntax_error\fP, \fBerror::indefinite_length\fP, \fBerror::nesting_depth_exceeded\fP, \fBerror::inadmissible_type_for_tag_content\fP, \fBerror::sharedref_index_not_marked\fP, \fBerror::invalid_tag\fP, \fBerror::sharedref_not_defined\fP, \fBerror::not_indexable\fP, \fBerror::index_out_of_bounds\fP, \fBerror::key_not_found\fP, \fBerror::invalid_path\fP, \fBerror::incorrect_type\fP, \fBerror::number_out_of_range\fP, \fBerror::cyclic_data_structure\fP, \fBerror::unpopulated_table_index\fP, \fBerror::nodelist_too_long\fP, \fBerror::duplicate_key\fP, \fBerror::no_buffer_space\fP, \fBerror::value_too_large\fP, \fBerror::not_enough_memory\fP, \fBerror::io_error\fP, \fBerror::string_length_exceeded\fP, \fBerror::container_elements_exceeded\fP, \fBerror::not_singular_query\fP, \fBerror::amplification_limit_breach\fP }"
 .br
 .RI "Names the fault that a call returns in its \fRstd::expected<T, \fBcbor::error\fP>\fP\&. "
 .in -1c
@@ -69,13 +69,11 @@ Each value is one enumerator of \fR\fBcbor::error\fP\fP\&.
 .IP "\(bu" 2
 \fRsharedref_index_not_marked\fP: a tag 29 names no tag 28 before it\&.
 .IP "\(bu" 2
-\fRsharedref_not_complete\fP: \fR\fBcbor::structs\fP\fP decode meets a tag 29 that names a tag 28 in a skipped member\&.
+\fRinvalid_tag\fP: \fR\fBcbor::structs\fP\fP or \fRcbor::schema\fP meets a tag 28 or a tag 29 where it reads a value\&.
 .IP "\(bu" 2
 \fRsharedref_not_defined\fP: \fR\fBcbor::decode\fP\fP meets a tag 29 that names a tag 28 whose content is only tags 28 and this tag 29\&.
 .IP "\(bu" 2
-\fRreserved_simple_value\fP: an encode meets a simple value from 24 to 31\&.
-.IP "\(bu" 2
-\fRunsupported_value\fP: the encoder meets a typed array with a reserved tag, or a tag outside RFC 8746; \fR\fBcbor::encode()\fP\fP writes no tag 29; \fR\fBcbor::encode_cycles()\fP\fP writes it\&.
+\fRunsupported_value\fP: \fR\fBcbor::encode()\fP\fP meets a \fRshared_reference\fP; \fR\fBcbor::encode()\fP\fP writes no tag 29; \fRcbor::encode_cycles()\fP writes it\&.
 .IP "\(bu" 2
 \fRnot_indexable\fP: a key or an index meets an item that is not a map or an array\&.
 .IP "\(bu" 2
@@ -111,7 +109,7 @@ Each value is one enumerator of \fR\fBcbor::error\fP\fP\&.
 .IP "\(bu" 2
 \fRnot_singular_query\fP: \fRcbor::path::compile<T>\fP gets a path that is not singular, and \fRT\fP is not \fRnodelist\fP\&.
 .IP "\(bu" 2
-\fRamplification_limit_breach\fP: \fR\fBcbor::encode_cycles()\fP\fP would write more than \fR\fBcbor::limits::maximum_amplification\fP\fP times the size of the tree, past \fR\fBcbor::limits::amplification_activation_threshold\fP\fP\&.
+\fRamplification_limit_breach\fP: \fRcbor::encode_cycles()\fP would write more than \fR\fBcbor::limits::maximum_amplification\fP\fP times the size of the tree, past \fR\fBcbor::limits::amplification_activation_threshold\fP\fP\&.
 .PP
 .SH "THE CONVERSION TO std::error_code"
 .PP
@@ -163,7 +161,7 @@ Each limit is a \fRstatic constexpr\fP member of \fR\fBcbor::limits\fP\fP\&. No 
 A macro that the build does not set takes its default\&. The default of the first two limits is \fRSIZE_MAX\fP\&. A limit at \fRSIZE_MAX\fP is not set, and its check is not in the program\&. Every translation unit of one program uses the same values\&. A value that does not fit \fRstd::size_t\fP does not compile\&.
 
 .PP
-\fR\fBcbor::encode_cycles()\fP\fP gives \fRamplification_limit_breach\fP, and writes nothing, when the output would be larger than \fR\fBcbor::limits::amplification_activation_threshold\fP\fP and than \fR\fBcbor::limits::maximum_amplification\fP\fP times the tree\&.
+\fRcbor::encode_cycles()\fP gives \fRamplification_limit_breach\fP, and writes nothing, when the output would be larger than \fR\fBcbor::limits::amplification_activation_threshold\fP\fP and than \fR\fBcbor::limits::maximum_amplification\fP\fP times the tree\&.
 
 .PP
 A limit counts what a call reads or decodes\&. An item that a call only skips does not count\&. The error comes at the read that meets the value\&. A count in the input reserves no memory\&. The library does not bound the size of the input\&. The program bounds it before it calls the library\&.
@@ -188,7 +186,7 @@ A frame outside these bounds, such as the stack of a fiber or of a signal handle
 .nf
     // bytes: a std::string with {"a": 1}
     auto const doc = cbor::lazy::adopt(std::move(bytes));
-    auto const e = doc\->at_key("b")\&.error();                     // key_not_found
+    auto const e = doc\->at("b")\&.error();                     // key_not_found
     std::error_code const code{e};
     std::string const text = code\&.message();                 // "key not found"
 .fi
