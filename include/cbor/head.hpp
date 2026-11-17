@@ -277,7 +277,7 @@ class heads
 
     template <class E>
         requires std::same_as<E, char> || std::same_as<E, std::byte>
-    static std::optional<head> convert_bignum_to_integer(std::uint64_t const tag, std::span<E const> const magnitude)
+    CBOR_ALWAYS_INLINE static std::optional<head> convert_bignum_to_integer(std::uint64_t const tag, std::span<E const> const magnitude)
     {
         std::span<E const> const digits = magnitude_without_leading_zeros(magnitude);
         if (!detail::validity::check_magnitude_size(digits.size(), sizeof(std::uint64_t)))
@@ -382,7 +382,7 @@ class heads
             return string;
         }
 
-        std::expected<std::optional<head>, error> decode_bignum(std::uint64_t const tag)
+        CBOR_ALWAYS_INLINE std::expected<std::optional<head>, error> decode_bignum(std::uint64_t const tag)
         {
             auto const r = decode_head();
             if (!r) [[unlikely]]
