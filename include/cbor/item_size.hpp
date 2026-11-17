@@ -10,7 +10,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
-#include <limits>
 #include <string_view>
 #include <utility>
 
@@ -54,10 +53,9 @@ class well_formedness
                     continue;
                 }
                 if (h->major == major_type::array)
-                    added = h->argument;
+                    added = detail::validity::count_enclosed_data_items(major_type::array, h->argument);
                 else if (h->major == major_type::map)
-                    added = detail::validity::checked_mul(h->argument, rfc8949::data_items_per_pair)
-                                .value_or(std::numeric_limits<std::uint64_t>::max());
+                    added = detail::validity::count_enclosed_data_items(major_type::map, h->argument);
                 else
                     continue;
             } else {
@@ -71,14 +69,9 @@ class well_formedness
                         return std::unexpected(s.error());
                     continue;
                 case major_type::array:
-                    added = slow->argument;
-                    break;
                 case major_type::map:
-                    added = detail::validity::checked_mul(slow->argument, rfc8949::data_items_per_pair)
-                                .value_or(std::numeric_limits<std::uint64_t>::max());
-                    break;
                 case major_type::tag:
-                    added = 1;
+                    added = detail::validity::count_enclosed_data_items(slow->major, slow->argument);
                     break;
                 default:
                     continue;
