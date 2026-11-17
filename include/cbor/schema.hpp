@@ -4733,19 +4733,20 @@ private:
     static auto at_path_with_directory(std::string_view const encoded, Index const... indexes)
     {
         using X = typename decltype(detail::reflection::path_result<T, T, Path, 1, Verified>())::type;
-        auto const dir = detail::reflection::read_directory<T, Verified, D>(encoded);
+        std::string_view const message = detail::heads::self_described_cbor_content(encoded);
+        auto const dir = detail::reflection::read_directory<T, Verified, D>(message);
         if (!dir) [[unlikely]]
             return std::expected<X, error>(std::unexpect, dir.error());
         std::array<std::size_t, sizeof...(Index)> const i{static_cast<std::size_t>(indexes)...};
         std::expected<X, error> read =
-            detail::reflection::walk_path<T, T, Path, 1, Verified>(encoded,
-                                                           std::span<char const>(encoded)
-                                                               .subspan(encoded.size() - fixed_size())
+            detail::reflection::walk_path<T, T, Path, 1, Verified>(message,
+                                                           std::span<char const>(message)
+                                                               .subspan(message.size() - fixed_size())
                                                                .template first<fixed_size()>(),
                                                            *dir, i);
         if constexpr (Verified)
             if (!read) [[unlikely]]
-                return std::expected<X, error>(std::unexpect, detail::reflection::too_little_data_if_truncated<T, D>(encoded, read.error()));
+                return std::expected<X, error>(std::unexpect, detail::reflection::too_little_data_if_truncated<T, D>(message, read.error()));
         return read;
     }
 
@@ -4763,15 +4764,16 @@ private:
     {
         detail::validity::throw_logic_error_if_empty(
             owner, "cbor::schema::view: the owner of the encoded data item is empty");
-        auto const dir = detail::reflection::read_directory<T, Verified, D>(encoded);
+        std::string_view const message = detail::heads::self_described_cbor_content(encoded);
+        auto const dir = detail::reflection::read_directory<T, Verified, D>(message);
         if (!dir) [[unlikely]]
             return std::unexpected(dir.error());
-        auto const root = std::span<char const>(encoded).subspan(encoded.size() - fixed_size()).template first<fixed_size()>();
+        auto const root = std::span<char const>(message).subspan(message.size() - fixed_size()).template first<fixed_size()>();
         if constexpr (Verified)
             if (!detail::reflection::class_tag_valid<T, T>(root)) [[unlikely]]
                 return std::unexpected(detail::reflection::too_little_data_if_truncated<T, D>(
-                    encoded, detail::reflection::error_of_refused_field(root)));
-        return accessor<T, Verified>(std::move(owner), encoded, root, *dir);
+                    message, detail::reflection::error_of_refused_field(root)));
+        return accessor<T, Verified>(std::move(owner), message, root, *dir);
     }
 
     template <bool Verified, detail::description_place D, owning_range_of_chars Encoded>
@@ -4798,9 +4800,10 @@ private:
         } else {
             detail::validity::throw_logic_error_if_empty(
                 owner, "cbor::schema::decode: the owner of the encoded data item is empty");
+            std::string_view const message = detail::heads::self_described_cbor_content(encoded);
             std::optional<T> made;
-            if (auto const r = detail::reflection::read_root<T, Verified, D>(made, encoded); !r) [[unlikely]]
-                return std::unexpected(Verified ? detail::reflection::too_little_data_if_truncated<T, D>(encoded, r.error()) : r.error());
+            if (auto const r = detail::reflection::read_root<T, Verified, D>(made, message); !r) [[unlikely]]
+                return std::unexpected(Verified ? detail::reflection::too_little_data_if_truncated<T, D>(message, r.error()) : r.error());
             return ref<T>(std::move(owner), std::move(*made));
         }
     }
@@ -4820,9 +4823,10 @@ private:
     {
         detail::validity::throw_logic_error_if_empty(
             owner, "cbor::schema::decode: the owner of the encoded data item is empty");
-        if (auto const r = detail::reflection::read_root<T, Verified, D>(target, encoded); !r)
+        std::string_view const message = detail::heads::self_described_cbor_content(encoded);
+        if (auto const r = detail::reflection::read_root<T, Verified, D>(target, message); !r)
             [[unlikely]]
-            return std::unexpected(Verified ? detail::reflection::too_little_data_if_truncated<T, D>(encoded, r.error()) : r.error());
+            return std::unexpected(Verified ? detail::reflection::too_little_data_if_truncated<T, D>(message, r.error()) : r.error());
         return ref<T>(std::move(owner), std::move(target));
     }
 };
