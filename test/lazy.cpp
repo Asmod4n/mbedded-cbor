@@ -1839,35 +1839,12 @@ TEST_CASE("lazy: an index reads a typed array through tag 24 and tag 28")
     CHECK_EQ(doc.at(1)->at(1).error(), error::not_indexable);
 }
 
-// operator[] is the same call as at, so that a lazy reads as a container. It gives std::expected and does not throw. The
-// bytes are not checked before the call. A missing key is a value, not a fault of ours.
-TEST_CASE("lazy: operator[] gives what at gives")
-{
-    cbor::lazy const map = lazy_of(
-        "\xa2\x61" "a\x82\x1b\x00\x00\x00\x00\x00\x00\x00\x01"
-        "\x1b\x00\x00\x00\x00\x00\x00\x00\x02\x1b\x00\x00\x00\x00\x00\x00\x00\x02"
-        "\x63two"s);
-    CHECK(value_at(*map["a"]) == value_at(*map.at("a")));
-    CHECK(value_at(*map.at(2)) == V("two"s));
-    CHECK(value_at(*(*map["a"])[std::size_t{1}]) == V(2));
-    CHECK_EQ(map["z"].error(), error::key_not_found);
-    CHECK_EQ(map["z"].error(), map.at("z").error());
-    cbor::lazy const array = lazy_of(
-        "\x82\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x1b\x00\x00\x00\x00\x00\x00\x00\x02"s);
-    CHECK(value_at(*array[std::size_t{0}]) == V(1));
-    CHECK_EQ(array["a"].error(), error::not_indexable);
-    CHECK_EQ(array[std::size_t{2}].error(), array.at(std::size_t{2}).error());
-    cbor::lazy const cut = lazy_of("\xa2\x61" "a\x01\x61"s);
-    CHECK_EQ(cut["b"].error(), cut.at("b").error());
-}
-
 // lazy does not reject a map with a repeated key (RFC 8949 5.6 leaves that to the decoder). Every way to read
 // a key gives the first pair, so that the result does not depend on the form of the call.
 TEST_CASE("lazy: a repeated key gives the first pair")
 {
     cbor::lazy const twice = lazy_of("\xa3\x61" "a\x01\x61" "b\x02\x61" "a\x03"s);
     CHECK(value_at(*twice.at("a")) == V(1));
-    CHECK(value_at(*twice["a"]) == V(1));
     CHECK(value_at(*twice.at_path(*cbor::path::compile<cbor::lazy>("$.a"))) == V(1));
     CHECK_EQ(twice.at_path<"$.a", int>(), 1);
     cbor::lazy const numbers = lazy_of("\xa3\x01\x01\x01\x02\x01\x03"s);

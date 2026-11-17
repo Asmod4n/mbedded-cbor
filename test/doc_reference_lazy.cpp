@@ -114,19 +114,19 @@ TEST_CASE("doc reference lazy: lazy")
     CHECK_THROWS_AS((void)cbor::lazy{}.type(), std::logic_error);
 }
 
-// lazy.hpp, snippet at_key: a text key, an integer key and a key that is not there; the error of the example.
-TEST_CASE("doc reference lazy: at_key")
+// lazy.hpp, snippet at_text_key: a text key, an integer key and a key that is not there; the error of the example.
+TEST_CASE("doc reference lazy: at with a text key")
 {
     std::string bytes =
         test::encode_in_preferred_form(test::M("cars"s, test::A(test::M("hp"s, 5), test::M("hp"s, 7)), 7, "seven"s));
-    // [at_key]
+    // [at_text_key]
     // bytes: a std::string with {"cars": [{"hp": 5}, {"hp": 7}], 7: "seven"}
     auto const doc = cbor::lazy::adopt(std::move(bytes));
     auto const hp = doc->at("cars")->at(1)->at("hp")->get<int>(); // 7
-    auto const seven = doc->at(7)->get<std::string_view>();    // a ref to "seven"
-    auto const bus = doc->at("bus");                               // key_not_found
-    auto const first = doc->at("cars")->at("hp");                  // not_indexable
-    // [at_key]
+    auto const seven = doc->at(7)->get<std::string_view>();       // a ref to "seven"
+    auto const bus = doc->at("bus");                              // key_not_found
+    auto const first = doc->at("cars")->at("hp");                 // not_indexable
+    // [at_text_key]
     CHECK_EQ(hp.value(), 7);
     CHECK_EQ(**seven, "seven"sv);
     CHECK_EQ(bus.error(), cbor::error::key_not_found);
@@ -148,20 +148,6 @@ TEST_CASE("doc reference lazy: at")
     CHECK_EQ(hp.value(), 7);
     CHECK_EQ(first.error(), cbor::error::key_not_found);
     CHECK_EQ(past.error(), cbor::error::index_out_of_bounds);
-}
-
-// lazy.hpp, snippet operator_subscript: operator[] gives the result of at and does not throw.
-TEST_CASE("doc reference lazy: operator[]")
-{
-    std::string bytes = test::encode_in_preferred_form(test::M("cars"s, test::A(5, 7)));
-    // [operator_subscript]
-    // bytes: a std::string with {"cars": [5, 7]}
-    auto const doc = cbor::lazy::adopt(std::move(bytes));
-    auto const second = (*(*doc)["cars"])[1]->get<int>();  // 7
-    auto const bus = (*doc)["bus"];                        // key_not_found
-    // [operator_subscript]
-    CHECK_EQ(second.value(), 7);
-    CHECK_EQ(bus.error(), cbor::error::key_not_found);
 }
 
 // lazy.hpp, snippet at_path: a scalar, a text as a ref, a nodelist, a missing key, the lazy of a node. A query compiled

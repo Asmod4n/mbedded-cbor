@@ -76,7 +76,6 @@ TEST_CASE("doc advanced runtime: keys")
     CHECK_EQ(test::make_lazy_from_copy("\xa1\xd8\x1c\x61" "a\x01"s)->at("a").error(), error::key_not_found);
     auto const twice = *test::make_lazy_from_copy("\xa2\x61" "a\x01\x61" "a\x02"s);
     CHECK_EQ(twice.at("a")->get<std::int64_t>(), 1);
-    CHECK_EQ(twice["a"]->get<std::int64_t>(), 1);
     CHECK_EQ(twice.at_path<"$.a", std::int64_t>(), 1);
 }
 
