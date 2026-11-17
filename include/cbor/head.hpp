@@ -692,6 +692,12 @@ class heads
 
     CBOR_ALWAYS_INLINE static constexpr std::string_view self_described_cbor_content(std::string_view const encoded)
     {
+        if (encoded.empty() ||
+            static_cast<major_type>(static_cast<std::uint8_t>(encoded.front()) >> rfc8949::additional_information_bits) !=
+                major_type::tag ||
+            additional_information_of(static_cast<std::uint8_t>(encoded.front())) <
+                std::to_underlying(rfc8949::additional_information::two_byte_argument)) [[likely]]
+            return encoded;
         auto const h = read_raw_head<false>(encoded, detail::validity::offset{});
         if (h && h->major == major_type::tag && detail::validity::is_self_described_cbor_tag(h->argument))
             return detail::validity::subspan(encoded, h->at);
