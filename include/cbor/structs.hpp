@@ -415,10 +415,7 @@ class generic
                     detail::validity::check_magnitude_size(digits.size(), sizeof(uint128)).error_or(error{});
                 c != error{}) [[unlikely]]
                 return std::unexpected(c);
-            magnitude = 0;
-            for (char const c : digits)
-                magnitude =
-                    magnitude << std::numeric_limits<std::uint8_t>::digits | static_cast<std::uint8_t>(c);
+            magnitude = detail::heads::magnitude_value<uint128>(digits);
         } else if (h.major != major_type::unsigned_integer && !negative) [[unlikely]] {
             return std::unexpected(error::incorrect_type);
         }

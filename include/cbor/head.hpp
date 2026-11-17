@@ -249,11 +249,11 @@ class heads
             std::ranges::subrange(std::ranges::find_if(magnitude, [](E const digit) { return digit != E{}; }), magnitude.end()));
     }
 
-    template <class E>
+    template <class U, class E>
         requires std::same_as<E, char> || std::same_as<E, std::byte>
-    static std::uint64_t magnitude_value(std::span<E const> const magnitude)
+    static U magnitude_value(std::span<E const> const magnitude)
     {
-        std::uint64_t n = 0;
+        U n = 0;
         for (E const c : magnitude)
             n = n << std::numeric_limits<std::uint8_t>::digits | static_cast<std::uint8_t>(c);
         return n;
@@ -282,7 +282,7 @@ class heads
         std::span<E const> const digits = magnitude_without_leading_zeros(magnitude);
         if (!detail::validity::check_magnitude_size(digits.size(), sizeof(std::uint64_t)))
             return std::nullopt;
-        std::uint64_t const n = magnitude_value(digits);
+        std::uint64_t const n = magnitude_value<std::uint64_t>(digits);
         return head{tag == std::to_underlying(rfc8949::tag_number::negative_bignum) ? major_type::negative_integer
                                                                                    : major_type::unsigned_integer,
                     preferred_argument_info(n), n};
