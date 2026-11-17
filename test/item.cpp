@@ -1261,7 +1261,7 @@ void check_result(std::expected<T, error> const &got, std::expected<E, error> co
 }
 
 using pair = std::pair<std::uint64_t, cbor::item const *>;
-using pairs = std::ranges::stride_view<std::ranges::adjacent_view<std::span<cbor::item const>, 2>>;
+using pairs = cbor::pairs;
 
 template <class T>
 void check_integer(cbor::type const kind, cbor::item const &it)

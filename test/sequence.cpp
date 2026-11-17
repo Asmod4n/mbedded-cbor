@@ -227,8 +227,9 @@ TEST_CASE("sequence: a range of bytes gives the elements of the std::string of t
     REQUIRE(first.has_value());
     REQUIRE(second.has_value());
     std::string const both = *first + *second;
+    auto const reference = std::make_shared<std::string const>(both);
     std::vector<std::string_view> expected;
-    for (auto const e : cbor::sequence{std::make_shared<std::string const>(both)})
+    for (auto const e : cbor::sequence{reference})
         expected.push_back(e.value());
     auto const u = std::make_shared<std::vector<std::uint8_t> const>(unsigned_bytes_of_bytes_sequence(both));
     std::vector<std::string_view> from_u;

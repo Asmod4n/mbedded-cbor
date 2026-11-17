@@ -19,6 +19,8 @@ namespace detail
 {
 
 class canonical_ids;
+template <class Item>
+struct pair_at;
 class encoding;
 class extended_diagnostic_notation;
 class generic;
@@ -152,6 +154,9 @@ class rfc8949
     friend class path;
 
     friend class detail::canonical_ids;
+
+    template <class Item>
+    friend struct detail::pair_at;
 
     friend class detail::encoding;
 

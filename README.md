@@ -318,8 +318,7 @@ Where the value is itself a handle, such as `cbor::owning<cbor::item>` or
 // bytes: a std::string with {"sensor": "t1", "value": 21.5}
 auto const tree = cbor::decode(bytes).value();
 
-using pairs = std::ranges::stride_view<std::ranges::adjacent_view<std::span<cbor::item const>, 2>>;
-for (auto const [key, value] : tree->get<pairs>().value())
+for (auto const [key, value] : tree->get<cbor::pairs>().value())
     std::println("{}", *key.get<std::string_view>());              // sensor, value
 
 std::string out;
