@@ -40,7 +40,7 @@ namespace cbor
 {
 
 std::expected<owning<item>, error> parse_edn(std::string_view text);
-std::expected<std::string, error> diag2cbor(std::string_view text);
+constexpr std::expected<std::string, error> diag2cbor(std::string_view text);
 
 namespace detail
 {
@@ -1103,7 +1103,7 @@ class extended_diagnostic_notation
         return next;
     }
 
-    static std::string encoding_indicator(std::uint8_t const info, std::uint64_t const argument)
+    static constexpr std::string encoding_indicator(std::uint8_t const info, std::uint64_t const argument)
     {
         if (info < std::to_underlying(rfc8949::additional_information::one_byte_argument))
             return {};
@@ -1114,13 +1114,13 @@ class extended_diagnostic_notation
                                   std::to_underlying(rfc8949::additional_information::one_byte_argument))};
     }
 
-    static void encode_base16(std::string &out, std::uint8_t const byte)
+    static constexpr void encode_base16(std::string &out, std::uint8_t const byte)
     {
         out.push_back(rfc4648::base16_lowercase_alphabet[byte >> rfc4648::base16_group_bits]);
         out.push_back(rfc4648::base16_lowercase_alphabet[byte & ((1 << rfc4648::base16_group_bits) - 1)]);
     }
 
-    static std::string hex_of(std::string_view const bytes)
+    static constexpr std::string hex_of(std::string_view const bytes)
     {
         std::string out;
         out.reserve(std::numeric_limits<std::uint8_t>::digits / rfc4648::base16_group_bits * bytes.size());
@@ -1129,7 +1129,7 @@ class extended_diagnostic_notation
         return out;
     }
 
-    static std::string quoted_of(std::string_view const text)
+    static constexpr std::string quoted_of(std::string_view const text)
     {
         std::string out = "\"";
         for (char const c : text) {
@@ -1169,7 +1169,7 @@ class extended_diagnostic_notation
         return out;
     }
 
-    static std::string number_of(double const value)
+    static constexpr std::string number_of(double const value)
     {
         if (std::isinf(value))
             return value > 0 ? "Infinity" : "-Infinity";
@@ -1195,7 +1195,7 @@ class extended_diagnostic_notation
         return mantissa + "e" + sign + std::string(exponent);
     }
 
-    static std::string float_of(std::uint8_t const info, std::uint64_t const argument)
+    static constexpr std::string float_of(std::uint8_t const info, std::uint64_t const argument)
     {
         std::size_t const width =
             info - std::to_underlying(rfc8949::simple_information::half_precision_float);
@@ -1217,7 +1217,7 @@ class extended_diagnostic_notation
         return number_of(value) + (width == preferred ? std::string{} : indicator);
     }
 
-    static bool break_consumed(detail::heads::decoder<true> &d)
+    static constexpr bool break_consumed(detail::heads::decoder<true> &d)
     {
         if (!detail::validity::bytes_fit(detail::heads::initial_byte_size, d.encoded.size()) ||
             d.encoded.front() !=
@@ -1228,7 +1228,7 @@ class extended_diagnostic_notation
         return true;
     }
 
-    static std::expected<void, error>
+    static constexpr std::expected<void, error>
     write_diagnostic(std::string &out, detail::heads::decoder<true> &d)
     {
         if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
@@ -1356,7 +1356,7 @@ class extended_diagnostic_notation
 
     friend std::expected<std::string, error> cbor::diagnostic_notation(std::string_view encoded);
 
-    friend std::expected<std::string, error> cbor::diag2cbor(std::string_view text);
+    friend constexpr std::expected<std::string, error> cbor::diag2cbor(std::string_view text);
 
     friend std::expected<std::string, error> item::to_edn() const;
 };
@@ -1435,7 +1435,7 @@ inline std::expected<std::string, error> diagnostic_notation(std::string_view co
  *
  * @ingroup tools
  */
-inline std::expected<std::string, error> diag2cbor(std::string_view const text)
+constexpr std::expected<std::string, error> diag2cbor(std::string_view const text)
 {
     using edn = detail::extended_diagnostic_notation;
     auto const start = edn::optional_space_end(text, 0);

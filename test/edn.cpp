@@ -144,6 +144,15 @@ TEST_CASE("parse_edn: a text that is not one item gives syntax_error")
 // RFC 8949 section 3: the encoding indicators _0 to _3 put the argument in 1, 2, 4 and 8 bytes after the initial
 // byte. diag2cbor must write the width that the text gives, and diagnostic_notation must give the text back, or the
 // two functions do not agree on the head.
+// The literal "..."_edn reads its text at compile time, so diag2cbor must run in a constant expression. The constexpr
+// variable makes the compiler run the reader there; it holds the size, because a constant cannot keep the memory of
+// the string. h'01' is a byte string head and one byte (RFC 8949 3.1).
+TEST_CASE("diag2cbor: the reader runs in a constant expression")
+{
+    constexpr std::size_t size = cbor::diag2cbor("h'01'").value().size();
+    CHECK_EQ(size, 2u);
+}
+
 TEST_CASE("diag2cbor: an encoding indicator gives the width of the head")
 {
     for (auto const &[text, size] : {std::pair<std::string_view, std::size_t>{"1_0", 2}, {"1_1", 3}, {"1_2", 5},
