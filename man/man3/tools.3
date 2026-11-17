@@ -42,7 +42,7 @@ tools \- check, split and print CBOR bytes
 .br
 .RI "Reads the EDN text of one item at compile time and gives its CBOR bytes as a \fBcbor::edn_literal\fP\&. "
 .ti -1c
-.RI "std::expected< \fBowning\fP< item >, \fBerror\fP > \fBcbor::parse_edn\fP (std::string_view const text)"
+.RI "std::expected< \fBowning\fP< \fBitem\fP >, \fBerror\fP > \fBcbor::parse_edn\fP (std::string_view const text)"
 .br
 .RI "Reads the extended diagnostic notation (EDN) in \fRtext\fP into a tree\&. "
 .in -1c

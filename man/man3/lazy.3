@@ -117,7 +117,7 @@ The binary16 float \fR1\&.5\fP (\fRf9 3e 00\fP) reads as \fR1\&.5\fP\&. The inte
 An iterator holds the owner of the bytes\&. It stays valid after the lazy and the view end\&. When the iterator cannot step over an element, \fR*it\fP gives \fRtoo_little_data\fP or another error of the bytes\&. Each later position gives that error\&.
 .SH "COPY ONE ITEM TO A TREE"
 .PP
-\fRto_item()\fP gives a \fRstd::expected<\fBcbor::owning\fP<cbor::item>, \fBcbor::error\fP>\fP\&. It reads the whole item at the lazy, checks every head, and builds one \fRcbor::item\fP for each data item\&. The tree copies each text and byte string\&. It does not view the bytes of the lazy, and it stays valid after the lazy and its owner end\&. The errors of \fR\fBcbor::decode\fP\fP apply\&.
+\fRto_item()\fP gives a \fRstd::expected<\fBcbor::owning\fP<\fBcbor::item\fP>, \fBcbor::error\fP>\fP\&. It reads the whole item at the lazy, checks every head, and builds one \fR\fBcbor::item\fP\fP for each data item\&. The tree copies each text and byte string\&. It does not view the bytes of the lazy, and it stays valid after the lazy and its owner end\&. The errors of \fR\fBcbor::decode\fP\fP apply\&.
 
 .PP
 \fRto_item\fP keeps tags 28 and 29 as tag items\&. A tag 55799 inside the top-level item stays a tag item, and \fRtype()\fP gives \fRtag\fP there\&. \fRget\fP, \fRat_key\fP, \fRat\fP and a path read through such a tag to its content\&. They do not read through it where it is the content of a tag 2, a tag 3 or a typed array\&. There the content is not a byte string, as \fR\fBcbor::decode\fP\fP reads it\&. \fRto_item\fP of a lazy that starts with a tag 55799 gives the content\&.

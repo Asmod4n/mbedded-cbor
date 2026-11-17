@@ -6,23 +6,31 @@ decode \- a decoded tree of CBOR and its encode
 .SH SYNOPSIS
 .br
 .PP
+.SS "Classes"
+
+.in +1c
+.ti -1c
+.RI "struct \fBcbor::item\fP"
+.br
+.RI "One node of a tree from \fBcbor::decode()\fP or \fR\fBlazy::to_item\fP\fP\&. "
+.in -1c
 .SS "Functions"
 
 .in +1c
 .ti -1c
-.RI "std::expected< std::reference_wrapper< item const >, \fBerror\fP > \fBcbor::encoded_cbor_data_item\fP (\fBowning\fP< item > const &tree, item const &tagged)"
+.RI "std::expected< std::reference_wrapper< \fBitem\fP const >, \fBerror\fP > \fBcbor::encoded_cbor_data_item\fP (\fBowning\fP< \fBitem\fP > const &tree, \fBitem\fP const &tagged)"
 .br
 .RI "Gives the root of the item that a tag 24 (RFC 8949 3\&.4\&.5\&.1) holds in its byte string\&. "
 .ti -1c
-.RI "std::expected< \fBowning\fP< item >, \fBerror\fP > \fBcbor::decode\fP (std::string_view const encoded)"
+.RI "std::expected< \fBowning\fP< \fBitem\fP >, \fBerror\fP > \fBcbor::decode\fP (std::string_view const encoded)"
 .br
-.RI "Decodes the one top-level item in \fRencoded\fP into a tree of cbor::item\&. "
+.RI "Decodes the one top-level item in \fRencoded\fP into a tree of \fBcbor::item\fP\&. "
 .ti -1c
-.RI "std::expected< \fBref\fP< std::span< iovec const > >, \fBerror\fP > \fBcbor::encode_iov\fP (item const &root)"
+.RI "std::expected< \fBref\fP< std::span< iovec const > >, \fBerror\fP > \fBcbor::encode_iov\fP (\fBitem\fP const &root)"
 .br
 .RI "Writes the tree at \fRroot\fP into a list of \fRstruct iovec\fP pieces, not into one buffer\&. "
 .ti -1c
-.RI "std::expected< \fBref\fP< std::span< iovec const > >, \fBerror\fP > \fBcbor::encode_iov\fP (\fBowning\fP< item > const &root)"
+.RI "std::expected< \fBref\fP< std::span< iovec const > >, \fBerror\fP > \fBcbor::encode_iov\fP (\fBowning\fP< \fBitem\fP > const &root)"
 .br
 .RI "Writes the tree that \fRroot\fP owns into a list of \fRstruct iovec\fP pieces, and refers to its long strings\&. "
 .ti -1c
@@ -30,13 +38,13 @@ decode \- a decoded tree of CBOR and its encode
 .br
 requires detail::encoding::is_target_v<std::remove_reference_t<Target>>
 .br
-std::expected< std::size_t, \fBerror\fP > \fBcbor::encode\fP (Target &&out, item const &root)
+std::expected< std::size_t, \fBerror\fP > \fBcbor::encode\fP (Target &&out, \fBitem\fP const &root)
 .br
 .RI "Writes the tree at \fRroot\fP and gives the count of bytes written\&. "
 .in -1c
 .SH "DESCRIPTION"
 .PP 
-\fR\fBcbor::decode\fP\fP reads one top-level item of a \fRstd::string_view\fP into a tree of \fRcbor::item\fP\&. \fR\fBcbor::encode\fP\fP and \fR\fBcbor::encode_iov\fP\fP write a tree as CBOR\&. Include \fR<\fBcbor/cbor\&.hpp\fP>\fP\&.
+\fR\fBcbor::decode\fP\fP reads one top-level item of a \fRstd::string_view\fP into a tree of \fR\fBcbor::item\fP\fP\&. \fR\fBcbor::encode\fP\fP and \fR\fBcbor::encode_iov\fP\fP write a tree as CBOR\&. Include \fR<\fBcbor/cbor\&.hpp\fP>\fP\&.
 
 .PP
 The tree copies each text and byte string into one memory zone that the result owns\&. It does not view the input, and it stays valid after the input ends\&. \fR\fBcbor::decode\fP\fP reads no byte after the item, so a CBOR sequence (RFC 8742) is read item by item\&. It reads every head of the item, so every limit counts each head\&. A count in a head reserves nothing: an array that claims more elements than bytes are left gives \fRtoo_little_data\fP before it reads an element\&.
@@ -58,15 +66,15 @@ An integer type: an integer; a negative integer gives its value, -1 minus the ar
 .IP "\(bu" 2
 \fRcbor::typed_array\fP: a typed array (RFC 8746), its tag number and its bytes\&.
 .IP "\(bu" 2
-\fRstd::span<cbor::item const>\fP: an array, its elements\&.
+\fRstd::span<\fBcbor::item\fP const>\fP: an array, its elements\&.
 .IP "\(bu" 2
-\fRstd::ranges::chunk_view<std::span<cbor::item const>>\fP: a map, each key and its value as one chunk of two items\&.
+\fRstd::ranges::chunk_view<std::span<\fBcbor::item\fP const>>\fP: a map, each key and its value as one chunk of two items\&.
 .IP "\(bu" 2
-\fRstd::pair<std::uint64_t, cbor::item const *>\fP: a tag, a bignum or a \fRshared_reference\fP, the tag number or the index, and the content or the item that the tag 28 of that index marks\&.
+\fRstd::pair<std::uint64_t, \fBcbor::item\fP const *>\fP: a tag, a bignum or a \fRshared_reference\fP, the tag number or the index, and the content or the item that the tag 28 of that index marks\&.
 .PP
 
 .PP
-Every \fRT\fP except the pair passes a tag that it does not interpret, as \fR\fBcbor::lazy::get\fP\fP does\&. \fRvisit(f)\fP calls \fRf\fP once with the value of the node, as \fRstd::visit\fP does: a negative integer as \fRcbor::int128\fP, a map as the \fRchunk_view\fP, a tag or a bignum as the pair, a typed array as \fRcbor::typed_array\fP and a \fRshared_reference\fP as the \fRcbor::item const *\fP of its target\&. \fRvisit\fP exists where \fRcbor::int128\fP exists\&.
+Every \fRT\fP except the pair passes a tag that it does not interpret, as \fR\fBcbor::lazy::get\fP\fP does\&. \fRvisit(f)\fP calls \fRf\fP once with the value of the node, as \fRstd::visit\fP does: a negative integer as \fRcbor::int128\fP, a map as the \fRchunk_view\fP, a tag or a bignum as the pair, a typed array as \fRcbor::typed_array\fP and a \fRshared_reference\fP as the \fR\fBcbor::item\fP const *\fP of its target\&. \fRvisit\fP exists where \fRcbor::int128\fP exists\&.
 
 .PP
 A bignum (tag 2 or 3) whose magnitude fits in 64 bits is the same value as a basic integer (RFC 8949, section 3\&.4\&.3)\&. \fR\fBcbor::decode\fP\fP makes it an \fRunsigned_integer\fP or a \fRnegative_integer\fP item\&. A larger bignum stays an \fRunsigned_bignum\fP or a \fRnegative_bignum\fP\&. Its content is a byte string item that holds a copy of the magnitude\&.
@@ -105,7 +113,7 @@ a writer of the program with \fRallocate\fP, \fRappend\fP and \fRdone\fP\&. An e
 \fRcbor::encode_iov(item)\fP writes a tree into a list of pieces as \fRstruct iovec\fP, with their storage, which lives as long as the result\&. The pieces are for \fRwritev\fP, \fRsendmsg\fP, \fRIORING_OP_WRITEV\fP and \fRIORING_OP_SENDMSG\fP\&. The result is \fRstd::expected<\fBcbor::ref\fP<std::span<iovec const>>, \fBcbor::error\fP>\fP\&. The pieces are for sending only\&. Hold the result until the call returns, or until the last completion of the request comes\&. \fRencode_iov\fP writes into blocks of 16 KiB and copies each byte once\&.
 
 .PP
-\fRcbor::encode_iov(*tree)\fP, with the \fR\fBcbor::owning\fP<cbor::item>\fP that \fR\fBcbor::decode\fP\fP gives, does not copy a text or a byte string longer than \fRCBOR_ENCODER_COPYBREAK\fP bytes (4096 by default): its piece points into the tree, and the result holds the tree alive\&. \fRcbor::encode_iov(**tree)\fP copies every string\&.
+\fRcbor::encode_iov(*tree)\fP, with the \fR\fBcbor::owning\fP<\fBcbor::item\fP>\fP that \fR\fBcbor::decode\fP\fP gives, does not copy a text or a byte string longer than \fRCBOR_ENCODER_COPYBREAK\fP bytes (4096 by default): its piece points into the tree, and the result holds the tree alive\&. \fRcbor::encode_iov(**tree)\fP copies every string\&.
 .SH "ERRORS"
 .PP
 Each function gives \fRstd::expected\fP with a \fR\fBcbor::error\fP\fP\&. \fR\fBcbor::encoded_cbor_data_item\fP\fP throws \fRstd::logic_error\fP for an item that is not a tag 24 of that tree\&.
