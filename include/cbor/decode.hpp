@@ -257,17 +257,14 @@ std::expected<void, error> tree_decoder<Resolve>::decode_content(std::pmr::vecto
         return decode_scalar(node, head);
     case major_type::array:
     case major_type::map: {
-        auto const count = detail::validity::checked_mul(
-            head.argument, head.major == major_type::map ? rfc8949::data_items_per_pair : std::size_t{1});
-        if (!count) [[unlikely]]
-            return std::unexpected(error::too_little_data);
-        auto const reserved = detail::validity::checked_add(std::uint64_t{open}, *count);
+        std::uint64_t const count = detail::validity::count_enclosed_data_items(head.major, head.argument);
+        auto const reserved = detail::validity::checked_add(std::uint64_t{open}, count);
         if (!reserved) [[unlikely]]
             return std::unexpected(error::too_little_data);
         if (auto const r = detail::validity::check_bytes_left(*reserved, d.encoded.size()); !r)
             [[unlikely]]
             return std::unexpected(r.error());
-        std::size_t const n = static_cast<std::size_t>(*count);
+        std::size_t const n = static_cast<std::size_t>(count);
         std::pmr::vector<item> &nodes = decoded.items_reserved(n);
         open = static_cast<std::size_t>(*reserved);
         if (n != 0)
