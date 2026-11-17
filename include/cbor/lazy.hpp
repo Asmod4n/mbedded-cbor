@@ -1345,10 +1345,6 @@ std::expected<typename Entries::iterator, error> lazy::find_key(resolved found, 
     if (found.h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
     detail::validity::offset const first = detail::validity::distance(found.source.encoded, found.d.encoded);
-    if (auto const r = detail::validity::check_pending_items(found.h.major, found.h.info, found.h.argument,
-                                                             found.d.encoded.size());
-        !r) [[unlikely]]
-        return std::unexpected(r.error());
     typename Entries::iterator it(std::move(found.source), first, found.h.argument);
     auto found_at = find_key<typename Entries::iterator, std::default_sentinel_t, Key>(
         std::move(it), std::default_sentinel, key);
@@ -1498,12 +1494,6 @@ inline std::expected<std::uint64_t, error> lazy::size() const
     auto const &[source, h, d, item_at] = *found;
     if (h.major != major_type::array && h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
-    auto const items = detail::validity::checked_mul(
-        h.argument, h.major == major_type::map ? rfc8949::data_items_per_pair : 1);
-    if (!items) [[unlikely]]
-        return std::unexpected(error::too_little_data);
-    if (auto const r = detail::validity::check_bytes_left(*items, d.encoded.size()); !r) [[unlikely]]
-        return std::unexpected(r.error());
     return h.argument;
 }
 
@@ -1645,11 +1635,6 @@ inline std::expected<lazy_elements, error> lazy::elements() const
             auto const &[source, h, d, item_at] = *found;
             if (h.major != major_type::array) [[unlikely]]
                 return std::unexpected(error::not_indexable);
-            if (auto const r = detail::validity::check_definite_length(h.major, h.info); !r) [[unlikely]]
-                return std::unexpected(r.error());
-            if (auto const r = detail::validity::check_bytes_left(h.argument, d.encoded.size()); !r)
-                [[unlikely]]
-                return std::unexpected(r.error());
             return lazy_elements(source, detail::validity::distance(source.encoded, d.encoded), h.argument,
                                  {});
 }
@@ -1663,13 +1648,6 @@ inline std::expected<lazy_entries, error> lazy::entries() const
     auto const &[source, h, d, item_at] = *found;
     if (h.major != major_type::map) [[unlikely]]
         return std::unexpected(error::not_indexable);
-    if (auto const r = detail::validity::check_definite_length(h.major, h.info); !r) [[unlikely]]
-        return std::unexpected(r.error());
-    auto const items = detail::validity::checked_mul(h.argument, rfc8949::data_items_per_pair);
-    if (!items) [[unlikely]]
-        return std::unexpected(error::too_little_data);
-    if (auto const r = detail::validity::check_bytes_left(*items, d.encoded.size()); !r) [[unlikely]]
-        return std::unexpected(r.error());
     return lazy_entries(source, detail::validity::distance(source.encoded, d.encoded), h.argument);
 }
 
