@@ -51,6 +51,9 @@ struct lazy_entries;
 
 struct lazy;
 
+template <std::size_t N>
+class edn_literal;
+
 /**
  * @brief The result of a path that can select many nodes: a wildcard, a descendant segment, a slice, a filter or
  * several selectors.
@@ -272,6 +275,39 @@ public:
                  !std::same_as<Integer, wchar_t> && !std::same_as<Integer, char8_t> &&
                  !std::same_as<Integer, char16_t> && !std::same_as<Integer, char32_t>)
     std::expected<lazy, error> at(Integer key_or_index) const;
+
+    /**
+     * @brief Gives the lazy of the value of a key of any kind, written as an EDN literal `"..."_edn`.
+     *
+     * An integer literal is an integer key on a map and an index on an array, as cbor::lazy::at() with an integer.
+     * A text literal is a text key, as cbor::lazy::at() with a text.
+     * Every other literal gives the value of the first pair whose key is equivalent (RFC 8949 5.6.1), as the same
+     * literal in a path does: a byte string, a float, an array, a map, a tag, a bignum or a simple value. A leading
+     * tag 55799 is read through on both sides.
+     * A text known only at run time takes cbor::path::compile() with `"$[" + text + "]"` and cbor::lazy::at_path().
+     * The brackets hold an RFC 9535 selector first, so that form agrees with at only for a literal that is not an
+     * integer and not a selector: `$[-1]` counts from the end, and `$[1:2]` is a slice.
+     *
+     * @code{.example}
+     * message: {h'01': "bytes", [1, 2]: "pair", 1.5: "float"}
+     * call: doc->at("h'01'"_edn)->get<std::string_view>()
+     * result: ref to "bytes"
+     * call: doc->at("[1, 2]"_edn)->get<std::string_view>()
+     * result: ref to "pair"
+     * call: doc->at("55799(1.5)"_edn)->get<std::string_view>()
+     * result: ref to "float"
+     * @endcode
+     *
+     * @retval key_not_found no pair of the map has the key
+     * @retval index_out_of_bounds an integer literal is negative or not less than the count of an array
+     * @retval not_indexable the lazy is not a map, or the literal is not an integer and the lazy is not a map
+     * @retval too_little_data, syntax_error, indefinite_length the bytes up to the value are broken
+     * @snippet doc_reference_lazy.cpp at_edn
+     * @see cbor::literals::operator""_edn()
+     * @see cbor::lazy::at_path()
+     */
+    template <std::size_t N>
+    std::expected<lazy, error> at(edn_literal<N> const &key) const;
 
 
     /**
@@ -538,6 +574,8 @@ private:
 
     template <std::integral Index>
     static std::expected<lazy, error> select_index(resolved const &found, Index i);
+
+    std::expected<lazy, error> select_integer_key_or_index(detail::heads::head const &key, bool argument_fits) const;
 
     template <class Key, class Entries = lazy_entries>
         requires std::same_as<Key, std::string_view> || std::same_as<Key, std::int64_t> ||
@@ -1536,25 +1574,29 @@ template <class Integer>
              !std::same_as<Integer, char16_t> && !std::same_as<Integer, char32_t>)
 std::expected<lazy, error> lazy::at(Integer const key_or_index) const
 {
+    bool const argument_fits = detail::validity::check_integer_argument_range(key_or_index).has_value();
+    return select_integer_key_or_index(
+        argument_fits ? detail::heads::preferred_head_of_integer(key_or_index) : detail::heads::head{}, argument_fits);
+}
+
+inline std::expected<lazy, error> lazy::select_integer_key_or_index(detail::heads::head const &key,
+                                                                    bool const argument_fits) const
+{
     throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
     auto found = resolve(*this);
     if (!found) [[unlikely]]
         return std::unexpected(found.error());
-    bool const argument_fits = detail::validity::check_integer_argument_range(key_or_index).has_value();
     if (found->h.major == major_type::map) {
         if (!argument_fits) [[unlikely]]
             return std::unexpected(error::key_not_found);
-        return value_of(find_key(std::move(*found), detail::heads::preferred_head_of_integer(key_or_index)));
+        return value_of(find_key(std::move(*found), key));
     }
-    bool negative = false;
-    if constexpr (std::is_signed_v<Integer>)
-        negative = key_or_index < 0;
-    if (!argument_fits || negative) [[unlikely]] {
+    if (!argument_fits || key.major == major_type::negative_integer) [[unlikely]] {
         if (found->h.major == major_type::array || detail::heads::is_typed_array(found->h))
             return std::unexpected(error::index_out_of_bounds);
         return std::unexpected(error::not_indexable);
     }
-    return select_index(*found, static_cast<std::uint64_t>(key_or_index));
+    return select_index(*found, key.argument);
 }
 
 template <class T>

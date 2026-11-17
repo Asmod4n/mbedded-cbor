@@ -1274,6 +1274,16 @@ inline std::expected<lazy, error> path::select_index(lazy const &node, std::int6
     return lazy::select_index(*found, index);
 }
 
+template <std::size_t N>
+std::expected<lazy, error> lazy::at(edn_literal<N> const &key) const
+{
+    std::string_view const encoded(std::span(key.encoded));
+    auto const h = detail::heads::decoder<false>{encoded}.decode_head();
+    if (h && (h->major == major_type::unsigned_integer || h->major == major_type::negative_integer))
+        return select_integer_key_or_index(*h, true);
+    return path::find_key(*this, encoded);
+}
+
 inline std::expected<lazy, error> path::find_key(lazy const &node, std::string_view const key)
 {
     detail::heads::decoder<false> text_key{key};

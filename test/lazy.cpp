@@ -227,6 +227,84 @@ TEST_CASE("lazy: at with a negative index on an array and on a typed array")
     CHECK_EQ(lazy_of_edn("1").at(1).error(), error::not_indexable);
 }
 
+namespace
+{
+
+std::string text_at(std::expected<cbor::lazy, error> const &node)
+{
+    REQUIRE(node.has_value());
+    auto const text = node->get<std::string_view>();
+    REQUIRE(text.has_value());
+    return std::string(**text);
+}
+
+} // namespace
+
+// The owner decided that at takes a key of any kind as an EDN literal. A key that is not an integer and not a text is
+// compared by RFC 8949 5.6.1, as the same literal in a path compares it: a float by its value in any width, -0.0 as
+// 0.0, a map by its pairs in any order. An integer literal is the integer key, as at(n) is.
+TEST_CASE("lazy: at with an EDN literal reads a key of each kind")
+{
+    using namespace cbor::literals;
+    cbor::lazy const map = lazy_of_edn(
+        R"({h'01': "bytes", 1.5: "float", 0.0: "zero", NaN: "nan", [1, 2]: "array", {1: 2, 3: 4}: "map", )"
+        R"(1(0): "tag", simple(16): "simple", true: "true", 2(h'010000000000000000'): "big", 1: "one", "a": "text"})");
+    CHECK_EQ(text_at(map.at("h'01'"_edn)), "bytes");
+    CHECK_EQ(text_at(map.at("1.5"_edn)), "float");
+    CHECK_EQ(text_at(map.at("1.5_3"_edn)), "float");
+    CHECK_EQ(text_at(map.at("-0.0"_edn)), "zero");
+    CHECK_EQ(text_at(map.at("NaN"_edn)), "nan");
+    CHECK_EQ(text_at(map.at("[1, 2]"_edn)), "array");
+    CHECK_EQ(text_at(map.at("{3: 4, 1: 2}"_edn)), "map");
+    CHECK_EQ(text_at(map.at("1(0)"_edn)), "tag");
+    CHECK_EQ(map.at("0"_edn).error(), error::key_not_found);
+    CHECK_EQ(text_at(map.at("simple(16)"_edn)), "simple");
+    CHECK_EQ(text_at(map.at("true"_edn)), "true");
+    CHECK_EQ(text_at(map.at("2(h'010000000000000000')"_edn)), "big");
+    CHECK_EQ(text_at(map.at("1"_edn)), "one");
+    CHECK_EQ(text_at(map.at("\"a\""_edn)), text_at(map.at("a")));
+    cbor::lazy const empty = lazy_of_edn("{}");
+    CHECK_EQ(empty.at("h'01'"_edn).error(), error::key_not_found);
+    CHECK_EQ(empty.at("1.5"_edn).error(), error::key_not_found);
+    CHECK_EQ(empty.at("[1, 2]"_edn).error(), error::key_not_found);
+    CHECK_EQ(empty.at("1"_edn).error(), error::key_not_found);
+    CHECK_EQ(empty.at("\"a\""_edn).error(), error::key_not_found);
+}
+
+// An integer literal is an index on an array, as at(1) and $[1] are; a negative one is an error as at(-1) is. Any
+// other literal is a key, so on an array, a typed array or a scalar it gives not_indexable. Tag 55799 has no meaning
+// beyond the self-description (RFC 8949 3.4.6): it is read through on the key and on the literal, but 55799(1) is a
+// tag and not an integer, so it is no index.
+TEST_CASE("lazy: at with an EDN literal on an array, a typed array, a scalar and through tag 55799")
+{
+    using namespace cbor::literals;
+    cbor::lazy const array = lazy_of_edn(R"(["x", "y"])");
+    CHECK_EQ(text_at(array.at("1"_edn)), "y");
+    CHECK_EQ(array.at("-1"_edn).error(), error::index_out_of_bounds);
+    CHECK_EQ(array.at("55799(1)"_edn).error(), error::not_indexable);
+    CHECK_EQ(array.at("h'01'"_edn).error(), error::not_indexable);
+    CHECK_EQ(lazy_of_edn("64(h'0102')").at("h'01'"_edn).error(), error::not_indexable);
+    CHECK_EQ(lazy_of_edn("1").at("h'01'"_edn).error(), error::not_indexable);
+    CHECK_EQ(text_at(lazy_of_edn(R"({55799(1.5): "x"})").at("1.5"_edn)), "x");
+    CHECK_EQ(text_at(lazy_of_edn(R"({1.5: "x"})").at("55799(1.5)"_edn)), "x");
+}
+
+// RFC 8949 5.6.1 keeps a bignum and an integer of the same value apart in the generic data model, while at(n) and
+// $[n] match a bignum key that holds n. A bignum literal that fits 64 bits is a key of another kind, so at must give
+// what the same literal gives in a path, whatever that result is.
+TEST_CASE("lazy: at with a bignum literal gives what the same path gives")
+{
+    using namespace cbor::literals;
+    cbor::lazy const map = lazy_of_edn(R"({1: "one"})");
+    auto const by_at = map.at("2(h'01')"_edn);
+    auto const by_path = map.at_path<"$[2(h'01')]">();
+    REQUIRE_EQ(by_at.has_value(), by_path.has_value());
+    if (by_at)
+        CHECK_EQ(text_at(by_at), text_at(by_path));
+    else
+        CHECK_EQ(by_at.error(), by_path.error());
+}
+
 // Ported from test.rb: 'lazy: deep nesting + wide maps'.
 TEST_CASE("lazy: deep nesting and a wide map")
 {

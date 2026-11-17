@@ -150,6 +150,23 @@ TEST_CASE("doc reference lazy: at")
     CHECK_EQ(past.error(), cbor::error::index_out_of_bounds);
 }
 
+// lazy.hpp, snippet at_edn: a byte string key, an array key and a float key behind tag 55799, each as an EDN literal.
+TEST_CASE("doc reference lazy: at with an EDN literal")
+{
+    std::string bytes = cbor::diag2cbor(R"({h'01': "bytes", [1, 2]: "pair", 1.5: "float"})").value();
+    // [at_edn]
+    // bytes: a std::string with {h'01': "bytes", [1, 2]: "pair", 1.5: "float"}
+    using namespace cbor::literals;
+    auto const doc = cbor::lazy::adopt(std::move(bytes));
+    auto const bytes_value = doc->at("h'01'"_edn)->get<std::string_view>();  // a ref to "bytes"
+    auto const pair_value = doc->at("[1, 2]"_edn)->get<std::string_view>();  // a ref to "pair"
+    auto const float_value = doc->at("55799(1.5)"_edn)->get<std::string_view>(); // a ref to "float"
+    // [at_edn]
+    CHECK_EQ(**bytes_value, "bytes"sv);
+    CHECK_EQ(**pair_value, "pair"sv);
+    CHECK_EQ(**float_value, "float"sv);
+}
+
 // lazy.hpp, snippet at_path: a scalar, a text as a ref, a nodelist, a missing key, the lazy of a node. A query compiled
 // at run time.
 TEST_CASE("doc reference lazy: at_path")

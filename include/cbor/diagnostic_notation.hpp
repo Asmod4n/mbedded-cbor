@@ -32,6 +32,7 @@
 #include "error.hpp"
 #include "validity.hpp"
 #include "head.hpp"
+#include "path.hpp"
 #include "rfc2781.hpp"
 #include "rfc3629.hpp"
 #include "rfc4648.hpp"
@@ -1449,6 +1450,79 @@ constexpr std::expected<std::string, error> diag2cbor(std::string_view const tex
     if (!end || *end != text.size()) [[unlikely]]
         return std::unexpected(error::syntax_error);
     return bytes;
+}
+
+template <std::size_t N>
+class edn_literal;
+
+inline namespace literals
+{
+
+template <fixed_string Text>
+consteval auto operator""_edn();
+
+}
+
+/**
+ * @brief Holds the CBOR bytes of one item that the literal `"..."_edn` read from its EDN text at compile time.
+ *
+ * Only the literal makes one, so the bytes are always one well-formed item, as cbor::diag2cbor() writes it.
+ * cbor::lazy::at() takes it as a key or an index.
+ *
+ * @see cbor::lazy::at()
+ * @see cbor::diag2cbor()
+ *
+ * @ingroup tools
+ */
+template <std::size_t N>
+class edn_literal
+{
+    std::array<char, N> encoded;
+
+    consteval explicit edn_literal(std::array<char, N> const &bytes) : encoded(bytes)
+    {
+    }
+
+    template <fixed_string Text>
+    friend consteval auto literals::operator""_edn();
+
+    friend struct lazy;
+};
+
+inline namespace literals
+{
+
+/**
+ * @brief Reads the EDN text of one item at compile time and gives its CBOR bytes as a cbor::edn_literal.
+ *
+ * The reader is the one of cbor::diag2cbor(). A text that is not one item of EDN does not compile.
+ * `using namespace cbor::literals;` or `using namespace cbor;` makes the literal visible.
+ *
+ * @code{.example}
+ * message: {h'01': "bytes", [1, 2]: "pair"}
+ * call: doc->at("h'01'"_edn)->get<std::string_view>()
+ * result: ref to "bytes"
+ * call: doc->at("[1, 2]"_edn)->get<std::string_view>()
+ * result: ref to "pair"
+ * @endcode
+ *
+ * @see cbor::lazy::at()
+ * @see cbor::diag2cbor()
+ *
+ * @ingroup tools
+ */
+template <fixed_string Text>
+consteval auto operator""_edn()
+{
+    constexpr std::size_t size =
+        diag2cbor(Text.view()).transform([](std::string const &bytes) { return bytes.size(); }).value_or(0);
+    static_assert(size != 0, "cbor::literals::operator\"\"_edn: the text is not one item of EDN");
+    std::array<char, size> bytes{};
+    if (auto const written = diag2cbor(Text.view()))
+        std::ranges::copy(*written, bytes.begin());
+    return edn_literal<size>(bytes);
+}
+
 }
 
 /**
