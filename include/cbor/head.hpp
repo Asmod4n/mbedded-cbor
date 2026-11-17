@@ -690,7 +690,7 @@ class heads
         return raw_head{major, info, argument, detail::validity::next(at, initial_byte_size + size)};
     }
 
-    static constexpr std::string_view self_described_cbor_content(std::string_view const encoded)
+    CBOR_ALWAYS_INLINE static constexpr std::string_view self_described_cbor_content(std::string_view const encoded)
     {
         auto const h = read_raw_head<false>(encoded, detail::validity::offset{});
         if (h && h->major == major_type::tag && detail::validity::is_self_described_cbor_tag(h->argument))

@@ -431,7 +431,7 @@ class generic
     }
 #endif
 
-    static std::expected<detail::heads::head, error>
+    CBOR_ALWAYS_INLINE static std::expected<detail::heads::head, error>
     decode_head_through_self_described_cbor(detail::heads::decoder<true> &d)
     {
         auto h = d.decode_head();
