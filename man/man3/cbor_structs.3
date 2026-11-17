@@ -13,23 +13,23 @@ cbor::structs \- Writes a C++ value as CBOR and reads it back\&.
 
 .in +1c
 .ti -1c
-.RI "template<owning_range_of_chars Encoded> static std::expected< \fBref\fP< T >, \fBerror\fP > \fBdecode\fP (Encoded &&encoded)"
+.RI "template<owning_range_of_bytes Encoded> static std::expected< \fBref\fP< T >, \fBerror\fP > \fBdecode\fP (Encoded &&encoded)"
 .br
 .RI "Reads one item into a \fRT\fP\&. "
 .ti -1c
-.RI "template<owning_range_of_chars Encoded> static std::expected< \fBref\fP< T >, \fBerror\fP > \fBdecode\fP (std::shared_ptr< Encoded const > encoded)"
+.RI "template<owning_range_of_bytes Encoded> static std::expected< \fBref\fP< T >, \fBerror\fP > \fBdecode\fP (std::shared_ptr< Encoded const > encoded)"
 .br
 .RI "Reads one item into a \fRT\fP from the bytes that \fRencoded\fP owns\&. "
 .ti -1c
-.RI "template<owning_range_of_chars Encoded> static std::expected< \fBref\fP< T >, \fBerror\fP > \fBdecode\fP (std::shared_ptr< Encoded const > encoded, T &&target)"
+.RI "template<owning_range_of_bytes Encoded> static std::expected< \fBref\fP< T >, \fBerror\fP > \fBdecode\fP (std::shared_ptr< Encoded const > encoded, T &&target)"
 .br
 .RI "Reads one item into \fRtarget\fP from the bytes that \fRencoded\fP owns\&. "
 .ti -1c
-.RI "template<borrowed_range_of_chars Encoded> static std::expected< \fBref\fP< T >, \fBerror\fP > \fBdecode\fP (std::shared_ptr< void const > owner, Encoded const &encoded)"
+.RI "template<borrowed_range_of_bytes Encoded> static std::expected< \fBref\fP< T >, \fBerror\fP > \fBdecode\fP (std::shared_ptr< void const > owner, Encoded const &encoded)"
 .br
 .RI "Reads one item into a \fRT\fP from bytes that \fRowner\fP keeps alive\&. "
 .ti -1c
-.RI "template<borrowed_range_of_chars Encoded> static std::expected< \fBref\fP< T >, \fBerror\fP > \fBdecode\fP (std::shared_ptr< void const > owner, Encoded const &encoded, T &&target)"
+.RI "template<borrowed_range_of_bytes Encoded> static std::expected< \fBref\fP< T >, \fBerror\fP > \fBdecode\fP (std::shared_ptr< void const > owner, Encoded const &encoded, T &&target)"
 .br
 .RI "Reads one item into \fRtarget\fP from bytes that \fRowner\fP keeps alive\&. "
 .ti -1c

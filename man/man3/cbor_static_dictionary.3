@@ -13,7 +13,7 @@ cbor::static_dictionary \- Writes and reads a message of \fRT\fP without its des
 
 .in +1c
 .ti -1c
-.RI "template<owning_range_of_chars Encoded>"
+.RI "template<owning_range_of_bytes Encoded>"
 .br
 requires (has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
 .br
@@ -21,7 +21,7 @@ static std::expected< typename schema< T >::template accessor< T, true >, \fBerr
 .br
 .RI "Opens a message without its description, as cbor::schema::adopt() opens a message\&. "
 .ti -1c
-.RI "template<owning_range_of_chars Encoded>"
+.RI "template<owning_range_of_bytes Encoded>"
 .br
 requires (has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
 .br
@@ -29,7 +29,7 @@ static std::expected< typename schema< T >::template accessor< T, true >, \fBerr
 .br
 .RI "Opens the message without its description that \fRencoded\fP owns, as cbor::schema::view() does\&. "
 .ti -1c
-.RI "template<borrowed_range_of_chars Encoded>"
+.RI "template<borrowed_range_of_bytes Encoded>"
 .br
 requires (has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
 .br
@@ -49,7 +49,7 @@ static auto \fBat_path\fP (std::string_view const encoded, Index const \&.\&.\&.
 .br
 .RI "Reads one value at \fRPath\fP of a message without its description, as cbor::schema::at_path() does\&. "
 .ti -1c
-.RI "template<owning_range_of_chars Encoded>"
+.RI "template<owning_range_of_bytes Encoded>"
 .br
 requires (has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
 .br
@@ -57,7 +57,7 @@ static std::expected< \fBref\fP< T >, \fBerror\fP > \fBdecode\fP (Encoded &&enco
 .br
 .RI "Reads the whole message without its description into a \fRT\fP, as cbor::schema::decode() does\&. "
 .ti -1c
-.RI "template<owning_range_of_chars Encoded>"
+.RI "template<owning_range_of_bytes Encoded>"
 .br
 requires (has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
 .br
@@ -65,7 +65,7 @@ static std::expected< \fBref\fP< T >, \fBerror\fP > \fBdecode\fP (std::shared_pt
 .br
 .RI "Reads the whole message without its description that \fRencoded\fP owns into a \fRT\fP\&. "
 .ti -1c
-.RI "template<owning_range_of_chars Encoded>"
+.RI "template<owning_range_of_bytes Encoded>"
 .br
 requires (has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
 .br
@@ -73,7 +73,7 @@ static std::expected< \fBref\fP< T >, \fBerror\fP > \fBdecode\fP (std::shared_pt
 .br
 .RI "Reads the whole message without its description that \fRencoded\fP owns into \fRtarget\fP\&. "
 .ti -1c
-.RI "template<borrowed_range_of_chars Encoded>"
+.RI "template<borrowed_range_of_bytes Encoded>"
 .br
 requires (has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
 .br
@@ -81,7 +81,7 @@ static std::expected< \fBref\fP< T >, \fBerror\fP > \fBdecode\fP (std::shared_pt
 .br
 .RI "Reads the whole message without its description in bytes that \fRowner\fP keeps alive into a \fRT\fP\&. "
 .ti -1c
-.RI "template<borrowed_range_of_chars Encoded>"
+.RI "template<borrowed_range_of_bytes Encoded>"
 .br
 requires (has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
 .br
@@ -89,7 +89,7 @@ static std::expected< \fBref\fP< T >, \fBerror\fP > \fBdecode\fP (std::shared_pt
 .br
 .RI "Reads the whole message without its description in bytes that \fRowner\fP keeps alive into \fRtarget\fP\&. "
 .ti -1c
-.RI "template<owning_range_of_chars Encoded>"
+.RI "template<owning_range_of_bytes Encoded>"
 .br
 requires (has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
 .br
@@ -97,7 +97,7 @@ static std::expected< typename schema< T >::template accessor< T, false >, \fBer
 .br
 .RI "Opens a message without its description, as cbor::schema::unverified_adopt() does\&. "
 .ti -1c
-.RI "template<owning_range_of_chars Encoded>"
+.RI "template<owning_range_of_bytes Encoded>"
 .br
 requires (has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
 .br
@@ -105,7 +105,7 @@ static std::expected< typename schema< T >::template accessor< T, false >, \fBer
 .br
 .RI "Opens the message without its description that \fRencoded\fP owns, as cbor::schema::unverified_view() does\&. "
 .ti -1c
-.RI "template<borrowed_range_of_chars Encoded>"
+.RI "template<borrowed_range_of_bytes Encoded>"
 .br
 requires (has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
 .br
@@ -125,7 +125,7 @@ static auto \fBunverified_at_path\fP (std::string_view const encoded, Index cons
 .br
 .RI "Reads one value at \fRPath\fP of a message without its description, as cbor::schema::unverified_at_path() does\&. "
 .ti -1c
-.RI "template<owning_range_of_chars Encoded>"
+.RI "template<owning_range_of_bytes Encoded>"
 .br
 requires (has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
 .br
@@ -133,7 +133,7 @@ static std::expected< \fBref\fP< T >, \fBerror\fP > \fBunverified_decode\fP (Enc
 .br
 .RI "Reads the whole message without its description into a \fRT\fP, as cbor::schema::unverified_decode() does\&. "
 .ti -1c
-.RI "template<owning_range_of_chars Encoded>"
+.RI "template<owning_range_of_bytes Encoded>"
 .br
 requires (has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
 .br
@@ -141,7 +141,7 @@ static std::expected< \fBref\fP< T >, \fBerror\fP > \fBunverified_decode\fP (std
 .br
 .RI "Reads the message without its description that \fRencoded\fP owns into a \fRT\fP, and does not check its data\&. "
 .ti -1c
-.RI "template<owning_range_of_chars Encoded>"
+.RI "template<owning_range_of_bytes Encoded>"
 .br
 requires (has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
 .br
@@ -149,7 +149,7 @@ static std::expected< \fBref\fP< T >, \fBerror\fP > \fBunverified_decode\fP (std
 .br
 .RI "Reads the message without its description that \fRencoded\fP owns into \fRtarget\fP, and does not check its data\&. "
 .ti -1c
-.RI "template<borrowed_range_of_chars Encoded>"
+.RI "template<borrowed_range_of_bytes Encoded>"
 .br
 requires (has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
 .br
@@ -157,7 +157,7 @@ static std::expected< \fBref\fP< T >, \fBerror\fP > \fBunverified_decode\fP (std
 .br
 .RI "Reads the message without its description in bytes that \fRowner\fP keeps alive into a \fRT\fP, and does not check its data\&. "
 .ti -1c
-.RI "template<borrowed_range_of_chars Encoded>"
+.RI "template<borrowed_range_of_bytes Encoded>"
 .br
 requires (has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
 .br

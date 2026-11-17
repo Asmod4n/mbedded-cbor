@@ -107,15 +107,15 @@ std::expected< std::conditional_t< view_result< T >, \fBref\fP< T >, T >, \fBerr
 
 .in +1c
 .ti -1c
-.RI "template<borrowed_range_of_chars Encoded> static std::expected< lazy, \fBerror\fP > \fBview\fP (std::shared_ptr< void const > owner, Encoded const &encoded)"
+.RI "template<borrowed_range_of_bytes Encoded> static std::expected< lazy, \fBerror\fP > \fBview\fP (std::shared_ptr< void const > owner, Encoded const &encoded)"
 .br
 .RI "Makes the lazy of the top-level item in the bytes, in place\&. "
 .ti -1c
-.RI "template<owning_range_of_chars Encoded> static std::expected< lazy, \fBerror\fP > \fBview\fP (std::shared_ptr< Encoded const > owner)"
+.RI "template<owning_range_of_bytes Encoded> static std::expected< lazy, \fBerror\fP > \fBview\fP (std::shared_ptr< Encoded const > owner)"
 .br
 .RI "Makes the lazy of the top-level item in \fR*owner\fP, in place\&. "
 .ti -1c
-.RI "template<owning_range_of_chars Encoded> static std::expected< lazy, \fBerror\fP > \fBadopt\fP (Encoded &&encoded)"
+.RI "template<owning_range_of_bytes Encoded> static std::expected< lazy, \fBerror\fP > \fBadopt\fP (Encoded &&encoded)"
 .br
 .RI "Makes the lazy of the top-level item in \fRencoded\fP, and moves the bytes into a new owner\&. "
 .in -1c

@@ -30,9 +30,25 @@ tools \- check, split and print CBOR bytes
 .br
 .RI "Gives the size in bytes of the first item in \fRencoded\fP\&. "
 .ti -1c
+.RI "template<borrowed_range_of_bytes Encoded>"
+.br
+requires (!std::is_array_v<std::remove_cvref_t<Encoded>>)
+.br
+std::expected< std::size_t, \fBerror\fP > \fBcbor::item_size\fP (Encoded &&encoded)
+.br
+.RI "Gives the size in bytes of the first data item in a range of bytes\&. "
+.ti -1c
 .RI "std::expected< std::string, \fBerror\fP > \fBcbor::diagnostic_notation\fP (std::string_view const encoded)"
 .br
 .RI "Gives the text of the item in \fRencoded\fP in the diagnostic notation of RFC 8949 section 8\&. "
+.ti -1c
+.RI "template<borrowed_range_of_bytes Encoded>"
+.br
+requires (!std::is_array_v<std::remove_cvref_t<Encoded>>)
+.br
+std::expected< std::string, \fBerror\fP > \fBcbor::diagnostic_notation\fP (Encoded &&encoded)
+.br
+.RI "Writes the first data item in a range of bytes in diagnostic notation\&. "
 .ti -1c
 .RI "constexpr std::expected< std::string, \fBerror\fP > \fBcbor::diag2cbor\fP (std::string_view const text)"
 .br

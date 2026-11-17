@@ -31,7 +31,7 @@ cbor::sequence_reader \- Reads a CBOR sequence (RFC 8742) whose bytes arrive in 
 .br
 .RI "Takes the bytes and the state of \fRother\fP\&. "
 .ti -1c
-.RI "template<borrowed_range_of_chars Piece>"
+.RI "template<borrowed_range_of_bytes Piece>"
 .br
 requires (!std::is_array_v<Piece>)
 .br
@@ -39,7 +39,7 @@ void \fBfeed\fP (Piece const piece)
 .br
 .RI "Copies the bytes of a view to the end of the sequence\&. "
 .ti -1c
-.RI "template<owning_range_of_chars Piece>"
+.RI "template<owning_range_of_bytes Piece>"
 .br
 requires (!std::is_array_v<Piece>)
 .br
@@ -47,11 +47,11 @@ void \fBfeed\fP (Piece const &piece)
 .br
 .RI "Copies the bytes of a container to the end of the sequence\&. "
 .ti -1c
-.RI "template<owning_range_of_chars Piece> void \fBfeed\fP (Piece &&piece)"
+.RI "template<owning_range_of_bytes Piece> void \fBfeed\fP (Piece &&piece)"
 .br
 .RI "Takes a container by move and holds it as the next bytes of the sequence\&. "
 .ti -1c
-.RI "template<owning_range_of_chars Piece> void \fBfeed\fP (std::shared_ptr< Piece const > piece)"
+.RI "template<owning_range_of_bytes Piece> void \fBfeed\fP (std::shared_ptr< Piece const > piece)"
 .br
 .RI "Holds the bytes of \fRpiece\fP as the next bytes of the sequence, without a copy\&. "
 .ti -1c

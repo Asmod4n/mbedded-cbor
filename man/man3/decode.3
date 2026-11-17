@@ -26,6 +26,14 @@ decode \- a decoded tree of CBOR and its encode
 .br
 .RI "Decodes the one top-level item in \fRencoded\fP into a tree of \fBcbor::item\fP\&. "
 .ti -1c
+.RI "template<borrowed_range_of_bytes Encoded>"
+.br
+requires (!std::is_array_v<std::remove_cvref_t<Encoded>>)
+.br
+std::expected< \fBowning\fP< \fBitem\fP >, \fBerror\fP > \fBcbor::decode\fP (Encoded &&encoded)
+.br
+.RI "Reads one data item from a range of bytes\&. "
+.ti -1c
 .RI "std::expected< \fBref\fP< std::span< iovec const > >, \fBerror\fP > \fBcbor::encode_iov\fP (\fBitem\fP const &root)"
 .br
 .RI "Writes the tree at \fRroot\fP into a list of \fRstruct iovec\fP pieces, not into one buffer\&. "
