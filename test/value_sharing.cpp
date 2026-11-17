@@ -4,6 +4,7 @@
 #include <array>
 #include <cstdint>
 #include <expected>
+#include <format>
 #include <initializer_list>
 #include <limits>
 #include <memory>
@@ -730,22 +731,92 @@ std::string diamonds_of(std::size_t const k)
 
 } // namespace shared_test
 
-// The owner decided that encode writes no shared reference unless the program calls encode_cycles: cbor::encode with a
-// tree with a shared_reference gives unsupported_value. A tree without one is written as before.
-TEST_CASE("value sharing: cbor::encode writes no tag 28 or 29")
+namespace shared_test
 {
-    auto const cyclic = cbor::decode("\xd8\x1c\x81\xd8\x1d\x00"sv);
-    REQUIRE(cyclic.has_value());
+
+// The bytes of cbor::encode for the node. encode_iov gives the same bytes, so both choose the walk from the same node.
+std::string written_by_encode(cbor::item const &node)
+{
     std::string out;
-    CHECK_EQ(cbor::encode(out, **cyclic).error(), error::unsupported_value);
+    REQUIRE(cbor::encode(out, node).has_value());
 #if __has_include(<sys/uio.h>)
-    CHECK_EQ(cbor::encode_iov(**cyclic).error(), error::unsupported_value);
+    auto const pieces = cbor::encode_iov(node);
+    REQUIRE(pieces.has_value());
+    CHECK_EQ(test::join_pieces_into_bytes(**pieces).value(), out);
 #endif
-    auto const marked = cbor::decode("\x82\xd8\x1c\x01\x02"sv);
-    REQUIRE(marked.has_value());
-    std::string plain;
-    CHECK_EQ(cbor::encode(plain, **marked), 3u);
-    CHECK_EQ(plain, "\x82\x01\x02"s);
+    return out;
+}
+
+// The bytes of cbor::encode for the tree that cbor::decode gives for the EDN text.
+std::string written_by_encode(std::string_view const edn)
+{
+    auto const decoded = cbor::decode(cbor::diag2cbor(edn).value());
+    REQUIRE(decoded.has_value());
+    return written_by_encode(**decoded);
+}
+
+// The elements of the array at the root of the tree.
+std::span<cbor::item const> elements_of(tree const &array)
+{
+    auto const elements = array->get<std::span<cbor::item const>>();
+    REQUIRE(elements.has_value());
+    return *elements;
+}
+
+} // namespace shared_test
+
+// The owner decided that encode writes the cycles of a tree. encode sees a shared_reference below a node only through a
+// mark that the decoder sets on each node above it. A reference that stands only as a map key, or only as the content
+// of a tag, must reach that mark too. Else encode writes the tree in one walk and meets the reference.
+TEST_CASE("value sharing: cbor::encode writes a reference under a map key or a tag")
+{
+    using shared_test::written_by_encode;
+    CHECK_EQ(written_by_encode("[28(\"k\"), {29(0): 1}]"), cbor::diag2cbor("[\"k\", {\"k\": 1}]").value());
+    CHECK_EQ(written_by_encode("[28(1), 1234(29(0))]"), cbor::diag2cbor("[1, 1234(1)]").value());
+    CHECK_EQ(written_by_encode("[28(h'01'), 2([29(0)])]"), cbor::diag2cbor("[h'01', 2([h'01'])]").value());
+    CHECK_EQ(written_by_encode("[28(h'01'), 3([29(0)])]"), cbor::diag2cbor("[h'01', 3([h'01'])]").value());
+}
+
+// encode takes any node of a tree, not only its root. A node that is itself a shared_reference stands for its target.
+// A root that a tag 28 marks keeps its mark only when a reference names it in a cycle.
+TEST_CASE("value sharing: cbor::encode of a shared_reference node and of a marked root")
+{
+    using shared_test::written_by_encode;
+    auto const tree = cbor::decode(cbor::diag2cbor("[28([1]), 29(0)]").value());
+    REQUIRE(tree.has_value());
+    auto const elements = shared_test::elements_of(*tree);
+    CHECK_EQ(elements[1].type(), cbor::type::shared_reference);
+    CHECK_EQ(written_by_encode(elements[1]), cbor::diag2cbor("[1]").value());
+    CHECK_EQ(written_by_encode(**tree), cbor::diag2cbor("[[1], [1]]").value());
+    CHECK_EQ(written_by_encode("28([29(0)])"), cbor::diag2cbor("28([29(0)])").value());
+    CHECK_EQ(written_by_encode("28([1])"), cbor::diag2cbor("[1]").value());
+}
+
+// The content of a tag 24 is decoded with marks of its own. encode writes the tag 24 as its byte string. The root of
+// the content, from cbor::encoded_cbor_data_item, is written with its cycle.
+TEST_CASE("value sharing: cbor::encode of the content of a tag 24 writes its cycle")
+{
+    std::string const inner = cbor::diag2cbor("28([29(0)])").value();
+    std::string hex;
+    for (char const c : inner)
+        hex += std::format("{:02x}", static_cast<unsigned char>(c));
+    std::string const outer = cbor::diag2cbor("24(h'" + hex + "')").value();
+    auto const tree = cbor::decode(outer);
+    REQUIRE(tree.has_value());
+    CHECK_EQ(shared_test::written_by_encode(**tree), outer);
+    auto const content = cbor::encoded_cbor_data_item(*tree, **tree);
+    REQUIRE(content.has_value());
+    CHECK_EQ(shared_test::written_by_encode(content->get()), inner);
+}
+
+// The mark of a reference must reach every node above it, through siblings that hold none. A sibling without a
+// reference is written in one walk, with the same bytes.
+TEST_CASE("value sharing: cbor::encode of a deep reference and of a sibling without one")
+{
+    auto const tree = cbor::decode(cbor::diag2cbor("[[1, [2]], {\"a\": [28(3), [[29(0)]]]}]").value());
+    REQUIRE(tree.has_value());
+    CHECK_EQ(shared_test::written_by_encode(**tree), cbor::diag2cbor("[[1, [2]], {\"a\": [3, [[3]]]}]").value());
+    CHECK_EQ(shared_test::written_by_encode(shared_test::elements_of(*tree)[0]), cbor::diag2cbor("[1, [2]]").value());
 }
 
 // theories/Writer.v write: encode_cycles puts a tag 28 on a node that a back edge of the walk reaches. A

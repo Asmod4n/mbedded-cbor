@@ -137,6 +137,7 @@ struct tree_decoder {
     detail::heads::decoder<true> d;
     std::size_t open = 0;
     std::vector<item const *> marks;
+    std::size_t shared_references = 0;
 
     std::expected<void, error> decode_item(std::pmr::vector<item> &into);
 
@@ -266,6 +267,7 @@ std::expected<void, error> tree_decoder<Resolve>::decode_content(std::pmr::vecto
         if (n != 0)
             if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
                 return std::unexpected(r.error());
+        std::size_t const shared_references_before = shared_references;
         for (std::size_t left = n; left != 0; --left) {
             --open;
             auto const c = d.decode_head();
@@ -284,15 +286,22 @@ std::expected<void, error> tree_decoder<Resolve>::decode_content(std::pmr::vecto
             node.via.map = std::span<item const>(nodes);
         else
             node.via.array = std::span<item const>(nodes);
+        if constexpr (Resolve)
+            if (shared_references != shared_references_before) [[unlikely]]
+                node.m_holds_shared_reference = true;
         return {};
     }
     default: {
         std::string_view const tagged = d.encoded;
         std::pmr::vector<item> &held = decoded.items_reserved(1);
+        std::size_t const shared_references_before = shared_references;
         if (auto const r = decode_item(held); !r) [[unlikely]]
             return r;
         item const &content = held.front();
         node.via.tag = {head.argument, &content};
+        if constexpr (Resolve)
+            if (shared_references != shared_references_before) [[unlikely]]
+                node.m_holds_shared_reference = true;
         if (node.m_type == cbor::type::typed_array)
             if (auto const r = detail::validity::check_typed_array_content(
                     head.argument, detail::heads::major_type_of(content.m_type),
@@ -307,7 +316,7 @@ std::expected<void, error> tree_decoder<Resolve>::decode_content(std::pmr::vecto
         }
         std::string_view const content_encoded =
             std::string_view(std::span(tagged).first(std::to_underlying(detail::validity::distance(tagged, d.encoded))));
-        tree_decoder inner{decoded, {std::string_view(std::span(content_encoded).last(content.via.bin.size()))}, 0, {}};
+        tree_decoder inner{decoded, {std::string_view(std::span(content_encoded).last(content.via.bin.size()))}, 0, {}, 0};
         std::pmr::vector<item> &embedded = decoded.items_reserved(1);
         if (auto const r = inner.decode_item(embedded); !r) [[unlikely]]
             return r;
@@ -350,7 +359,9 @@ std::expected<void, error> tree_decoder<Resolve>::decode_sharedref(std::pmr::vec
         return std::unexpected(h->argument - marks.size() < marked ? error::sharedref_not_defined : index.error());
     item const *const target = marks[std::to_underlying(*index)];
     marks.insert(marks.end(), marked, target);
-    into.emplace_back(item{cbor::type::shared_reference, h->info, {.tag = {h->argument, target}}});
+    into.emplace_back(item{cbor::type::shared_reference, h->info, {.tag = {h->argument, target}}})
+        .m_holds_shared_reference = true;
+    ++shared_references;
     return {};
 }
 
@@ -367,7 +378,7 @@ std::expected<decoded_tree, error> decode_tree(std::string_view const encoded)
                                                                     detail::validity::initial_size_limit);
                                               })
                                               .value_or(detail::validity::initial_size_limit));
-    tree_decoder<Resolve> tree{*decoded, {encoded}, 0, {}};
+    tree_decoder<Resolve> tree{*decoded, {encoded}, 0, {}, 0};
     std::pmr::vector<item> &root = decoded->items_reserved(1);
     if (auto const built = tree.decode_item(root); !built) [[unlikely]]
         return std::unexpected(built.error());

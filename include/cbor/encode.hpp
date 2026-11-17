@@ -53,9 +53,7 @@ class schema;
  * The program holds the `ref` until the call returns or until the last completion of the request.
  * The bytes are those of cbor::encode().
  * The function exists where `<sys/uio.h>` exists.
- * `nesting_depth_exceeded`: the tree is deeper than the limit.
- * `unsupported_value`: the tree holds a `shared_reference`.
- * cbor::encode_iov_cycles() writes tags 28 and 29 as cbor::encode_cycles() does.
+ * The errors are those of cbor::encode().
  * A piece that refers to the string of an owner points into memory that the owner holds as const; a call that writes
  * into the pieces, such as `readv`, is a wrong use.
  *
@@ -272,10 +270,13 @@ private:
  *
  * Each integer, length and tag number keeps the width of its head, from `additional_information`.
  * A float keeps its width.
- * The call walks the tree once and writes no tag 28 or 29 of its own.
+ * A tree without a `shared_reference` is written in one walk, and the call writes no tag 28 or 29 of its own.
  * A tag 28 and a tag 29 of a tree of cbor::lazy::to_item() are written as they are.
- * A `shared_reference` gives `unsupported_value`; `out` then holds the bytes written before it.
- * cbor::encode_cycles() writes it with tags 28 and 29.
+ * A `shared_reference` stands for the item it names.
+ * A walk before the write finds each item that a depth-first walk reaches again while it is inside that item.
+ * Such an item gets a tag 28, and each edge that reaches it again is a tag 29 with the index of that mark, in its
+ * shortest head.
+ * A value that two references reach without a cycle is written in full each time.
  * `out` is one of these:
  * - a container of bytes, for example `std::string`: the call appends;
  * - a `std::span` of bytes: the call writes into it and allocates nothing;
@@ -296,9 +297,22 @@ private:
  * result: 4 bytes: 82 01 61 61
  * @endcode
  *
+ * @code{.example}
+ * bytes: d8 1c 81 d8 1d 00
+ * call: auto const tree = cbor::decode(bytes)
+ * result: owning item of 28([29(0)])
+ * call: std::string out;
+ * result: ""
+ * call: cbor::encode(out, **tree)
+ * result: 6
+ * call: out
+ * result: 6 bytes: d8 1c 81 d8 1d 00
+ * @endcode
+ *
  * @retval no_buffer_space the span is too short
- * @retval nesting_depth_exceeded the tree is deeper than the limit
- * @retval unsupported_value the tree holds a `shared_reference`
+ * @retval nesting_depth_exceeded the tree, or the path through its references, is deeper than the limit
+ * @retval amplification_limit_breach the output would be larger than `cbor::limits::amplification_activation_threshold`
+ * and than `cbor::limits::maximum_amplification` times the tree; nothing is written
  * @retval value_too_large, not_enough_memory, io_error the error of a writer, from its `std::errc`
  * @snippet doc_reference_item.cpp encode
  * @see cbor::encode_iov()
@@ -411,7 +425,7 @@ struct detail::encoding::binary_writer {
         }
     }
 
-    std::expected<void, std::errc> encode_head(major_type const major, std::uint8_t const info, std::uint64_t const argument)
+    CBOR_ALWAYS_INLINE std::expected<void, std::errc> encode_head(major_type const major, std::uint8_t const info, std::uint64_t const argument)
     {
         if constexpr (!direct) {
             if (!detail::validity::bytes_fit(detail::heads::head_size_max, block.size() - used)) [[unlikely]]
@@ -452,7 +466,7 @@ struct detail::encoding::binary_writer {
 
     template <class E>
         requires std::same_as<E, char> || std::same_as<E, std::byte>
-    std::expected<void, std::errc> encode_payload(std::span<E const> const bytes)
+    CBOR_ALWAYS_INLINE std::expected<void, std::errc> encode_payload(std::span<E const> const bytes)
     {
         std::span<char> const out = block;
         std::size_t const at = used;
@@ -688,8 +702,8 @@ std::expected<void, error> detail::encoding::encode_item(binary_writer<Writer> &
 {
     if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
         return r;
-    if (node.m_type == cbor::type::shared_reference) [[unlikely]]
-        return std::unexpected(error::unsupported_value);
+    detail::validity::throw_logic_error_if(node.m_type == cbor::type::shared_reference,
+                                           "cbor::encode: a shared_reference stands below a node that does not hold it");
     head_parts const head = head_of(node);
     std::expected<void, std::errc> const written = encode_head_and_payload<AppendRef>(out, node, head);
     if (!written) [[unlikely]]
@@ -865,12 +879,11 @@ public:
 template <bool Cycles, bool AppendRef, class Writer>
 std::expected<void, error> detail::encoding::encode_tree(binary_writer<Writer> &out, item const &root)
 {
-    if constexpr (Cycles) {
+    if (Cycles || root.m_holds_shared_reference) [[unlikely]] {
         depth_first_search walk;
         return walk.encode<AppendRef>(out, root);
-    } else {
-        return encode_item<AppendRef>(out, root);
     }
+    return encode_item<AppendRef>(out, root);
 }
 
 template <bool Cycles, class Target>

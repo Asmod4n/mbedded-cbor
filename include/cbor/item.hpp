@@ -103,6 +103,10 @@ private:
 public:
     std::uint8_t const additional_information;
 
+private:
+    bool m_holds_shared_reference = false;
+
+public:
     /**
      * @brief Gives the kind of the node.
      *
@@ -133,8 +137,10 @@ public:
      * draft-ietf-cbor-edn-literals. cbor::parse_edn() reads it back. The function is defined in
      * `<cbor/diagnostic_notation.hpp>`.
      *
-     * @retval unsupported_value the tree holds a `shared_reference`
-     * @retval nesting_depth_exceeded the tree is deeper than the stack of the thread holds
+     * @retval nesting_depth_exceeded the tree, or the path through its references, is deeper than the stack of the
+     * thread holds
+     * @retval amplification_limit_breach the values that the references share would make the bytes larger than the
+     * limit of cbor::encode()
      * @see cbor::parse_edn()
      */
     std::expected<std::string, error> to_edn() const;

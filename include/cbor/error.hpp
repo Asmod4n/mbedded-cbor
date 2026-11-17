@@ -64,7 +64,7 @@ enum class error {
     invalid_tag,
     /** `decode` meets a tag 29 that names a tag 28 whose content is only tags 28 and this tag 29. */
     sharedref_not_defined,
-    /** cbor::encode() meets a `shared_reference`. */
+    /** The library does not return it. */
     unsupported_value,
     /** A key or an index meets an item that is not a map or an array. */
     not_indexable,
@@ -104,7 +104,7 @@ enum class error {
     /** `path::compile<T>` gets a path that is not singular, and `T` is not `nodelist`. */
     not_singular_query,
     /**
-     * cbor::encode_cycles() would write more than `cbor::limits::maximum_amplification` times the size of the
+     * cbor::encode() would write more than `cbor::limits::maximum_amplification` times the size of the
      * tree, past `cbor::limits::amplification_activation_threshold`.
      */
     amplification_limit_breach

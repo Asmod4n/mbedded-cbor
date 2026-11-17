@@ -299,8 +299,7 @@ TEST_CASE("doc advanced runtime: item_size")
 
 // The section "Tags 28 and 29" shows that a lazy, clone and diagnostic notation read both as plain tags. That
 // cbor::decode resolves them. The second element is a shared_reference to the first. An index with no mark is an error.
-// 28(29(0)) names no value. encode refuses a shared_reference. encode_cycles writes the shared value twice and
-// marks only a cycle.
+// 28(29(0)) names no value. encode writes the shared value twice and marks only a cycle.
 TEST_CASE("doc advanced runtime: tags 28 and 29")
 {
     auto const tree = cbor::decode("\x82\xd8\x1c\x01\xd8\x1d\x00"sv);
@@ -311,7 +310,8 @@ TEST_CASE("doc advanced runtime: tags 28 and 29")
     CHECK_EQ(cbor::decode("\x81\xd8\x1d\x00"sv).error(), error::sharedref_index_not_marked);
     CHECK_EQ(cbor::decode("\xd8\x1c\xd8\x1d\x00"sv).error(), error::sharedref_not_defined);
     std::string out;
-    CHECK_EQ(cbor::encode(out, **tree).error(), error::unsupported_value);
+    CHECK_EQ(cbor::encode(out, **tree), 3u);
+    CHECK_EQ(out, cbor::diag2cbor("[1, 1]").value());
     std::string shared;
     CHECK_EQ(cbor::encode_cycles(shared, **tree), 3u);
     CHECK_EQ(shared, "\x82\x01\x01"s);
