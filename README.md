@@ -40,7 +40,7 @@ for (auto const p : *points | std::views::drop(1) | std::views::take(1))
 ```
 
 The reference with examples that run in the browser:
-<https://asmod4n.github.io/mbedded-cbor/>.
+<https://asmod4n.github.io/mbedded-cbor-docs/>.
 
 It implements CBOR (RFC 8949), CBOR sequences (RFC 8742), typed arrays
 (RFC 8746), the paths of RFC 9535 and Packed CBOR
@@ -305,6 +305,56 @@ FetchContent_MakeAvailable(mbedded-cbor)
 
 ## Usage
 
+Every call that can fail returns a `std::expected`. `*result` or
+`result.value()` gives the value, and `result->` reaches a member of it.
+Where the value is itself a handle, such as `cbor::owning<cbor::item>` or
+`cbor::ref<T>`, a second `->` reaches the item or the struct.
+
+### Decode and encode a whole message
+
+`cbor::decode` gives a tree of items. `cbor::encode` writes a tree back.
+
+```cpp
+// bytes: a std::string with {"sensor": "t1", "value": 21.5}
+auto const tree = cbor::decode(bytes).value();
+
+using pairs = std::ranges::stride_view<std::ranges::adjacent_view<std::span<cbor::item const>, 2>>;
+for (auto const [key, value] : tree->get<pairs>().value())
+    std::println("{}", *key.get<std::string_view>());              // sensor, value
+
+std::string out;
+cbor::encode(out, *tree);                                           // out == bytes
+```
+
+### Encode a value or a struct
+
+`cbor::structs<T>` encodes any value: a struct, an `int`, a `std::map`.
+It decodes the bytes back into the same type.
+
+```cpp
+struct reading {
+    std::string sensor;
+    double value;
+    std::vector<int> samples;
+};
+
+auto const bytes = cbor::structs<reading>::encode(reading{"t1", 21.5, {3, 4, 5}}).value();
+auto const back = cbor::structs<reading>::decode(std::string(bytes)).value();
+back->sensor;                                                       // "t1"
+
+cbor::structs<int>::encode(42);                                     // 18 2a
+cbor::structs<std::map<std::string, int>>::encode({{"a", 1}});      // {"a": 1}
+```
+
+A decoded struct can point into the bytes, for example with a
+`std::string_view` member. So `decode` takes the bytes by move, or as a
+`std::shared_ptr` that keeps them alive:
+
+```cpp
+auto const owner = std::make_shared<std::string const>(bytes);
+auto const r = cbor::structs<reading>::decode(owner).value();
+```
+
 ### Read a message
 
 The bytes move into the library, or the library reads them in place
@@ -336,7 +386,7 @@ auto const age = doc.at_path<"$.user.age", int>();                 // cbor::erro
 
 ## Documentation
 
-- <https://asmod4n.github.io/mbedded-cbor/>: every function and type,
+- <https://asmod4n.github.io/mbedded-cbor-docs/>: every function and type,
   with examples that run in the browser.
 - The comments of the headers in `include/cbor/`: every function and type; Doxygen makes the site and the man
   pages from them.
