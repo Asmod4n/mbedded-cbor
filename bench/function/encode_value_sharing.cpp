@@ -1,5 +1,5 @@
-// The bench of the block cbor::encode_cycles and encode_iov_cycles (encode.hpp), the encode that writes
-// tags 28 and 29 for each cycle.
+// The bench of the block cbor::encode and encode_iov (encode.hpp) of a tree with a cycle, which they write with
+// tags 28 and 29 (the value-sharing registration, refs/value-sharing.html).
 // Each iteration writes every tree of a buffer of COLD_BYTES bytes of messages.
 #include <benchmark/benchmark.h>
 #include <cbor/decode.hpp>
@@ -28,15 +28,15 @@ std::size_t cold_bytes()
 
 auto written(cbor::item const &tree, std::string &out)
 {
-    return cbor::encode_cycles(out, tree);
+    return cbor::encode(out, tree);
 }
 
 auto pieces(cbor::item const &tree)
 {
-    return cbor::encode_iov_cycles(tree);
+    return cbor::encode_iov(tree);
 }
 
-void encode_cycles(benchmark::State &state)
+void encode_value_sharing(benchmark::State &state)
 {
     std::vector<cbor::owning<cbor::item>> trees;
     for (std::size_t total = 0; total < cold_bytes(); total += message.size())
@@ -56,7 +56,7 @@ void encode_cycles(benchmark::State &state)
     state.SetItemsProcessed(state.iterations() * static_cast<benchmark::IterationCount>(trees.size()));
 }
 
-void encode_iov_cycles(benchmark::State &state)
+void encode_iov_value_sharing(benchmark::State &state)
 {
     std::vector<cbor::owning<cbor::item>> trees;
     for (std::size_t total = 0; total < cold_bytes(); total += message.size())
@@ -72,6 +72,6 @@ void encode_iov_cycles(benchmark::State &state)
 
 }
 
-BENCHMARK(encode_cycles)->Unit(benchmark::kMillisecond);
-BENCHMARK(encode_iov_cycles)->Unit(benchmark::kMillisecond);
+BENCHMARK(encode_value_sharing)->Unit(benchmark::kMillisecond);
+BENCHMARK(encode_iov_value_sharing)->Unit(benchmark::kMillisecond);
 BENCHMARK_MAIN();

@@ -312,14 +312,12 @@ TEST_CASE("doc advanced runtime: tags 28 and 29")
     std::string out;
     CHECK_EQ(cbor::encode(out, **tree), 3u);
     CHECK_EQ(out, cbor::diag2cbor("[1, 1]").value());
-    std::string shared;
-    CHECK_EQ(cbor::encode_cycles(shared, **tree), 3u);
-    CHECK_EQ(shared, "\x82\x01\x01"s);
-    auto const cyclic = cbor::decode("\xd8\x1c\x81\xd8\x1d\x00"sv);
+    std::string const cycle_written = cbor::diag2cbor("28([29(0)])").value();
+    auto const cyclic = cbor::decode(cycle_written);
     REQUIRE(cyclic.has_value());
     std::string cycle;
-    CHECK_EQ(cbor::encode_cycles(cycle, **cyclic), 6u);
-    CHECK_EQ(cycle, "\xd8\x1c\x81\xd8\x1d\x00"s);
+    CHECK_EQ(cbor::encode(cycle, **cyclic), cycle_written.size());
+    CHECK_EQ(cycle, cycle_written);
     auto const l = *test::make_lazy_from_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
     CHECK_EQ(l.at(1)->type(), cbor::type::tag);
     CHECK_EQ(l.at(1)->get<std::int64_t>(), 0);

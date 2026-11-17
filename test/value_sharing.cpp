@@ -706,7 +706,7 @@ std::string encoded_again(std::string_view const input)
     auto const decoded = cbor::decode(input);
     REQUIRE(decoded.has_value());
     std::string out;
-    REQUIRE(cbor::encode_cycles(out, **decoded).has_value());
+    REQUIRE(cbor::encode(out, **decoded).has_value());
     return out;
 }
 
@@ -819,7 +819,7 @@ TEST_CASE("value sharing: cbor::encode of a deep reference and of a sibling with
     CHECK_EQ(shared_test::written_by_encode(shared_test::elements_of(*tree)[0]), cbor::diag2cbor("[1, [2]]").value());
 }
 
-// theories/Writer.v write: encode_cycles puts a tag 28 on a node that a back edge of the walk reaches. A
+// theories/Writer.v write: encode puts a tag 28 on a node that a back edge of the walk reaches. A
 // tag 29 with the index of that mark on each back edge. A value reached twice without a cycle is written twice (owner
 // decision). Each expectation is the stream that write gives for the graph that cbor::decode reads.
 TEST_CASE("value sharing: cbor::encode writes the marks of each cycle as Writer.v writes them")
@@ -859,7 +859,7 @@ TEST_CASE("value sharing: cbor::decode reads back what cbor::encode writes")
         REQUIRE(back.has_value());
         CHECK(test::unfoldings_equal(**tree, **back));
 #if __has_include(<sys/uio.h>)
-        auto const pieces = cbor::encode_iov_cycles(**tree);
+        auto const pieces = cbor::encode_iov(**tree);
         REQUIRE(pieces.has_value());
         std::string joined;
         for (iovec const &piece : **pieces)
@@ -880,10 +880,10 @@ TEST_CASE("value sharing: cbor::encode writes each copy and stops at the amplifi
     auto const tree = cbor::decode(shared_test::diamonds_of(levels_past_the_limit));
     REQUIRE(tree.has_value());
     std::string out;
-    CHECK_EQ(cbor::encode_cycles(out, **tree).error(), error::amplification_limit_breach);
+    CHECK_EQ(cbor::encode(out, **tree).error(), error::amplification_limit_breach);
     CHECK(out.empty());
     std::array<char, 64> span{};
-    CHECK_EQ(cbor::encode_cycles(std::span(span), **tree).error(), error::amplification_limit_breach);
+    CHECK_EQ(cbor::encode(std::span(span), **tree).error(), error::amplification_limit_breach);
     CHECK(std::ranges::all_of(span, [](char const c) { return c == 0; }));
 }
 
@@ -922,7 +922,7 @@ TEST_CASE("value sharing: a path through references deeper than the stack gives 
     REQUIRE(tree.has_value());
     CHECK_EQ(test::error_on_small_stack([&tree] {
                  std::string out;
-                 return cbor::encode_cycles(out, **tree);
+                 return cbor::encode(out, **tree);
              }),
              error::nesting_depth_exceeded);
 }

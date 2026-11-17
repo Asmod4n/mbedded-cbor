@@ -1,6 +1,7 @@
 #include "reference.hpp"
 #include "owned_copy.hpp"
 #include "pieces.hpp"
+#include <cbor/diagnostic_notation.hpp>
 
 #include <sys/socket.h>
 #include <unistd.h>
@@ -244,20 +245,18 @@ TEST_CASE("encode_iov: the pieces of a decoded tree outlive the tree")
     CHECK_EQ(join_pieces_into_bytes(*kept), expected);
 }
 
-// The cycles overload walks the tree another way, through its own search. It must refer and copy as the other overload
-// does, and give the bytes of encode_cycles.
-TEST_CASE("encode_iov_cycles: the overload for a decoded tree gives the bytes of encode_cycles")
+// A tree with a shared_reference is written through the search for cycles, not through the walk of a plain tree. That
+// search must refer and copy as the walk does. The shared text is written in full at each of its two places.
+TEST_CASE("encode_iov: the overload for a decoded tree with a shared_reference refers to long strings")
 {
     for (std::size_t const size : sizes_around_copybreak()) {
         CAPTURE(size);
-        std::string const input = array_of_text_bytes_and_seven(size);
-        auto const tree = cbor::decode(input);
+        std::string const text_edn = "\"" + std::string(size, 'a') + "\"";
+        auto const tree = cbor::decode(cbor::diag2cbor("[28(" + text_edn + "), 29(0)]").value());
         REQUIRE(tree.has_value());
-        std::string expected;
-        REQUIRE(cbor::encode_cycles(expected, **tree).has_value());
-        auto const referred = cbor::encode_iov_cycles(*tree);
+        auto const referred = cbor::encode_iov(*tree);
         REQUIRE(referred.has_value());
-        CHECK_EQ(join_pieces_into_bytes(*referred), expected);
+        CHECK_EQ(join_pieces_into_bytes(*referred), cbor::diag2cbor("[" + text_edn + ", " + text_edn + "]").value());
         auto const text = (**tree).get<std::span<cbor::item const>>().value()[0].get<std::string_view>();
         REQUIRE(text.has_value());
         CHECK_EQ(points_into(*referred, text->data()), size > copybreak && size > 0);
