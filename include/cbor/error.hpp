@@ -64,8 +64,6 @@ enum class error {
     invalid_tag,
     /** `decode` meets a tag 29 that names a tag 28 whose content is only tags 28 and this tag 29. */
     sharedref_not_defined,
-    /** The library does not return it. */
-    unsupported_value,
     /** A key or an index meets an item that is not a map or an array. */
     not_indexable,
     /** The index is outside the array. */
@@ -126,14 +124,14 @@ enum class error {
  * @code{.example}
  * message: {}
  * call: std::error_code const e{cbor::error::no_buffer_space}
- * result: std::error_code cbor:21
+ * result: std::error_code cbor:19
  * call: e.default_error_condition().category().name()
  * result: "generic"
  * call: std::error_code const t{cbor::error::too_little_data}
  * result: std::error_code cbor:1
  * call: t.default_error_condition().category().name()
  * result: "cbor"
- * call: cbor::category().message(13)
+ * call: cbor::category().message(11)
  * result: "key not found"
  * call: cbor::category().message(0)
  * result: "unknown cbor error"
@@ -181,8 +179,6 @@ public:
             return "invalid tag";
         case error::sharedref_not_defined:
             return "sharedref not defined";
-        case error::unsupported_value:
-            return "unsupported value";
         case error::not_indexable:
             return "not indexable";
         case error::index_out_of_bounds:
@@ -284,11 +280,11 @@ inline std::error_category const &category() noexcept
  * @code{.example}
  * message: {}
  * call: std::error_code const e = cbor::make_error_code(cbor::error::invalid_path)
- * result: std::error_code cbor:14
+ * result: std::error_code cbor:12
  * call: e.message()
  * result: "invalid path"
  * call: e.value()
- * result: 14
+ * result: 12
  * @endcode
  *
  * @snippet doc_reference_errors.cpp make_error_code
@@ -318,7 +314,7 @@ inline std::error_code make_error_code(error const e) noexcept
  * call: std::is_error_code_enum_v<cbor::error>
  * result: true
  * call: std::error_code const e{cbor::error::index_out_of_bounds}
- * result: std::error_code cbor:12
+ * result: std::error_code cbor:10
  * call: e.message()
  * result: "index outside of array bounds"
  * @endcode

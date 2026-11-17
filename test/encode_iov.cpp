@@ -12,12 +12,14 @@
 #include <expected>
 #include <memory>
 #include <numeric>
+#include <optional>
 #include <ranges>
 #include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 using namespace std::string_literals;
@@ -234,14 +236,16 @@ TEST_CASE("encode_iov: the pieces of a decoded tree outlive the tree")
     std::size_t const size = copybreak + CBOR_ENCODER_BLOCK_SIZE;
     std::string const input = array_of_text_bytes_and_seven(size);
     std::string expected;
-    std::expected<pieces, cbor::error> kept = std::unexpected(cbor::error::unsupported_value);
+    std::optional<pieces> kept;
     {
         auto tree = cbor::decode(input);
         REQUIRE(tree.has_value());
         REQUIRE(cbor::encode(expected, **tree).has_value());
-        kept = cbor::encode_iov(*tree);
-        REQUIRE(kept.has_value());
+        auto referred = cbor::encode_iov(*tree);
+        REQUIRE(referred.has_value());
+        kept = std::move(*referred);
     }
+    REQUIRE(kept.has_value());
     CHECK_EQ(join_pieces_into_bytes(*kept), expected);
 }
 
