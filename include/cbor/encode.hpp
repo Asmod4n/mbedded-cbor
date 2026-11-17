@@ -179,7 +179,7 @@ public:
         } || byte_container<Target> ||
         requires(Target &target, std::size_t const hint) { target.allocate(hint).done(hint); };
 
-    template <bool Cycles, class Target>
+    template <class Target>
     static std::expected<std::size_t, error> encode_into(Target &&target, item const &root);
 
 private:
@@ -219,13 +219,11 @@ private:
 
     class depth_first_search;
 
-    template <bool Cycles, bool AppendRef, class Writer>
+    template <bool AppendRef, class Writer>
     static std::expected<void, error> encode_tree(binary_writer<Writer> &out, item const &root);
 
 #if __has_include(<sys/uio.h>)
-    template <bool Cycles>
     static std::expected<ref<std::span<iovec const>>, error> encode_iov_of(item const &root);
-    template <bool Cycles>
     static std::expected<ref<std::span<iovec const>>, error> encode_iov_of(owning<item> const &root);
 #endif
 
@@ -819,22 +817,22 @@ public:
     }
 };
 
-template <bool Cycles, bool AppendRef, class Writer>
+template <bool AppendRef, class Writer>
 std::expected<void, error> detail::encoding::encode_tree(binary_writer<Writer> &out, item const &root)
 {
-    if (Cycles || root.m_holds_shared_reference) [[unlikely]] {
+    if (root.m_holds_shared_reference) [[unlikely]] {
         depth_first_search walk;
         return walk.encode<AppendRef>(out, root);
     }
     return encode_item<AppendRef>(out, root);
 }
 
-template <bool Cycles, class Target>
+template <class Target>
 std::expected<std::size_t, error> detail::encoding::encode_into(Target &&target, item const &root)
 {
     decltype(auto) message = message_of(target, 0);
     binary_writer<std::remove_reference_t<decltype(message)>> out(message);
-    if (auto const r = encode_tree<Cycles, false>(out, root); !r) [[unlikely]]
+    if (auto const r = encode_tree<false>(out, root); !r) [[unlikely]]
         return std::unexpected(r.error());
     if (auto const r = out.flush(); !r) [[unlikely]]
         return std::unexpected(detail::validity::writer_error(r.error()));
@@ -847,39 +845,37 @@ template <class Target>
     requires detail::encoding::is_target_v<std::remove_reference_t<Target>>
 std::expected<std::size_t, error> encode(Target &&out, item const &root)
 {
-    return detail::encoding::encode_into<false>(std::forward<Target>(out), root);
+    return detail::encoding::encode_into(std::forward<Target>(out), root);
 }
 
 #if __has_include(<sys/uio.h>)
-template <bool Cycles>
-std::expected<ref<std::span<iovec const>>, error> detail::encoding::encode_iov_of(item const &root)
+inline std::expected<ref<std::span<iovec const>>, error> detail::encoding::encode_iov_of(item const &root)
 {
     iov_writer writer;
     binary_writer<iov_writer> out(writer);
-    if (auto const r = encode_tree<Cycles, false>(out, root); !r) [[unlikely]]
+    if (auto const r = encode_tree<false>(out, root); !r) [[unlikely]]
         return std::unexpected(r.error());
     return out.release();
 }
 
-template <bool Cycles>
-std::expected<ref<std::span<iovec const>>, error> detail::encoding::encode_iov_of(owning<item> const &root)
+inline std::expected<ref<std::span<iovec const>>, error> detail::encoding::encode_iov_of(owning<item> const &root)
 {
     iov_writer writer;
     writer.push_owner(root.held);
     binary_writer<iov_writer> out(writer);
-    if (auto const r = encode_tree<Cycles, true>(out, *root.held); !r) [[unlikely]]
+    if (auto const r = encode_tree<true>(out, *root.held); !r) [[unlikely]]
         return std::unexpected(r.error());
     return out.release();
 }
 
 inline std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &root)
 {
-    return detail::encoding::encode_iov_of<false>(root);
+    return detail::encoding::encode_iov_of(root);
 }
 
 inline std::expected<ref<std::span<iovec const>>, error> encode_iov(owning<item> const &root)
 {
-    return detail::encoding::encode_iov_of<false>(root);
+    return detail::encoding::encode_iov_of(root);
 }
 
 #endif
