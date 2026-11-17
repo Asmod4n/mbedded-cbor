@@ -1,0 +1,51 @@
+name: code
+
+on:
+  push:
+    paths:
+      - 'include/**'
+      - 'test/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - 'third_party/**'
+      - 'test-vectors/**'
+      - 'cbor-test-vectors/**'
+      - '.github/workflows/code.yml'
+      - '.github/workflows/macos.yml'
+      - '.github/workflows/windows.yml'
+      - '.github/code_changed.sh'
+
+permissions:
+  contents: read
+
+jobs:
+  changed:
+    runs-on: ubuntu-24.04
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            base=$(git merge-base origin/main HEAD)
+          else
+            base=$BEFORE
+          fi
+          files=$(bash .github/code_changed.sh "$base" HEAD)
+          printf '%s\n' "$files"
+          if [ -n "$files" ]; then echo code=true >> "$GITHUB_OUTPUT"; else echo code=false >> "$GITHUB_OUTPUT"; fi
+
+  macos:
+    needs: changed
+    if: needs.changed.outputs.code == 'true'
+    uses: ./.github/workflows/macos.yml
+
+  windows:
+    needs: changed
+    if: needs.changed.outputs.code == 'true'
+    uses: ./.github/workflows/windows.yml
