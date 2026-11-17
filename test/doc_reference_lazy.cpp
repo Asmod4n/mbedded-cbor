@@ -123,7 +123,7 @@ TEST_CASE("doc reference lazy: at_key")
     // bytes: a std::string with {"cars": [{"hp": 5}, {"hp": 7}], 7: "seven"}
     auto const doc = cbor::lazy::adopt(std::move(bytes));
     auto const hp = doc->at("cars")->at(1)->at("hp")->get<int>(); // 7
-    auto const seven = doc->at_key(7)->get<std::string_view>();    // a ref to "seven"
+    auto const seven = doc->at(7)->get<std::string_view>();    // a ref to "seven"
     auto const bus = doc->at("bus");                               // key_not_found
     auto const first = doc->at("cars")->at("hp");                  // not_indexable
     // [at_key]

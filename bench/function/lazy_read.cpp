@@ -1,4 +1,5 @@
-// The bench of the block of reads of a cbor::lazy: at_key, at(index), size, type, get (lazy.hpp).
+// The bench of the block of reads of a cbor::lazy: at with a text key, an integer key and an index, size, type, get
+// (lazy.hpp).
 // Each iteration reads every lazy of a buffer of COLD_BYTES bytes of messages.
 // lazy_read: text keys, the message {"a": 1, "b": [2, 3]}. lazy_read_integer_key: integer keys, {1: 1, 2: [2, 3]}.
 #include <benchmark/benchmark.h>
@@ -60,7 +61,7 @@ void lazy_read(benchmark::State &state)
 void lazy_read_integer_key(benchmark::State &state)
 {
     auto const sample = cbor::lazy::view(std::make_shared<std::string const>(integer_key_message));
-    if (!sample || sample->at_key(2)->at(1)->get<std::int64_t>() != 3 || sample->size() != 2) {
+    if (!sample || sample->at(2)->at(1)->get<std::int64_t>() != 3 || sample->size() != 2) {
         state.SkipWithError("the lazy of {1: 1, 2: [2, 3]} does not give 3 at key 2, index 1 and size 2");
         return;
     }
@@ -68,8 +69,8 @@ void lazy_read_integer_key(benchmark::State &state)
     for (auto _ : state) {
         std::int64_t sum = 0;
         for (cbor::lazy const &doc : lazies) {
-            sum += *doc.at_key(1)->get<std::int64_t>();
-            sum += *doc.at_key(2)->at(1)->get<std::int64_t>();
+            sum += *doc.at(1)->get<std::int64_t>();
+            sum += *doc.at(2)->at(1)->get<std::int64_t>();
             sum += static_cast<std::int64_t>(*doc.size());
             sum += static_cast<std::int64_t>(*doc.type());
         }

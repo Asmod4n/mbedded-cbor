@@ -246,11 +246,11 @@ TEST_CASE("bignum: tag 28 around a bignum that fits is a tag over the integer")
 // refuses a tag 2 whose content is not a byte string.
 TEST_CASE("bignum: a key that fits 64 bits is the same key as the integer")
 {
-    CHECK_EQ(test::make_lazy_from_copy("\xa2\xc2\x41\x01\x00\x01\x01"s)->at_key(1)->get<int>(), 0);
-    CHECK_EQ(test::make_lazy_from_copy("\xa2\xc3\x41\x00\x00\x20\x01"s)->at_key(-1)->get<int>(), 0);
-    CHECK_EQ(test::make_lazy_from_copy("\xa1\xc2\x41\x01\x61\x61"s)->at_key(1)->get<std::string_view>().has_value(), true);
-    CHECK_EQ(test::make_lazy_from_copy("\xa1\xc2\x41\x01\x61\x61"s)->at_key(-2).error(), error::key_not_found);
-    CHECK_EQ(test::make_lazy_from_copy("\xa1\xc2\x61\x61\x61\x61"s)->at_key(1).error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(test::make_lazy_from_copy("\xa2\xc2\x41\x01\x00\x01\x01"s)->at(1)->get<int>(), 0);
+    CHECK_EQ(test::make_lazy_from_copy("\xa2\xc3\x41\x00\x00\x20\x01"s)->at(-1)->get<int>(), 0);
+    CHECK_EQ(test::make_lazy_from_copy("\xa1\xc2\x41\x01\x61\x61"s)->at(1)->get<std::string_view>().has_value(), true);
+    CHECK_EQ(test::make_lazy_from_copy("\xa1\xc2\x41\x01\x61\x61"s)->at(-2).error(), error::key_not_found);
+    CHECK_EQ(test::make_lazy_from_copy("\xa1\xc2\x61\x61\x61\x61"s)->at(1).error(), error::inadmissible_type_for_tag_content);
     CHECK(test::query("$[1]", *test::make_lazy_from_copy("\xa1\xc2\x41\x01\x61\x61"s)) ==
           test::query("$[1]", *test::make_lazy_from_copy("\xa1\x01\x61\x61"s)));
     CHECK(test::query("$[-1]", *test::make_lazy_from_copy("\xa1\xc3\x40\x61\x61"s)) ==
@@ -351,7 +351,7 @@ TEST_CASE("bignum: every reader gives the value of a bignum")
         if (r.as_int64) {
             auto const keyed = test::make_lazy_from_copy(encode_edn("{" + r.edn + ": \"v\"}"));
             REQUIRE(keyed.has_value());
-            CHECK(holds_text_v(keyed->at_key(*r.as_int64)));
+            CHECK(holds_text_v(keyed->at(*r.as_int64)));
             if (*r.as_int64 >= -largest_index && *r.as_int64 <= largest_index) {
                 auto const index = cbor::path::compile<cbor::lazy>("$[" + r.number + "]");
                 REQUIRE(index.has_value());

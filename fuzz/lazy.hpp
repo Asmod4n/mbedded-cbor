@@ -63,8 +63,7 @@ inline void lazy_channels(std::string_view const input)
     }
     std::string_view const key = input.substr(0, 4);
     (void)root.at(0);
-    (void)root.at_key(0);
-    (void)root.at_key(-1);
+    (void)root.at(-1);
     (void)root.at("a");
     if (auto const a = root.at(key))
         if (auto const b = a->at(0))
@@ -121,8 +120,8 @@ inline void node_reads_compare(cbor::lazy const &a, cbor::lazy const &b)
 }
 
 // The forms of the input that cbor::lazy takes: owned by adopt, a std::shared_ptr to the bytes, and an
-// owner with a view into it. Each form reads the same; operator[] is at; elements and entries give as many
-// iterations as size says, and the post-increment steps as the pre-increment does.
+// owner with a view into it. Each form reads the same; elements and entries give as many iterations as size says,
+// and the post-increment steps as the pre-increment does.
 inline void lazy_forms(std::string_view const input)
 {
     auto const owned = cbor::lazy::adopt(std::string{input});
@@ -136,11 +135,6 @@ inline void lazy_forms(std::string_view const input)
     }
     node_reads_compare(*owned, *shared);
     node_reads_compare(*owned, *borrowed);
-    std::string_view const key = input.substr(0, 4);
-    require_same_result((*owned)[key].and_then([](cbor::lazy const &l) { return l.type(); }),
-                        owned->at(key).and_then([](cbor::lazy const &l) { return l.type(); }));
-    require_same_result((*owned)[std::size_t{0}].and_then([](cbor::lazy const &l) { return l.type(); }),
-                        owned->at(std::size_t{0}).and_then([](cbor::lazy const &l) { return l.type(); }));
     if (auto const elements = owned->elements()) {
         std::uint64_t count = 0;
         auto it = elements->begin();

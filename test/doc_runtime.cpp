@@ -84,7 +84,7 @@ TEST_CASE("doc runtime: read step by step")
     REQUIRE(key.has_value());
     CHECK_EQ(**key, "cars"sv);
     auto const keyed = test::make_lazy_from_copy(encode_in_preferred_form(M(7, "seven"s)));
-    auto const seven = keyed->at_key(7)->get<std::string_view>();
+    auto const seven = keyed->at(7)->get<std::string_view>();
     REQUIRE(seven.has_value());
     CHECK_EQ(**seven, "seven"sv);
 }

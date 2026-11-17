@@ -378,7 +378,7 @@ TEST_CASE("qcbor ParseEmptyMapInMapTest: an empty map is the value of key 2")
 {
     auto const doc = lazy_of(as_string({0xa1, 0x02, 0xa0}));
     REQUIRE(doc.has_value());
-    auto const inner = doc->at_key(2);
+    auto const inner = doc->at(2);
     REQUIRE(inner.has_value());
     CHECK(inner->type() == cbor::type::map);
     CHECK(inner->size() == 0u);
@@ -530,17 +530,17 @@ TEST_CASE("qcbor SimpleValueDecodeTests: simple values are found by key")
     auto const doc = lazy_of(as_string({0xa9, 0x01, 0xf4, 0x02, 0xf5, 0x03, 0xf6, 0x04, 0xf7, 0x05, 0xe0, 0x06,
                                         0xf3, 0x07, 0xf8, 0x20, 0x61, 0x40, 0xf8, 0xff, 0x0f, 0x0f}));
     REQUIRE(doc.has_value());
-    CHECK(read_as<cbor::simple_value>(doc->at_key(1)) == cbor::simple_value::false_value);
-    CHECK(read_as<cbor::simple_value>(doc->at_key(2)) == cbor::simple_value::true_value);
-    CHECK(read_as<cbor::simple_value>(doc->at_key(3)) == cbor::simple_value::null);
-    CHECK(read_as<cbor::simple_value>(doc->at_key(4)) == cbor::simple_value::undefined);
-    CHECK(read_as<cbor::simple_value>(doc->at_key(5)) == cbor::simple_value{0});
-    CHECK(read_as<cbor::simple_value>(doc->at_key(6)) == cbor::simple_value{19});
-    CHECK(read_as<cbor::simple_value>(doc->at_key(7)) == cbor::simple_value{32});
+    CHECK(read_as<cbor::simple_value>(doc->at(1)) == cbor::simple_value::false_value);
+    CHECK(read_as<cbor::simple_value>(doc->at(2)) == cbor::simple_value::true_value);
+    CHECK(read_as<cbor::simple_value>(doc->at(3)) == cbor::simple_value::null);
+    CHECK(read_as<cbor::simple_value>(doc->at(4)) == cbor::simple_value::undefined);
+    CHECK(read_as<cbor::simple_value>(doc->at(5)) == cbor::simple_value{0});
+    CHECK(read_as<cbor::simple_value>(doc->at(6)) == cbor::simple_value{19});
+    CHECK(read_as<cbor::simple_value>(doc->at(7)) == cbor::simple_value{32});
     CHECK(read_as<cbor::simple_value>(doc->at("@")) == cbor::simple_value{255});
-    CHECK(doc->at_key(99).error_or(error{}) == error::key_not_found);
+    CHECK(doc->at(99).error_or(error{}) == error::key_not_found);
     CHECK(doc->at("xx").error_or(error{}) == error::key_not_found);
-    CHECK(read_as<cbor::simple_value>(doc->at_key(15)) == std::unexpected(error::incorrect_type));
+    CHECK(read_as<cbor::simple_value>(doc->at(15)) == std::unexpected(error::incorrect_type));
 }
 
 namespace
@@ -941,9 +941,9 @@ TEST_CASE("qcbor BignumParseTest: bignums larger than 64 bits keep their bytes")
     REQUIRE(doc.has_value());
     auto const map_at = doc->at(2);
     REQUIRE(map_at.has_value());
-    CHECK(map_at->at_key(-64).and_then([](cbor::lazy const &l) { return l.type(); }) ==
+    CHECK(map_at->at(-64).and_then([](cbor::lazy const &l) { return l.type(); }) ==
           cbor::type::negative_bignum);
-    CHECK(map_at->at_key(64).and_then([](cbor::lazy const &l) { return l.type(); }) ==
+    CHECK(map_at->at(64).and_then([](cbor::lazy const &l) { return l.type(); }) ==
           cbor::type::unsigned_bignum);
     CHECK(map_at->at("BN+").and_then([](cbor::lazy const &l) { return l.type(); }) == cbor::type::unsigned_bignum);
     CHECK(map_at->at("BN-").and_then([](cbor::lazy const &l) { return l.type(); }) == cbor::type::negative_bignum);

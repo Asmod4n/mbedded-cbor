@@ -69,7 +69,7 @@ cbor::lazy at(cbor::lazy const &l, std::size_t const index)
 
 cbor::lazy at_key(cbor::lazy const &l, std::int64_t const key)
 {
-    auto const r = l.at_key(key);
+    auto const r = l.at(key);
     REQUIRE(r.has_value());
     return *r;
 }
@@ -115,9 +115,9 @@ TEST_CASE("lazy: access errors")
     CHECK_EQ(lazy_of(three).at("invalid").error(), error::not_indexable);
     CHECK_EQ(lazy_of(scalar).at("key").error(), error::not_indexable);
     CHECK_EQ(lazy_of(one).at(0).error(), error::key_not_found);
-    CHECK_EQ(lazy_of(three).at_key(0).error(), error::not_indexable);
+    CHECK(value_at(*lazy_of(three).at(0)) == V(1));
     CHECK_EQ(lazy_of(scalar).at(0).error(), error::not_indexable);
-    CHECK_EQ(lazy_of(empty_map).at_key(0).error(), error::key_not_found);
+    CHECK_EQ(lazy_of(empty_map).at(0).error(), error::key_not_found);
 }
 
 namespace
@@ -144,7 +144,7 @@ TEST_CASE("lazy: at reads an integer key of a map and an element of an array")
     CHECK(value_at(at(root, 1)) == V(7));
     CHECK(value_at(at(at(root, 0), 1)) == V("one"s));
     CHECK_EQ(at(root, 0).at(0).error(), error::key_not_found);
-    CHECK_EQ(root.at_key(1).error(), error::not_indexable);
+    CHECK(value_at(*root.at(1)) == V(7));
     CHECK(value_at(*lazy_of_edn(R"({-1: "minus"})").at(-1)) == V("minus"s));
     CHECK_EQ(root.at(std::numeric_limits<std::size_t>::max()).error(), error::index_out_of_bounds);
 }
@@ -679,15 +679,16 @@ TEST_CASE("lazy: at gives the value of a present key")
 {
     cbor::lazy const l = lazy_of("\xa4\x61" "a\x01\x21\x65" "minus\x07\x65" "seven\x61" "b\x02"s);
     CHECK(value_at(*l.at("b")) == V(2));
-    CHECK(value_at(*l.at_key(7)) == V("seven"s));
-    CHECK(value_at(*l.at_key(-2)) == V("minus"s));
+    CHECK(value_at(*l.at(7)) == V("seven"s));
+    CHECK(value_at(*l.at(-2)) == V("minus"s));
     CHECK_EQ(lazy_of("\xa0"s).at("a").error(), error::key_not_found);
 }
 
-// at is a lookup in a map. An array or a scalar has no keys.
-TEST_CASE("lazy: a key in an item that is not a map")
+// On an array an integer is an index, so at(0) gives the first element and not an error. A scalar has no keys and no
+// elements.
+TEST_CASE("lazy: an integer on an array and a key on a scalar")
 {
-    CHECK_EQ(lazy_of("\x81\x1b\x00\x00\x00\x00\x00\x00\x00\x01"s).at_key(0).error(), error::not_indexable);
+    CHECK(value_at(*lazy_of_edn("[1]").at(0)) == V(1));
     CHECK_EQ(lazy_of("\x1b\x00\x00\x00\x00\x00\x00\x00\x01"s).at("a").error(), error::not_indexable);
 }
 
@@ -1094,7 +1095,7 @@ TEST_CASE("lazy: copy, at and get as a chain")
 TEST_CASE("lazy: a key under tag 28 or tag 29 is a tag")
 {
     CHECK_EQ(lazy_of("\xa1\xd8\x1c\x61\x61\x01"s).at("a").error(), error::key_not_found);
-    CHECK_EQ(lazy_of("\xa1\xd8\x1c\x07\x03"s).at_key(7).error(), error::key_not_found);
+    CHECK_EQ(lazy_of("\xa1\xd8\x1c\x07\x03"s).at(7).error(), error::key_not_found);
     auto const root = lazy_of("\x82\xd8\x1c\x61\x61\xa1\xd8\x1d\x00\x02"s);
     REQUIRE(root.at(0).has_value());
     CHECK_EQ(root.at(1)->at("a").error(), error::key_not_found);
@@ -1205,7 +1206,7 @@ TEST_CASE("lazy: every member refuses a lazy that holds no top-level item")
     cbor::lazy const none{};
     CHECK_THROWS_AS((void)none.at("a"sv), std::logic_error);
     CHECK_THROWS_AS((void)none.at(0), std::logic_error);
-    CHECK_THROWS_AS((void)none.at_key(0), std::logic_error);
+    CHECK_THROWS_AS((void)none.at(0), std::logic_error);
     CHECK_THROWS_AS((void)none.get<std::uint64_t>(), std::logic_error);
     CHECK_THROWS_AS((void)none.get<cbor::typed_array>(), std::logic_error);
     CHECK_THROWS_AS((void)none.elements(), std::logic_error);
@@ -1272,8 +1273,8 @@ TEST_CASE("lazy: a repeated key gives the first entry with no error")
     std::string const twice = "\xa2\x61\x61\x01\x61\x61\x02"s;
     CHECK_EQ(*lazy_of(twice).at("a")->get<std::uint64_t>(), 1u);
     CHECK_EQ(*lazy_of("\xa3\x61\x61\x01\x61\x62\x02\x61\x61\x03"s).at("a")->get<std::uint64_t>(), 1u);
-    CHECK_EQ(*lazy_of("\xa2\x01\x01\x18\x01\x02"s).at_key(1)->get<std::uint64_t>(), 1u);
-    CHECK_EQ(*lazy_of("\xa2\x20\x01\x38\x00\x02"s).at_key(-1)->get<std::uint64_t>(), 1u);
+    CHECK_EQ(*lazy_of("\xa2\x01\x01\x18\x01\x02"s).at(1)->get<std::uint64_t>(), 1u);
+    CHECK_EQ(*lazy_of("\xa2\x20\x01\x38\x00\x02"s).at(-1)->get<std::uint64_t>(), 1u);
     CHECK_EQ(*lazy_of("\xa3\x61\x61\x01\x61\x61\x02\x61\x62\x03"s).at("b")->get<std::uint64_t>(), 3u);
     CHECK(lazy_of(twice).entries().has_value());
     cbor::lazy const top = lazy_of(twice);
@@ -1485,7 +1486,7 @@ TEST_CASE("lazy: a step to an element past the end of the input fails at once")
 {
     CHECK_EQ(test::make_lazy_from_copy(std::string("\x82\x01", 2))->at(std::size_t{1}).error(), error::too_little_data);
     CHECK_EQ(test::make_lazy_from_copy(std::string("\xa1\x61k", 3))->at("k").error(), error::too_little_data);
-    CHECK_EQ(test::make_lazy_from_copy(std::string("\xa1\x01", 2))->at_key(1).error(), error::too_little_data);
+    CHECK_EQ(test::make_lazy_from_copy(std::string("\xa1\x01", 2))->at(1).error(), error::too_little_data);
     CHECK_EQ(test::make_lazy_from_copy(std::string("\x82\x01\x19\x01", 4))->at(std::size_t{1}).error(), error::too_little_data);
 }
 
@@ -1516,7 +1517,7 @@ TEST_CASE("lazy: a step over a tag with no content gives too_little_data")
     CHECK_EQ(cbor::at_path<"$[0]", int>(doc).error(), error::too_little_data);
     CHECK_EQ(lazy_of(doc).at(0).error(), error::too_little_data);
     CHECK_EQ(lazy_of(doc).at("a").error(), error::too_little_data);
-    CHECK_EQ(lazy_of(doc).at_key(0).error(), error::too_little_data);
+    CHECK_EQ(lazy_of(doc).at(0).error(), error::too_little_data);
     CHECK_EQ(lazy_of(doc).size().error(), error::too_little_data);
     CHECK_EQ(lazy_of(doc).elements().error(), error::too_little_data);
     CHECK_EQ(lazy_of(doc).entries().error(), error::too_little_data);
@@ -1613,7 +1614,7 @@ TEST_CASE("lazy: a count larger than the bytes left is too_little_data before th
         CHECK_EQ(lazy_of(wire).elements().error(), error::too_little_data);
     }
     CHECK_EQ(lazy_of("\xa2\xff\x00\x00"s).at("a").error(), error::too_little_data);
-    CHECK_EQ(lazy_of("\xa2\xff\x00\x00"s).at_key(std::int64_t{0}).error(), error::too_little_data);
+    CHECK_EQ(lazy_of("\xa2\xff\x00\x00"s).at(std::int64_t{0}).error(), error::too_little_data);
     CHECK_EQ(lazy_of("\xa2\xff\x00\x00"s).entries().error(), error::too_little_data);
 }
 
@@ -1847,7 +1848,7 @@ TEST_CASE("lazy: operator[] gives what at gives")
         "\x1b\x00\x00\x00\x00\x00\x00\x00\x02\x1b\x00\x00\x00\x00\x00\x00\x00\x02"
         "\x63two"s);
     CHECK(value_at(*map["a"]) == value_at(*map.at("a")));
-    CHECK(value_at(*map.at_key(2)) == V("two"s));
+    CHECK(value_at(*map.at(2)) == V("two"s));
     CHECK(value_at(*(*map["a"])[std::size_t{1}]) == V(2));
     CHECK_EQ(map["z"].error(), error::key_not_found);
     CHECK_EQ(map["z"].error(), map.at("z").error());
@@ -1870,7 +1871,7 @@ TEST_CASE("lazy: a repeated key gives the first pair")
     CHECK(value_at(*twice.at_path(*cbor::path::compile<cbor::lazy>("$.a"))) == V(1));
     CHECK_EQ(twice.at_path<"$.a", int>(), 1);
     cbor::lazy const numbers = lazy_of("\xa3\x01\x01\x01\x02\x01\x03"s);
-    CHECK(value_at(*numbers.at_key(1)) == V(1));
+    CHECK(value_at(*numbers.at(1)) == V(1));
 }
 
 // RFC 9535 2.3.5.1: a single result needs a singular query. compile refuses any other query for every result type that

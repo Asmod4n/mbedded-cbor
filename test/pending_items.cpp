@@ -56,7 +56,7 @@ TEST_CASE("pending items: every reader refuses a container that claims more item
     auto const m = test::make_lazy_from_copy(map);
     REQUIRE(m.has_value());
     CHECK_EQ(m->entries().error(), error::too_little_data);
-    CHECK_EQ(m->at_key(1).error(), error::too_little_data);
+    CHECK_EQ(m->at(1).error(), error::too_little_data);
     auto const first = cbor::path::compile<std::int64_t>("$[0]");
     REQUIRE(first.has_value());
     CHECK_EQ(cbor::at_path(std::string_view(array), *first).error(), error::too_little_data);

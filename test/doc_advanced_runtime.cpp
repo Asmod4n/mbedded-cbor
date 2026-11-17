@@ -57,12 +57,12 @@ TEST_CASE("doc advanced runtime: lazy::adopt and lazy::view in every form")
 TEST_CASE("doc advanced runtime: steps and searches")
 {
     auto const doc = *test::make_lazy_from_copy(encode_in_preferred_form(M("cars"s, A(M("hp"s, 5), M("hp"s, 7)), 7, "seven"s)));
-    auto const seven = doc.at_key(7)->get<std::string_view>();
+    auto const seven = doc.at(7)->get<std::string_view>();
     CHECK_EQ(**seven, "seven"sv);
     CHECK_EQ(*doc.size(), 2u);
     CHECK_FALSE(*doc.empty());
-    CHECK_EQ(*doc["cars"]->size(), 2u);
-    CHECK_EQ(doc["cars"]->at(1)->at("hp")->get<std::int64_t>(), 7);
+    CHECK_EQ(*doc.at("cars")->size(), 2u);
+    CHECK_EQ(doc.at("cars")->at(1)->at("hp")->get<std::int64_t>(), 7);
     CHECK_EQ(doc.at("cars")->at(5).error(), error::index_out_of_bounds);
     CHECK_EQ(doc.at("bus").error(), error::key_not_found);
     CHECK_EQ(doc.at(0).error(), error::key_not_found);

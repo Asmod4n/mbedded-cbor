@@ -23,7 +23,7 @@ namespace test
 inline std::expected<cbor::lazy, cbor::error> select_element_by_index(cbor::lazy const &l, std::int64_t const index)
 {
     if (auto const e = l.elements(); !e && e.error() == cbor::error::not_indexable)
-        return l.at_key(index);
+        return l.at(index);
     if (index >= 0)
         return l.at(static_cast<std::size_t>(index));
     auto const size = l.size();
