@@ -1332,14 +1332,17 @@ class generic
                     detail::heads::head_size(std::to_underlying(rfc9581::map_key::base_time));
         auto const content = std::visit(
             [](auto const &s) -> std::expected<std::size_t, error> {
-                if constexpr (is_std_pair<std::remove_cvref_t<decltype(s)>>) {
-                    constexpr auto key = *detail::validity::fraction_key_of_period<typename U::period>();
+                if constexpr (is_std_pair<std::remove_cvref_t<decltype(s)>> &&
+                              detail::validity::fraction_key_of_period<typename U::period>().has_value()) {
+                    constexpr auto key = detail::validity::fraction_key_of_period<typename U::period>();
                     return generic_size(s.first).and_then([&](std::size_t const n) {
-                        return generic_size(std::to_underlying(key)).and_then([&](std::size_t const m) {
+                        return generic_size(std::to_underlying(*key)).and_then([&](std::size_t const m) {
                             return generic_size(s.second.count()).transform(
                                 [&](std::size_t const f) { return n + m + f; });
                         });
                     });
+                } else if constexpr (is_std_pair<std::remove_cvref_t<decltype(s)>>) {
+                    return std::unexpected(error::number_out_of_range);
                 } else {
                     return generic_size(s);
                 }
@@ -1369,11 +1372,14 @@ class generic
         }
         return std::visit(
             [&](auto const &s) -> std::expected<std::size_t, error> {
-                if constexpr (is_std_pair<std::remove_cvref_t<decltype(s)>>) {
-                    constexpr auto key = *detail::validity::fraction_key_of_period<typename U::period>();
+                if constexpr (is_std_pair<std::remove_cvref_t<decltype(s)>> &&
+                              detail::validity::fraction_key_of_period<typename U::period>().has_value()) {
+                    constexpr auto key = detail::validity::fraction_key_of_period<typename U::period>();
                     return write_generic(out, at, s.first)
-                        .and_then([&](std::size_t const w) { return write_generic(out, w, std::to_underlying(key)); })
+                        .and_then([&](std::size_t const w) { return write_generic(out, w, std::to_underlying(*key)); })
                         .and_then([&](std::size_t const w) { return write_generic(out, w, s.second.count()); });
+                } else if constexpr (is_std_pair<std::remove_cvref_t<decltype(s)>>) {
+                    return std::unexpected(error::number_out_of_range);
                 } else {
                     return write_generic(out, at, s);
                 }
