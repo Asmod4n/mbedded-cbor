@@ -279,6 +279,55 @@ class generic
     static constexpr bool is_whole_seconds<std::chrono::sys_time<std::chrono::duration<R>>> = true;
 
     template <class U>
+    static constexpr bool is_tai_time = false;
+
+    template <class U>
+    static constexpr bool is_gps_time = false;
+
+    template <class U>
+    static constexpr bool is_utc_time = false;
+
+    template <class U>
+    static constexpr bool is_file_time = false;
+
+    template <class U>
+    static constexpr bool is_zoned_time = false;
+
+    template <class U>
+    static constexpr bool is_local_time = false;
+
+#if __cpp_lib_chrono >= 201907L
+    template <class D>
+        requires std::signed_integral<typename D::rep> || std::floating_point<typename D::rep>
+    static constexpr bool is_tai_time<std::chrono::tai_time<D>> = true;
+
+    template <class D>
+        requires std::signed_integral<typename D::rep> || std::floating_point<typename D::rep>
+    static constexpr bool is_gps_time<std::chrono::gps_time<D>> = true;
+
+    template <class D>
+    static constexpr bool is_local_time<std::chrono::local_time<D>> = true;
+#endif
+
+#if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
+    template <class D>
+        requires std::signed_integral<typename D::rep> || std::floating_point<typename D::rep>
+    static constexpr bool is_utc_time<std::chrono::utc_time<D>> = true;
+
+    template <class D>
+        requires std::signed_integral<typename D::rep> || std::floating_point<typename D::rep>
+    static constexpr bool is_file_time<std::chrono::file_time<D>> = true;
+
+    template <class D>
+        requires std::signed_integral<typename D::rep> || std::floating_point<typename D::rep>
+    static constexpr bool is_zoned_time<std::chrono::zoned_time<D, std::chrono::time_zone const *>> = true;
+#endif
+
+    template <class U>
+    static constexpr bool is_clock_time =
+        is_tai_time<U> || is_gps_time<U> || is_utc_time<U> || is_file_time<U> || is_zoned_time<U>;
+
+    template <class U>
     static constexpr bool is_set = false;
 
     template <class K, class C, class A>
@@ -306,6 +355,8 @@ class generic
     {
         if constexpr (is_sys_time<U>)
             return std::to_underlying(rfc8949::tag_number::epoch_based_date_time);
+        else if constexpr (is_clock_time<U>)
+            return std::to_underlying(rfc9581::tag_number::extended_time);
         else if constexpr (is_duration<U>)
             return std::to_underlying(rfc9581::tag_number::duration);
         else if constexpr (std::same_as<U, std::chrono::year_month_day>)
@@ -318,8 +369,8 @@ class generic
 
     template <class U>
     static constexpr bool is_tagged_standard_type =
-        is_sys_time<U> || is_duration<U> || std::same_as<U, std::chrono::year_month_day> || is_set<U> ||
-        is_typed_array<U>;
+        is_sys_time<U> || is_clock_time<U> || is_duration<U> || std::same_as<U, std::chrono::year_month_day> ||
+        is_set<U> || is_typed_array<U>;
 
     template <class U>
     static constexpr bool is_extended_time = (is_sys_time<U> && !is_whole_seconds<U>) || is_duration<U>;
@@ -341,6 +392,14 @@ class generic
 #endif
             return tag == tag_of_standard_type<U>() || tag == std::to_underlying(rfc9581::tag_number::extended_time) ||
                    tag == std::to_underlying(rfc8943::tag_number::days_since_epoch_date);
+        } else if constexpr (is_tai_time<U> || is_gps_time<U>) {
+#if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
+            return standard_tag_accepted<std::chrono::sys_time<typename U::duration>>(tag);
+#else
+            return tag == tag_of_standard_type<U>();
+#endif
+        } else if constexpr (is_utc_time<U> || is_file_time<U>) {
+            return standard_tag_accepted<std::chrono::sys_time<typename U::duration>>(tag);
         } else if constexpr (std::same_as<U, std::chrono::year_month_day>) {
 #if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
             if (tag == std::to_underlying(rfc8943::tag_number::full_date_string))
@@ -374,6 +433,7 @@ class generic
     template <class U>
     static bool head_accepted(detail::heads::head const &h)
     {
+        static_assert(!is_local_time<U>, "cbor::structs: a std::chrono::local_time has no form in CBOR.");
         if constexpr (std::same_as<U, bool>)
             return detail::heads::is_boolean(h);
         else if constexpr (std::same_as<U, std::nullptr_t>)
@@ -703,8 +763,9 @@ class generic
         }
     }
 
-    template <class D>
-    static std::expected<D, error> read_extended_time(detail::heads::decoder<true> &d)
+    template <class D, bool zoned = false>
+    static std::expected<std::tuple<D, rfc9581::timescale, std::optional<std::string_view>>, error>
+    read_extended_time(detail::heads::decoder<true> &d)
     {
         auto const h = decode_head_through_self_described_cbor(d);
         if (!h) [[unlikely]]
@@ -714,7 +775,8 @@ class generic
             return std::unexpected(r.error());
         std::optional<std::variant<std::int64_t, double>> base;
         std::optional<std::pair<std::uint64_t, rfc9581::map_key>> fraction;
-        bool timescale = false;
+        std::optional<rfc9581::timescale> timescale;
+        std::optional<std::string_view> zone;
         for (std::uint64_t entry = 0; entry < h->argument; ++entry) {
             auto const k = decode_head_through_self_described_cbor(d);
             if (!k) [[unlikely]]
@@ -728,6 +790,12 @@ class generic
                 if (!known) [[unlikely]]
                     return std::unexpected(known.error());
                 key = *known;
+            }
+            if constexpr (!zoned) {
+                if (key == rfc9581::map_key::time_zone_hint_critical) [[unlikely]]
+                    return std::unexpected(error::inadmissible_type_for_tag_content);
+                if (key == rfc9581::map_key::time_zone_hint)
+                    key.reset();
             }
             if (!key) {
                 if (auto const s = detail::well_formedness::skip_item(d); !s) [[unlikely]]
@@ -760,20 +828,107 @@ class generic
                 if (v->major != major_type::unsigned_integer) [[unlikely]]
                     return std::unexpected(error::inadmissible_type_for_tag_content);
                 fraction = std::pair{v->argument, *key};
+            } else if (*key == rfc9581::map_key::time_zone_hint || *key == rfc9581::map_key::time_zone_hint_critical) {
+                if (auto const r = detail::validity::check_extended_time_entry_once(zone.has_value()); !r) [[unlikely]]
+                    return std::unexpected(r.error());
+                if (v->major != major_type::text_string) [[unlikely]]
+                    return std::unexpected(error::inadmissible_type_for_tag_content);
+                auto const name = d.decode_string(v->argument);
+                if (!name) [[unlikely]]
+                    return std::unexpected(name.error());
+                zone = *name;
             } else {
-                if (auto const r = detail::validity::check_extended_time_entry_once(timescale); !r) [[unlikely]]
+                if (auto const r = detail::validity::check_extended_time_entry_once(timescale.has_value()); !r)
+                    [[unlikely]]
                     return std::unexpected(r.error());
-                if (auto const r = detail::validity::check_timescale(v->major, v->argument); !r) [[unlikely]]
-                    return std::unexpected(r.error());
-                timescale = true;
+                auto const scale = detail::validity::check_timescale(v->major, v->argument);
+                if (!scale) [[unlikely]]
+                    return std::unexpected(scale.error());
+                timescale = *scale;
             }
         }
         if (!base || (fraction && !std::holds_alternative<std::int64_t>(*base))) [[unlikely]]
             return std::unexpected(error::inadmissible_type_for_tag_content);
-        if (fraction)
-            return detail::validity::check_extended_time_ticks<D>(std::get<std::int64_t>(*base), fraction->first,
-                                                                  fraction->second);
-        return std::visit([](auto const seconds) { return detail::validity::check_epoch_ticks<D>(seconds); }, *base);
+        auto const ticks =
+            fraction ? detail::validity::check_extended_time_ticks<D>(std::get<std::int64_t>(*base), fraction->first,
+                                                                      fraction->second)
+                     : std::visit([](auto const seconds) { return detail::validity::check_epoch_ticks<D>(seconds); },
+                                  *base);
+        if (!ticks) [[unlikely]]
+            return std::unexpected(ticks.error());
+        return std::tuple{*ticks, timescale.value_or(rfc9581::timescale::utc), zone};
+    }
+
+#if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
+    template <class D>
+    static std::expected<D, error> convert_tai_to_utc(D const tai)
+    {
+        if (auto const r = detail::validity::check_clock_range(tai, detail::validity::clock_offset_bound); !r)
+            [[unlikely]]
+            return std::unexpected(r.error());
+        return detail::validity::check_exact_ticks<D>(
+            std::chrono::clock_cast<std::chrono::system_clock>(std::chrono::tai_time<D>{tai}).time_since_epoch());
+    }
+
+    template <class D>
+    static std::expected<D, error> convert_utc_to_tai(D const utc)
+    {
+        if (auto const r = detail::validity::check_clock_range(utc, detail::validity::clock_offset_bound); !r)
+            [[unlikely]]
+            return std::unexpected(r.error());
+        return detail::validity::check_exact_ticks<D>(
+            std::chrono::clock_cast<std::chrono::tai_clock>(std::chrono::sys_time<D>{utc}).time_since_epoch());
+    }
+
+    static std::chrono::seconds file_clock_bound()
+    {
+        return std::chrono::abs(
+                   std::chrono::clock_cast<std::chrono::system_clock>(std::chrono::file_time<std::chrono::seconds>{})
+                       .time_since_epoch()) +
+               detail::validity::clock_offset_bound;
+    }
+#endif
+
+    template <class D>
+    static std::expected<D, error> convert_to_utc(D const ticks, rfc9581::timescale const scale)
+    {
+        if (scale == rfc9581::timescale::utc) [[likely]]
+            return ticks;
+#if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
+        return detail::validity::check_shifted_ticks(ticks, detail::validity::ptp_epoch_since_tai_clock_epoch)
+            .and_then([](D const tai) { return convert_tai_to_utc(tai); });
+#else
+        return std::unexpected(error::inadmissible_type_for_tag_content);
+#endif
+    }
+
+    template <class D>
+    static std::expected<D, error> read_ptp_ticks(detail::heads::decoder<true> &d, detail::heads::head const &tag)
+    {
+        if (tag.argument == std::to_underlying(rfc9581::tag_number::extended_time)) {
+            auto const t = read_extended_time<D>(d);
+            if (!t) [[unlikely]]
+                return std::unexpected(t.error());
+            if (std::get<1>(*t) == rfc9581::timescale::tai) [[likely]]
+                return std::get<0>(*t);
+#if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
+            return convert_utc_to_tai(std::get<0>(*t)).and_then([](D const tai) {
+                return detail::validity::check_shifted_ticks(tai, -detail::validity::ptp_epoch_since_tai_clock_epoch);
+            });
+#else
+            return std::unexpected(error::inadmissible_type_for_tag_content);
+#endif
+        }
+#if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
+        std::chrono::sys_time<D> utc{};
+        if (auto const r = read_tag_content(d, utc, tag); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        return convert_utc_to_tai(utc.time_since_epoch()).and_then([](D const tai) {
+            return detail::validity::check_shifted_ticks(tai, -detail::validity::ptp_epoch_since_tai_clock_epoch);
+        });
+#else
+        return std::unexpected(error::incorrect_type);
+#endif
     }
 
     template <class U>
@@ -860,18 +1015,85 @@ class generic
                 return parse_text(d, out, date_time_formats);
 #endif
             if (tag.argument == std::to_underlying(rfc9581::tag_number::extended_time)) {
-                auto const ticks = read_extended_time<typename U::duration>(d);
+                auto const t = read_extended_time<typename U::duration>(d);
+                if (!t) [[unlikely]]
+                    return std::unexpected(t.error());
+                auto const ticks = convert_to_utc(std::get<0>(*t), std::get<1>(*t));
                 if (!ticks) [[unlikely]]
                     return std::unexpected(ticks.error());
                 out = U{*ticks};
                 return {};
             }
             return read_epoch_days(d, out);
+        } else if constexpr (is_tai_time<U> || is_gps_time<U> || is_utc_time<U>) {
+            using D = typename U::duration;
+            auto const ptp = read_ptp_ticks<D>(d, tag);
+            if (!ptp) [[unlikely]]
+                return std::unexpected(ptp.error());
+            if constexpr (is_gps_time<U>) {
+                auto const gps = detail::validity::check_shifted_ticks(*ptp, -detail::validity::tai_minus_gps);
+                if (!gps) [[unlikely]]
+                    return std::unexpected(gps.error());
+                out = U{*gps};
+                return {};
+            } else {
+                auto const tai = detail::validity::check_shifted_ticks(*ptp, detail::validity::ptp_epoch_since_tai_clock_epoch);
+                if (!tai) [[unlikely]]
+                    return std::unexpected(tai.error());
+                if constexpr (is_tai_time<U>) {
+                    out = U{*tai};
+                    return {};
+                } else {
+#if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
+                    if (auto const r = detail::validity::check_clock_range(*tai, detail::validity::clock_offset_bound);
+                        !r) [[unlikely]]
+                        return r;
+                    auto const utc = detail::validity::check_exact_ticks<D>(
+                        std::chrono::clock_cast<std::chrono::utc_clock>(std::chrono::tai_time<D>{*tai}).time_since_epoch());
+                    if (!utc) [[unlikely]]
+                        return std::unexpected(utc.error());
+                    out = U{*utc};
+#endif
+                    return {};
+                }
+            }
+        } else if constexpr (is_file_time<U> || is_zoned_time<U>) {
+#if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
+            using D = typename U::duration;
+            if constexpr (is_file_time<U>) {
+                std::chrono::sys_time<D> utc{};
+                if (auto const r = read_tag_content(d, utc, tag); !r) [[unlikely]]
+                    return r;
+                if (auto const r = detail::validity::check_clock_range(utc.time_since_epoch(), file_clock_bound()); !r)
+                    [[unlikely]]
+                    return r;
+                auto const file = detail::validity::check_exact_ticks<D>(
+                    std::chrono::clock_cast<std::chrono::file_clock>(utc).time_since_epoch());
+                if (!file) [[unlikely]]
+                    return std::unexpected(file.error());
+                out = U{*file};
+            } else {
+                auto const t = read_extended_time<D, true>(d);
+                if (!t) [[unlikely]]
+                    return std::unexpected(t.error());
+                auto const utc = convert_to_utc(std::get<0>(*t), std::get<1>(*t));
+                if (!utc) [[unlikely]]
+                    return std::unexpected(utc.error());
+                auto const zone =
+                    detail::validity::check_time_zone(std::get<2>(*t).value_or(detail::validity::utc_zone_name));
+                if (!zone) [[unlikely]]
+                    return std::unexpected(zone.error());
+                out = U{*zone, std::chrono::sys_time<D>{*utc}};
+            }
+#endif
+            return {};
         } else if constexpr (is_duration<U>) {
-            auto const ticks = read_extended_time<U>(d);
-            if (!ticks) [[unlikely]]
-                return std::unexpected(ticks.error());
-            out = *ticks;
+            auto const t = read_extended_time<U>(d);
+            if (!t) [[unlikely]]
+                return std::unexpected(t.error());
+            if (std::get<1>(*t) != rfc9581::timescale::utc) [[unlikely]]
+                return std::unexpected(error::inadmissible_type_for_tag_content);
+            out = std::get<0>(*t);
             return {};
         } else if constexpr (std::same_as<U, std::chrono::year_month_day>) {
 #if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
@@ -1155,6 +1377,11 @@ class generic
         } else if constexpr (std::is_floating_point_v<U>) {
             static_assert(std::same_as<U, float> || std::same_as<U, double>, "cbor::structs reads and writes float and double only.");
             return float_size(value);
+        } else if constexpr (is_clock_time<U>) {
+            auto const t = extended_time_of(value);
+            if (!t) [[unlikely]]
+                return std::unexpected(t.error());
+            return extended_time_size(std::get<0>(*t), std::get<1>(*t), std::get<2>(*t));
         } else if constexpr (is_extended_time<U>) {
             return extended_time_size(value);
         } else if constexpr (is_tagged_standard_type<U>) {
@@ -1308,28 +1535,99 @@ class generic
             return value.time_since_epoch();
     }
 
+    template <class U>
+    using extended_time_parts =
+        std::tuple<std::chrono::sys_time<typename U::duration>, rfc9581::timescale, std::optional<std::string_view>>;
+
+    template <class U>
+    static std::expected<extended_time_parts<U>, error> extended_time_of(U const &value)
+    {
+        using D = typename U::duration;
+        if constexpr (is_zoned_time<U>) {
+            return extended_time_parts<U>{value.get_sys_time(), rfc9581::timescale::utc,
+                                          value.get_time_zone()->name()};
+        } else {
+            std::expected<D, error> ptp;
+            if constexpr (is_tai_time<U>) {
+                ptp = detail::validity::check_shifted_ticks(value.time_since_epoch(),
+                                                            -detail::validity::ptp_epoch_since_tai_clock_epoch);
+            } else if constexpr (is_gps_time<U>) {
+                ptp = detail::validity::check_shifted_ticks(value.time_since_epoch(), detail::validity::tai_minus_gps);
+            } else {
+#if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
+                std::chrono::seconds const bound =
+                    is_file_time<U> ? file_clock_bound() : detail::validity::clock_offset_bound;
+                if (auto const r = detail::validity::check_clock_range(value.time_since_epoch(), bound); !r)
+                    [[unlikely]]
+                    return std::unexpected(r.error());
+                if constexpr (is_file_time<U>) {
+                    auto const utc = detail::validity::check_exact_ticks<D>(
+                        std::chrono::clock_cast<std::chrono::system_clock>(value).time_since_epoch());
+                    if (!utc) [[unlikely]]
+                        return std::unexpected(utc.error());
+                    return extended_time_parts<U>{std::chrono::sys_time<D>{*utc}, rfc9581::timescale::utc,
+                                                  std::nullopt};
+                } else {
+                    ptp = detail::validity::check_exact_ticks<D>(
+                              std::chrono::clock_cast<std::chrono::tai_clock>(value).time_since_epoch())
+                              .and_then([](D const tai) {
+                                  return detail::validity::check_shifted_ticks(
+                                      tai, -detail::validity::ptp_epoch_since_tai_clock_epoch);
+                              });
+                }
+#endif
+            }
+            if (!ptp) [[unlikely]]
+                return std::unexpected(ptp.error());
+            return extended_time_parts<U>{std::chrono::sys_time<D>{*ptp}, rfc9581::timescale::tai, std::nullopt};
+        }
+    }
+
     template <class U, class S>
-    static constexpr std::uint64_t extended_time_tag(S const &seconds)
+    static constexpr std::uint64_t extended_time_tag(S const &seconds, rfc9581::timescale const scale,
+                                                     std::optional<std::string_view> const zone)
     {
         if constexpr (is_duration<U>)
             return std::to_underlying(rfc9581::tag_number::duration);
-        else if (seconds.index() == 2)
+        else if (seconds.index() == 2 || scale != rfc9581::timescale::utc || zone)
             return std::to_underlying(rfc9581::tag_number::extended_time);
         else
             return std::to_underlying(rfc8949::tag_number::epoch_based_date_time);
     }
 
+    template <class S>
+    static constexpr std::size_t extended_time_entries(S const &seconds, rfc9581::timescale const scale,
+                                                       std::optional<std::string_view> const zone)
+    {
+        return std::size_t{1} + std::size_t{seconds.index() == 2} + std::size_t{scale != rfc9581::timescale::utc} +
+               std::size_t{zone.has_value()};
+    }
+
     template <class U>
-    static std::expected<std::size_t, error> extended_time_size(U const &value)
+    static std::expected<std::size_t, error>
+    extended_time_size(U const &value, rfc9581::timescale const scale = rfc9581::timescale::utc,
+                       std::optional<std::string_view> const zone = std::nullopt)
     {
         auto const seconds = detail::validity::check_epoch_seconds(duration_of(value));
         if (!seconds) [[unlikely]]
             return std::unexpected(seconds.error());
-        std::uint64_t const tag = extended_time_tag<U>(*seconds);
+        std::uint64_t const tag = extended_time_tag<U>(*seconds, scale, zone);
         std::size_t size = detail::heads::head_size(tag);
         if (tag != std::to_underlying(rfc8949::tag_number::epoch_based_date_time))
-            size += detail::heads::head_size(seconds->index() == 2 ? rfc8949::data_items_per_pair : 1) +
+            size += detail::heads::head_size(extended_time_entries(*seconds, scale, zone)) +
                     detail::heads::head_size(std::to_underlying(rfc9581::map_key::base_time));
+        if (scale != rfc9581::timescale::utc)
+            size += detail::heads::head_size(std::to_underlying(rfc9581::map_key::timescale_critical)) +
+                    detail::heads::head_size(std::to_underlying(scale));
+        if (zone) {
+            auto const hint = generic_size(std::to_underlying(rfc9581::map_key::time_zone_hint))
+                                  .and_then([&](std::size_t const k) {
+                                      return generic_size(*zone).transform([&](std::size_t const v) { return k + v; });
+                                  });
+            if (!hint) [[unlikely]]
+                return hint;
+            size += *hint;
+        }
         auto const content = std::visit(
             [](auto const &s) -> std::expected<std::size_t, error> {
                 if constexpr (is_std_pair<std::remove_cvref_t<decltype(s)>> &&
@@ -1354,23 +1652,24 @@ class generic
     }
 
     template <class U>
-    static std::expected<std::size_t, error> write_extended_time(std::span<char> const out, std::size_t at,
-                                                                 U const &value)
+    static std::expected<std::size_t, error>
+    write_extended_time(std::span<char> const out, std::size_t at, U const &value,
+                        rfc9581::timescale const scale = rfc9581::timescale::utc,
+                        std::optional<std::string_view> const zone = std::nullopt)
     {
         auto const seconds = detail::validity::check_epoch_seconds(duration_of(value));
         if (!seconds) [[unlikely]]
             return std::unexpected(seconds.error());
-        std::uint64_t const tag = extended_time_tag<U>(*seconds);
+        std::uint64_t const tag = extended_time_tag<U>(*seconds, scale, zone);
         at += detail::heads::write_head(out, at, major_type::tag, tag);
         if (tag != std::to_underlying(rfc8949::tag_number::epoch_based_date_time)) {
-            at += detail::heads::write_head(out, at, major_type::map,
-                                            seconds->index() == 2 ? rfc8949::data_items_per_pair : 1);
+            at += detail::heads::write_head(out, at, major_type::map, extended_time_entries(*seconds, scale, zone));
             auto const key = write_generic(out, at, std::to_underlying(rfc9581::map_key::base_time));
             if (!key) [[unlikely]]
                 return key;
             at = *key;
         }
-        return std::visit(
+        auto const time = std::visit(
             [&](auto const &s) -> std::expected<std::size_t, error> {
                 if constexpr (is_std_pair<std::remove_cvref_t<decltype(s)>> &&
                               detail::validity::fraction_key_of_period<typename U::period>().has_value()) {
@@ -1385,6 +1684,20 @@ class generic
                 }
             },
             *seconds);
+        if (!time || (scale == rfc9581::timescale::utc && !zone)) [[likely]]
+            return time;
+        at = *time;
+        if (scale != rfc9581::timescale::utc) {
+            auto const w = write_generic(out, at, std::to_underlying(rfc9581::map_key::timescale_critical))
+                               .and_then([&](std::size_t const n) { return write_generic(out, n, std::to_underlying(scale)); });
+            if (!w) [[unlikely]]
+                return w;
+            at = *w;
+        }
+        if (zone)
+            return write_generic(out, at, std::to_underlying(rfc9581::map_key::time_zone_hint))
+                .and_then([&](std::size_t const n) { return write_generic(out, n, *zone); });
+        return at;
     }
 
     template <class U>
@@ -1474,6 +1787,11 @@ class generic
             at += detail::heads::write_head(out, at, major_type::byte_string, value.size());
             std::ranges::copy(value, std::as_writable_bytes(out.subspan(at, value.size())).begin());
             return at + value.size();
+        } else if constexpr (is_clock_time<U>) {
+            auto const t = extended_time_of(value);
+            if (!t) [[unlikely]]
+                return std::unexpected(t.error());
+            return write_extended_time(out, at, std::get<0>(*t), std::get<1>(*t), std::get<2>(*t));
         } else if constexpr (is_extended_time<U>) {
             return write_extended_time(out, at, value);
         } else if constexpr (is_tagged_standard_type<U>) {
@@ -1618,6 +1936,10 @@ class generic
  * | `std::set`, `std::flat_set` | tag 258 on an array |
  * | `std::chrono::sys_time<D>`, any period, an integral or floating rep | whole seconds: tag 1 on the integer; an integral rep of a millisecond to an attosecond: tag 1001 (RFC 9581) with the seconds and the fraction; a floating rep: tag 1 on the `double` when it is exact. `decode` also takes tag 0 where the C++ library has `std::chrono::parse`, tag 1001 and tag 100. A value that D cannot hold exactly gives `number_out_of_range` |
  * | `std::chrono::duration<R, P>` | tag 1002 (RFC 9581) with the seconds and the fraction |
+ * | `std::chrono::tai_time<D>`, `std::chrono::gps_time<D>` | tag 1001 (RFC 9581) with the timescale TAI; GPS converts by the constant of RFC 9581 3.4 |
+ * | `std::chrono::utc_time<D>` | tag 1001 with the timescale TAI, through the leap second table of the C++ library; exact in a leap second |
+ * | `std::chrono::file_time<D>` | as the `sys_time` that `std::chrono::clock_cast` gives |
+ * | `std::chrono::zoned_time<D>` | tag 1001 with its time in UTC and the time zone name under key -10 |
  * | `std::chrono::year_month_day` | tag 100 on an integer of days; `decode` also takes tag 1004 where the C++ library has `std::chrono::parse` |
  * | `std::optional<E>` | the item of E, or `null`; no key when empty |
  * | `std::variant<E...>` | the item of the alternative |
@@ -1890,7 +2212,7 @@ void copy_views_into_zone(T &value, string_saver &zone)
     } else if constexpr (std::is_same_v<T, typed_array>) {
         detail::copy_views_into_zone(value.bytes, zone);
     } else if constexpr (std::is_arithmetic_v<T> || std::is_enum_v<T> || detail::generic::is_sys_time<T> ||
-                         detail::generic::is_duration<T> ||
+                         detail::generic::is_clock_time<T> || detail::generic::is_duration<T> ||
                          std::is_same_v<T, std::nullptr_t> ||
                          requires { typename T::traits_type; typename T::allocator_type; }) {
     } else if constexpr (requires { typename T::value_type; value.has_value(); *value; }) {

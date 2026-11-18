@@ -1241,14 +1241,22 @@ TEST_CASE("structs: tag 1001 into sys_time")
 }
 
 // RFC 9581 3: the map has exactly one base time, at most one fraction key and at most one timescale key (3.3, 3.4). A
-// fraction needs an integer under key 1. An unsigned key that the library does not implement (4, 5, 10, 11 and
-// unknown ones) is critical and is an error. A timescale other than UTC (TAI is 1) gives another time than POSIX time.
+// fraction needs an integer under key 1. An unsigned key that the library does not implement (4, 5, 11 and unknown
+// ones) is critical and is an error. Key 10 is a critical time zone hint (3.6), and a sys_time cannot use it. TAI
+// (timescale 1) needs the leap seconds of the tzdb; without the tzdb it is an error.
 TEST_CASE("structs: tag 1001 that the library cannot read gives inadmissible_type_for_tag_content")
 {
     using namespace std::chrono;
+#if !(__cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream))
+    for (std::string_view const diag : {"1001({1: 1, 13: 1})", "1001({1: 1, -1: 1})"}) {
+        CAPTURE(diag);
+        CHECK_EQ(cbor::structs<sys_time<milliseconds>>::decode(cbor::diag2cbor(diag).value()).error(),
+                 error::inadmissible_type_for_tag_content);
+    }
+#endif
     for (std::string_view const diag :
          {"1001({1: 1, 4: 0})", "1001({1: 1, 5: 0})", "1001({1: 1, 10: 0})", "1001({1: 1, 11: 0})",
-          "1001({1: 1, 99: 0})", "1001({1: 1, 13: 1})", "1001({1: 1, -1: 1})", "1001({1: 1, 13: \"TAI\"})",
+          "1001({1: 1, 10: \"UTC\"})", "1001({1: 1, 99: 0})", "1001({1: 1, 13: 2})", "1001({1: 1, 13: \"TAI\"})",
           "1001({1: 1, -3: 1, -6: 1})", "1001({1: 1.5, -3: 1})", "1001({-3: 1})", "1001({})",
           "1001({1: 1, 1: 2})", "1001({1: 1, 13: 0, -1: 0})", "1001({1: 1, -3: -1})", "1001([1])",
           "1001({1: \"1\"})", "1001({h'01': 1, 1: 1})"}) {
@@ -1257,6 +1265,119 @@ TEST_CASE("structs: tag 1001 that the library cannot read gives inadmissible_typ
                  error::inadmissible_type_for_tag_content);
     }
 }
+
+#if __cpp_lib_chrono >= 201907L
+// RFC 9581 3.4 (refs/rfc9581.txt:315-347): timescale 1 is TAI with the PTP epoch 1970-01-01 TAI, and t_tai = t_gps +
+// 315964819. The epoch of tai_clock is 1958-01-01 TAI, 4383 days before the PTP epoch. A tai_time and a gps_time are
+// written as TAI under key 13, with no leap second table.
+TEST_CASE("structs: tai_time and gps_time are tag 1001 with timescale 1")
+{
+    using namespace std::chrono;
+    auto const item = [](std::string_view const diag) { return cbor::diag2cbor(diag).value(); };
+    round_trip(item("1001({1: 0, 13: 1})"), tai_seconds{seconds{378691200}});
+    round_trip(item("1001({1: 0, -3: 500, 13: 1})"), tai_time<milliseconds>{milliseconds{378691200500}});
+    round_trip(item("1001({1: -378691200, 13: 1})"), tai_seconds{seconds{0}});
+    round_trip(item("1001({1: 315964819, 13: 1})"), gps_seconds{seconds{0}});
+    round_trip(item("1001({1: 315964820, -3: 250, 13: 1})"), gps_time<milliseconds>{milliseconds{1250}});
+    CHECK_EQ(cbor::structs<gps_time<minutes>>::encode(gps_time<minutes>{}).error(), error::number_out_of_range);
+    CHECK_EQ(cbor::structs<gps_time<minutes>>::decode(item("1001({1: 0, 13: 1})")).error(), error::number_out_of_range);
+    CHECK_EQ(cbor::structs<tai_time<duration<std::int64_t, std::atto>>>::encode(
+                 tai_time<duration<std::int64_t, std::atto>>{})
+                 .error(),
+             error::number_out_of_range);
+    CHECK_EQ(cbor::structs<tai_seconds>::decode(item("1002({1: 0})")).error(), error::incorrect_type);
+}
+#endif
+
+#if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
+// The owner's review of the plan of 2026-11-18: every conversion through utc_clock reads the leap seconds of the tzdb.
+// TAI - UTC is 37 s from 2017-01-01 on. A UTC timescale or tag 1 into a tai_time goes through clock_cast.
+TEST_CASE("structs: timescale 1 into sys_time and UTC forms into tai_time convert with the leap seconds")
+{
+    using namespace std::chrono;
+    auto const item = [](std::string_view const diag) { return cbor::diag2cbor(diag).value(); };
+    auto const utc = cbor::structs<sys_seconds>::decode(item("1001({1: 1500000000, 13: 1})"));
+    REQUIRE(utc.has_value());
+    CHECK_EQ((*utc)->time_since_epoch().count(), 1499999963);
+    auto const elective = cbor::structs<sys_seconds>::decode(item("1001({1: 1500000000, -1: 1})"));
+    REQUIRE(elective.has_value());
+    CHECK_EQ((*elective)->time_since_epoch().count(), 1499999963);
+    for (std::string_view const diag : {"1(1499999963)", "1001({1: 1499999963})", "1001({1: 1499999963, 13: 0})"}) {
+        CAPTURE(diag);
+        auto const tai = cbor::structs<tai_seconds>::decode(item(diag));
+        REQUIRE(tai.has_value());
+        CHECK_EQ((*tai)->time_since_epoch().count(), 1500000000 + 378691200);
+        auto const gps = cbor::structs<gps_seconds>::decode(item(diag));
+        REQUIRE(gps.has_value());
+        CHECK_EQ((*gps)->time_since_epoch().count(), 1500000000 - 315964819);
+    }
+    CHECK_EQ(cbor::structs<sys_seconds>::decode(item("1001({1: 9223372036854775807, 13: 1})")).error(),
+             error::number_out_of_range);
+}
+
+// A utc_time counts the leap second 2016-12-31 23:59:60, which a sys_time cannot hold. It round trips as utc_time.
+// A decode into sys_time maps it to 23:59:59, as utc_clock::to_sys does.
+TEST_CASE("structs: utc_time is TAI and keeps a leap second")
+{
+    using namespace std::chrono;
+    auto const item = [](std::string_view const diag) { return cbor::diag2cbor(diag).value(); };
+    auto const before = clock_cast<utc_clock>(sys_seconds{seconds{1483228799}});
+    utc_seconds const leap = before + seconds{1};
+    CHECK(get_leap_second_info(leap).is_leap_second);
+    round_trip(item("1001({1: 1483228836, 13: 1})"), leap);
+    round_trip(item("1001({1: 1483228837, 13: 1})"), leap + seconds{1});
+    round_trip(item("1001({1: 1483228836, -3: 5, 13: 1})"), utc_time<milliseconds>{leap} + milliseconds{5});
+    auto const sys = cbor::structs<sys_seconds>::decode(item("1001({1: 1483228836, 13: 1})"));
+    REQUIRE(sys.has_value());
+    CHECK_EQ((*sys)->time_since_epoch().count(), 1483228799);
+    auto const tagged = cbor::structs<utc_seconds>::decode(item("1(1483228800)"));
+    REQUIRE(tagged.has_value());
+    CHECK((**tagged == leap + seconds{1}));
+}
+
+// A file_time is converted to sys_time with clock_cast and is written as a sys_time.
+TEST_CASE("structs: file_time is written as its sys_time")
+{
+    using namespace std::chrono;
+    auto const item = [](std::string_view const diag) { return cbor::diag2cbor(diag).value(); };
+    round_trip(item("1(1700000000)"), clock_cast<file_clock>(sys_seconds{seconds{1700000000}}));
+    round_trip(item("1001({1: 1700000000, -3: 500})"),
+               clock_cast<file_clock>(sys_time<milliseconds>{milliseconds{1700000000500}}));
+}
+
+// RFC 9581 3.6 (refs/rfc9581.txt:468-495): key -10 or 10 holds a time-zone-name or a time-numoffset. A zoned_time
+// with a const time_zone * holds a zone of the tzdb, and the tzdb has no zone "+01:00". Keys -10 and 10 must not both
+// stand in one map. A map with no hint gives the zone UTC.
+TEST_CASE("structs: zoned_time is tag 1001 with a time zone hint")
+{
+    using namespace std::chrono;
+    using zoned = zoned_time<seconds>;
+    auto const item = [](std::string_view const diag) { return cbor::diag2cbor(diag).value(); };
+    zoned const berlin{locate_zone("Europe/Berlin"), sys_seconds{seconds{1700000000}}};
+    round_trip(item(R"(1001({1: 1700000000, -10: "Europe/Berlin"}))"), berlin);
+    round_trip(item(R"(1001({1: 1700000000, -3: 5, -10: "Europe/Berlin"}))"),
+               zoned_time<milliseconds>{locate_zone("Europe/Berlin"), sys_time<milliseconds>{milliseconds{1700000000005}}});
+    auto const critical = cbor::structs<zoned>::decode(item(R"(1001({1: 1700000000, 10: "Europe/Berlin"}))"));
+    REQUIRE(critical.has_value());
+    CHECK((**critical == berlin));
+    auto const plain = cbor::structs<zoned>::decode(item("1001({1: 1700000000})"));
+    REQUIRE(plain.has_value());
+    CHECK_EQ((*plain)->get_time_zone(), locate_zone("UTC"));
+    auto const tai = cbor::structs<zoned>::decode(item(R"(1001({1: 1700000037, 13: 1, -10: "Europe/Berlin"}))"));
+    REQUIRE(tai.has_value());
+    CHECK((**tai == berlin));
+    auto const hint = cbor::structs<sys_seconds>::decode(item(R"(1001({1: 1700000000, -10: "Europe/Berlin"}))"));
+    REQUIRE(hint.has_value());
+    CHECK_EQ((*hint)->time_since_epoch().count(), 1700000000);
+    for (std::string_view const diag :
+         {R"(1001({1: 1, -10: "+01:00"}))", R"(1001({1: 1, -10: "Nowhere/None"}))", R"(1001({1: 1, -10: 60}))",
+          R"(1001({1: 1, -10: "UTC", 10: "UTC"}))"}) {
+        CAPTURE(diag);
+        CHECK_EQ(cbor::structs<zoned>::decode(item(diag)).error(), error::inadmissible_type_for_tag_content);
+    }
+    CHECK_EQ(cbor::structs<zoned>::decode(item("1(1)")).error(), error::incorrect_type);
+}
+#endif
 
 // RFC 8943 2: tag 100 holds days since 1970-01-01. A sys_time takes it as days * 86400 seconds. A count of days whose
 // seconds do not fit 64 bits gives number_out_of_range.

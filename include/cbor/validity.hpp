@@ -48,6 +48,7 @@
 #include <optional>
 #include <utility>
 #include <variant>
+#include <version>
 #if __has_include(<stdckdint.h>)
 #include <stdckdint.h>
 #endif
@@ -912,7 +913,8 @@ public:
     {
         if (major == major_type::unsigned_integer) {
             if (std::cmp_equal(argument, std::to_underlying(rfc9581::map_key::base_time)) ||
-                std::cmp_equal(argument, std::to_underlying(rfc9581::map_key::timescale_critical)))
+                std::cmp_equal(argument, std::to_underlying(rfc9581::map_key::timescale_critical)) ||
+                std::cmp_equal(argument, std::to_underlying(rfc9581::map_key::time_zone_hint_critical)))
                 return static_cast<rfc9581::map_key>(argument);
             return std::unexpected(error::inadmissible_type_for_tag_content);
         }
@@ -922,7 +924,7 @@ public:
             return std::nullopt;
         auto const key = static_cast<rfc9581::map_key>(-1 - static_cast<std::int64_t>(argument));
         if (key == rfc9581::map_key::timescale_elective || key == rfc9581::map_key::timescale_elective_first ||
-            std::ranges::contains(fraction_keys, key))
+            key == rfc9581::map_key::time_zone_hint || std::ranges::contains(fraction_keys, key))
             return key;
         return std::nullopt;
     }
@@ -934,13 +936,78 @@ public:
         return {};
     }
 
-    static constexpr std::expected<void, error> check_timescale(major_type const major, std::uint64_t const argument)
+    static constexpr std::expected<rfc9581::timescale, error> check_timescale(major_type const major,
+                                                                             std::uint64_t const argument)
     {
-        if (major != major_type::unsigned_integer || argument != std::to_underlying(rfc9581::timescale::utc))
+        if (major != major_type::unsigned_integer || (argument != std::to_underlying(rfc9581::timescale::utc) &&
+                                                      argument != std::to_underlying(rfc9581::timescale::tai)))
             [[unlikely]]
             return std::unexpected(error::inadmissible_type_for_tag_content);
+        return static_cast<rfc9581::timescale>(argument);
+    }
+
+    static constexpr std::chrono::year tai_clock_epoch_year{1958};
+
+    static constexpr std::chrono::seconds ptp_epoch_since_tai_clock_epoch =
+        std::chrono::sys_days{} - std::chrono::sys_days{tai_clock_epoch_year / std::chrono::January / 1};
+
+    static constexpr std::chrono::seconds tai_minus_gps{rfc9581::tai_minus_gps_seconds};
+
+    static constexpr std::chrono::seconds clock_offset_bound = ptp_epoch_since_tai_clock_epoch + tai_minus_gps;
+
+    template <class D>
+    static constexpr std::expected<D, error> check_shifted_ticks(D const ticks, std::chrono::seconds const shift)
+    {
+        auto const step = check_epoch_ticks<D>(shift.count());
+        if (!step) [[unlikely]]
+            return step;
+        if constexpr (std::integral<typename D::rep>) {
+            if ((step->count() > 0 && ticks > D::max() - *step) || (step->count() < 0 && ticks < D::min() - *step))
+                [[unlikely]]
+                return std::unexpected(error::number_out_of_range);
+        }
+        return ticks + *step;
+    }
+
+    template <class D>
+    static constexpr std::expected<void, error> check_clock_range(D const ticks, std::chrono::seconds const bound)
+    {
+        if constexpr (std::integral<typename D::rep>) {
+            auto const seconds = std::chrono::floor<std::chrono::seconds>(ticks);
+            auto const highest = std::chrono::floor<std::chrono::seconds>(D::max());
+            auto const lowest = std::chrono::ceil<std::chrono::seconds>(D::min());
+            if (seconds > highest - bound || seconds < lowest + bound) [[unlikely]]
+                return std::unexpected(error::number_out_of_range);
+        }
         return {};
     }
+
+    template <class D, class C>
+    static constexpr std::expected<D, error> check_exact_ticks(C const ticks)
+    {
+        auto const result = std::chrono::duration_cast<D>(ticks);
+        if constexpr (std::integral<typename D::rep>)
+            if (std::chrono::duration_cast<C>(result) != ticks) [[unlikely]]
+                return std::unexpected(error::number_out_of_range);
+        return result;
+    }
+
+#if __cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream)
+    static constexpr std::string_view utc_zone_name = "UTC";
+
+    static std::expected<std::chrono::time_zone const *, error> check_time_zone(std::string_view const name)
+    {
+        std::chrono::tzdb const &db = std::chrono::get_tzdb();
+        std::string_view target = name;
+        auto const link = std::ranges::lower_bound(db.links, name, {}, &std::chrono::time_zone_link::name);
+        if (link != db.links.end() && link->name() == name)
+            target = link->target();
+        auto const zone = std::ranges::lower_bound(db.zones, target, {}, &std::chrono::time_zone::name);
+        if (zone == db.zones.end() || zone->name() != target) [[unlikely]]
+            return std::unexpected(error::inadmissible_type_for_tag_content);
+        return &*zone;
+    }
+#endif
 
     static constexpr std::expected<void, error>
     check_extended_time_map(major_type const major, std::uint8_t const info, std::uint64_t const argument,
