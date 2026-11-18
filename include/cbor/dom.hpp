@@ -1,9 +1,10 @@
 // Gives a tree of CBOR data items in the form of the yyjson DOM: an item of 16 bytes, all items of a tree
 // in one array, each container followed by its descendants and holding the distance to its next sibling,
-// and one copy of the input that the strings point into. Decodes CBOR into the tree, with tags 28 and 29
-// kept as tags or resolved, and encodes the tree in the form of the yyjson writer, with tags 28 and 29
-// for its cycles only.
+// and one padded copy of the input that the strings point into. Decodes CBOR into the tree, with tags 28
+// and 29 kept as tags or resolved, reads JSON text into the tree in the form of the yyjson reader, and
+// encodes the tree in the form of the yyjson writer, with tags 28 and 29 for its cycles only.
 // https://www.rfc-editor.org/rfc/rfc8949
+// https://www.rfc-editor.org/rfc/rfc8259
 // https://www.rfc-editor.org/rfc/rfc8746
 // http://cbor.schmorp.de/value-sharing
 // https://github.com/ibireme/yyjson
@@ -15,15 +16,18 @@
 #include <expected>
 #include <limits>
 #include <memory>
+#include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
+#include "diagnostic_notation.hpp"
 #include "error.hpp"
 #include "head.hpp"
 #include "ieee754.hpp"
+#include "padded_string.hpp"
 #include "rfc8949.hpp"
 #include "shared.hpp"
 #include "validity.hpp"
@@ -69,6 +73,8 @@ inline constexpr std::uint8_t extended_mask = std::numeric_limits<std::uint8_t>:
 inline constexpr std::uint8_t width_mask = ((1 << width_bits) - 1) << width_bit;
 inline constexpr int tag_bit = 13;
 inline constexpr std::uint64_t info_mask = (std::uint64_t{1} << (tag_bit - info_bit)) - 1;
+inline constexpr std::uint64_t high_bound = std::uint64_t{1}
+                                            << (std::numeric_limits<std::uint64_t>::digits - tag_bit);
 
 inline constexpr std::uint8_t subtype_false = 0 << subtype_bit;
 inline constexpr std::uint8_t subtype_true = 1 << subtype_bit;
@@ -124,6 +130,8 @@ constexpr std::size_t width_of(item const &x)
 }
 }
 
+inline constexpr std::size_t growth_divisor = 2;
+
 struct link {
     std::size_t tagged;
     std::size_t embedded;
@@ -132,8 +140,7 @@ struct link {
 struct tree {
     std::unique_ptr<item[]> values;
     std::size_t val_read;
-    std::unique_ptr<char[]> text;
-    std::size_t dat_read;
+    padded_string text;
     std::vector<link> encoded_cbor_data_items;
     bool has_shared_reference;
 
@@ -225,6 +232,16 @@ class reader
             x.tag = kind::word(0, info, kind::type_number | kind::subtype_negative);
             x.uni.u64 = argument;
         }
+    }
+
+    static void set_float(item &x, std::uint8_t const info, double const value)
+    {
+        x.tag = kind::word(0, info,
+                           static_cast<std::uint8_t>(
+                               kind::type_number | kind::subtype_real |
+                               (info - std::to_underlying(rfc8949::simple_information::half_precision_float))
+                                   << kind::width_bit));
+        x.uni.f64 = value;
     }
 
     [[gnu::noinline]] static std::expected<void, error> check_typed_array_content(std::uint64_t const tag,
@@ -388,14 +405,7 @@ class reader
                 }
                 case major_type::simple:
                     if (heads::is_floating_point(h->major, h->info)) {
-                        x.tag =
-                            kind::word(0, h->info,
-                                       static_cast<std::uint8_t>(
-                                           kind::type_number | kind::subtype_real |
-                                           (h->info - std::to_underlying(
-                                                          rfc8949::simple_information::half_precision_float))
-                                               << kind::width_bit));
-                        x.uni.f64 = ieee754::decode_float(h->info, h->argument);
+                        set_float(x, h->info, ieee754::decode_float(h->info, h->argument));
                         break;
                     }
                     switch (h->info) {
@@ -456,6 +466,395 @@ class reader
         found.clear();
     }
 
+    using edn = extended_diagnostic_notation;
+
+    static constexpr std::size_t estimated_minify_ratio = 6;
+    static constexpr std::size_t estimated_pretty_ratio = 16;
+    static constexpr std::size_t estimated_extra = 4;
+    static constexpr std::size_t pair_values = 2;
+    static constexpr std::size_t pretty_probe = 2;
+    static constexpr std::string_view pretty_indent = "  ";
+    static constexpr std::string_view pretty_comma = ",\n";
+    static constexpr std::string_view pretty_colon = ": ";
+
+    struct sax_dom_parser {
+        item &x;
+
+        std::expected<void, error> null()
+        {
+            x.tag = kind::word(0, std::to_underlying(simple_value::null), kind::type_null);
+            return {};
+        }
+
+        std::expected<void, error> boolean(bool const value)
+        {
+            x.tag = value ? kind::word(0, std::to_underlying(simple_value::true_value),
+                                       kind::type_bool | kind::subtype_true)
+                          : kind::word(0, std::to_underlying(simple_value::false_value),
+                                       kind::type_bool | kind::subtype_false);
+            return {};
+        }
+
+        std::expected<void, error> number_unsigned(std::uint64_t const value)
+        {
+            set_integer(x, major_type::unsigned_integer, heads::preferred_argument_info(value), value);
+            return {};
+        }
+
+        std::expected<void, error> number_integer(std::uint64_t const argument)
+        {
+            set_integer(x, major_type::negative_integer, heads::preferred_argument_info(argument), argument);
+            return {};
+        }
+
+        std::expected<void, error> number_float(double const value)
+        {
+            set_float(x, std::to_underlying(ieee754::preferred_float_info(value)), value);
+            return {};
+        }
+
+        std::expected<void, error> string(std::string_view const content, std::size_t const text_left)
+        {
+            static_cast<void>(text_left);
+            if (auto const r = validity::check_argument<true>(major_type::text_string, content.size()); !r)
+                [[unlikely]]
+                return r;
+            x.tag =
+                kind::word(content.size(), heads::preferred_argument_info(content.size()), kind::type_text);
+            x.uni.str = content.data();
+            return {};
+        }
+    };
+
+    struct value_block {
+        std::unique_ptr<item[]> values;
+        std::span<item> items;
+        std::size_t val_end;
+
+        static value_block allocated(std::size_t const size)
+        {
+            auto values = std::make_unique_for_overwrite<item[]>(size);
+            std::span<item> const items(values.get(), size);
+            return {std::move(values), items, size - pair_values};
+        }
+
+        [[gnu::noinline]] void grow(std::size_t const used)
+        {
+            value_block grown = allocated(items.size() + items.size() / growth_divisor);
+            std::ranges::copy(items.first(used), grown.items.begin());
+            *this = std::move(grown);
+        }
+    };
+
+    enum class label {
+        arr_begin,
+        arr_val_begin,
+        arr_val_end,
+        arr_end,
+        obj_begin,
+        obj_key_begin,
+        obj_key_end,
+        obj_val_begin,
+        obj_val_end,
+        obj_end,
+        doc_end
+    };
+
+    static std::expected<void, error> check_text_size(std::size_t const size)
+    {
+        if (std::cmp_greater_equal(size, kind::high_bound)) [[unlikely]]
+            return std::unexpected(error::value_too_large);
+        return {};
+    }
+
+    static std::expected<std::size_t, error> read_scalar(padded_string &text, std::size_t const cur, item &x)
+    {
+        sax_dom_parser handler{x};
+        unsigned char const c = text[cur];
+        if (edn::char_is_num(c))
+            return edn::read_num(text, cur, handler);
+        if (c == '"') {
+            padded_string::in_place_string unescaped = text.in_place(cur + 1);
+            return edn::read_str(text, cur, handler, unescaped);
+        }
+        if (c == 't')
+            return edn::read_true(std::string_view(text), cur, handler);
+        if (c == 'f')
+            return edn::read_false(std::string_view(text), cur, handler);
+        if (c != 'n') [[unlikely]]
+            return std::unexpected(error::syntax_error);
+        return edn::read_null(std::string_view(text), cur, handler);
+    }
+
+    static bool byte_match(padded_string const &text, std::size_t const at, std::string_view const pattern)
+    {
+        for (std::size_t i = 0; i < pattern.size(); ++i)
+            if (text[at + i] != static_cast<unsigned char>(pattern[i]))
+                return false;
+        return true;
+    }
+
+    static std::size_t space_end(padded_string const &text, std::size_t cur)
+    {
+        while (edn::char_is_space(text[cur]))
+            ++cur;
+        return cur;
+    }
+
+    static std::size_t indent_end(padded_string const &text, std::size_t cur)
+    {
+        while (byte_match(text, cur, pretty_indent))
+            cur += pretty_indent.size();
+        return cur;
+    }
+
+    static std::size_t newline_end(padded_string const &text, std::size_t const cur)
+    {
+        return text[cur] == '\n' ? cur + 1 : cur;
+    }
+
+    template <bool Pretty>
+    static std::expected<tree, error> read_root(padded_string text, std::size_t cur)
+    {
+        value_block block = value_block::allocated(
+            text.size() / (Pretty ? estimated_pretty_ratio : estimated_minify_ratio) + estimated_extra);
+        std::size_t val = 0;
+        std::size_t ctn = 0;
+        std::size_t ctn_len = 0;
+        std::size_t depth = 1;
+        std::expected<std::size_t, error> r;
+        auto const val_incr = [&block, &val] {
+            ++val;
+            if (val >= block.val_end) [[unlikely]]
+                block.grow(val);
+        };
+        auto const container_begin = [&](std::uint8_t const type) -> std::expected<void, error> {
+            if (auto const c = check_nesting_depth(depth); !c) [[unlikely]]
+                return c;
+            ++depth;
+            block.items[ctn].tag =
+                kind::word(ctn_len + 1, 0, static_cast<std::uint8_t>(block.items[ctn].tag & kind::type_mask));
+            val_incr();
+            block.items[val].tag = kind::word(0, 0, type);
+            block.items[val].uni.ofs = val - ctn;
+            ctn = val;
+            ctn_len = 0;
+            if constexpr (Pretty)
+                cur = newline_end(text, cur);
+            return {};
+        };
+        auto const container_end = [&](major_type const major) -> std::expected<label, error> {
+            item &c = block.items[ctn];
+            std::size_t const parent = ctn - c.uni.ofs;
+            std::size_t const count =
+                major == major_type::map ? ctn_len / rfc8949::data_items_per_pair : ctn_len;
+            if (auto const a = validity::check_argument<true>(major, count); !a) [[unlikely]]
+                return std::unexpected(a.error());
+            c.tag = kind::word(count, heads::preferred_argument_info(count),
+                               major == major_type::map ? kind::type_map : kind::type_array);
+            c.uni.ofs = val - ctn + 1;
+            if (ctn == parent) [[unlikely]]
+                return label::doc_end;
+            --depth;
+            ctn = parent;
+            ctn_len = static_cast<std::size_t>(kind::high_of(block.items[ctn].tag));
+            if constexpr (Pretty)
+                cur = newline_end(text, cur);
+            return (block.items[ctn].tag & kind::type_mask) == kind::type_map ? label::obj_val_end
+                                                                              : label::arr_val_end;
+        };
+
+        label next = label::arr_val_begin;
+        block.items[ctn].uni.ofs = 0;
+        if (text[cur] == '{') {
+            block.items[ctn].tag = kind::word(0, 0, kind::type_map);
+            next = label::obj_key_begin;
+        } else {
+            block.items[ctn].tag = kind::word(0, 0, kind::type_array);
+        }
+        ++cur;
+        if constexpr (Pretty)
+            cur = newline_end(text, cur);
+
+        for (;;) {
+            switch (next) {
+            case label::arr_begin:
+            case label::obj_begin:
+                if (auto const o =
+                        container_begin(next == label::obj_begin ? kind::type_map : kind::type_array);
+                    !o) [[unlikely]]
+                    return std::unexpected(o.error());
+                next = next == label::obj_begin ? label::obj_key_begin : label::arr_val_begin;
+                continue;
+            case label::arr_val_begin: {
+                if constexpr (Pretty)
+                    cur = indent_end(text, cur);
+                unsigned char const c = text[cur];
+                if (c == '{') {
+                    ++cur;
+                    next = label::obj_begin;
+                    continue;
+                }
+                if (c == '[') {
+                    ++cur;
+                    next = label::arr_begin;
+                    continue;
+                }
+                if (c == ']') {
+                    ++cur;
+                    if (ctn_len != 0) [[unlikely]]
+                        return std::unexpected(error::syntax_error);
+                    next = label::arr_end;
+                    continue;
+                }
+                if (edn::char_is_space(c)) {
+                    cur = space_end(text, cur);
+                    continue;
+                }
+                val_incr();
+                ++ctn_len;
+                r = read_scalar(text, cur, block.items[val]);
+                if (!r) [[unlikely]]
+                    return std::unexpected(r.error());
+                cur = *r;
+                next = label::arr_val_end;
+                continue;
+            }
+            case label::arr_val_end:
+                if constexpr (Pretty)
+                    if (byte_match(text, cur, pretty_comma)) {
+                        cur += pretty_comma.size();
+                        next = label::arr_val_begin;
+                        continue;
+                    }
+                if (text[cur] == ',') {
+                    ++cur;
+                    next = label::arr_val_begin;
+                    continue;
+                }
+                if (text[cur] == ']') {
+                    ++cur;
+                    next = label::arr_end;
+                    continue;
+                }
+                if (!edn::char_is_space(text[cur])) [[unlikely]]
+                    return std::unexpected(error::syntax_error);
+                cur = space_end(text, cur);
+                continue;
+            case label::arr_end:
+            case label::obj_end: {
+                auto const after =
+                    container_end(next == label::obj_end ? major_type::map : major_type::array);
+                if (!after) [[unlikely]]
+                    return std::unexpected(after.error());
+                next = *after;
+                continue;
+            }
+            case label::obj_key_begin:
+                if constexpr (Pretty)
+                    cur = indent_end(text, cur);
+                if (text[cur] == '"') [[likely]] {
+                    val_incr();
+                    ++ctn_len;
+                    r = read_scalar(text, cur, block.items[val]);
+                    if (!r) [[unlikely]]
+                        return std::unexpected(r.error());
+                    cur = *r;
+                    next = label::obj_key_end;
+                    continue;
+                }
+                if (text[cur] == '}') {
+                    ++cur;
+                    if (ctn_len != 0) [[unlikely]]
+                        return std::unexpected(error::syntax_error);
+                    next = label::obj_end;
+                    continue;
+                }
+                if (!edn::char_is_space(text[cur])) [[unlikely]]
+                    return std::unexpected(error::syntax_error);
+                cur = space_end(text, cur);
+                continue;
+            case label::obj_key_end:
+                if constexpr (Pretty)
+                    if (byte_match(text, cur, pretty_colon)) {
+                        cur += pretty_colon.size();
+                        next = label::obj_val_begin;
+                        continue;
+                    }
+                if (text[cur] == ':') {
+                    ++cur;
+                    next = label::obj_val_begin;
+                    continue;
+                }
+                if (!edn::char_is_space(text[cur])) [[unlikely]]
+                    return std::unexpected(error::syntax_error);
+                cur = space_end(text, cur);
+                continue;
+            case label::obj_val_begin: {
+                unsigned char const c = text[cur];
+                if (c == '{') {
+                    ++cur;
+                    next = label::obj_begin;
+                    continue;
+                }
+                if (c == '[') {
+                    ++cur;
+                    next = label::arr_begin;
+                    continue;
+                }
+                if (edn::char_is_space(c)) {
+                    cur = space_end(text, cur);
+                    continue;
+                }
+                ++val;
+                ++ctn_len;
+                r = read_scalar(text, cur, block.items[val]);
+                if (!r) [[unlikely]]
+                    return std::unexpected(r.error());
+                cur = *r;
+                next = label::obj_val_end;
+                continue;
+            }
+            case label::obj_val_end:
+                if constexpr (Pretty)
+                    if (byte_match(text, cur, pretty_comma)) {
+                        cur += pretty_comma.size();
+                        next = label::obj_key_begin;
+                        continue;
+                    }
+                if (text[cur] == ',') [[likely]] {
+                    ++cur;
+                    next = label::obj_key_begin;
+                    continue;
+                }
+                if (text[cur] == '}') [[likely]] {
+                    ++cur;
+                    next = label::obj_end;
+                    continue;
+                }
+                if (!edn::char_is_space(text[cur])) [[unlikely]]
+                    return std::unexpected(error::syntax_error);
+                cur = space_end(text, cur);
+                continue;
+            case label::doc_end:
+                if (space_end(text, cur) != text.size()) [[unlikely]]
+                    return std::unexpected(error::syntax_error);
+                return tree{std::move(block.values), val + 1, std::move(text), {}, false};
+            }
+        }
+    }
+
+    static std::expected<tree, error> read_root_single(padded_string text, std::size_t const cur)
+    {
+        auto values = std::make_unique_for_overwrite<item[]>(1);
+        auto const end = read_scalar(text, cur, values[0]);
+        if (!end) [[unlikely]]
+            return std::unexpected(end.error());
+        if (space_end(text, *end) != text.size()) [[unlikely]]
+            return std::unexpected(error::syntax_error);
+        return tree{std::move(values), 1, std::move(text), {}, false};
+    }
+
 public:
     template <bool SharedRefs>
     static std::expected<tree, error> decode(std::string_view const bytes)
@@ -464,13 +863,12 @@ public:
         std::size_t const size = encoded.size();
         if (size == 0) [[unlikely]]
             return std::unexpected(error::too_little_data);
-        auto text = std::make_unique_for_overwrite<char[]>(size);
-        std::ranges::copy(encoded, text.get());
+        padded_string text(encoded);
         auto values = std::make_unique_for_overwrite<item[]>(size);
         items_decoder out{std::span<item>(values.get(), size), {}, false};
-        auto const outer = out.decode_item<SharedRefs>(0, std::string_view(text.get(), size), 0, false);
+        auto const outer = out.decode_item<SharedRefs>(0, std::string_view(text), 0, false);
         if (out.embedded.empty() && outer) [[likely]]
-            return tree{std::move(values), *outer, std::move(text), size, {}, out.has_shared_reference};
+            return tree{std::move(values), *outer, std::move(text), {}, out.has_shared_reference};
         bool failed = !outer;
         std::size_t written = outer.value_or(0);
         std::vector<embedded_item> pending;
@@ -491,8 +889,25 @@ public:
             schedule(pending, out.embedded, inner);
         }
         std::ranges::sort(links, {}, &link::tagged);
-        return tree{std::move(values),       written, std::move(text), size, std::move(links),
-                    out.has_shared_reference};
+        return tree{std::move(values), written, std::move(text), std::move(links), out.has_shared_reference};
+    }
+
+    static std::expected<tree, error> read(std::string_view const json)
+    {
+        if (auto const r = check_text_size(json.size()); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        padded_string text(json);
+        std::size_t const cur = space_end(text, 0);
+        if (cur >= text.size()) [[unlikely]]
+            return std::unexpected(error::syntax_error);
+        if (text[cur] == '[' || text[cur] == '{') [[likely]] {
+            if (std::ranges::all_of(
+                    std::views::iota(std::size_t{1}, pretty_probe + 1),
+                    [&text, cur](std::size_t const i) { return edn::char_is_space(text[cur + i]); }))
+                return read_root<true>(std::move(text), cur);
+            return read_root<false>(std::move(text), cur);
+        }
+        return read_root_single(std::move(text), cur);
     }
 };
 
@@ -500,8 +915,6 @@ class writer
 {
     using heads = detail::heads;
     using validity = detail::validity;
-
-    static constexpr std::size_t growth_divisor = 2;
 
     static constexpr std::size_t not_open = std::numeric_limits<std::size_t>::max();
 
@@ -760,7 +1173,7 @@ class writer
 public:
     static std::expected<std::size_t, error> encode(std::string &out, tree const &t)
     {
-        output o = output_for(out, t.dat_read);
+        output o = output_for(out, t.text.size());
         for (item const &x : t.root())
             if (auto const r = write_item(o, x); !r) [[unlikely]] {
                 o.discard();
@@ -777,7 +1190,7 @@ public:
         depth_first_search walk(items);
         if (auto const r = walk.find_back_edges(0); !r) [[unlikely]]
             return std::unexpected(r.error());
-        output o = output_for(out, t.dat_read);
+        output o = output_for(out, t.text.size());
         if (auto const r = walk.write(o, 0); !r) [[unlikely]] {
             o.discard();
             return std::unexpected(r.error());
@@ -794,6 +1207,11 @@ inline std::expected<tree, error> decode(std::string_view const encoded)
 inline std::expected<tree, error> decode_shared_refs(std::string_view const encoded)
 {
     return reader::decode<true>(encoded);
+}
+
+inline std::expected<tree, error> read(std::string_view const json)
+{
+    return reader::read(json);
 }
 
 inline std::expected<std::size_t, error> encode(std::string &out, tree const &decoded)

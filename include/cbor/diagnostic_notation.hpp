@@ -37,6 +37,7 @@
 #include "error.hpp"
 #include "validity.hpp"
 #include "head.hpp"
+#include "padded_string.hpp"
 #include "path.hpp"
 #include "rfc2781.hpp"
 #include "rfc3629.hpp"
@@ -50,6 +51,11 @@ constexpr std::expected<std::string, error> diag2cbor(std::string_view text);
 
 namespace detail
 {
+
+namespace dom
+{
+class reader;
+}
 
 class extended_diagnostic_notation
 {
@@ -260,7 +266,20 @@ class extended_diagnostic_notation
         return at;
     }
 
-    static constexpr std::size_t skip_utf8(std::string_view const text, std::size_t at)
+    static unsigned char padded_char(padded_string const &text, std::size_t const at)
+    {
+        return text[at];
+    }
+
+    static std::size_t skip_ascii(padded_string const &text, std::size_t at)
+    {
+        while (char_is_ascii_skip(text[at]))
+            ++at;
+        return at;
+    }
+
+    template <class Text>
+    static constexpr std::size_t skip_utf8(Text const &text, std::size_t at)
     {
         while (padded_char(text, at) > rfc3629::one_octet_last)
             ++at;
@@ -384,7 +403,8 @@ class extended_diagnostic_notation
         return indicated{at + 1, std::to_underlying(rfc8949::additional_information::indefinite_length)};
     }
 
-    static constexpr void append_utf8(std::string &out, std::uint32_t const c)
+    template <class Out>
+    static constexpr void append_utf8(Out &out, std::uint32_t const c)
     {
         constexpr int bits = rfc3629::following_octet_bits;
         auto const following = [](std::uint32_t const v) {
@@ -1923,12 +1943,12 @@ class extended_diagnostic_notation
         return bigint_cmp(big_full, big_comp);
     }
 
-    template <class Handler>
-    static constexpr std::expected<std::size_t, error> read_num(std::string_view const text, std::size_t const hdr,
+    template <class Text, class Handler>
+    static constexpr std::expected<std::size_t, error> read_num(Text const &text, std::size_t const hdr,
                                                                 Handler &handler)
     {
         enum class digi { intg_more, frac, frac_more, frac_end, exp_more, exp_finish, finish };
-        auto const ch = [text](std::size_t const at) { return padded_char(text, at); };
+        auto const ch = [&text](std::size_t const at) { return padded_char(text, at); };
         bool const sign = ch(hdr) == '-';
         std::size_t cur = hdr + (sign ? 1 : 0);
         auto const at_cur = [&cur] { return cur; };
@@ -2229,7 +2249,8 @@ class extended_diagnostic_notation
             fp_upper.sig <<= 1;
             fp_upper.exp -= 1;
             fp_upper.sig += 1;
-            std::strong_ordering const cmp = bigcomp(text, sig, exp, sig_cut, sig_end, dot_pos, fp_upper);
+            std::strong_ordering const cmp =
+                bigcomp(std::string_view(text), sig, exp, sig_cut, sig_end, dot_pos, fp_upper);
             if (cmp != 0) [[likely]]
                 raw += cmp > 0 ? std::uint64_t{1} : 0;
             else
@@ -2242,8 +2263,9 @@ class extended_diagnostic_notation
         return return_f64_bin(raw);
     }
 
+    template <class Out>
     static constexpr std::expected<std::size_t, error> read_uni_esc(std::string_view const text, std::size_t const at,
-                                                          std::string &out)
+                                                                    Out &out)
     {
         auto const hex_load_4 = [text](std::size_t const from) -> std::expected<std::uint32_t, error> {
             if (auto const left = detail::validity::check_text_left(text, from, hex4_digits); !left) [[unlikely]]
@@ -2280,15 +2302,16 @@ class extended_diagnostic_notation
         return after + escape_prefix.size() + hex4_digits;
     }
 
-    template <class Handler>
-    static constexpr std::expected<std::size_t, error> read_str(std::string_view const text, std::size_t const at,
-                                                                Handler &handler, std::string &unescaped)
+    template <class Text, class Handler, class Unescaped>
+    static constexpr std::expected<std::size_t, error> read_str(Text const &text, std::size_t const at,
+                                                                Handler &handler, Unescaped &unescaped)
     {
+        std::string_view const logical(text);
         std::size_t const hdr = at + 1;
         std::size_t src = skip_ascii(text, hdr);
         while (padded_char(text, src) > rfc3629::one_octet_last)
             src = skip_ascii(text, skip_utf8(text, src));
-        std::string_view content = text.substr(hdr, src - hdr);
+        std::string_view content = logical.substr(hdr, src - hdr);
         if (padded_char(text, src) != '"') {
             unescaped.assign(content);
             for (;;) {
@@ -2321,7 +2344,7 @@ class extended_diagnostic_notation
                     unescaped.push_back('\t');
                     break;
                 case 'u': {
-                    auto const next = read_uni_esc(text, src, unescaped);
+                    auto const next = read_uni_esc(logical, src, unescaped);
                     if (!next) [[unlikely]]
                         return next;
                     src = *next;
@@ -2333,13 +2356,13 @@ class extended_diagnostic_notation
                 std::size_t run = skip_ascii(text, src);
                 while (padded_char(text, run) > rfc3629::one_octet_last)
                     run = skip_ascii(text, skip_utf8(text, run));
-                unescaped.append(text.substr(src, run - src));
+                unescaped.append(logical.substr(src, run - src));
                 src = run;
             }
-            content = unescaped;
+            content = std::string_view(unescaped);
         }
         std::size_t const end = src + 1;
-        return handler.string(content, text.size() - end).transform([end] { return end; });
+        return handler.string(content, logical.size() - end).transform([end] { return end; });
     }
 
     template <class Handler>
@@ -2910,6 +2933,8 @@ class extended_diagnostic_notation
     friend std::expected<std::string, error> item::to_edn() const;
 
     friend std::expected<owning<item>, error> cbor::parse_edn(std::string_view text);
+
+    friend class dom::reader;
 };
 
 }
