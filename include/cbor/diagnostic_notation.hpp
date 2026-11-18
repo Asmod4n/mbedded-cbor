@@ -1116,6 +1116,184 @@ class extended_diagnostic_notation
         return item{detail::heads::type_of(major, info, argument), info, {.u64 = argument}};
     }
 
+    struct sax_dom_parser {
+        zone &decoded;
+        std::vector<item> &values;
+
+        std::expected<void, error> null()
+        {
+            item simple = scalar_item(major_type::simple, std::to_underlying(simple_value::null));
+            simple.via.simple_value = simple_value::null;
+            values.push_back(simple);
+            return {};
+        }
+
+        std::expected<void, error> boolean(bool const value)
+        {
+            simple_value const v = value ? simple_value::true_value : simple_value::false_value;
+            item simple = scalar_item(major_type::simple, std::to_underlying(v));
+            simple.via.simple_value = v;
+            values.push_back(simple);
+            return {};
+        }
+
+        std::expected<void, error> number_unsigned(std::uint64_t const value)
+        {
+            values.push_back(scalar_item(major_type::unsigned_integer, value));
+            return {};
+        }
+
+        std::expected<void, error> number_integer(std::uint64_t const argument)
+        {
+            values.push_back(scalar_item(major_type::negative_integer, argument));
+            return {};
+        }
+
+        std::expected<void, error> number_float(double const value)
+        {
+            std::uint8_t const info = std::to_underlying(detail::ieee754::preferred_float_info(value));
+            values.push_back(item{detail::heads::type_of(major_type::simple, info, 0), info, {.f64 = value}});
+            return {};
+        }
+
+        std::expected<void, error> string(std::string_view const content, std::size_t const text_left)
+        {
+            if (!detail::validity::check_argument<true>(major_type::text_string, content.size())) [[unlikely]]
+                return std::unexpected(error::syntax_error);
+            item string = scalar_item(major_type::text_string, content.size());
+            string.via.str = decoded.strings.save(
+                content, content.size() + std::min(detail::validity::string_saver_chunk_size, text_left));
+            values.push_back(string);
+            return {};
+        }
+
+        std::size_t start_object() const
+        {
+            return values.size();
+        }
+
+        std::size_t start_array() const
+        {
+            return values.size();
+        }
+
+        std::expected<void, error> end_object(std::size_t const start, std::size_t const pairs)
+        {
+            return end(start, major_type::map, pairs);
+        }
+
+        std::expected<void, error> end_array(std::size_t const start, std::size_t const elements)
+        {
+            return end(start, major_type::array, elements);
+        }
+
+        std::expected<void, error> end(std::size_t const start, major_type const major, std::size_t const count)
+        {
+            if (!detail::validity::check_argument<true>(major, count)) [[unlikely]]
+                return std::unexpected(error::syntax_error);
+            static_assert(std::is_trivially_destructible_v<item>, "The zone frees its memory and runs no destructor.");
+            std::size_t const n = values.size() - start;
+            std::span<item const> const children = std::span<item const>(values).subspan(start);
+            item *const storage = std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(n);
+            std::ranges::uninitialized_copy(children, std::span<item>(storage, n));
+            std::span<item const> const block(storage, n);
+            while (values.size() != start)
+                values.pop_back();
+            item container = scalar_item(major, count);
+            if (major == major_type::map)
+                container.via.map = block;
+            else
+                container.via.array = block;
+            values.push_back(container);
+            return {};
+        }
+    };
+
+    struct writer {
+        std::string &out;
+        backpatches &patches;
+
+        constexpr std::expected<void, error> null()
+        {
+            out.push_back(detail::heads::initial_byte(major_type::simple, std::to_underlying(simple_value::null)));
+            return {};
+        }
+
+        constexpr std::expected<void, error> boolean(bool const value)
+        {
+            simple_value const v = value ? simple_value::true_value : simple_value::false_value;
+            out.push_back(detail::heads::initial_byte(major_type::simple, std::to_underlying(v)));
+            return {};
+        }
+
+        constexpr std::expected<void, error> number_unsigned(std::uint64_t const value)
+        {
+            return append_head(out, major_type::unsigned_integer, value, no_indicator);
+        }
+
+        constexpr std::expected<void, error> number_integer(std::uint64_t const argument)
+        {
+            return append_head(out, major_type::negative_integer, argument, no_indicator);
+        }
+
+        constexpr std::expected<void, error> number_float(double const value)
+        {
+            return append_float(out, value, no_indicator);
+        }
+
+        constexpr std::expected<void, error> string(std::string_view const content, std::size_t const text_left)
+        {
+            static_cast<void>(text_left);
+            if (auto const r = append_head(out, major_type::text_string, content.size(), no_indicator); !r) [[unlikely]]
+                return r;
+            out += content;
+            return {};
+        }
+
+        constexpr std::size_t start_object()
+        {
+            return patches.open(out);
+        }
+
+        constexpr std::size_t start_array()
+        {
+            return patches.open(out);
+        }
+
+        constexpr std::expected<void, error> end_object(std::size_t const patch, std::size_t const pairs)
+        {
+            return end(patch, major_type::map, pairs);
+        }
+
+        constexpr std::expected<void, error> end_array(std::size_t const patch, std::size_t const elements)
+        {
+            return end(patch, major_type::array, elements);
+        }
+
+        constexpr std::expected<void, error> end(std::size_t const patch, major_type const major, std::size_t const count)
+        {
+            std::string head;
+            if (auto const r = append_head(head, major, count, no_indicator); !r) [[unlikely]]
+                return r;
+            patches.close(out, patch, head);
+            return {};
+        }
+    };
+
+    static constexpr bool value_ends(std::string_view const text, std::size_t const at)
+    {
+        auto const closes = [text](std::size_t const p) {
+            unsigned char const c = padded_char(text, p);
+            return !detail::validity::check_text_left(text, p, 1) || c == ',' || c == ']' || c == '}' || c == ':';
+        };
+        if (closes(at))
+            return true;
+        if (!char_is_trivia(padded_char(text, at)))
+            return false;
+        auto const next = optional_space_end(text, at);
+        return next && closes(*next);
+    }
+
     struct uint128 {
         std::uint64_t hi;
         std::uint64_t lo;
@@ -1745,22 +1923,22 @@ class extended_diagnostic_notation
         return bigint_cmp(big_full, big_comp);
     }
 
-    static std::expected<std::size_t, error> read_num(std::string_view const text, std::size_t const hdr,
-                                                      std::vector<item> &values)
+    template <class Handler>
+    static constexpr std::expected<std::size_t, error> read_num(std::string_view const text, std::size_t const hdr,
+                                                                Handler &handler)
     {
         enum class digi { intg_more, frac, frac_more, frac_end, exp_more, exp_finish, finish };
         auto const ch = [text](std::size_t const at) { return padded_char(text, at); };
         bool const sign = ch(hdr) == '-';
-        auto const return_i64 = [&values, sign](std::uint64_t const v) {
-            values.push_back(sign && v != 0 ? scalar_item(major_type::negative_integer, v - 1)
-                                            : scalar_item(major_type::unsigned_integer, v));
+        std::size_t cur = hdr + (sign ? 1 : 0);
+        auto const at_cur = [&cur] { return cur; };
+        auto const return_i64 = [&handler, &at_cur, sign](std::uint64_t const v) {
+            return (sign && v != 0 ? handler.number_integer(v - 1) : handler.number_unsigned(v)).transform(at_cur);
         };
-        auto const return_f64 = [&values, sign](double const v) {
-            double const value = sign ? -v : v;
-            std::uint8_t const info = std::to_underlying(detail::ieee754::preferred_float_info(value));
-            values.push_back(item{detail::heads::type_of(major_type::simple, info, 0), info, {.f64 = value}});
+        auto const return_f64 = [&handler, &at_cur, sign](double const v) {
+            return handler.number_float(sign ? -v : v).transform(at_cur);
         };
-        auto const return_f64_bin = [&return_f64](std::uint64_t const raw) { return_f64(std::bit_cast<double>(raw)); };
+        auto const return_f64_bin = [&return_f64](std::uint64_t const raw) { return return_f64(std::bit_cast<double>(raw)); };
         auto const digit_value = [&ch](std::size_t const at) { return static_cast<std::uint64_t>(ch(at) - '0'); };
 
         std::size_t sig_cut = std::string_view::npos;
@@ -1770,7 +1948,6 @@ class extended_diagnostic_notation
         std::int32_t exp = 0;
         std::int64_t exp_sig = 0;
         std::int64_t exp_lit = 0;
-        std::size_t cur = hdr + (sign ? 1 : 0);
         std::size_t i = 1;
         digi next = digi::finish;
 
@@ -1779,8 +1956,7 @@ class extended_diagnostic_notation
                 return std::unexpected(error::syntax_error);
             ++cur;
             if (!char_is_digit_or_fp(ch(cur))) [[likely]] {
-                return_i64(0);
-                return cur;
+                return return_i64(0);
             }
             if (ch(cur) == '.') {
                 dot_pos = cur++;
@@ -1807,8 +1983,7 @@ class extended_diagnostic_notation
                         exp_lit = static_cast<std::int64_t>(digit_value(cur)) + exp_lit * decimal;
                     }
                 }
-                return_f64_bin(0);
-                return cur;
+                return return_f64_bin(0);
             }
         } else {
             sig = digit_value(cur);
@@ -1821,15 +1996,13 @@ class extended_diagnostic_notation
             if (i == u64_safe_dig) {
                 cur += u64_safe_dig;
                 if (!char_is_digit_or_fp(ch(cur))) {
-                    return_i64(sig);
-                    return cur;
+                    return return_i64(sig);
                 }
                 next = digi::intg_more;
             } else {
                 if (!char_is_fp(ch(cur + i))) [[likely]] {
                     cur += i;
-                    return_i64(sig);
-                    return cur;
+                    return return_i64(sig);
                 }
                 dot_pos = cur + i;
                 if (ch(cur + i) == '.') {
@@ -1862,8 +2035,7 @@ class extended_diagnostic_notation
                     if (sig < u64_max / decimal || (sig == u64_max / decimal && num <= u64_max % decimal)) {
                         sig = num + sig * decimal;
                         ++cur;
-                        return_i64(sig);
-                        return cur;
+                        return return_i64(sig);
                     }
                 }
                 if (char_is_exp(c)) {
@@ -1959,13 +2131,11 @@ class extended_diagnostic_notation
                     dbl /= f64_pow10_table[static_cast<std::size_t>(-exp)];
                 else
                     dbl *= f64_pow10_table[static_cast<std::size_t>(exp)];
-                return_f64(dbl);
-                return cur;
+                return return_f64(dbl);
             }
         }
         if (sig == 0) [[unlikely]] {
-            return_f64_bin(0);
-            return cur;
+            return return_f64_bin(0);
         }
 
         if (sig_cut == std::string_view::npos && exp > -f64_max_dec_exp + 1 && exp < f64_max_dec_exp - (u64_safe_dig + 1))
@@ -2003,8 +2173,7 @@ class extended_diagnostic_notation
                 }
                 hi >>= f64_bits - f64_sig_full_bits;
                 exp2 += f64_bits - f64_sig_full_bits + f64_sig_bits + f64_exp_bias;
-                return_f64_bin(static_cast<std::uint64_t>(exp2) << f64_sig_bits | (hi & f64_sig_mask));
-                return cur;
+                return return_f64_bin(static_cast<std::uint64_t>(exp2) << f64_sig_bits | (hi & f64_sig_mask));
             }
         }
 
@@ -2070,11 +2239,10 @@ class extended_diagnostic_notation
         }
         if ((raw & f64_exp_mask) == 0) [[unlikely]]
             return std::unexpected(error::syntax_error);
-        return_f64_bin(raw);
-        return cur;
+        return return_f64_bin(raw);
     }
 
-    static std::expected<std::size_t, error> read_uni_esc(std::string_view const text, std::size_t const at,
+    static constexpr std::expected<std::size_t, error> read_uni_esc(std::string_view const text, std::size_t const at,
                                                           std::string &out)
     {
         auto const hex_load_4 = [text](std::size_t const from) -> std::expected<std::uint32_t, error> {
@@ -2112,8 +2280,9 @@ class extended_diagnostic_notation
         return after + escape_prefix.size() + hex4_digits;
     }
 
-    static std::expected<std::size_t, error> read_str(std::string_view const text, std::size_t const at, zone &decoded,
-                                                      std::vector<item> &values, std::string &unescaped)
+    template <class Handler>
+    static constexpr std::expected<std::size_t, error> read_str(std::string_view const text, std::size_t const at,
+                                                                Handler &handler, std::string &unescaped)
     {
         std::size_t const hdr = at + 1;
         std::size_t src = skip_ascii(text, hdr);
@@ -2170,60 +2339,49 @@ class extended_diagnostic_notation
             content = unescaped;
         }
         std::size_t const end = src + 1;
-        if (!detail::validity::check_argument<true>(major_type::text_string, content.size())) [[unlikely]]
-            return std::unexpected(error::syntax_error);
-        item string = scalar_item(major_type::text_string, content.size());
-        string.via.str = decoded.strings.save(
-            content, content.size() + std::min(detail::validity::string_saver_chunk_size, text.size() - end));
-        values.push_back(string);
-        return end;
+        return handler.string(content, text.size() - end).transform([end] { return end; });
     }
 
-    static std::expected<std::size_t, error> read_true(std::string_view const text, std::size_t const at,
-                                                       std::vector<item> &values)
+    template <class Handler>
+    static constexpr std::expected<std::size_t, error> read_true(std::string_view const text, std::size_t const at,
+                                                                Handler &handler)
     {
         constexpr std::string_view literal = "true";
         if (!std::string_view{std::span(text).subspan(at)}.starts_with(literal)) [[unlikely]]
             return std::unexpected(error::syntax_error);
-        item simple = scalar_item(major_type::simple, std::to_underlying(simple_value::true_value));
-        simple.via.simple_value = simple_value::true_value;
-        values.push_back(simple);
-        return at + literal.size();
+        return handler.boolean(true).transform([at, literal] { return at + literal.size(); });
     }
 
-    static std::expected<std::size_t, error> read_false(std::string_view const text, std::size_t const at,
-                                                        std::vector<item> &values)
+    template <class Handler>
+    static constexpr std::expected<std::size_t, error> read_false(std::string_view const text, std::size_t const at,
+                                                                Handler &handler)
     {
         constexpr std::string_view literal = "false";
         if (!std::string_view{std::span(text).subspan(at)}.starts_with(literal)) [[unlikely]]
             return std::unexpected(error::syntax_error);
-        item simple = scalar_item(major_type::simple, std::to_underlying(simple_value::false_value));
-        simple.via.simple_value = simple_value::false_value;
-        values.push_back(simple);
-        return at + literal.size();
+        return handler.boolean(false).transform([at, literal] { return at + literal.size(); });
     }
 
-    static std::expected<std::size_t, error> read_null(std::string_view const text, std::size_t const at,
-                                                       std::vector<item> &values)
+    template <class Handler>
+    static constexpr std::expected<std::size_t, error> read_null(std::string_view const text, std::size_t const at,
+                                                                Handler &handler)
     {
         constexpr std::string_view literal = "null";
         if (!std::string_view{std::span(text).subspan(at)}.starts_with(literal)) [[unlikely]]
             return std::unexpected(error::syntax_error);
-        item simple = scalar_item(major_type::simple, std::to_underlying(simple_value::null));
-        simple.via.simple_value = simple_value::null;
-        values.push_back(simple);
-        return at + literal.size();
+        return handler.null().transform([at, literal] { return at + literal.size(); });
     }
 
-    static std::expected<std::size_t, error> read_root_minify(std::string_view const text, std::size_t cur,
-                                                              zone &decoded, std::vector<item> &values,
-                                                              std::string &unescaped)
+    template <class Handler>
+    static constexpr std::expected<std::size_t, error> read_root_minify(std::string_view const text, std::size_t cur,
+                                                                        Handler &handler, std::string &unescaped)
     {
         if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
             return std::unexpected(r.error());
         enum class label { arr_val_begin, arr_val_end, obj_key_begin, obj_key_end, obj_val_begin, obj_val_end, arr_end, obj_end };
         bool const obj = text[cur++] == '{';
-        std::size_t const start = values.size();
+        std::size_t const ctn = obj ? handler.start_object() : handler.start_array();
+        std::size_t ctn_len = 0;
         label next = obj ? label::obj_key_begin : label::arr_val_begin;
         while (next != label::arr_end && next != label::obj_end) {
             unsigned char const c = padded_char(text, cur);
@@ -2232,18 +2390,18 @@ class extended_diagnostic_notation
             case label::arr_val_begin:
             case label::obj_val_begin:
                 if (char_is_ctn(c))
-                    r = read_root_minify(text, cur, decoded, values, unescaped);
+                    r = read_root_minify(text, cur, handler, unescaped);
                 else if (char_is_num(c))
-                    r = read_num(text, cur, values);
+                    r = read_num(text, cur, handler);
                 else if (c == '"')
-                    r = read_str(text, cur, decoded, values, unescaped);
+                    r = read_str(text, cur, handler, unescaped);
                 else if (c == 't')
-                    r = read_true(text, cur, values);
+                    r = read_true(text, cur, handler);
                 else if (c == 'f')
-                    r = read_false(text, cur, values);
+                    r = read_false(text, cur, handler);
                 else if (c == 'n')
-                    r = read_null(text, cur, values);
-                else if (c == ']' && next == label::arr_val_begin && values.size() == start) {
+                    r = read_null(text, cur, handler);
+                else if (c == ']' && next == label::arr_val_begin && ctn_len == 0) {
                     ++cur;
                     next = label::arr_end;
                     continue;
@@ -2252,6 +2410,7 @@ class extended_diagnostic_notation
                 if (!r) [[unlikely]]
                     return r;
                 cur = *r;
+                ++ctn_len;
                 next = next == label::arr_val_begin ? label::arr_val_end : label::obj_val_end;
                 continue;
             case label::arr_val_end:
@@ -2269,14 +2428,15 @@ class extended_diagnostic_notation
                 break;
             case label::obj_key_begin:
                 if (c == '"') [[likely]] {
-                    r = read_str(text, cur, decoded, values, unescaped);
+                    r = read_str(text, cur, handler, unescaped);
                     if (!r) [[unlikely]]
                         return r;
                     cur = *r;
+                    ++ctn_len;
                     next = label::obj_key_end;
                     continue;
                 }
-                if (c == '}' && values.size() == start) {
+                if (c == '}' && ctn_len == 0) {
                     ++cur;
                     next = label::obj_end;
                     continue;
@@ -2306,42 +2466,25 @@ class extended_diagnostic_notation
                 return end;
             cur = *end;
         }
-        std::size_t const n = values.size() - start;
-        major_type const major = obj ? major_type::map : major_type::array;
-        std::uint64_t const count = obj ? n / rfc8949::data_items_per_pair : n;
-        if (!detail::validity::check_argument<true>(major, count)) [[unlikely]]
-            return std::unexpected(error::syntax_error);
-        static_assert(std::is_trivially_destructible_v<item>, "The zone frees its memory and runs no destructor.");
-        std::span<item const> const children = std::span<item const>(values).subspan(start);
-        item *const storage = std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(n);
-        std::ranges::uninitialized_copy(children, std::span<item>(storage, n));
-        std::span<item const> const block(storage, n);
-        while (values.size() != start)
-            values.pop_back();
-        item container = scalar_item(major, count);
-        if (obj)
-            container.via.map = block;
-        else
-            container.via.array = block;
-        values.push_back(container);
-        return cur;
+        return (obj ? handler.end_object(ctn, ctn_len / rfc8949::data_items_per_pair) : handler.end_array(ctn, ctn_len))
+            .transform([cur] { return cur; });
     }
 
-    static std::expected<std::size_t, error> read_root_single(std::string_view const text, std::size_t const cur,
-                                                              zone &decoded, std::vector<item> &values,
-                                                              std::string &unescaped)
+    template <class Handler>
+    static constexpr std::expected<std::size_t, error> read_root_single(std::string_view const text, std::size_t const cur,
+                                                                        Handler &handler, std::string &unescaped)
     {
         unsigned char const c = padded_char(text, cur);
         if (char_is_num(c))
-            return read_num(text, cur, values);
+            return read_num(text, cur, handler);
         if (c == '"')
-            return read_str(text, cur, decoded, values, unescaped);
+            return read_str(text, cur, handler, unescaped);
         if (c == 't')
-            return read_true(text, cur, values);
+            return read_true(text, cur, handler);
         if (c == 'f')
-            return read_false(text, cur, values);
+            return read_false(text, cur, handler);
         if (c == 'n')
-            return read_null(text, cur, values);
+            return read_null(text, cur, handler);
         return std::unexpected(error::syntax_error);
     }
 
@@ -2358,9 +2501,10 @@ class extended_diagnostic_notation
                                                   .value_or(detail::validity::initial_size_limit));
         std::vector<item> values;
         std::string unescaped;
+        sax_dom_parser handler{*decoded, values};
         auto const next = char_is_ctn(padded_char(text, *start))
-                              ? read_root_minify(text, *start, *decoded, values, unescaped)
-                              : read_root_single(text, *start, *decoded, values, unescaped);
+                              ? read_root_minify(text, *start, handler, unescaped)
+                              : read_root_single(text, *start, handler, unescaped);
         if (!next) [[unlikely]]
             return std::unexpected(next.error());
         auto const end = optional_space_end(text, *next);
@@ -2373,6 +2517,20 @@ class extended_diagnostic_notation
 
     static constexpr std::expected<std::size_t, error> parse_literal(literal_cursor const cursor, std::string &out)
     {
+        std::size_t const size_before = out.size();
+        {
+            backpatches patches;
+            writer handler{out, patches};
+            std::string unescaped;
+            auto const next = char_is_ctn(padded_char(cursor.text, cursor.at))
+                                  ? read_root_minify(cursor.text, cursor.at, handler, unescaped)
+                                  : read_root_single(cursor.text, cursor.at, handler, unescaped);
+            if (next && value_ends(cursor.text, *next)) [[likely]] {
+                patches.apply(out);
+                return next;
+            }
+        }
+        out.resize(size_before);
         backpatches patches;
         auto const next = parse_literal(cursor, out, patches);
         if (!next) [[unlikely]]
