@@ -782,6 +782,10 @@ class heads
 
     template <class>
     friend class cbor::schema;
+
+    friend class detail::dom::reader;
+
+    friend class detail::dom::writer;
 };
 
 }

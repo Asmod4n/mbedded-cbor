@@ -33,6 +33,14 @@ class validity;
 template <bool>
 struct tree_decoder;
 
+namespace dom
+{
+
+class reader;
+class writer;
+
+}
+
 }
 
 enum class major_type : std::uint8_t {
@@ -173,6 +181,10 @@ class rfc8949
     friend class detail::reflection;
 
     friend class detail::generic;
+
+    friend class detail::dom::reader;
+
+    friend class detail::dom::writer;
 };
 
 }
