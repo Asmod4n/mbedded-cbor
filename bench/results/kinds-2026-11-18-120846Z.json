@@ -1,0 +1,231 @@
+{
+ "what": "kinds table: carsales (bench/cars.json), bench/compare.cpp, bench/kinds-table.sh",
+ "context": {
+  "resolved_march": "sapphirerapids",
+  "compilers": [
+   "g++-16 (Debian 16.2.0-4) 16.2.0"
+  ],
+  "binaries": {
+   "g++-16.LAZY_READ": {
+    "binary": "g++-16.LAZY_READ",
+    "comment": "String dump of section '.comment':\n  [     0]  GCC: (Debian 16.2.0-4) 16.2.0",
+    "libraries": {
+     "libbenchmark.so.1.9.1": "/usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1",
+     "libstdc++.so.6": "/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.36",
+     "libc.so.6": "/usr/lib/x86_64-linux-gnu/libc.so.6",
+     "libm.so.6": "/usr/lib/x86_64-linux-gnu/libm.so.6"
+    }
+   }
+  },
+  "libc": "ldd (Debian GLIBC 2.43-7) 2.43",
+  "level_two_cache": "2048K",
+  "kernel": "6.18.44-fc-v595",
+  "scheduler": "no sched_ext state (kernel default)",
+  "virtualization": "docker ",
+  "host_in_container": "no",
+  "host_user": "root 0",
+  "container": "podman mbedded-cbor-sid-bench, user 65534, network none",
+  "cpu": {
+   "model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+   "flags_sha256": "19139faa5b3c177a2d253ee9520b13713aee71074562456de06d1ba7833e7890",
+   "cpus": 4,
+   "l3": "266240K"
+  },
+  "uid": 65534,
+  "priority": "nice -10 granted",
+  "threads": 1,
+  "pinned": false,
+  "cpu_left_to_the_machine": "each bench process is single-threaded on 4 cpus",
+  "gate_before_build": [
+   "gate: vmstat 1 5",
+   "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+   " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+   " 0  0      0 15896808  25572 308404    0    0  3452    29  488    1  2  1 92  5  0  0",
+   " 0  0      0 15896636  25572 308556    0    0     0     0  203  211  1  0 99  0  0  0",
+   " 0  0      0 15896608  25572 308620    0    0     0     0  113  172  0  0 100  0  0  0",
+   " 0  0      0 15896608  25572 308620    0    0     0     0  187  257  0  0 99  0  0  0",
+   " 0  0      0 15896988  25572 308620    0    0     0     0  165  227  0  0 100  0  0  0",
+   "gate: ps --sort=-pcpu (top 7)",
+   "  PID USER     %CPU  NI COMMAND",
+   "  101 root      7.2   0 claude",
+   "   31 root      0.6   - migration/3",
+   "   21 root      0.6   - migration/1",
+   "   26 root      0.6   - migration/2",
+   "    1 root      0.5   0 process_api",
+   "   43 root      0.2   0 kworker/u16:1-events_unbound",
+   "   93 root      0.1   0 environment-man",
+   "gate: busy 0.5% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough",
+   "gate: busy process 101 user root pcpu 7.2 ni 0 claude"
+  ],
+  "gate_before_runs": [
+   "gate: vmstat 1 5",
+   "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+   " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+   " 1  0      0 15706232  29924 427128    0    0  3625    83  612    1 13  1 78  8  0  0",
+   " 0  0      0 15706464  29924 426924    0    0     0     0  208  177  0  0 100  0  0  0",
+   " 0  0      0 15710444  29924 426924    0    0     0     0  155  160  0  0 100  0  0  0",
+   " 0  0      0 15717596  29924 426924    0    0     0     0  100  111  0  0 100  0  0  0",
+   " 0  0      0 15725228  29924 426924    0    0     0     0   75   88  0  0 99  0  0  0",
+   "gate: ps --sort=-pcpu (top 7)",
+   "  PID USER     %CPU  NI COMMAND",
+   "  101 root      5.8   0 claude",
+   "   31 root      0.4   - migration/3",
+   "   21 root      0.4   - migration/1",
+   "   26 root      0.4   - migration/2",
+   "    1 root      0.4   0 process_api",
+   "   43 root      0.1   0 kworker/u16:1-events_unbound",
+   "   93 root      0.1   0 environment-man",
+   "gate: busy 0.2% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough",
+   "gate: busy process 101 user root pcpu 5.8 ni 0 claude"
+  ],
+  "steal_limit_percent": 3,
+  "rounds_detail": [
+   {
+    "round": 1,
+    "attempt": 1,
+    "wall_s": 7.190742015838623,
+    "kept": true,
+    "steal_percent_of_cpu_time": 0.45123221103783406
+   },
+   {
+    "round": 2,
+    "attempt": 2,
+    "wall_s": 8.014568090438843,
+    "kept": true,
+    "steal_percent_of_cpu_time": 0.28002489110143125
+   },
+   {
+    "round": 3,
+    "attempt": 3,
+    "wall_s": 9.24363398551941,
+    "kept": true,
+    "steal_percent_of_cpu_time": 0.3242366927857336
+   },
+   {
+    "round": 4,
+    "attempt": 4,
+    "wall_s": 7.591913938522339,
+    "kept": true,
+    "steal_percent_of_cpu_time": 0.32873109796186717
+   },
+   {
+    "round": 5,
+    "attempt": 5,
+    "wall_s": 7.830002069473267,
+    "kept": true,
+    "steal_percent_of_cpu_time": 0.4461440407903123
+   },
+   {
+    "round": 6,
+    "attempt": 6,
+    "wall_s": 7.393401861190796,
+    "kept": true,
+    "steal_percent_of_cpu_time": 0.40526849037487334
+   },
+   {
+    "round": 7,
+    "attempt": 7,
+    "wall_s": 7.620498180389404,
+    "kept": true,
+    "steal_percent_of_cpu_time": 0.4256712508185986
+   }
+  ],
+  "failed": [],
+  "stderr_of_runs": "",
+  "packages": [
+   "libbenchmark-dev 1.9.1-1+b2",
+   "libc6 2.43-7",
+   "libcapnp-dev 1.5.0-2",
+   "libflatbuffers-dev 23.5.26+dfsg-4+b2",
+   "libjsoncons-dev 1.5.0-2",
+   "libstdc++6 16.2.0-4",
+   "libtinycbor-dev 7.0-1"
+  ],
+  "flags": "-O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -pie -DNDEBUG",
+  "rounds": 7,
+  "min_time": "1s",
+  "warnings": {
+   "g++-16": "-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -Wnull-dereference "
+  },
+  "commit": "3d197c72dde25fa1a3b4a0641b0f0a0acb71cdf3"
+ },
+ "results": {
+  "g++-16.LAZY_READ": {
+   "unit": "ns",
+   "repetitions": [
+    2682491.0857699723,
+    3151393.871153866,
+    3203105.9303201255,
+    2618648.9253438003,
+    2430239.436681242,
+    2722788.240917761,
+    2679357.2987288185
+   ],
+   "median": 2682491.0857699723,
+   "spread": 0.3180207192647311,
+   "check": 33191310.68737028,
+   "expected": 33191310.68737028,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.MB_READ": {
+   "unit": "ns",
+   "repetitions": [
+    83669.39526758759,
+    77775.98864785866,
+    71863.54421034566,
+    68506.51032668157,
+    78828.81714809177,
+    72123.14926803284,
+    72253.96137229993
+   ],
+   "median": 72253.96137229993,
+   "spread": 0.22133494858517788,
+   "check": 33191310.68737028,
+   "expected": 33191310.68737028,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.MB_READ_AA": {
+   "unit": "ns",
+   "repetitions": [
+    85026.60249482302,
+    70994.45112684436,
+    74836.12345800878,
+    76016.58041119357,
+    74276.94034712936,
+    54011.268501875136,
+    75121.29289610981
+   ],
+   "median": 74836.12345800878,
+   "spread": 0.5742382071969132,
+   "check": 33191310.68737028,
+   "expected": 33191310.68737028,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  },
+  "g++-16.TC_READ": {
+   "unit": "ns",
+   "repetitions": [
+    1683918.0258939525,
+    1878951.2353705908,
+    1812586.9900620868,
+    1670032.2082191918,
+    1852139.9537366505,
+    1744687.5601056942,
+    2094638.0463917109
+   ],
+   "median": 1812586.9900620868,
+   "spread": 0.25425008935922855,
+   "check": 33191310.68737028,
+   "expected": 33191310.68737028,
+   "bytes_written": 0,
+   "bytes_plain": 440957,
+   "bytes_packed": 155849
+  }
+ },
+ "check_failures": []
+}
