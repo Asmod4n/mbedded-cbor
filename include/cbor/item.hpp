@@ -38,6 +38,8 @@ class encoding;
 template <bool>
 struct tree_decoder;
 
+class extended_diagnostic_notation;
+
 }
 
 struct item;
@@ -418,6 +420,8 @@ private:
     static constexpr detail::pairs_of_items<Item> pair_keys_with_values(std::span<Item const> map);
 
     friend class detail::encoding;
+
+    friend class detail::extended_diagnostic_notation;
 };
 
 /**

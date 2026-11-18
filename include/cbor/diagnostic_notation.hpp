@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <ranges>
@@ -143,6 +144,29 @@ class extended_diagnostic_notation
     static constexpr int hexadecimal = 16;
 
     static constexpr unsigned char unescaped_first = 0x20;
+
+    static constexpr std::size_t repeat16 = 16;
+    static constexpr std::uint8_t char_is_ascii_skip_dq = 1;
+    static constexpr std::array<std::uint8_t, std::numeric_limits<unsigned char>::max() + 1> char_table = [] {
+        std::array<std::uint8_t, std::numeric_limits<unsigned char>::max() + 1> t{};
+        for (std::size_t c = 0; c < t.size(); ++c)
+            if (c != '"' && c != '\\' && c != '\r' && (c == '\n' || c >= unescaped_first))
+                t[c] = char_is_ascii_skip_dq;
+        return t;
+    }();
+
+    static constexpr std::size_t read_str_skip(std::string_view const text, std::size_t at)
+    {
+        while (detail::validity::check_text_left(text, at, repeat16)) {
+            for (std::size_t i = 0; i < repeat16; ++i)
+                if (char_table[static_cast<unsigned char>(text[at + i])] == 0)
+                    return at + i;
+            at += repeat16;
+        }
+        while (detail::validity::check_text_left(text, at, 1) && char_table[static_cast<unsigned char>(text[at])] != 0)
+            ++at;
+        return at;
+    }
 
     static constexpr bool blank(char const c)
     {
@@ -312,6 +336,11 @@ class extended_diagnostic_notation
     {
         char const quote = text[at++];
         for (;;) {
+            if (quote == '"') {
+                std::size_t const run_end = read_str_skip(text, at);
+                out.append(std::string_view(text).substr(at, run_end - at));
+                at = run_end;
+            }
             if (auto const left = detail::validity::check_text_left(text, at, 1); !left) [[unlikely]]
                 return std::unexpected(left.error());
             char const c = text[at++];
@@ -981,6 +1010,199 @@ class extended_diagnostic_notation
         return parse_number(text, at, out);
     }
 
+    static constexpr bool value_ends(std::string_view const text, std::size_t const at)
+    {
+        if (!detail::validity::check_text_left(text, at, 1))
+            return true;
+        char const c = text[at];
+        return blank(c) || c == ',' || c == ']' || c == '}' || c == ':' || c == '/' || c == '#';
+    }
+
+    static item scalar_item(major_type const major, std::uint64_t const argument)
+    {
+        std::uint8_t const info = detail::heads::preferred_argument_info(argument);
+        return item{detail::heads::type_of(major, info, argument), info, {.u64 = argument}};
+    }
+
+    static constexpr std::size_t digits_end(std::string_view const text, std::size_t const at)
+    {
+        std::span<char const> const rest = std::span(text).subspan(at);
+        return at + static_cast<std::size_t>(std::ranges::distance(rest.begin(), std::ranges::find_if_not(rest, digit)));
+    }
+
+    static std::expected<std::size_t, error> read_number(std::string_view const text, std::size_t const at,
+                                                         std::vector<item> &values)
+    {
+        bool const negative = text[at] == '-';
+        std::size_t const first = negative ? at + 1 : at;
+        if (!detail::validity::check_text_left(text, first, 1)) [[unlikely]]
+            return std::unexpected(error::syntax_error);
+        std::size_t p = digits_end(text, first);
+        std::size_t const digits = p - first;
+        if (digits == 0 || (text[first] == '0' && digits > 1)) [[unlikely]]
+            return std::unexpected(error::syntax_error);
+        bool real = false;
+        if (detail::validity::check_text_left(text, p, 1) && text[p] == '.') {
+            real = true;
+            std::size_t const fraction = p + 1;
+            p = digits_end(text, fraction);
+            if (p == fraction) [[unlikely]]
+                return std::unexpected(error::syntax_error);
+        }
+        if (detail::validity::check_text_left(text, p, 1) && (text[p] == 'e' || text[p] == 'E')) {
+            real = true;
+            ++p;
+            if (detail::validity::check_text_left(text, p, 1) && (text[p] == '+' || text[p] == '-'))
+                ++p;
+            std::size_t const exponent = p;
+            p = digits_end(text, exponent);
+            if (p == exponent) [[unlikely]]
+                return std::unexpected(error::syntax_error);
+        }
+        if (!value_ends(text, p)) [[unlikely]]
+            return std::unexpected(error::syntax_error);
+        if (!real) {
+            if (digits > static_cast<std::size_t>(std::numeric_limits<std::uint64_t>::digits10)) [[unlikely]]
+                return std::unexpected(error::syntax_error);
+            std::uint64_t const mantissa = std::ranges::fold_left(
+                std::span(text).subspan(first, digits), std::uint64_t{0},
+                [](std::uint64_t const m, char const d) { return m * decimal + static_cast<std::uint64_t>(d - '0'); });
+            values.push_back(negative && mantissa != 0 ? scalar_item(major_type::negative_integer, mantissa - 1)
+                                                       : scalar_item(major_type::unsigned_integer, mantissa));
+            return p;
+        }
+        double value;
+        std::string_view const number{std::span(text).subspan(at, p - at)};
+        if (std::from_chars(std::to_address(number.begin()), std::to_address(number.end()), value).ec != std::errc{})
+            [[unlikely]]
+            return std::unexpected(error::syntax_error);
+        std::uint8_t const info = std::to_underlying(detail::ieee754::preferred_float_info(value));
+        values.push_back(item{detail::heads::type_of(major_type::simple, info, 0), info, {.f64 = value}});
+        return p;
+    }
+
+    static std::expected<std::size_t, error> read_root_minify(std::string_view const text, std::size_t const at,
+                                                              zone &decoded, std::vector<item> &values,
+                                                              std::string &unescaped)
+    {
+        if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        if (!detail::validity::check_text_left(text, at, 1)) [[unlikely]]
+            return std::unexpected(error::syntax_error);
+        char const c = text[at];
+        if (c == '"') {
+            std::size_t const stop = read_str_skip(text, at + 1);
+            std::string_view content;
+            std::size_t next;
+            if (detail::validity::check_text_left(text, stop, 1) && text[stop] == '"') {
+                content = std::string_view(text).substr(at + 1, stop - at - 1);
+                next = stop + 1;
+            } else {
+                unescaped.clear();
+                auto const end = parse_quoted(text, at, unescaped);
+                if (!end) [[unlikely]]
+                    return std::unexpected(end.error());
+                content = unescaped;
+                next = *end;
+            }
+            if (!value_ends(text, next)) [[unlikely]]
+                return std::unexpected(error::syntax_error);
+            item string = scalar_item(major_type::text_string, content.size());
+            string.via.str = decoded.strings.save(content, content.size() + std::min(detail::validity::string_saver_chunk_size, text.size() - next));
+            values.push_back(string);
+            return next;
+        }
+        if (c == '[' || c == '{') {
+            bool const map = c == '{';
+            char const close = map ? '}' : ']';
+            auto const first = optional_space_end(text, at + 1);
+            if (!first) [[unlikely]]
+                return first;
+            std::size_t const start = values.size();
+            std::size_t p = *first;
+            bool separated = true;
+            while (detail::validity::check_text_left(text, p, 1) && text[p] != close) {
+                if (!separated) [[unlikely]]
+                    return std::unexpected(error::syntax_error);
+                auto next = read_root_minify(text, p, decoded, values, unescaped);
+                if (!next) [[unlikely]]
+                    return next;
+                if (map) {
+                    auto const colon = optional_space_end(text, *next);
+                    if (!colon) [[unlikely]]
+                        return colon;
+                    if (!detail::validity::check_text_left(text, *colon, 1) || text[*colon] != ':') [[unlikely]]
+                        return std::unexpected(error::syntax_error);
+                    auto const value = optional_space_end(text, *colon + 1);
+                    if (!value) [[unlikely]]
+                        return value;
+                    next = read_root_minify(text, *value, decoded, values, unescaped);
+                    if (!next) [[unlikely]]
+                        return next;
+                }
+                auto const s = parse_separator(text, *next);
+                if (!s) [[unlikely]]
+                    return std::unexpected(s.error());
+                p = s->at;
+                separated = s->separated;
+            }
+            if (!detail::validity::check_text_left(text, p, 1)) [[unlikely]]
+                return std::unexpected(error::syntax_error);
+            std::size_t const n = values.size() - start;
+            std::pmr::vector<item> &block = decoded.items_reserved(n);
+            std::span<item const> const children = std::span<item const>(values).subspan(start);
+            std::ranges::copy(children, std::back_inserter(block));
+            while (values.size() != start)
+                values.pop_back();
+            item container = scalar_item(map ? major_type::map : major_type::array,
+                                         map ? n / rfc8949::data_items_per_pair : n);
+            if (map)
+                container.via.map = std::span<item const>(block);
+            else
+                container.via.array = std::span<item const>(block);
+            values.push_back(container);
+            return p + 1;
+        }
+        constexpr auto names = std::to_array<std::string_view>({"false", "true", "null"});
+        for (std::size_t i = 0; i < names.size(); ++i)
+            if (std::string_view{std::span(text).subspan(at)}.starts_with(names[i])) {
+                if (!value_ends(text, at + names[i].size())) [[unlikely]]
+                    return std::unexpected(error::syntax_error);
+                std::uint64_t const v = std::to_underlying(simple_value::false_value) + i;
+                item simple = scalar_item(major_type::simple, v);
+                simple.via.simple_value = static_cast<simple_value>(v);
+                values.push_back(simple);
+                return at + names[i].size();
+            }
+        if (c == '-' || digit(c))
+            return read_number(text, at, values);
+        return std::unexpected(error::syntax_error);
+    }
+
+    static std::expected<owning<item>, error> read_root_minify(std::string_view const text)
+    {
+        auto const start = optional_space_end(text, 0);
+        if (!start) [[unlikely]]
+            return std::unexpected(start.error());
+        auto decoded = std::make_unique<zone>(detail::validity::checked_mul(text.size(), sizeof(item) + 1)
+                                                  .transform([](std::size_t const size) {
+                                                      return std::clamp(size, std::size_t{1},
+                                                                        detail::validity::initial_size_limit);
+                                                  })
+                                                  .value_or(detail::validity::initial_size_limit));
+        std::vector<item> values;
+        std::string unescaped;
+        auto const next = read_root_minify(text, *start, *decoded, values, unescaped);
+        if (!next) [[unlikely]]
+            return std::unexpected(next.error());
+        auto const end = optional_space_end(text, *next);
+        if (!end || *end != text.size()) [[unlikely]]
+            return std::unexpected(error::syntax_error);
+        std::pmr::vector<item> &root = decoded->items_reserved(1);
+        root.push_back(values.front());
+        return zone_owner::tree_owned(&root.front(), std::move(decoded));
+    }
+
     static constexpr std::expected<std::size_t, error> parse_literal(literal_cursor const cursor, std::string &out)
     {
         backpatches patches;
@@ -1360,6 +1582,8 @@ class extended_diagnostic_notation
     friend constexpr std::expected<std::string, error> cbor::diag2cbor(std::string_view text);
 
     friend std::expected<std::string, error> item::to_edn() const;
+
+    friend std::expected<owning<item>, error> cbor::parse_edn(std::string_view text);
 };
 
 }
@@ -1561,6 +1785,8 @@ consteval auto operator""_edn()
  */
 inline std::expected<owning<item>, error> parse_edn(std::string_view const text)
 {
+    if (auto tree = detail::extended_diagnostic_notation::read_root_minify(text)) [[likely]]
+        return tree;
     return diag2cbor(text).and_then([](std::string const &bytes) { return decode(std::string_view(bytes)); });
 }
 
