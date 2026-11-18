@@ -1,7 +1,8 @@
 // Gives a tree of CBOR data items in the form of the yyjson DOM: an item of 16 bytes, all items of a tree
 // in one array, each container followed by its descendants and holding the distance to its next sibling,
 // and one copy of the input that the strings point into. Decodes CBOR into the tree, with tags 28 and 29
-// kept as tags or resolved.
+// kept as tags or resolved, and encodes the tree in the form of the yyjson writer, with tags 28 and 29
+// for its cycles only.
 // https://www.rfc-editor.org/rfc/rfc8949
 // https://www.rfc-editor.org/rfc/rfc8746
 // http://cbor.schmorp.de/value-sharing
@@ -15,6 +16,7 @@
 #include <limits>
 #include <memory>
 #include <span>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -494,6 +496,296 @@ public:
     }
 };
 
+class writer
+{
+    using heads = detail::heads;
+    using validity = detail::validity;
+
+    static constexpr std::size_t growth_divisor = 2;
+
+    static constexpr std::size_t not_open = std::numeric_limits<std::size_t>::max();
+
+    struct output {
+        std::string &out;
+        std::size_t start;
+        std::span<char> buffer;
+        std::size_t used;
+
+        [[gnu::noinline]] void grow(std::size_t const needed)
+        {
+            std::size_t const size = std::max(buffer.size() + buffer.size() / growth_divisor, used + needed);
+            out.resize(start + size);
+            buffer = std::span<char>(out).subspan(start);
+        }
+
+        void reserve(std::size_t const needed)
+        {
+            if (needed > buffer.size() - used) [[unlikely]]
+                grow(needed);
+        }
+
+        void write_head(major_type const major, std::uint8_t const info, std::uint64_t const argument)
+        {
+            reserve(heads::head_size_max);
+            used += heads::write_head(buffer, used, major, info, argument);
+        }
+
+        std::size_t finish()
+        {
+            out.resize(start + used);
+            return used;
+        }
+
+        void discard()
+        {
+            out.resize(start);
+        }
+
+        void write_string(major_type const major, std::uint8_t const info, std::string_view const content)
+        {
+            reserve(heads::head_size_max + content.size());
+            used += heads::write_head(buffer, used, major, info, content.size());
+            std::ranges::copy(content, buffer.subspan(used).begin());
+            used += content.size();
+        }
+    };
+
+    static std::expected<void, error> write_item(output &o, item const &x)
+    {
+        std::uint8_t const info = kind::info_of(x.tag);
+        switch (x.tag & kind::type_mask) {
+        case kind::type_null:
+        case kind::type_bool:
+            o.write_head(major_type::simple, info, info);
+            return {};
+        case kind::type_number:
+            switch (x.tag & kind::subtype_mask) {
+            case kind::subtype_uint:
+                o.write_head(major_type::unsigned_integer, info, x.uni.u64);
+                return {};
+            case kind::subtype_sint:
+                o.write_head(major_type::negative_integer, info, static_cast<std::uint64_t>(~x.uni.i64));
+                return {};
+            case kind::subtype_negative:
+                o.write_head(major_type::negative_integer, info, x.uni.u64);
+                return {};
+            default:
+                o.write_head(
+                    major_type::simple, info,
+                    ieee754::encode_float(static_cast<rfc8949::simple_information>(info), x.uni.f64));
+                return {};
+            }
+        case kind::type_bytes:
+            o.write_string(major_type::byte_string, info,
+                           std::string_view(x.uni.str, static_cast<std::size_t>(kind::high_of(x.tag))));
+            return {};
+        case kind::type_text:
+            o.write_string(major_type::text_string, info,
+                           std::string_view(x.uni.str, static_cast<std::size_t>(kind::high_of(x.tag))));
+            return {};
+        case kind::type_array:
+            o.write_head(major_type::array, info, kind::high_of(x.tag));
+            return {};
+        case kind::type_map:
+            o.write_head(major_type::map, info, kind::high_of(x.tag));
+            return {};
+        default:
+            switch (x.tag & kind::extended_mask) {
+            case kind::extended_tag:
+            case kind::extended_typed_array:
+                o.write_head(major_type::tag, info, x.uni.u64);
+                return {};
+            case kind::extended_simple:
+                o.write_head(major_type::simple, info, x.uni.u64);
+                return {};
+            default:
+                return std::unexpected(error::cyclic_data_structure);
+            }
+        }
+    }
+
+    static void write_preferred_head(output &o, major_type const major, std::uint64_t const argument)
+    {
+        o.write_head(major, heads::preferred_argument_info(argument), argument);
+    }
+
+    static std::uint64_t children_of(item const &x)
+    {
+        switch (x.tag & kind::type_mask) {
+        case kind::type_array:
+            return kind::high_of(x.tag);
+        case kind::type_map:
+            return rfc8949::data_items_per_pair * kind::high_of(x.tag);
+        case kind::type_extended:
+            return kind::is_tag(x) ? 1 : 0;
+        default:
+            return 0;
+        }
+    }
+
+    static std::uint64_t size_of(item const &x)
+    {
+        std::uint64_t const head = heads::initial_byte_size + heads::argument_size(kind::info_of(x.tag));
+        auto const type = x.tag & kind::type_mask;
+        if (type == kind::type_bytes || type == kind::type_text)
+            return head + kind::high_of(x.tag);
+        return head;
+    }
+
+    class depth_first_search
+    {
+        struct frame {
+            std::size_t node;
+            std::size_t child;
+            std::uint64_t left;
+            bool below;
+        };
+
+        static constexpr std::uint64_t back_edge_size =
+            heads::head_size(std::to_underlying(rfc8949::tag_number::sharedref)) + heads::initial_byte_size;
+
+        std::span<item const> items;
+        std::vector<std::uint8_t> on_path;
+        std::vector<std::uint8_t> target;
+        std::vector<std::size_t> open;
+        std::uint64_t direct = 0;
+        std::uint64_t in_tree = 0;
+
+        std::size_t followed(std::size_t const at) const
+        {
+            if (kind::is_extended(items[at], kind::extended_shared_reference)) [[unlikely]]
+                return static_cast<std::size_t>(static_cast<std::int64_t>(at) + items[at].uni.i64);
+            return at;
+        }
+
+        std::expected<void, error> count(std::uint64_t const bytes, bool const below)
+        {
+            direct += bytes;
+            if (!below)
+                in_tree += bytes;
+            return validity::check_amplification(direct, in_tree);
+        }
+
+    public:
+        explicit depth_first_search(std::span<item const> const tree_items)
+            : items(tree_items), on_path(tree_items.size()), target(tree_items.size()),
+              open(tree_items.size(), not_open)
+        {
+        }
+
+        std::expected<void, error> find_back_edges(std::size_t const root)
+        {
+            std::vector<frame> path;
+            if (auto const r = count(size_of(items[root]), false); !r) [[unlikely]]
+                return r;
+            on_path[root] = 1;
+            path.push_back({root, root + 1, children_of(items[root]), false});
+            while (!path.empty()) {
+                frame &f = path.back();
+                if (f.left == 0) {
+                    on_path[f.node] = 0;
+                    path.pop_back();
+                    continue;
+                }
+                std::size_t const child = f.child;
+                bool const below = f.below;
+                f.child += kind::width_of(items[child]);
+                --f.left;
+                bool const reference = kind::is_extended(items[child], kind::extended_shared_reference);
+                std::size_t const next = followed(child);
+                if (reference && !below)
+                    in_tree += heads::head_size(std::to_underlying(rfc8949::tag_number::sharedref)) +
+                               heads::initial_byte_size +
+                               heads::argument_size(kind::info_of(items[child].tag));
+                if (on_path[next] != 0) {
+                    target[next] = 1;
+                    if (auto const r = count(back_edge_size, true); !r) [[unlikely]]
+                        return r;
+                    continue;
+                }
+                if (auto const r = count(size_of(items[next]), below || reference); !r) [[unlikely]]
+                    return r;
+                on_path[next] = 1;
+                path.push_back({next, next + 1, children_of(items[next]), below || reference});
+            }
+            return {};
+        }
+
+        std::expected<void, error> write(output &o, std::size_t const root)
+        {
+            std::vector<frame> path;
+            std::size_t marks = 0;
+            std::size_t next = root;
+            for (;;) {
+                std::size_t const index = marks;
+                if (target[next] != 0) {
+                    write_preferred_head(o, major_type::tag,
+                                         std::to_underlying(rfc8949::tag_number::shareable));
+                    ++marks;
+                }
+                if (auto const r = write_item(o, items[next]); !r) [[unlikely]]
+                    return r;
+                open[next] = index;
+                path.push_back({next, next + 1, children_of(items[next]), false});
+                for (;;) {
+                    if (path.empty())
+                        return {};
+                    frame &f = path.back();
+                    if (f.left == 0) {
+                        open[f.node] = not_open;
+                        path.pop_back();
+                        continue;
+                    }
+                    std::size_t const child = f.child;
+                    f.child += kind::width_of(items[child]);
+                    --f.left;
+                    next = followed(child);
+                    if (open[next] == not_open)
+                        break;
+                    write_preferred_head(o, major_type::tag,
+                                         std::to_underlying(rfc8949::tag_number::sharedref));
+                    write_preferred_head(o, major_type::unsigned_integer, open[next]);
+                }
+            }
+        }
+    };
+
+    static output output_for(std::string &out, std::size_t const estimate)
+    {
+        output o{out, out.size(), {}, 0};
+        o.grow(estimate + heads::head_size_max);
+        return o;
+    }
+
+public:
+    static std::expected<std::size_t, error> encode(std::string &out, tree const &t)
+    {
+        output o = output_for(out, t.dat_read);
+        for (item const &x : t.root())
+            if (auto const r = write_item(o, x); !r) [[unlikely]] {
+                o.discard();
+                return std::unexpected(r.error());
+            }
+        return o.finish();
+    }
+
+    static std::expected<std::size_t, error> encode_cycles(std::string &out, tree const &t)
+    {
+        if (!t.has_shared_reference) [[likely]]
+            return encode(out, t);
+        std::span<item const> const items = t.root();
+        depth_first_search walk(items);
+        if (auto const r = walk.find_back_edges(0); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        output o = output_for(out, t.dat_read);
+        if (auto const r = walk.write(o, 0); !r) [[unlikely]] {
+            o.discard();
+            return std::unexpected(r.error());
+        }
+        return o.finish();
+    }
+};
+
 inline std::expected<tree, error> decode(std::string_view const encoded)
 {
     return reader::decode<false>(encoded);
@@ -502,6 +794,16 @@ inline std::expected<tree, error> decode(std::string_view const encoded)
 inline std::expected<tree, error> decode_shared_refs(std::string_view const encoded)
 {
     return reader::decode<true>(encoded);
+}
+
+inline std::expected<std::size_t, error> encode(std::string &out, tree const &decoded)
+{
+    return writer::encode(out, decoded);
+}
+
+inline std::expected<std::size_t, error> encode_cycles(std::string &out, tree const &decoded)
+{
+    return writer::encode_cycles(out, decoded);
 }
 
 }
