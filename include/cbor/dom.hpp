@@ -153,50 +153,19 @@ class reader
 
     static constexpr std::size_t max_nesting_depth = 1024;
 
-    static constexpr std::size_t encoded_tag_and_content = 2;
-
     struct frame {
         std::size_t at;
         std::uint64_t left;
     };
 
-    struct embedding {
-        std::string_view rest;
-        std::uint64_t open;
-        std::vector<std::size_t> marks;
+    struct embedded_item {
+        std::string_view encoded;
+        std::size_t tagged;
         std::size_t depth;
+        error failure;
     };
 
-    struct embedded_trees {
-        std::vector<item> values;
-        std::vector<link> in_place;
-        std::vector<link> moved;
-
-        [[gnu::noinline]] void move_tree(std::span<item const> const tree_in_place, std::size_t const tagged)
-        {
-            std::size_t const first = tagged + encoded_tag_and_content;
-            std::size_t const moved_to = values.size();
-            values.insert(values.end(), tree_in_place.begin(), tree_in_place.end());
-            while (!in_place.empty() && in_place.back().tagged >= first) {
-                link const l = in_place.back();
-                in_place.pop_back();
-                moved.push_back({l.tagged - first + moved_to, l.embedded});
-            }
-            in_place.push_back({tagged, moved_to});
-        }
-
-        [[gnu::noinline]] std::vector<link> links_after(std::size_t const outer) const
-        {
-            std::vector<link> links;
-            links.reserve(in_place.size() + moved.size());
-            for (link const &l : in_place)
-                links.push_back({l.tagged, l.embedded + outer});
-            for (link const &l : moved)
-                links.push_back({l.tagged + outer, l.embedded + outer});
-            std::ranges::sort(links, {}, &link::tagged);
-            return links;
-        }
-    };
+    struct items_decoder;
 
     static std::expected<void, error> check_nesting_depth(std::size_t const open_containers)
     {
@@ -304,6 +273,187 @@ class reader
         return true;
     }
 
+    struct items_decoder {
+        std::span<item> values;
+        std::vector<embedded_item> embedded;
+        bool has_shared_reference;
+
+        [[gnu::noinline]] void add_embedded(item const &content, std::size_t const tagged,
+                                            std::size_t const depth)
+        {
+            embedded.push_back(
+                {std::string_view(content.uni.str, static_cast<std::size_t>(kind::high_of(content.tag))),
+                 tagged, depth, error{}});
+        }
+
+        template <bool SharedRefs>
+        std::expected<std::size_t, error> decode_item(std::size_t const first, std::string_view const encoded,
+                                                      std::size_t const depth, bool const one_item)
+        {
+            std::span<item> const v = values;
+            heads::decoder<true> d{encoded};
+            std::vector<frame> open_containers;
+            std::vector<std::size_t> marks;
+            std::size_t marked = 0;
+            std::uint64_t left = 1;
+            std::uint64_t open = 1;
+            std::size_t val = first;
+            for (;;) {
+                auto const h = d.decode_head();
+                if (!h) [[unlikely]]
+                    return std::unexpected(h.error());
+                --open;
+                item &x = v[val];
+                if constexpr (SharedRefs)
+                    if (marked != 0 && !is_value_sharing(*h)) [[unlikely]] {
+                        marks.insert(marks.end(), marked, val);
+                        marked = 0;
+                    }
+                switch (h->major) {
+                case major_type::unsigned_integer:
+                case major_type::negative_integer:
+                    set_integer(x, h->major, h->info, h->argument);
+                    break;
+                case major_type::byte_string:
+                case major_type::text_string: {
+                    auto const s = d.decode_string(h->argument);
+                    if (!s) [[unlikely]]
+                        return std::unexpected(s.error());
+                    x.tag =
+                        kind::word(h->argument, h->info,
+                                   h->major == major_type::text_string ? kind::type_text : kind::type_bytes);
+                    x.uni.str = s->data();
+                    break;
+                }
+                case major_type::array:
+                case major_type::map: {
+                    std::uint64_t const count = validity::count_enclosed_data_items(h->major, h->argument);
+                    auto const reserved = validity::checked_add(open, count);
+                    if (!reserved) [[unlikely]]
+                        return std::unexpected(error::too_little_data);
+                    if (auto const r = validity::check_bytes_left(*reserved, d.encoded.size()); !r)
+                        [[unlikely]]
+                        return std::unexpected(r.error());
+                    x.tag = kind::word(h->argument, h->info,
+                                       h->major == major_type::map ? kind::type_map : kind::type_array);
+                    if (count != 0) {
+                        if (auto const r = check_nesting_depth(depth + open_containers.size()); !r)
+                            [[unlikely]]
+                            return std::unexpected(r.error());
+                        open = *reserved;
+                        open_containers.push_back({val, left});
+                        left = count;
+                        ++val;
+                        continue;
+                    }
+                    x.uni.ofs = 1;
+                    break;
+                }
+                case major_type::tag: {
+                    if constexpr (SharedRefs) {
+                        if (h->argument == std::to_underlying(rfc8949::tag_number::shareable)) [[unlikely]] {
+                            ++marked;
+                            ++open;
+                            continue;
+                        }
+                        if (h->argument == std::to_underlying(rfc8949::tag_number::sharedref)) [[unlikely]] {
+                            if (auto const r = decode_sharedref(d, x, val, marks, marked); !r) [[unlikely]]
+                                return std::unexpected(r.error());
+                            marked = 0;
+                            has_shared_reference = true;
+                            break;
+                        }
+                    }
+                    if (heads::is_bignum(h->major, h->argument)) [[unlikely]] {
+                        auto const r = decode_bignum(d, x, h->argument);
+                        if (!r) [[unlikely]]
+                            return std::unexpected(r.error());
+                        if (*r)
+                            break;
+                    }
+                    if (auto const r = check_nesting_depth(depth + open_containers.size()); !r) [[unlikely]]
+                        return std::unexpected(r.error());
+                    x.tag = kind::word(0, h->info,
+                                       kind::type_extended | (validity::is_typed_array_tag(h->argument)
+                                                                  ? kind::extended_typed_array
+                                                                  : kind::extended_tag));
+                    x.uni.u64 = h->argument;
+                    ++open;
+                    open_containers.push_back({val, left});
+                    left = 1;
+                    ++val;
+                    continue;
+                }
+                case major_type::simple:
+                    if (heads::is_floating_point(h->major, h->info)) {
+                        x.tag =
+                            kind::word(0, h->info,
+                                       static_cast<std::uint8_t>(
+                                           kind::type_number | kind::subtype_real |
+                                           (h->info - std::to_underlying(
+                                                          rfc8949::simple_information::half_precision_float))
+                                               << kind::width_bit));
+                        x.uni.f64 = ieee754::decode_float(h->info, h->argument);
+                        break;
+                    }
+                    switch (h->info) {
+                    case std::to_underlying(simple_value::false_value):
+                        x.tag = kind::word(0, h->info, kind::type_bool | kind::subtype_false);
+                        break;
+                    case std::to_underlying(simple_value::true_value):
+                        x.tag = kind::word(0, h->info, kind::type_bool | kind::subtype_true);
+                        break;
+                    case std::to_underlying(simple_value::null):
+                        x.tag = kind::word(0, h->info, kind::type_null);
+                        break;
+                    case std::to_underlying(simple_value::undefined):
+                        x.tag = kind::word(0, h->info, kind::type_null | kind::subtype_undefined);
+                        break;
+                    default:
+                        x.tag = kind::word(0, h->info, kind::type_extended | kind::extended_simple);
+                        x.uni.u64 = h->argument;
+                        break;
+                    }
+                    break;
+                }
+                ++val;
+                while (--left == 0) {
+                    if (open_containers.empty()) {
+                        if (one_item)
+                            if (auto const r = validity::check_one_data_item(d.encoded); !r) [[unlikely]]
+                                return std::unexpected(r.error());
+                        return val;
+                    }
+                    frame const f = open_containers.back();
+                    open_containers.pop_back();
+                    left = f.left;
+                    item &c = v[f.at];
+                    if ((c.tag & kind::type_mask) != kind::type_extended) {
+                        c.uni.ofs = val - f.at;
+                        continue;
+                    }
+                    if (kind::is_extended(c, kind::extended_typed_array)) [[unlikely]] {
+                        if (auto const r = check_typed_array_content(c.uni.u64, v[f.at + 1]); !r) [[unlikely]]
+                            return std::unexpected(r.error());
+                    } else if (c.uni.u64 == std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item) &&
+                               (v[f.at + 1].tag & kind::type_mask) == kind::type_bytes) [[unlikely]] {
+                        add_embedded(v[f.at + 1], f.at, depth + open_containers.size() + 1);
+                    }
+                    c.tag |= std::uint64_t{val - f.at} << kind::tag_bit;
+                }
+            }
+        }
+    };
+
+    static void schedule(std::vector<embedded_item> &pending, std::vector<embedded_item> &found,
+                         std::expected<std::size_t, error> const &decoded)
+    {
+        if (!decoded) [[unlikely]]
+            pending.push_back({{}, 0, 0, decoded.error()});
+        pending.insert(pending.end(), found.rbegin(), found.rend());
+        found.clear();
+    }
+
 public:
     template <bool SharedRefs>
     static std::expected<tree, error> decode(std::string_view const bytes)
@@ -314,184 +464,33 @@ public:
             return std::unexpected(error::too_little_data);
         auto text = std::make_unique_for_overwrite<char[]>(size);
         std::ranges::copy(encoded, text.get());
-        auto values_owner = std::make_unique_for_overwrite<item[]>(size);
-        std::span<item> const values(values_owner.get(), size);
-        heads::decoder<true> d{std::string_view(text.get(), size)};
-        std::vector<frame> open_containers;
-        std::vector<embedding> embeddings;
-        embedded_trees embedded;
-        std::vector<std::size_t> marks;
-        std::size_t marked = 0;
-        bool shared_reference = false;
-        std::uint64_t left = 1;
-        std::uint64_t open = 1;
-        std::size_t val = 0;
-        for (;;) {
-            auto const h = d.decode_head();
-            if (!h) [[unlikely]]
-                return std::unexpected(h.error());
-            --open;
-            item &x = values[val];
-            if constexpr (SharedRefs)
-                if (marked != 0 && !is_value_sharing(*h)) [[unlikely]] {
-                    marks.insert(marks.end(), marked, val);
-                    marked = 0;
-                }
-            switch (h->major) {
-            case major_type::unsigned_integer:
-            case major_type::negative_integer:
-                set_integer(x, h->major, h->info, h->argument);
-                break;
-            case major_type::byte_string:
-            case major_type::text_string: {
-                auto const s = d.decode_string(h->argument);
-                if (!s) [[unlikely]]
-                    return std::unexpected(s.error());
-                x.tag = kind::word(h->argument, h->info,
-                                   h->major == major_type::text_string ? kind::type_text : kind::type_bytes);
-                x.uni.str = s->data();
-                break;
+        auto values = std::make_unique_for_overwrite<item[]>(size);
+        items_decoder out{std::span<item>(values.get(), size), {}, false};
+        auto const outer = out.decode_item<SharedRefs>(0, std::string_view(text.get(), size), 0, false);
+        if (out.embedded.empty() && outer) [[likely]]
+            return tree{std::move(values), *outer, std::move(text), size, {}, out.has_shared_reference};
+        bool failed = !outer;
+        std::size_t written = outer.value_or(0);
+        std::vector<embedded_item> pending;
+        std::vector<link> links;
+        schedule(pending, out.embedded, outer);
+        while (!pending.empty()) {
+            embedded_item const e = pending.back();
+            pending.pop_back();
+            if (e.failure != error{}) [[unlikely]]
+                return std::unexpected(e.failure);
+            std::size_t const first = failed ? 0 : written;
+            auto const inner = out.decode_item<SharedRefs>(first, e.encoded, e.depth, true);
+            failed = failed || !inner;
+            if (!failed) {
+                links.push_back({e.tagged, first});
+                written = *inner;
             }
-            case major_type::array:
-            case major_type::map: {
-                std::uint64_t const count = validity::count_enclosed_data_items(h->major, h->argument);
-                auto const reserved = validity::checked_add(open, count);
-                if (!reserved) [[unlikely]]
-                    return std::unexpected(error::too_little_data);
-                if (auto const r = validity::check_bytes_left(*reserved, d.encoded.size()); !r) [[unlikely]]
-                    return std::unexpected(r.error());
-                x.tag = kind::word(h->argument, h->info,
-                                   h->major == major_type::map ? kind::type_map : kind::type_array);
-                if (count != 0) {
-                    if (auto const r = check_nesting_depth(open_containers.size()); !r) [[unlikely]]
-                        return std::unexpected(r.error());
-                    open = *reserved;
-                    open_containers.push_back({val, left});
-                    left = count;
-                    ++val;
-                    continue;
-                }
-                x.uni.ofs = 1;
-                break;
-            }
-            case major_type::tag: {
-                if constexpr (SharedRefs) {
-                    if (h->argument == std::to_underlying(rfc8949::tag_number::shareable)) [[unlikely]] {
-                        ++marked;
-                        ++open;
-                        continue;
-                    }
-                    if (h->argument == std::to_underlying(rfc8949::tag_number::sharedref)) [[unlikely]] {
-                        if (auto const r = decode_sharedref(d, x, val, marks, marked); !r) [[unlikely]]
-                            return std::unexpected(r.error());
-                        marked = 0;
-                        shared_reference = true;
-                        break;
-                    }
-                }
-                if (heads::is_bignum(h->major, h->argument)) [[unlikely]] {
-                    auto const r = decode_bignum(d, x, h->argument);
-                    if (!r) [[unlikely]]
-                        return std::unexpected(r.error());
-                    if (*r)
-                        break;
-                }
-                if (auto const r = check_nesting_depth(open_containers.size()); !r) [[unlikely]]
-                    return std::unexpected(r.error());
-                x.tag = kind::word(0, h->info,
-                                   kind::type_extended |
-                                       (validity::is_typed_array_tag(h->argument) ? kind::extended_typed_array
-                                                                                  : kind::extended_tag));
-                x.uni.u64 = h->argument;
-                ++open;
-                open_containers.push_back({val, left});
-                left = 1;
-                ++val;
-                continue;
-            }
-            case major_type::simple:
-                if (heads::is_floating_point(h->major, h->info)) {
-                    x.tag = kind::word(
-                        0, h->info,
-                        static_cast<std::uint8_t>(
-                            kind::type_number | kind::subtype_real |
-                            (h->info - std::to_underlying(rfc8949::simple_information::half_precision_float))
-                                << kind::width_bit));
-                    x.uni.f64 = ieee754::decode_float(h->info, h->argument);
-                    break;
-                }
-                switch (h->info) {
-                case std::to_underlying(simple_value::false_value):
-                    x.tag = kind::word(0, h->info, kind::type_bool | kind::subtype_false);
-                    break;
-                case std::to_underlying(simple_value::true_value):
-                    x.tag = kind::word(0, h->info, kind::type_bool | kind::subtype_true);
-                    break;
-                case std::to_underlying(simple_value::null):
-                    x.tag = kind::word(0, h->info, kind::type_null);
-                    break;
-                case std::to_underlying(simple_value::undefined):
-                    x.tag = kind::word(0, h->info, kind::type_null | kind::subtype_undefined);
-                    break;
-                default:
-                    x.tag = kind::word(0, h->info, kind::type_extended | kind::extended_simple);
-                    x.uni.u64 = h->argument;
-                    break;
-                }
-                break;
-            }
-            ++val;
-            while (--left == 0) {
-                if (open_containers.empty()) {
-                    std::vector<link> links;
-                    if (!embedded.values.empty()) [[unlikely]] {
-                        std::ranges::copy(embedded.values, values.subspan(val).begin());
-                        links = embedded.links_after(val);
-                    }
-                    return tree{std::move(values_owner), val + embedded.values.size(),
-                                std::move(text),         size,
-                                std::move(links),        shared_reference};
-                }
-                frame const f = open_containers.back();
-                open_containers.pop_back();
-                left = f.left;
-                item &c = values[f.at];
-                if ((c.tag & kind::type_mask) != kind::type_extended) {
-                    c.uni.ofs = val - f.at;
-                    continue;
-                }
-                if (kind::is_extended(c, kind::extended_typed_array)) [[unlikely]] {
-                    if (auto const r = check_typed_array_content(c.uni.u64, values[f.at + 1]); !r)
-                        [[unlikely]]
-                        return std::unexpected(r.error());
-                } else if (c.uni.u64 == std::to_underlying(rfc8949::tag_number::encoded_cbor_data_item))
-                    [[unlikely]] {
-                    if (!embeddings.empty() && embeddings.back().depth == open_containers.size()) {
-                        if (auto const r = validity::check_one_data_item(d.encoded); !r) [[unlikely]]
-                            return std::unexpected(r.error());
-                        std::size_t const first = f.at + encoded_tag_and_content;
-                        embedded.move_tree(values.subspan(first, val - first), f.at);
-                        embedding &e = embeddings.back();
-                        d.encoded = e.rest;
-                        open = e.open;
-                        marks = std::move(e.marks);
-                        embeddings.pop_back();
-                        val = first;
-                    } else if ((values[f.at + 1].tag & kind::type_mask) == kind::type_bytes) {
-                        item const &content = values[f.at + 1];
-                        embeddings.push_back({d.encoded, open, std::move(marks), open_containers.size()});
-                        marks = {};
-                        open_containers.push_back(f);
-                        d.encoded = std::string_view(content.uni.str,
-                                                     static_cast<std::size_t>(kind::high_of(content.tag)));
-                        open = 1;
-                        left = 1;
-                        break;
-                    }
-                }
-                c.tag |= std::uint64_t{val - f.at} << kind::tag_bit;
-            }
+            schedule(pending, out.embedded, inner);
         }
+        std::ranges::sort(links, {}, &link::tagged);
+        return tree{std::move(values),       written, std::move(text), size, std::move(links),
+                    out.has_shared_reference};
     }
 };
 
