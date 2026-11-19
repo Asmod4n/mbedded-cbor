@@ -161,14 +161,7 @@ class pfr
     template <class E, class Alloc>
     static consteval bool uses_allocator_aggregate()
     {
-#ifdef __cpp_impl_reflection
         return detail::reflection::uses_allocator_aggregate<E, Alloc>();
-#else
-        if constexpr (has_describe_members<E>)
-            return false;
-        else
-            return detail::reflection::uses_allocator_aggregate<E, Alloc>();
-#endif
     }
 
     template <class E, class Alloc>
