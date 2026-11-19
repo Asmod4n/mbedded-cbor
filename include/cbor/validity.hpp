@@ -649,6 +649,14 @@ public:
         return view(std::views::drop(whole, static_cast<std::ranges::range_difference_t<view>>(std::to_underlying(at))));
     }
 
+    CBOR_ALWAYS_INLINE static constexpr std::string_view checked_substr(std::string_view const whole,
+                                                                        std::size_t const at, std::size_t const size)
+    {
+        if (!bytes_fit(at, whole.size()) || !bytes_fit(size, whole.size() - at)) [[unlikely]]
+            throw_logic_error("cbor::detail::validity: the bytes are after the end of their input");
+        return std::string_view(std::span(whole).subspan(at, size));
+    }
+
     CBOR_ALWAYS_INLINE static constexpr std::span<char const> element_span(std::span<char const> const elements,
                                                                            index const i, std::size_t const size)
     {

@@ -635,7 +635,7 @@ inline std::span<detail::dom::node const> item::descendants() const
 
 inline std::string_view item::text() const
 {
-    return std::string_view(owner->text).substr(node().m_uni.ofs, length());
+    return detail::validity::checked_substr(owner->text, node().m_uni.ofs, length());
 }
 
 /**
