@@ -496,10 +496,15 @@ wg_count wg_good_check(wg_vector const &v)
     CAPTURE(v.description);
     CAPTURE(v.encoded);
     REQUIRE_FALSE(v.decoded.empty());
-    // No depth is fixed. A vector nested deeper than the stack of the main thread holds gives nesting_depth_exceeded;
-    // the test case counts it and checks the count.
-    if (auto const shallow = decode_wire_into_value(v.encoded);
-        !shallow && shallow.error() == error::nesting_depth_exceeded) {
+    // No depth is fixed for a reader that recurses. A vector nested deeper than the stack of the main thread holds gives
+    // nesting_depth_exceeded there; the test case counts it and checks the count. decode and lazy::to_item do not
+    // recurse, so the probe is diagnostic_notation and the lazy walk, the readers below that recurse.
+    if (auto const text = cbor::diagnostic_notation(v.encoded);
+        !text && text.error() == error::nesting_depth_exceeded) {
+        return {1, 1};
+    }
+    if (auto const walked = lazy_value_of(v.encoded);
+        !walked && walked.error() == error::nesting_depth_exceeded) {
         return {1, 1};
     }
     auto const expected = decode_wire_into_value(v.decoded);
