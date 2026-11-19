@@ -263,7 +263,7 @@ cbor::item const &element_of(cbor::item const &array, std::size_t const index)
     return (*elements)[index];
 }
 
-cbor::item const *target_of(cbor::item const &reference)
+cbor::item const *target_of_reference(cbor::item const &reference)
 {
     REQUIRE_EQ(reference.type(), cbor::type::shared_reference);
     return reference.get<std::pair<std::uint64_t, cbor::item const *>>().value().second;
@@ -322,10 +322,10 @@ TEST_CASE("cbor::to_edn: the text of a shared tree reads back to the same tree")
     CHECK_EQ(cbor::to_edn(*parsed), text);
     auto const back = shared_from_edn(*text);
     cbor::item const &first = element_of(*back, 0);
-    CHECK_EQ(target_of(element_of(*back, 1)), &first);
-    CHECK_EQ(target_of(element_of(*back, 2)), &element_of(first, 1));
+    CHECK_EQ(target_of_reference(element_of(*back, 1)), &first);
+    CHECK_EQ(target_of_reference(element_of(*back, 2)), &element_of(first, 1));
     auto const cycle = shared_from_edn(*cbor::to_edn(shared_from_edn("28([29(0)])")));
-    CHECK_EQ(target_of(element_of(*cycle, 0)), &*cycle);
+    CHECK_EQ(target_of_reference(element_of(*cycle, 0)), &*cycle);
 }
 
 // Without its owner an item does not know the marks of its tags 28, so a text of it would name marks that are not

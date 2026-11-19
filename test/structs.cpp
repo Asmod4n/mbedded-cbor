@@ -1795,7 +1795,9 @@ TEST_CASE("cbor::to_edn: a value gives the text of the bytes that cbor::encode w
     check_edn_of_value(sys_time<milliseconds>{milliseconds{1700000000123}});
     check_edn_of_value(milliseconds{-1500});
     check_edn_of_value(year_month_day{year{1970}, month{1}, day{2}});
+#if __cpp_lib_chrono >= 201907L
     check_edn_of_value(tai_time<seconds>{seconds{100}});
+#endif
     check_edn_of_value(cbor::tagged_item<99, std::string>{"t"});
     check_edn_of_value(integer_order{10, 20, 30});
     check_edn_of_value(std::vector<pair_ab>{{1, {2, 3}}, {4, {}}});
