@@ -3,7 +3,7 @@
 // that mbedded-cbor writes the same bytes as QCBOR for the same values. Each expected value comes from the upstream
 // test and is checked against RFC 8949 in refs/rfc8949.txt.
 //
-// QCBOR writes integers in preferred serialization (RFC 8949 4.1), and cbor::structs<T>::encode writes the preferred
+// QCBOR writes integers in preferred serialization (RFC 8949 4.1), and cbor::encode writes the preferred
 // serialization (structs.hpp: "Writes @p value as one CBOR item in preferred serialization"). So a test writes the
 // values of upstream with cbor::structs, and a decoded item with cbor::encode. The library writes no single head, so
 // an upstream test that writes heads one call at a time has no port.
@@ -104,7 +104,7 @@ std::string as_string(std::initializer_list<std::uint8_t> const bytes)
 template <class T>
 std::string encode_in_preferred_form(T const &value)
 {
-    auto const out = cbor::structs<T>::encode(value);
+    auto const out = cbor::encode<T>(value);
     REQUIRE(out.has_value());
     return *out;
 }

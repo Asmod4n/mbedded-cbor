@@ -2,7 +2,7 @@
 // reaches a head with an argument of 0, 1, 2, 4 and 8 bytes.
 // heads_encode_iov: cbor::encode_iov of a decoded tree with arguments of each width.
 // heads_structs_encode and heads_schema_encode: a struct with a string, small integers, a list of structs and a list
-// of doubles, written by cbor::structs and by cbor::schema into a std::string; the rows with _span write the same
+// of doubles, written by cbor::encode and by cbor::schema into a std::string; the rows with _span write the same
 // struct one after the other into one span.
 // heads_decode_wide: cbor::decode of a message with arguments of 2, 4 and 8 bytes and a text with a 2-byte length.
 // heads_item_size_long: cbor::item_size of an array of 256 maps, so the fast read of a head has 9 bytes after it.
@@ -84,10 +84,19 @@ void heads_encode_iov(benchmark::State &state)
 
 car const sample_car{"Volvo", 5, {{69, 2.5f}, {69, 2.5f}, {70, 2.25f}, {70, 2.25f}}, {1.5, 1.25, 0.1}};
 
-template <template <class> class Codec, bool Span = false>
+template <bool Schema, class... Out>
+auto car_encoded(Out &...out)
+{
+    if constexpr (Schema)
+        return cbor::schema<car>::encode(out..., sample_car);
+    else
+        return cbor::encode(out..., sample_car);
+}
+
+template <bool Schema, bool Span = false>
 void encode_car(benchmark::State &state)
 {
-    auto const sample = Codec<car>::encode(sample_car);
+    auto const sample = car_encoded<Schema>();
     if (!sample) {
         state.SkipWithError("the codec refuses the car");
         return;
@@ -99,7 +108,7 @@ void encode_car(benchmark::State &state)
         if constexpr (Span) {
             std::span<char> rest(spans);
             for (std::size_t i = 0; i < count; ++i) {
-                auto n = Codec<car>::encode(rest, sample_car);
+                auto n = car_encoded<Schema>(rest);
                 benchmark::DoNotOptimize(n);
                 rest = rest.subspan(*n);
             }
@@ -107,7 +116,7 @@ void encode_car(benchmark::State &state)
         } else {
             for (std::size_t i = 0; i < count; ++i) {
                 out.clear();
-                auto n = Codec<car>::encode(out, sample_car);
+                auto n = car_encoded<Schema>(out);
                 benchmark::DoNotOptimize(n);
             }
             benchmark::DoNotOptimize(out.data());
@@ -118,22 +127,22 @@ void encode_car(benchmark::State &state)
 
 void heads_structs_encode(benchmark::State &state)
 {
-    encode_car<cbor::structs>(state);
+    encode_car<false>(state);
 }
 
 void heads_schema_encode(benchmark::State &state)
 {
-    encode_car<cbor::schema>(state);
+    encode_car<true>(state);
 }
 
 void heads_structs_encode_span(benchmark::State &state)
 {
-    encode_car<cbor::structs, true>(state);
+    encode_car<false, true>(state);
 }
 
 void heads_schema_encode_span(benchmark::State &state)
 {
-    encode_car<cbor::schema, true>(state);
+    encode_car<true, true>(state);
 }
 
 void heads_decode_wide(benchmark::State &state)

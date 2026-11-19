@@ -482,12 +482,12 @@ namespace describe_test
 template <class T>
 void round_trip(std::string const &bytes, T const &value)
 {
-    auto const written = cbor::structs<T>::encode(value);
+    auto const written = cbor::encode<T>(value);
     REQUIRE(written.has_value());
     CHECK_EQ(*written, bytes);
     auto const read = cbor::structs<T>::decode(std::string(bytes));
     REQUIRE(read.has_value());
-    CHECK_EQ(*cbor::structs<T>::encode(**read), bytes);
+    CHECK_EQ(*cbor::encode<T>(**read), bytes);
 }
 
 template <class T>
@@ -562,7 +562,7 @@ TEST_CASE("describe: a type with no default constructor decodes into an object o
     using namespace describe_test;
     std::string const bytes = "\xda\x00\x02\x71\x14\xa1\x61"
                               "a\x07"s;
-    CHECK_EQ(*cbor::structs<no_default>::encode(no_default(7)), bytes);
+    CHECK_EQ(*cbor::encode<no_default>(no_default(7)), bytes);
     auto const read =
         cbor::structs<no_default>::decode(std::make_shared<std::string const>(bytes), no_default(0));
     REQUIRE(read.has_value());
@@ -694,14 +694,14 @@ TEST_CASE("describe: a description with no entry and a description through a typ
 }
 
 // D16: an aggregate with no description is read by its member names, through reflection on gcc and through
-// Boost.PFR elsewhere. Both give these bytes, written from RFC 8949 4.2.1: "b" (61 62) before "aa" (62 61
-// 61).
-TEST_CASE("describe: an aggregate with no description gives the same bytes on every build")
+// Boost.PFR elsewhere. Both read the map of RFC 8949 4.2.1 order: "b" (61 62) before "aa" (62 61 61). cbor::encode
+// writes such an aggregate only through a description (owner, 2026-11-19).
+TEST_CASE("describe: an aggregate with no description is read the same on every build")
 {
-    describe_test::round_trip("\xa2\x61"
-                              "b\x01\x62"
-                              "aa\x61x"s,
-                              describe_test::plain{1, "x"});
+    auto const read = cbor::structs<describe_test::plain>::decode(cbor::diag2cbor(R"({"b": 1, "aa": "x"})").value());
+    REQUIRE(read.has_value());
+    CHECK_EQ((*read)->b, 1u);
+    CHECK_EQ((*read)->aa, "x");
 }
 
 // RFC 9052 2 calls a message with no CBOR tag an untagged message. SenML (RFC 8428 6), CTAP2 and the COSE header are

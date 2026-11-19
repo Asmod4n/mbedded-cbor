@@ -158,3 +158,9 @@ CBOR_DEFINE_TYPE(reference_structs::trailer, cbor::tag{160061},
 // [CBOR_DEFINE_TYPE_MEMBERS]
 CBOR_DEFINE_TYPE_MEMBERS(reference_structs::device, cbor::untagged, name, port);
 // [CBOR_DEFINE_TYPE_MEMBERS]
+
+// [person]
+CBOR_DEFINE_TYPE_MEMBERS(reference_structs::person, cbor::untagged, name, age);
+// [person]
+
+CBOR_DEFINE_TYPE_MEMBERS(reference_structs::reading, cbor::untagged, id, unit);

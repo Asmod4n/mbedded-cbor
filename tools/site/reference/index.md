@@ -114,7 +114,7 @@ Write the message:
 | schema | FlatBuffers | 9.0× | 3.4× |
 
 - schema reads Packed CBOR (155849 bytes). The other kinds and the
-  libraries read the CBOR of `structs<T>::encode` (440957 bytes).
+  libraries read the CBOR of `cbor::encode` (440957 bytes).
 - item, structs and jsoncons decode the message before they read one
   field. jsoncons decodes the message before its path.
 - jsoncons `decode_cbor<T>` copies each text into a `std::string`.

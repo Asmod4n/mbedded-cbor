@@ -36,7 +36,7 @@ inline std::expected<test::value, cbor::error> loads(std::string_view const payl
 template <class T>
 std::string dumps(T const &value)
 {
-    auto const encoded = cbor::structs<T>::encode(value);
+    auto const encoded = cbor::encode<T>(value);
     REQUIRE(encoded.has_value());
     return hexlify(*encoded);
 }

@@ -1,12 +1,17 @@
 /**
 @defgroup structs any CBOR into a C++ struct and back
 
-`cbor::structs<T>` writes a C++ value as one CBOR item. It reads one CBOR
-item back into a value of type `T`. Include `<cbor/cbor.hpp>`.
+`cbor::encode` writes a C++ value as one CBOR item. `cbor::structs<T>`
+reads one CBOR item back into a value of type `T`. Include
+`<cbor/cbor.hpp>`.
 
 A struct is written as a map. Each public data member is one entry, and
 its key is the name of the member. A description changes the keys, adds a
 tag, or names the members of a class. See KEYS AND DESCRIPTIONS.
+
+`cbor::encode` writes a struct only through its description, also where
+reflection or Boost.PFR is present: an aggregate with no description does
+not compile there. It needs no reflection and no Boost.PFR.
 
 `cbor::structs` finds the members of an aggregate by reflection. On g++ 16
 with `-std=c++26 -freflection`, the members come from reflection. On every
@@ -22,15 +27,15 @@ and the pkg-config file add it to the include path.
 
 @section structs_encode WRITE A VALUE
 
-`cbor::structs<T>::encode(value)` gives `std::expected<std::string,
-cbor::error>`, the bytes of the item.
+`cbor::encode(value)` gives `std::expected<std::string, cbor::error>`, the
+bytes of the item.
 
-`cbor::structs<T>::encode(out, value)` appends the bytes to `out`. It
-gives `std::expected<std::size_t, cbor::error>`, the count of bytes that it
+`cbor::encode(out, value)` appends the bytes to `out`. It gives
+`std::expected<std::size_t, cbor::error>`, the count of bytes that it
 appended. `out` is a `std::string`, a container of `char`, a
-`std::span<char>`, or a writer of the program. A `T` that is itself such a
-type has only the form `encode(value)`. A `std::span<char>` that is too
-small for the bytes gives `no_buffer_space`.
+`std::span<char>`, or a writer of the program. A `std::span<char>` that is
+too small for the bytes gives `no_buffer_space`. A `cbor::item` and a
+`cbor::owning<cbor::item>` take the encode of a tree.
 
 The keys of a struct come in the order of RFC 8949 section 4.2.1.
 

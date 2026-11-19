@@ -149,7 +149,7 @@ TEST_CASE("doc advanced basics: a std::pmr target")
 {
     using texts = std::pmr::vector<std::pmr::string>;
     auto const owner = std::make_shared<std::string const>(
-        *cbor::structs<std::vector<std::string>>::encode({std::string(40, 'a'), std::string(40, 'b')}));
+        *cbor::encode<std::vector<std::string>>({std::string(40, 'a'), std::string(40, 'b')}));
     std::array<std::byte, 64> buffer{};
     std::pmr::monotonic_buffer_resource budget(buffer.data(), buffer.size(), std::pmr::null_memory_resource());
     CHECK_THROWS_AS(static_cast<void>(cbor::structs<texts>::decode(owner, texts(&budget))), std::bad_alloc);

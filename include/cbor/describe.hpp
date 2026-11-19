@@ -70,7 +70,7 @@ struct map_key {
  *
  * @code{.example}
  * bytes: a2 00 61 74 02 f9 3e 00
- * call: auto const encoded = cbor::structs<senml>::encode(senml{"t", 1.5})
+ * call: auto const encoded = cbor::encode<senml>(senml{"t", 1.5})
  * result: 8 bytes: a2 00 61 74 02 f9 3e 00
  * call: cbor::lazy::adopt(*encoded)
  * result: lazy of {0: "t", 2: 1.5}
@@ -94,15 +94,16 @@ struct member {
 };
 
 /**
- * @brief Describes how cbor::structs and cbor::schema write and read `T`.
+ * @brief Describes how cbor::encode, cbor::structs and cbor::schema write and read `T`.
  *
  * A specialization holds `tag`, a `std::optional<cbor::tag>`, and `members`, a `std::tuple` of cbor::member entries.
  * `cbor::untagged` gives a map with no tag.
  * The specialization stands outside every namespace, after `T`.
  * `cbor::has_describe_members<T>` is true when `T` has a specialization.
  *
- * A class that is not an aggregate, or that has a base class, needs a description.
- * cbor::structs then reads the members, the keys and the tag from the description only.
+ * cbor::encode writes a struct only through its description. For cbor::structs, a class that is not an aggregate,
+ * or that has a base class, needs a description; cbor::structs then reads the members, the keys and the tag from the
+ * description only.
  * `using base = B;` in the specialization names the direct base class `B`; cbor::schema takes a class with a base
  * class only so, and the members of `B` stand in `members` too.
  * `CBOR_DEFINE_DERIVED_TYPE` and `CBOR_DEFINE_DERIVED_TYPE_MEMBERS` write such a specialization; they take `BASE`
@@ -124,15 +125,13 @@ struct member {
  * message: {"content-type": "text/plain"}
  * call: cbor::has_describe_members<header>
  * result: true
- * call: cbor::has_describe_members<person>
- * result: false
- * call: auto const h = cbor::structs<header>::encode(header{"text/plain"})
+ * call: auto const h = cbor::encode<header>(header{"text/plain"})
  * result: 30 bytes: da 00 02 71 3c a1 6c 63 6f 6e 74 65 6e 74 2d 74 79 70 65 6a 74 65 78 74 2f 70 6c 61 69 6e
  * call: cbor::lazy::adopt(*h)
  * result: lazy of 160060({"content-type": "text/plain"})
  * call: cbor::structs<header>::decode(*h).has_value()
  * result: true
- * call: auto const t = cbor::structs<trailer>::encode(trailer{7})
+ * call: auto const t = cbor::encode<trailer>(trailer{7})
  * result: 16 bytes: da 00 02 71 3d a1 68 63 68 65 63 6b 73 75 6d 07
  * call: cbor::lazy::adopt(*t)
  * result: lazy of 160061({"checksum": 7})
@@ -190,7 +189,7 @@ class describe
  *
  * @code{.example}
  * message: {"user": "ann", "level": 2}
- * call: auto const encoded = cbor::structs<account>::encode(account{"ann", 2})
+ * call: auto const encoded = cbor::encode<account>(account{"ann", 2})
  * result: 17 bytes: a2 64 75 73 65 72 63 61 6e 6e 65 6c 65 76 65 6c 02
  * call: cbor::lazy::adopt(*encoded)
  * result: lazy of {"user": "ann", "level": 2}
@@ -253,7 +252,7 @@ class describe
  * message: {"name": "lamp", "port": 3}
  * call: cbor::has_describe_members<device>
  * result: true
- * call: auto const encoded = cbor::structs<device>::encode(device{"lamp", 3})
+ * call: auto const encoded = cbor::encode<device>(device{"lamp", 3})
  * result: 17 bytes: a2 64 6e 61 6d 65 64 6c 61 6d 70 64 70 6f 72 74 03
  * call: cbor::lazy::adopt(*encoded)
  * result: lazy of {"name": "lamp", "port": 3}

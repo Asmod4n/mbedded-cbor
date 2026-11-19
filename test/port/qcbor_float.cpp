@@ -67,7 +67,7 @@ std::string as_string(std::initializer_list<std::uint8_t> const bytes)
 template <class T>
 std::string encode_in_preferred_form(T const value)
 {
-    auto const out = cbor::structs<T>::encode(value);
+    auto const out = cbor::encode<T>(value);
     REQUIRE(out.has_value());
     return *out;
 }
@@ -190,7 +190,7 @@ double decode_half(std::uint16_t const half)
 
 } // namespace
 
-// FloatValuesTests with DoubleTestCases: cbor::structs<double>::encode writes the preferred serialization
+// FloatValuesTests with DoubleTestCases: cbor::encode of a double writes the preferred serialization
 // (structs.hpp: "`float`, `double` | the shortest float that holds the value"). The preferred form and the 64-bit form
 // of upstream decode to the same double.
 TEST_CASE("qcbor FloatValuesTests: doubles encode in preferred and 64-bit form, and decode back")

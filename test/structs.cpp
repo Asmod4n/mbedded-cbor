@@ -47,7 +47,7 @@ void round_trip(std::string const &bytes, T const &expected)
     auto const back = cbor::structs<T>::decode(std::string(bytes));
     REQUIRE(back.has_value());
     CHECK((**back == expected));
-    auto const again = cbor::structs<T>::encode(expected);
+    auto const again = cbor::encode<T>(expected);
     REQUIRE(again.has_value());
     CHECK_EQ(*again, bytes);
 }
@@ -114,6 +114,14 @@ struct integer_order {
 };
 
 } // namespace
+
+CBOR_DEFINE_TYPE_MEMBERS(user_entity, cbor::untagged, id);
+
+CBOR_DEFINE_TYPE_MEMBERS(credential, cbor::untagged, id, type);
+
+CBOR_DEFINE_TYPE_MEMBERS(pair_ab, cbor::untagged, a, b);
+CBOR_DEFINE_TYPE_MEMBERS(text_order, cbor::untagged, aa, b);
+CBOR_DEFINE_TYPE_MEMBERS(long_text_order, cbor::untagged, aaaaaaaaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbbbbb);
 
 template <>
 struct cbor::describe_members<senml_record> {
@@ -238,7 +246,7 @@ TEST_CASE("structs: a SenML pack with integer labels")
     std::vector<senml_record> const pack{
         {"urn:dev:ow:10e2073a01080063:", 1.320067464e9, "voltage", "V", 120.1, std::nullopt},
         {std::nullopt, std::nullopt, "current", "A", 1.2, -5}};
-    auto const bytes = cbor::structs<std::vector<senml_record>>::encode(pack);
+    auto const bytes = cbor::encode<std::vector<senml_record>>(pack);
     REQUIRE(bytes.has_value());
     CHECK_EQ(static_cast<std::uint8_t>(bytes->at(0)), 0x82);
     CHECK_EQ(static_cast<std::uint8_t>(bytes->at(1)), 0xa5);
@@ -264,7 +272,7 @@ TEST_CASE("structs: a COSE_Sign1 under tag 18 reads as views into the message")
     auto const held = cbor::structs<cose_sign1>::decode(owner);
     REQUIRE(held.has_value());
     CHECK_EQ(static_cast<void const *>(std::get<2>((*held)->content).data()), static_cast<void const *>(std::span(*owner).subspan(12).data()));
-    CHECK_EQ(*cbor::structs<cose_sign1>::encode(**sign1), message);
+    CHECK_EQ(*cbor::encode<cose_sign1>(**sign1), message);
 }
 
 // Owner decision: structs::decode has the view form decode(std::shared_ptr<std::string const>). It copies nothing
@@ -308,19 +316,19 @@ TEST_CASE("structs: a CTAP2 getAssertion response")
     CHECK_EQ((*r)->credential_id.type, "public-key"sv);
     CHECK_EQ((*r)->credential_id.id.size(), 2u);
     CHECK_FALSE((*r)->user.has_value());
-    CHECK_EQ(*cbor::structs<get_assertion_response>::encode(**r), message);
+    CHECK_EQ(*cbor::encode<get_assertion_response>(**r), message);
     std::array<char, 64> room{};
-    auto const placed = cbor::structs<get_assertion_response>::encode(std::span(room), **r);
+    auto const placed = cbor::encode<get_assertion_response>(std::span(room), **r);
     REQUIRE(placed.has_value());
     CHECK_EQ(std::string_view(room.data(), *placed), message);
     std::vector<char> tight(message.size());
-    auto const exact = cbor::structs<get_assertion_response>::encode(std::span(tight), **r);
+    auto const exact = cbor::encode<get_assertion_response>(std::span(tight), **r);
     REQUIRE(exact.has_value());
     CHECK_EQ(std::string_view(tight.data(), *exact), message);
     std::array<char, 8> small{};
-    CHECK_EQ(cbor::structs<get_assertion_response>::encode(std::span(small), **r).error(), cbor::error::no_buffer_space);
+    CHECK_EQ(cbor::encode<get_assertion_response>(std::span(small), **r).error(), cbor::error::no_buffer_space);
     std::string text = "x";
-    CHECK_EQ(*cbor::structs<get_assertion_response>::encode(text, **r), message.size());
+    CHECK_EQ(*cbor::encode<get_assertion_response>(text, **r), message.size());
     CHECK_EQ(text, "x" + message);
 }
 
@@ -382,7 +390,7 @@ TEST_CASE("structs: the description gives the key of a member")
     REQUIRE(back.has_value());
     CHECK_EQ((*back)->m0, 7u);
     CHECK((*back)->m1);
-    CHECK_EQ(*cbor::structs<renamed>::encode(renamed{7, true}), "\xda\x00\x02\x71\x32\xa2\x63"
+    CHECK_EQ(*cbor::encode<renamed>(renamed{7, true}), "\xda\x00\x02\x71\x32\xa2\x63"
                                                                 "EOF\xf5\x69x-user-id\x07"s);
     CHECK_EQ(cbor::structs<renamed>::decode("\xda\x00\x02\x71\x32\xa2\x62m0\x07\x62m1\xf5"s).error(),
              error::key_not_found);
@@ -439,7 +447,7 @@ TEST_CASE("structs: only public members are written and read")
     a.name = "ann";
     a.id = 7;
     a.hidden_set(42, 9);
-    std::string const bytes = *cbor::structs<account>::encode(a);
+    std::string const bytes = *cbor::encode<account>(a);
     CHECK_EQ(bytes, "\xda\x00\x02\x71\x33\xa2\x62id\x07\x64name\x63"
                     "ann"s);
     auto const back = cbor::structs<account>::decode("\xda\x00\x02\x71\x33\xa4\x64name\x63"
@@ -678,6 +686,8 @@ struct standard_containers {
     bool operator==(standard_containers const &) const = default;
 };
 
+CBOR_DEFINE_TYPE_MEMBERS(standard_containers, cbor::untagged, l, q, b, s, m, mm);
+
 // decode reads every standard container that encode writes. Before the fix std::list, std::deque, std::set and
 // std::vector<bool> encoded but did not compile in decode: the branch tested push_back and called reserve and
 // emplace_back. A std::set fell through to the struct reader.
@@ -704,7 +714,7 @@ void multimap_check()
     auto const back = cbor::structs<M>::decode(cbor::diag2cbor("{1: [2, 3], 2: [4]}").value());
     REQUIRE(back.has_value());
     CHECK_EQ((**back), M{{1, 2}, {1, 3}, {2, 4}});
-    auto const again = cbor::structs<M>::encode(M{{1, 2}, {1, 3}});
+    auto const again = cbor::encode<M>(M{{1, 2}, {1, 3}});
     REQUIRE(again.has_value());
     CHECK((*again == cbor::diag2cbor("{1: [2, 3]}").value() || *again == cbor::diag2cbor("{1: [3, 2]}").value()));
     if constexpr (requires(M const &m) { m.lower_bound(1); }) {
@@ -827,7 +837,7 @@ TEST_CASE("structs decode keeps the resource of a moved pmr target")
     CHECK((!decodes_named_target<texts>));
 
     std::vector<std::string> const value(3, std::string(40, 'x'));
-    auto const encoded = cbor::structs<std::vector<std::string>>::encode(value);
+    auto const encoded = cbor::encode<std::vector<std::string>>(value);
     REQUIRE(encoded.has_value());
     auto const owner = std::make_shared<std::string const>(*encoded);
     std::array<std::byte, 64> buffer;
@@ -941,6 +951,8 @@ struct pmr_person {
     bool operator==(pmr_person const &) const = default;
 };
 
+CBOR_DEFINE_TYPE_MEMBERS(pmr_person, cbor::untagged, name, age);
+
 // The caller bounds the memory of a decode with the resource of the target. A plain struct has no allocator, so the
 // vector cannot give its resource to the struct. But it can give it to each member that takes an allocator, as
 // uses-allocator construction ([allocator.uses.construction]) does for one object. The test puts a counting resource as
@@ -950,7 +962,7 @@ TEST_CASE("structs: a plain struct in a std::pmr::vector takes the resource of t
 {
     using people = std::pmr::vector<pmr_person>;
     std::string const long_name(40, 'n');
-    auto const encoded = cbor::structs<people>::encode(people{{std::pmr::string(long_name), 1}, {std::pmr::string(long_name), 2}});
+    auto const encoded = cbor::encode<people>(people{{std::pmr::string(long_name), 1}, {std::pmr::string(long_name), 2}});
     REQUIRE(encoded.has_value());
     counting_resource fallback;
     counting_resource target;
@@ -977,10 +989,10 @@ TEST_CASE("structs: a plain struct in a std::pmr::vector takes the resource of t
 // before a negative one, 1 (01) and 24 (18 18) before -1 (20). The declaration order differs on purpose.
 TEST_CASE("structs: keys come out in the deterministic order of RFC 8949 4.2.1")
 {
-    auto const t = cbor::structs<text_order>::encode(text_order{1, 2});
+    auto const t = cbor::encode<text_order>(text_order{1, 2});
     REQUIRE(t.has_value());
     CHECK_EQ(*t, "\xa2\x61\x62\x02\x62\x61\x61\x01"sv);
-    auto const i = cbor::structs<integer_order>::encode(integer_order{10, 20, 30});
+    auto const i = cbor::encode<integer_order>(integer_order{10, 20, 30});
     REQUIRE(i.has_value());
     CHECK_EQ(*i, "\xa3\x01\x18\x1e\x18\x18\x0a\x20\x14"sv);
     auto const back = cbor::structs<integer_order>::decode(std::string(*i));
@@ -993,7 +1005,7 @@ TEST_CASE("structs: keys come out in the deterministic order of RFC 8949 4.2.1")
 // members compares the initial byte first. A text of 24 bytes or more has a head of two bytes.
 TEST_CASE("structs: a key of 23 bytes comes before a key of 24 bytes")
 {
-    auto const t = cbor::structs<long_text_order>::encode(long_text_order{1, 2});
+    auto const t = cbor::encode<long_text_order>(long_text_order{1, 2});
     REQUIRE(t.has_value());
     CHECK_EQ(*t, "\xa2\x77" + std::string(23, 'b') + "\x02\x78\x18" + std::string(24, 'a') + "\x01");
 }
@@ -1202,8 +1214,8 @@ TEST_CASE("structs: sys_time with a period that tag 1001 cannot carry gives numb
 {
     using namespace std::chrono;
     using thirds = duration<std::int64_t, std::ratio<1, 3>>;
-    CHECK_EQ(cbor::structs<sys_time<thirds>>::encode(sys_time<thirds>{thirds{1}}).error(), error::number_out_of_range);
-    auto const whole = cbor::structs<sys_time<thirds>>::encode(sys_time<thirds>{thirds{3}});
+    CHECK_EQ(cbor::encode<sys_time<thirds>>(sys_time<thirds>{thirds{1}}).error(), error::number_out_of_range);
+    auto const whole = cbor::encode<sys_time<thirds>>(sys_time<thirds>{thirds{3}});
     REQUIRE(whole.has_value());
     CHECK_EQ(*whole, cbor::diag2cbor("1(1)").value());
 }
@@ -1279,9 +1291,9 @@ TEST_CASE("structs: tai_time and gps_time are tag 1001 with timescale 1")
     round_trip(item("1001({1: -378691200, 13: 1})"), tai_seconds{seconds{0}});
     round_trip(item("1001({1: 315964819, 13: 1})"), gps_seconds{seconds{0}});
     round_trip(item("1001({1: 315964820, -3: 250, 13: 1})"), gps_time<milliseconds>{milliseconds{1250}});
-    CHECK_EQ(cbor::structs<gps_time<minutes>>::encode(gps_time<minutes>{}).error(), error::number_out_of_range);
+    CHECK_EQ(cbor::encode<gps_time<minutes>>(gps_time<minutes>{}).error(), error::number_out_of_range);
     CHECK_EQ(cbor::structs<gps_time<minutes>>::decode(item("1001({1: 0, 13: 1})")).error(), error::number_out_of_range);
-    CHECK_EQ(cbor::structs<tai_time<duration<std::int64_t, std::atto>>>::encode(
+    CHECK_EQ(cbor::encode<tai_time<duration<std::int64_t, std::atto>>>(
                  tai_time<duration<std::int64_t, std::atto>>{})
                  .error(),
              error::number_out_of_range);
@@ -1402,6 +1414,8 @@ struct duration_member {
     bool operator==(duration_member const &) const = default;
 };
 
+CBOR_DEFINE_TYPE_MEMBERS(duration_member, cbor::untagged, a);
+
 // RFC 9581 4 (refs/rfc9581.txt:558-591): a duration is tag 1002 with the map of tag 1001. The owner's review of plan 2:
 // a duration is always tag 1002, and decode takes only tag 1002. A std::chrono::duration has a private member, so it
 // is read as a duration and never as a struct.
@@ -1504,7 +1518,7 @@ TEST_CASE("structs: a vector or an array of numbers is an RFC 8746 typed array")
                "b"s,
                std::vector<std::string>{"a", "b"});
     std::array const three{std::byte{1}, std::byte{2}, std::byte{3}};
-    CHECK_EQ(*cbor::structs<std::span<std::byte const>>::encode(std::span<std::byte const>(three)),
+    CHECK_EQ(*cbor::encode<std::span<std::byte const>>(std::span<std::byte const>(three)),
              "\x43\x01\x02\x03"s);
     auto const view = cbor::structs<std::span<std::byte const>>::decode("\x43\x01\x02\x03"s);
     REQUIRE(view.has_value());
@@ -1634,6 +1648,8 @@ struct clone_probe {
 
 }
 
+CBOR_DEFINE_TYPE_MEMBERS(clone_probe, cbor::untagged, name, key, tags, labels);
+
 // Owner decision 2026-10-17: clone() of a ref gives an object that owns all its memory, recursively (rule: a clone is
 // recursive). Each view of the struct is copied into the zone of the result. So the result stays valid after the input
 // and the ref are gone; the address sanitizer build sees any read of the freed input.
@@ -1641,7 +1657,7 @@ TEST_CASE("structs: clone of a ref copies every view of the struct, recursively"
 {
     std::array<std::byte, 2> const key{std::byte{1}, std::byte{2}};
     clone_probe const probe{"ann", std::span<std::byte const>(key), {"a", "bc"}, {{"k", "v"}, {"x", "yz"}}};
-    auto encoded = cbor::structs<clone_probe>::encode(probe);
+    auto encoded = cbor::encode<clone_probe>(probe);
     REQUIRE(encoded.has_value());
     auto read = cbor::structs<clone_probe>::decode(std::move(*encoded));
     REQUIRE(read.has_value());
@@ -1673,27 +1689,27 @@ TEST_CASE("structs: a count longer than the bytes is too_little_data before the 
 }
 
 // RFC 8742: a program writes a CBOR sequence into one buffer of its own. It keeps the bytes behind each item.
-// structs::encode into a span changes no byte behind the item. This holds also where the item ends in a head of one byte
+// cbor::encode into a span changes no byte behind the item. This holds also where the item ends in a head of one byte
 // (the empty typed array). It writes the bytes of the std::string form.
 TEST_CASE("encode: a span keeps every byte behind the struct")
 {
     constexpr char sentinel = 'Z';
     pair_ab const value{1, {}};
-    auto const expected = cbor::structs<pair_ab>::encode(value);
+    auto const expected = cbor::encode<pair_ab>(value);
     REQUIRE(expected.has_value());
     std::array<char, 64> buffer;
     buffer.fill(sentinel);
-    auto const n = cbor::structs<pair_ab>::encode(std::span<char>(buffer), value);
+    auto const n = cbor::encode<pair_ab>(std::span<char>(buffer), value);
     REQUIRE(n.has_value());
     CHECK_EQ(std::string_view(buffer.data(), *n), *expected);
     CHECK(std::ranges::all_of(std::span(buffer).subspan(*n), [](char const c) { return c == sentinel; }));
 }
 
-// structs::encode with a target counts the bytes that it appended to memory. Such a count is a std::size_t, as
+// cbor::encode with a target counts the bytes that it appended to memory. Such a count is a std::size_t, as
 // std::string::size gives it. The expectation comes from that decision, not from the header.
 TEST_CASE("structs: the count of bytes appended is a std::size_t")
 {
-    CHECK((std::is_same_v<decltype(cbor::structs<pair_ab>::encode(std::declval<std::string &>(), std::declval<pair_ab const &>())),
+    CHECK((std::is_same_v<decltype(cbor::encode<pair_ab>(std::declval<std::string &>(), std::declval<pair_ab const &>())),
                           std::expected<std::size_t, cbor::error>>));
 }
 
@@ -1702,7 +1718,7 @@ TEST_CASE("structs: the count of bytes appended is a std::size_t")
 TEST_CASE("structs: decode reads a range of bytes as the std::string of the same bytes")
 {
     pair_ab const value{1, {2, 3}};
-    auto const encoded = cbor::structs<pair_ab>::encode(value);
+    auto const encoded = cbor::encode<pair_ab>(value);
     REQUIRE(encoded.has_value());
     std::vector<std::uint8_t> u(encoded->size());
     std::ranges::transform(std::as_bytes(std::span(*encoded)), u.begin(),
@@ -1714,4 +1730,16 @@ TEST_CASE("structs: decode reads a range of bytes as the std::string of the same
     auto const from_b = cbor::structs<pair_ab>::decode(owner, std::as_bytes(std::span(*owner)));
     REQUIRE(from_b.has_value());
     CHECK((**from_b == value));
+}
+
+// cbor::encode takes the target first, as the standard library does, so the second argument is always the value. A
+// value of a type that could itself be a target, a std::string or a std::vector of bytes, is written as that value.
+TEST_CASE("cbor::encode: a value of a type that is also a target is written as the value")
+{
+    std::string out;
+    CHECK_EQ(cbor::encode(out, std::string("ab")), 3u);
+    CHECK_EQ(out, cbor::diag2cbor("\"ab\"").value());
+    std::string typed;
+    CHECK_EQ(cbor::encode(typed, std::vector<std::byte>{std::byte{1}}), 4u);
+    CHECK_EQ(typed, cbor::diag2cbor("64(h'01')").value());
 }

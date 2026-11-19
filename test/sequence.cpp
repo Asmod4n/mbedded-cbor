@@ -218,12 +218,14 @@ std::vector<std::uint8_t> unsigned_bytes_of_bytes_sequence(std::string const &by
 
 } // namespace
 
+CBOR_DEFINE_TYPE_MEMBERS(bytes_sequence, cbor::untagged, a, b);
+
 // A byte range reads as the std::string of the same bytes. The bytes come from the encoder of the library, and the
 // test reads them as std::vector<std::uint8_t> and as std::span<std::byte const>, the forms that other CBOR libraries take.
 TEST_CASE("sequence: a range of bytes gives the elements of the std::string of the same bytes")
 {
-    auto const first = cbor::structs<bytes_sequence>::encode(bytes_sequence{1, {2}});
-    auto const second = cbor::structs<bytes_sequence>::encode(bytes_sequence{3, {}});
+    auto const first = cbor::encode<bytes_sequence>(bytes_sequence{1, {2}});
+    auto const second = cbor::encode<bytes_sequence>(bytes_sequence{3, {}});
     REQUIRE(first.has_value());
     REQUIRE(second.has_value());
     std::string const both = *first + *second;

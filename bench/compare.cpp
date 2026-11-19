@@ -1409,7 +1409,7 @@ static double op()
     if (!l) [[unlikely]] std::abort();
     return sum(**l);
 #elif defined(OP_STRUCTS_ENCODE)
-    auto const e = cbor::structs<T>::encode(*encoded_source);
+    auto const e = cbor::encode<T>(*encoded_source);
     if (!e) [[unlikely]] std::abort();
     benchmark::DoNotOptimize(e->data());
     return double(e->size());
@@ -1460,7 +1460,7 @@ static double check()
 #elif defined(OP_STRUCTS_ENCODE) || defined(OP_ITEM_ENCODE)
     std::string out;
 #if defined(OP_STRUCTS_ENCODE)
-    out = *cbor::structs<T>::encode(*encoded_source);
+    out = *cbor::encode<T>(*encoded_source);
 #else
     if (!cbor::encode(out, **item_source)) std::abort();
 #endif
@@ -1506,7 +1506,7 @@ int main(int argc, char **argv)
     if (!S::encode(msg, data)) std::abort();
     held = std::make_shared<std::string const>(msg);
 #if defined(DS_CARS)
-    plain = std::make_shared<std::string const>(*cbor::structs<T>::encode(data));
+    plain = std::make_shared<std::string const>(*cbor::encode<T>(data));
     benchmark::AddCustomContext("bytes_plain", std::to_string(plain->size()));
     benchmark::AddCustomContext("check_field", std::to_string(data.cars[500].engine.cc));
 #endif

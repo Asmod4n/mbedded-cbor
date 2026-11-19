@@ -315,7 +315,7 @@ TEST_CASE("qcbor SimpleArrayTest: a simple array encodes, decodes back, and each
     std::string const haven = "haven token";
     using row = std::tuple<std::int64_t, std::int64_t, std::span<std::byte const>, std::span<std::byte const>>;
     auto const encoded =
-        cbor::structs<row>::encode(row{23, 6000, std::as_bytes(std::span(galactic)), std::as_bytes(std::span(haven))});
+        cbor::encode<row>(row{23, 6000, std::as_bytes(std::span(galactic)), std::as_bytes(std::span(haven))});
     REQUIRE(encoded.has_value());
 
     auto const doc = lazy_of(*encoded);

@@ -72,7 +72,7 @@ namespace tinycbor_encoder
 template <class T>
 std::string written_by_structs(T const &value)
 {
-    auto const r = cbor::structs<T>::encode(value);
+    auto const r = cbor::encode<T>(value);
     if (!r)
         return "error: " + make_error_text(r.error());
     return *r;

@@ -1,9 +1,10 @@
 /**
  * @file
- * Writes a C++ value as CBOR and reads it back into a value of the
- * same type. Writes a struct as a map with one key for each member
- * that holds a value. Finds the members by reflection, by Boost.PFR or
- * in describe_members. Writes std::chrono times and dates, sets and
+ * Writes a C++ value as CBOR with cbor::encode and reads it back into a
+ * value of the same type with cbor::structs. Writes a struct as a map
+ * with one key for each member that holds a value, from its
+ * describe_members. Reads the members by reflection, by Boost.PFR or
+ * from describe_members. Writes std::chrono times and dates, sets and
  * arrays of numbers under their standard tags.
  * https://www.rfc-editor.org/rfc/rfc8949
  * https://www.rfc-editor.org/rfc/rfc8943#section-2.1
@@ -94,6 +95,19 @@ class pfr
                 false,
                 "cbor::structs reads a class that is not an aggregate only through cbor::describe_members.");
         }
+    }
+
+    template <class U>
+    static consteval bool struct_writable()
+    {
+        static_assert(has_describe_members<U>,
+                      "cbor::encode writes a class only through a cbor::describe_members specialization, also where "
+                      "reflection or Boost.PFR could read its members: the description states the keys and the tag "
+                      "that the bytes carry.");
+        if constexpr (has_describe_members<U>)
+            return detail::reflection::description_valid<U>();
+        else
+            return true;
     }
 
     template <class U>
@@ -1470,7 +1484,7 @@ class generic
                              }) {
             return elements_size(value);
         } else {
-            static_assert(detail::pfr::struct_readable<U>());
+            static_assert(detail::pfr::struct_writable<U>());
             std::size_t present = 0;
             auto const member_size =
                 [&]<std::size_t I>(std::integral_constant<std::size_t, I>,
@@ -1708,7 +1722,7 @@ class generic
         } else if constexpr (std::same_as<U, std::chrono::year_month_day>) {
             if (!value.ok()) [[unlikely]]
                 detail::validity::throw_logic_error(
-                    "cbor::structs::encode: the year_month_day is no valid date");
+                    "cbor::encode: the year_month_day is no valid date");
             return generic_size(std::chrono::sys_days{value}.time_since_epoch().count());
         } else if constexpr (is_set<U>) {
             return elements_size(value);
@@ -1848,7 +1862,7 @@ class generic
                              }) {
             return write_elements(out, at, value);
         } else {
-            static_assert(detail::pfr::struct_readable<U>());
+            static_assert(detail::pfr::struct_writable<U>());
             if constexpr (constexpr std::optional<std::uint64_t> tag = detail::reflection::tag_number_of<U>(); tag.has_value())
                 at += detail::heads::write_head(out, at, major_type::tag, *tag);
             std::size_t const present = [&]<std::size_t... I>(std::index_sequence<I...>) {
@@ -1913,15 +1927,135 @@ class generic
         else
             return write_generic(out, at, m);
     }
+
+public:
+    template <class T>
+    CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode_to_string(T const &value)
+    {
+        auto const counted = detail::generic::generic_size(value);
+        if (!counted) [[unlikely]]
+            return std::unexpected(counted.error());
+        auto const sum = detail::heads::padded_size(*counted);
+        if (!sum) [[unlikely]]
+            return std::unexpected(sum.error());
+        std::size_t const padded = *sum;
+        std::string out(padded, '\0');
+        auto const written = detail::generic::write_generic(std::span<char>(out), 0, value);
+        if (!written) [[unlikely]]
+            return std::unexpected(written.error());
+        out.resize(*written);
+        return out;
+    }
+
+    template <class Target, class T>
+    CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode_into(Target &&out, T const &value)
+    {
+        using U = std::remove_cvref_t<Target>;
+        auto const counted = detail::generic::generic_size(value);
+        if (!counted) [[unlikely]]
+            return std::unexpected(counted.error());
+        auto const sum = detail::heads::padded_size(*counted);
+        if (!sum) [[unlikely]]
+            return std::unexpected(sum.error());
+        std::size_t const padded = *sum;
+        std::size_t const size = *counted;
+        if constexpr (detail::byte_container<U> && requires { requires std::same_as<std::ranges::range_value_t<U>, char>; }) {
+            std::size_t const at = std::ranges::size(out);
+            auto const total = detail::validity::checked_add(at, padded);
+            if (!total) [[unlikely]]
+                return std::unexpected(detail::validity::writer_error(total.error()));
+            out.resize(*total);
+            auto const written = detail::generic::write_generic(std::span<char>(out), at, value);
+            out.resize(written ? at + size : at);
+            if (!written) [[unlikely]]
+                return std::unexpected(written.error());
+            return size;
+        } else if constexpr (!detail::byte_container<U> && requires { std::span<char>(out); }) {
+            if (detail::validity::bytes_fit(size, std::span<char>(out).size())) {
+                auto const written = detail::generic::write_generic(std::span<char>(out).first(size), 0, value);
+                if (!written) [[unlikely]]
+                    return std::unexpected(written.error());
+                return size;
+            }
+        }
+        std::string encoded(padded, '\0');
+        auto const written = detail::generic::write_generic(std::span<char>(encoded), 0, value);
+        if (!written) [[unlikely]]
+            return std::unexpected(written.error());
+        encoded.resize(*written);
+        decltype(auto) message = detail::message_of(out, encoded.size());
+        if (auto const r = message.append(encoded); !r) [[unlikely]]
+            return std::unexpected(detail::validity::writer_error(r.error()));
+        if (auto const r = message.done(encoded.size()); !r) [[unlikely]]
+            return std::unexpected(detail::validity::writer_error(r.error()));
+        return encoded.size();
+    }
 };
 
 }
 
 /**
- * @brief Writes a C++ value as CBOR and reads it back.
+ * @brief Writes `value` as one CBOR item in preferred serialization, into a new `std::string`.
+ *
+ * `T` is one of the types of the table of cbor::structs. A struct is written only through its
+ * cbor::describe_members specialization; an aggregate without one does not compile, also where reflection or
+ * Boost.PFR is present. A struct is a map, and its keys come in the order of RFC 8949 4.2.1.
+ * A cbor::item and a cbor::owning<cbor::item> take the overload that writes a tree.
+ *
+ * @code{.example}
+ * message: {"name": "ann", "age": 30}
+ * call: auto const encoded = cbor::encode<person>(person{"ann", 30})
+ * result: 16 bytes: a2 63 61 67 65 18 1e 64 6e 61 6d 65 63 61 6e 6e
+ * call: cbor::lazy::adopt(*encoded)
+ * result: lazy of {"age": 30, "name": "ann"}
+ * @endcode
+ *
+ * @retval value_too_large the size of the bytes does not fit in `std::size_t`
+ * @retval nesting_depth_exceeded the value is deeper than the stack of the thread holds
+ * @throws std::logic_error a `std::chrono::year_month_day` that is no valid date
+ * @throws std::bad_alloc a refused allocation of the result
+ * @snippet doc_reference_structs.cpp encode
+ * @see cbor::structs::decode()
+ * @see cbor::describe_members
+ *
+ * @ingroup structs
+ */
+template <class T>
+    requires(!std::same_as<T, item> && !std::same_as<T, owning<item>>)
+CBOR_ALWAYS_INLINE inline std::expected<std::string, error> encode(T const &value)
+{
+    return detail::generic::encode_to_string(value);
+}
+
+/**
+ * @brief Appends `value` as one CBOR item in preferred serialization to `out`, and gives the count of bytes that it
+ * appended.
+ *
+ * The item is that of cbor::encode(T const &).
+ * `out` is a container of bytes, for example `std::string`, a `std::span` of bytes, or a writer.
+ *
+ * @retval no_buffer_space a `std::span` that is too small for the bytes, or the writer gives this error
+ * @retval value_too_large the size of the bytes does not fit in `std::size_t`, or the writer gives this error
+ * @retval nesting_depth_exceeded the value is deeper than the stack of the thread holds
+ * @retval not_enough_memory, io_error the writer gives this error
+ * @throws std::logic_error a `std::chrono::year_month_day` that is no valid date
+ * @see cbor::encode(T const &)
+ *
+ * @ingroup structs
+ */
+template <class T, class Target>
+    requires(detail::is_target_v<std::remove_reference_t<Target>> && !std::same_as<T, item> &&
+             !std::same_as<T, owning<item>>)
+CBOR_ALWAYS_INLINE inline std::expected<std::size_t, error> encode(Target &&out, T const &value)
+{
+    return detail::generic::encode_into(std::forward<Target>(out), value);
+}
+
+/**
+ * @brief Reads a C++ value back from CBOR that cbor::encode wrote.
  *
  * `T`, and each member of a struct in `T`, is one of the types in this table.
- * `encode` writes the item of the right column.
+ * cbor::encode writes the item of the right column; it writes a struct only through its cbor::describe_members.
  * `decode` takes only that item, under its own tag.
  *
  * | C++ type | CBOR item |
@@ -1955,11 +2089,11 @@ class generic
  *
  * @code{.example}
  * message: {"id": 4}
- * call: auto const r = cbor::structs<reading>::encode(reading{4, std::nullopt})
+ * call: auto const r = cbor::encode<reading>(reading{4, std::nullopt})
  * result: 5 bytes: a1 62 69 64 04
  * call: cbor::lazy::adopt(*r)
  * result: lazy of {"id": 4}
- * call: auto const s = cbor::structs<std::set<std::uint8_t>>::encode(std::set<std::uint8_t>{3, 1})
+ * call: auto const s = cbor::encode<std::set<std::uint8_t>>(std::set<std::uint8_t>{3, 1})
  * result: 6 bytes: d9 01 02 82 01 03
  * call: cbor::lazy::adopt(*s)
  * result: lazy of 258([1, 3])
@@ -1968,7 +2102,7 @@ class generic
  * @endcode
  *
  * @snippet doc_reference_structs.cpp structs
- * @see cbor::structs::encode()
+ * @see cbor::encode(T const &)
  * @see cbor::structs::decode()
  * @see cbor::describe_members
  * @see cbor::ref
@@ -2023,7 +2157,7 @@ public:
      * @retval container_elements_exceeded the count of an array or a map is greater than `limits::container_elements`
      * @throws std::bad_alloc a refused allocation
      * @snippet doc_reference_structs.cpp decode
-     * @see cbor::structs::encode()
+     * @see cbor::encode(T const &)
      * @see cbor::ref
      */
     template <owning_range_of_bytes Encoded>
@@ -2079,102 +2213,6 @@ public:
     {
         return decode_with_owner(std::move(owner), detail::chars_of(encoded),
                             std::move(target));
-    }
-
-    /**
-     * @brief Writes @p value as one CBOR item in preferred serialization, into a new `std::string`.
-     *
-     * A struct is a map, and its keys come in the order of RFC 8949 4.2.1.
-     * The second form appends to `out` and returns the count of bytes that it appended.
-     * `out` is a `std::string`, a container of `char`, a `std::span<char>` or a writer.
-     * A type that `structs` does not take does not compile.
-     *
-     * @code{.example}
-     * message: {"name": "ann", "age": 30}
-     * call: auto const encoded = cbor::structs<person>::encode(person{"ann", 30})
-     * result: 16 bytes: a2 63 61 67 65 18 1e 64 6e 61 6d 65 63 61 6e 6e
-     * call: cbor::lazy::adopt(*encoded)
-     * result: lazy of {"age": 30, "name": "ann"}
-     * @endcode
-     *
-     * @retval value_too_large the size of the bytes does not fit in `std::size_t`
-     * @throws std::logic_error a `std::chrono::year_month_day` that is no valid date
-     * @throws std::bad_alloc a refused allocation of the result
-     * @snippet doc_reference_structs.cpp encode
-     * @see cbor::structs::decode()
-     */
-    CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode(T const &value)
-    {
-        auto const counted = detail::generic::generic_size(value);
-        if (!counted) [[unlikely]]
-            return std::unexpected(counted.error());
-        auto const sum = detail::heads::padded_size(*counted);
-        if (!sum) [[unlikely]]
-            return std::unexpected(sum.error());
-        std::size_t const padded = *sum;
-        std::string out(padded, '\0');
-        auto const written = detail::generic::write_generic(std::span<char>(out), 0, value);
-        if (!written) [[unlikely]]
-            return std::unexpected(written.error());
-        out.resize(*written);
-        return out;
-    }
-
-    /**
-     * @brief Appends @p value as one CBOR item in preferred serialization to @p out.
-     * @param out a `std::string`, a container of `char`, a `std::span<char>` or a writer. A `T` that is itself such
-     * a type has only the form that returns a new `std::string`.
-     * @return the count of bytes that it appended
-     * @retval no_buffer_space a `std::span<char>` that is too small for the bytes, or the writer gives this error
-     * @retval value_too_large the size of the bytes does not fit in `std::size_t`, or the writer gives this error
-     * @retval not_enough_memory, io_error the writer gives this error
-     * @throws std::logic_error a `std::chrono::year_month_day` that is no valid date
-     */
-    template <class Target>
-        requires(detail::is_target_v<std::remove_reference_t<Target>> &&
-                 !detail::is_target_v<T>)
-    CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(Target &&out, T const &value)
-    {
-        using U = std::remove_cvref_t<Target>;
-        auto const counted = detail::generic::generic_size(value);
-        if (!counted) [[unlikely]]
-            return std::unexpected(counted.error());
-        auto const sum = detail::heads::padded_size(*counted);
-        if (!sum) [[unlikely]]
-            return std::unexpected(sum.error());
-        std::size_t const padded = *sum;
-        std::size_t const size = *counted;
-        if constexpr (detail::byte_container<U> &&
-                             requires { requires std::same_as<std::ranges::range_value_t<U>, char>; }) {
-            std::size_t const at = std::ranges::size(out);
-            auto const total = detail::validity::checked_add(at, padded);
-            if (!total) [[unlikely]]
-                return std::unexpected(detail::validity::writer_error(total.error()));
-            out.resize(*total);
-            auto const written = detail::generic::write_generic(std::span<char>(out), at, value);
-            out.resize(written ? at + size : at);
-            if (!written) [[unlikely]]
-                return std::unexpected(written.error());
-            return size;
-        } else if constexpr (!detail::byte_container<U> && requires { std::span<char>(out); }) {
-            if (detail::validity::bytes_fit(size, std::span<char>(out).size())) {
-                auto const written = detail::generic::write_generic(std::span<char>(out).first(size), 0, value);
-                if (!written) [[unlikely]]
-                    return std::unexpected(written.error());
-                return size;
-            }
-        }
-        std::string encoded(padded, '\0');
-        auto const written = detail::generic::write_generic(std::span<char>(encoded), 0, value);
-        if (!written) [[unlikely]]
-            return std::unexpected(written.error());
-        encoded.resize(*written);
-        decltype(auto) message = detail::message_of(out, encoded.size());
-        if (auto const r = message.append(encoded); !r) [[unlikely]]
-            return std::unexpected(detail::validity::writer_error(r.error()));
-        if (auto const r = message.done(encoded.size()); !r) [[unlikely]]
-            return std::unexpected(detail::validity::writer_error(r.error()));
-        return encoded.size();
     }
 
 private:
