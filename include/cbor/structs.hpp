@@ -2131,8 +2131,8 @@ public:
      * @throws std::logic_error a `std::chrono::year_month_day` that is no valid date
      */
     template <class Target>
-        requires(detail::encoding::is_target_v<std::remove_reference_t<Target>> &&
-                 !detail::encoding::is_target_v<T>)
+        requires(detail::is_target_v<std::remove_reference_t<Target>> &&
+                 !detail::is_target_v<T>)
     CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(Target &&out, T const &value)
     {
         using U = std::remove_cvref_t<Target>;
@@ -2144,7 +2144,7 @@ public:
             return std::unexpected(sum.error());
         std::size_t const padded = *sum;
         std::size_t const size = *counted;
-        if constexpr (detail::encoding::byte_container<U> &&
+        if constexpr (detail::byte_container<U> &&
                              requires { requires std::same_as<std::ranges::range_value_t<U>, char>; }) {
             std::size_t const at = std::ranges::size(out);
             auto const total = detail::validity::checked_add(at, padded);
@@ -2156,7 +2156,7 @@ public:
             if (!written) [[unlikely]]
                 return std::unexpected(written.error());
             return size;
-        } else if constexpr (!detail::encoding::byte_container<U> && requires { std::span<char>(out); }) {
+        } else if constexpr (!detail::byte_container<U> && requires { std::span<char>(out); }) {
             if (detail::validity::bytes_fit(size, std::span<char>(out).size())) {
                 auto const written = detail::generic::write_generic(std::span<char>(out).first(size), 0, value);
                 if (!written) [[unlikely]]
@@ -2169,7 +2169,7 @@ public:
         if (!written) [[unlikely]]
             return std::unexpected(written.error());
         encoded.resize(*written);
-        decltype(auto) message = detail::encoding::message_of(out, encoded.size());
+        decltype(auto) message = detail::message_of(out, encoded.size());
         if (auto const r = message.append(encoded); !r) [[unlikely]]
             return std::unexpected(detail::validity::writer_error(r.error()));
         if (auto const r = message.done(encoded.size()); !r) [[unlikely]]

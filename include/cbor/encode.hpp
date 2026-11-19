@@ -41,9 +41,6 @@
 namespace cbor
 {
 
-template <class T>
-class schema;
-
 #if __has_include(<sys/uio.h>)
 /**
  * @brief Writes the tree at `root` into a list of `struct iovec` pieces, not into one buffer.
@@ -90,6 +87,90 @@ std::expected<ref<std::span<iovec const>>, error> encode_iov(owning<item> const 
 namespace detail
 {
 
+template <class C>
+struct container_message {
+    C &container;
+
+    template <class E>
+        requires std::same_as<E, char> || std::same_as<E, std::byte>
+    std::expected<void, std::errc> append(std::span<E const> const part)
+    {
+        std::size_t const at = std::ranges::size(container);
+        container.resize(at + part.size());
+        std::ranges::copy(std::as_bytes(part), std::as_writable_bytes(std::span(container).subspan(at)).begin());
+        return {};
+    }
+
+    std::expected<void, std::errc> append(std::string_view const part)
+    {
+        return append(std::span(part));
+    }
+
+    std::expected<void, std::errc> done(std::size_t)
+    {
+        return {};
+    }
+};
+
+template <class B>
+struct span_message {
+    std::span<B> out;
+    std::size_t used;
+
+    template <class E>
+        requires std::same_as<E, char> || std::same_as<E, std::byte>
+    std::expected<void, std::errc> append(std::span<E const> const part)
+    {
+        if (auto const fits = detail::validity::check_space_left(part.size(), out.size() - used); !fits)
+            [[unlikely]]
+            return fits;
+        std::ranges::copy(std::as_bytes(part), std::as_writable_bytes(out.subspan(used).first(part.size())).begin());
+        used += part.size();
+        return {};
+    }
+
+    std::expected<void, std::errc> append(std::string_view const part)
+    {
+        return append(std::span(part));
+    }
+
+    std::expected<void, std::errc> done(std::size_t)
+    {
+        return {};
+    }
+};
+
+template <class C>
+constexpr bool byte_container = requires(C &c) {
+    c.resize(std::size_t{});
+    requires sizeof(std::ranges::range_value_t<C>) == 1;
+    requires std::ranges::contiguous_range<C>;
+};
+
+template <class Target>
+constexpr bool is_target_v =
+    requires(Target &target) {
+        std::span(target);
+        requires std::same_as<typename Target::element_type, char> ||
+                     std::same_as<typename Target::element_type, std::byte>;
+        requires !requires { target.resize(std::size_t{}); };
+    } || byte_container<Target> ||
+    requires(Target &target, std::size_t const hint) { target.allocate(hint).done(hint); };
+
+template <class Target>
+    requires is_target_v<std::remove_reference_t<Target>>
+decltype(auto) message_of(Target &&target, std::size_t const hint)
+{
+    using U = std::remove_cvref_t<Target>;
+    if constexpr (requires { typename U::element_type; } && requires { std::span(target); } &&
+                  !requires { target.resize(std::size_t{}); })
+        return span_message<typename U::element_type>{target, 0};
+    else if constexpr (byte_container<U>)
+        return container_message<U>{target};
+    else
+        return target.allocate(hint);
+}
+
 class encoding
 {
 public:
@@ -108,95 +189,11 @@ private:
     class iov_writer;
 #endif
 
-    template <class C>
-    struct container_message {
-        C &container;
-
-        template <class E>
-            requires std::same_as<E, char> || std::same_as<E, std::byte>
-        std::expected<void, std::errc> append(std::span<E const> const part)
-        {
-            std::size_t const at = std::ranges::size(container);
-            container.resize(at + part.size());
-            std::ranges::copy(std::as_bytes(part), std::as_writable_bytes(std::span(container).subspan(at)).begin());
-            return {};
-        }
-
-        std::expected<void, std::errc> append(std::string_view const part)
-        {
-            return append(std::span(part));
-        }
-
-        std::expected<void, std::errc> done(std::size_t)
-        {
-            return {};
-        }
-    };
-
-    template <class B>
-    struct span_message {
-        std::span<B> out;
-        std::size_t used;
-
-        template <class E>
-            requires std::same_as<E, char> || std::same_as<E, std::byte>
-        std::expected<void, std::errc> append(std::span<E const> const part)
-        {
-            if (auto const fits = detail::validity::check_space_left(part.size(), out.size() - used); !fits)
-                [[unlikely]]
-                return fits;
-            std::ranges::copy(std::as_bytes(part), std::as_writable_bytes(out.subspan(used).first(part.size())).begin());
-            used += part.size();
-            return {};
-        }
-
-        std::expected<void, std::errc> append(std::string_view const part)
-        {
-            return append(std::span(part));
-        }
-
-        std::expected<void, std::errc> done(std::size_t)
-        {
-            return {};
-        }
-    };
-
-    template <class C>
-    static constexpr bool byte_container = requires(C &c) {
-        c.resize(std::size_t{});
-        requires sizeof(std::ranges::range_value_t<C>) == 1;
-        requires std::ranges::contiguous_range<C>;
-    };
-
 public:
-    template <class Target>
-    static constexpr bool is_target_v =
-        requires(Target &target) {
-            std::span(target);
-            requires std::same_as<typename Target::element_type, char> ||
-                         std::same_as<typename Target::element_type, std::byte>;
-            requires !requires { target.resize(std::size_t{}); };
-        } || byte_container<Target> ||
-        requires(Target &target, std::size_t const hint) { target.allocate(hint).done(hint); };
-
     template <class Target>
     static std::expected<std::size_t, error> encode_into(Target &&target, item const &root);
 
 private:
-    template <class Target>
-        requires is_target_v<std::remove_reference_t<Target>>
-    static decltype(auto) message_of(Target &&target, std::size_t const hint)
-    {
-        using U = std::remove_cvref_t<Target>;
-        if constexpr (requires { typename U::element_type; } && requires { std::span(target); } &&
-                      !requires { target.resize(std::size_t{}); })
-            return span_message<typename U::element_type>{target, 0};
-        else if constexpr (byte_container<U>)
-            return container_message<U>{target};
-        else
-            return target.allocate(hint);
-    }
-
     struct head_parts {
         major_type major;
         std::uint8_t info;
@@ -231,12 +228,6 @@ private:
     friend std::expected<ref<std::span<iovec const>>, error> cbor::encode_iov(item const &root);
     friend std::expected<ref<std::span<iovec const>>, error> cbor::encode_iov(owning<item> const &root);
 #endif
-
-    template <class>
-    friend class cbor::structs;
-
-    template <class>
-    friend class cbor::schema;
 };
 
 }
@@ -297,12 +288,12 @@ private:
  * @ingroup decode
  */
 template <class Target>
-    requires detail::encoding::is_target_v<std::remove_reference_t<Target>>
+    requires detail::is_target_v<std::remove_reference_t<Target>>
 std::expected<std::size_t, error> encode(Target &&out, item const &root);
 
 template <class Writer>
 struct detail::encoding::binary_writer {
-    static constexpr bool direct = std::same_as<Writer, detail::encoding::span_message<char>>;
+    static constexpr bool direct = std::same_as<Writer, detail::span_message<char>>;
 #if __has_include(<sys/uio.h>)
     static constexpr bool blocks = std::same_as<Writer, detail::encoding::iov_writer>;
 #else
@@ -842,7 +833,7 @@ std::expected<std::size_t, error> detail::encoding::encode_into(Target &&target,
 }
 
 template <class Target>
-    requires detail::encoding::is_target_v<std::remove_reference_t<Target>>
+    requires detail::is_target_v<std::remove_reference_t<Target>>
 std::expected<std::size_t, error> encode(Target &&out, item const &root)
 {
     return detail::encoding::encode_into(std::forward<Target>(out), root);
