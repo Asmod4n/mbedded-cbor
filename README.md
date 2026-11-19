@@ -111,8 +111,10 @@ makes. These are the checks of mbedded-cbor.
   to 87 (RFC 8746) a byte string. Other content gives
   `inadmissible_type_for_tag_content`. The content of every other tag
   is not checked.
-- **Shared references.** A reference of tag 29 names an item that tag
-  28 marked before it; else the read gives `sharedref_not_defined` or
+- **Shared references.** `cbor::decode_cycles` resolves tags 28
+  and 29 for cycles only. A reference of tag 29 names an item that tag
+  28 marked before it and whose decode has not ended; else the read
+  gives `sharedref_not_cyclic`, `sharedref_not_defined` or
   `sharedref_index_not_marked`.
 - **Duplicate keys.** A repeated key gives every entry in `cbor::decode`,
   the error `duplicate_key` in `cbor::structs` (an unordered multimap
@@ -162,7 +164,7 @@ Write the message:
 | schema | FlatBuffers | 9.0× | 3.4× |
 
 - schema reads Packed CBOR (155849 bytes). The other kinds and the
-  libraries read the CBOR of `structs<T>::encode` (440957 bytes).
+  libraries read the CBOR of `cbor::encode` (440957 bytes).
 - item, structs and jsoncons decode the message before they read one
   field. jsoncons decodes the message before its path.
 - jsoncons `decode_cbor<T>` copies each text into a `std::string`.
@@ -193,8 +195,8 @@ details stand in [bench/comparison.md](bench/comparison.md).
 |---|---|---|---|---|---|
 | Format | CBOR | JSON; CBOR through `from_cbor` and `to_cbor` | CBOR | its own | its own |
 | Read one field | a path; the rest is not decoded | decodes the whole input first | decodes the whole input; no lookup of a key | direct | direct |
-| Write a struct | no extra code (C++26 reflection, or Boost.PFR in C++23) | a macro that names each member | no mapping of a struct | a schema file and a code generator | a schema file and a code generator |
-| Shared values, tags 28 and 29 | read and written | not read | not read | one offset in two places | not checked |
+| Write a struct | `CBOR_DEFINE_TYPE_MEMBERS` names each member; the read needs no extra code (C++26 reflection, or Boost.PFR in C++23) | a macro that names each member | no mapping of a struct | a schema file and a code generator | a schema file and a code generator |
+| Cycles through tags 28 and 29 | read and written | not read | not read | one offset in two places | not checked |
 | A list of numbers with no copy | `cbor::schema` | copies | reads each number | direct | direct |
 | Broken input | a `std::expected` error | an exception, or a discarded value | an error code | the Verifier; without it, no check | an exception |
 
@@ -219,8 +221,9 @@ struct person {
     std::string name;
     int age;
 };
+CBOR_DEFINE_TYPE_MEMBERS(person, cbor::untagged, name, age);
 
-auto bytes = cbor::structs<person>::encode(person{"ann", 30});
+auto bytes = cbor::encode(person{"ann", 30});
 auto const back = cbor::structs<person>::decode(std::move(*bytes));
 // (*back)->name is "ann", (*back)->age is 30
 ```
@@ -284,10 +287,6 @@ cmake -S mbedded-cbor -B build -DBUILD_TESTING=OFF
 cmake --install build --prefix /usr/local
 ```
 
-On Linux and macOS the install also writes the reference as man pages in
-section 3: `man mbedded-cbor` gives the overview, and `man cbor::lazy`
-gives one class.
-
 ```cmake
 find_package(mbedded-cbor 0.9 CONFIG REQUIRED)
 target_link_libraries(app PRIVATE mbedded-cbor::mbedded-cbor)
@@ -327,8 +326,10 @@ cbor::encode(out, *tree);                                           // out == by
 
 ### Encode a value or a struct
 
-`cbor::structs<T>` encodes any value: a struct, an `int`, a `std::map`.
-It decodes the bytes back into the same type.
+`cbor::encode` writes any value: a struct, an `int`, a `std::map`. A
+struct needs a `cbor::describe_members` specialization, which
+`CBOR_DEFINE_TYPE_MEMBERS` writes. `cbor::structs<T>` decodes the bytes
+back into the same type.
 
 ```cpp
 struct reading {
@@ -336,13 +337,14 @@ struct reading {
     double value;
     std::vector<int> samples;
 };
+CBOR_DEFINE_TYPE_MEMBERS(reading, cbor::untagged, sensor, value, samples);
 
-auto const bytes = cbor::structs<reading>::encode(reading{"t1", 21.5, {3, 4, 5}}).value();
+auto const bytes = cbor::encode(reading{"t1", 21.5, {3, 4, 5}}).value();
 auto const back = cbor::structs<reading>::decode(std::string(bytes)).value();
 back->sensor;                                                       // "t1"
 
-cbor::structs<int>::encode(42);                                     // 18 2a
-cbor::structs<std::map<std::string, int>>::encode({{"a", 1}});      // {"a": 1}
+cbor::encode(42);                                                   // 18 2a
+cbor::encode(std::map<std::string, int>{{"a", 1}});                 // {"a": 1}
 ```
 
 A decoded struct can point into the bytes, for example with a
@@ -387,13 +389,9 @@ auto const age = doc.at_path<"$.user.age", int>();                 // cbor::erro
 
 - <https://asmod4n.github.io/mbedded-cbor-docs/>: every function and type,
   with examples that run in the browser.
-- The comments of the headers in `include/cbor/`: every function and type; Doxygen makes the site and the man
-  pages from them.
-- [man/man3](man/man3): the reference as man pages, one page per group.
-  `mbedded-cbor(3)` is the overview, with the threads, the limits and
-  the memory. `mbedded-cbor-errors(3)` holds the errors. `mbedded-cbor-path(3)` holds the
-  paths of RFC 9535 on CBOR. `mbedded-cbor-schema(3)` holds structs as
-  Packed CBOR. `mbedded-cbor-structs(3)` reads any CBOR into a struct.
+- The comments of the headers in `include/cbor/`: every function and type. The site and the man pages
+  are made from them in [Asmod4n/mbedded-cbor-docs](https://github.com/Asmod4n/mbedded-cbor-docs).
+- The man pages, one for each class and one for each group, install from that repository.
 - The section "Compared with other libraries" above: other libraries, task by task.
 
 ## Testing

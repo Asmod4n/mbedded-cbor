@@ -194,8 +194,8 @@ TEST_CASE("path edn literals: an indefinite-length literal is invalid_path")
 // RFC 8949 Appendix A: the diagnostic notation that cbor::diagnostic_notation writes for an example is a literal of the
 // same value. Every example that a selector reads as a key literal selects the key of its own bytes. An integer is an
 // index and not a key literal. A text is a name of RFC 9535 and not a key literal. Not here are the examples whose key
-// is of indefinite length. at_path does not read indefinite-length input. See the former basics guide, whose facts now
-// stand in tools/doc/groups/errors.dox. Three floats whose decimal form has more digits than an exact conversion takes
+// is of indefinite length. at_path does not read indefinite-length input.
+// Three floats whose decimal form has more digits than an exact conversion takes
 // read back only where std::from_chars converts them.
 TEST_CASE("path edn literals: the diagnostic notation of each example of RFC 8949 Appendix A is a key")
 {

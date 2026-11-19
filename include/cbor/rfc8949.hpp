@@ -23,7 +23,9 @@ template <class Item>
 struct pair_at;
 class encoding;
 class extended_diagnostic_notation;
-class generic;
+class edn_text;
+template <bool Reflected>
+class basic_generic;
 class heads;
 class ieee754;
 class reflection;
@@ -159,6 +161,8 @@ class rfc8949
 
     friend class detail::extended_diagnostic_notation;
 
+    friend class detail::edn_text;
+
     friend class path;
 
     friend class detail::canonical_ids;
@@ -180,7 +184,8 @@ class rfc8949
 
     friend class detail::reflection;
 
-    friend class detail::generic;
+    template <bool>
+    friend class detail::basic_generic;
 
     friend class detail::dom::reader;
 

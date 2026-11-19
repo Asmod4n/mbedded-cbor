@@ -11,7 +11,8 @@ namespace cbor
 namespace detail
 {
 
-class generic;
+template <bool Reflected>
+class basic_generic;
 class reflection;
 
 }
@@ -22,7 +23,8 @@ class cbor_sets
 
     friend class detail::reflection;
 
-    friend class detail::generic;
+    template <bool>
+    friend class detail::basic_generic;
 };
 
 }

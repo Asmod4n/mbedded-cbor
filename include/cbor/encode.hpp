@@ -41,9 +41,6 @@
 namespace cbor
 {
 
-template <class T>
-class schema;
-
 #if __has_include(<sys/uio.h>)
 /**
  * @brief Writes the tree at `root` into a list of `struct iovec` pieces, not into one buffer.
@@ -90,6 +87,90 @@ std::expected<ref<std::span<iovec const>>, error> encode_iov(owning<item> const 
 namespace detail
 {
 
+template <class C>
+struct container_message {
+    C &container;
+
+    template <class E>
+        requires std::same_as<E, char> || std::same_as<E, std::byte>
+    std::expected<void, std::errc> append(std::span<E const> const part)
+    {
+        std::size_t const at = std::ranges::size(container);
+        container.resize(at + part.size());
+        std::ranges::copy(std::as_bytes(part), std::as_writable_bytes(std::span(container).subspan(at)).begin());
+        return {};
+    }
+
+    std::expected<void, std::errc> append(std::string_view const part)
+    {
+        return append(std::span(part));
+    }
+
+    std::expected<void, std::errc> done(std::size_t)
+    {
+        return {};
+    }
+};
+
+template <class B>
+struct span_message {
+    std::span<B> out;
+    std::size_t used;
+
+    template <class E>
+        requires std::same_as<E, char> || std::same_as<E, std::byte>
+    std::expected<void, std::errc> append(std::span<E const> const part)
+    {
+        if (auto const fits = detail::validity::check_space_left(part.size(), out.size() - used); !fits)
+            [[unlikely]]
+            return fits;
+        std::ranges::copy(std::as_bytes(part), std::as_writable_bytes(out.subspan(used).first(part.size())).begin());
+        used += part.size();
+        return {};
+    }
+
+    std::expected<void, std::errc> append(std::string_view const part)
+    {
+        return append(std::span(part));
+    }
+
+    std::expected<void, std::errc> done(std::size_t)
+    {
+        return {};
+    }
+};
+
+template <class C>
+constexpr bool byte_container = requires(C &c) {
+    c.resize(std::size_t{});
+    requires sizeof(std::ranges::range_value_t<C>) == 1;
+    requires std::ranges::contiguous_range<C>;
+};
+
+template <class Target>
+constexpr bool is_target_v =
+    requires(Target &target) {
+        std::span(target);
+        requires std::same_as<typename Target::element_type, char> ||
+                     std::same_as<typename Target::element_type, std::byte>;
+        requires !requires { target.resize(std::size_t{}); };
+    } || byte_container<Target> ||
+    requires(Target &target, std::size_t const hint) { target.allocate(hint).done(hint); };
+
+template <class Target>
+    requires is_target_v<std::remove_reference_t<Target>>
+decltype(auto) message_of(Target &&target, std::size_t const hint)
+{
+    using U = std::remove_cvref_t<Target>;
+    if constexpr (requires { typename U::element_type; } && requires { std::span(target); } &&
+                  !requires { target.resize(std::size_t{}); })
+        return span_message<typename U::element_type>{target, 0};
+    else if constexpr (byte_container<U>)
+        return container_message<U>{target};
+    else
+        return target.allocate(hint);
+}
+
 class encoding
 {
 public:
@@ -108,95 +189,11 @@ private:
     class iov_writer;
 #endif
 
-    template <class C>
-    struct container_message {
-        C &container;
-
-        template <class E>
-            requires std::same_as<E, char> || std::same_as<E, std::byte>
-        std::expected<void, std::errc> append(std::span<E const> const part)
-        {
-            std::size_t const at = std::ranges::size(container);
-            container.resize(at + part.size());
-            std::ranges::copy(std::as_bytes(part), std::as_writable_bytes(std::span(container).subspan(at)).begin());
-            return {};
-        }
-
-        std::expected<void, std::errc> append(std::string_view const part)
-        {
-            return append(std::span(part));
-        }
-
-        std::expected<void, std::errc> done(std::size_t)
-        {
-            return {};
-        }
-    };
-
-    template <class B>
-    struct span_message {
-        std::span<B> out;
-        std::size_t used;
-
-        template <class E>
-            requires std::same_as<E, char> || std::same_as<E, std::byte>
-        std::expected<void, std::errc> append(std::span<E const> const part)
-        {
-            if (auto const fits = detail::validity::check_space_left(part.size(), out.size() - used); !fits)
-                [[unlikely]]
-                return fits;
-            std::ranges::copy(std::as_bytes(part), std::as_writable_bytes(out.subspan(used).first(part.size())).begin());
-            used += part.size();
-            return {};
-        }
-
-        std::expected<void, std::errc> append(std::string_view const part)
-        {
-            return append(std::span(part));
-        }
-
-        std::expected<void, std::errc> done(std::size_t)
-        {
-            return {};
-        }
-    };
-
-    template <class C>
-    static constexpr bool byte_container = requires(C &c) {
-        c.resize(std::size_t{});
-        requires sizeof(std::ranges::range_value_t<C>) == 1;
-        requires std::ranges::contiguous_range<C>;
-    };
-
 public:
-    template <class Target>
-    static constexpr bool is_target_v =
-        requires(Target &target) {
-            std::span(target);
-            requires std::same_as<typename Target::element_type, char> ||
-                         std::same_as<typename Target::element_type, std::byte>;
-            requires !requires { target.resize(std::size_t{}); };
-        } || byte_container<Target> ||
-        requires(Target &target, std::size_t const hint) { target.allocate(hint).done(hint); };
-
     template <class Target>
     static std::expected<std::size_t, error> encode_into(Target &&target, item const &root);
 
 private:
-    template <class Target>
-        requires is_target_v<std::remove_reference_t<Target>>
-    static decltype(auto) message_of(Target &&target, std::size_t const hint)
-    {
-        using U = std::remove_cvref_t<Target>;
-        if constexpr (requires { typename U::element_type; } && requires { std::span(target); } &&
-                      !requires { target.resize(std::size_t{}); })
-            return span_message<typename U::element_type>{target, 0};
-        else if constexpr (byte_container<U>)
-            return container_message<U>{target};
-        else
-            return target.allocate(hint);
-    }
-
     struct head_parts {
         major_type major;
         std::uint8_t info;
@@ -214,8 +211,6 @@ private:
         requires(!AppendRef || binary_writer<Writer>::blocks);
     template <class Writer>
     static std::expected<void, std::errc> encode_sharedref(binary_writer<Writer> &out, std::uint64_t index);
-    static std::uint64_t size_of(item const &node, head_parts const &head);
-    static std::uint64_t reference_size_of(item const &reference);
 
     class depth_first_search;
 
@@ -231,12 +226,6 @@ private:
     friend std::expected<ref<std::span<iovec const>>, error> cbor::encode_iov(item const &root);
     friend std::expected<ref<std::span<iovec const>>, error> cbor::encode_iov(owning<item> const &root);
 #endif
-
-    template <class>
-    friend class cbor::structs;
-
-    template <class>
-    friend class cbor::schema;
 };
 
 }
@@ -252,7 +241,6 @@ private:
  * A walk before the write finds each item that a depth-first walk reaches again while it is inside that item.
  * Such an item gets a tag 28, and each edge that reaches it again is a tag 29 with the index of that mark, in its
  * shortest head.
- * A value that two references reach without a cycle is written in full each time.
  * `out` is one of these:
  * - a container of bytes, for example `std::string`: the call appends;
  * - a `std::span` of bytes: the call writes into it and allocates nothing;
@@ -287,22 +275,20 @@ private:
  *
  * @retval no_buffer_space the span is too short
  * @retval nesting_depth_exceeded the tree, or the path through its references, is deeper than the limit
- * @retval amplification_limit_breach the output would be larger than `cbor::limits::amplification_activation_threshold`
- * and than `cbor::limits::maximum_amplification` times the tree; nothing is written
  * @retval value_too_large, not_enough_memory, io_error the error of a writer, from its `std::errc`
  * @snippet doc_reference_item.cpp encode
  * @see cbor::encode_iov()
  * @see cbor::decode()
  *
- * @ingroup decode
+ * @ingroup encode
  */
 template <class Target>
-    requires detail::encoding::is_target_v<std::remove_reference_t<Target>>
+    requires detail::is_target_v<std::remove_reference_t<Target>>
 std::expected<std::size_t, error> encode(Target &&out, item const &root);
 
 template <class Writer>
 struct detail::encoding::binary_writer {
-    static constexpr bool direct = std::same_as<Writer, detail::encoding::span_message<char>>;
+    static constexpr bool direct = std::same_as<Writer, detail::span_message<char>>;
 #if __has_include(<sys/uio.h>)
     static constexpr bool blocks = std::same_as<Writer, detail::encoding::iov_writer>;
 #else
@@ -657,22 +643,6 @@ std::expected<void, error> detail::encoding::encode_item(binary_writer<Writer> &
     return {};
 }
 
-inline std::uint64_t detail::encoding::size_of(item const &node, head_parts const &head)
-{
-    std::uint64_t const size = detail::heads::initial_byte_size + detail::heads::argument_size(head.info);
-    if (head.major == major_type::byte_string)
-        return size + node.via.bin.size();
-    if (head.major == major_type::text_string)
-        return size + node.via.str.size();
-    return size;
-}
-
-inline std::uint64_t detail::encoding::reference_size_of(item const &reference)
-{
-    return detail::heads::head_size(std::to_underlying(rfc8949::tag_number::sharedref)) + detail::heads::initial_byte_size +
-           detail::heads::argument_size(reference.additional_information);
-}
-
 class detail::encoding::depth_first_search
 {
     struct frame {
@@ -681,14 +651,9 @@ class detail::encoding::depth_first_search
         frame const *up;
     };
 
-    static constexpr std::uint64_t back_edge_size =
-        detail::heads::head_size(std::to_underlying(rfc8949::tag_number::sharedref)) + detail::heads::initial_byte_size;
-
     std::vector<item const *> targets;
     std::unordered_map<item const *, std::uint64_t> open;
     bool path_in_map = false;
-    std::uint64_t direct = 0;
-    std::uint64_t tree = 0;
 
     void enter_path(frame const &here)
     {
@@ -697,50 +662,36 @@ class detail::encoding::depth_first_search
         path_in_map = true;
     }
 
-    std::expected<void, error> count(std::uint64_t const bytes, bool const below)
-    {
-        direct += bytes;
-        if (!below)
-            tree += bytes;
-        return detail::validity::check_amplification(direct, tree);
-    }
-
-    std::expected<void, error> find_back_edges(item const &node, frame const *const up, bool const below)
+    std::expected<void, error> find_back_edges(item const &node, frame const *const up)
     {
         if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
             return r;
         head_parts const head = head_of(node);
-        if (auto const r = count(size_of(node, head), below); !r) [[unlikely]]
-            return r;
         frame const here{&node, 0, up};
         if (path_in_map) [[unlikely]]
             open.emplace(&node, 0);
         for (item const &child : children_of(node, head.major))
-            if (auto const r = follow_edge(child, here, below); !r) [[unlikely]]
+            if (auto const r = follow_edge(child, here); !r) [[unlikely]]
                 return r;
         if (item const *const content = content_of(node, head.major))
-            if (auto const r = follow_edge(*content, here, below); !r) [[unlikely]]
+            if (auto const r = follow_edge(*content, here); !r) [[unlikely]]
                 return r;
         if (path_in_map) [[unlikely]]
             open.erase(&node);
         return {};
     }
 
-    std::expected<void, error> follow_edge(item const &child, frame const &here, bool const below)
+    std::expected<void, error> follow_edge(item const &child, frame const &here)
     {
         bool const reference = child.m_type == cbor::type::shared_reference;
         item const &next = reference ? *child.via.tag.content : child;
-        if (reference) [[unlikely]] {
-            if (!below)
-                tree += reference_size_of(child);
-            if (!path_in_map)
-                enter_path(here);
-        }
+        if (reference && !path_in_map) [[unlikely]]
+            enter_path(here);
         if (path_in_map && open.contains(&next)) [[unlikely]] {
             targets.push_back(&next);
-            return count(back_edge_size, true);
+            return {};
         }
-        return find_back_edges(next, &here, below || reference);
+        return find_back_edges(next, &here);
     }
 
     template <bool AppendRef, class Writer>
@@ -804,7 +755,7 @@ public:
     std::expected<void, error> encode(binary_writer<Writer> &out, item const &root)
     {
         item const &start = root.m_type == cbor::type::shared_reference ? *root.via.tag.content : root;
-        if (auto const r = find_back_edges(start, nullptr, false); !r) [[unlikely]]
+        if (auto const r = find_back_edges(start, nullptr); !r) [[unlikely]]
             return r;
         std::ranges::sort(targets);
         auto const repeated = std::ranges::unique(targets);
@@ -842,7 +793,7 @@ std::expected<std::size_t, error> detail::encoding::encode_into(Target &&target,
 }
 
 template <class Target>
-    requires detail::encoding::is_target_v<std::remove_reference_t<Target>>
+    requires detail::is_target_v<std::remove_reference_t<Target>>
 std::expected<std::size_t, error> encode(Target &&out, item const &root)
 {
     return detail::encoding::encode_into(std::forward<Target>(out), root);

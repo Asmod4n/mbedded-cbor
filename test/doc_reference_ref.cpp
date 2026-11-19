@@ -19,9 +19,9 @@ using namespace std::string_literals;
 
 using reference_ref::person;
 
-// tools/doc/groups/ref.dox, snippet ref group. The EXAMPLES section of the man page of the group ref shows that a ref
-// keeps the bytes. They stay after the lazy that read them ends. That clone copies the bytes. The test checks each value
-// that the comments of the example state, and the bytes against the encoding of RFC 8949.
+// The snippet of the group ref, between the markers "ref group". The example on the page of the group ref shows that a
+// ref keeps the bytes. They stay after the lazy that read them ends. That clone copies the bytes. The test checks each
+// value that the comments of the example state, and the bytes against the encoding of RFC 8949.
 TEST_CASE("doc reference ref: the example of the group ref")
 {
     std::string bytes = test::encode_in_preferred_form(test::M("name"s, "ann"s));

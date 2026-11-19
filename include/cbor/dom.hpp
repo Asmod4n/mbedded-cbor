@@ -1767,15 +1767,6 @@ class writer
         }
     }
 
-    static std::uint64_t size_of(item const &x)
-    {
-        std::uint64_t const head = heads::initial_byte_size + heads::argument_size(kind::info_of(x.tag));
-        auto const type = x.tag & kind::type_mask;
-        if (type == kind::type_bytes || type == kind::type_text)
-            return head + kind::high_of(x.tag);
-        return head;
-    }
-
     class depth_first_search
     {
         struct frame {
@@ -1785,29 +1776,16 @@ class writer
             bool below;
         };
 
-        static constexpr std::uint64_t back_edge_size =
-            heads::head_size(std::to_underlying(rfc8949::tag_number::sharedref)) + heads::initial_byte_size;
-
         std::span<item const> items;
         std::vector<std::uint8_t> on_path;
         std::vector<std::uint8_t> target;
         std::vector<std::size_t> open;
-        std::uint64_t direct = 0;
-        std::uint64_t in_tree = 0;
 
         std::size_t followed(std::size_t const at) const
         {
             if (kind::is_extended(items[at], kind::extended_shared_reference)) [[unlikely]]
                 return static_cast<std::size_t>(static_cast<std::int64_t>(at) + items[at].uni.i64);
             return at;
-        }
-
-        std::expected<void, error> count(std::uint64_t const bytes, bool const below)
-        {
-            direct += bytes;
-            if (!below)
-                in_tree += bytes;
-            return validity::check_amplification(direct, in_tree);
         }
 
     public:
@@ -1820,8 +1798,6 @@ class writer
         std::expected<void, error> find_back_edges(std::size_t const root)
         {
             std::vector<frame> path;
-            if (auto const r = count(size_of(items[root]), false); !r) [[unlikely]]
-                return r;
             on_path[root] = 1;
             path.push_back({root, root + 1, children_of(items[root]), false});
             while (!path.empty()) {
@@ -1832,25 +1808,15 @@ class writer
                     continue;
                 }
                 std::size_t const child = f.child;
-                bool const below = f.below;
                 f.child += kind::width_of(items[child]);
                 --f.left;
-                bool const reference = kind::is_extended(items[child], kind::extended_shared_reference);
                 std::size_t const next = followed(child);
-                if (reference && !below)
-                    in_tree += heads::head_size(std::to_underlying(rfc8949::tag_number::sharedref)) +
-                               heads::initial_byte_size +
-                               heads::argument_size(kind::info_of(items[child].tag));
                 if (on_path[next] != 0) {
                     target[next] = 1;
-                    if (auto const r = count(back_edge_size, true); !r) [[unlikely]]
-                        return r;
                     continue;
                 }
-                if (auto const r = count(size_of(items[next]), below || reference); !r) [[unlikely]]
-                    return r;
                 on_path[next] = 1;
-                path.push_back({next, next + 1, children_of(items[next]), below || reference});
+                path.push_back({next, next + 1, children_of(items[next]), false});
             }
             return {};
         }

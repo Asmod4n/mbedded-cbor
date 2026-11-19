@@ -172,7 +172,7 @@ TEST_CASE("simple value: structs reads and writes every simple value 0 to 255")
         }
         REQUIRE(r.has_value());
         CHECK_EQ(std::to_underlying(**r), v);
-        auto const out = cbor::structs<cbor::simple_value>::encode(static_cast<cbor::simple_value>(v));
+        auto const out = cbor::encode<cbor::simple_value>(static_cast<cbor::simple_value>(v));
         REQUIRE(out.has_value());
         CHECK_EQ(*out, wire_of(v));
     }

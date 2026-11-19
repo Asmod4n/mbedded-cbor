@@ -17,20 +17,19 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 using cbor::error;
 
-// Each test in this file is one claim of the former advanced internals guide that a caller can check. The facts of that
-// guide stand in tools/doc/groups/lazy.dox, decode.dox, path.dox, schema.dox and structs.dox, or in the comment of the
-// test that checks them. The tests exist so that a change of the mechanism that breaks a claim fails here. How the
-// documents are tested. Every example of a former guide is a doctest case. The cases of the guide <name> are in
-// test/doc_<name>.cpp, and their names start with "doc <name>:". The cases of the advanced guide <name> are in
-// test/doc_advanced_<name>.cpp, and their names start with "doc advanced <name>:". The cases of this file start with
-// "doc internals:". A test builds the input that a comment of the document shows as text with encode_in_preferred_form() of
-// test/reference.hpp. The examples of the reference pages of a group come from test/doc_reference_<group>.cpp. The
-// snippet markers that the comments of the headers name select them. The names of those cases start with "doc reference
-// <group>:". A claim about allocations has its test in test/allocation.cpp. test/cts.cpp runs the JSONPath Compliance
-// Test Suite. The reference site, https://asmod4n.github.io/mbedded-cbor/, is built from the comments of the headers
-// through Doxygen, and from the group pages in tools/site/reference. Each example block of a page runs in the browser,
-// in the library compiled to WebAssembly. The build of the site runs each example and compares its result with the page.
-// With CBOR_FUZZ, CMake builds one fuzz target for each public entry of the directory fuzz.
+// Each test in this file is one claim of the former advanced internals guide that a caller can check. The tests exist
+// so that a change of the mechanism that breaks a claim fails here. How the documents are tested. Every example of a
+// former guide is a doctest case. The cases of the guide <name> are in test/doc_<name>.cpp, and their names start with
+// "doc <name>:". The cases of the advanced guide <name> are in test/doc_advanced_<name>.cpp, and their names start with
+// "doc advanced <name>:". The cases of this file start with "doc internals:". A test builds the input that a comment of
+// the document shows as text with encode_in_preferred_form() of test/reference.hpp. The examples of the reference pages
+// of a group come from test/doc_reference_<group>.cpp. The snippet markers that the comments of the headers name select
+// them. The names of those cases start with "doc reference <group>:". A claim about allocations has its test in
+// test/allocation.cpp. test/cts.cpp runs the JSONPath Compliance Test Suite. The reference site,
+// https://asmod4n.github.io/mbedded-cbor-docs/, is built from the comments of the headers by the repository
+// Asmod4n/mbedded-cbor-docs. Each example of a page runs in the browser, in the library compiled to WebAssembly. The
+// build of the site runs each example and compares its result with the page. With CBOR_FUZZ, CMake builds one fuzz
+// target for each public entry of the directory fuzz.
 
 // The section "How the documents are tested" states that encode_in_preferred_form() builds the input that a comment shows as text.
 // The test exists because every document test depends on that.
@@ -120,14 +119,14 @@ TEST_CASE("doc internals: an item keeps the bits of a NaN")
 // significand of a shorter NaN with zeros on the right, so a NaN reads back with the bits that were written.
 TEST_CASE("doc internals: a NaN takes the shortest width that keeps its bits")
 {
-    auto const of_double = [](std::uint64_t const bits) { return cbor::structs<double>::encode(std::bit_cast<double>(bits))->size(); };
-    auto const of_float = [](std::uint32_t const bits) { return cbor::structs<float>::encode(std::bit_cast<float>(bits))->size(); };
+    auto const of_double = [](std::uint64_t const bits) { return cbor::encode<double>(std::bit_cast<double>(bits))->size(); };
+    auto const of_float = [](std::uint32_t const bits) { return cbor::encode<float>(std::bit_cast<float>(bits))->size(); };
     CHECK_EQ(of_double(0x7ff8'0400'0000'0000), 3u);
     CHECK_EQ(of_double(0x7ff8'0000'2000'0000), 5u);
     CHECK_EQ(of_double(0x7ff8'0000'0000'0001), 9u);
     CHECK_EQ(of_float(0x7fc0'2000), 3u);
     CHECK_EQ(of_float(0x7fc0'0001), 5u);
-    auto const back = cbor::structs<float>::decode(*cbor::structs<float>::encode(std::bit_cast<float>(std::uint32_t{0x7fc0'0001})));
+    auto const back = cbor::structs<float>::decode(*cbor::encode<float>(std::bit_cast<float>(std::uint32_t{0x7fc0'0001})));
     REQUIRE(back.has_value());
     CHECK_EQ(std::bit_cast<std::uint32_t>(**back), 0x7fc0'0001u);
 }

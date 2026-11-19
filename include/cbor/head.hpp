@@ -39,7 +39,9 @@ namespace detail
 
 class encoding;
 class extended_diagnostic_notation;
-class generic;
+class edn_text;
+template <bool Reflected>
+class basic_generic;
 class reflection;
 class well_formedness;
 
@@ -79,6 +81,8 @@ struct tree_decoder;
 }
 
 std::expected<owning<item>, error> decode(std::string_view encoded);
+
+std::expected<owning<item>, error> decode_cycles(std::string_view encoded);
 
 std::expected<std::size_t, error> item_size(std::string_view encoded);
 
@@ -752,6 +756,8 @@ class heads
 
     friend class detail::extended_diagnostic_notation;
 
+    friend class detail::edn_text;
+
     friend class cbor::path;
 
     friend class detail::canonical_ids;
@@ -762,6 +768,8 @@ class heads
     friend struct detail::tree_decoder;
 
     friend std::expected<owning<item>, error> cbor::decode(std::string_view encoded);
+
+    friend std::expected<owning<item>, error> cbor::decode_cycles(std::string_view encoded);
 
     friend struct cbor::item;
 
@@ -775,7 +783,8 @@ class heads
 
     friend class detail::reflection;
 
-    friend class detail::generic;
+    template <bool>
+    friend class detail::basic_generic;
 
     template <class>
     friend class cbor::structs;

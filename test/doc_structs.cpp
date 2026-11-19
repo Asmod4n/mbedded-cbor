@@ -21,9 +21,9 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 using cbor::error;
 
-// Each test in this file is one example of the former structs guide, whose facts now stand in
-// tools/doc/groups/structs.dox. The tests exist so that every example compiles and gives the result that the text
-// states. Where an example writes a comment with the input as text, the test builds the same input with encode_in_preferred_form().
+// Each test in this file is one example of the former structs guide. The tests exist so that every example compiles and
+// gives the result that the text states. Where an example writes a comment with the input as text, the test builds the
+// same input with encode_in_preferred_form().
 
 namespace doc_structs
 {
@@ -44,7 +44,7 @@ struct person {
 // meets two std::expected values and a ref in it.
 std::expected<std::string, cbor::error> round_trip()
 {
-    auto bytes = cbor::structs<person>::encode(person{"ann", 30, {"admin"}, address{"Graz", "8010"}});
+    auto bytes = cbor::encode<person>(person{"ann", 30, {"admin"}, address{"Graz", "8010"}});
     if (!bytes)
         return std::unexpected(bytes.error());
     auto const text = cbor::diagnostic_notation(*bytes);
@@ -76,6 +76,9 @@ struct kinds {
 
 } // namespace doc_structs
 
+CBOR_DEFINE_TYPE_MEMBERS(doc_structs::address, cbor::untagged, city, zip);
+CBOR_DEFINE_TYPE_MEMBERS(doc_structs::person, cbor::untagged, name, age, tags, home);
+CBOR_DEFINE_TYPE_MEMBERS(doc_structs::kinds, cbor::untagged, b, u, f, d, raw, l, s, m, c);
 CBOR_DEFINE_TYPE(doc_structs::header, cbor::tag{160060},
                  cbor::member{"content-type", &doc_structs::header::content_type});
 
@@ -94,7 +97,7 @@ TEST_CASE("doc structs: write a struct and read it back")
 TEST_CASE("doc structs: types")
 {
     kinds const k{true, 7, 1.5f, 2.5, {std::byte{1}}, {1, 2}, {3}, {{"a", 1}}, color::green};
-    auto const bytes = cbor::structs<kinds>::encode(k);
+    auto const bytes = cbor::encode<kinds>(k);
     REQUIRE(bytes.has_value());
     CHECK_EQ(cbor::diagnostic_notation(*bytes),
              R"({"b": true, "c": 1, "d": 2.5, "f": 1.5, "l": [1, 2], "m": {"a": 1}, "s": 258([3]), "u": 7, "raw": 64(h'01')})");
@@ -102,19 +105,19 @@ TEST_CASE("doc structs: types")
     REQUIRE(back.has_value());
     CHECK_EQ((*back)->c, color::green);
     CHECK_EQ((*back)->m.at("a"), 1);
-    CHECK_EQ(cbor::diagnostic_notation(*cbor::structs<std::optional<int>>::encode(std::nullopt)), "null");
+    CHECK_EQ(cbor::diagnostic_notation(*cbor::encode<std::optional<int>>(std::nullopt)), "null");
 }
 
 // The section "Keys" shows a key that a description gives, the tag that the description writes, and that an
 // empty optional member has no key.
 TEST_CASE("doc structs: keys")
 {
-    auto const bytes = cbor::structs<header>::encode(header{"text/plain"});
+    auto const bytes = cbor::encode<header>(header{"text/plain"});
     REQUIRE(bytes.has_value());
     CHECK_EQ(cbor::diagnostic_notation(*bytes), R"(160060({"content-type": "text/plain"}))");
     CHECK_EQ(cbor::structs<header>::decode(encode_in_preferred_form(M("content-type"s, "text/plain"s))).error(),
              error::incorrect_type);
-    auto const none = cbor::structs<person>::encode(person{"bob", 40, {}, std::nullopt});
+    auto const none = cbor::encode<person>(person{"bob", 40, {}, std::nullopt});
     REQUIRE(none.has_value());
     CHECK_EQ(cbor::diagnostic_notation(*none), R"({"age": 40, "name": "bob", "tags": []})");
     auto const back = cbor::structs<person>::decode(std::string(*none));

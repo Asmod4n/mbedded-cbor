@@ -40,6 +40,15 @@ struct record {
     std::vector<inner> people;
 };
 
+} // namespace fuzz::structs
+
+CBOR_DEFINE_TYPE_MEMBERS(fuzz::structs::inner, cbor::untagged, id, name);
+CBOR_DEFINE_TYPE_MEMBERS(fuzz::structs::record, cbor::untagged, number, small, flag, wide, narrow, text, list, maybe,
+                         table, pair, nested, people);
+
+namespace fuzz::structs
+{
+
 // Every form of decode reads the input to the value that the std::string form reads: a std::shared_ptr to the
 // bytes, an owner with a span into them, and both with a default target. The value is compared by its encoding.
 template <class T>
@@ -48,7 +57,7 @@ void decode_forms(std::string_view const input, std::string const &expected)
     auto const bytes = std::make_shared<std::vector<char> const>(input.begin(), input.end());
     auto const encoded_as = [&](auto const &decoded) {
         require(decoded.has_value());
-        auto const again = cbor::structs<T>::encode(**decoded);
+        auto const again = cbor::encode<T>(**decoded);
         require(again.has_value() && *again == expected);
     };
     encoded_as(cbor::structs<T>::decode(bytes));
@@ -63,20 +72,20 @@ template <class T>
 void encode_targets(T const &value, std::string const &expected)
 {
     std::vector<char> chars;
-    require(cbor::structs<T>::encode(chars, value) == expected.size() && std::ranges::equal(chars, expected));
+    require(cbor::encode<T>(chars, value) == expected.size() && std::ranges::equal(chars, expected));
     std::vector<char> exact(expected.size());
-    require(cbor::structs<T>::encode(std::span<char>(exact), value) == expected.size() &&
+    require(cbor::encode<T>(std::span<char>(exact), value) == expected.size() &&
             std::ranges::equal(exact, expected));
     std::vector<char> longer(expected.size() + 1);
-    require(cbor::structs<T>::encode(std::span<char>(longer), value) == expected.size() &&
+    require(cbor::encode<T>(std::span<char>(longer), value) == expected.size() &&
             std::ranges::equal(std::span(longer).first(expected.size()), expected));
     if (!expected.empty()) {
         std::vector<char> short_by_one(expected.size() - 1);
-        auto const refused = cbor::structs<T>::encode(std::span<char>(short_by_one), value);
+        auto const refused = cbor::encode<T>(std::span<char>(short_by_one), value);
         require(!refused && refused.error() == cbor::error::no_buffer_space);
     }
     string_writer w;
-    require(cbor::structs<T>::encode(w, value) == expected.size() && w.encoded == expected);
+    require(cbor::encode<T>(w, value) == expected.size() && w.encoded == expected);
 }
 
 // cbor::structs reads any CBOR that has the shape of the struct. What it reads, it writes back, and the written bytes
@@ -87,11 +96,11 @@ void round_trip(std::string_view const input)
     auto const value = cbor::structs<T>::decode(std::string(input));
     if (!value)
         return;
-    auto const first = cbor::structs<T>::encode(**value);
+    auto const first = cbor::encode<T>(**value);
     require(first.has_value());
     auto const again = cbor::structs<T>::decode(std::string(*first));
     require(again.has_value());
-    auto const second = cbor::structs<T>::encode(**again);
+    auto const second = cbor::encode<T>(**again);
     require(second.has_value() && *second == *first);
     auto const end = cbor::item_size(*first);
     require(end.has_value() && *end == first->size());

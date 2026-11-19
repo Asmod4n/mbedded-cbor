@@ -167,6 +167,27 @@ TEST_CASE("recursion limit: encode")
     CHECK_EQ(*failure, error::nesting_depth_exceeded);
 }
 
+// cbor::to_edn of a tree recurses once for each array, as encode does. The tree comes from a decode on the main
+// thread; its text on the small stack stops where that stack ends.
+TEST_CASE("recursion limit: to_edn")
+{
+    auto const held_tree = cbor::decode(*cbor::diag2cbor(std::string(held, '[') + "0" + std::string(held, ']')));
+    REQUIRE(held_tree.has_value());
+    CHECK(cbor::to_edn(*held_tree).has_value());
+    auto const deep = cbor::diag2cbor(std::string(test::levels_main_thread_holds, '[') + "0" +
+                                      std::string(test::levels_main_thread_holds, ']'))
+                          .and_then([](std::string const &bytes) { return cbor::decode(bytes); });
+    if constexpr (!test::main_thread_holds_deep_input) {
+        if (!deep) {
+            CHECK_EQ(deep.error(), error::nesting_depth_exceeded);
+            return;
+        }
+    }
+    REQUIRE(deep.has_value());
+    refused_on_small_stack([&deep] { return cbor::to_edn(*deep); });
+    refused_on_small_stack([&deep] { return cbor::to_edn(**deep); });
+}
+
 // A shared value and a reference to it. A lazy at the second element meets the reference. It reads the mark at the depth
 // of its own position. So the stack holds the frames of both nests.
 TEST_CASE("recursion limit: a shared value read through its reference")

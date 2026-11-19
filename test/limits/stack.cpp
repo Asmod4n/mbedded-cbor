@@ -54,6 +54,7 @@ struct holder {
 } // namespace
 } // namespace limits_stack
 
+CBOR_DEFINE_TYPE_MEMBERS(limits_stack::node, cbor::untagged, c);
 CBOR_DEFINE_DERIVED_TYPE_MEMBERS(limits_stack::leaf, limits_stack::twig, cbor::tag{1525}, n);
 CBOR_DEFINE_DERIVED_TYPE_MEMBERS(limits_stack::limb, limits_stack::twig, cbor::tag{1526}, n, next);
 CBOR_DEFINE_TYPE_MEMBERS(limits_stack::holder, cbor::tag{1527}, held);
@@ -166,7 +167,7 @@ read_values every_reader(std::size_t const levels, holder const &chain, outcome 
     kept.nodes = cbor::structs<node>::decode(nodes_around_empty((levels - 1) / links_per_level));
     reads(*kept.nodes, expected);
     if (*kept.nodes)
-        reads(cbor::structs<node>::encode(***kept.nodes), expected);
+        reads(cbor::encode<node>(***kept.nodes), expected);
     auto const written = cbor::schema<holder>::encode(chain);
     reads(written, chain_expected);
     if (written) {

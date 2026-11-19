@@ -48,11 +48,20 @@ struct person {
 };
 // end struct-decl
 
+} // namespace doc_comparison
+
+// begin struct-describe
+CBOR_DEFINE_TYPE_MEMBERS(doc_comparison::person, cbor::untagged, name, age);
+// end struct-describe
+
+namespace doc_comparison
+{
+
 // The section "Write a struct and read it back" gives the round trip of an aggregate through structs.
 TEST_CASE("doc comparison: write a struct and read it back")
 {
     // begin struct
-    auto bytes = cbor::structs<person>::encode(person{"ann", 30});
+    auto bytes = cbor::encode(person{"ann", 30});
     auto const back = cbor::structs<person>::decode(std::move(*bytes));
     // (*back)->name is "ann", (*back)->age is 30
     // end struct

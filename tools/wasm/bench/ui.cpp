@@ -226,7 +226,7 @@ __attribute__((export_name("server_encode"))) std::uint64_t server_encode(std::u
     for (std::uint32_t f = 0; f < form_fields; ++f)
         std::get<1>(message).fields.push_back(
             server_field{"field" + std::to_string(f), "Field " + std::to_string(f), f % 2 ? "number" : "text"});
-    wire = *cbor::structs<std::tuple<server_table, server_form>>::encode(message);
+    wire = *cbor::encode<std::tuple<server_table, server_form>>(message);
     return packed(wire);
 }
 

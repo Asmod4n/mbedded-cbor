@@ -124,9 +124,9 @@ TEST_CASE("doc reference item: item::visit")
 }
 #endif
 
-// tools/doc/groups/decode.dox, snippet decode group: the EXAMPLES section of the man page of the group decode uses
-// decode and encode together. So a reader sees one round trip. The test checks each value that the comments of the
-// example state.
+// The snippet of the group decode, between the markers "decode group". The example on the page of the group decode
+// uses the encoder, decode and encode together. So a reader sees one round trip. The test checks each value that the
+// comments of the example state.
 TEST_CASE("doc reference item: the example of the group decode")
 {
     // [decode group]

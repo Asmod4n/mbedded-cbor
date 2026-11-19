@@ -153,7 +153,7 @@ __attribute__((export_name("series_make"))) std::uint32_t series_make(std::uint3
     for (std::uint32_t i = 0; i < n; ++i)
         values[i] = static_cast<std::int32_t>(1000 + i % 1000);
     auto const bytes = packed ? cbor::schema<series>::encode(series{7, std::move(values)})
-                              : cbor::structs<plain_series>::encode(plain_series{7, std::move(values)});
+                              : cbor::encode<plain_series>(plain_series{7, std::move(values)});
     return doc_load(bytes->data(), bytes->size());
 }
 

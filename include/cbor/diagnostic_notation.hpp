@@ -47,6 +47,8 @@ namespace cbor
 
 std::expected<owning<item>, error> parse_edn(std::string_view text);
 constexpr std::expected<std::string, error> diag2cbor(std::string_view text);
+std::expected<std::string, error> to_edn(item const &root);
+std::expected<std::string, error> to_edn(owning<item> const &tree);
 
 namespace detail
 {
@@ -55,6 +57,7 @@ namespace dom
 {
 class reader;
 }
+class edn_text;
 
 class extended_diagnostic_notation
 {
@@ -1198,12 +1201,10 @@ class extended_diagnostic_notation
         {
             if (!detail::validity::check_argument<true>(major, count)) [[unlikely]]
                 return std::unexpected(error::syntax_error);
-            static_assert(std::is_trivially_destructible_v<item>, "The zone frees its memory and runs no destructor.");
             std::size_t const n = values.size() - start;
             std::span<item const> const children = std::span<item const>(values).subspan(start);
-            item *const storage = std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(n);
-            std::ranges::uninitialized_copy(children, std::span<item>(storage, n));
-            std::span<item const> const block(storage, n);
+            std::pmr::vector<item> &block = decoded.items_reserved(n);
+            std::ranges::copy(children, std::back_inserter(block));
             while (values.size() != start)
                 values.pop_back();
             item container = scalar_item(major, count);
@@ -2776,6 +2777,86 @@ class extended_diagnostic_notation
         return number_of(value) + (width == preferred ? std::string{} : indicator);
     }
 
+    static std::expected<void, error> write_item(std::string &out, item const &node)
+    {
+        if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
+            return r;
+        std::uint8_t const info = node.additional_information;
+        switch (node.m_type) {
+        case cbor::type::unsigned_integer:
+            out += std::to_string(node.via.u64) + encoding_indicator(info, node.via.u64);
+            break;
+        case cbor::type::negative_integer:
+            out += node.via.u64 == std::numeric_limits<std::uint64_t>::max() ? std::string("-18446744073709551616")
+                                                                              : "-" + std::to_string(node.via.u64 + 1);
+            out += encoding_indicator(info, node.via.u64);
+            break;
+        case cbor::type::byte_string:
+            out += "h'";
+            for (std::byte const b : node.via.bin)
+                encode_base16(out, std::to_integer<std::uint8_t>(b));
+            out += "'" + encoding_indicator(info, node.via.bin.size());
+            break;
+        case cbor::type::text_string:
+            out += quoted_of(node.via.str) + encoding_indicator(info, node.via.str.size());
+            break;
+        case cbor::type::array:
+        case cbor::type::map: {
+            bool const map = node.m_type == cbor::type::map;
+            std::span<item const> const children = map ? node.via.map : node.via.array;
+            std::size_t const count = map ? children.size() / rfc8949::data_items_per_pair : children.size();
+            out += map ? "{" : "[";
+            if (std::string const indicator = encoding_indicator(info, count); !indicator.empty())
+                out += indicator + " ";
+            for (std::size_t i = 0; i != children.size(); ++i) {
+                if (i != 0)
+                    out += map && i % rfc8949::data_items_per_pair != 0 ? ": " : ", ";
+                if (auto const r = write_item(out, children[i]); !r) [[unlikely]]
+                    return r;
+            }
+            out += map ? "}" : "]";
+            break;
+        }
+        case cbor::type::tag:
+        case cbor::type::typed_array:
+        case cbor::type::unsigned_bignum:
+        case cbor::type::negative_bignum:
+            out += std::to_string(node.via.tag.number) + encoding_indicator(info, node.via.tag.number) + "(";
+            if (auto const r = write_item(out, *node.via.tag.content); !r) [[unlikely]]
+                return r;
+            out += ")";
+            break;
+        case cbor::type::shared_reference:
+            detail::validity::throw_logic_error_if(true, "cbor::to_edn: the walk met a shared_reference");
+            break;
+        case cbor::type::false_value:
+            out += "false";
+            break;
+        case cbor::type::true_value:
+            out += "true";
+            break;
+        case cbor::type::null:
+            out += "null";
+            break;
+        case cbor::type::undefined:
+            out += "undefined";
+            break;
+        case cbor::type::simple_value:
+            out += "simple(" + std::to_string(std::to_underlying(node.via.simple_value)) + ")";
+            break;
+        case cbor::type::half_float:
+        case cbor::type::single_float:
+        case cbor::type::double_float: {
+            auto const width = static_cast<rfc8949::simple_information>(
+                std::to_underlying(rfc8949::simple_information::half_precision_float) +
+                (std::to_underlying(node.m_type) - std::to_underlying(cbor::type::half_float)));
+            out += float_of(std::to_underlying(width), detail::ieee754::encode_float(width, node.via.f64));
+            break;
+        }
+        }
+        return {};
+    }
+
     static constexpr bool break_consumed(detail::heads::decoder<true> &d)
     {
         if (!detail::validity::bytes_fit(detail::heads::initial_byte_size, d.encoded.size()) ||
@@ -2922,6 +3003,160 @@ class extended_diagnostic_notation
     friend std::expected<owning<item>, error> cbor::parse_edn(std::string_view text);
 
     friend class dom::reader;
+
+    friend std::expected<std::string, error> cbor::to_edn(item const &root);
+
+    friend std::expected<std::string, error> cbor::to_edn(owning<item> const &tree);
+
+    friend class detail::edn_text;
+};
+
+class edn_text
+{
+    struct open {
+        std::uint64_t items;
+        std::uint64_t done;
+        major_type major;
+    };
+
+    using notation = extended_diagnostic_notation;
+
+    std::string text;
+    std::vector<open> opened;
+    major_type string_major = major_type::text_string;
+    std::uint64_t string_left = 0;
+    std::uint8_t string_info = 0;
+
+    void begin_item()
+    {
+        if (opened.empty() || opened.back().major == major_type::tag || opened.back().done == 0)
+            return;
+        bool const value = opened.back().major == major_type::map && opened.back().done % rfc8949::data_items_per_pair != 0;
+        text += value ? ": " : ", ";
+    }
+
+    void end_item()
+    {
+        while (!opened.empty()) {
+            open &o = opened.back();
+            if (++o.done != o.items)
+                return;
+            text += o.major == major_type::array ? "]" : o.major == major_type::map ? "}" : ")";
+            opened.pop_back();
+        }
+    }
+
+    void end_string()
+    {
+        text += string_major == major_type::text_string ? "\"" : "'";
+        text += notation::encoding_indicator(string_info, 0);
+        end_item();
+    }
+
+public:
+    void write_head(major_type const major, std::uint8_t const info, std::uint64_t const argument)
+    {
+        begin_item();
+        std::string const indicator = notation::encoding_indicator(info, argument);
+        switch (major) {
+        case major_type::unsigned_integer:
+            text += std::to_string(argument) + indicator;
+            end_item();
+            return;
+        case major_type::negative_integer:
+            text += argument == std::numeric_limits<std::uint64_t>::max() ? std::string("-18446744073709551616")
+                                                                          : "-" + std::to_string(argument + 1);
+            text += indicator;
+            end_item();
+            return;
+        case major_type::byte_string:
+        case major_type::text_string:
+            text += major == major_type::text_string ? "\"" : "h'";
+            string_major = major;
+            string_left = argument;
+            string_info = indicator.empty() ? std::uint8_t{0} : info;
+            if (argument == 0)
+                end_string();
+            return;
+        case major_type::array:
+        case major_type::map:
+            text += major == major_type::map ? "{" : "[";
+            if (!indicator.empty())
+                text += indicator + " ";
+            if (argument == 0) {
+                text += major == major_type::map ? "}" : "]";
+                end_item();
+                return;
+            }
+            opened.push_back({major == major_type::map ? argument * rfc8949::data_items_per_pair : argument, 0, major});
+            return;
+        case major_type::tag:
+            text += std::to_string(argument) + indicator + "(";
+            opened.push_back({1, 0, major});
+            return;
+        case major_type::simple:
+            break;
+        }
+        switch (info) {
+        case std::to_underlying(simple_value::false_value):
+            text += "false";
+            break;
+        case std::to_underlying(simple_value::true_value):
+            text += "true";
+            break;
+        case std::to_underlying(simple_value::null):
+            text += "null";
+            break;
+        case std::to_underlying(simple_value::undefined):
+            text += "undefined";
+            break;
+        case std::to_underlying(rfc8949::simple_information::half_precision_float):
+        case std::to_underlying(rfc8949::simple_information::single_precision_float):
+        case std::to_underlying(rfc8949::simple_information::double_precision_float):
+            text += notation::float_of(info, argument);
+            break;
+        default:
+            text += "simple(" + std::to_string(argument) + ")";
+            break;
+        }
+        end_item();
+    }
+
+    void write_head(major_type const major, std::uint64_t const argument)
+    {
+        write_head(major, detail::heads::preferred_argument_info(argument), argument);
+    }
+
+    void write_payload(std::string_view const part)
+    {
+        if (part.empty())
+            return;
+        if (string_major == major_type::text_string) {
+            std::string const quoted = notation::quoted_of(part);
+            text.append(quoted, 1, quoted.size() - std::string_view("\"\"").size());
+        } else {
+            text += notation::hex_of(part);
+        }
+        string_left -= part.size();
+        if (string_left == 0)
+            end_string();
+    }
+
+    void write_payload(std::span<std::byte const> const part)
+    {
+        if (part.empty())
+            return;
+        for (std::byte const b : part)
+            notation::encode_base16(text, std::to_integer<std::uint8_t>(b));
+        string_left -= part.size();
+        if (string_left == 0)
+            end_string();
+    }
+
+    std::string release()
+    {
+        return std::move(text);
+    }
 };
 
 }
@@ -3111,11 +3346,8 @@ consteval auto operator""_edn()
  * @retval string_length_exceeded a string is longer than `limits::string_length`, where a build sets that limit
  * @retval container_elements_exceeded an array or a map holds more than `limits::container_elements` items, where a
  * build sets that limit
- * @retval sharedref_index_not_marked a tag 29 whose index names no tag 28 before it
- * @retval sharedref_not_defined a tag 29 that names a tag 28 whose content is only tags 28 and this tag 29, as in
- * `28(29(0))`
- * @retval inadmissible_type_for_tag_content a tag 29 over an item that is not an unsigned integer, or a typed array
- * (RFC 8746) whose content is not a byte string of whole elements
+ * @retval inadmissible_type_for_tag_content a typed array (RFC 8746) whose content is not a byte string of whole
+ * elements
  * @see cbor::diag2cbor()
  * @see item::to_edn()
  *
@@ -3134,6 +3366,69 @@ inline std::expected<std::string, error> item::to_edn() const
     if (auto const r = encode(bytes, *this); !r) [[unlikely]]
         return std::unexpected(r.error());
     return diagnostic_notation(bytes);
+}
+
+/**
+ * @brief Gives the text of the tree at `root` in the extended diagnostic notation (EDN).
+ *
+ * A tree with no `shared_reference` is walked; the call reads no bytes. Each integer, length and tag number carries
+ * the encoding indicator of the width that its item keeps, as cbor::diagnostic_notation() writes it, and a float
+ * keeps its width. A tag 24 gives its byte string. cbor::parse_edn() reads the text back into the same tree.
+ * A `root` that holds a `shared_reference` (a tree of cbor::decode_cycles()) gives the text of the bytes of
+ * cbor::encode(): a tag 28 stands only on a value that a tag 29 names, and each tag 29 has the index of its mark in
+ * the text, in its shortest head. A `shared_reference` stands for its target, and an inner `root` also writes the
+ * values above it that its references name. cbor::decode_cycles() of the bytes of cbor::diag2cbor() of the text of
+ * the root of the tree gives a tree with the same targets.
+ *
+ * @code{.example}
+ * bytes: 82 01 19 00 02
+ * call: auto const tree = cbor::decode(bytes)
+ * result: owning item of [1, 2_1]
+ * call: cbor::to_edn(**tree)
+ * result: "[1, 2_1]"
+ * @endcode
+ *
+ * @retval nesting_depth_exceeded the tree, or the path through its references, is deeper than the stack of the
+ * thread holds
+ * @see cbor::to_edn(owning<item> const &)
+ * @see cbor::parse_edn()
+ *
+ * @ingroup tools
+ */
+inline std::expected<std::string, error> to_edn(item const &root)
+{
+    if (root.m_holds_shared_reference) [[unlikely]]
+        return root.to_edn();
+    std::string out;
+    if (auto const r = detail::extended_diagnostic_notation::write_item(out, root); !r) [[unlikely]]
+        return std::unexpected(r.error());
+    return out;
+}
+
+/**
+ * @brief Gives the text of the whole tree that `tree` owns in the extended diagnostic notation (EDN).
+ *
+ * The text is that of cbor::to_edn(item const &) of the root.
+ *
+ * @code{.example}
+ * bytes: d8 1c 81 d8 1d 00
+ * call: auto const tree = cbor::decode_cycles(bytes)
+ * result: owning item of 28([29(0)])
+ * call: cbor::to_edn(*tree)
+ * result: "28([29(0)])"
+ * @endcode
+ *
+ * @retval nesting_depth_exceeded the tree is deeper than the stack of the thread holds
+ * @throws std::logic_error `tree` owns no tree
+ * @see cbor::to_edn(item const &)
+ * @see cbor::decode_cycles()
+ *
+ * @ingroup tools
+ */
+inline std::expected<std::string, error> to_edn(owning<item> const &tree)
+{
+    std::ignore = detail::zone_owner::zone_found(tree, "cbor::to_edn: the owning item holds no decoded tree");
+    return to_edn(*tree);
 }
 
 }

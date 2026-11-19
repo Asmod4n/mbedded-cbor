@@ -1,6 +1,6 @@
 // Writes every interop case as one line to stdout. The line is "name TAB section TAB written TAB expected". Written and
 // expected are hex. Written comes from a public writer of the library. The writers are cbor::encode(item),
-// structs<T>::encode and schema<T>::encode. Expected holds the same value in bytes that do not come
+// cbor::encode of a value and schema<T>::encode. Expected holds the same value in bytes that do not come
 // from the writer under test. These bytes are the input of a re-encode, or bytes written by hand from RFC 8949 and RFC
 // 8746. A dash stands for a case with no expected bytes; the decoders must then only accept the written bytes. A writer
 // that refuses a value gives "!" and the error in place of written, so the driver reports it.
@@ -136,10 +136,10 @@ void corpora(std::filesystem::path const &dir)
 template <class T>
 std::expected<std::string, cbor::error> one_item(T const value)
 {
-    return cbor::structs<T>::encode(value);
+    return cbor::encode<T>(value);
 }
 
-// Every C++ integer type at its limits and every float width at its special values, through structs<T>::encode. The
+// Every C++ integer type at its limits and every float width at its special values, through cbor::encode. The
 // expected bytes are the preferred serialization of RFC 8949 4.2.1 and 4.2.2, written by hand. -2^64, a half float and a
 // simple value have no C++ type that structs writes, so their expected bytes are the input of a re-encode.
 void native_widths()
@@ -278,6 +278,10 @@ struct senml {
 
 } // namespace
 
+CBOR_DEFINE_TYPE_MEMBERS(inner, cbor::untagged, city, zip);
+CBOR_DEFINE_TYPE_MEMBERS(everything, cbor::untagged, flag, nothing, i8, i16, i32, i64, u8, u16, u32, u64, f32, f64,
+                         third, text, bytes, absent, list, reals, table, time, big, ubig, hue, home);
+
 template <>
 struct cbor::describe_members<senml> {
     static constexpr std::optional<cbor::tag> tag = cbor::untagged;
@@ -290,7 +294,7 @@ struct cbor::describe_members<senml> {
 namespace
 {
 
-// structs<T>::encode. The expected bytes are written by hand in the preferred serialization; the decoders compare
+// cbor::encode. The expected bytes are written by hand in the preferred serialization; the decoders compare
 // values. So a float that the library writes in another width still compares equal.
 void structs_cases()
 {
@@ -344,8 +348,8 @@ void structs_cases()
         "6475626967c249010000000000000000"           // "ubig": 2^64
         "6368756501"                                 // "hue": 1
         "64686f6d65a26463697479644772617a637a69706438303130";                                         // "home": {"city": "Graz", "zip": "8010"}
-    result_print("structs/everything", s, cbor::structs<everything>::encode(v), expected);
-    result_print("structs/senml", "RFC 8428 6", cbor::structs<senml>::encode(senml{"t", 1.5}), "a200617402f93e00");
+    result_print("structs/everything", s, cbor::encode<everything>(v), expected);
+    result_print("structs/senml", "RFC 8428 6", cbor::encode<senml>(senml{"t", 1.5}), "a200617402f93e00");
 }
 
 struct tire {

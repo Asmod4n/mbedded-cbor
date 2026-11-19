@@ -63,7 +63,8 @@ namespace cbor
 namespace detail
 {
 
-class generic;
+template <bool Reflected>
+class basic_generic;
 class pfr;
 
 }
@@ -3323,7 +3324,8 @@ class reflection
     template <class>
     friend class cbor::typed_array_view;
 
-    friend class detail::generic;
+    template <bool>
+    friend class detail::basic_generic;
 
     friend class detail::pfr;
 };
@@ -4645,7 +4647,7 @@ public:
      */
     template <class Target>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() &&
-                 detail::encoding::is_target_v<std::remove_reference_t<Target>>)
+                 detail::is_target_v<std::remove_reference_t<Target>>)
     CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(Target &&out, T const &value)
     {
         return encode<detail::description_place::inside>(std::forward<Target>(out), value);
@@ -4689,7 +4691,7 @@ private:
         if (!sum) [[unlikely]]
             return std::unexpected(sum.error());
         std::size_t const padded = *sum;
-        if constexpr (detail::encoding::byte_container<U> && requires { requires std::same_as<std::ranges::range_value_t<U>, char>; }) {
+        if constexpr (detail::byte_container<U> && requires { requires std::same_as<std::ranges::range_value_t<U>, char>; }) {
             std::size_t const at = std::ranges::size(target);
             auto const total = detail::validity::checked_add(at, padded);
             if (!total) [[unlikely]]
@@ -4701,7 +4703,7 @@ private:
             if (!written) [[unlikely]]
                 return std::unexpected(written.error());
             return *size;
-        } else if constexpr (!detail::encoding::byte_container<U> && requires { std::span<char>(target); }) {
+        } else if constexpr (!detail::byte_container<U> && requires { std::span<char>(target); }) {
             std::span<char> const out(target);
             if (detail::validity::bytes_fit(*size, out.size())) {
                 auto const written = detail::reflection::write_encoded<true, D>(out.first(*size), value, second);
@@ -4710,7 +4712,7 @@ private:
                 return *size;
             }
         }
-        decltype(auto) message = detail::encoding::message_of(target, *size);
+        decltype(auto) message = detail::message_of(target, *size);
         if constexpr (requires { std::span<char>(message); }) {
             std::span<char> const out(message);
             if (!detail::validity::bytes_fit(*size, out.size())) [[unlikely]]
@@ -5101,7 +5103,7 @@ public:
      */
     template <class Target>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() &&
-                 detail::encoding::is_target_v<std::remove_reference_t<Target>>)
+                 detail::is_target_v<std::remove_reference_t<Target>>)
     CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(Target &&out, T const &value)
     {
         return schema<T>::template encode<detail::description_place::apart>(std::forward<Target>(out), value);

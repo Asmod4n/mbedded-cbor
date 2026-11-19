@@ -18,9 +18,8 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 using cbor::error;
 
-// Each test in this file is one example of the former schema guide, whose facts now stand in
-// tools/doc/groups/schema.dox. The tests exist so that every example compiles and gives the result that the text
-// states.
+// Each test in this file is one example of the former schema guide. The tests exist so that every example compiles and
+// gives the result that the text states.
 
 namespace doc_packed
 {
