@@ -264,9 +264,14 @@ bool const broken = doc.is_discarded();
 | g++ 16, `-std=c++26 -freflection` | Linux | every part, and the check of each description against the members |
 | g++ 15, clang 21 (Debian stable with trixie-backports), `-std=c++23` | Linux | every part in C++23 |
 | AppleClang of Xcode 26 | macOS 26 | every part in C++23 |
+| clang-cl of Visual Studio | Windows x64 | every part in C++23 |
+| cl.exe (MSVC) | Windows | not supported |
 
-On Windows the library builds with clang-cl, the clang frontend. The
-frontend of MSVC is refused at the first include.
+On Windows the library builds with clang-cl, the clang frontend of
+Visual Studio. cl.exe is not supported: it cannot evaluate the
+compile-time code of `cbor::schema`, `cbor::structs` and `cbor::at_path`.
+The library stops at the first include with an error when cl.exe
+compiles it.
 
 The library reads the bounds of the stack of each thread. It compiles
 for Linux (glibc and musl), macOS, Windows on x64, WebAssembly without
