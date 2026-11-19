@@ -169,7 +169,7 @@ class reader
     [[gnu::always_inline, gnu::flatten]] static bool
     byte_match(std::span<char const> const buf, std::size_t const at, std::string_view const pattern)
     {
-        return std::ranges::equal(bytes_at<N>(buf, at), pattern.substr(0, N));
+        return std::ranges::equal(bytes_at<N>(buf, at), pattern);
     }
 
     CBOR_ALWAYS_INLINE static unsigned char byte(std::span<char const> const buf, std::size_t const at)
@@ -738,7 +738,8 @@ class reader
     CBOR_ALWAYS_INLINE static std::size_t read_false(std::span<char const> const buf, std::size_t const cur,
                                                      node &x)
     {
-        if (byte_match<literal_false.size() - 1>(buf, cur + 1, literal_false.substr(1))) [[likely]] {
+        static constexpr std::string_view rest = validity::subspan(literal_false, validity::offset{1});
+        if (byte_match<rest.size()>(buf, cur + 1, rest)) [[likely]] {
             x.m_tag = kind::word(0, std::to_underlying(simple_value::false_value),
                                kind::type_bool | kind::subtype_false);
             return cur + literal_false.size();

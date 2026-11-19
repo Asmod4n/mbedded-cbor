@@ -506,7 +506,7 @@ public:
             if (decoded->block.items.size() - first < e.size) [[unlikely]]
                 decoded->block.grow(written, first + e.size);
             auto const inner = out.decode_item<Cycles>(
-                first, e.first, std::string_view(decoded->text).substr(e.first, e.size), e.depth, true);
+                first, e.first, detail::validity::checked_substr(decoded->text, e.first, e.size), e.depth, true);
             failed = failed || !inner;
             if (!failed) {
                 out.links.push_back({e.tagged, first});
