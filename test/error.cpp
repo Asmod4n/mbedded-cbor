@@ -41,7 +41,7 @@ constexpr std::array every_error{
     error::string_length_exceeded,
     error::container_elements_exceeded,
     error::not_singular_query,
-    error::amplification_limit_breach,
+    error::sharedref_not_cyclic,
 };
 
 } // namespace
@@ -50,7 +50,7 @@ constexpr std::array every_error{
 // member, so the size of the list equals the value of the last member.
 TEST_CASE("error: the list of the tests holds every member of cbor::error")
 {
-    CHECK_EQ(every_error.size(), static_cast<std::size_t>(error::amplification_limit_breach));
+    CHECK_EQ(every_error.size(), static_cast<std::size_t>(error::sharedref_not_cyclic));
 }
 
 // An error never equals the value-initialized enum: a result that holds error{} would read as no error.

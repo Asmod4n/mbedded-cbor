@@ -298,12 +298,13 @@ TEST_CASE("cbor::to_edn: an item inside a tree gives the text of that item")
 
 // A tree of cbor::decode_shared_refs keeps the node that each tag 28 stood before, and a shared_reference keeps its
 // index. The owning form writes both again and never follows a reference, so a cycle ends. A tag 28 with no reference
-// to it, a chain of two tags 28 and a tag 28 over a tag 29 keep the index of every later tag 29.
+// to it, a chain of two tags 28 and a tag 28 over a tag 29 keep the index of every later tag 29. Each tag 29 closes a
+// cycle, as decode_shared_refs requires.
 TEST_CASE("cbor::to_edn: a tree of decode_shared_refs keeps its tags 28 and 29")
 {
     for (std::string_view const text :
-         {"[28(1), 29(0)]", "28([29(0)])", "[28(1)]", "[28(28(5)), 29(0), 29(1)]", "[28(1), 28(29(0)), 29(1)]",
-          "28(999(29(0)))", "{28(\"k\"): 29(0)}", "[28(1), 29(0_1)]", "[28(1), 28(2), 29(1), 29(0)]",
+         {"28([1, 29(0)])", "28([29(0)])", "[28(1)]", "28(28([29(0), 29(1)]))", "28([28(29(0)), 29(1)])",
+          "28(999(29(0)))", "28({\"k\": 29(0)})", "28([1, 29(0_1)])", "28([1, 28([2, 29(1)]), 29(0)])",
           "2(28(h'05'))"}) {
         CAPTURE(text);
         CHECK_EQ(cbor::to_edn(shared_from_edn(text)), text);
@@ -314,16 +315,16 @@ TEST_CASE("cbor::to_edn: a tree of decode_shared_refs keeps its tags 28 and 29")
 // gives the text back, and cbor::decode_shared_refs of its bytes resolves each tag 29 to the node it named before.
 TEST_CASE("cbor::to_edn: the text of a shared tree reads back to the same tree")
 {
-    auto const shared = shared_from_edn("[28([1, 28(2)]), 29(0), 29(1)]");
+    auto const shared = shared_from_edn("28([1, 28([2, 29(1), 29(0)])])");
     auto const text = cbor::to_edn(shared);
     REQUIRE(text.has_value());
     auto const parsed = cbor::parse_edn(*text);
     REQUIRE(parsed.has_value());
     CHECK_EQ(cbor::to_edn(*parsed), text);
     auto const back = shared_from_edn(*text);
-    cbor::item const &first = element_of(*back, 0);
-    CHECK_EQ(target_of_reference(element_of(*back, 1)), &first);
-    CHECK_EQ(target_of_reference(element_of(*back, 2)), &element_of(first, 1));
+    cbor::item const &inner = element_of(*back, 1);
+    CHECK_EQ(target_of_reference(element_of(inner, 1)), &inner);
+    CHECK_EQ(target_of_reference(element_of(inner, 2)), &*back);
     auto const cycle = shared_from_edn(*cbor::to_edn(shared_from_edn("28([29(0)])")));
     CHECK_EQ(target_of_reference(element_of(*cycle, 0)), &*cycle);
 }
@@ -332,7 +333,7 @@ TEST_CASE("cbor::to_edn: the text of a shared tree reads back to the same tree")
 // there. The call refuses that use. An owning item that holds no tree is a wrong use too.
 TEST_CASE("cbor::to_edn: an item that holds a shared_reference without its owner is a wrong use")
 {
-    auto const shared = shared_from_edn("[28(1), 29(0)]");
+    auto const shared = shared_from_edn("28([1, 29(0)])");
     CHECK_THROWS_AS(std::ignore = cbor::to_edn(*shared), std::logic_error);
     CHECK_THROWS_AS(std::ignore = cbor::to_edn(element_of(*shared, 1)), std::logic_error);
     CHECK_EQ(cbor::to_edn(element_of(*shared, 0)), "1");

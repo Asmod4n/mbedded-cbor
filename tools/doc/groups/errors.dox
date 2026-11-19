@@ -44,7 +44,7 @@ Each value is one enumerator of `cbor::error`.
 - `string_length_exceeded`: a string is longer than `cbor::limits::string_length`.
 - `container_elements_exceeded`: a container has more items than `cbor::limits::container_elements`.
 - `not_singular_query`: `cbor::path::compile<T>` gets a %path that is not singular, and `T` is not `nodelist`.
-- `amplification_limit_breach`: `cbor::encode_cycles()` would write more than `cbor::limits::maximum_amplification` times the size of the tree, past `cbor::limits::amplification_activation_threshold`.
+- `sharedref_not_cyclic`: `cbor::decode_shared_refs` meets a tag 29 that names a tag 28 whose content is decoded to its end, so the reference closes no cycle.
 
 @section errors_conversion THE CONVERSION TO std::error_code
 
@@ -87,19 +87,12 @@ reads a limit at run time.
 
 - `CBOR_STRING_LENGTH_DEFAULT` sets `cbor::limits::string_length`. It counts the bytes of one text or byte string. Its error is `string_length_exceeded`.
 - `CBOR_CONTAINER_ELEMENTS_DEFAULT` sets `cbor::limits::container_elements`. It counts the elements of one array, or the pairs of one map. Its error is `container_elements_exceeded`.
-- `CBOR_AMPLIFICATION_ACTIVATION_THRESHOLD_DEFAULT` sets `cbor::limits::amplification_activation_threshold`. Its default is 8388608 bytes (8 MiB). Its error is `amplification_limit_breach`.
-- `CBOR_MAXIMUM_AMPLIFICATION_DEFAULT` sets `cbor::limits::maximum_amplification`. Its default is 100. Its error is `amplification_limit_breach`.
 
-A macro that the build does not set takes its default. The default of the
-first two limits is `SIZE_MAX`. A limit at `SIZE_MAX` is not set, and its
+A macro that the build does not set takes its default. The default of
+both limits is `SIZE_MAX`. A limit at `SIZE_MAX` is not set, and its
 check is not in the program. Every translation unit of one program uses
 the same values. A value that does not fit `std::size_t` does not
 compile.
-
-`cbor::encode_cycles()` gives `amplification_limit_breach`,
-and writes nothing, when the output would be larger than
-`cbor::limits::amplification_activation_threshold` and than
-`cbor::limits::maximum_amplification` times the tree.
 
 A limit counts what a call reads or decodes. An item that a call only
 skips does not count. The error comes at the read that meets the value.

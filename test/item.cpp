@@ -1113,8 +1113,8 @@ struct sample {
 };
 
 // One encoded item for each member of cbor::type, written from RFC 8949 Appendix A, RFC 8746 and the value-sharing
-// registration. A tag 29 needs a tag 28 before it. So the shared_reference stands as the second element of [28(1),
-// 29(0)], and the test reads that element.
+// registration. A tag 29 names a tag 28 whose value is still open, so it closes a cycle. So the shared_reference stands
+// as the second element of 28([1, 29(0)]), its target is the root, and the test reads that element.
 constexpr std::array<sample, 19> samples{{
     {cbor::type::unsigned_integer, "\x18\x64"sv},
     {cbor::type::negative_integer, "\x38\x63"sv},
@@ -1134,7 +1134,7 @@ constexpr std::array<sample, 19> samples{{
     {cbor::type::unsigned_bignum, "\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"sv},
     {cbor::type::negative_bignum, "\xc3\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"sv},
     {cbor::type::typed_array, "\xd8\x40\x42\x01\x02"sv},
-    {cbor::type::shared_reference, "\x82\xd8\x1c\x01\xd8\x1d\x00"sv},
+    {cbor::type::shared_reference, "\xd8\x1c\x82\x01\xd8\x1d\x00"sv},
 }};
 
 } // namespace
@@ -1392,7 +1392,7 @@ TEST_CASE("item get<T>: every kind of node read as every type")
         REQUIRE(tree.has_value());
         cbor::item const &it = node_of(s, *tree);
         cbor::item const *const first =
-            s.type == cbor::type::shared_reference ? &(*tree)->get<std::span<cbor::item const>>().value()[0] : nullptr;
+            s.type == cbor::type::shared_reference ? &**tree : nullptr;
         check_every_type(s.type, it, first);
     }
 }
@@ -1674,7 +1674,7 @@ TEST_CASE("item visit: f receives the value of every kind of node")
             CHECK_EQ(std::get<cbor::typed_array>(got).tag, 64u);
             break;
         case cbor::type::shared_reference:
-            CHECK_EQ(std::get<cbor::item const *>(got), &(*tree)->get<std::span<cbor::item const>>().value()[0]);
+            CHECK_EQ(std::get<cbor::item const *>(got), &**tree);
             break;
         }
     }

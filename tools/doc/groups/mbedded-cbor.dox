@@ -36,10 +36,6 @@ A limit stops input that holds a string or a container that is too large. Each l
 
 - `CBOR_STRING_LENGTH_DEFAULT` sets `cbor::limits::string_length`. It counts the bytes of one text string or byte string. The default is no limit. Input that goes past it gives `cbor::error::string_length_exceeded`.
 - `CBOR_CONTAINER_ELEMENTS_DEFAULT` sets `cbor::limits::container_elements`. It counts the elements of one array, or the pairs of one map. The default is no limit. Input that goes past it gives `cbor::error::container_elements_exceeded`.
-- `CBOR_AMPLIFICATION_ACTIVATION_THRESHOLD_DEFAULT` sets `cbor::limits::amplification_activation_threshold`. The default is 8388608 bytes (8 MiB).
-- `CBOR_MAXIMUM_AMPLIFICATION_DEFAULT` sets `cbor::limits::maximum_amplification`. The default is 100.
-
-`cbor::encode_cycles` writes a value that two references reach twice. So each level of such references doubles the output. Past the activation threshold, the output may be `maximum_amplification` times the tree at most. Past that, `cbor::encode_cycles` gives `cbor::error::amplification_limit_breach` and writes nothing. The check runs at each node. So it can stop before the whole tree is counted.
 
 A value that does not fit `std::size_t` does not compile. A limit at its default has no check in the program. Every translation unit of one program uses the same values. A different value in one translation unit breaks the one definition rule.
 

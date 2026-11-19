@@ -36,9 +36,9 @@ constexpr std::string_view error_names[] = {"",
                                             "string_length_exceeded",
                                             "container_elements_exceeded",
                                             "not_singular_query",
-                                            "amplification_limit_breach"};
+                                            "sharedref_not_cyclic"};
 
-static_assert(std::size(error_names) == std::to_underlying(cbor::error::amplification_limit_breach) + 1);
+static_assert(std::size(error_names) == std::to_underlying(cbor::error::sharedref_not_cyclic) + 1);
 
 template <>
 struct kind<cbor::error> {

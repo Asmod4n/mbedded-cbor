@@ -297,20 +297,21 @@ TEST_CASE("doc advanced runtime: item_size")
 }
 
 // The section "Tags 28 and 29" shows that a lazy, clone and diagnostic notation read both as plain tags. That
-// cbor::decode_shared_refs resolves them. The second element is a shared_reference to the first. An index with no mark is
-// an error. 28(29(0)) names no value. encode writes the shared value twice and marks only a cycle.
+// cbor::decode_shared_refs resolves them. The second element is a shared_reference to the array that holds it. A
+// reference to a value whose decode has ended, an index with no mark and 28(29(0)) are errors. encode writes the cycle.
 TEST_CASE("doc advanced runtime: tags 28 and 29")
 {
-    auto const tree = cbor::decode_shared_refs("\x82\xd8\x1c\x01\xd8\x1d\x00"sv);
+    auto const tree = cbor::decode_shared_refs("\xd8\x1c\x82\x01\xd8\x1d\x00"sv);
     REQUIRE(tree.has_value());
     auto const elements = (*tree)->get<std::span<cbor::item const>>().value();
     CHECK_EQ(elements[1].type(), cbor::type::shared_reference);
-    CHECK_EQ(elements[1].get<std::pair<std::uint64_t, cbor::item const *>>().value().second, &elements[0]);
+    CHECK_EQ(elements[1].get<std::pair<std::uint64_t, cbor::item const *>>().value().second, &**tree);
+    CHECK_EQ(cbor::decode_shared_refs("\x82\xd8\x1c\x01\xd8\x1d\x00"sv).error(), error::sharedref_not_cyclic);
     CHECK_EQ(cbor::decode_shared_refs("\x81\xd8\x1d\x00"sv).error(), error::sharedref_index_not_marked);
     CHECK_EQ(cbor::decode_shared_refs("\xd8\x1c\xd8\x1d\x00"sv).error(), error::sharedref_not_defined);
     std::string out;
-    CHECK_EQ(cbor::encode(out, **tree), 3u);
-    CHECK_EQ(out, cbor::diag2cbor("[1, 1]").value());
+    CHECK_EQ(cbor::encode(out, **tree), 7u);
+    CHECK_EQ(out, cbor::diag2cbor("28([1, 29(0)])").value());
     std::string const cycle_written = cbor::diag2cbor("28([29(0)])").value();
     auto const cyclic = cbor::decode_shared_refs(cycle_written);
     REQUIRE(cyclic.has_value());

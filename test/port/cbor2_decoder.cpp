@@ -823,32 +823,30 @@ TEST_CASE("cbor2 decoder: Python semantic tags read as plain tags")
 // (refs/value-sharing.html): "index 0 refers to the first value marked as shareable in the CBOR stream".
 // cbor::decode_shared_refs resolves the two tags (owner decision): a tag 28 makes no node and marks the node of its content, and a tag 29 is
 // a shared_reference node whose target is the node of that mark. The reference model shows a shared_reference as
-// 29(index). A tag 29 with no mark before it is an error, as in cbor2.
+// 29(index). A tag 29 with no mark before it is an error, as in cbor2. A tag 29 that names a value whose decode has
+// ended closes no cycle; cbor2 reads it, cbor::decode_shared_refs refuses it (owner decision).
 TEST_CASE("cbor2 decoder: TestSharedReference read by cbor::decode_shared_refs")
 {
     CHECK_EQ(decode_error_of(unhexlify("d81d05")), error::sharedref_index_not_marked);
     auto const ref = [](int const index) { return tag_of(29, V(index)); };
     check_decoded({
         {"D90102D81C8181D81D00", tag_of(258, A(A(ref(0))))},
-        {"d90102d81c82d81c82d81c83010203d81d02d81d02", tag_of(258, A(A(A(1, 2, 3), ref(2)), ref(2)))},
         {"d81c81d81d00", A(ref(0))},
         {"d81ca100d81d00", M(0, ref(0))},
-        {"82d81c82d81c61616162d81d00", A(A("a", "b"), ref(0))},
-        {"82d81ca1616101d81d00", A(M("a", 1), ref(0))},
-        {"82d81cd917706548656c6c6fd81d00", A(tag_of(6000, V("Hello")), ref(0))},
         {"a1d81cd903e7d81d0001", M(tag_of(999, ref(0)), 1)},
         {"d9010281d81cd903e7d81d00", tag_of(258, A(tag_of(999, ref(0))))},
     });
-    // A tag 29 gives the node of its mark: in 28([29(0)]) the element names the array itself, and in
-    // [28([28("a"), "b"]), 29(0)] the second element names the first.
+    for (std::string_view const shared :
+         {"d90102d81c82d81c82d81c83010203d81d02d81d02", "82d81c82d81c61616162d81d00", "82d81ca1616101d81d00",
+          "82d81cd917706548656c6c6fd81d00"}) {
+        CAPTURE(shared);
+        CHECK_EQ(decode_error_of(unhexlify(shared)), error::sharedref_not_cyclic);
+    }
+    // A tag 29 gives the node of its mark: in 28([29(0)]) the element names the array itself.
     auto const cyclic = cbor::decode_shared_refs(unhexlify("d81c81d81d00"));
     REQUIRE(cyclic.has_value());
     CHECK_EQ((*cyclic)->get<std::span<cbor::item const>>().value()[0].get<std::pair<std::uint64_t, cbor::item const *>>().value().second,
              &**cyclic);
-    auto const shared = cbor::decode_shared_refs(unhexlify("82d81c82d81c61616162d81d00"));
-    REQUIRE(shared.has_value());
-    auto const elements = (*shared)->get<std::span<cbor::item const>>().value();
-    CHECK_EQ(elements[1].get<std::pair<std::uint64_t, cbor::item const *>>().value().second, &elements[0]);
 }
 
 // Upstream: TestSharedReference.test_nested_shareable_in_array, test_object_hook and test_tag_hook, and

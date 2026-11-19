@@ -102,11 +102,8 @@ enum class error {
     container_elements_exceeded,
     /** `path::compile<T>` gets a path that is not singular, and `T` is not `nodelist`. */
     not_singular_query,
-    /**
-     * cbor::encode() would write more than `cbor::limits::maximum_amplification` times the size of the
-     * tree, past `cbor::limits::amplification_activation_threshold`.
-     */
-    amplification_limit_breach
+    /** `decode_shared_refs` meets a tag 29 that names a tag 28 whose content is decoded to its end, so no cycle. */
+    sharedref_not_cyclic
 };
 
 /**
@@ -214,8 +211,8 @@ public:
             return "container elements exceeded";
         case error::not_singular_query:
             return "not a singular query";
-        case error::amplification_limit_breach:
-            return "amplification limit breach";
+        case error::sharedref_not_cyclic:
+            return "sharedref not cyclic";
         }
         return "unknown cbor error";
     }

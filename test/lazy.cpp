@@ -1068,7 +1068,7 @@ TEST_CASE("lazy: the content of each tag for every major type")
             if (tag == 2 || tag == 3 || tag == 24)
                 read = get<std::int64_t>(tagged).transform([](std::int64_t) {});
             else if (tag == 29) {
-                read = cbor::decode_shared_refs("\x82\xd8\x1c\x00"s + tagged).transform([](auto const &) {});
+                read = cbor::decode_shared_refs("\xd8\x1c\x81"s + tagged).transform([](auto const &) {});
                 CHECK(cbor::decode("\x82\xd8\x1c\x00"s + tagged).has_value());
             } else
                 read = cbor::decode("\x82\xd8\x1c\x00"s + tagged).transform([](auto const &) {});

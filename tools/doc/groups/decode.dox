@@ -63,10 +63,12 @@ whose content is no byte string it gives `incorrect_type`.
 Tag 28 marks a value as shared. Tag 29 with the index n stands for the
 value of the n-th tag 28. `cbor::decode` reads both as tags over their
 content. `cbor::decode_shared_refs` resolves both tags, with a table for
-one call. A tag 28 makes no node and marks the node of its content. A tag 29 is a `shared_reference` item. That item can be the
-item itself or an item above it, so the tree can hold a cycle. An index
-with no tag 28 before it gives `sharedref_index_not_marked`, and
-`28(29(0))` gives `sharedref_not_defined`.
+one call. A tag 28 makes no node and marks the node of its content. A tag 29 is a `shared_reference` item. Its target is the
+item itself or an item above it, whose decode has not ended, so each
+reference closes a cycle. A tag 29 that names an item whose decode has
+ended gives `sharedref_not_cyclic`. An index with no tag 28 before it
+gives `sharedref_index_not_marked`, and `28(29(0))` gives
+`sharedref_not_defined`.
 
 `cbor::decode`, a lazy, `clone`, `at_path`, `cbor::path::query` and
 `cbor::diagnostic_notation` read tag 28 and tag 29 as tags over their content. They resolve nothing,
@@ -97,15 +99,12 @@ The target of `cbor::encode` is one of these:
 information that each item keeps. Each integer, length and tag number
 keeps the width of its head on the wire. A float keeps the width of its
 type, and a NaN keeps its bits. A bignum that fits in 64 bits is written
-in its shortest head. A `shared_reference` gives `unsupported_value`.
-`encode_cycles(out, tree)` writes tags 28 and 29 only for a cycle.
+in its shortest head. `cbor::encode` writes tags 28 and 29 of a tree of
+`cbor::decode_shared_refs` only for a cycle.
 It walks the tree before it writes, depth first, and follows each
 `shared_reference` to its item. An item that the walk reaches again while
 it is inside that item gets a tag 28. Each such edge is a tag 29 with the
-index of that mark. A value that two references reach without a cycle is
-written in full each time. The path through references can be deeper than
-the tree, so `encode` can give `nesting_depth_exceeded` for a tree that
-`cbor::decode` gave. A tree of `clone` keeps tags 28 and 29 as tags, and
+index of that mark. A tree of `clone` keeps tags 28 and 29 as tags, and
 `encode` writes them as they are.
 
 `cbor::encode_iov(item)` writes a tree into a list of pieces as

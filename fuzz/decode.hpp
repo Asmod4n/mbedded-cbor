@@ -118,8 +118,9 @@ inline std::vector<cbor::item const *> nodes_of(cbor::owning<cbor::item> const &
 
 // cbor::decode_shared_refs resolves tags 28 and 29 (theories/ValueSharing.v). A decode that succeeds reads a stream
 // that to_item also reads; each shared_reference names a node of the tree (theorem read_no_dangling); the tree has no
-// more nodes than the tree of to_item, which keeps one node per tag (read_no_expansion). encode writes a tree with a
-// shared_reference unless the amplification limit, the depth or the bounded span stops it, and decode_shared_refs
+// more nodes than the tree of to_item, which keeps one node per tag (read_no_expansion). Each shared_reference names a
+// node above it or itself, since a tag 29 must close a cycle. encode writes a tree with a shared_reference unless the
+// depth or the bounded span stops it, and decode_shared_refs
 // reads back a graph with the same unfolding (theories/Writer.v write_read_back). A tree with as many nodes as the
 // tree of clone holds no tag 28, so encode writes it as it writes the tree of clone.
 inline void resolving_decode(std::string_view const input)
@@ -144,8 +145,7 @@ inline void resolving_decode(std::string_view const input)
         std::array<char, 1 << 16> bounded;
         auto const size = cbor::encode(std::span(bounded), **resolved);
         if (!size) {
-            require(size.error() == cbor::error::amplification_limit_breach ||
-                    size.error() == cbor::error::nesting_depth_exceeded ||
+            require(size.error() == cbor::error::nesting_depth_exceeded ||
                     size.error() == cbor::error::no_buffer_space);
             return;
         }

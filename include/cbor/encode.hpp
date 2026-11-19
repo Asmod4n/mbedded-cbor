@@ -211,8 +211,6 @@ private:
         requires(!AppendRef || binary_writer<Writer>::blocks);
     template <class Writer>
     static std::expected<void, std::errc> encode_sharedref(binary_writer<Writer> &out, std::uint64_t index);
-    static std::uint64_t size_of(item const &node, head_parts const &head);
-    static std::uint64_t reference_size_of(item const &reference);
 
     class depth_first_search;
 
@@ -243,7 +241,6 @@ private:
  * A walk before the write finds each item that a depth-first walk reaches again while it is inside that item.
  * Such an item gets a tag 28, and each edge that reaches it again is a tag 29 with the index of that mark, in its
  * shortest head.
- * A value that two references reach without a cycle is written in full each time.
  * `out` is one of these:
  * - a container of bytes, for example `std::string`: the call appends;
  * - a `std::span` of bytes: the call writes into it and allocates nothing;
@@ -278,8 +275,6 @@ private:
  *
  * @retval no_buffer_space the span is too short
  * @retval nesting_depth_exceeded the tree, or the path through its references, is deeper than the limit
- * @retval amplification_limit_breach the output would be larger than `cbor::limits::amplification_activation_threshold`
- * and than `cbor::limits::maximum_amplification` times the tree; nothing is written
  * @retval value_too_large, not_enough_memory, io_error the error of a writer, from its `std::errc`
  * @snippet doc_reference_item.cpp encode
  * @see cbor::encode_iov()
@@ -648,22 +643,6 @@ std::expected<void, error> detail::encoding::encode_item(binary_writer<Writer> &
     return {};
 }
 
-inline std::uint64_t detail::encoding::size_of(item const &node, head_parts const &head)
-{
-    std::uint64_t const size = detail::heads::initial_byte_size + detail::heads::argument_size(head.info);
-    if (head.major == major_type::byte_string)
-        return size + node.via.bin.size();
-    if (head.major == major_type::text_string)
-        return size + node.via.str.size();
-    return size;
-}
-
-inline std::uint64_t detail::encoding::reference_size_of(item const &reference)
-{
-    return detail::heads::head_size(std::to_underlying(rfc8949::tag_number::sharedref)) + detail::heads::initial_byte_size +
-           detail::heads::argument_size(reference.additional_information);
-}
-
 class detail::encoding::depth_first_search
 {
     struct frame {
@@ -672,14 +651,9 @@ class detail::encoding::depth_first_search
         frame const *up;
     };
 
-    static constexpr std::uint64_t back_edge_size =
-        detail::heads::head_size(std::to_underlying(rfc8949::tag_number::sharedref)) + detail::heads::initial_byte_size;
-
     std::vector<item const *> targets;
     std::unordered_map<item const *, std::uint64_t> open;
     bool path_in_map = false;
-    std::uint64_t direct = 0;
-    std::uint64_t tree = 0;
 
     void enter_path(frame const &here)
     {
@@ -688,50 +662,36 @@ class detail::encoding::depth_first_search
         path_in_map = true;
     }
 
-    std::expected<void, error> count(std::uint64_t const bytes, bool const below)
-    {
-        direct += bytes;
-        if (!below)
-            tree += bytes;
-        return detail::validity::check_amplification(direct, tree);
-    }
-
-    std::expected<void, error> find_back_edges(item const &node, frame const *const up, bool const below)
+    std::expected<void, error> find_back_edges(item const &node, frame const *const up)
     {
         if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
             return r;
         head_parts const head = head_of(node);
-        if (auto const r = count(size_of(node, head), below); !r) [[unlikely]]
-            return r;
         frame const here{&node, 0, up};
         if (path_in_map) [[unlikely]]
             open.emplace(&node, 0);
         for (item const &child : children_of(node, head.major))
-            if (auto const r = follow_edge(child, here, below); !r) [[unlikely]]
+            if (auto const r = follow_edge(child, here); !r) [[unlikely]]
                 return r;
         if (item const *const content = content_of(node, head.major))
-            if (auto const r = follow_edge(*content, here, below); !r) [[unlikely]]
+            if (auto const r = follow_edge(*content, here); !r) [[unlikely]]
                 return r;
         if (path_in_map) [[unlikely]]
             open.erase(&node);
         return {};
     }
 
-    std::expected<void, error> follow_edge(item const &child, frame const &here, bool const below)
+    std::expected<void, error> follow_edge(item const &child, frame const &here)
     {
         bool const reference = child.m_type == cbor::type::shared_reference;
         item const &next = reference ? *child.via.tag.content : child;
-        if (reference) [[unlikely]] {
-            if (!below)
-                tree += reference_size_of(child);
-            if (!path_in_map)
-                enter_path(here);
-        }
+        if (reference && !path_in_map) [[unlikely]]
+            enter_path(here);
         if (path_in_map && open.contains(&next)) [[unlikely]] {
             targets.push_back(&next);
-            return count(back_edge_size, true);
+            return {};
         }
-        return find_back_edges(next, &here, below || reference);
+        return find_back_edges(next, &here);
     }
 
     template <bool AppendRef, class Writer>
@@ -795,7 +755,7 @@ public:
     std::expected<void, error> encode(binary_writer<Writer> &out, item const &root)
     {
         item const &start = root.m_type == cbor::type::shared_reference ? *root.via.tag.content : root;
-        if (auto const r = find_back_edges(start, nullptr, false); !r) [[unlikely]]
+        if (auto const r = find_back_edges(start, nullptr); !r) [[unlikely]]
             return r;
         std::ranges::sort(targets);
         auto const repeated = std::ranges::unique(targets);

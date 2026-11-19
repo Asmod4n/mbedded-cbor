@@ -158,8 +158,6 @@ public:
      *
      * @retval nesting_depth_exceeded the tree, or the path through its references, is deeper than the stack of the
      * thread holds
-     * @retval amplification_limit_breach the values that the references share would make the bytes larger than the
-     * limit of cbor::encode()
      * @see cbor::parse_edn()
      */
     std::expected<std::string, error> to_edn() const;
