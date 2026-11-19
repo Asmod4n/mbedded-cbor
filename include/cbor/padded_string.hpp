@@ -23,42 +23,6 @@ class padded_string
 public:
     static constexpr std::size_t padding = 4;
 
-    class in_place_string
-    {
-        std::span<char> bytes;
-        std::size_t first;
-        std::size_t last;
-
-    public:
-        in_place_string(std::span<char> const padded, std::size_t const at)
-            : bytes(padded), first(at), last(at)
-        {
-        }
-
-        void assign(std::string_view const content)
-        {
-            last = first + content.size();
-        }
-
-        void push_back(char const c)
-        {
-            bytes[last] = c;
-            ++last;
-        }
-
-        void append(std::string_view const run)
-        {
-            std::ranges::copy(run, bytes.subspan(last).begin());
-            last += run.size();
-        }
-
-        operator std::string_view() const
-        {
-            std::span<char const> const content = bytes.subspan(first, last - first);
-            return {content.begin(), content.end()};
-        }
-    };
-
 private:
     std::unique_ptr<char[]> bytes;
     std::size_t length;
@@ -69,11 +33,6 @@ private:
         validity::throw_logic_error_if(!sum,
                                        "cbor::detail::padded_string: the text is longer than memory holds");
         return *sum;
-    }
-
-    std::span<char const> padded() const
-    {
-        return {bytes.get(), length + padding};
     }
 
 public:
@@ -99,9 +58,14 @@ public:
         return static_cast<unsigned char>(padded()[at]);
     }
 
-    in_place_string in_place(std::size_t const first)
+    std::span<char const> padded() const
     {
-        return {std::span<char>(bytes.get(), length + padding), first};
+        return {bytes.get(), length + padding};
+    }
+
+    std::span<char> padded()
+    {
+        return {bytes.get(), length + padding};
     }
 };
 

@@ -1,4 +1,5 @@
-// Gives the surrogate pairs of UTF-16 to cbor::detail::extended_diagnostic_notation.
+// Gives the surrogate pairs of UTF-16 to cbor::detail::extended_diagnostic_notation and
+// cbor::detail::dom::reader.
 // https://www.rfc-editor.org/rfc/rfc2781
 #pragma once
 
@@ -11,6 +12,13 @@ namespace detail
 {
 
 class extended_diagnostic_notation;
+
+namespace dom
+{
+
+class reader;
+
+}
 
 }
 
@@ -27,6 +35,7 @@ class rfc2781
     static constexpr int surrogate_bits = 10;
 
     friend class detail::extended_diagnostic_notation;
+    friend class detail::dom::reader;
 };
 
 }

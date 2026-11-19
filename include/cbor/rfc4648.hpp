@@ -1,5 +1,5 @@
 // Gives the base16 and base64 alphabets and their group sizes in bits
-// to cbor::detail::extended_diagnostic_notation.
+// to cbor::detail::extended_diagnostic_notation and cbor::detail::dom::reader.
 // https://www.rfc-editor.org/rfc/rfc4648
 #pragma once
 
@@ -12,6 +12,13 @@ namespace detail
 {
 
 class extended_diagnostic_notation;
+
+namespace dom
+{
+
+class reader;
+
+}
 
 }
 
@@ -31,6 +38,7 @@ class rfc4648
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
     friend class detail::extended_diagnostic_notation;
+    friend class detail::dom::reader;
 };
 
 }

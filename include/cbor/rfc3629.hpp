@@ -1,4 +1,5 @@
-// Gives the octet forms of UTF-8 to cbor::detail::extended_diagnostic_notation and cbor::path.
+// Gives the octet forms of UTF-8 to cbor::detail::extended_diagnostic_notation, cbor::detail::dom::reader and
+// cbor::path.
 // https://www.rfc-editor.org/rfc/rfc3629
 #pragma once
 
@@ -11,6 +12,13 @@ namespace detail
 {
 
 class extended_diagnostic_notation;
+
+namespace dom
+{
+
+class reader;
+
+}
 
 }
 
@@ -39,6 +47,7 @@ class rfc3629
     static constexpr std::uint32_t following_octet_mask = 0x3f;
 
     friend class detail::extended_diagnostic_notation;
+    friend class detail::dom::reader;
     friend class path;
 };
 

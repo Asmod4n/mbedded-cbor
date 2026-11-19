@@ -37,7 +37,6 @@
 #include "error.hpp"
 #include "validity.hpp"
 #include "head.hpp"
-#include "padded_string.hpp"
 #include "path.hpp"
 #include "rfc2781.hpp"
 #include "rfc3629.hpp"
@@ -262,18 +261,6 @@ class extended_diagnostic_notation
             at += repeat16;
         }
         while (char_is_ascii_skip(padded_char(text, at)))
-            ++at;
-        return at;
-    }
-
-    static unsigned char padded_char(padded_string const &text, std::size_t const at)
-    {
-        return text[at];
-    }
-
-    static std::size_t skip_ascii(padded_string const &text, std::size_t at)
-    {
-        while (char_is_ascii_skip(text[at]))
             ++at;
         return at;
     }
