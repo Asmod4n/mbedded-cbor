@@ -32,14 +32,14 @@ double float_of(std::string_view wire)
 
 std::string write_preferred_float(double d)
 {
-    auto const e = cbor::structs<double>::encode(d);
+    auto const e = cbor::encode<double>(d);
     REQUIRE(e.has_value());
     return *e;
 }
 
 std::string write_preferred_float(float f)
 {
-    auto const e = cbor::structs<float>::encode(f);
+    auto const e = cbor::encode<float>(f);
     REQUIRE(e.has_value());
     return *e;
 }
@@ -259,7 +259,7 @@ TEST_CASE("§4.1 float width: a NaN takes the shortest width that keeps its sign
         CHECK_EQ(wire, c.wire);
         CHECK_EQ(bits_of(float_of(wire)), c.bits);
         std::string exact(c.wire.size(), '\0');
-        CHECK_EQ(cbor::structs<double>::encode(std::span(exact), std::bit_cast<double>(c.bits)), c.wire.size());
+        CHECK_EQ(cbor::encode<double>(std::span(exact), std::bit_cast<double>(c.bits)), c.wire.size());
         CHECK_EQ(exact, c.wire);
     }
     struct {
@@ -278,7 +278,7 @@ TEST_CASE("§4.1 float width: a NaN takes the shortest width that keeps its sign
         REQUIRE(back.has_value());
         CHECK_EQ(std::bit_cast<std::uint32_t>(**back), c.bits);
         std::string exact(c.wire.size(), '\0');
-        CHECK_EQ(cbor::structs<float>::encode(std::span(exact), std::bit_cast<float>(c.bits)), c.wire.size());
+        CHECK_EQ(cbor::encode<float>(std::span(exact), std::bit_cast<float>(c.bits)), c.wire.size());
         CHECK_EQ(exact, c.wire);
     }
 }

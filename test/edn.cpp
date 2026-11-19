@@ -2,13 +2,16 @@
 #include <doctest/doctest.h>
 
 #include <cstddef>
+#include <cstdint>
 #include <fstream>
 #include <iterator>
 #include <optional>
 #include <span>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 
 namespace
@@ -229,4 +232,122 @@ TEST_CASE("diagnostic_notation: tag 76 is a plain tag")
         CHECK_EQ(cbor::diagnostic_notation(*bytes), text);
         CHECK(cbor::parse_edn(text).has_value());
     }
+}
+
+namespace
+{
+
+cbor::owning<cbor::item> decoded_from_edn(std::string_view const text)
+{
+    auto const bytes = cbor::diag2cbor(text);
+    REQUIRE(bytes.has_value());
+    auto tree = cbor::decode(*bytes);
+    REQUIRE(tree.has_value());
+    return std::move(*tree);
+}
+
+cbor::owning<cbor::item> shared_from_edn(std::string_view const text)
+{
+    auto const bytes = cbor::diag2cbor(text);
+    REQUIRE(bytes.has_value());
+    auto tree = cbor::decode_cycles(*bytes);
+    REQUIRE(tree.has_value());
+    return std::move(*tree);
+}
+
+cbor::item const &element_of(cbor::item const &array, std::size_t const index)
+{
+    auto const elements = array.get<std::span<cbor::item const>>();
+    REQUIRE(elements.has_value());
+    REQUIRE_LT(index, elements->size());
+    return (*elements)[index];
+}
+
+cbor::item const *target_of_reference(cbor::item const &reference)
+{
+    REQUIRE_EQ(reference.type(), cbor::type::shared_reference);
+    return reference.get<std::pair<std::uint64_t, cbor::item const *>>().value().second;
+}
+
+} // namespace
+
+// cbor::to_edn walks the tree, so each kind of item and each width that an item keeps must give the text that
+// cbor::diagnostic_notation gives for the bytes. Each text below is written in that form: an encoding indicator only
+// where a head is not in preferred form (RFC 8949 4.2.1, draft-ietf-cbor-edn-literals).
+TEST_CASE("cbor::to_edn: each kind of item gives its text with its encoding indicator")
+{
+    for (std::string_view const text :
+         {"0", "1_0", "23_0", "-1", "-25_1", "18446744073709551615", "-18446744073709551616", "h'0102'", "h''_0",
+          "\"a\"", "\"\\n\\\"\"", "\"a\"_1", "[]", "[_0 1]", "[1, [2, 3]]", "{\"a\": 1}", "{_1 1: 2, 3: [4]}", "false",
+          "true", "null", "undefined", "simple(99)", "1.5", "1.5_2", "100000.0", "NaN", "Infinity", "-Infinity_3",
+          "1(0)", "1_1(0)", "64(h'0102')", "2(h'010000000000000000')", "3(h'010000000000000000')", "24(h'01')",
+          "28(1)", "29(0)"}) {
+        CAPTURE(text);
+        auto const tree = decoded_from_edn(text);
+        CHECK_EQ(cbor::to_edn(*tree), text);
+        CHECK_EQ(cbor::to_edn(tree), text);
+    }
+}
+
+// The item form takes any node of a tree, not only the root.
+TEST_CASE("cbor::to_edn: an item inside a tree gives the text of that item")
+{
+    auto const tree = decoded_from_edn("[1, {\"a\": [2_0]}]");
+    CHECK_EQ(cbor::to_edn(element_of(*tree, 1)), "{\"a\": [2_0]}");
+}
+
+// A tree of cbor::decode_cycles with a shared_reference gives the text of the bytes of cbor::encode. So a tag 28
+// stands only on a value that a tag 29 names, each tag 29 has the index of its mark in the text and its shortest head,
+// and a tag 28 over a tag 29 marks no value of its own. A tag 28 that no tag 29 names makes no shared_reference, so
+// its tree is walked, and the walk writes no tag 28.
+TEST_CASE("cbor::to_edn: a tree of decode_cycles gives tags 28 and 29 only for its cycles")
+{
+    for (auto const &[text, expected] : std::initializer_list<std::pair<std::string_view, std::string_view>>{
+             {"28([1, 29(0)])", "28([1, 29(0)])"},
+             {"28([29(0)])", "28([29(0)])"},
+             {"[28(1)]", "[1]"},
+             {"28(28([29(0), 29(1)]))", "28([29(0), 29(0)])"},
+             {"28([28(29(0)), 29(1)])", "28([29(0), 29(0)])"},
+             {"28(999(29(0)))", "28(999(29(0)))"},
+             {"28({\"k\": 29(0)})", "28({\"k\": 29(0)})"},
+             {"28([1, 29(0_1)])", "28([1, 29(0)])"},
+             {"28([1, 28([2, 29(1)]), 29(0)])", "28([1, 28([2, 29(1)]), 29(0)])"},
+             {"2(28(h'05'))", "2(h'05')"}}) {
+        CAPTURE(text);
+        CHECK_EQ(cbor::to_edn(shared_from_edn(text)), expected);
+    }
+}
+
+// The text of a shared tree, read back, must name the same targets: cbor::parse_edn keeps tags 28 and 29 as tags and
+// gives the text back, and cbor::decode_cycles of its bytes resolves each tag 29 to the node it named before.
+TEST_CASE("cbor::to_edn: the text of a shared tree reads back to the same tree")
+{
+    auto const shared = shared_from_edn("28([1, 28([2, 29(1), 29(0)])])");
+    auto const text = cbor::to_edn(shared);
+    REQUIRE(text.has_value());
+    auto const parsed = cbor::parse_edn(*text);
+    REQUIRE(parsed.has_value());
+    CHECK_EQ(cbor::to_edn(*parsed), text);
+    auto const back = shared_from_edn(*text);
+    cbor::item const &inner = element_of(*back, 1);
+    CHECK_EQ(target_of_reference(element_of(inner, 1)), &inner);
+    CHECK_EQ(target_of_reference(element_of(inner, 2)), &*back);
+    auto const cycle = shared_from_edn(*cbor::to_edn(shared_from_edn("28([29(0)])")));
+    CHECK_EQ(target_of_reference(element_of(*cycle, 0)), &*cycle);
+}
+
+// An item of a tree with a shared_reference needs no owner: a shared_reference stands for its target, and an inner
+// item also writes the values above it that its references name. An owning item that holds no tree is a wrong use.
+TEST_CASE("cbor::to_edn: an item of a tree with a cycle gives its text without the owner")
+{
+    auto const shared = shared_from_edn("28([1, 29(0)])");
+    CHECK_EQ(cbor::to_edn(*shared), "28([1, 29(0)])");
+    CHECK_EQ(cbor::to_edn(element_of(*shared, 1)), "28([1, 29(0)])");
+    CHECK_EQ(cbor::to_edn(element_of(*shared, 0)), "1");
+    auto const nested = shared_from_edn("28([1, 28([2, 29(1), 29(0)])])");
+    CHECK_EQ(cbor::to_edn(element_of(*nested, 1)), "28([2, 29(0), [1, 29(0)]])");
+    cbor::owning<cbor::item> moved = shared_from_edn("1");
+    cbor::owning<cbor::item> const kept = std::move(moved);
+    CHECK_THROWS_AS(std::ignore = cbor::to_edn(moved), std::logic_error);
+    CHECK_EQ(cbor::to_edn(kept), "1");
 }

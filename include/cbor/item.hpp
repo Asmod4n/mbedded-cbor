@@ -13,6 +13,7 @@
 #include <functional>
 #include <ranges>
 #include <span>
+#include <string>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -43,6 +44,8 @@ class extended_diagnostic_notation;
 }
 
 struct item;
+
+std::expected<std::string, error> to_edn(item const &root);
 
 template <class T>
 concept scalar_result = (std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
@@ -155,8 +158,6 @@ public:
      *
      * @retval nesting_depth_exceeded the tree, or the path through its references, is deeper than the stack of the
      * thread holds
-     * @retval amplification_limit_breach the values that the references share would make the bytes larger than the
-     * limit of cbor::encode()
      * @see cbor::parse_edn()
      */
     std::expected<std::string, error> to_edn() const;
@@ -422,6 +423,8 @@ private:
     friend class detail::encoding;
 
     friend class detail::extended_diagnostic_notation;
+
+    friend std::expected<std::string, error> cbor::to_edn(item const &root);
 };
 
 /**

@@ -111,8 +111,10 @@ makes. These are the checks of mbedded-cbor.
   to 87 (RFC 8746) a byte string. Other content gives
   `inadmissible_type_for_tag_content`. The content of every other tag
   is not checked.
-- **Shared references.** A reference of tag 29 names an item that tag
-  28 marked before it; else the read gives `sharedref_not_defined` or
+- **Shared references.** `cbor::decode_cycles` resolves tags 28
+  and 29 for cycles only. A reference of tag 29 names an item that tag
+  28 marked before it and whose decode has not ended; else the read
+  gives `sharedref_not_cyclic`, `sharedref_not_defined` or
   `sharedref_index_not_marked`.
 - **Duplicate keys.** A repeated key gives every entry in `cbor::decode`,
   the error `duplicate_key` in `cbor::structs` (an unordered multimap
@@ -162,7 +164,7 @@ Write the message:
 | schema | FlatBuffers | 9.0× | 3.4× |
 
 - schema reads Packed CBOR (155849 bytes). The other kinds and the
-  libraries read the CBOR of `structs<T>::encode` (440957 bytes).
+  libraries read the CBOR of `cbor::encode` (440957 bytes).
 - item, structs and jsoncons decode the message before they read one
   field. jsoncons decodes the message before its path.
 - jsoncons `decode_cbor<T>` copies each text into a `std::string`.
@@ -193,8 +195,8 @@ details stand in [bench/comparison.md](bench/comparison.md).
 |---|---|---|---|---|---|
 | Format | CBOR | JSON; CBOR through `from_cbor` and `to_cbor` | CBOR | its own | its own |
 | Read one field | a path; the rest is not decoded | decodes the whole input first | decodes the whole input; no lookup of a key | direct | direct |
-| Write a struct | no extra code (C++26 reflection, or Boost.PFR in C++23) | a macro that names each member | no mapping of a struct | a schema file and a code generator | a schema file and a code generator |
-| Shared values, tags 28 and 29 | read and written | not read | not read | one offset in two places | not checked |
+| Write a struct | `CBOR_DEFINE_TYPE_MEMBERS` names each member; the read needs no extra code (C++26 reflection, or Boost.PFR in C++23) | a macro that names each member | no mapping of a struct | a schema file and a code generator | a schema file and a code generator |
+| Cycles through tags 28 and 29 | read and written | not read | not read | one offset in two places | not checked |
 | A list of numbers with no copy | `cbor::schema` | copies | reads each number | direct | direct |
 | Broken input | a `std::expected` error | an exception, or a discarded value | an error code | the Verifier; without it, no check | an exception |
 
@@ -219,8 +221,9 @@ struct person {
     std::string name;
     int age;
 };
+CBOR_DEFINE_TYPE_MEMBERS(person, cbor::untagged, name, age);
 
-auto bytes = cbor::structs<person>::encode(person{"ann", 30});
+auto bytes = cbor::encode(person{"ann", 30});
 auto const back = cbor::structs<person>::decode(std::move(*bytes));
 // (*back)->name is "ann", (*back)->age is 30
 ```
@@ -323,8 +326,10 @@ cbor::encode(out, *tree);                                           // out == by
 
 ### Encode a value or a struct
 
-`cbor::structs<T>` encodes any value: a struct, an `int`, a `std::map`.
-It decodes the bytes back into the same type.
+`cbor::encode` writes any value: a struct, an `int`, a `std::map`. A
+struct needs a `cbor::describe_members` specialization, which
+`CBOR_DEFINE_TYPE_MEMBERS` writes. `cbor::structs<T>` decodes the bytes
+back into the same type.
 
 ```cpp
 struct reading {
@@ -332,13 +337,14 @@ struct reading {
     double value;
     std::vector<int> samples;
 };
+CBOR_DEFINE_TYPE_MEMBERS(reading, cbor::untagged, sensor, value, samples);
 
-auto const bytes = cbor::structs<reading>::encode(reading{"t1", 21.5, {3, 4, 5}}).value();
+auto const bytes = cbor::encode(reading{"t1", 21.5, {3, 4, 5}}).value();
 auto const back = cbor::structs<reading>::decode(std::string(bytes)).value();
 back->sensor;                                                       // "t1"
 
-cbor::structs<int>::encode(42);                                     // 18 2a
-cbor::structs<std::map<std::string, int>>::encode({{"a", 1}});      // {"a": 1}
+cbor::encode(42);                                                   // 18 2a
+cbor::encode(std::map<std::string, int>{{"a", 1}});                 // {"a": 1}
 ```
 
 A decoded struct can point into the bytes, for example with a

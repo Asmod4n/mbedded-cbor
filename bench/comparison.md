@@ -139,15 +139,16 @@ person const copy = p;
 
 ### mbedded-cbor
 
-structs reads the members of an aggregate by C++26 reflection on g++ 16, and through Boost.PFR on every other compiler. The struct needs no macro and no tag.
+cbor::encode writes a struct through its description, which `CBOR_DEFINE_TYPE_MEMBERS` writes from the names of the members. structs reads the members of an aggregate by C++26 reflection on g++ 16, and through Boost.PFR on every other compiler; the read needs no macro and no tag.
 
 ```cpp
 struct person {
     std::string name;
     int age;
 };
+CBOR_DEFINE_TYPE_MEMBERS(person, cbor::untagged, name, age);
 
-auto bytes = cbor::structs<person>::encode(person{"ann", 30});
+auto bytes = cbor::encode(person{"ann", 30});
 auto const back = cbor::structs<person>::decode(std::move(*bytes));
 // (*back)->name is "ann", (*back)->age is 30
 ```
@@ -558,7 +559,7 @@ number for them.
 ## 10. Other decoders read what mbedded-cbor writes
 
 `test/interop/run.sh` writes values with every public writer:
-`cbor::encode(item)`, `structs<T>::encode` and `schema<T>::encode`. The values are the examples of RFC 8949 Appendix A,
+`cbor::encode(item)`, `cbor::encode(value)` and `schema<T>::encode`. The values are the examples of RFC 8949 Appendix A,
 the cbor-wg test vectors, the bench corpora, every integer and float
 width, tags 28 and 29, and typed arrays. Each decoder below reads the
 output. The script then compares the value with the value that was

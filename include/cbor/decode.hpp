@@ -3,8 +3,10 @@
  * Decodes the first CBOR data item in a buffer into a tree of
  * cbor::item. The tree holds a copy of each string in its own memory.
  * Decodes a bignum that fits in 64 bits as an integer. Decodes the
- * content of a tag 24 as one more data item.
+ * content of a tag 24 as one more data item. decode_cycles also
+ * resolves tags 28 and 29 of the value-sharing registration.
  * https://www.rfc-editor.org/rfc/rfc8949
+ * http://cbor.schmorp.de/value-sharing
  */
 #pragma once
 
@@ -137,7 +139,12 @@ struct tree_decoder {
     zone &decoded;
     detail::heads::decoder<true> d;
     std::size_t open = 0;
-    std::vector<item const *> marks;
+    struct open_mark {
+        std::uint64_t index;
+        item const *target;
+    };
+    std::size_t marks = 0;
+    std::vector<open_mark> open_marks;
     std::size_t shared_references = 0;
 
     std::expected<void, error> decode_item(std::pmr::vector<item> &into);
@@ -151,6 +158,13 @@ struct tree_decoder {
     CBOR_ALWAYS_INLINE inline std::expected<void, error> decode_scalar(item &node, detail::heads::head h);
 
     CBOR_NEVER_INLINE std::expected<bool, error> decode_bignum(std::pmr::vector<item> &into, std::uint64_t tag);
+
+    void mark(item const &target, std::size_t const count)
+    {
+        for (std::size_t i = 0; i < count; ++i)
+            open_marks.push_back(open_mark{marks + i, &target});
+        marks += count;
+    }
 };
 
 
@@ -236,7 +250,7 @@ std::expected<void, error> tree_decoder<Resolve>::decode_content(std::pmr::vecto
         if (*r) {
             if constexpr (Resolve)
                 if (marked != 0) [[unlikely]]
-                    marks.insert(marks.end(), marked, &into.back());
+                    mark(into.back(), marked);
             return {};
         }
     }
@@ -244,7 +258,7 @@ std::expected<void, error> tree_decoder<Resolve>::decode_content(std::pmr::vecto
         item{detail::heads::type_of(head.major, head.info, head.argument), head.info, {.u64 = head.argument}});
     if constexpr (Resolve)
         if (marked != 0) [[unlikely]]
-            marks.insert(marks.end(), marked, &node);
+            mark(node, marked);
     switch (head.major) {
     case major_type::unsigned_integer:
     case major_type::negative_integer:
@@ -317,7 +331,7 @@ std::expected<void, error> tree_decoder<Resolve>::decode_content(std::pmr::vecto
         }
         std::string_view const content_encoded =
             std::string_view(std::span(tagged).first(std::to_underlying(detail::validity::distance(tagged, d.encoded))));
-        tree_decoder inner{decoded, {std::string_view(std::span(content_encoded).last(content.via.bin.size()))}, 0, {}, 0};
+        tree_decoder inner{decoded, {std::string_view(std::span(content_encoded).last(content.via.bin.size()))}, 0, 0, {}, 0};
         std::pmr::vector<item> &embedded = decoded.items_reserved(1);
         if (auto const r = inner.decode_item(embedded); !r) [[unlikely]]
             return r;
@@ -338,8 +352,17 @@ std::expected<void, error> tree_decoder<Resolve>::decode_shareable(std::pmr::vec
         auto const h = d.decode_head();
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
-        if (h->major != major_type::tag || h->argument != std::to_underlying(rfc8949::tag_number::shareable))
+        if (h->major == major_type::tag && h->argument == std::to_underlying(rfc8949::tag_number::sharedref))
             return decode_content(into, *h, chain);
+        if (h->major != major_type::tag || h->argument != std::to_underlying(rfc8949::tag_number::shareable)) {
+            std::size_t const first = open_marks.size();
+            if (auto const r = decode_content(into, *h, chain); !r) [[unlikely]]
+                return r;
+            item const *const node = open_marks[first].target;
+            auto const closed = std::ranges::remove(std::span(open_marks).subspan(first), node, &open_mark::target);
+            open_marks.resize(open_marks.size() - closed.size());
+            return {};
+        }
         ++chain;
     }
 }
@@ -355,13 +378,16 @@ std::expected<void, error> tree_decoder<Resolve>::decode_sharedref(std::pmr::vec
                             .error_or(error{});
         c != error{}) [[unlikely]]
         return std::unexpected(c);
-    auto const index = detail::value_sharing::check_sharedref_index(h->argument, marks.size());
+    auto const index = detail::value_sharing::check_sharedref_index(h->argument, marks);
     if (!index) [[unlikely]]
-        return std::unexpected(h->argument - marks.size() < marked ? error::sharedref_not_defined : index.error());
-    item const *const target = marks[std::to_underlying(*index)];
-    marks.insert(marks.end(), marked, target);
-    into.emplace_back(item{cbor::type::shared_reference, h->info, {.tag = {h->argument, target}}})
-        .m_holds_shared_reference = true;
+        return std::unexpected(h->argument - marks < marked ? error::sharedref_not_defined : index.error());
+    auto const named = std::ranges::lower_bound(open_marks, h->argument, {}, &open_mark::index);
+    if (named == open_marks.end() || named->index != h->argument) [[unlikely]]
+        return std::unexpected(error::sharedref_not_cyclic);
+    item const &target = *named->target;
+    item &reference = into.emplace_back(item{cbor::type::shared_reference, h->info, {.tag = {h->argument, &target}}});
+    reference.m_holds_shared_reference = true;
+    mark(target, marked);
     ++shared_references;
     return {};
 }
@@ -379,7 +405,7 @@ std::expected<decoded_tree, error> decode_tree(std::string_view const encoded)
                                                                     detail::validity::initial_size_limit);
                                               })
                                               .value_or(detail::validity::initial_size_limit));
-    tree_decoder<Resolve> tree{*decoded, {encoded}, 0, {}, 0};
+    tree_decoder<Resolve> tree{*decoded, {encoded}, 0, 0, {}, 0};
     std::pmr::vector<item> &root = decoded->items_reserved(1);
     if (auto const built = tree.decode_item(root); !built) [[unlikely]]
         return std::unexpected(built.error());
@@ -398,10 +424,8 @@ std::expected<decoded_tree, error> decode_tree(std::string_view const encoded)
  * The tree holds a copy of each text and byte string, so it stays valid after `encoded` ends.
  * A bignum whose magnitude fits 64 bits becomes an integer node.
  * A tag 24 is a tag node, and cbor::encoded_cbor_data_item() gives its decoded content.
- * Tags 28 and 29 of the value-sharing registration are resolved, with a table for this call: a tag 28 makes no
- * node and marks the node of its content, and a tag 29 with the index n is a `shared_reference` node whose target is
- * the node that the n-th tag 28 marks. A target can be the node itself or a node above it, so the tree can hold a
- * cycle. The content of a tag 24 has its own table.
+ * A tag 28 and a tag 29 of the value-sharing registration are tag nodes, as every tag that decode does not interpret;
+ * cbor::decode_cycles() resolves them.
  * One leading tag 55799 is read as its content, so the root is that content.
  * A second tag 55799 and a tag 55799 inside an item stay tag nodes.
  *
@@ -428,21 +452,19 @@ std::expected<decoded_tree, error> decode_tree(std::string_view const encoded)
  * the item is not read, so the input can be a CBOR sequence (RFC 8742)
  * @retval indefinite_length a string, an array or a map has an indefinite length
  * @retval nesting_depth_exceeded the item is deeper than the limit
- * @retval sharedref_index_not_marked a tag 29 whose index names no tag 28 before it
- * @retval sharedref_not_defined a tag 29 that names a tag 28 whose content is only tags 28 and this tag 29, as in
- * `28(29(0))`
- * @retval inadmissible_type_for_tag_content a tag 29 over an item that is not an unsigned integer, or a typed array (RFC 8746) whose content is not a byte string of whole
+ * @retval inadmissible_type_for_tag_content a typed array (RFC 8746) whose content is not a byte string of whole
  * elements. A tag 2 or 3 over another content is an `unsigned_bignum` or `negative_bignum` item over that content,
  * a tag 24 over another content is a `tag` item over that content, and decode checks the content of no other tag.
  * @snippet doc_reference_item.cpp decode
  * @see cbor::item
+ * @see cbor::decode_cycles()
  * @see cbor::encode()
  *
  * @ingroup decode
  */
 inline std::expected<owning<item>, error> decode(std::string_view const encoded)
 {
-    auto const decoded = detail::decode_tree<true>(detail::heads::self_described_cbor_content(encoded));
+    auto const decoded = detail::decode_tree<false>(detail::heads::self_described_cbor_content(encoded));
     if (!decoded) [[unlikely]]
         return std::unexpected(decoded.error());
     return decoded->tree;
@@ -457,6 +479,57 @@ template <borrowed_range_of_bytes Encoded>
 std::expected<owning<item>, error> decode(Encoded &&encoded)
 {
     return decode(detail::chars_of(encoded));
+}
+
+/**
+ * @brief Decodes the one top-level item in `encoded` as cbor::decode() does, and resolves its tags 28 and 29.
+ *
+ * Tags 28 and 29 of the value-sharing registration are resolved, with a table for this call: a tag 28 makes no
+ * node and marks the node of its content, and a tag 29 with the index n is a `shared_reference` node whose target is
+ * the node that the n-th tag 28 marks. A tag 29 closes a cycle: its target is a node whose decode has not ended,
+ * the node above the tag 29 or that node itself. A tag 29 that names a node whose decode has ended is an error. The
+ * content of a tag 24 has its own table. cbor::encode() and cbor::to_edn() write such a tree, with a tag 28 and a
+ * tag 29 only for a cycle.
+ *
+ * @code{.example}
+ * bytes: d8 1c 81 d8 1d 00
+ * call: auto const tree = cbor::decode_cycles(bytes)
+ * result: owning item of 28([29(0)])
+ * call: (*tree)->get<std::span<cbor::item const>>().value()[0].type()
+ * result: cbor::type::shared_reference
+ * @endcode
+ *
+ * @retval too_little_data, syntax_error, indefinite_length, nesting_depth_exceeded as cbor::decode()
+ * @retval sharedref_index_not_marked a tag 29 whose index names no tag 28 before it
+ * @retval sharedref_not_defined a tag 29 that names a tag 28 whose content is only tags 28 and this tag 29, as in
+ * `28(29(0))`
+ * @retval sharedref_not_cyclic a tag 29 that names a tag 28 whose content is decoded to its end, as in
+ * `[28(1), 29(0)]`
+ * @retval inadmissible_type_for_tag_content a tag 29 over an item that is not an unsigned integer, or a typed array
+ * (RFC 8746) whose content is not a byte string of whole elements
+ * @see cbor::decode()
+ * @see cbor::to_edn(item const &)
+ * @see cbor::encode()
+ *
+ * @ingroup decode
+ */
+inline std::expected<owning<item>, error> decode_cycles(std::string_view const encoded)
+{
+    auto const decoded = detail::decode_tree<true>(detail::heads::self_described_cbor_content(encoded));
+    if (!decoded) [[unlikely]]
+        return std::unexpected(decoded.error());
+    return decoded->tree;
+}
+
+/**
+ * @brief Reads one data item from a range of bytes, and resolves its tags 28 and 29.
+ * @ingroup decode
+ */
+template <borrowed_range_of_bytes Encoded>
+    requires(!std::is_array_v<std::remove_cvref_t<Encoded>>)
+std::expected<owning<item>, error> decode_cycles(Encoded &&encoded)
+{
+    return decode_cycles(detail::chars_of(encoded));
 }
 
 }

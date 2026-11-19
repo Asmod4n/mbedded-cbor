@@ -383,8 +383,8 @@ TEST_CASE("bignum: type() gives the error of a cut content head")
 
 // RFC 8949 3.4.3: encode writes a bignum that fits 64 bits as the integer, the preferred form. A tree has such a
 // bignum over a byte string only where a tag 28 stood between the tag 2 or 3 and the bytes, because decode reads a
-// bignum over a byte string as the integer. Decode drops the tag 28 today. A magnitude that does not fit stays a
-// bignum.
+// bignum over a byte string as the integer. cbor::decode_cycles drops the tag 28. A magnitude that does not fit
+// stays a bignum.
 TEST_CASE("bignum: encode writes a bignum that fits 64 bits as the integer")
 {
     struct row {
@@ -394,7 +394,7 @@ TEST_CASE("bignum: encode writes a bignum that fits 64 bits as the integer")
     for (row const r : {row{"2(28(h'05'))", "5"}, row{"3(28(h'00'))", "-1"},
                         row{"2(28(h'010000000000000000'))", "2(h'010000000000000000')"}}) {
         CAPTURE(r.edn);
-        auto const tree = cbor::decode(encode_edn(std::string(r.edn)));
+        auto const tree = cbor::decode_cycles(encode_edn(std::string(r.edn)));
         REQUIRE(tree.has_value());
         std::string again;
         REQUIRE(cbor::encode(again, **tree).has_value());

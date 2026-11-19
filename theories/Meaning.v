@@ -340,7 +340,7 @@ Proof.
       rewrite (strip_chain _ _ _ _ Ch). eapply IH. exact H.
     + destruct (Nat.eqb tg sharedref).
       * destruct ts as [| [i | | | |] ts']; try discriminate.
-        destruct (nth_error (table s) i); [| discriminate]. destruct (_ <? _); [| discriminate].
+        destruct (nth_error (table s) i); [| discriminate]. destruct (_ <? _); [| discriminate]. drop_cyclic.
         inversion H; subst; reflexivity.
       * destruct (read_item fuel ts (reserved (looked 1 s))) as [[[c r1] s1] | e] eqn:E; [| discriminate].
         inversion H; subst. eapply IH. exact E.
@@ -390,7 +390,7 @@ Proof.
       * simpl in L. rewrite length_app, repeat_length in L. rewrite length_app, repeat_length. lia.
     + destruct (Nat.eqb tg sharedref) eqn:R.
       * destruct ts as [| [i | | | |] ts']; try discriminate.
-        destruct (nth_error (table s) i); [| discriminate]. destruct (_ <? _); [| discriminate].
+        destruct (nth_error (table s) i); [| discriminate]. destruct (_ <? _); [| discriminate]. drop_cyclic.
         inversion H; subst. exists []. split; [simpl; rewrite M; reflexivity | simpl; lia].
       * destruct (read_item fuel ts (reserved (looked 1 s))) as [[[c r1] s1] | e] eqn:E; [| discriminate].
         inversion H; subst. destruct (IH _ _ _ _ _ E) as [m [Mm L]]. exists m.
@@ -446,7 +446,7 @@ Proof.
       destruct (IH _ _ _ _ _ H) as [_ F1]. exact F1.
     + destruct (Nat.eqb tg sharedref).
       * destruct ts as [| [i | | | |] ts']; try discriminate.
-        destruct (nth_error (table s) i); [| discriminate]. destruct (_ <? _); [| discriminate].
+        destruct (nth_error (table s) i); [| discriminate]. destruct (_ <? _); [| discriminate]. drop_cyclic.
         inversion H; subst. intros e I; left; exact I.
       * destruct (read_item fuel ts (reserved (looked 1 s))) as [[[c r1] s1] | e] eqn:E; [| discriminate].
         inversion H; subst. destruct (IH _ _ _ _ _ E) as [_ F1].
@@ -504,7 +504,7 @@ Proof.
       exact (proj2 (IH _ _ _ _ _ H S N)).
     + destruct (Nat.eqb tg sharedref).
       * destruct ts as [| [i | | | |] ts']; try discriminate.
-        destruct (nth_error (table s) i); [| discriminate]. destruct (_ <? _); [| discriminate].
+        destruct (nth_error (table s) i); [| discriminate]. destruct (_ <? _); [| discriminate]. drop_cyclic.
         inversion H; subst. exact N.
       * destruct (read_item fuel ts (reserved (looked 1 s))) as [[[c r1] s1] | e] eqn:E; [| discriminate].
         inversion H; subst.
@@ -766,7 +766,7 @@ Proof.
         simpl in H. rewrite M28, M29 in H. apply Nat.eqb_eq in M29. subst t.
         destruct r as [| [i | | | |] r']; try discriminate.
         destruct (nth_error (table s) i) as [x |] eqn:Ex; [| discriminate].
-        destruct (x <? next s); [| discriminate].
+        destruct (x <? next s); [| discriminate]. drop_cyclic.
         inversion H; subst. split; [exact Gd |].
         rewrite dup_ref.
         assert (Tg : nth i (table s) 0 = id) by (apply nth_error_nth; exact Ex).
@@ -825,34 +825,6 @@ Fixpoint item_end (fuel : nat) (ts : list tok) : option (list tok) :=
 
 (* The stream is one item, and nothing follows it. *)
 Definition well_formed (ts : list tok) : Prop := item_end (S (length ts)) ts = Some [].
-
-(* Each tag 29 has an unsigned integer as its index. The index names a tag 28 before the tag 29 that is not in the
-   chain of tags 28 directly before the tag 29. count: the tags 28 before; run: the tags 28 directly before. *)
-Fixpoint refs_ok (ts : list tok) (count run : nat) : Prop :=
-  match ts with
-  | [] => True
-  | TTag t :: r =>
-    if Nat.eqb t shareable then refs_ok r (S count) (S run)
-    else if Nat.eqb t sharedref then
-      match r with
-      | TUInt i :: r' => i + run < count /\ refs_ok r' count 0
-      | _ => False
-      end
-    else refs_ok r count 0
-  | _ :: r => refs_ok r count 0
-  end.
-
-Lemma refs_ref : forall i r c run, refs_ok (TTag sharedref :: TUInt i :: r) c run = (i + run < c /\ refs_ok r c 0).
-Proof. reflexivity. Qed.
-
-Lemma refs_repeat : forall k x c run,
-  refs_ok (repeat (TTag shareable) k ++ x) c run = refs_ok x (c + k) (run + k).
-Proof.
-  induction k as [| k IH]; intros x c run.
-  - rewrite !Nat.add_0_r. reflexivity.
-  - change (refs_ok (repeat (TTag shareable) k ++ x) (S c) (S run) = refs_ok x (c + S k) (run + S k)).
-    rewrite IH. replace (S c + k) with (c + S k) by lia. replace (S run + k) with (run + S k) by lia. reflexivity.
-Qed.
 
 Lemma item_end_tags : forall k f x, item_end (k + f) (repeat (TTag shareable) k ++ x) = item_end f x.
 Proof. induction k as [| k IH]; intros f x; [reflexivity | exact (IH f x)]. Qed.
@@ -938,230 +910,212 @@ Proof.
       apply (IH _ _ _ _ _ H). lia.
     + destruct (Nat.eqb tg sharedref).
       * destruct ts as [| [i | | | |] ts']; try discriminate.
-        destruct (nth_error (table s) i); [| discriminate]. destruct (_ <? _); [| discriminate].
+        destruct (nth_error (table s) i); [| discriminate]. destruct (_ <? _); [| discriminate]. drop_cyclic.
         inversion H; subst. destruct f as [| f]; [simpl in L; lia | reflexivity].
       * destruct (read_item fuel ts (reserved (looked 1 s))) as [[[c r1] s1] | e] eqn:E; [| discriminate].
         inversion H; subst. simpl. apply (IH _ _ _ _ _ E). lia.
 Qed.
 
-(* A successful read meets refs_ok. A read that starts after a chain of tags 28 reads an item that makes a node. *)
-Lemma items_refs : forall fuel,
-  (forall ts s id rest s' r, read_item fuel ts s = ok (id, rest, s') -> (r = 0 \/ simple ts) ->
-     refs_ok rest (length (table s')) 0 -> refs_ok ts (length (table s)) r) ->
-  forall n x a ids rest b, items (read_item fuel) n x a = ok (ids, rest, b) ->
-    refs_ok rest (length (table b)) 0 -> refs_ok x (length (table a)) 0.
+(* cycles_ok_items checks k items one after the other with the check of one item. *)
+Fixpoint cycles_ok_items (ck : list tok -> nat -> list nat -> option (list tok * nat * list nat)) (k : nat)
+  (ts : list tok) (n : nat) (tb : list nat) : option (list tok * nat * list nat) :=
+  match k with
+  | 0 => Some (ts, n, tb)
+  | S k' =>
+    match ck ts n tb with
+    | Some (r, n1, tb1) => cycles_ok_items ck k' r n1 tb1
+    | None => None
+    end
+  end.
+
+(* cycles_ok checks one item as read_item reads it, without the graph. n is the next id, tb the table and opn the
+   ids of the items whose read has not ended. It gives the stream after the item, the next id and the table, or
+   None. A node takes n, and n is in opn while the content of the node is checked. A tag 29 passes only if it
+   names an id in opn: it closes a cycle. *)
+Fixpoint cycles_ok (fuel : nat) (ts : list tok) (n : nat) (tb : list nat) (opn : list nat) {struct fuel}
+  : option (list tok * nat * list nat) :=
+  match fuel with
+  | 0 => None
+  | S f =>
+    match ts with
+    | [] => None
+    | TUInt _ :: r => Some (r, S n, tb)
+    | TLeaf _ :: r => Some (r, S n, tb)
+    | TArr k :: r => cycles_ok_items (fun x m t => cycles_ok f x m t (n :: opn)) k r (S n) tb
+    | TMap k :: r => cycles_ok_items (fun x m t => cycles_ok f x m t (n :: opn)) (k + k) r (S n) tb
+    | TTag t :: r =>
+      if Nat.eqb t shareable then
+        let (c, content) := chain r 1 in
+        match chain_target content c (mkstate n tb [] 0) with
+        | ok target => cycles_ok f content n (tb ++ repeat target c) opn
+        | fail _ => None
+        end
+      else if Nat.eqb t sharedref then
+        match r with
+        | TUInt i :: r' =>
+          match nth_error tb i with
+          | Some x => if x <? n then if existsb (Nat.eqb x) opn then Some (r', n, tb) else None else None
+          | None => None
+          end
+        | _ => None
+        end
+      else cycles_ok f r (S n) tb (n :: opn)
+    end
+  end.
+
+(* opn holds the ids below next s whose nodes are not complete, and no other id. *)
+Definition open_nodes (s : state) (opn : list nat) : Prop :=
+  (forall x, x < next s -> complete x (graph s) = false <-> In x opn) /\ (forall x, In x opn -> x < next s).
+
+(* chain_target reads only the table and the next id. *)
+Lemma chain_target_graph : forall content c s,
+  chain_target content c s = chain_target content c (mkstate (next s) (table s) [] 0).
+Proof. intros content c [n tb g st]. reflexivity. Qed.
+
+Lemma existsb_In : forall x l, existsb (Nat.eqb x) l = true <-> In x l.
 Proof.
-  intros fuel Hr. induction n as [| n IH]; intros x a ids rest b H R; simpl in H.
-  - inversion H; subst. exact R.
-  - destruct (read_item fuel x a) as [[[id1 rest1] s1] | e] eqn:E1; [| discriminate].
-    destruct (items (read_item fuel) n rest1 s1) as [[[ids2 rest2] s2] | e] eqn:E2; [| discriminate].
-    inversion H; subst.
-    apply (Hr _ _ _ _ _ 0 E1 (or_introl eq_refl)). eapply IH; [exact E2 | exact R].
+  intros x l. rewrite existsb_exists. split.
+  - intros [y [I E]]. apply Nat.eqb_eq in E. subst y. exact I.
+  - intros I. exists x. split; [exact I | apply Nat.eqb_refl].
 Qed.
 
-Lemma read_item_refs : forall fuel ts s id rest s' r, read_item fuel ts s = ok (id, rest, s') ->
-  (r = 0 \/ simple ts) -> refs_ok rest (length (table s')) 0 -> refs_ok ts (length (table s)) r.
+Lemma complete_cons : forall x i nd g, complete x ((i, nd) :: g) = orb (Nat.eqb i x) (complete x g).
+Proof. reflexivity. Qed.
+
+Lemma complete_next : forall s, sound s -> complete (next s) (graph s) = false.
 Proof.
-  induction fuel as [| fuel IH]; intros ts s id rest s' r H Hr R; [discriminate |].
-  simpl in H. destruct ts as [| [n | n | k | k | tg] ts]; try discriminate.
-  - inversion H; subst. exact R.
-  - inversion H; subst. exact R.
-  - destruct (items (read_item fuel) k ts (reserved (looked 1 s))) as [[[ids r1] s1] | e] eqn:E; [| discriminate].
-    inversion H; subst. exact (items_refs _ IH _ _ _ _ _ _ E R).
-  - destruct (items (read_item fuel) (k + k) ts (reserved (looked 1 s))) as [[[ids r1] s1] | e] eqn:E; [| discriminate].
-    inversion H; subst. exact (items_refs _ IH _ _ _ _ _ _ E R).
-  - destruct (Nat.eqb tg shareable) eqn:M.
-    + apply Nat.eqb_eq in M. subst tg.
-      assert (r = 0) as -> by (destruct Hr as [-> | [N _]]; [reflexivity | exfalso; apply N; reflexivity]).
-      destruct (chain ts 1) as [c content] eqn:Ch.
-      destruct (chain_target content c s) as [target | e] eqn:CT; [| discriminate].
-      destruct (chain_whole _ _ _ Ch) as [Ts C1].
-      rewrite Ts, refs_repeat.
-      assert (Lm : length (table (marked_as target c (looked c s))) = length (table s) + c).
-      { simpl. rewrite length_app, repeat_length. reflexivity. }
-      destruct (chain_target_cases _ _ _ _ CT) as [[i0 [r0 [Ec Ei]]] | [Et Hc]].
-      * subst content. destruct fuel as [| fuel]; [discriminate |].
-        apply sharedref_names_entry in H as [_ [Es Er]]. subst s' rest.
-        rewrite refs_ref. split.
-        -- assert (Li : i0 < length (table s)) by (apply nth_error_Some; rewrite Ei; discriminate). lia.
-        -- change (refs_ok r0 (length (table (marked_as target c (looked c s)))) 0) in R. rewrite Lm in R. exact R.
-      * rewrite <- Lm. apply (IH _ _ _ _ _ (0 + c) H); [| exact R].
-        right. apply simple_of; [eapply chain_content_head; exact Ch | exact Hc].
-    + destruct (Nat.eqb tg sharedref) eqn:M29.
-      * apply Nat.eqb_eq in M29. subst tg.
-        assert (r = 0) as -> by (destruct Hr as [-> | [_ N]]; [reflexivity | exfalso; apply N; reflexivity]).
-        destruct ts as [| [i | | | |] ts']; try discriminate.
-        destruct (nth_error (table s) i) as [x |] eqn:Ex; [| discriminate]. destruct (_ <? _); [| discriminate].
-        inversion H; subst. rewrite refs_ref. split; [| exact R].
-        assert (Li : i < length (table s)) by (apply nth_error_Some; rewrite Ex; discriminate). lia.
-      * destruct (read_item fuel ts (reserved (looked 1 s))) as [[[c r1] s1] | e] eqn:E; [| discriminate].
-        inversion H; subst. simpl. rewrite M, M29.
-        exact (IH _ _ _ _ _ 0 E (or_introl eq_refl) R).
+  intros s Sd. unfold complete. destruct (existsb _ _) eqn:E; [| reflexivity].
+  apply existsb_exists in E as [[i nd] [I Ei]]. simpl in Ei. apply Nat.eqb_eq in Ei. subst i.
+  destruct (Sd _ _ I) as [L _]. lia.
 Qed.
 
-(* T6, one direction: a stream that read reads is one well-formed item and meets refs_ok. *)
-Theorem read_stream : forall ts root s, read ts = ok (root, s) -> well_formed ts /\ refs_ok ts 0 0.
+(* A node opens when the reader reserves its id. *)
+Lemma open_nodes_rl : forall s opn, sound s -> open_nodes s opn -> open_nodes (reserved (looked 1 s)) (next s :: opn).
+Proof.
+  intros s opn Sd [Oc Ol]. split; cbn [next graph reserved looked].
+  - intros x Lx. destruct (Nat.eq_dec x (next s)) as [-> | D].
+    + rewrite (complete_next s Sd). split; [intros _; left; reflexivity | reflexivity].
+    + rewrite (Oc x ltac:(lia)). simpl. split; [intros I; right; exact I | intros [E | I]; [lia | exact I]].
+  - intros x [<- | I]; [lia | specialize (Ol x I); lia].
+Qed.
+
+(* A node closes when it enters the graph. *)
+Lemma open_nodes_made : forall s s1 opn nd, open_nodes s opn -> open_nodes s1 (next s :: opn) ->
+  open_nodes (made (next s) nd s1) opn.
+Proof.
+  intros s s1 opn nd [Oc Ol] [Oc1 Ol1].
+  assert (L1 : next s < next s1) by (apply Ol1; left; reflexivity).
+  split; cbn [next graph made].
+  - intros x Lx. rewrite complete_cons. destruct (Nat.eqb (next s) x) eqn:E; simpl.
+    + apply Nat.eqb_eq in E. subst x. split; [discriminate | intros I; specialize (Ol _ I); lia].
+    + apply Nat.eqb_neq in E. rewrite (Oc1 x Lx). simpl. split; [intros [E1 | I]; [lia | exact I] | intros I; right; exact I].
+  - intros x I. specialize (Ol x I). lia.
+Qed.
+
+Lemma items_cycles : forall f opn,
+  (forall ts s, open_nodes s opn -> sound s ->
+     match read_item f ts s with
+     | ok (_, rest, s') => cycles_ok f ts (next s) (table s) opn = Some (rest, next s', table s') /\ open_nodes s' opn
+     | fail _ => cycles_ok f ts (next s) (table s) opn = None
+     end) ->
+  forall k ts s, open_nodes s opn -> sound s ->
+    match items (read_item f) k ts s with
+    | ok (_, rest, s') =>
+      cycles_ok_items (fun x m t => cycles_ok f x m t opn) k ts (next s) (table s) = Some (rest, next s', table s') /\
+      open_nodes s' opn
+    | fail _ => cycles_ok_items (fun x m t => cycles_ok f x m t opn) k ts (next s) (table s) = None
+    end.
+Proof.
+  intros f opn Hr. induction k as [| k IH]; intros ts s O Sd; cbn [items cycles_ok_items].
+  - split; [reflexivity | exact O].
+  - pose proof (Hr ts s O Sd) as H1.
+    destruct (read_item f ts s) as [[[id1 r1] s1] | e] eqn:E1.
+    + destruct H1 as [C1 O1]. rewrite C1.
+      pose proof (IH r1 s1 O1 (proj1 (read_item_sound _ _ _ _ _ _ E1 Sd))) as H2.
+      destruct (items (read_item f) k r1 s1) as [[[ids r2] s2] | e]; exact H2.
+    + rewrite H1. reflexivity.
+Qed.
+
+(* read_item and cycles_ok agree: the read succeeds exactly where cycles_ok passes, and both give the same stream,
+   the same next id and the same table. *)
+Lemma read_item_cycles : forall fuel ts s opn, open_nodes s opn -> sound s ->
+  match read_item fuel ts s with
+  | ok (_, rest, s') => cycles_ok fuel ts (next s) (table s) opn = Some (rest, next s', table s') /\ open_nodes s' opn
+  | fail _ => cycles_ok fuel ts (next s) (table s) opn = None
+  end.
+Proof.
+  induction fuel as [| f IH]; intros ts s opn O Sd; [reflexivity |].
+  pose proof (open_nodes_rl s opn Sd O) as O1.
+  pose proof (sound_rl s Sd) as S1.
+  destruct ts as [| [n | n | k | k | t] r]; cbn [read_item cycles_ok]; [reflexivity | | | | |].
+  - split; [reflexivity | exact (open_nodes_made s _ opn _ O O1)].
+  - split; [reflexivity | exact (open_nodes_made s _ opn _ O O1)].
+  - pose proof (items_cycles f (next s :: opn) (fun x s0 => IH x s0 (next s :: opn)) k r _ O1 S1) as Hi.
+    destruct (items (read_item f) k r (reserved (looked 1 s))) as [[[ids r1] s2] | e]; [| exact Hi].
+    destruct Hi as [C O2]. split; [exact C | exact (open_nodes_made s _ opn _ O O2)].
+  - pose proof (items_cycles f (next s :: opn) (fun x s0 => IH x s0 (next s :: opn)) (k + k) r _ O1 S1) as Hi.
+    destruct (items (read_item f) (k + k) r (reserved (looked 1 s))) as [[[ids r1] s2] | e]; [| exact Hi].
+    destruct Hi as [C O2]. split; [exact C | exact (open_nodes_made s _ opn _ O O2)].
+  - destruct (Nat.eqb t shareable).
+    + destruct (chain r 1) as [c content].
+      rewrite (chain_target_graph content c s).
+      destruct (chain_target content c (mkstate (next s) (table s) [] 0)) as [target | e]; [| reflexivity].
+      pose proof (IH content (marked_as target c (looked c s)) opn O Sd) as Hc.
+      destruct (read_item f content (marked_as target c (looked c s))) as [[[id r1] s2] | e]; exact Hc.
+    + destruct (Nat.eqb t sharedref).
+      * destruct r as [| [i | | | |] r']; try reflexivity.
+        destruct (nth_error (table s) i) as [x |]; [| reflexivity].
+        destruct (x <? next s) eqn:Lx; [| reflexivity].
+        apply Nat.ltb_lt in Lx. destruct O as [Oc Ol]. pose proof (Oc x Lx) as Ox.
+        destruct (complete x (graph s)) eqn:C; destruct (existsb (Nat.eqb x) opn) eqn:X.
+        -- apply existsb_In in X. apply Ox in X. discriminate.
+        -- reflexivity.
+        -- split; [reflexivity | exact (conj Oc Ol)].
+        -- pose proof (proj2 (existsb_In x opn) (proj1 Ox eq_refl)) as I. congruence.
+      * pose proof (IH r (reserved (looked 1 s)) (next s :: opn) O1 S1) as Hc.
+        destruct (read_item f r (reserved (looked 1 s))) as [[[id r1] s2] | e]; [| exact Hc].
+        destruct Hc as [C O2]. split; [exact C | exact (open_nodes_made s _ opn _ O O2)].
+Qed.
+
+Lemma open_nodes_start : open_nodes start [].
+Proof. split; [intros x L; simpl in L; lia | intros x []]. Qed.
+
+Lemma sound_start : sound start.
+Proof. intros i n []. Qed.
+
+(* T6, one direction: a stream that read reads is one well-formed item, and each of its tags 29 closes a cycle. *)
+Theorem read_stream : forall ts root s, read ts = ok (root, s) ->
+  well_formed ts /\ cycles_ok (S (length ts)) ts 0 [] [] <> None.
 Proof.
   intros ts root s H. unfold read in H.
+  pose proof (read_item_cycles (S (length ts)) ts start [] open_nodes_start sound_start) as Hc.
   destruct (read_item (S (length ts)) ts start) as [[[r rest] s'] | e] eqn:E; [| discriminate].
   destruct rest; [| discriminate].
   split.
   - unfold well_formed. eapply read_item_ends; [exact E | lia].
-  - exact (read_item_refs _ _ _ _ _ _ 0 E (or_introl eq_refl) I).
+  - destruct Hc as [C _]. cbn [next table start] in C. rewrite C. discriminate.
 Qed.
 
-(* The other direction: each entry of the table is a reserved id. After a chain of tags 28 whose item makes a node,
-   the entries may be the next id, which the item reserves first. *)
-Definition below (s : state) : Prop := forall j x, nth_error (table s) j = Some x -> x < next s.
-Definition below_eq (s : state) : Prop := forall j x, nth_error (table s) j = Some x -> x <= next s.
-
-Lemma below_rl : forall s, below_eq s -> below (reserved (looked 1 s)).
-Proof. intros s B j x Ej. specialize (B j x Ej). simpl. lia. Qed.
-
-Lemma nth_error_app_repeat : forall (l : list nat) a c j y,
-  nth_error (l ++ repeat a c) j = Some y -> nth_error l j = Some y \/ y = a.
+(* T6, the other direction: read reads each well-formed stream whose tags 29 close cycles. *)
+Theorem stream_read : forall ts, well_formed ts -> cycles_ok (S (length ts)) ts 0 [] [] <> None ->
+  exists root s, read ts = ok (root, s).
 Proof.
-  intros l a c j y E.
-  destruct (Nat.lt_ge_cases j (length l)) as [L | L].
-  - left. rewrite nth_error_app1 in E by exact L. exact E.
-  - right. rewrite nth_error_app2 in E by exact L. apply nth_error_In in E. apply repeat_spec in E. exact E.
+  intros ts W Cn.
+  pose proof (read_item_cycles (S (length ts)) ts start [] open_nodes_start sound_start) as Hc.
+  unfold read.
+  destruct (read_item (S (length ts)) ts start) as [[[id rest] s'] | e] eqn:E; [| exfalso; exact (Cn Hc)].
+  pose proof (read_item_ends _ _ _ _ _ _ E (S (length ts)) ltac:(lia)) as Er.
+  unfold well_formed in W. rewrite W in Er. injection Er as <-.
+  exists id, s'. reflexivity.
 Qed.
 
-Lemma read_item_chain_eq : forall f r s c content, chain r 1 = (c, content) ->
-  read_item (S f) (TTag shareable :: r) s =
-  match chain_target content c s with
-  | fail e => fail e
-  | ok target => read_item f content (marked_as target c (looked c s))
-  end.
-Proof. intros f r s c content Ch. simpl. rewrite Ch. reflexivity. Qed.
-
-Lemma read_item_ref_ok : forall f i r s x, nth_error (table s) i = Some x -> x < next s ->
-  read_item (S f) (TTag sharedref :: TUInt i :: r) s = ok (x, r, looked 2 s).
-Proof. intros f i r s x E L. simpl. rewrite E. apply Nat.ltb_lt in L. rewrite L. reflexivity. Qed.
-
-Lemma chain_target_ref : forall i r c s x, nth_error (table s) i = Some x -> x < next s ->
-  chain_target (TTag sharedref :: TUInt i :: r) c s = ok x.
-Proof. intros i r c s x E L. unfold chain_target. simpl. rewrite E. apply Nat.ltb_lt in L. rewrite L. reflexivity. Qed.
-
-Lemma chain_target_simple : forall content c s, simple content -> chain_target content c s = ok (next s).
-Proof.
-  intros [| [n | n | n | n | t] r] c s Hs; try reflexivity.
-  destruct Hs as [_ N]. apply Nat.eqb_neq in N. unfold chain_target. simpl. rewrite N. reflexivity.
-Qed.
-
-Definition complete_at (fuel : nat) : Prop :=
-  forall ts s rest r, length ts < fuel -> item_end (S (length ts)) ts = Some rest ->
-    refs_ok ts (length (table s)) r -> below s \/ (below_eq s /\ simple ts) ->
-    exists id s', read_item fuel ts s = ok (id, rest, s') /\ refs_ok rest (length (table s')) 0 /\ below s'.
-
-Lemma items_complete : forall fuel F, complete_at fuel ->
-  forall n x a rest, length x < fuel -> length x < F -> skips (item_end F) n x = Some rest ->
-    refs_ok x (length (table a)) 0 -> below a ->
-    exists ids b, items (read_item fuel) n x a = ok (ids, rest, b) /\ refs_ok rest (length (table b)) 0 /\ below b.
-Proof.
-  intros fuel F Hc. induction n as [| n IH]; intros x a rest L LF H R B; simpl in H.
-  - inversion H; subst. exists [], a. split; [reflexivity | split; assumption].
-  - destruct (item_end F x) as [r1 |] eqn:E1; [| discriminate].
-    assert (E1' : item_end (S (length x)) x = Some r1) by (eapply item_end_enough; [exact E1 | lia]).
-    destruct (Hc x a r1 0 L E1' R (or_introl B)) as [id [b1 [Hr1 [R1 B1]]]].
-    pose proof (item_end_shorter _ _ _ E1) as L1.
-    destruct (IH r1 b1 rest ltac:(lia) ltac:(lia) H R1 B1) as [ids [b [Hi [Rb Bb]]]].
-    exists (id :: ids), b. split; [simpl; rewrite Hr1, Hi; reflexivity | split; assumption].
-Qed.
-
-Lemma read_item_complete : forall fuel, complete_at fuel.
-Proof.
-  induction fuel as [| f IH]; intros ts s rest r L W R B; [simpl in L; lia |].
-  assert (Be : below_eq s) by (destruct B as [B | [B _]]; [intros j x E0; specialize (B j x E0); lia | exact B]).
-  destruct ts as [| [n | n | n | n | t] r0]; try discriminate W.
-  - change (Some r0 = Some rest) in W. injection W as <-.
-    exists (next s), (made (next s) (NUInt n) (reserved (looked 1 s))).
-    split; [reflexivity | split; [exact R | intros j x Ej; specialize (Be j x Ej); simpl; lia]].
-  - change (Some r0 = Some rest) in W. injection W as <-.
-    exists (next s), (made (next s) (NLeaf n) (reserved (looked 1 s))).
-    split; [reflexivity | split; [exact R | intros j x Ej; specialize (Be j x Ej); simpl; lia]].
-  - change (skips (item_end (S (length r0))) n r0 = Some rest) in W.
-    simpl in L.
-    destruct (items_complete f (S (length r0)) IH n r0 (reserved (looked 1 s)) rest ltac:(lia) ltac:(lia) W R (below_rl _ Be))
-      as [ids [b [Hi [Rb Bb]]]].
-    exists (next s), (made (next s) (NArr ids) b). split; [simpl; rewrite Hi; reflexivity | split; [exact Rb | exact Bb]].
-  - change (skips (item_end (S (length r0))) (n + n) r0 = Some rest) in W.
-    simpl in L.
-    destruct (items_complete f (S (length r0)) IH (n + n) r0 (reserved (looked 1 s)) rest ltac:(lia) ltac:(lia) W R (below_rl _ Be))
-      as [ids [b [Hi [Rb Bb]]]].
-    exists (next s), (made (next s) (NMap (pairs ids)) b). split; [simpl; rewrite Hi; reflexivity | split; [exact Rb | exact Bb]].
-  - change (item_end (S (length r0)) r0 = Some rest) in W.
-    destruct (Nat.eqb t shareable) eqn:M28.
-    + (* A chain of tags 28. *)
-      apply Nat.eqb_eq in M28. subst t.
-      destruct B as [B | [_ [N _]]]; [| exfalso; apply N; reflexivity].
-      destruct (chain r0 1) as [c content] eqn:Ch.
-      destruct (chain_whole _ _ _ Ch) as [Ts C1].
-      destruct (chain_repeat _ _ _ _ Ch) as [Rt _].
-      assert (Lc : length r0 = c - 1 + length content) by (rewrite Rt, length_app, repeat_length; reflexivity).
-      rewrite Ts, refs_repeat in R.
-      assert (Wc : item_end (S (length content)) content = Some rest).
-      { rewrite Rt, length_app, repeat_length in W.
-        replace (S (c - 1 + length content)) with (c - 1 + S (length content)) in W by lia.
-        rewrite item_end_tags in W. exact W. }
-      assert (Lm : length (table (marked_as (next s) c (looked c s))) = length (table s) + c).
-      { simpl. rewrite length_app, repeat_length. reflexivity. }
-      assert (K : (exists r1, content = TTag sharedref :: r1) \/ simple content).
-      { destruct content as [| [n1 | n1 | n1 | n1 | t1] r1]; try (right; exact I).
-        destruct (Nat.eqb t1 sharedref) eqn:M29.
-        - left. apply Nat.eqb_eq in M29. subst t1. eexists. reflexivity.
-        - right. split; [intros E0; subst t1; eapply chain_content_head; [exact Ch | reflexivity] | apply Nat.eqb_neq; exact M29]. }
-      destruct K as [[r1 ->] | Hs].
-      * (* The chain marks a reference to an earlier mark. *)
-        destruct r1 as [| [i | | | |] r2]; try (exfalso; exact R).
-        rewrite refs_ref in R. destruct R as [Li R2].
-        change (Some r2 = Some rest) in Wc. injection Wc as <-.
-        destruct (nth_error (table s) i) as [x |] eqn:Ex; [| apply nth_error_None in Ex; lia].
-        exists x, (looked 2 (marked_as x c (looked c s))). split; [| split].
-        -- rewrite (read_item_chain_eq _ _ _ _ _ Ch), (chain_target_ref _ _ _ _ _ Ex (B _ _ Ex)).
-           destruct f as [| f]; [simpl in L; lia |].
-           apply read_item_ref_ok; [exact (nth_error_app_prefix _ _ _ _ Ex) | exact (B _ _ Ex)].
-        -- change (refs_ok r2 (length (table s ++ repeat x c)) 0). rewrite length_app, repeat_length. exact R2.
-        -- intros j y Ej. destruct (nth_error_app_repeat _ _ _ _ _ Ej) as [Ej' | ->]; [exact (B _ _ Ej') | exact (B _ _ Ex)].
-      * (* The chain marks an item that makes a node. *)
-        rewrite <- Lm in R.
-        destruct (IH content (marked_as (next s) c (looked c s)) rest (r + c) ltac:(simpl in L; lia) Wc R) as [id [s' [Hr [Rs Bs]]]].
-        { right. split; [| exact Hs]. intros j y Ej.
-          destruct (nth_error_app_repeat _ _ _ _ _ Ej) as [Ej' | ->]; [specialize (B _ _ Ej'); simpl; lia | simpl; lia]. }
-        exists id, s'. split; [| split; assumption].
-        rewrite (read_item_chain_eq _ _ _ _ _ Ch), (chain_target_simple _ _ _ Hs). exact Hr.
-    + destruct (Nat.eqb t sharedref) eqn:M29.
-      * (* A tag 29. *)
-        apply Nat.eqb_eq in M29. subst t.
-        destruct B as [B | [_ [_ N]]]; [| exfalso; apply N; reflexivity].
-        destruct r0 as [| [i | | | |] r2]; try (exfalso; exact R).
-        rewrite refs_ref in R. destruct R as [Li R2].
-        change (Some r2 = Some rest) in W. injection W as <-.
-        destruct (nth_error (table s) i) as [x |] eqn:Ex; [| apply nth_error_None in Ex; lia].
-        exists x, (looked 2 s). split; [apply read_item_ref_ok; [exact Ex | exact (B _ _ Ex)] | split; [exact R2 | exact B]].
-      * (* Another tag. *)
-        simpl in R. rewrite M28, M29 in R.
-        destruct (IH r0 (reserved (looked 1 s)) rest 0 ltac:(simpl in L; lia) W R (or_introl (below_rl _ Be)))
-          as [id [s1 [Hr [Rs Bs]]]].
-        exists (next s), (made (next s) (NTag t id) s1).
-        split; [simpl; rewrite M28, M29, Hr; reflexivity | split; [exact Rs | exact Bs]].
-Qed.
-
-(* T6, the other direction: read reads each well-formed stream that meets refs_ok. *)
-Theorem stream_read : forall ts, well_formed ts -> refs_ok ts 0 0 -> exists root s, read ts = ok (root, s).
-Proof.
-  intros ts W R.
-  destruct (read_item_complete (S (length ts)) ts start [] 0 ltac:(lia) W R) as [id [s' [H _]]].
-  { left. intros [| j] x Ej; discriminate Ej. }
-  exists id, s'. unfold read. rewrite H. reflexivity.
-Qed.
-
-(* T6: read succeeds if and only if the stream is one well-formed item and meets refs_ok. *)
-Theorem read_ok_iff : forall ts, (exists root s, read ts = ok (root, s)) <-> well_formed ts /\ refs_ok ts 0 0.
+(* T6: read succeeds if and only if the stream is one well-formed item and each of its tags 29 closes a cycle. *)
+Theorem read_ok_iff : forall ts, (exists root s, read ts = ok (root, s)) <->
+  well_formed ts /\ cycles_ok (S (length ts)) ts 0 [] [] <> None.
 Proof.
   intros ts. split.
   - intros [root [s H]]. exact (read_stream ts root s H).
-  - intros [W R]. exact (stream_read ts W R).
+  - intros [W C]. exact (stream_read ts W C).
 Qed.
 
 (* Cases with their result, computed by the model. *)
@@ -1170,20 +1124,29 @@ Qed.
 Example expand_cyclic_array : expand 3 [TTag 28; TArr 1; TTag 29; TUInt 0] = TA [TA [TA [Cut]]].
 Proof. reflexivity. Qed.
 
-(* The specification: [28([]), 29(0), []]. *)
+(* The specification: [28([]), 29(0), []]. read refuses it (spec_shared_array); expand duplicates the value. *)
 Example expand_shared_array :
   expand 2 [TArr 3; TTag 28; TArr 0; TTag 29; TUInt 0; TArr 0] = TA [TA []; TA []; TA []].
 Proof. reflexivity. Qed.
 
-(* A mark of a reference: [28(1), 28(29(0)), 29(1)]. *)
+(* A mark of a reference: [28(1), 28(29(0)), 29(1)]. read refuses it (mark_of_reference_to_complete); expand
+   duplicates the value. *)
 Example expand_mark_of_reference :
   expand 2 [TArr 3; TTag 28; TUInt 1; TTag 28; TTag 29; TUInt 0; TTag 29; TUInt 1] = TA [TU 1; TU 1; TU 1].
 Proof. reflexivity. Qed.
 
-(* refs_ok refuses a reference to a mark in the chain directly before it: 28(28(29(0))). *)
-Example refs_chain_of_itself : ~ refs_ok [TTag 28; TTag 28; TTag 29; TUInt 0] 0 0.
-Proof. simpl. lia. Qed.
+(* cycles_ok refuses a reference to a mark in the chain directly before it: 28(28(29(0))). *)
+Example cycles_chain_of_itself : cycles_ok 5 [TTag 28; TTag 28; TTag 29; TUInt 0] 0 [] [] = None.
+Proof. reflexivity. Qed.
 
-(* refs_ok refuses a reference before its mark: [29(0), 28(1)]. *)
-Example refs_before_mark : ~ refs_ok [TArr 2; TTag 29; TUInt 0; TTag 28; TUInt 1] 0 0.
-Proof. simpl. lia. Qed.
+(* cycles_ok refuses a reference before its mark: [29(0), 28(1)]. *)
+Example cycles_before_mark : cycles_ok 6 [TArr 2; TTag 29; TUInt 0; TTag 28; TUInt 1] 0 [] [] = None.
+Proof. reflexivity. Qed.
+
+(* cycles_ok refuses a reference to a complete value: [28([]), 29(0), []]. *)
+Example cycles_shared_array : cycles_ok 7 [TArr 3; TTag 28; TArr 0; TTag 29; TUInt 0; TArr 0] 0 [] [] = None.
+Proof. reflexivity. Qed.
+
+(* cycles_ok passes a reference that closes a cycle: 28([29(0)]). *)
+Example cycles_cyclic_array : cycles_ok 5 [TTag 28; TArr 1; TTag 29; TUInt 0] 0 [] [] = Some ([], 1, [0]).
+Proof. reflexivity. Qed.

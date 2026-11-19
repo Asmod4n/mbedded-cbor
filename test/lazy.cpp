@@ -1024,8 +1024,8 @@ TEST_CASE("lazy: get reads every integer width up to its edge")
 // string. RFC 8746 2: the content of tags 64 to 87 is a byte string. Tag 76 is reserved, and the library reads it as a
 // tag that it does not interpret. The registration of tag 29 (value-sharing) makes its content an unsigned integer. The
 // rule table holds a row only for a tag that the library interprets (owner, 2026-10-13), so every other tag takes every
-// major type. A lazy reads the content of tags 2, 3 and 24 when it reads the value; cbor::decode reads the content of
-// the other tags. This test has two purposes. No content that these sections forbid may pass a reader that interprets
+// major type. A lazy reads the content of tags 2, 3 and 24 when it reads the value; cbor::decode_cycles reads the
+// content of tag 29, which cbor::decode passes as a tag; cbor::decode reads the content of the other tags. This test has two purposes. No content that these sections forbid may pass a reader that interprets
 // the tag. No reader may refuse a tag that the library does not interpret.
 TEST_CASE("lazy: the content of each tag for every major type")
 {
@@ -1067,7 +1067,10 @@ TEST_CASE("lazy: the content of each tag for every major type")
             std::expected<void, error> read;
             if (tag == 2 || tag == 3 || tag == 24)
                 read = get<std::int64_t>(tagged).transform([](std::int64_t) {});
-            else
+            else if (tag == 29) {
+                read = cbor::decode_cycles("\xd8\x1c\x81"s + tagged).transform([](auto const &) {});
+                CHECK(cbor::decode("\x82\xd8\x1c\x00"s + tagged).has_value());
+            } else
                 read = cbor::decode("\x82\xd8\x1c\x00"s + tagged).transform([](auto const &) {});
             if (admitted)
                 CHECK(read.has_value());
@@ -2230,11 +2233,13 @@ std::vector<std::uint8_t> unsigned_bytes_of_bytes_lazy(std::string const &bytes)
 
 } // namespace
 
+CBOR_DEFINE_TYPE_MEMBERS(bytes_lazy, cbor::untagged, a, b);
+
 // A byte range reads as the std::string of the same bytes. The bytes come from the encoder of the library, and the
 // test reads them as std::vector<std::uint8_t> and as std::span<std::byte const>, the forms that other CBOR libraries take.
 TEST_CASE("lazy: view and adopt read a range of bytes as the std::string of the same bytes")
 {
-    auto const encoded = cbor::structs<bytes_lazy>::encode(bytes_lazy{1, {2, 3}});
+    auto const encoded = cbor::encode<bytes_lazy>(bytes_lazy{1, {2, 3}});
     REQUIRE(encoded.has_value());
     auto const owner = std::make_shared<std::string const>(*encoded);
     auto const b = std::as_bytes(std::span(*owner));

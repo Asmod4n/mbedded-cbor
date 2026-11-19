@@ -1113,8 +1113,8 @@ struct sample {
 };
 
 // One encoded item for each member of cbor::type, written from RFC 8949 Appendix A, RFC 8746 and the value-sharing
-// registration. A tag 29 needs a tag 28 before it. So the shared_reference stands as the second element of [28(1),
-// 29(0)], and the test reads that element.
+// registration. A tag 29 names a tag 28 whose value is still open, so it closes a cycle. So the shared_reference stands
+// as the second element of 28([1, 29(0)]), its target is the root, and the test reads that element.
 constexpr std::array<sample, 19> samples{{
     {cbor::type::unsigned_integer, "\x18\x64"sv},
     {cbor::type::negative_integer, "\x38\x63"sv},
@@ -1134,7 +1134,7 @@ constexpr std::array<sample, 19> samples{{
     {cbor::type::unsigned_bignum, "\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"sv},
     {cbor::type::negative_bignum, "\xc3\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"sv},
     {cbor::type::typed_array, "\xd8\x40\x42\x01\x02"sv},
-    {cbor::type::shared_reference, "\x82\xd8\x1c\x01\xd8\x1d\x00"sv},
+    {cbor::type::shared_reference, "\xd8\x1c\x82\x01\xd8\x1d\x00"sv},
 }};
 
 } // namespace
@@ -1367,6 +1367,14 @@ void check_every_type(cbor::type const kind, cbor::item const &it, cbor::item co
     }
 }
 
+// Only cbor::decode_cycles makes a shared_reference node; cbor::decode reads its sample as tags.
+std::expected<cbor::owning<cbor::item>, error> tree_of(sample const &s)
+{
+    if (s.type == cbor::type::shared_reference)
+        return cbor::decode_cycles(s.encoded);
+    return cbor::decode(s.encoded);
+}
+
 cbor::item const &node_of(sample const &s, cbor::owning<cbor::item> const &tree)
 {
     if (s.type != cbor::type::shared_reference)
@@ -1380,11 +1388,11 @@ TEST_CASE("item get<T>: every kind of node read as every type")
 {
     for (sample const &s : samples) {
         CAPTURE(std::to_underlying(s.type));
-        auto const tree = cbor::decode(s.encoded);
+        auto const tree = tree_of(s);
         REQUIRE(tree.has_value());
         cbor::item const &it = node_of(s, *tree);
         cbor::item const *const first =
-            s.type == cbor::type::shared_reference ? &(*tree)->get<std::span<cbor::item const>>().value()[0] : nullptr;
+            s.type == cbor::type::shared_reference ? &**tree : nullptr;
         check_every_type(s.type, it, first);
     }
 }
@@ -1478,7 +1486,7 @@ TEST_CASE("item get<double>: an integer that a double holds and one that it does
 // RFC 8949 3.4: a decoder passes a tag that it does not interpret. get passes the tags that cbor::lazy::get passes.
 // A tag 24 is not passed: its content is a byte string, and cbor::encoded_cbor_data_item gives the item in it. A tag
 // 55799 inside an item is a tag of its own (RFC 8949 3.4.6) and is passed. The tag 1 in 28(1(29(0))) holds a shared
-// reference to itself; a shared reference is not passed, so the call ends.
+// reference to itself after cbor::decode_cycles; a shared reference is not passed, so the call ends.
 TEST_CASE("item get<T>: the tags that get passes")
 {
     auto const epoch = cbor::decode("\xc1\x05"sv);
@@ -1489,7 +1497,7 @@ TEST_CASE("item get<T>: the tags that get passes")
     CHECK_EQ((*embedded)->get<pair>()->first, 24u);
     auto const self_described = cbor::decode("\x81\xd9\xd9\xf7\x07"sv);
     CHECK_EQ((*self_described)->get<std::span<cbor::item const>>().value()[0].get<int>().value(), 7);
-    auto const loop = cbor::decode("\xd8\x1c\xc1\xd8\x1d\x00"sv);
+    auto const loop = cbor::decode_cycles("\xd8\x1c\xc1\xd8\x1d\x00"sv);
     REQUIRE(loop.has_value());
     CHECK_EQ((*loop)->get<int>().error(), error::incorrect_type);
     CHECK_EQ((*loop)->get<pair>()->first, 1u);
@@ -1534,7 +1542,7 @@ void check_agreements(cbor::item const &it, cbor::lazy const &doc, types<T...>)
 
 // A program reads a value either from a tree or from a lazy, and both must give the same value or the same error. The
 // exceptions are a ref against a plain view, a tag 24, which a lazy passes into its content, and the tags 28 and 29,
-// which a tree resolves and a lazy passes.
+// which cbor::decode_cycles resolves and a lazy passes.
 TEST_CASE("item get<T> and lazy get<T> agree")
 {
     for (sample const &s : samples) {
@@ -1612,7 +1620,7 @@ TEST_CASE("item visit: f receives the value of every kind of node")
 {
     for (sample const &s : samples) {
         CAPTURE(std::to_underlying(s.type));
-        auto const tree = cbor::decode(s.encoded);
+        auto const tree = tree_of(s);
         REQUIRE(tree.has_value());
         cbor::item const &it = node_of(s, *tree);
         int calls = 0;
@@ -1666,7 +1674,7 @@ TEST_CASE("item visit: f receives the value of every kind of node")
             CHECK_EQ(std::get<cbor::typed_array>(got).tag, 64u);
             break;
         case cbor::type::shared_reference:
-            CHECK_EQ(std::get<cbor::item const *>(got), &(*tree)->get<std::span<cbor::item const>>().value()[0]);
+            CHECK_EQ(std::get<cbor::item const *>(got), &**tree);
             break;
         }
     }
@@ -1708,11 +1716,13 @@ std::vector<std::uint8_t> unsigned_bytes_of_bytes_item(std::string const &bytes)
 
 } // namespace
 
+CBOR_DEFINE_TYPE_MEMBERS(bytes_item, cbor::untagged, a, b);
+
 // A byte range reads as the std::string of the same bytes. The bytes come from the encoder of the library, and the
 // test reads them as std::vector<std::uint8_t> and as std::span<std::byte const>, the forms that other CBOR libraries take.
 TEST_CASE("decode, item_size, diagnostic_notation: a range of bytes reads as the std::string of the same bytes")
 {
-    auto const encoded = cbor::structs<bytes_item>::encode(bytes_item{1, {2, 3}});
+    auto const encoded = cbor::encode<bytes_item>(bytes_item{1, {2, 3}});
     REQUIRE(encoded.has_value());
     auto const u = unsigned_bytes_of_bytes_item(*encoded);
     auto const b = std::as_bytes(std::span(*encoded));

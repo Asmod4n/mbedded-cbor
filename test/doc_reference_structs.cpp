@@ -40,9 +40,9 @@ using reference_structs::trailer;
 TEST_CASE("doc reference structs: the example of the group structs")
 {
     // [structs group]
-    // person: struct { std::string name; int age; }
+    // person: struct { std::string name; int age; }, described by CBOR_DEFINE_TYPE_MEMBERS
     // encoded: 16 bytes, {"age": 30, "name": "ann"}
-    auto const encoded = cbor::structs<person>::encode(person{"ann", 30});
+    auto const encoded = cbor::encode<person>(person{"ann", 30});
     // back: a ref to person{"ann", 30}
     auto const back = cbor::structs<person>::decode(std::string(*encoded));
     auto const age = (*back)->age;    // 30
@@ -60,8 +60,8 @@ TEST_CASE("doc reference structs: the example of the group structs")
 TEST_CASE("doc reference structs: encode a value")
 {
     // [encode]
-    // person: struct { std::string name; int age; }
-    auto const bytes = cbor::structs<person>::encode(person{"ann", 30});  // {"age": 30, "name": "ann"}
+    // person: struct { std::string name; int age; }, described by CBOR_DEFINE_TYPE_MEMBERS
+    auto const bytes = cbor::encode<person>(person{"ann", 30});  // {"age": 30, "name": "ann"}
     // [encode]
     REQUIRE(bytes.has_value());
     CHECK_EQ(*bytes, test::encode_in_preferred_form(test::M("age"s, 30, "name"s, "ann"s)));
@@ -72,7 +72,7 @@ TEST_CASE("doc reference structs: encode a value")
 TEST_CASE("doc reference structs: encode appends to a target")
 {
     std::string out = "\x01"s;
-    auto const n = cbor::structs<std::uint8_t>::encode(out, 2);
+    auto const n = cbor::encode<std::uint8_t>(out, 2);
     REQUIRE(n.has_value());
     CHECK_EQ(*n, 1u);
     CHECK_EQ(out, "\x01\x02"s);
@@ -82,7 +82,7 @@ TEST_CASE("doc reference structs: encode appends to a target")
 TEST_CASE("doc reference structs: encode into a span that is too small")
 {
     std::array<char, 2> small{};
-    auto const n = cbor::structs<person>::encode(std::span<char>(small), person{"ann", 30});
+    auto const n = cbor::encode<person>(std::span<char>(small), person{"ann", 30});
     REQUIRE_FALSE(n.has_value());
     CHECK_EQ(n.error(), cbor::error::no_buffer_space);
 }
@@ -156,7 +156,7 @@ TEST_CASE("doc reference structs: decode with an empty owner throws")
 TEST_CASE("doc reference structs: cbor::describe_members")
 {
     // [describe_members use]
-    auto const bytes = cbor::structs<header>::encode(header{"text/plain"});  // 160060({"content-type": "text/plain"})
+    auto const bytes = cbor::encode<header>(header{"text/plain"});  // 160060({"content-type": "text/plain"})
     // [describe_members use]
     REQUIRE(bytes.has_value());
     CHECK_EQ(*bytes, test::encode_in_preferred_form(test::value{test::tagged{160060, test::M("content-type"s, "text/plain"s)}}));
@@ -168,7 +168,7 @@ TEST_CASE("doc reference structs: cbor::describe_members")
 TEST_CASE("doc reference structs: cbor::member with integer keys")
 {
     // [member use]
-    auto const bytes = cbor::structs<senml>::encode(senml{"t", 1.5});  // {0: "t", 2: 1.5}
+    auto const bytes = cbor::encode<senml>(senml{"t", 1.5});  // {0: "t", 2: 1.5}
     // [member use]
     REQUIRE(bytes.has_value());
     CHECK_EQ(*bytes, test::encode_in_preferred_form(test::M(0, "t"s, 2, 1.5)));
@@ -178,7 +178,7 @@ TEST_CASE("doc reference structs: cbor::member with integer keys")
 TEST_CASE("doc reference structs: CBOR_MEMBER")
 {
     // [CBOR_MEMBER use]
-    auto const bytes = cbor::structs<account>::encode(account{"ann", 2});  // {"user": "ann", "level": 2}
+    auto const bytes = cbor::encode<account>(account{"ann", 2});  // {"user": "ann", "level": 2}
     // [CBOR_MEMBER use]
     REQUIRE(bytes.has_value());
     CHECK_EQ(*bytes, test::encode_in_preferred_form(test::M("user"s, "ann"s, "level"s, 2)));
@@ -189,7 +189,7 @@ TEST_CASE("doc reference structs: CBOR_MEMBER")
 TEST_CASE("doc reference structs: CBOR_DEFINE_TYPE_MEMBERS")
 {
     // [CBOR_DEFINE_TYPE_MEMBERS use]
-    auto const bytes = cbor::structs<device>::encode(device{"lamp", 3});  // {"name": "lamp", "port": 3}
+    auto const bytes = cbor::encode<device>(device{"lamp", 3});  // {"name": "lamp", "port": 3}
     // [CBOR_DEFINE_TYPE_MEMBERS use]
     REQUIRE(bytes.has_value());
     CHECK_EQ(*bytes, test::encode_in_preferred_form(test::M("name"s, "lamp"s, "port"s, 3)));
@@ -201,18 +201,18 @@ TEST_CASE("doc reference structs: member types")
 {
     // [structs]
     // reading: struct { std::uint8_t id; std::optional<std::uint8_t> unit; }
-    auto const one = cbor::structs<reading>::encode(reading{4, std::nullopt});    // {"id": 4}
-    auto const set = cbor::structs<std::set<std::uint8_t>>::encode({3, 1});        // 258([1, 3])
+    auto const one = cbor::encode<reading>(reading{4, std::nullopt});    // {"id": 4}
+    auto const set = cbor::encode<std::set<std::uint8_t>>({3, 1});        // 258([1, 3])
     // [structs]
     CHECK_EQ(*one, test::encode_in_preferred_form(test::M("id"s, 4)));
     CHECK_EQ(*set, test::encode_in_preferred_form(test::value{test::tagged{258, test::A(1, 3)}}));
-    CHECK_EQ(*cbor::structs<std::set<std::uint8_t>>::encode({3, 1}),
+    CHECK_EQ(*cbor::encode<std::set<std::uint8_t>>({3, 1}),
              test::encode_in_preferred_form(test::value{test::tagged{258, test::A(1, 3)}}));
-    CHECK_EQ(*cbor::structs<std::array<std::byte, 2>>::encode({std::byte{1}, std::byte{2}}),
+    CHECK_EQ(*cbor::encode<std::array<std::byte, 2>>({std::byte{1}, std::byte{2}}),
              test::encode_in_preferred_form(test::value{test::tagged{64, test::value{test::bytes{"\x01\x02"s}}}}));
-    CHECK_EQ(*cbor::structs<std::chrono::sys_seconds>::encode(std::chrono::sys_seconds{std::chrono::seconds{1700000000}}),
+    CHECK_EQ(*cbor::encode<std::chrono::sys_seconds>(std::chrono::sys_seconds{std::chrono::seconds{1700000000}}),
              test::encode_in_preferred_form(test::value{test::tagged{1, test::value{std::uint64_t{1700000000}}}}));
-    CHECK_EQ(*cbor::structs<reading>::encode(reading{4, std::nullopt}), test::encode_in_preferred_form(test::M("id"s, 4)));
+    CHECK_EQ(*cbor::encode<reading>(reading{4, std::nullopt}), test::encode_in_preferred_form(test::M("id"s, 4)));
     auto const back = cbor::structs<reading>::decode(test::encode_in_preferred_form(test::M("id"s, 4)));
     REQUIRE(back.has_value());
     CHECK_FALSE((*back)->unit.has_value());
@@ -224,7 +224,7 @@ TEST_CASE("doc reference structs: CBOR_DEFINE_TYPE")
 {
     // [CBOR_DEFINE_TYPE use]
     // trailer: struct { std::uint8_t checksum; }
-    auto const bytes = cbor::structs<trailer>::encode(trailer{7});  // 160061({"checksum": 7})
+    auto const bytes = cbor::encode<trailer>(trailer{7});  // 160061({"checksum": 7})
     // [CBOR_DEFINE_TYPE use]
     REQUIRE(bytes.has_value());
     using namespace std::string_literals;

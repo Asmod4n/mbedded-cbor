@@ -36,13 +36,18 @@ Inductive err :=
 | trailing_data
 | sharedref_index_not_unsigned
 | sharedref_index_not_marked
-| sharedref_not_defined.
+| sharedref_not_defined
+| sharedref_not_cyclic.
 
 Inductive result (A : Type) :=
 | ok (value : A)
 | fail (e : err).
 Arguments ok {A}.
 Arguments fail {A}.
+
+(* A node is complete once it is in the graph. *)
+Definition complete (id : nat) (g : list (nat * node)) : bool :=
+  existsb (fun p => Nat.eqb (fst p) id) g.
 
 Definition made (id : nat) (n : node) (s : state) : state :=
   mkstate (next s) (table s) ((id, n) :: graph s) (steps s).
@@ -110,7 +115,8 @@ Fixpoint pairs (l : list nat) : list (nat * nat) :=
 (* read_item reads one item and gives the id of its node, the rest of the stream and the new state.
    A node gets its id at its head, before its content (the specification: "record the reference before
    decoding the value"), and enters the graph once, when it is complete. A tag 28 makes no node: its entry
-   is the id that the content gets. A tag 29 makes no node: it gives the id of an entry. *)
+   is the id that the content gets. A tag 29 makes no node: it gives the id of an entry whose node is not
+   complete, so each tag 29 closes a cycle. *)
 Fixpoint read_item (fuel : nat) (ts : list tok) (s : state) {struct fuel}
   : result (nat * list tok * state) :=
   match fuel with
@@ -144,7 +150,10 @@ Fixpoint read_item (fuel : nat) (ts : list tok) (s : state) {struct fuel}
         | TUInt i :: rest' =>
           match nth_error (table s) i with
           | None => fail sharedref_index_not_marked
-          | Some id => if id <? next s then ok (id, rest', looked 2 s) else fail sharedref_not_defined
+          | Some id =>
+            if id <? next s then
+              if complete id (graph s) then fail sharedref_not_cyclic else ok (id, rest', looked 2 s)
+            else fail sharedref_not_defined
           end
         | [] => fail too_little_data
         | _ :: _ => fail sharedref_index_not_unsigned
@@ -158,6 +167,10 @@ Fixpoint read_item (fuel : nat) (ts : list tok) (s : state) {struct fuel}
   end.
 
 Definition start : state := mkstate 0 [] [] 0.
+
+(* A tag 29 that names a complete node fails, so a proof of a read that succeeds drops that branch. *)
+Ltac drop_cyclic :=
+  match goal with H : context [complete ?a ?g] |- _ => destruct (complete a g); [discriminate |] end.
 
 Definition read (ts : list tok) : result (nat * state) :=
   match read_item (S (length ts)) ts start with
@@ -274,6 +287,7 @@ Proof.
       * destruct ts as [| [i | | | |] ts']; try discriminate.
         destruct (nth_error (table s) i) as [x |]; [| discriminate].
         destruct (x <? next s); [| discriminate].
+        drop_cyclic.
         inversion H; subst; split; [apply extends_looked | simpl; lia].
       * destruct (read_item fuel ts (reserved (looked 1 s))) as [[[c r1] s1] | e] eqn:E; [| discriminate].
         inversion H; subst.
@@ -338,7 +352,7 @@ Proof.
     + destruct (Nat.eqb tg sharedref).
       * destruct ts as [| [i | | | |] ts']; try discriminate.
         destruct (nth_error (table s) i); [| discriminate].
-        destruct (_ <? _); discriminate.
+        destruct (_ <? _); [destruct (complete _ _) |]; discriminate.
       * destruct (read_item fuel ts (reserved (looked 1 s))) as [[[c r1] s1] | e] eqn:E.
         -- discriminate.
         -- inversion H; subst. eapply IH; [| exact E]. lia.
@@ -380,7 +394,7 @@ Proof.
     + destruct (Nat.eqb tg sharedref).
       * destruct ts as [| [i | | | |] ts']; try discriminate.
         destruct (nth_error (table s) i); [| discriminate].
-        destruct (_ <? _); [| discriminate].
+        destruct (_ <? _); [| discriminate]. drop_cyclic.
         inversion H; subst; simpl; lia.
       * destruct (read_item fuel ts (reserved (looked 1 s))) as [[[c r1] s1] | e] eqn:E; [| discriminate].
         inversion H; subst. apply IH in E. unfold counted in E. simpl in *. lia.
@@ -439,6 +453,7 @@ Proof.
       * destruct ts as [| [i | | | |] ts']; try discriminate.
         destruct (nth_error (table s) i); [| discriminate].
         destruct (_ <? _) eqn:L; [| discriminate].
+        drop_cyclic.
         inversion H; subst. apply Nat.ltb_lt in L. exact L.
       * destruct (read_item fuel ts (reserved (looked 1 s))) as [[[c r1] s1] | e] eqn:E; [| discriminate].
         inversion H; subst. simpl.
@@ -548,7 +563,7 @@ Proof.
     + destruct (Nat.eqb tg sharedref).
       * destruct ts as [| [i | | | |] ts']; try discriminate.
         destruct (nth_error (table s) i); [| discriminate].
-        destruct (_ <? _); [| discriminate].
+        destruct (_ <? _); [| discriminate]. drop_cyclic.
         inversion H; subst. split; [exact S | intros j Hj; simpl in Hj; lia].
       * destruct (read_item fuel ts (reserved (looked 1 s))) as [[[c r1] s1] | e] eqn:E; [| discriminate].
         inversion H; subst.
@@ -608,7 +623,7 @@ Proof.
         -- destruct (x <? next s) eqn:Lx; [| discriminate].
            inversion MT; subst.
            rewrite Tm in H. rewrite (nth_error_app_prefix _ _ _ _ Ex) in H.
-           rewrite N in H. rewrite Lx in H. inversion H; subst. reflexivity.
+           rewrite N in H. rewrite Lx in H. drop_cyclic. inversion H; subst. reflexivity.
         -- destruct (_ <? _); discriminate.
       * inversion MT; subst.
         destruct (read_item fuel ts (reserved (looked 1 s1))) as [[[c0 r1] s2] | e]; [| discriminate].
@@ -644,6 +659,7 @@ Proof.
   intros fuel i ts s id rest s' H. simpl in H.
   destruct (nth_error (table s) i) as [x |] eqn:E; [| discriminate].
   destruct (x <? next s); [| discriminate].
+  drop_cyclic.
   inversion H; subst. auto.
 Qed.
 
@@ -655,10 +671,10 @@ Definition result_of (ts : list tok) : result (nat * list (nat * node) * list na
   | fail e => fail e
   end.
 
-(* The specification: [28([]), 29(0), []], the first two elements are one array. *)
+(* The specification: [28([]), 29(0), []]. The reference names an array that is complete, so it closes no cycle
+   (owner decision, 2026-11-19). *)
 Example spec_shared_array :
-  result_of [TArr 3; TTag 28; TArr 0; TTag 29; TUInt 0; TArr 0]
-  = ok (0, [(0, NArr [1; 1; 2]); (2, NArr []); (1, NArr [])], [1]).
+  result_of [TArr 3; TTag 28; TArr 0; TTag 29; TUInt 0; TArr 0] = fail sharedref_not_cyclic.
 Proof. reflexivity. Qed.
 
 (* The specification: 28([29(0)]), an array that holds itself. *)
@@ -682,16 +698,20 @@ Proof. reflexivity. Qed.
 Example chain_of_itself_inner : result_of [TTag 28; TTag 28; TTag 29; TUInt 1] = fail sharedref_not_defined.
 Proof. reflexivity. Qed.
 
-(* A mark of a reference marks the value that the reference names: [28(1), 28(29(0)), 29(1)]. *)
+(* A mark of a reference marks the value that the reference names: 28([28(29(0)), 29(1)]). That value is the open
+   root, so the second reference closes a cycle too. *)
 Example mark_of_reference :
-  result_of [TArr 3; TTag 28; TUInt 1; TTag 28; TTag 29; TUInt 0; TTag 29; TUInt 1]
-  = ok (0, [(0, NArr [1; 1; 1]); (1, NUInt 1)], [1; 1]).
+  result_of [TTag 28; TArr 2; TTag 28; TTag 29; TUInt 0; TTag 29; TUInt 1] = ok (0, [(0, NArr [0; 0])], [0; 0]).
 Proof. reflexivity. Qed.
 
-(* Two marks of one value: 28(28(5)), then 29(0) and 29(1) name the same node. *)
+(* [28(1), 28(29(0)), 29(1)]: the first reference names a complete integer. *)
+Example mark_of_reference_to_complete :
+  result_of [TArr 3; TTag 28; TUInt 1; TTag 28; TTag 29; TUInt 0; TTag 29; TUInt 1] = fail sharedref_not_cyclic.
+Proof. reflexivity. Qed.
+
+(* Two marks of one value: 28(28([29(0), 29(1)])), both references name the open root. *)
 Example two_marks_one_value :
-  result_of [TArr 3; TTag 28; TTag 28; TUInt 5; TTag 29; TUInt 0; TTag 29; TUInt 1]
-  = ok (0, [(0, NArr [1; 1; 1]); (1, NUInt 5)], [1; 1]).
+  result_of [TTag 28; TTag 28; TArr 2; TTag 29; TUInt 0; TTag 29; TUInt 1] = ok (0, [(0, NArr [0; 0])], [0; 0]).
 Proof. reflexivity. Qed.
 
 (* An item after the root: 1 2. *)
@@ -711,9 +731,9 @@ Proof. reflexivity. Qed.
 Example reference_over_text : result_of [TTag 29; TLeaf 0] = fail sharedref_index_not_unsigned.
 Proof. reflexivity. Qed.
 
-(* A map whose value refers to its own key: {28("a"): 29(0)}. *)
+(* A map whose value refers to its own key: {28("a"): 29(0)}. The key is complete. *)
 Example value_refers_to_key :
-  result_of [TMap 1; TTag 28; TLeaf 7; TTag 29; TUInt 0] = ok (0, [(0, NMap [(1, 1)]); (1, NLeaf 7)], [1]).
+  result_of [TMap 1; TTag 28; TLeaf 7; TTag 29; TUInt 0] = fail sharedref_not_cyclic.
 Proof. reflexivity. Qed.
 
 (* A map that holds itself as its key: 28({29(0): 1}). *)
@@ -765,7 +785,7 @@ Proof.
     + destruct (Nat.eqb tg sharedref).
       * destruct ts as [| [i | | | |] ts']; try discriminate.
         destruct (nth_error (table s) i); [| discriminate].
-        destruct (_ <? _); [| discriminate].
+        destruct (_ <? _); [| discriminate]. drop_cyclic.
         inversion H; subst; simpl; lia.
       * destruct (read_item fuel ts (reserved (looked 1 s))) as [[[c r1] s1] | e] eqn:E; [| discriminate].
         inversion H; subst. apply IH in E. unfold linear in E. simpl in *. lia.
