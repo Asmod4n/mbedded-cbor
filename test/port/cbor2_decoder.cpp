@@ -77,10 +77,10 @@ test::value negative_of(std::uint64_t const argument)
     return test::value{test::negative{argument}};
 }
 
-// The error of cbor::decode, or error{} where cbor::decode gives a tree.
+// The error of cbor::decode_shared_refs, the decode that cbor2.loads ports, or error{} where it gives a tree.
 error decode_error_of(std::string_view const payload)
 {
-    auto const tree = cbor::decode(payload);
+    auto const tree = cbor::decode_shared_refs(payload);
     return tree.has_value() ? error{} : tree.error();
 }
 
@@ -819,12 +819,12 @@ TEST_CASE("cbor2 decoder: Python semantic tags read as plain tags")
 }
 
 // Upstream: TestSharedReference, TestMaximumDepth.test_self_referential_tag_as_map_key and
-// test_self_referential_tag_as_set_element, read by cbor::decode. The value sharing specification
-// (refs/value-sharing.html): "index 0 refers to the first value marked as shareable in the CBOR stream". cbor::decode
-// resolves the two tags (owner decision): a tag 28 makes no node and marks the node of its content, and a tag 29 is
+// test_self_referential_tag_as_set_element, read by cbor::decode_shared_refs. The value sharing specification
+// (refs/value-sharing.html): "index 0 refers to the first value marked as shareable in the CBOR stream".
+// cbor::decode_shared_refs resolves the two tags (owner decision): a tag 28 makes no node and marks the node of its content, and a tag 29 is
 // a shared_reference node whose target is the node of that mark. The reference model shows a shared_reference as
 // 29(index). A tag 29 with no mark before it is an error, as in cbor2.
-TEST_CASE("cbor2 decoder: TestSharedReference read by cbor::decode")
+TEST_CASE("cbor2 decoder: TestSharedReference read by cbor::decode_shared_refs")
 {
     CHECK_EQ(decode_error_of(unhexlify("d81d05")), error::sharedref_index_not_marked);
     auto const ref = [](int const index) { return tag_of(29, V(index)); };
@@ -841,11 +841,11 @@ TEST_CASE("cbor2 decoder: TestSharedReference read by cbor::decode")
     });
     // A tag 29 gives the node of its mark: in 28([29(0)]) the element names the array itself, and in
     // [28([28("a"), "b"]), 29(0)] the second element names the first.
-    auto const cyclic = cbor::decode(unhexlify("d81c81d81d00"));
+    auto const cyclic = cbor::decode_shared_refs(unhexlify("d81c81d81d00"));
     REQUIRE(cyclic.has_value());
     CHECK_EQ((*cyclic)->get<std::span<cbor::item const>>().value()[0].get<std::pair<std::uint64_t, cbor::item const *>>().value().second,
              &**cyclic);
-    auto const shared = cbor::decode(unhexlify("82d81c82d81c61616162d81d00"));
+    auto const shared = cbor::decode_shared_refs(unhexlify("82d81c82d81c61616162d81d00"));
     REQUIRE(shared.has_value());
     auto const elements = (*shared)->get<std::span<cbor::item const>>().value();
     CHECK_EQ(elements[1].get<std::pair<std::uint64_t, cbor::item const *>>().value().second, &elements[0]);

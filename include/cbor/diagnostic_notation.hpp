@@ -3099,11 +3099,8 @@ consteval auto operator""_edn()
  * @retval string_length_exceeded a string is longer than `limits::string_length`, where a build sets that limit
  * @retval container_elements_exceeded an array or a map holds more than `limits::container_elements` items, where a
  * build sets that limit
- * @retval sharedref_index_not_marked a tag 29 whose index names no tag 28 before it
- * @retval sharedref_not_defined a tag 29 that names a tag 28 whose content is only tags 28 and this tag 29, as in
- * `28(29(0))`
- * @retval inadmissible_type_for_tag_content a tag 29 over an item that is not an unsigned integer, or a typed array
- * (RFC 8746) whose content is not a byte string of whole elements
+ * @retval inadmissible_type_for_tag_content a typed array (RFC 8746) whose content is not a byte string of whole
+ * elements
  * @see cbor::diag2cbor()
  * @see item::to_edn()
  *

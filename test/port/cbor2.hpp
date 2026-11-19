@@ -22,10 +22,11 @@ namespace cbor2
 using test::hexlify;
 using test::unhexlify;
 
-// cbor2.loads: the tree that cbor::decode gives, as a value of the reference model.
+// cbor2.loads: the tree that cbor::decode_shared_refs gives, as a value of the reference model. cbor2.loads resolves
+// tags 28 and 29, and so does cbor::decode_shared_refs.
 inline std::expected<test::value, cbor::error> loads(std::string_view const payload)
 {
-    auto const tree = cbor::decode(payload);
+    auto const tree = cbor::decode_shared_refs(payload);
     if (!tree)
         return std::unexpected(tree.error());
     return test::make_value_from_item(**tree);

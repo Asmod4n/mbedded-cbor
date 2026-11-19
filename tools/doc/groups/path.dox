@@ -210,7 +210,7 @@ caller reads the tag number.
 - Tag 28 (shareable): the path passes it. The value is the content.
 - Tag 29 (shared reference): the path passes it as any other tag. The
   value is the content, the index. A path does not resolve the
-  reference. `cbor::decode` does.
+  reference. `cbor::decode_shared_refs` does.
 - Tag 55799 (self-described CBOR): the path passes it at the top, inside
   the item and inside a tag 24. It does not pass it as the content of a
   tag 2, a tag 3 or a typed array. A map key behind a tag 55799 is

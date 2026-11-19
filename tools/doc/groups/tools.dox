@@ -143,9 +143,8 @@ and a call on a `cbor::sequence_reader` that was moved from.
 - `nesting_depth_exceeded`: `diagnostic_notation` of an item, or
   `diag2cbor` and `parse_edn` of a text, that is deeper than the stack of
   the thread holds.
-- `sharedref_index_not_marked`, `sharedref_not_defined` and
-  `inadmissible_type_for_tag_content`: in `parse_edn`, as `cbor::decode`
-  gives them.
+- `inadmissible_type_for_tag_content`: in `parse_edn`, as `cbor::decode`
+  gives it.
 
 @manonly
 .SH "EXAMPLES"

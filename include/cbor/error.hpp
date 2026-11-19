@@ -63,7 +63,7 @@ enum class error {
     sharedref_index_not_marked,
     /** `structs` or `%schema` meets a tag 28 or a tag 29 where it reads a value. */
     invalid_tag,
-    /** `decode` meets a tag 29 that names a tag 28 whose content is only tags 28 and this tag 29. */
+    /** `decode_shared_refs` meets a tag 29 that names a tag 28 whose content is only tags 28 and this tag 29. */
     sharedref_not_defined,
     /** A key or an index meets an item that is not a map or an array. */
     not_indexable,
