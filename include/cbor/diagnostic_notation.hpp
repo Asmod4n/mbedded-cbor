@@ -2653,10 +2653,15 @@ class extended_diagnostic_notation
         return number_of(value) + (width == preferred ? std::string{} : indicator);
     }
 
-    static std::expected<void, error> write_item(std::string &out, item const &node)
+    static constexpr bool holds_children(cbor::type const t)
     {
-        if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
-            return r;
+        return t == cbor::type::array || t == cbor::type::map || t == cbor::type::tag ||
+               t == cbor::type::typed_array || t == cbor::type::unsigned_bignum ||
+               t == cbor::type::negative_bignum || t == cbor::type::shared_reference;
+    }
+
+    static void write_scalar(std::string &out, item const &node)
+    {
         std::uint8_t const info = node.additional_information();
         switch (node.type()) {
         case cbor::type::unsigned_integer:
@@ -2678,51 +2683,6 @@ class extended_diagnostic_notation
         case cbor::type::text_string:
             out += quoted_of(node.text()) + encoding_indicator(info, node.length());
             break;
-        case cbor::type::array: {
-            out += "[";
-            if (std::string const indicator = encoding_indicator(info, node.length()); !indicator.empty())
-                out += indicator + " ";
-            bool first = true;
-            for (item const &element : node.elements()) {
-                if (!first)
-                    out += ", ";
-                first = false;
-                if (auto const r = write_item(out, element); !r) [[unlikely]]
-                    return r;
-            }
-            out += "]";
-            break;
-        }
-        case cbor::type::map: {
-            out += "{";
-            if (std::string const indicator = encoding_indicator(info, node.length()); !indicator.empty())
-                out += indicator + " ";
-            bool first = true;
-            for (auto const [key, value] : node.entries()) {
-                if (!first)
-                    out += ", ";
-                first = false;
-                if (auto const r = write_item(out, key); !r) [[unlikely]]
-                    return r;
-                out += ": ";
-                if (auto const r = write_item(out, value); !r) [[unlikely]]
-                    return r;
-            }
-            out += "}";
-            break;
-        }
-        case cbor::type::tag:
-        case cbor::type::typed_array:
-        case cbor::type::unsigned_bignum:
-        case cbor::type::negative_bignum:
-            out += std::to_string(node.m_uni.u64) + encoding_indicator(info, node.m_uni.u64) + "(";
-            if (auto const r = write_item(out, node.content()); !r) [[unlikely]]
-                return r;
-            out += ")";
-            break;
-        case cbor::type::shared_reference:
-            detail::validity::throw_logic_error_if(true, "cbor::to_edn: the walk met a shared_reference");
-            break;
         case cbor::type::false_value:
             out += "false";
             break;
@@ -2743,6 +2703,86 @@ class extended_diagnostic_notation
         case cbor::type::double_float:
             out += float_of(info, detail::ieee754::encode_float(static_cast<rfc8949::simple_information>(info),
                                                                 node.m_uni.f64));
+            break;
+        case cbor::type::array:
+        case cbor::type::map:
+        case cbor::type::tag:
+        case cbor::type::typed_array:
+        case cbor::type::unsigned_bignum:
+        case cbor::type::negative_bignum:
+        case cbor::type::shared_reference:
+            detail::validity::throw_logic_error_if(true, "cbor::to_edn: write_scalar met an item with children");
+            break;
+        }
+    }
+
+    static std::expected<void, error> write_child(std::string &out, item const &node)
+    {
+        if (holds_children(node.type()))
+            return write_item(out, node);
+        write_scalar(out, node);
+        return {};
+    }
+
+    static std::expected<void, error> write_item(std::string &out, item const &node)
+    {
+        if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
+            return r;
+        std::uint8_t const info = node.additional_information();
+        switch (node.type()) {
+        case cbor::type::array: {
+            out += "[";
+            if (std::string const indicator = encoding_indicator(info, node.length()); !indicator.empty())
+                out += indicator + " ";
+            std::span<item const> const all = node.descendants();
+            std::size_t at = 1;
+            for (std::size_t i = 0; i != node.length(); ++i) {
+                if (i != 0)
+                    out += ", ";
+                item const &element = all[at];
+                if (auto const r = write_child(out, element); !r) [[unlikely]]
+                    return r;
+                at += detail::dom::kind::width_of(element);
+            }
+            out += "]";
+            break;
+        }
+        case cbor::type::map: {
+            out += "{";
+            if (std::string const indicator = encoding_indicator(info, node.length()); !indicator.empty())
+                out += indicator + " ";
+            std::span<item const> const all = node.descendants();
+            std::size_t at = 1;
+            for (std::size_t i = 0; i != node.length(); ++i) {
+                if (i != 0)
+                    out += ", ";
+                item const &key = all[at];
+                if (auto const r = write_child(out, key); !r) [[unlikely]]
+                    return r;
+                at += detail::dom::kind::width_of(key);
+                out += ": ";
+                item const &value = all[at];
+                if (auto const r = write_child(out, value); !r) [[unlikely]]
+                    return r;
+                at += detail::dom::kind::width_of(value);
+            }
+            out += "}";
+            break;
+        }
+        case cbor::type::tag:
+        case cbor::type::typed_array:
+        case cbor::type::unsigned_bignum:
+        case cbor::type::negative_bignum:
+            out += std::to_string(node.m_uni.u64) + encoding_indicator(info, node.m_uni.u64) + "(";
+            if (auto const r = write_item(out, node.content()); !r) [[unlikely]]
+                return r;
+            out += ")";
+            break;
+        case cbor::type::shared_reference:
+            detail::validity::throw_logic_error_if(true, "cbor::to_edn: the walk met a shared_reference");
+            break;
+        default:
+            write_scalar(out, node);
             break;
         }
         return {};
