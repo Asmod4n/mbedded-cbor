@@ -98,10 +98,10 @@ class pfr
         }
     }
 
-    template <class U>
+    template <class U, bool Reflected>
     static consteval bool struct_writable()
     {
-        static_assert(has_describe_members<U>,
+        static_assert(Reflected || has_describe_members<U>,
                       "cbor::encode writes a class only through a cbor::describe_members specialization, also where "
                       "reflection or Boost.PFR could read its members: the description states the keys and the tag "
                       "that the bytes carry.");
@@ -195,7 +195,8 @@ class pfr
         }
     }
 
-    friend class detail::generic;
+    template <bool>
+    friend class detail::basic_generic;
 
     template <class>
     friend class cbor::structs;
@@ -209,7 +210,8 @@ class pfr
 namespace detail
 {
 
-class generic
+template <bool Reflected>
+class basic_generic
 {
     template <class>
     friend class cbor::structs;
@@ -1478,7 +1480,7 @@ class generic
                              }) {
             return elements_size(value);
         } else {
-            static_assert(detail::pfr::struct_writable<U>());
+            static_assert(detail::pfr::struct_writable<U, Reflected>());
             std::size_t present = 0;
             auto const member_size =
                 [&]<std::size_t I>(std::integral_constant<std::size_t, I>,
@@ -1929,7 +1931,7 @@ class generic
                              }) {
             return write_elements(out, at, value);
         } else {
-            static_assert(detail::pfr::struct_writable<U>());
+            static_assert(detail::pfr::struct_writable<U, Reflected>());
             if constexpr (constexpr std::optional<std::uint64_t> tag = detail::reflection::tag_number_of<U>(); tag.has_value())
                 at += put_head(out, at, major_type::tag, *tag);
             std::size_t const present = [&]<std::size_t... I>(std::index_sequence<I...>) {
@@ -2005,7 +2007,7 @@ public:
     template <class T>
     CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode_to_string(T const &value)
     {
-        auto const counted = detail::generic::generic_size(value);
+        auto const counted = generic_size(value);
         if (!counted) [[unlikely]]
             return std::unexpected(counted.error());
         auto const sum = detail::heads::padded_size(*counted);
@@ -2013,7 +2015,7 @@ public:
             return std::unexpected(sum.error());
         std::size_t const padded = *sum;
         std::string out(padded, '\0');
-        auto const written = detail::generic::write_generic(std::span<char>(out), 0, value);
+        auto const written = write_generic(std::span<char>(out), 0, value);
         if (!written) [[unlikely]]
             return std::unexpected(written.error());
         out.resize(*written);
@@ -2024,7 +2026,7 @@ public:
     CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode_into(Target &&out, T const &value)
     {
         using U = std::remove_cvref_t<Target>;
-        auto const counted = detail::generic::generic_size(value);
+        auto const counted = generic_size(value);
         if (!counted) [[unlikely]]
             return std::unexpected(counted.error());
         auto const sum = detail::heads::padded_size(*counted);
@@ -2038,21 +2040,21 @@ public:
             if (!total) [[unlikely]]
                 return std::unexpected(detail::validity::writer_error(total.error()));
             out.resize(*total);
-            auto const written = detail::generic::write_generic(std::span<char>(out), at, value);
+            auto const written = write_generic(std::span<char>(out), at, value);
             out.resize(written ? at + size : at);
             if (!written) [[unlikely]]
                 return std::unexpected(written.error());
             return size;
         } else if constexpr (!detail::byte_container<U> && requires { std::span<char>(out); }) {
             if (detail::validity::bytes_fit(size, std::span<char>(out).size())) {
-                auto const written = detail::generic::write_generic(std::span<char>(out).first(size), 0, value);
+                auto const written = write_generic(std::span<char>(out).first(size), 0, value);
                 if (!written) [[unlikely]]
                     return std::unexpected(written.error());
                 return size;
             }
         }
         std::string encoded(padded, '\0');
-        auto const written = detail::generic::write_generic(std::span<char>(encoded), 0, value);
+        auto const written = write_generic(std::span<char>(encoded), 0, value);
         if (!written) [[unlikely]]
             return std::unexpected(written.error());
         encoded.resize(*written);
@@ -2064,6 +2066,8 @@ public:
         return encoded.size();
     }
 };
+
+using generic = basic_generic<false>;
 
 }
 
@@ -2313,6 +2317,51 @@ public:
     {
         return decode_with_owner(std::move(owner), detail::chars_of(encoded),
                             std::move(target));
+    }
+
+    /**
+     * @brief Writes @p value as one CBOR item in preferred serialization, into a new `std::string`.
+     *
+     * A struct is a map, and its keys come in the order of RFC 8949 4.2.1.
+     * The second form appends to `out` and returns the count of bytes that it appended.
+     * `out` is a `std::string`, a container of `char`, a `std::span<char>` or a writer.
+     * A type that `structs` does not take does not compile.
+     *
+     * @code{.example}
+     * message: {"name": "ann", "age": 30}
+     * call: auto const encoded = cbor::structs<person>::encode(person{"ann", 30})
+     * result: 16 bytes: a2 63 61 67 65 18 1e 64 6e 61 6d 65 63 61 6e 6e
+     * call: cbor::lazy::adopt(*encoded)
+     * result: lazy of {"age": 30, "name": "ann"}
+     * @endcode
+     *
+     * @retval value_too_large the size of the bytes does not fit in `std::size_t`
+     * @throws std::logic_error a `std::chrono::year_month_day` that is no valid date
+     * @throws std::bad_alloc a refused allocation of the result
+     * @snippet doc_reference_structs.cpp encode
+     * @see cbor::structs::decode()
+     */
+    CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode(T const &value)
+    {
+        return detail::basic_generic<true>::encode_to_string(value);
+    }
+
+    /**
+     * @brief Appends @p value as one CBOR item in preferred serialization to @p out.
+     * @param out a `std::string`, a container of `char`, a `std::span<char>` or a writer. A `T` that is itself such
+     * a type has only the form that returns a new `std::string`.
+     * @return the count of bytes that it appended
+     * @retval no_buffer_space a `std::span<char>` that is too small for the bytes, or the writer gives this error
+     * @retval value_too_large the size of the bytes does not fit in `std::size_t`, or the writer gives this error
+     * @retval not_enough_memory, io_error the writer gives this error
+     * @throws std::logic_error a `std::chrono::year_month_day` that is no valid date
+     */
+    template <class Target>
+        requires(detail::is_target_v<std::remove_reference_t<Target>> &&
+                 !detail::is_target_v<T>)
+    CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(Target &&out, T const &value)
+    {
+        return detail::basic_generic<true>::encode_into(std::forward<Target>(out), value);
     }
 
 private:

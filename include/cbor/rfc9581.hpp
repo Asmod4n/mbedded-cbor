@@ -12,7 +12,8 @@ namespace cbor
 namespace detail
 {
 
-class generic;
+template <bool Reflected>
+class basic_generic;
 class reflection;
 class validity;
 
@@ -45,7 +46,8 @@ class rfc9581
 
     friend class detail::reflection;
 
-    friend class detail::generic;
+    template <bool>
+    friend class detail::basic_generic;
 
     friend class detail::validity;
 };

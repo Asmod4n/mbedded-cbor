@@ -40,7 +40,8 @@ namespace detail
 class encoding;
 class extended_diagnostic_notation;
 class edn_text;
-class generic;
+template <bool Reflected>
+class basic_generic;
 class reflection;
 class well_formedness;
 
@@ -782,7 +783,8 @@ class heads
 
     friend class detail::reflection;
 
-    friend class detail::generic;
+    template <bool>
+    friend class detail::basic_generic;
 
     template <class>
     friend class cbor::structs;

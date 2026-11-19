@@ -63,7 +63,8 @@ namespace cbor
 namespace detail
 {
 
-class generic;
+template <bool Reflected>
+class basic_generic;
 class pfr;
 
 }
@@ -3323,7 +3324,8 @@ class reflection
     template <class>
     friend class cbor::typed_array_view;
 
-    friend class detail::generic;
+    template <bool>
+    friend class detail::basic_generic;
 
     friend class detail::pfr;
 };

@@ -1802,3 +1802,43 @@ TEST_CASE("cbor::to_edn: a value gives the text of the bytes that cbor::encode w
     check_edn_of_value(integer_order{10, 20, 30});
     check_edn_of_value(std::vector<pair_ab>{{1, {2, 3}}, {4, {}}});
 }
+
+namespace
+{
+
+struct plain_point {
+    std::int64_t x;
+    std::string name;
+    bool operator==(plain_point const &) const = default;
+};
+
+} // namespace
+
+#if defined(__cpp_impl_reflection) || (defined(BOOST_PFR_ENABLED) && BOOST_PFR_ENABLED)
+// structs<T>::encode reads the members of an aggregate with no description through reflection or Boost.PFR, as
+// structs<T>::decode reads them. cbor::encode does not take such a type; structs<T>::encode is the form that does.
+// The bytes are the map with the member names as keys in the order of RFC 8949 4.2.1, and decode reads them back.
+TEST_CASE("structs: encode writes an aggregate with no description and decode reads it back")
+{
+    auto const bytes = cbor::structs<plain_point>::encode(plain_point{-3, "a"});
+    REQUIRE(bytes.has_value());
+    CHECK_EQ(cbor::diagnostic_notation(*bytes), "{\"x\": -3, \"name\": \"a\"}");
+    auto const back = cbor::structs<plain_point>::decode(std::string(*bytes));
+    REQUIRE(back.has_value());
+    CHECK_EQ(**back, (plain_point{-3, "a"}));
+}
+#endif
+
+// structs<T>::encode of a described struct gives the bytes of cbor::encode, and the form with a target appends them
+// and gives their count.
+TEST_CASE("structs: encode of a described struct equals cbor::encode, and appends to a target")
+{
+    auto const bytes = cbor::structs<pmr_person>::encode(pmr_person{std::pmr::string("ann"), 30});
+    REQUIRE(bytes.has_value());
+    CHECK_EQ(*bytes, cbor::encode(pmr_person{std::pmr::string("ann"), 30}).value());
+    std::string out = "x";
+    auto const n = cbor::structs<pmr_person>::encode(out, pmr_person{std::pmr::string("ann"), 30});
+    REQUIRE(n.has_value());
+    CHECK_EQ(*n, bytes->size());
+    CHECK_EQ(out, "x" + *bytes);
+}

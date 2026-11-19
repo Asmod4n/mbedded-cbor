@@ -24,7 +24,8 @@ struct pair_at;
 class encoding;
 class extended_diagnostic_notation;
 class edn_text;
-class generic;
+template <bool Reflected>
+class basic_generic;
 class heads;
 class ieee754;
 class reflection;
@@ -175,7 +176,8 @@ class rfc8949
 
     friend class detail::reflection;
 
-    friend class detail::generic;
+    template <bool>
+    friend class detail::basic_generic;
 };
 
 }
