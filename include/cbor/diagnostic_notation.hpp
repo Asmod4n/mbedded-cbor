@@ -1195,12 +1195,10 @@ class extended_diagnostic_notation
         {
             if (!detail::validity::check_argument<true>(major, count)) [[unlikely]]
                 return std::unexpected(error::syntax_error);
-            static_assert(std::is_trivially_destructible_v<item>, "The zone frees its memory and runs no destructor.");
             std::size_t const n = values.size() - start;
             std::span<item const> const children = std::span<item const>(values).subspan(start);
-            item *const storage = std::pmr::polymorphic_allocator<item>(&decoded.memory).allocate(n);
-            std::ranges::uninitialized_copy(children, std::span<item>(storage, n));
-            std::span<item const> const block(storage, n);
+            std::pmr::vector<item> &block = decoded.items_reserved(n);
+            std::ranges::copy(children, std::back_inserter(block));
             while (values.size() != start)
                 values.pop_back();
             item container = scalar_item(major, count);
