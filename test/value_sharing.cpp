@@ -611,6 +611,26 @@ TEST_CASE("value sharing: cbor::decode_cycles reads each case of the model")
     CHECK_EQ(target_of(std::get<0>((*own_key)->get<cbor::pairs>().value()[0])), &**own_key);
 }
 
+// A tag 29 may name any marked value whose read has not ended: the value itself or one above it. A tag 28 over a tag
+// 29 marks the value that the reference names, so its mark stays open as long as that value is open, also after the
+// item around the tag 28 ends. Each case comes with the open values at its tag 29.
+TEST_CASE("value sharing: cbor::decode_cycles takes a tag 29 to each open value and to no other")
+{
+    for (std::string_view const edn :
+         {"28([28([28(29(0))]), 29(2)])", "28([28([28(29(0)), 29(2)]), 29(2)])", "28([28(29(0)), 28([29(2), 29(1)])])",
+          "28(28([29(1), 29(0)]))", "[28([29(0)]), 28([29(1)])]", "28([28(29(0)), [29(1)]])",
+          "28({\"kids\": [28({\"parent\": 29(0), \"self\": 29(1)})]})"}) {
+        CAPTURE(edn);
+        CHECK(cbor::decode_cycles(cbor::diag2cbor(edn).value()).has_value());
+    }
+    // 29(2) names the mark of 28(29(1)), whose value is the inner array; that array has ended. 29(1) names the inner
+    // array after its end. 29(0) names the first array after its end.
+    for (std::string_view const edn : {"28([28([28(29(1))]), 29(2)])", "28([28([1]), 29(1)])", "[28([29(0)]), 29(0)]"}) {
+        CAPTURE(edn);
+        CHECK_EQ(cbor::decode_cycles(cbor::diag2cbor(edn).value()).error(), error::sharedref_not_cyclic);
+    }
+}
+
 // RFC 8949 3: an argument can stand in each width. The tag 29 and its index are read in each width. The largest index
 // has no mark, on every build (the index is compared as a 64-bit number).
 TEST_CASE("value sharing: cbor::decode_cycles reads a tag 29 and its index in each width")

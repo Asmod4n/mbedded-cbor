@@ -140,12 +140,12 @@ struct tree_decoder {
     zone &decoded;
     detail::heads::decoder<true> d;
     std::size_t open = 0;
-    struct shareable {
+    struct open_mark {
+        std::uint64_t index;
         item const *target;
-        std::size_t origin;
-        bool complete;
     };
-    std::vector<shareable> marks;
+    std::size_t marks = 0;
+    std::vector<open_mark> open_marks;
     std::size_t shared_references = 0;
 
     std::expected<void, error> decode_item(std::pmr::vector<item> &into);
@@ -160,9 +160,11 @@ struct tree_decoder {
 
     CBOR_NEVER_INLINE std::expected<bool, error> decode_bignum(std::pmr::vector<item> &into, std::uint64_t tag);
 
-    void mark(item const &target, item const &marked_item, std::size_t const count, std::size_t const origin)
+    void mark(item const &target, item const &marked_item, std::size_t const count)
     {
-        marks.insert(marks.end(), count, shareable{&target, origin, false});
+        for (std::size_t i = 0; i < count; ++i)
+            open_marks.push_back(open_mark{marks + i, &target});
+        marks += count;
         decoded.shareables.insert(decoded.shareables.end(), count, &marked_item);
     }
 };
@@ -250,7 +252,7 @@ std::expected<void, error> tree_decoder<Resolve>::decode_content(std::pmr::vecto
         if (*r) {
             if constexpr (Resolve)
                 if (marked != 0) [[unlikely]]
-                    mark(into.back(), into.back(), marked, marks.size());
+                    mark(into.back(), into.back(), marked);
             return {};
         }
     }
@@ -258,7 +260,7 @@ std::expected<void, error> tree_decoder<Resolve>::decode_content(std::pmr::vecto
         item{detail::heads::type_of(head.major, head.info, head.argument), head.info, {.u64 = head.argument}});
     if constexpr (Resolve)
         if (marked != 0) [[unlikely]]
-            mark(node, node, marked, marks.size());
+            mark(node, node, marked);
     switch (head.major) {
     case major_type::unsigned_integer:
     case major_type::negative_integer:
@@ -331,7 +333,7 @@ std::expected<void, error> tree_decoder<Resolve>::decode_content(std::pmr::vecto
         }
         std::string_view const content_encoded =
             std::string_view(std::span(tagged).first(std::to_underlying(detail::validity::distance(tagged, d.encoded))));
-        tree_decoder inner{decoded, {std::string_view(std::span(content_encoded).last(content.via.bin.size()))}, 0, {}, 0};
+        tree_decoder inner{decoded, {std::string_view(std::span(content_encoded).last(content.via.bin.size()))}, 0, 0, {}, 0};
         std::pmr::vector<item> &embedded = decoded.items_reserved(1);
         if (auto const r = inner.decode_item(embedded); !r) [[unlikely]]
             return r;
@@ -352,12 +354,15 @@ std::expected<void, error> tree_decoder<Resolve>::decode_shareable(std::pmr::vec
         auto const h = d.decode_head();
         if (!h) [[unlikely]]
             return std::unexpected(h.error());
+        if (h->major == major_type::tag && h->argument == std::to_underlying(rfc8949::tag_number::sharedref))
+            return decode_content(into, *h, chain);
         if (h->major != major_type::tag || h->argument != std::to_underlying(rfc8949::tag_number::shareable)) {
-            std::size_t const first = marks.size();
+            std::size_t const first = open_marks.size();
             if (auto const r = decode_content(into, *h, chain); !r) [[unlikely]]
                 return r;
-            for (shareable &m : std::span(marks).subspan(first, chain))
-                m.complete = true;
+            item const *const node = open_marks[first].target;
+            auto const closed = std::ranges::remove(std::span(open_marks).subspan(first), node, &open_mark::target);
+            open_marks.resize(open_marks.size() - closed.size());
             return {};
         }
         ++chain;
@@ -375,16 +380,16 @@ std::expected<void, error> tree_decoder<Resolve>::decode_sharedref(std::pmr::vec
                             .error_or(error{});
         c != error{}) [[unlikely]]
         return std::unexpected(c);
-    auto const index = detail::value_sharing::check_sharedref_index(h->argument, marks.size());
+    auto const index = detail::value_sharing::check_sharedref_index(h->argument, marks);
     if (!index) [[unlikely]]
-        return std::unexpected(h->argument - marks.size() < marked ? error::sharedref_not_defined : index.error());
-    shareable const named = marks[std::to_underlying(*index)];
-    if (marks[named.origin].complete) [[unlikely]]
+        return std::unexpected(h->argument - marks < marked ? error::sharedref_not_defined : index.error());
+    auto const named = std::ranges::lower_bound(open_marks, h->argument, {}, &open_mark::index);
+    if (named == open_marks.end() || named->index != h->argument) [[unlikely]]
         return std::unexpected(error::sharedref_not_cyclic);
-    item const &target = *named.target;
+    item const &target = *named->target;
     item &reference = into.emplace_back(item{cbor::type::shared_reference, h->info, {.tag = {h->argument, &target}}});
     reference.m_holds_shared_reference = true;
-    mark(target, reference, marked, named.origin);
+    mark(target, reference, marked);
     ++shared_references;
     return {};
 }
@@ -402,7 +407,7 @@ std::expected<decoded_tree, error> decode_tree(std::string_view const encoded)
                                                                     detail::validity::initial_size_limit);
                                               })
                                               .value_or(detail::validity::initial_size_limit));
-    tree_decoder<Resolve> tree{*decoded, {encoded}, 0, {}, 0};
+    tree_decoder<Resolve> tree{*decoded, {encoded}, 0, 0, {}, 0};
     std::pmr::vector<item> &root = decoded->items_reserved(1);
     if (auto const built = tree.decode_item(root); !built) [[unlikely]]
         return std::unexpected(built.error());
