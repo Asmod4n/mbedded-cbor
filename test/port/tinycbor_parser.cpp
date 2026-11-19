@@ -424,7 +424,7 @@ TEST_CASE("tinycbor parser: integers")
         CAPTURE(r.name);
         auto const tree = cbor::decode(r.data);
         REQUIRE(tree.has_value());
-        cbor::item const &node = **tree;
+        cbor::item const node = **tree;
         CHECK_EQ(node.type(), r.negative ? cbor::type::negative_integer : cbor::type::unsigned_integer);
         if (!r.negative)
             CHECK_EQ(node.get<std::uint64_t>().value_or(0), r.raw);
@@ -889,7 +889,7 @@ TEST_CASE("tinycbor parser: string length")
             continue;
         }
         REQUIRE_EQ(make_outcome_text(tree), make_error_text(no_error));
-        cbor::item const &node = **tree;
+        cbor::item const node = **tree;
         if (node.type() == cbor::type::text_string)
             CHECK_EQ(node.get<std::string_view>()->size(), r.expected);
         else
@@ -1066,7 +1066,7 @@ TEST_CASE("tinycbor parser: find a key in a map")
         CHECK_EQ(value->type().value_or(cbor::type::null), cbor::type::tag);
         auto const tree = value->to_item();
         REQUIRE_EQ(make_outcome_text(tree), make_error_text(no_error));
-        CHECK_EQ((*tree)->get<std::pair<std::uint64_t, cbor::item const *>>().value_or(std::pair<std::uint64_t, cbor::item const *>{}).first, 42u);
+        CHECK_EQ((*tree)->get<std::pair<std::uint64_t, cbor::item>>().transform([](std::pair<std::uint64_t, cbor::item> const t) { return t.first; }).value_or(0u), 42u);
         auto const text = value->get<std::string_view>();
         REQUIRE_EQ(make_outcome_text(text), make_error_text(no_error));
         CHECK_EQ(**text, "haystack"sv);

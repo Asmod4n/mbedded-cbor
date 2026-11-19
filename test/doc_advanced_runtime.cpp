@@ -166,7 +166,7 @@ TEST_CASE("doc advanced runtime: clone and decode")
     CHECK_EQ((*tree)->get<cbor::array_range>()->size(), 2u);
     CHECK_EQ((*tree)->get<item_pairs>().error(), error::incorrect_type);
     auto const second = (*tree)->get<cbor::array_range>()->next();
-    cbor::item const &pairs = second.front();
+    cbor::item const pairs = second.front();
     CHECK_EQ(pairs.get<item_pairs>()->size(), 1u);
     CHECK_EQ(std::get<0>(pairs.get<item_pairs>()->front()).get<std::string_view>(), "a"sv);
     CHECK_EQ(std::get<1>(pairs.get<item_pairs>()->front()).get<std::uint64_t>(), 2u);
@@ -178,7 +178,7 @@ TEST_CASE("doc advanced runtime: clone and decode")
     CHECK_EQ(*test::make_lazy_from_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->at(1)->type(), cbor::type::tag);
     auto const tags = test::make_lazy_from_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->to_item();
     REQUIRE(tags.has_value());
-    CHECK_EQ(list_children_of_item(*(*tags))[1]->type(), cbor::type::tag);
+    CHECK_EQ(list_children_of_item(*(*tags))[1].type(), cbor::type::tag);
 }
 
 // The section "clone and decode" says that the tree holds a copy of each string. So that it stays valid after the input
@@ -191,9 +191,9 @@ TEST_CASE("doc advanced runtime: the tree copies its strings")
     auto const text = (*tree)->get<cbor::array_range>()->front().get<std::string_view>();
     REQUIRE(text.has_value());
     CHECK_NE(static_cast<void const *>(text->data()), static_cast<void const *>(std::span(input).subspan(2).data()));
-    auto const big = (*tree)->get<cbor::array_range>()->next().front().get<std::pair<std::uint64_t, cbor::item const *>>();
+    auto const big = (*tree)->get<cbor::array_range>()->next().front().get<std::pair<std::uint64_t, cbor::item>>();
     REQUIRE(big.has_value());
-    auto const magnitude = big->second->get<std::span<std::byte const>>();
+    auto const magnitude = big->second.get<std::span<std::byte const>>();
     REQUIRE(magnitude.has_value());
     CHECK_EQ(magnitude->size(), 9u);
     std::less<void const *> const before;
@@ -226,10 +226,10 @@ TEST_CASE("doc advanced runtime: encode")
     CHECK_EQ(w.encoded, "\x82\x01\x02"s);
     std::string const cycle = "\xd8\x1c\xc6\xd8\x1d\x00"s;
     auto const tagged = *test::make_lazy_from_copy(cycle)->to_item();
-    cbor::item const *const six = tagged->get<std::pair<std::uint64_t, cbor::item const *>>().value().second;
-    CHECK_EQ(read_argument_of_item(*six), 6u);
-    cbor::item const *const reference = six->get<std::pair<std::uint64_t, cbor::item const *>>().value().second;
-    CHECK_EQ(reference->get<std::pair<std::uint64_t, cbor::item const *>>().value().first, 29u);
+    cbor::item const six = tagged->get<std::pair<std::uint64_t, cbor::item>>().value().second;
+    CHECK_EQ(read_argument_of_item(six), 6u);
+    cbor::item const reference = six.get<std::pair<std::uint64_t, cbor::item>>().value().second;
+    CHECK_EQ(reference.get<std::pair<std::uint64_t, cbor::item>>().value().first, 29u);
     std::string const wire = "\x82\xd8\x1c\x19\x00\x01\xd8\x1d\x00"s;
     std::string const own = wire;
     std::string again;
@@ -305,7 +305,7 @@ TEST_CASE("doc advanced runtime: tags 28 and 29")
     REQUIRE(tree.has_value());
     auto const elements = (*tree)->get<cbor::array_range>().value();
     CHECK_EQ(elements.next().front().type(), cbor::type::shared_reference);
-    CHECK_EQ(elements.next().front().get<std::pair<std::uint64_t, cbor::item const *>>().value().second, &**tree);
+    CHECK(elements.next().front().get<std::pair<std::uint64_t, cbor::item>>().value().second == **tree);
     CHECK_EQ(cbor::decode_cycles("\x82\xd8\x1c\x01\xd8\x1d\x00"sv).error(), error::sharedref_not_cyclic);
     CHECK_EQ(cbor::decode_cycles("\x81\xd8\x1d\x00"sv).error(), error::sharedref_index_not_marked);
     CHECK_EQ(cbor::decode_cycles("\xd8\x1c\xd8\x1d\x00"sv).error(), error::sharedref_not_defined);
@@ -324,7 +324,7 @@ TEST_CASE("doc advanced runtime: tags 28 and 29")
     CHECK_EQ(cbor::diagnostic_notation("\x82\xd8\x1c\x01\xd8\x1d\x00"sv), "[28(1), 29(0)]");
     auto const forward = test::make_lazy_from_copy("\x82\xd8\x1d\x00\xd8\x1c\x05"s)->to_item();
     REQUIRE(forward.has_value());
-    CHECK_EQ((*forward)->get<cbor::array_range>().value().front().get<std::pair<std::uint64_t, cbor::item const *>>().value().first, 29u);
+    CHECK_EQ((*forward)->get<cbor::array_range>().value().front().get<std::pair<std::uint64_t, cbor::item>>().value().first, 29u);
     CHECK(test::make_lazy_from_copy("\xd8\x1c\x81\xd8\x1d\x00"s)->to_item().has_value());
     CHECK_EQ(test::make_lazy_from_copy("\xd8\x1c\xd8\x1d\x00"s)->at(0).error(), error::not_indexable);
 }
@@ -342,9 +342,9 @@ TEST_CASE("doc advanced runtime: tag 55799")
     CHECK_EQ((*decoded)->type(), cbor::type::array);
     auto const tree = test::make_lazy_from_copy("\x81\xd9\xd9\xf7\x01"s)->to_item();
     REQUIRE(tree.has_value());
-    cbor::item const *const inner = list_children_of_item(*(*tree))[0];
-    CHECK_EQ(inner->type(), cbor::type::tag);
-    CHECK_EQ(read_argument_of_item(*inner), 55799u);
+    cbor::item const inner = list_children_of_item(*(*tree))[0];
+    CHECK_EQ(inner.type(), cbor::type::tag);
+    CHECK_EQ(read_argument_of_item(inner), 55799u);
 }
 
 // The iov forms exist where the platform has <sys/uio.h>, as in the library (encode.hpp); Windows has none.

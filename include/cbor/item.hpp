@@ -19,6 +19,7 @@
 #include <string_view>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 #if __has_include(<stdfloat>)
 #include <stdfloat>
@@ -26,6 +27,7 @@
 
 #include "error.hpp"
 #include "head.hpp"
+#include "padded_string.hpp"
 #include "rfc8746.hpp"
 #include "rfc8949.hpp"
 #include "validity.hpp"
@@ -42,11 +44,11 @@ class extended_diagnostic_notation;
 
 struct tree_owner;
 
+struct tree;
+
 namespace dom
 {
 
-struct kind;
-struct value_block;
 class decoder;
 class reader;
 
@@ -56,7 +58,7 @@ class reader;
 
 struct item;
 
-std::expected<std::string, error> to_edn(item const &root);
+std::expected<std::string, error> to_edn(item root);
 
 template <class T>
 concept scalar_result = (std::integral<T> && !std::is_same_v<T, bool>) || std::is_same_v<T, double> ||
@@ -73,76 +75,24 @@ concept view_result =
 namespace detail
 {
 
-class array_iterator
-{
-    std::span<item const> rest;
-
-    friend struct cbor::item;
-
-    explicit array_iterator(std::span<item const> const siblings) : rest(siblings)
-    {
-    }
-
-public:
-    using value_type = item;
-    using difference_type = std::ptrdiff_t;
-    using iterator_concept = std::forward_iterator_tag;
-
-    array_iterator() = default;
-
-    item const &operator*() const;
-
-    array_iterator &operator++();
-
-    array_iterator operator++(int)
-    {
-        array_iterator const before = *this;
-        ++*this;
-        return before;
-    }
-
-    friend bool operator==(array_iterator const &a, array_iterator const &b)
-    {
-        return a.rest.data() == b.rest.data();
-    }
-};
-
-class map_iterator
-{
-    std::span<item const> rest;
-
-    friend struct cbor::item;
-
-    explicit map_iterator(std::span<item const> const siblings) : rest(siblings)
-    {
-    }
-
-public:
-    using value_type = std::pair<item const &, item const &>;
-    using difference_type = std::ptrdiff_t;
-    using iterator_concept = std::forward_iterator_tag;
-
-    map_iterator() = default;
-
-    std::pair<item const &, item const &> operator*() const;
-
-    map_iterator &operator++();
-
-    map_iterator operator++(int)
-    {
-        map_iterator const before = *this;
-        ++*this;
-        return before;
-    }
-
-    friend bool operator==(map_iterator const &a, map_iterator const &b)
-    {
-        return a.rest.data() == b.rest.data();
-    }
-};
-
 namespace dom
 {
+
+struct node {
+    std::uint64_t m_tag;
+    union {
+        std::uint64_t u64;
+        std::int64_t i64;
+        double f64;
+        std::size_t ofs;
+    } m_uni;
+
+    node()
+    {
+    }
+
+    constexpr cbor::type type() const;
+};
 
 struct kind {
     static constexpr std::uint8_t type_extended = 0;
@@ -206,14 +156,168 @@ struct kind {
         return is_extended_word(tag, extended_tag) || is_extended_word(tag, extended_typed_array);
     }
 
-    static constexpr bool is_extended(item const &x, std::uint8_t extended);
+    static constexpr bool is_extended(node const &x, std::uint8_t const extended)
+    {
+        return is_extended_word(x.m_tag, extended);
+    }
 
-    static constexpr bool is_tag(item const &x);
+    static constexpr bool is_tag(node const &x)
+    {
+        return is_tag_word(x.m_tag);
+    }
 
-    static constexpr std::size_t width_of(item const &x);
+    static constexpr std::size_t width_of(node const &x)
+    {
+        switch (x.m_tag & type_mask) {
+        case type_array:
+        case type_map:
+            return x.m_uni.ofs;
+        case type_extended:
+            if (is_tag(x))
+                return static_cast<std::size_t>(high_of(x.m_tag));
+            return 1;
+        default:
+            return 1;
+        }
+    }
+};
+
+constexpr cbor::type node::type() const
+{
+    switch (m_tag & kind::type_mask) {
+    case kind::type_bytes:
+        return cbor::type::byte_string;
+    case kind::type_text:
+        return cbor::type::text_string;
+    case kind::type_array:
+        return cbor::type::array;
+    case kind::type_map:
+        return cbor::type::map;
+    case kind::type_null:
+        return (m_tag & kind::subtype_mask) == kind::subtype_undefined ? cbor::type::undefined : cbor::type::null;
+    case kind::type_bool:
+        return (m_tag & kind::subtype_mask) == kind::subtype_true ? cbor::type::true_value : cbor::type::false_value;
+    case kind::type_number:
+        switch (m_tag & kind::subtype_mask) {
+        case kind::subtype_uint:
+            return cbor::type::unsigned_integer;
+        case kind::subtype_real:
+            return static_cast<cbor::type>(std::to_underlying(cbor::type::half_float) +
+                                           ((m_tag & kind::width_mask) >> kind::width_bit));
+        default:
+            return cbor::type::negative_integer;
+        }
+    default:
+        switch (m_tag & kind::extended_mask) {
+        case kind::extended_simple:
+            return cbor::type::simple_value;
+        case kind::extended_shared_reference:
+            return cbor::type::shared_reference;
+        case kind::extended_typed_array:
+            return cbor::type::typed_array;
+        default:
+            return detail::heads::type_of(major_type::tag, 0, m_uni.u64);
+        }
+    }
+}
+
+inline constexpr std::size_t growth_divisor = 2;
+
+struct value_block {
+    static constexpr std::size_t pair_values = 2;
+
+    std::vector<node> items;
+    std::size_t val_end;
+
+    static value_block allocated(std::size_t const size)
+    {
+        return {std::vector<node>(size), size - std::min(size, pair_values)};
+    }
+
+    [[gnu::noinline]] void grow(std::size_t const used, std::size_t const needed)
+    {
+        value_block grown = allocated(std::max(items.size() + items.size() / growth_divisor, needed));
+        std::ranges::copy(std::span(items).first(used), grown.items.begin());
+        *this = std::move(grown);
+    }
+
+    [[gnu::noinline]] void grow(std::size_t const used)
+    {
+        grow(used, 0);
+    }
 };
 
 }
+
+class array_iterator
+{
+    tree const *owner = nullptr;
+    std::size_t index = 0;
+
+    friend struct cbor::item;
+
+    array_iterator(tree const *const of, std::size_t const at) : owner(of), index(at)
+    {
+    }
+
+public:
+    using value_type = item;
+    using difference_type = std::ptrdiff_t;
+    using iterator_concept = std::forward_iterator_tag;
+
+    array_iterator() = default;
+
+    item operator*() const;
+
+    array_iterator &operator++();
+
+    array_iterator operator++(int)
+    {
+        array_iterator const before = *this;
+        ++*this;
+        return before;
+    }
+
+    friend bool operator==(array_iterator const a, array_iterator const b)
+    {
+        return a.index == b.index;
+    }
+};
+
+class map_iterator
+{
+    tree const *owner = nullptr;
+    std::size_t index = 0;
+
+    friend struct cbor::item;
+
+    map_iterator(tree const *const of, std::size_t const at) : owner(of), index(at)
+    {
+    }
+
+public:
+    using value_type = std::pair<item, item>;
+    using difference_type = std::ptrdiff_t;
+    using iterator_concept = std::forward_iterator_tag;
+
+    map_iterator() = default;
+
+    std::pair<item, item> operator*() const;
+
+    map_iterator &operator++();
+
+    map_iterator operator++(int)
+    {
+        map_iterator const before = *this;
+        ++*this;
+        return before;
+    }
+
+    friend bool operator==(map_iterator const a, map_iterator const b)
+    {
+        return a.index == b.index;
+    }
+};
 
 template <class T, class Iterator>
 struct is_sized_range_of : std::false_type {
@@ -233,10 +337,10 @@ struct is_sized_range_of<std::ranges::subrange<Iterator, Iterator, std::ranges::
  * cbor::item::additional_information() gives the low 5 bits of the initial byte (RFC 8949 3).
  * cbor::item::get() and cbor::item::visit() give the value.
  * The constructor is private: only a decode makes an item.
- * An item owns no memory and has no destructor to run.
- * An item takes 16 bytes, as a value of the yyjson DOM: the items of a tree stand in one array, and a container is
- * followed by its descendants. So an item is not copied: it is used where its tree holds it.
- * The tree owns every node and every string.
+ * An item is a view of one node: it holds its tree and the index of the node in the array of the tree, as a
+ * `dom::element` of simdjson holds its document and its index. It owns no memory, and a copy of it is a view of the
+ * same node. So an item is passed by value.
+ * The tree owns every node and every string. An item is valid as long as its tree.
  * An item gives no error.
  *
  * @code{.example}
@@ -260,26 +364,14 @@ struct is_sized_range_of<std::ranges::subrange<Iterator, Iterator, std::ranges::
  */
 struct item {
 private:
-    std::uint64_t m_tag;
-    union {
-        std::uint64_t u64;
-        std::int64_t i64;
-        double f64;
-        char const *str;
-        std::size_t ofs;
-    } m_uni;
+    detail::tree const *owner;
+    std::size_t index;
 
-    item() = default;
-
-    item(item const &) = default;
-
-    item &operator=(item const &) = default;
+    item(detail::tree const *const of, std::size_t const at) : owner(of), index(at)
+    {
+    }
 
 public:
-    item(item &&) = delete;
-
-    item &operator=(item &&) = delete;
-
     /**
      * @brief Gives the kind of the node.
      *
@@ -298,45 +390,9 @@ public:
      *
      * @see cbor::lazy::type()
      */
-    constexpr cbor::type type() const
+    cbor::type type() const
     {
-        using kind = detail::dom::kind;
-        switch (m_tag & kind::type_mask) {
-        case kind::type_bytes:
-            return cbor::type::byte_string;
-        case kind::type_text:
-            return cbor::type::text_string;
-        case kind::type_array:
-            return cbor::type::array;
-        case kind::type_map:
-            return cbor::type::map;
-        case kind::type_null:
-            return (m_tag & kind::subtype_mask) == kind::subtype_undefined ? cbor::type::undefined : cbor::type::null;
-        case kind::type_bool:
-            return (m_tag & kind::subtype_mask) == kind::subtype_true ? cbor::type::true_value
-                                                                      : cbor::type::false_value;
-        case kind::type_number:
-            switch (m_tag & kind::subtype_mask) {
-            case kind::subtype_uint:
-                return cbor::type::unsigned_integer;
-            case kind::subtype_real:
-                return static_cast<cbor::type>(std::to_underlying(cbor::type::half_float) +
-                                               ((m_tag & kind::width_mask) >> kind::width_bit));
-            default:
-                return cbor::type::negative_integer;
-            }
-        default:
-            switch (m_tag & kind::extended_mask) {
-            case kind::extended_simple:
-                return cbor::type::simple_value;
-            case kind::extended_shared_reference:
-                return cbor::type::shared_reference;
-            case kind::extended_typed_array:
-                return cbor::type::typed_array;
-            default:
-                return detail::heads::type_of(major_type::tag, 0, m_uni.u64);
-            }
-        }
+        return node().type();
     }
 
     /**
@@ -353,9 +409,9 @@ public:
      * result: 25
      * @endcode
      */
-    constexpr std::uint8_t additional_information() const
+    std::uint8_t additional_information() const
     {
-        return detail::dom::kind::info_of(m_tag);
+        return detail::dom::kind::info_of(node().m_tag);
     }
 
     /**
@@ -372,6 +428,14 @@ public:
     std::expected<std::string, error> to_edn() const;
 
     /**
+     * @brief Tells whether two items are views of the same node of the same tree. It does not compare the values.
+     *
+     * A `shared_reference` of cbor::decode_cycles() gives its target, and `==` tells whether that target is a given
+     * node.
+     */
+    friend bool operator==(item, item) = default;
+
+    /**
      * @brief Gives the value of the node as `T`, as cbor::lazy::get() reads it.
      *
      * | T | Reads |
@@ -384,12 +448,12 @@ public:
      * | `cbor::typed_array` | a typed array (RFC 8746): its tag number and its bytes |
      * | `cbor::array_range` | an array: its elements |
      * | `cbor::map_range` | a map: each key and its value as one pair |
-     * | `std::pair<std::uint64_t, item const *>` | a tag, a bignum or a shared reference: the tag number or the index, and the content or the target |
+     * | `std::pair<std::uint64_t, item>` | a tag, a bignum or a shared reference: the tag number or the index, and the content or the target |
      *
      * A negative integer gives its value, -1 minus the argument (RFC 8949 3.1).
      * Every `T` except the pair passes a tag that the call does not interpret, as cbor::lazy::get() does.
      * A tag 2, 3 or 24 and a typed array are not passed, and a shared reference is not passed.
-     * A view and a pointer in the result point into the tree: the result is valid as long as the tree.
+     * A view and an item in the result point into the tree: the result is valid as long as the tree.
      *
      * @code{.example}
      * message: {"a": -500}
@@ -422,7 +486,7 @@ public:
                   ) ||
                  view_result<T> || detail::is_sized_range_of<T, detail::array_iterator>::value ||
                  detail::is_sized_range_of<T, detail::map_iterator>::value ||
-                 std::same_as<T, std::pair<std::uint64_t, item const *>>)
+                 std::same_as<T, std::pair<std::uint64_t, item>>)
     std::expected<T, error> get() const;
 
 #ifdef CBOR_HAS_INT128
@@ -440,13 +504,13 @@ public:
      * | `false_value`, `true_value` | `bool` |
      * | `null` | `std::nullptr_t` |
      * | `undefined`, `simple_value` | `cbor::simple_value` |
-     * | `tag`, `unsigned_bignum`, `negative_bignum` | `std::pair<std::uint64_t, item const *>`: the tag number and the content; a bignum has the tag number 2 or 3 (RFC 8949 3.4.3) |
+     * | `tag`, `unsigned_bignum`, `negative_bignum` | `std::pair<std::uint64_t, item>`: the tag number and the content; a bignum has the tag number 2 or 3 (RFC 8949 3.4.3) |
      * | `typed_array` | `cbor::typed_array` |
-     * | `shared_reference` | `item const *`: the target |
+     * | `shared_reference` | `item`: the target |
      *
      * `f` gives one return type for every alternative, as std::visit requires; another `f` does not compile.
      * visit exists where cbor::int128 exists.
-     * A view and a pointer that `f` receives point into the tree.
+     * A view and an item that `f` receives point into the tree.
      *
      * @snippet doc_reference_item.cpp visit
      * @see cbor::item::get()
@@ -456,13 +520,15 @@ public:
 #endif
 
 private:
+    detail::dom::node const &node() const;
+
     std::unexpected<error> reject_as_number() const
     {
         cbor::type const t = type();
         if (t != cbor::type::unsigned_bignum && t != cbor::type::negative_bignum) [[unlikely]]
             return std::unexpected(error::incorrect_type);
         if (error const c =
-                detail::validity::check_tag_content(m_uni.u64, detail::heads::major_type_of(content().type()))
+                detail::validity::check_tag_content(node().m_uni.u64, detail::heads::major_type_of(content().type()))
                     .error_or(error{});
             c != error{}) [[unlikely]]
             return std::unexpected(c);
@@ -471,110 +537,111 @@ private:
 
     std::uint64_t argument() const
     {
-        if ((m_tag & detail::dom::kind::subtype_mask) == detail::dom::kind::subtype_sint)
-            return static_cast<std::uint64_t>(~m_uni.i64);
-        return m_uni.u64;
+        detail::dom::node const &x = node();
+        if ((x.m_tag & detail::dom::kind::subtype_mask) == detail::dom::kind::subtype_sint)
+            return static_cast<std::uint64_t>(~x.m_uni.i64);
+        return x.m_uni.u64;
     }
 
     bool holds_shared_reference() const
     {
-        return (m_tag & detail::dom::kind::shared_flag) != 0;
+        return (node().m_tag & detail::dom::kind::shared_flag) != 0;
     }
 
     std::size_t length() const
     {
-        return static_cast<std::size_t>(detail::dom::kind::high_of(m_tag));
+        return static_cast<std::size_t>(detail::dom::kind::high_of(node().m_tag));
     }
 
-    std::string_view text() const
-    {
-        return {m_uni.str, length()};
-    }
+    std::string_view text() const;
 
     std::span<std::byte const> bytes() const
     {
         return std::as_bytes(std::span(text()));
     }
 
-    std::span<item const> descendants() const;
-
-    item const &content() const
+    std::size_t next() const
     {
-        return descendants().subspan(1).front();
+        return index + detail::dom::kind::width_of(node());
     }
 
-    item const &target() const;
+    std::span<detail::dom::node const> descendants() const;
+
+    item descendant(std::size_t const at) const
+    {
+        return {owner, index + at};
+    }
+
+    item content() const
+    {
+        return {owner, index + 1};
+    }
+
+    item target() const
+    {
+        return {owner, index + static_cast<std::size_t>(node().m_uni.i64)};
+    }
 
     auto elements() const;
 
     auto entries() const;
 
-    friend struct detail::dom::kind;
+    friend class detail::array_iterator;
 
-    friend struct detail::dom::value_block;
-
-    friend class detail::dom::decoder;
-
-    friend class detail::dom::reader;
+    friend class detail::map_iterator;
 
     friend class detail::encoding;
 
     friend class detail::extended_diagnostic_notation;
 
+    friend struct detail::tree;
+
     friend struct detail::tree_owner;
 
-    friend std::expected<std::string, error> cbor::to_edn(item const &root);
+    friend std::expected<std::string, error> cbor::to_edn(item root);
 };
 
-static_assert(sizeof(item) == sizeof(std::uint64_t) + sizeof(std::uint64_t));
+static_assert(sizeof(item) == sizeof(detail::tree const *) + sizeof(std::size_t));
+static_assert(sizeof(detail::dom::node) == sizeof(std::uint64_t) + sizeof(std::uint64_t));
 
-constexpr bool detail::dom::kind::is_extended(item const &x, std::uint8_t const extended)
+namespace detail
 {
-    return is_extended_word(x.m_tag, extended);
+
+struct tree {
+    static constexpr std::size_t no_item = std::numeric_limits<std::size_t>::max();
+
+    struct link {
+        std::size_t tagged;
+        std::size_t embedded;
+    };
+
+    dom::value_block block;
+    padded_string text;
+    std::vector<link> encoded_cbor_data_items;
+    item root{this, 0};
+};
+
 }
 
-constexpr bool detail::dom::kind::is_tag(item const &x)
+inline detail::dom::node const &item::node() const
 {
-    return is_tag_word(x.m_tag);
+    return owner->block.items[index];
 }
 
-constexpr std::size_t detail::dom::kind::width_of(item const &x)
+inline std::span<detail::dom::node const> item::descendants() const
 {
-    switch (x.m_tag & type_mask) {
-    case type_array:
-    case type_map:
-        return x.m_uni.ofs;
-    case type_extended:
-        if (is_tag(x))
-            return static_cast<std::size_t>(high_of(x.m_tag));
-        return 1;
-    default:
-        return 1;
-    }
+    return std::span(owner->block.items).subspan(index, detail::dom::kind::width_of(node()));
 }
 
-#if defined(__clang__)
-#pragma clang unsafe_buffer_usage begin
-#endif
-
-inline std::span<item const> item::descendants() const
+inline std::string_view item::text() const
 {
-    return {this, detail::dom::kind::width_of(*this)};
+    return std::string_view(owner->text).substr(node().m_uni.ofs, length());
 }
-
-inline item const &item::target() const
-{
-    return *(this + m_uni.i64);
-}
-
-#if defined(__clang__)
-#pragma clang unsafe_buffer_usage end
-#endif
 
 /**
  * @brief The elements of an array, in their order, as a forward range with a size (RFC 8949 3.1, major type 4).
  *
- * cbor::item::get() gives it for an array. Each element is a `cbor::item const &`. The range is a view into the tree.
+ * cbor::item::get() gives it for an array. Each element is a cbor::item. The range is a view into the tree.
  *
  * @code{.example}
  * message: [1, "a"]
@@ -596,7 +663,7 @@ using array_range =
 /**
  * @brief The entries of a map, in their order, as a forward range with a size (RFC 8949 3.1, major type 5).
  *
- * cbor::item::get() gives it for a map. Each entry is a `std::pair<item const &, item const &>`: the key and the
+ * cbor::item::get() gives it for a map. Each entry is a `std::pair<item, item>`: the key and the
  * value. The range is a view into the tree.
  *
  * @code{.example}
@@ -617,40 +684,37 @@ static_assert(std::ranges::forward_range<array_range> && std::ranges::view<array
 static_assert(std::ranges::forward_range<map_range> && std::ranges::view<map_range> &&
               std::ranges::sized_range<map_range>);
 
-inline item const &detail::array_iterator::operator*() const
+inline item detail::array_iterator::operator*() const
 {
-    return rest.front();
+    return {owner, index};
 }
 
 inline detail::array_iterator &detail::array_iterator::operator++()
 {
-    rest = rest.subspan(dom::kind::width_of(rest.front()));
+    index = (**this).next();
     return *this;
 }
 
-inline std::pair<item const &, item const &> detail::map_iterator::operator*() const
+inline std::pair<item, item> detail::map_iterator::operator*() const
 {
-    return {rest.front(), rest.subspan(dom::kind::width_of(rest.front())).front()};
+    item const key{owner, index};
+    return {key, item{owner, key.next()}};
 }
 
 inline detail::map_iterator &detail::map_iterator::operator++()
 {
-    std::span<item const> const value = rest.subspan(dom::kind::width_of(rest.front()));
-    rest = value.subspan(dom::kind::width_of(value.front()));
+    index = (**this).second.next();
     return *this;
 }
 
 inline auto item::elements() const
 {
-    std::span<item const> const all = descendants();
-    return array_range(detail::array_iterator(all.subspan(1)), detail::array_iterator(all.subspan(all.size())),
-                       length());
+    return array_range(detail::array_iterator(owner, index + 1), detail::array_iterator(owner, next()), length());
 }
 
 inline auto item::entries() const
 {
-    std::span<item const> const all = descendants();
-    return map_range(detail::map_iterator(all.subspan(1)), detail::map_iterator(all.subspan(all.size())), length());
+    return map_range(detail::map_iterator(owner, index + 1), detail::map_iterator(owner, next()), length());
 }
 
 template <class T>
@@ -661,20 +725,20 @@ template <class T>
               ) ||
              view_result<T> || detail::is_sized_range_of<T, detail::array_iterator>::value ||
              detail::is_sized_range_of<T, detail::map_iterator>::value ||
-             std::same_as<T, std::pair<std::uint64_t, item const *>>)
+             std::same_as<T, std::pair<std::uint64_t, item>>)
 std::expected<T, error> item::get() const
 {
-    item const *at = this;
-    if constexpr (!std::same_as<T, std::pair<std::uint64_t, item const *>>)
-        while (at->type() == cbor::type::tag && detail::heads::is_tag_passed(at->m_uni.u64))
-            at = &at->content();
-    item const &node = *at;
-    cbor::type const t = node.type();
+    item at = *this;
+    if constexpr (!std::same_as<T, std::pair<std::uint64_t, item>>)
+        while (at.type() == cbor::type::tag && detail::heads::is_tag_passed(at.node().m_uni.u64))
+            at = at.content();
+    detail::dom::node const &x = at.node();
+    cbor::type const t = x.type();
     if constexpr (std::integral<T> && !std::same_as<T, bool>) {
         bool const negative = t == cbor::type::negative_integer;
         if (t != cbor::type::unsigned_integer && !negative) [[unlikely]]
-            return node.reject_as_number();
-        std::uint64_t const argument = node.argument();
+            return at.reject_as_number();
+        std::uint64_t const argument = at.argument();
         if (error const c = detail::validity::check_number_range<T>(negative, argument).error_or(error{});
             c != error{}) [[unlikely]]
             return std::unexpected(c);
@@ -684,11 +748,11 @@ std::expected<T, error> item::get() const
         case cbor::type::half_float:
         case cbor::type::single_float:
         case cbor::type::double_float:
-            return node.m_uni.f64;
+            return x.m_uni.f64;
         case cbor::type::unsigned_integer:
         case cbor::type::negative_integer: {
             bool const negative = t == cbor::type::negative_integer;
-            std::uint64_t const argument = node.argument();
+            std::uint64_t const argument = at.argument();
             if (error const c = detail::validity::check_number_range<double>(negative, argument).error_or(error{});
                 c != error{}) [[unlikely]]
                 return std::unexpected(c);
@@ -696,7 +760,7 @@ std::expected<T, error> item::get() const
                             : static_cast<double>(argument);
         }
         [[unlikely]] default:
-            return node.reject_as_number();
+            return at.reject_as_number();
         }
     } else if constexpr (std::same_as<T, bool>) {
         if (t != cbor::type::false_value && t != cbor::type::true_value) [[unlikely]]
@@ -712,40 +776,40 @@ std::expected<T, error> item::get() const
         case cbor::type::true_value:
         case cbor::type::null:
         case cbor::type::undefined:
-            return static_cast<simple_value>(node.additional_information());
+            return static_cast<simple_value>(at.additional_information());
         case cbor::type::simple_value:
-            return static_cast<simple_value>(node.m_uni.u64);
+            return static_cast<simple_value>(x.m_uni.u64);
         [[unlikely]] default:
             return std::unexpected(error::incorrect_type);
         }
     } else if constexpr (std::same_as<T, std::string_view>) {
         if (t != cbor::type::text_string) [[unlikely]]
             return std::unexpected(error::incorrect_type);
-        return node.text();
+        return at.text();
     } else if constexpr (std::same_as<T, std::span<std::byte const>>) {
         if (t != cbor::type::byte_string) [[unlikely]]
             return std::unexpected(error::incorrect_type);
-        return node.bytes();
+        return at.bytes();
     } else if constexpr (std::same_as<T, typed_array>) {
         if (t != cbor::type::typed_array) [[unlikely]]
             return std::unexpected(error::incorrect_type);
-        return typed_array{node.m_uni.u64, node.content().bytes()};
+        return typed_array{x.m_uni.u64, at.content().bytes()};
     } else if constexpr (detail::is_sized_range_of<T, detail::array_iterator>::value) {
         if (t != cbor::type::array) [[unlikely]]
             return std::unexpected(error::incorrect_type);
-        return node.elements();
+        return at.elements();
     } else if constexpr (detail::is_sized_range_of<T, detail::map_iterator>::value) {
         if (t != cbor::type::map) [[unlikely]]
             return std::unexpected(error::incorrect_type);
-        return node.entries();
+        return at.entries();
     } else {
         switch (t) {
         case cbor::type::tag:
         case cbor::type::unsigned_bignum:
         case cbor::type::negative_bignum:
-            return std::pair<std::uint64_t, item const *>(node.m_uni.u64, &node.content());
+            return std::pair<std::uint64_t, item>(x.m_uni.u64, at.content());
         case cbor::type::shared_reference:
-            return std::pair<std::uint64_t, item const *>(detail::dom::kind::high_of(node.m_tag), &node.target());
+            return std::pair<std::uint64_t, item>(detail::dom::kind::high_of(x.m_tag), at.target());
         [[unlikely]] default:
             return std::unexpected(error::incorrect_type);
         }
@@ -766,19 +830,20 @@ decltype(auto) item::visit(F &&f) const
                       std::same_as<std::invoke_result_t<F, bool>, result> &&
                       std::same_as<std::invoke_result_t<F, std::nullptr_t>, result> &&
                       std::same_as<std::invoke_result_t<F, simple_value>, result> &&
-                      std::same_as<std::invoke_result_t<F, std::pair<std::uint64_t, item const *>>, result> &&
+                      std::same_as<std::invoke_result_t<F, std::pair<std::uint64_t, item>>, result> &&
                       std::same_as<std::invoke_result_t<F, typed_array>, result> &&
-                      std::same_as<std::invoke_result_t<F, item const *>, result>,
+                      std::same_as<std::invoke_result_t<F, item>, result>,
                   "cbor::item::visit: f must give one return type for every kind of node, as std::visit requires");
-    switch (type()) {
+    detail::dom::node const &x = node();
+    switch (x.type()) {
     case cbor::type::unsigned_integer:
-        return std::invoke(std::forward<F>(f), m_uni.u64);
+        return std::invoke(std::forward<F>(f), x.m_uni.u64);
     case cbor::type::negative_integer:
         return std::invoke(std::forward<F>(f), detail::heads::subtract_argument_from_minus_one<int128>(argument()));
     case cbor::type::half_float:
     case cbor::type::single_float:
     case cbor::type::double_float:
-        return std::invoke(std::forward<F>(f), m_uni.f64);
+        return std::invoke(std::forward<F>(f), x.m_uni.f64);
     case cbor::type::byte_string:
         return std::invoke(std::forward<F>(f), bytes());
     case cbor::type::text_string:
@@ -795,15 +860,15 @@ decltype(auto) item::visit(F &&f) const
     case cbor::type::undefined:
         return std::invoke(std::forward<F>(f), static_cast<simple_value>(additional_information()));
     case cbor::type::simple_value:
-        return std::invoke(std::forward<F>(f), static_cast<simple_value>(m_uni.u64));
+        return std::invoke(std::forward<F>(f), static_cast<simple_value>(x.m_uni.u64));
     case cbor::type::tag:
     case cbor::type::unsigned_bignum:
     case cbor::type::negative_bignum:
-        return std::invoke(std::forward<F>(f), std::pair<std::uint64_t, item const *>(m_uni.u64, &content()));
+        return std::invoke(std::forward<F>(f), std::pair<std::uint64_t, item>(x.m_uni.u64, content()));
     case cbor::type::typed_array:
-        return std::invoke(std::forward<F>(f), typed_array{m_uni.u64, content().bytes()});
+        return std::invoke(std::forward<F>(f), typed_array{x.m_uni.u64, content().bytes()});
     case cbor::type::shared_reference:
-        return std::invoke(std::forward<F>(f), &target());
+        return std::invoke(std::forward<F>(f), target());
     }
     detail::validity::throw_logic_error("cbor::item::visit: the type is not a member of cbor::type");
 }

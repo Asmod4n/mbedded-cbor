@@ -138,7 +138,7 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
             CHECK_EQ(decoded_item.error(), error::indefinite_length);
             continue;
         }
-        cbor::item const &it = **decoded_item;
+        cbor::item const it = **decoded_item;
         std::string again;
         REQUIRE(cbor::encode(again, it).has_value());
         CHECK_EQ(again, wire);
@@ -182,7 +182,7 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
                 break;
             }
             std::string content;
-            REQUIRE(cbor::encode(content, *read_tag_content_of_item(it)).has_value());
+            REQUIRE(cbor::encode(content, read_tag_content_of_item(it)).has_value());
             CHECK_EQ(static_cast<std::uint8_t>(content.front()) >> 5, static_cast<std::uint8_t>(after_head.front()) >> 5);
             break;
         }
@@ -373,7 +373,7 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
     auto const decoded_item = l.to_item();
     if (!decoded_item)
         return std::unexpected(decoded_item.error());
-    cbor::item const &it = **decoded_item;
+    cbor::item const it = **decoded_item;
     switch (find_major_type_of(it.type())) {
     case cbor::major_type::unsigned_integer:
         return value{read_argument_of_item(it)};

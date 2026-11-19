@@ -27,17 +27,17 @@ cbor::owning<cbor::item> read_vectors()
     return std::move(*tree);
 }
 
-cbor::item const *member_of(cbor::item const &object, std::string_view const key)
+std::optional<cbor::item> member_of(cbor::item const object, std::string_view const key)
 {
     auto const pairs = object.get<cbor::map_range>();
     REQUIRE(pairs.has_value());
-    for (auto const pair : *pairs)
-        if (std::get<0>(pair).get<std::string_view>() == key)
-            return &std::get<1>(pair);
-    return nullptr;
+    for (auto const [k, value] : *pairs)
+        if (k.get<std::string_view>() == key)
+            return value;
+    return std::nullopt;
 }
 
-std::string encoded(cbor::item const &node)
+std::string encoded(cbor::item const node)
 {
     std::string out;
     REQUIRE(cbor::encode(out, node).has_value());
@@ -55,14 +55,14 @@ std::string bytes_of_hex(std::string_view const hex)
 }
 
 // The bytes of a vector, made from its hex text.
-std::string bytes_of(cbor::item const &vector)
+std::string bytes_of(cbor::item const vector)
 {
     auto const hex = member_of(vector, "hex");
-    REQUIRE(hex != nullptr);
+    REQUIRE(hex.has_value());
     return bytes_of_hex(*hex->get<std::string_view>());
 }
 
-bool round_trips(cbor::item const &vector)
+bool round_trips(cbor::item const vector)
 {
     auto const flag = member_of(vector, "roundtrip");
     return flag && flag->get<bool>().value_or(false);
@@ -78,7 +78,7 @@ TEST_CASE("parse_edn: the diagnostic notation of RFC 8949 Appendix A gives the b
     auto const all = vectors->get<cbor::array_range>();
     REQUIRE(all.has_value());
     std::size_t checked = 0;
-    for (cbor::item const &vector : *all) {
+    for (cbor::item const vector : *all) {
         auto const diagnostic = member_of(vector, "diagnostic");
         if (!diagnostic || !round_trips(vector))
             continue;
@@ -100,7 +100,7 @@ TEST_CASE("parse_edn: the JSON values of RFC 8949 Appendix A give the bytes of t
     auto const all = vectors->get<cbor::array_range>();
     REQUIRE(all.has_value());
     std::size_t checked = 0;
-    for (cbor::item const &vector : *all) {
+    for (cbor::item const vector : *all) {
         auto const decoded = member_of(vector, "decoded");
         if (!decoded || !round_trips(vector))
             continue;
@@ -118,7 +118,7 @@ TEST_CASE("item::to_edn: the text of each vector reads back to its bytes")
     auto const vectors = read_vectors();
     auto const all = vectors->get<cbor::array_range>();
     REQUIRE(all.has_value());
-    for (cbor::item const &vector : *all) {
+    for (cbor::item const vector : *all) {
         std::string const bytes = bytes_of(vector);
         auto const tree = cbor::decode(bytes);
         if (!tree)
@@ -177,7 +177,7 @@ TEST_CASE("diag2cbor: the diagnostic notation of RFC 8949 Appendix A gives the b
     auto const all = vectors->get<cbor::array_range>();
     REQUIRE(all.has_value());
     std::size_t checked = 0;
-    for (cbor::item const &vector : *all) {
+    for (cbor::item const vector : *all) {
         auto const diagnostic = member_of(vector, "diagnostic");
         if (!diagnostic || !round_trips(vector))
             continue;
@@ -255,7 +255,7 @@ cbor::owning<cbor::item> shared_from_edn(std::string_view const text)
     return std::move(*tree);
 }
 
-cbor::item const &element_of(cbor::item const &array, std::size_t const index)
+cbor::item element_of(cbor::item const array, std::size_t const index)
 {
     auto const elements = array.get<cbor::array_range>();
     REQUIRE(elements.has_value());
@@ -263,10 +263,10 @@ cbor::item const &element_of(cbor::item const &array, std::size_t const index)
     return elements->next(static_cast<std::ptrdiff_t>(index)).front();
 }
 
-cbor::item const *target_of_reference(cbor::item const &reference)
+cbor::item target_of_reference(cbor::item const reference)
 {
     REQUIRE_EQ(reference.type(), cbor::type::shared_reference);
-    return reference.get<std::pair<std::uint64_t, cbor::item const *>>().value().second;
+    return reference.get<std::pair<std::uint64_t, cbor::item>>().value().second;
 }
 
 } // namespace
@@ -329,11 +329,11 @@ TEST_CASE("cbor::to_edn: the text of a shared tree reads back to the same tree")
     REQUIRE(parsed.has_value());
     CHECK_EQ(cbor::to_edn(*parsed), text);
     auto const back = shared_from_edn(*text);
-    cbor::item const &inner = element_of(*back, 1);
-    CHECK_EQ(target_of_reference(element_of(inner, 1)), &inner);
-    CHECK_EQ(target_of_reference(element_of(inner, 2)), &*back);
+    cbor::item const inner = element_of(*back, 1);
+    CHECK(target_of_reference(element_of(inner, 1)) == inner);
+    CHECK(target_of_reference(element_of(inner, 2)) == *back);
     auto const cycle = shared_from_edn(*cbor::to_edn(shared_from_edn("28([29(0)])")));
-    CHECK_EQ(target_of_reference(element_of(*cycle, 0)), &*cycle);
+    CHECK(target_of_reference(element_of(*cycle, 0)) == *cycle);
 }
 
 // An item of a tree with a shared_reference needs no owner: a shared_reference stands for its target, and an inner

@@ -298,7 +298,7 @@ void run(benchmark::State &state, Sum const sum)
         state.SkipWithError("cbor::decode refuses the message of the bench");
         return;
     }
-    cbor::item const &root = **tree;
+    cbor::item const root = **tree;
     std::uint64_t total = 0;
     for (auto _ : state) {
         total = sum(root);
@@ -309,12 +309,12 @@ void run(benchmark::State &state, Sum const sum)
 
 void item_get_scalars(benchmark::State &state)
 {
-    run(state, [](cbor::item const &root) { return scalars_sum(root); });
+    run(state, [](cbor::item const root) { return scalars_sum(root); });
 }
 
 void item_visit_tree(benchmark::State &state)
 {
-    run(state, [](cbor::item const &root) { return tree_sum(root); });
+    run(state, [](cbor::item const root) { return tree_sum(root); });
 }
 
 }

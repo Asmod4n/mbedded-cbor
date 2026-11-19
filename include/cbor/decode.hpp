@@ -1,10 +1,10 @@
 /**
  * @file
- * Decodes the first CBOR data item in a buffer into a tree of
- * cbor::item in the form of the yyjson DOM: an item of 16 bytes, all
- * items of a tree in one array, each container followed by its
- * descendants and holding the distance to its next sibling, and one
- * copy of the input that the strings point into. Decodes a bignum that
+ * Decodes the first CBOR data item in a buffer into a tree in the form
+ * of the yyjson DOM: a node of 16 bytes, all nodes of a tree in one
+ * array, each container followed by its descendants and holding the
+ * distance to its next sibling, and one copy of the input that the
+ * strings index into. A cbor::item is the tree and the index of a node. Decodes a bignum that
  * fits in 64 bits as an integer. Decodes the content of a tag 24 as one
  * more data item. decode_cycles also resolves tags 28 and 29 of the
  * value-sharing registration.
@@ -43,59 +43,6 @@ namespace cbor
 namespace detail
 {
 
-namespace dom
-{
-
-inline constexpr std::size_t growth_divisor = 2;
-
-struct value_block {
-    static constexpr std::size_t pair_values = 2;
-
-    std::unique_ptr<item[]> values;
-    std::span<item> items;
-    std::size_t val_end;
-
-    static value_block allocated(std::size_t size);
-
-    [[gnu::noinline]] void grow(std::size_t const used, std::size_t const needed)
-    {
-        value_block grown = allocated(std::max(items.size() + items.size() / growth_divisor, needed));
-        for (auto &&[to, from] : std::views::zip(grown.items, items.first(used)))
-            to = from;
-        *this = std::move(grown);
-    }
-
-    [[gnu::noinline]] void grow(std::size_t const used)
-    {
-        grow(used, 0);
-    }
-};
-
-#if defined(__clang__)
-#pragma clang unsafe_buffer_usage begin
-#endif
-
-inline value_block value_block::allocated(std::size_t const size)
-{
-    std::unique_ptr<item[]> values(new item[size]);
-    std::span<item> const items(values.get(), size);
-    return {std::move(values), items, size - std::min(size, pair_values)};
-}
-
-#if defined(__clang__)
-#pragma clang unsafe_buffer_usage end
-#endif
-
-}
-
-struct tree {
-    using link = std::pair<item const *, item const *>;
-
-    dom::value_block block;
-    padded_string text;
-    std::vector<link> encoded_cbor_data_items;
-};
-
 struct tree_owner {
     std::unique_ptr<tree> owned;
 
@@ -105,8 +52,23 @@ struct tree_owner {
 
     static owning<item> tree_owned(std::unique_ptr<tree> decoded)
     {
-        item const *const root = &decoded->block.items.front();
+        item const *const root = &decoded->root;
         return owning<item>(std::shared_ptr<item const>(root, tree_owner{std::move(decoded)}));
+    }
+
+    static tree const *tree_of(item const x)
+    {
+        return x.owner;
+    }
+
+    static std::size_t index_of(item const x)
+    {
+        return x.index;
+    }
+
+    static item item_at(tree const &of, std::size_t const at)
+    {
+        return {&of, at};
     }
 
     static tree const &tree_found(owning<item> const &held, char const *const what)
@@ -142,7 +104,7 @@ public:
         return {};
     }
 
-    static void set_integer(item &x, major_type const major, std::uint8_t const info, std::uint64_t const argument)
+    static void set_integer(node &x, major_type const major, std::uint8_t const info, std::uint64_t const argument)
     {
         if (major == major_type::unsigned_integer) {
             x.m_tag = kind::word(0, info, kind::type_number | kind::subtype_uint);
@@ -156,7 +118,7 @@ public:
         }
     }
 
-    static void set_float(item &x, std::uint8_t const info, double const value)
+    static void set_float(node &x, std::uint8_t const info, double const value)
     {
         x.m_tag = kind::word(0, info,
                              static_cast<std::uint8_t>(
@@ -166,13 +128,7 @@ public:
         x.m_uni.f64 = value;
     }
 
-    static void set_text(item &x, char const *const first, std::size_t const size)
-    {
-        x.m_tag = kind::word(size, heads::preferred_argument_info(size), kind::type_text);
-        x.m_uni.str = first;
-    }
-
-    static void set_literal(item &x, simple_value const value)
+    static void set_literal(node &x, simple_value const value)
     {
         switch (value) {
         case simple_value::false_value:
@@ -190,39 +146,39 @@ public:
         }
     }
 
-    static std::uint64_t high_of(item const &x)
+    static std::uint64_t high_of(node const &x)
     {
         return kind::high_of(x.m_tag);
     }
 
-    static void set_container(item &x, std::uint64_t const count, std::uint8_t const info, std::uint8_t const type,
+    static void set_container(node &x, std::uint64_t const count, std::uint8_t const info, std::uint8_t const type,
                               std::size_t const ofs)
     {
         x.m_tag = kind::word(count, info, type);
         x.m_uni.ofs = ofs;
     }
 
-    static void set_type(item &x, std::uint8_t const type)
+    static void set_type(node &x, std::uint8_t const type)
     {
         x.m_tag = kind::word(0, 0, type);
     }
 
-    static std::uint8_t type_of(item const &x)
+    static std::uint8_t type_of(node const &x)
     {
         return static_cast<std::uint8_t>(x.m_tag & kind::type_mask);
     }
 
-    static void set_open_count(item &x, std::size_t const count)
+    static void set_open_count(node &x, std::size_t const count)
     {
         x.m_tag = kind::word(count, 0, type_of(x));
     }
 
-    static std::size_t ofs_of(item const &x)
+    static std::size_t ofs_of(node const &x)
     {
         return x.m_uni.ofs;
     }
 
-    static void set_ofs(item &x, std::size_t const ofs)
+    static void set_ofs(node &x, std::size_t const ofs)
     {
         x.m_uni.ofs = ofs;
     }
@@ -234,18 +190,12 @@ private:
     };
 
     struct embedded_item {
-        std::string_view encoded;
+        std::size_t first;
+        std::size_t size;
         std::size_t tagged;
         std::size_t depth;
         error failure;
     };
-
-    struct index_link {
-        std::size_t tagged;
-        std::size_t embedded;
-    };
-
-    static constexpr std::size_t no_item = std::numeric_limits<std::size_t>::max();
 
     struct open_mark {
         std::uint64_t index;
@@ -257,20 +207,20 @@ private:
         return h.major == major_type::tag && h.argument == std::to_underlying(number);
     }
 
-    static major_type major_type_of(item const &x)
+    static major_type major_type_of(node const &x)
     {
         return heads::major_type_of(x.type());
     }
 
     [[gnu::noinline]] static std::expected<void, error> check_typed_array_content(std::uint64_t const tag,
-                                                                                  item const &content)
+                                                                                  node const &content)
     {
         major_type const m = major_type_of(content);
         return validity::check_typed_array_content(
             tag, m, m == major_type::byte_string ? kind::high_of(content.m_tag) : std::uint64_t{});
     }
 
-    [[gnu::noinline]] static std::expected<bool, error> decode_bignum(heads::decoder<true> &d, item &x,
+    [[gnu::noinline]] static std::expected<bool, error> decode_bignum(heads::decoder<true> &d, node &x,
                                                                       std::uint64_t const tag)
     {
         if (!heads::starts_with_definite_byte_string(d.encoded).value_or(false))
@@ -342,30 +292,30 @@ private:
     struct items_decoder {
         value_block &block;
         std::vector<embedded_item> embedded;
-        std::vector<index_link> links;
+        std::vector<tree::link> links;
 
-        [[gnu::noinline]] void add_embedded(item const &content, std::size_t const tagged, std::size_t const depth)
+        [[gnu::noinline]] void add_embedded(node const &content, std::size_t const tagged, std::size_t const depth)
         {
             if ((content.m_tag & kind::type_mask) != kind::type_bytes) {
-                links.push_back({tagged, no_item});
+                links.push_back({tagged, tree::no_item});
                 return;
             }
             embedded.push_back(
-                {std::string_view(content.m_uni.str, static_cast<std::size_t>(kind::high_of(content.m_tag))),
-                 tagged, depth, error{}});
+                {content.m_uni.ofs, static_cast<std::size_t>(kind::high_of(content.m_tag)), tagged, depth, error{}});
         }
 
-        [[gnu::noinline]] static void mark_path(std::span<item> const v, std::span<frame const> const path)
+        [[gnu::noinline]] static void mark_path(std::span<node> const v, std::span<frame const> const path)
         {
             for (frame const &f : path)
                 v[f.at].m_tag |= kind::shared_flag;
         }
 
         template <bool Cycles>
-        std::expected<std::size_t, error> decode_item(std::size_t const first, std::string_view const encoded,
-                                                      std::size_t const depth, bool const one_item)
+        std::expected<std::size_t, error> decode_item(std::size_t const first, std::size_t const at,
+                                                      std::string_view const encoded, std::size_t const depth,
+                                                      bool const one_item)
         {
-            std::span<item> const v = block.items;
+            std::span<node> const v = block.items;
             heads::decoder<true> d{encoded};
             std::vector<frame> open_containers;
             marks_table table;
@@ -377,7 +327,7 @@ private:
                 if (!h) [[unlikely]]
                     return std::unexpected(h.error());
                 --open;
-                item &x = v[val];
+                node &x = v[val];
                 switch (h->major) {
                 case major_type::unsigned_integer:
                 case major_type::negative_integer:
@@ -390,7 +340,7 @@ private:
                         return std::unexpected(s.error());
                     x.m_tag = kind::word(h->argument, h->info,
                                          h->major == major_type::text_string ? kind::type_text : kind::type_bytes);
-                    x.m_uni.str = s->data();
+                    x.m_uni.ofs = at + (encoded.size() - d.encoded.size() - s->size());
                     break;
                 }
                 case major_type::array:
@@ -495,7 +445,7 @@ private:
                     left = f.left;
                     if constexpr (Cycles)
                         table.close_marks_of(f.at);
-                    item &c = v[f.at];
+                    node &c = v[f.at];
                     if ((c.m_tag & kind::type_mask) != kind::type_extended) {
                         c.m_uni.ofs = val - f.at;
                         continue;
@@ -517,20 +467,15 @@ private:
                          std::expected<std::size_t, error> const &decoded)
     {
         if (!decoded) [[unlikely]]
-            pending.push_back({{}, 0, 0, decoded.error()});
+            pending.push_back({0, 0, 0, 0, decoded.error()});
         pending.insert(pending.end(), found.rbegin(), found.rend());
         found.clear();
     }
 
-    [[gnu::noinline]] static std::vector<tree::link> links_of(std::span<item const> const items,
-                                                              std::vector<index_link> &links)
+    [[gnu::noinline]] static std::vector<tree::link> links_of(std::vector<tree::link> &links)
     {
-        std::ranges::sort(links, {}, &index_link::tagged);
-        std::vector<tree::link> found;
-        found.reserve(links.size());
-        for (index_link const &l : links)
-            found.emplace_back(&items[l.tagged], l.embedded == no_item ? nullptr : &items[l.embedded]);
-        return found;
+        std::ranges::sort(links, {}, &tree::link::tagged);
+        return std::move(links);
     }
 
 public:
@@ -545,7 +490,7 @@ public:
         auto decoded = std::make_unique<tree>(value_block::allocated(size), padded_string(bytes),
                                               std::vector<tree::link>{});
         items_decoder out{decoded->block, {}, {}};
-        auto const outer = out.decode_item<Cycles>(0, std::string_view(decoded->text), 0, false);
+        auto const outer = out.decode_item<Cycles>(0, 0, std::string_view(decoded->text), 0, false);
         if (out.embedded.empty() && out.links.empty() && outer) [[likely]]
             return decoded;
         bool failed = !outer;
@@ -558,9 +503,10 @@ public:
             if (e.failure != error{}) [[unlikely]]
                 return std::unexpected(e.failure);
             std::size_t const first = failed ? 0 : written;
-            if (decoded->block.items.size() - first < e.encoded.size()) [[unlikely]]
-                decoded->block.grow(written, first + e.encoded.size());
-            auto const inner = out.decode_item<Cycles>(first, e.encoded, e.depth, true);
+            if (decoded->block.items.size() - first < e.size) [[unlikely]]
+                decoded->block.grow(written, first + e.size);
+            auto const inner = out.decode_item<Cycles>(
+                first, e.first, std::string_view(decoded->text).substr(e.first, e.size), e.depth, true);
             failed = failed || !inner;
             if (!failed) {
                 out.links.push_back({e.tagged, first});
@@ -568,7 +514,7 @@ public:
             }
             schedule(pending, out.embedded, inner);
         }
-        decoded->encoded_cbor_data_items = links_of(decoded->block.items, out.links);
+        decoded->encoded_cbor_data_items = links_of(out.links);
         return decoded;
     }
 };
@@ -595,8 +541,8 @@ std::expected<owning<item>, error> decode_tree(std::string_view const encoded)
  * call: auto const tree = cbor::decode(bytes)
  * result: owning item of 24(h'6161')
  * call: auto const inner = cbor::encoded_cbor_data_item(*tree, **tree)
- * result: reference to item of "a"
- * call: inner->get().get<std::string_view>()
+ * result: item of "a"
+ * call: inner->get<std::string_view>()
  * result: "a"
  * @endcode
  *
@@ -607,18 +553,19 @@ std::expected<owning<item>, error> decode_tree(std::string_view const encoded)
  *
  * @ingroup decode
  */
-inline std::expected<std::reference_wrapper<item const>, error>
-encoded_cbor_data_item(owning<item> const &tree, item const &tagged)
+inline std::expected<item, error> encoded_cbor_data_item(owning<item> const &tree, item const tagged)
 {
     constexpr char const *what = "cbor::encoded_cbor_data_item: the item is not a tag 24 of this decoded tree";
     detail::tree const &decoded = detail::tree_owner::tree_found(tree, what);
-    auto const found = std::ranges::lower_bound(decoded.encoded_cbor_data_items, &tagged, std::less<>{},
-                                                &detail::tree::link::first);
-    detail::validity::throw_logic_error_if(found == decoded.encoded_cbor_data_items.end() || found->first != &tagged,
+    std::size_t const at = detail::tree_owner::index_of(tagged);
+    auto const found =
+        std::ranges::lower_bound(decoded.encoded_cbor_data_items, at, {}, &detail::tree::link::tagged);
+    detail::validity::throw_logic_error_if(detail::tree_owner::tree_of(tagged) != &decoded ||
+                                               found == decoded.encoded_cbor_data_items.end() || found->tagged != at,
                                            what);
-    if (found->second == nullptr) [[unlikely]]
+    if (found->embedded == detail::tree::no_item) [[unlikely]]
         return std::unexpected(error::incorrect_type);
-    return std::cref(*found->second);
+    return detail::tree_owner::item_at(decoded, found->embedded);
 }
 
 /**
@@ -711,7 +658,7 @@ std::expected<owning<item>, error> decode(Encoded &&encoded)
  * @retval inadmissible_type_for_tag_content a tag 29 over an item that is not an unsigned integer, or a typed array
  * (RFC 8746) whose content is not a byte string of whole elements
  * @see cbor::decode()
- * @see cbor::to_edn(item const &)
+ * @see cbor::to_edn(item)
  * @see cbor::encode()
  *
  * @ingroup decode

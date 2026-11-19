@@ -177,11 +177,11 @@ TEST_CASE("cbor2 decoder: test_integer")
         auto const tree = cbor::decode(unhexlify(r.payload));
         REQUIRE(tree.has_value());
         REQUIRE_EQ((*tree)->type(), r.type);
-        auto const tag = r.type == cbor::type::unsigned_bignum ? (*tree)->get<std::pair<std::uint64_t, cbor::item const *>>()
-                                                                : (*tree)->get<std::pair<std::uint64_t, cbor::item const *>>();
+        auto const tag = r.type == cbor::type::unsigned_bignum ? (*tree)->get<std::pair<std::uint64_t, cbor::item>>()
+                                                                : (*tree)->get<std::pair<std::uint64_t, cbor::item>>();
         REQUIRE(tag.has_value());
         CHECK_EQ(tag->first, r.tag);
-        auto const magnitude = tag->second->get<std::span<std::byte const>>();
+        auto const magnitude = tag->second.get<std::span<std::byte const>>();
         REQUIRE(magnitude.has_value());
         std::string const m(reinterpret_cast<char const *>(magnitude->data()), magnitude->size());
         CHECK_EQ(hexlify(m), "010000000000000000");
@@ -698,17 +698,17 @@ TEST_CASE("cbor2 decoder: test_fraction, test_bigfloat")
     // so it stays a tag 2 node.
     auto const tree = cbor::decode(unhexlify("c482384dc252011f1fe37d0c70ff50456ba8b891997b07d6"));
     REQUIRE(tree.has_value());
-    auto const tag = (*tree)->get<std::pair<std::uint64_t, cbor::item const *>>();
+    auto const tag = (*tree)->get<std::pair<std::uint64_t, cbor::item>>();
     REQUIRE(tag.has_value());
     CHECK_EQ(tag->first, 4u);
-    auto const pair = tag->second->get<cbor::array_range>();
+    auto const pair = tag->second.get<cbor::array_range>();
     REQUIRE(pair.has_value());
     REQUIRE_EQ(pair->size(), 2u);
     CHECK_EQ(pair->front().get<std::int64_t>().value(), -78);
-    auto const mantissa = pair->next(1).front().get<std::pair<std::uint64_t, cbor::item const *>>();
+    auto const mantissa = pair->next(1).front().get<std::pair<std::uint64_t, cbor::item>>();
     REQUIRE(mantissa.has_value());
     CHECK_EQ(mantissa->first, 2u);
-    auto const magnitude = mantissa->second->get<std::span<std::byte const>>();
+    auto const magnitude = mantissa->second.get<std::span<std::byte const>>();
     REQUIRE(magnitude.has_value());
     CHECK_EQ(hexlify(std::string(reinterpret_cast<char const *>(magnitude->data()), magnitude->size())),
              "011f1fe37d0c70ff50456ba8b891997b07d6");
@@ -845,8 +845,8 @@ TEST_CASE("cbor2 decoder: TestSharedReference read by cbor::decode_cycles")
     // A tag 29 gives the node of its mark: in 28([29(0)]) the element names the array itself.
     auto const cyclic = cbor::decode_cycles(unhexlify("d81c81d81d00"));
     REQUIRE(cyclic.has_value());
-    CHECK_EQ((*cyclic)->get<cbor::array_range>().value().front().get<std::pair<std::uint64_t, cbor::item const *>>().value().second,
-             &**cyclic);
+    CHECK((*cyclic)->get<cbor::array_range>().value().front().get<std::pair<std::uint64_t, cbor::item>>().value().second ==
+          **cyclic);
 }
 
 // Upstream: TestSharedReference.test_nested_shareable_in_array, test_object_hook and test_tag_hook, and

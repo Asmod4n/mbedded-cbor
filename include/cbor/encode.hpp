@@ -60,14 +60,14 @@ namespace cbor
  *
  * @ingroup decode
  */
-std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &root);
+std::expected<ref<std::span<iovec const>>, error> encode_iov(item const root);
 
 /**
  * @brief Writes the tree that `root` owns into a list of `struct iovec` pieces, and refers to its long strings.
  *
  * A byte or text string longer than `CBOR_ENCODER_COPYBREAK` bytes is a piece that points into the tree; a shorter
  * one is copied into a block. The result holds the whole tree alive. The bytes and the errors are those of
- * cbor::encode_iov(item const &).
+ * cbor::encode_iov(item).
  *
  * @code{.output}
  * bytes: 82 01 61 61
@@ -77,7 +77,7 @@ std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &root);
  * @endcode
  *
  * @snippet doc_reference_item.cpp encode_iov
- * @see cbor::encode_iov(item const &)
+ * @see cbor::encode_iov(item)
  *
  * @ingroup decode
  */
@@ -192,7 +192,7 @@ private:
 
 public:
     template <class Target>
-    static std::expected<std::size_t, error> encode_into(Target &&target, item const &root);
+    static std::expected<std::size_t, error> encode_into(Target &&target, item const root);
 
 private:
     struct head_parts {
@@ -201,14 +201,14 @@ private:
         std::uint64_t argument;
     };
 
-    static head_parts head_of(item const &node);
-    static std::optional<detail::heads::head> integer_of_bignum(item const &node);
+    static head_parts head_of(item const node);
+    static std::optional<detail::heads::head> integer_of_bignum(item const node);
     template <class F>
-    static std::expected<void, error> for_each_child(item const &node, F &&f);
+    static std::expected<void, error> for_each_child(item const node, F &&f);
     template <bool AppendRef, class Writer>
-    static std::expected<void, error> encode_items(binary_writer<Writer> &out, item const &root);
+    static std::expected<void, error> encode_items(binary_writer<Writer> &out, item const root);
     template <bool AppendRef, class Writer>
-    static std::expected<void, std::errc> encode_head_and_payload(binary_writer<Writer> &out, item const &node,
+    static std::expected<void, std::errc> encode_head_and_payload(binary_writer<Writer> &out, item const node,
                                                                   head_parts const &head)
         requires(!AppendRef || binary_writer<Writer>::blocks);
     template <class Writer>
@@ -217,15 +217,15 @@ private:
     class depth_first_search;
 
     template <bool AppendRef, class Writer>
-    static std::expected<void, error> encode_tree(binary_writer<Writer> &out, item const &root);
+    static std::expected<void, error> encode_tree(binary_writer<Writer> &out, item const root);
 
 #if __has_include(<sys/uio.h>)
-    static std::expected<ref<std::span<iovec const>>, error> encode_iov_of(item const &root);
+    static std::expected<ref<std::span<iovec const>>, error> encode_iov_of(item const root);
     static std::expected<ref<std::span<iovec const>>, error> encode_iov_of(owning<item> const &root);
 #endif
 
 #if __has_include(<sys/uio.h>)
-    friend std::expected<ref<std::span<iovec const>>, error> cbor::encode_iov(item const &root);
+    friend std::expected<ref<std::span<iovec const>>, error> cbor::encode_iov(item const root);
     friend std::expected<ref<std::span<iovec const>>, error> cbor::encode_iov(owning<item> const &root);
 #endif
 };
@@ -288,7 +288,7 @@ private:
  */
 template <class Target>
     requires detail::is_target_v<std::remove_reference_t<Target>>
-std::expected<std::size_t, error> encode(Target &&out, item const &root);
+std::expected<std::size_t, error> encode(Target &&out, item const root);
 
 template <class Writer>
 struct detail::encoding::binary_writer {
@@ -510,7 +510,7 @@ class detail::encoding::iov_writer
 };
 #endif
 
-inline detail::encoding::head_parts detail::encoding::head_of(item const &node)
+inline detail::encoding::head_parts detail::encoding::head_of(item const node)
 {
     std::uint8_t const info = node.additional_information();
     switch (node.type()) {
@@ -530,7 +530,7 @@ inline detail::encoding::head_parts detail::encoding::head_of(item const &node)
     case cbor::type::negative_bignum:
     case cbor::type::tag:
     case cbor::type::typed_array:
-        return {major_type::tag, info, node.m_uni.u64};
+        return {major_type::tag, info, node.node().m_uni.u64};
     case cbor::type::shared_reference:
         return {major_type::tag,
                 detail::heads::preferred_argument_info(std::to_underlying(rfc8949::tag_number::sharedref)),
@@ -541,22 +541,22 @@ inline detail::encoding::head_parts detail::encoding::head_of(item const &node)
     case cbor::type::undefined:
         return {major_type::simple, info, info};
     case cbor::type::simple_value:
-        return {major_type::simple, info, node.m_uni.u64};
+        return {major_type::simple, info, node.node().m_uni.u64};
     case cbor::type::half_float:
     case cbor::type::single_float:
     case cbor::type::double_float:
         return {major_type::simple, info,
-                detail::ieee754::encode_float(static_cast<rfc8949::simple_information>(info), node.m_uni.f64)};
+                detail::ieee754::encode_float(static_cast<rfc8949::simple_information>(info), node.node().m_uni.f64)};
     }
     return {major_type::simple, info, info};
 }
 
 template <class F>
-std::expected<void, error> detail::encoding::for_each_child(item const &node, F &&f)
+std::expected<void, error> detail::encoding::for_each_child(item const node, F &&f)
 {
     switch (node.type()) {
     case cbor::type::array:
-        for (item const &child : node.elements())
+        for (item const child : node.elements())
             if (auto const r = f(child); !r) [[unlikely]]
                 return r;
         return {};
@@ -579,7 +579,7 @@ std::expected<void, error> detail::encoding::for_each_child(item const &node, F 
 }
 
 template <bool AppendRef, class Writer>
-CBOR_ALWAYS_INLINE inline std::expected<void, std::errc> detail::encoding::encode_head_and_payload(binary_writer<Writer> &out, item const &node,
+CBOR_ALWAYS_INLINE inline std::expected<void, std::errc> detail::encoding::encode_head_and_payload(binary_writer<Writer> &out, item const node,
                                                                  head_parts const &head)
     requires(!AppendRef || binary_writer<Writer>::blocks)
 {
@@ -604,32 +604,33 @@ std::expected<void, std::errc> detail::encoding::encode_sharedref(binary_writer<
     return out.encode_head(major_type::unsigned_integer, index);
 }
 
-inline std::optional<detail::heads::head> detail::encoding::integer_of_bignum(item const &node)
+inline std::optional<detail::heads::head> detail::encoding::integer_of_bignum(item const node)
 {
     cbor::type const t = node.type();
     if (t != cbor::type::unsigned_bignum && t != cbor::type::negative_bignum) [[likely]]
         return std::nullopt;
-    item const &content = node.content();
+    item const content = node.content();
     if (content.type() != cbor::type::byte_string)
         return std::nullopt;
-    return detail::heads::convert_bignum_to_integer(node.m_uni.u64, content.bytes());
+    return detail::heads::convert_bignum_to_integer(node.node().m_uni.u64, content.bytes());
 }
 
 template <bool AppendRef, class Writer>
-std::expected<void, error> detail::encoding::encode_items(binary_writer<Writer> &out, item const &root)
+std::expected<void, error> detail::encoding::encode_items(binary_writer<Writer> &out, item const root)
 {
-    for (std::span<item const> rest = root.descendants(); !rest.empty();) {
-        item const &node = rest.front();
+    std::span<dom::node const> const all = root.descendants();
+    for (std::size_t at = 0; at != all.size();) {
+        item const node = root.descendant(at);
         if (auto const integer = integer_of_bignum(node)) [[unlikely]] {
             if (auto const r = out.encode_head(integer->major, integer->info, integer->argument); !r) [[unlikely]]
                 return std::unexpected(detail::validity::writer_error(r.error()));
-            rest = rest.subspan(dom::kind::width_of(node));
+            at += dom::kind::width_of(all[at]);
             continue;
         }
         std::expected<void, std::errc> const written = encode_head_and_payload<AppendRef>(out, node, head_of(node));
         if (!written) [[unlikely]]
             return std::unexpected(detail::validity::writer_error(written.error()));
-        rest = rest.subspan(1);
+        ++at;
     }
     return {};
 }
@@ -637,16 +638,16 @@ std::expected<void, error> detail::encoding::encode_items(binary_writer<Writer> 
 class detail::encoding::depth_first_search
 {
     struct frame {
-        item const *node;
+        std::size_t node;
         std::uint64_t index;
         frame const *up;
     };
 
-    std::vector<item const *> targets;
-    std::unordered_map<item const *, std::uint64_t> open;
+    std::vector<std::size_t> targets;
+    std::unordered_map<std::size_t, std::uint64_t> open;
     bool path_in_map = false;
 
-    static item const &followed(item const &child)
+    static item followed(item const child)
     {
         if (child.type() == cbor::type::shared_reference) [[unlikely]]
             return child.target();
@@ -660,42 +661,42 @@ class detail::encoding::depth_first_search
         path_in_map = true;
     }
 
-    std::expected<void, error> find_back_edges(item const &node, frame const *const up)
+    std::expected<void, error> find_back_edges(item const node, frame const *const up)
     {
         if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
             return r;
-        frame const here{&node, 0, up};
+        frame const here{node.index, 0, up};
         if (path_in_map) [[unlikely]]
-            open.emplace(&node, 0);
-        if (auto const r = for_each_child(node, [this, &here](item const &child) { return follow_edge(child, here); });
+            open.emplace(node.index, 0);
+        if (auto const r = for_each_child(node, [this, &here](item const child) { return follow_edge(child, here); });
             !r) [[unlikely]]
             return r;
         if (path_in_map) [[unlikely]]
-            open.erase(&node);
+            open.erase(node.index);
         return {};
     }
 
-    std::expected<void, error> follow_edge(item const &child, frame const &here)
+    std::expected<void, error> follow_edge(item const child, frame const &here)
     {
         bool const reference = child.type() == cbor::type::shared_reference;
-        item const &next = followed(child);
+        item const next = followed(child);
         if (reference && !path_in_map) [[unlikely]]
             enter_path(here);
-        if (path_in_map && open.contains(&next)) [[unlikely]] {
-            targets.push_back(&next);
+        if (path_in_map && open.contains(next.index)) [[unlikely]] {
+            targets.push_back(next.index);
             return {};
         }
         return find_back_edges(next, &here);
     }
 
     template <bool AppendRef, class Writer>
-    std::expected<std::uint64_t, error> write(binary_writer<Writer> &out, item const &node, frame const *const up,
+    std::expected<std::uint64_t, error> write(binary_writer<Writer> &out, item const node, frame const *const up,
                                               std::uint64_t marks)
     {
         if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
             return std::unexpected(r.error());
         std::uint64_t const index = marks;
-        if (!targets.empty() && std::ranges::binary_search(targets, &node)) [[unlikely]] {
+        if (!targets.empty() && std::ranges::binary_search(targets, node.index)) [[unlikely]] {
             if (auto const r = out.encode_head(major_type::tag, std::to_underlying(rfc8949::tag_number::shareable));
                 !r) [[unlikely]]
                 return std::unexpected(detail::validity::writer_error(r.error()));
@@ -710,11 +711,11 @@ class detail::encoding::depth_first_search
             detail::encoding::encode_head_and_payload<AppendRef>(out, node, head_of(node));
         if (!written) [[unlikely]]
             return std::unexpected(detail::validity::writer_error(written.error()));
-        frame const here{&node, index, up};
+        frame const here{node.index, index, up};
         if (path_in_map) [[unlikely]]
-            open.emplace(&node, index);
+            open.emplace(node.index, index);
         if (auto const r = for_each_child(node,
-                                          [this, &out, &here, &marks](item const &child) -> std::expected<void, error> {
+                                          [this, &out, &here, &marks](item const child) -> std::expected<void, error> {
                                               auto const m = write_edge<AppendRef>(out, child, here, marks);
                                               if (!m) [[unlikely]]
                                                   return std::unexpected(m.error());
@@ -724,20 +725,20 @@ class detail::encoding::depth_first_search
             !r) [[unlikely]]
             return std::unexpected(r.error());
         if (path_in_map) [[unlikely]]
-            open.erase(&node);
+            open.erase(node.index);
         return marks;
     }
 
     template <bool AppendRef, class Writer>
-    std::expected<std::uint64_t, error> write_edge(binary_writer<Writer> &out, item const &child, frame const &here,
+    std::expected<std::uint64_t, error> write_edge(binary_writer<Writer> &out, item const child, frame const &here,
                                                    std::uint64_t const marks)
     {
         bool const reference = child.type() == cbor::type::shared_reference;
-        item const &next = followed(child);
+        item const next = followed(child);
         if (reference && !path_in_map) [[unlikely]]
             enter_path(here);
         if (path_in_map) [[unlikely]] {
-            if (auto const at = open.find(&next); at != open.end()) {
+            if (auto const at = open.find(next.index); at != open.end()) {
                 std::expected<void, std::errc> const written = detail::encoding::encode_sharedref(out, at->second);
                 if (!written) [[unlikely]]
                     return std::unexpected(detail::validity::writer_error(written.error()));
@@ -749,9 +750,9 @@ class detail::encoding::depth_first_search
 
 public:
     template <bool AppendRef, class Writer>
-    std::expected<void, error> encode(binary_writer<Writer> &out, item const &root)
+    std::expected<void, error> encode(binary_writer<Writer> &out, item const root)
     {
-        item const &start = followed(root);
+        item const start = followed(root);
         if (auto const r = find_back_edges(start, nullptr); !r) [[unlikely]]
             return r;
         std::ranges::sort(targets);
@@ -766,7 +767,7 @@ public:
 };
 
 template <bool AppendRef, class Writer>
-std::expected<void, error> detail::encoding::encode_tree(binary_writer<Writer> &out, item const &root)
+std::expected<void, error> detail::encoding::encode_tree(binary_writer<Writer> &out, item const root)
 {
     if (root.holds_shared_reference()) [[unlikely]] {
         depth_first_search walk;
@@ -776,7 +777,7 @@ std::expected<void, error> detail::encoding::encode_tree(binary_writer<Writer> &
 }
 
 template <class Target>
-std::expected<std::size_t, error> detail::encoding::encode_into(Target &&target, item const &root)
+std::expected<std::size_t, error> detail::encoding::encode_into(Target &&target, item const root)
 {
     decltype(auto) message = message_of(target, 0);
     binary_writer<std::remove_reference_t<decltype(message)>> out(message);
@@ -791,13 +792,13 @@ std::expected<std::size_t, error> detail::encoding::encode_into(Target &&target,
 
 template <class Target>
     requires detail::is_target_v<std::remove_reference_t<Target>>
-std::expected<std::size_t, error> encode(Target &&out, item const &root)
+std::expected<std::size_t, error> encode(Target &&out, item const root)
 {
     return detail::encoding::encode_into(std::forward<Target>(out), root);
 }
 
 #if __has_include(<sys/uio.h>)
-inline std::expected<ref<std::span<iovec const>>, error> detail::encoding::encode_iov_of(item const &root)
+inline std::expected<ref<std::span<iovec const>>, error> detail::encoding::encode_iov_of(item const root)
 {
     iov_writer writer;
     binary_writer<iov_writer> out(writer);
@@ -816,7 +817,7 @@ inline std::expected<ref<std::span<iovec const>>, error> detail::encoding::encod
     return out.release();
 }
 
-inline std::expected<ref<std::span<iovec const>>, error> encode_iov(item const &root)
+inline std::expected<ref<std::span<iovec const>>, error> encode_iov(item const root)
 {
     return detail::encoding::encode_iov_of(root);
 }

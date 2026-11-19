@@ -512,21 +512,21 @@ static double path_read()
 
 #if defined(OP_ITEM_FIELD) || defined(OP_ITEM_READ) || defined(OP_ITEM_ENCODE)
 #if defined(OP_ITEM_FIELD) || defined(OP_ITEM_READ)
-static cbor::item const &untagged(cbor::item const &i)
+static cbor::item untagged(cbor::item const i)
 {
-    cbor::item const *at = &i;
-    while (at->type() == cbor::type::tag) {
-        auto const t = at->get<std::pair<std::uint64_t, cbor::item const *>>();
+    cbor::item at = i;
+    while (at.type() == cbor::type::tag) {
+        auto const t = at.get<std::pair<std::uint64_t, cbor::item>>();
         if (!t) [[unlikely]] std::abort();
         at = t->second;
     }
-    return *at;
+    return at;
 }
 
 #endif
 
 #if defined(OP_ITEM_FIELD)
-static cbor::item const &member(cbor::item const &m, std::string_view const key)
+static cbor::item member(cbor::item const m, std::string_view const key)
 {
     auto const entries = untagged(m).get<cbor::map_range>();
     if (!entries) [[unlikely]] std::abort();
@@ -538,9 +538,9 @@ static cbor::item const &member(cbor::item const &m, std::string_view const key)
 #endif
 
 #if defined(OP_ITEM_READ)
-static double item_sum(cbor::item const &tagged)
+static double item_sum(cbor::item const tagged)
 {
-    cbor::item const &i = untagged(tagged);
+    cbor::item const i = untagged(tagged);
     switch (i.type()) {
     case cbor::type::text_string: return bytes_sum(*i.get<std::string_view>());
     case cbor::type::unsigned_integer: return double(*i.get<std::uint64_t>());
@@ -552,7 +552,7 @@ static double item_sum(cbor::item const &tagged)
     case cbor::type::true_value: return 1;
     case cbor::type::array: {
         double s = 0;
-        for (auto const &x : *i.get<cbor::array_range>()) s += item_sum(x);
+        for (auto const x : *i.get<cbor::array_range>()) s += item_sum(x);
         return s;
     }
     case cbor::type::map: {

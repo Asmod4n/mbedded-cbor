@@ -29,7 +29,7 @@ namespace fuzz
 // Every target that encode takes writes the bytes of the std::string form: a container of char or of std::byte, a
 // span of char or of std::byte of the exact size, and a writer with allocate, append and done. A span one byte short
 // gives no_buffer_space.
-inline void encode_targets(cbor::item const &root, std::string const &out)
+inline void encode_targets(cbor::item const root, std::string const &out)
 {
     std::vector<char> chars;
     require(cbor::encode(chars, root) == out.size() && std::ranges::equal(chars, out));
@@ -90,25 +90,25 @@ inline void tree_encode(std::string_view const input)
 
 // The nodes of a tree, reached through the elements, the pairs, the tag contents and the embedded item of each tag
 // 24, not through a shared_reference and not into the byte string of a typed array. A shared_reference points into the tree, so this walk ends on a cycle.
-inline std::vector<cbor::item const *> nodes_of(cbor::owning<cbor::item> const &tree)
+inline std::vector<cbor::item> nodes_of(cbor::owning<cbor::item> const &tree)
 {
-    std::vector<cbor::item const *> nodes{&*tree};
+    std::vector<cbor::item> nodes{*tree};
     for (std::size_t i = 0; i < nodes.size(); ++i) {
-        cbor::item const &n = *nodes[i];
-        if (n.type() == cbor::type::tag && n.get<std::pair<std::uint64_t, cbor::item const *>>()->first == 24)
+        cbor::item const n = nodes[i];
+        if (n.type() == cbor::type::tag && n.get<std::pair<std::uint64_t, cbor::item>>()->first == 24)
             if (auto const embedded = cbor::encoded_cbor_data_item(tree, n))
-                nodes.push_back(&embedded->get());
+                nodes.push_back(*embedded);
         n.visit([&nodes](auto const value) {
             using V = std::remove_cvref_t<decltype(value)>;
             if constexpr (std::same_as<V, cbor::array_range>) {
-                for (cbor::item const &c : value)
-                    nodes.push_back(&c);
+                for (cbor::item const c : value)
+                    nodes.push_back(c);
             } else if constexpr (std::same_as<V, cbor::map_range>) {
                 for (auto const pair : value) {
-                    nodes.push_back(&std::get<0>(pair));
-                    nodes.push_back(&std::get<1>(pair));
+                    nodes.push_back(std::get<0>(pair));
+                    nodes.push_back(std::get<1>(pair));
                 }
-            } else if constexpr (std::same_as<V, std::pair<std::uint64_t, cbor::item const *>>) {
+            } else if constexpr (std::same_as<V, std::pair<std::uint64_t, cbor::item>>) {
                 nodes.push_back(value.second);
             }
         });
@@ -132,14 +132,14 @@ inline void resolving_decode(std::string_view const input)
     require(top_level.has_value());
     auto const plain = top_level->to_item();
     require(plain.has_value());
-    std::vector<cbor::item const *> const nodes = nodes_of(*resolved);
+    std::vector<cbor::item> const nodes = nodes_of(*resolved);
     std::size_t const plain_nodes = nodes_of(*plain).size();
     require(nodes.size() <= plain_nodes);
     bool shared = false;
-    for (cbor::item const *const n : nodes)
-        if (n->type() == cbor::type::shared_reference) {
+    for (cbor::item const n : nodes)
+        if (n.type() == cbor::type::shared_reference) {
             shared = true;
-            require(std::ranges::find(nodes, n->get<std::pair<std::uint64_t, cbor::item const *>>()->second) != nodes.end());
+            require(std::ranges::find(nodes, n.get<std::pair<std::uint64_t, cbor::item>>()->second) != nodes.end());
         }
     if (shared) {
         std::array<char, 1 << 16> bounded;

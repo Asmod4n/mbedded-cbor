@@ -45,6 +45,13 @@ class basic_generic;
 class reflection;
 class well_formedness;
 
+namespace dom
+{
+
+struct node;
+
+}
+
 }
 
 template <class T>
@@ -766,6 +773,8 @@ class heads
     friend std::expected<owning<item>, error> cbor::decode_cycles(std::string_view encoded);
 
     friend struct cbor::item;
+
+    friend struct detail::dom::node;
 
     friend struct cbor::lazy_elements;
 

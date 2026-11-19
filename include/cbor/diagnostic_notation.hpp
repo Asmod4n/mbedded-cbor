@@ -47,7 +47,7 @@ namespace cbor
 
 std::expected<owning<item>, error> parse_edn(std::string_view text);
 constexpr std::expected<std::string, error> diag2cbor(std::string_view text);
-std::expected<std::string, error> to_edn(item const &root);
+std::expected<std::string, error> to_edn(item root);
 std::expected<std::string, error> to_edn(owning<item> const &tree);
 
 namespace detail
@@ -2660,7 +2660,7 @@ class extended_diagnostic_notation
                t == cbor::type::negative_bignum || t == cbor::type::shared_reference;
     }
 
-    static void write_scalar(std::string &out, item const &node)
+    static void write_scalar(std::string &out, item const node)
     {
         std::uint8_t const info = node.additional_information();
         switch (node.type()) {
@@ -2696,13 +2696,13 @@ class extended_diagnostic_notation
             out += "undefined";
             break;
         case cbor::type::simple_value:
-            out += "simple(" + std::to_string(node.m_uni.u64) + ")";
+            out += "simple(" + std::to_string(node.node().m_uni.u64) + ")";
             break;
         case cbor::type::half_float:
         case cbor::type::single_float:
         case cbor::type::double_float:
             out += float_of(info, detail::ieee754::encode_float(static_cast<rfc8949::simple_information>(info),
-                                                                node.m_uni.f64));
+                                                                node.node().m_uni.f64));
             break;
         case cbor::type::array:
         case cbor::type::map:
@@ -2716,7 +2716,7 @@ class extended_diagnostic_notation
         }
     }
 
-    static std::expected<void, error> write_child(std::string &out, item const &node)
+    static std::expected<void, error> write_child(std::string &out, item const node)
     {
         if (holds_children(node.type()))
             return write_item(out, node);
@@ -2724,7 +2724,7 @@ class extended_diagnostic_notation
         return {};
     }
 
-    static std::expected<void, error> write_item(std::string &out, item const &node)
+    static std::expected<void, error> write_item(std::string &out, item const node)
     {
         if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
             return r;
@@ -2734,15 +2734,14 @@ class extended_diagnostic_notation
             out += "[";
             if (std::string const indicator = encoding_indicator(info, node.length()); !indicator.empty())
                 out += indicator + " ";
-            std::span<item const> const all = node.descendants();
+            std::span<detail::dom::node const> const all = node.descendants();
             std::size_t at = 1;
             for (std::size_t i = 0; i != node.length(); ++i) {
                 if (i != 0)
                     out += ", ";
-                item const &element = all[at];
-                if (auto const r = write_child(out, element); !r) [[unlikely]]
+                if (auto const r = write_child(out, node.descendant(at)); !r) [[unlikely]]
                     return r;
-                at += detail::dom::kind::width_of(element);
+                at += detail::dom::kind::width_of(all[at]);
             }
             out += "]";
             break;
@@ -2751,20 +2750,18 @@ class extended_diagnostic_notation
             out += "{";
             if (std::string const indicator = encoding_indicator(info, node.length()); !indicator.empty())
                 out += indicator + " ";
-            std::span<item const> const all = node.descendants();
+            std::span<detail::dom::node const> const all = node.descendants();
             std::size_t at = 1;
             for (std::size_t i = 0; i != node.length(); ++i) {
                 if (i != 0)
                     out += ", ";
-                item const &key = all[at];
-                if (auto const r = write_child(out, key); !r) [[unlikely]]
+                if (auto const r = write_child(out, node.descendant(at)); !r) [[unlikely]]
                     return r;
-                at += detail::dom::kind::width_of(key);
+                at += detail::dom::kind::width_of(all[at]);
                 out += ": ";
-                item const &value = all[at];
-                if (auto const r = write_child(out, value); !r) [[unlikely]]
+                if (auto const r = write_child(out, node.descendant(at)); !r) [[unlikely]]
                     return r;
-                at += detail::dom::kind::width_of(value);
+                at += detail::dom::kind::width_of(all[at]);
             }
             out += "}";
             break;
@@ -2773,7 +2770,7 @@ class extended_diagnostic_notation
         case cbor::type::typed_array:
         case cbor::type::unsigned_bignum:
         case cbor::type::negative_bignum:
-            out += std::to_string(node.m_uni.u64) + encoding_indicator(info, node.m_uni.u64) + "(";
+            out += std::to_string(node.node().m_uni.u64) + encoding_indicator(info, node.node().m_uni.u64) + "(";
             if (auto const r = write_item(out, node.content()); !r) [[unlikely]]
                 return r;
             out += ")";
@@ -2935,7 +2932,7 @@ class extended_diagnostic_notation
 
     friend class dom::reader;
 
-    friend std::expected<std::string, error> cbor::to_edn(item const &root);
+    friend std::expected<std::string, error> cbor::to_edn(item root);
 
     friend std::expected<std::string, error> cbor::to_edn(owning<item> const &tree);
 
@@ -3321,7 +3318,7 @@ inline std::expected<std::string, error> item::to_edn() const
  *
  * @ingroup tools
  */
-inline std::expected<std::string, error> to_edn(item const &root)
+inline std::expected<std::string, error> to_edn(item const root)
 {
     if (root.holds_shared_reference()) [[unlikely]]
         return root.to_edn();
@@ -3334,7 +3331,7 @@ inline std::expected<std::string, error> to_edn(item const &root)
 /**
  * @brief Gives the text of the whole tree that `tree` owns in the extended diagnostic notation (EDN).
  *
- * The text is that of cbor::to_edn(item const &) of the root.
+ * The text is that of cbor::to_edn(item) of the root.
  *
  * @code{.example}
  * bytes: d8 1c 81 d8 1d 00
@@ -3346,7 +3343,7 @@ inline std::expected<std::string, error> to_edn(item const &root)
  *
  * @retval nesting_depth_exceeded the tree is deeper than the stack of the thread holds
  * @throws std::logic_error `tree` owns no tree
- * @see cbor::to_edn(item const &)
+ * @see cbor::to_edn(item)
  * @see cbor::decode_cycles()
  *
  * @ingroup tools

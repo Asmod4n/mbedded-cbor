@@ -26,12 +26,12 @@ std::size_t cold_bytes()
     return std::stoull(given);
 }
 
-auto written(cbor::item const &tree, std::string &out)
+auto written(cbor::item const tree, std::string &out)
 {
     return cbor::encode(out, tree);
 }
 
-auto pieces(cbor::item const &tree)
+auto pieces(cbor::item const tree)
 {
     return cbor::encode_iov(tree);
 }

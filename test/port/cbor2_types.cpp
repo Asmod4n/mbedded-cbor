@@ -58,8 +58,8 @@ TEST_CASE("cbor2 types: TestCBORTag self-referential payload")
     CHECK(*decoded == test::value{test::tagged{999, test::value{test::tagged{29, V(0)}}}});
     auto const tree = cbor::decode_cycles(unhexlify("d81cd903e7d81d00"));
     REQUIRE(tree.has_value());
-    CHECK_EQ((*tree)->get<std::pair<std::uint64_t, cbor::item const *>>().value().second->get<std::pair<std::uint64_t, cbor::item const *>>().value().second,
-             &**tree);
+    CHECK((*tree)->get<std::pair<std::uint64_t, cbor::item>>().value().second.get<std::pair<std::uint64_t, cbor::item>>().value().second ==
+          **tree);
 }
 
 // Upstream: TestCBORSimpleValue.test_equals, the comparisons of two simple values. RFC 8949 5.6.1: "Simple values

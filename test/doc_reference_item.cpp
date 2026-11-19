@@ -108,7 +108,7 @@ TEST_CASE("doc reference item: item::visit")
     // bytes: a std::string with [1, -2, "a"]
     auto const tree = cbor::decode(bytes);
     std::string kinds;
-    for (cbor::item const &element : *(*tree)->get<cbor::array_range>())
+    for (cbor::item const element : *(*tree)->get<cbor::array_range>())
         kinds += element.visit([](auto const v) {
             if constexpr (std::is_same_v<decltype(v), std::uint64_t const>)
                 return "unsigned "s;
@@ -161,7 +161,7 @@ TEST_CASE("doc reference item: decode")
     CHECK_EQ((*self_described)->type(), cbor::type::unsigned_integer);
     auto const second = cbor::decode("\xd9\xd9\xf7\xd9\xd9\xf7\x01"s);
     REQUIRE(second);
-    CHECK_EQ((*second)->get<std::pair<std::uint64_t, cbor::item const *>>()->first, 55799u);
+    CHECK_EQ((*second)->get<std::pair<std::uint64_t, cbor::item>>()->first, 55799u);
     auto const inside = cbor::decode("\x81\xd9\xd9\xf7\x01"s);
     REQUIRE(inside);
     CHECK_EQ((*inside)->get<cbor::array_range>().value().front().type(), cbor::type::tag);
@@ -184,7 +184,7 @@ TEST_CASE("doc reference item: encoded_cbor_data_item")
     // bytes: a std::string with 24(h'6161'), a tag 24 over the text "a"
     auto const tree = cbor::decode(bytes);
     auto const inner = cbor::encoded_cbor_data_item(*tree, **tree);
-    auto const text = inner->get().get<std::string_view>();  // "a"
+    auto const text = inner->get<std::string_view>();  // "a"
     // [encoded_cbor_data_item]
     REQUIRE(tree);
     REQUIRE(inner);

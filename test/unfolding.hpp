@@ -3,12 +3,13 @@
 #include <cbor/encode.hpp>
 #include <cbor/item.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <ranges>
-#include <set>
 #include <span>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace test
 {
@@ -20,16 +21,16 @@ namespace test
 // targets use it too, so it needs no test framework.
 class bisimilarity
 {
-    std::set<std::pair<cbor::item const *, cbor::item const *>> assumed;
+    std::vector<std::pair<cbor::item, cbor::item>> assumed;
 
-    static cbor::item const &resolved(cbor::item const &i)
+    static cbor::item resolved(cbor::item const i)
     {
         if (i.type() == cbor::type::shared_reference)
-            return *i.get<std::pair<std::uint64_t, cbor::item const *>>()->second;
+            return i.get<std::pair<std::uint64_t, cbor::item>>()->second;
         return i;
     }
 
-    static std::string bytes_of(cbor::item const &i)
+    static std::string bytes_of(cbor::item const i)
     {
         std::string out;
         if (!cbor::encode(out, i))
@@ -47,11 +48,11 @@ class bisimilarity
         return true;
     }
 
-    bool tags_hold(cbor::item const &a, cbor::item const &b)
+    bool tags_hold(cbor::item const a, cbor::item const b)
     {
-        auto const l = a.get<std::pair<std::uint64_t, cbor::item const *>>().value();
-        auto const r = b.get<std::pair<std::uint64_t, cbor::item const *>>().value();
-        return l.first == r.first && holds(*l.second, *r.second);
+        auto const l = a.get<std::pair<std::uint64_t, cbor::item>>().value();
+        auto const r = b.get<std::pair<std::uint64_t, cbor::item>>().value();
+        return l.first == r.first && holds(l.second, r.second);
     }
 
     bool all_pairs_hold(cbor::map_range const l,
@@ -66,12 +67,13 @@ class bisimilarity
     }
 
 public:
-    bool holds(cbor::item const &x, cbor::item const &y)
+    bool holds(cbor::item const x, cbor::item const y)
     {
-        cbor::item const &a = resolved(x);
-        cbor::item const &b = resolved(y);
-        if (!assumed.emplace(&a, &b).second)
+        cbor::item const a = resolved(x);
+        cbor::item const b = resolved(y);
+        if (std::ranges::contains(assumed, std::pair(a, b)))
             return true;
+        assumed.emplace_back(a, b);
         if (a.type() != b.type() || a.additional_information() != b.additional_information())
             return false;
         switch (a.type()) {
@@ -88,7 +90,7 @@ public:
     }
 };
 
-inline bool unfoldings_equal(cbor::item const &a, cbor::item const &b)
+inline bool unfoldings_equal(cbor::item const a, cbor::item const b)
 {
     return bisimilarity{}.holds(a, b);
 }

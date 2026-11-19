@@ -2144,7 +2144,7 @@ CBOR_ALWAYS_INLINE inline std::expected<std::size_t, error> encode(Target &&out,
  * @retval number_out_of_range a time that its tag cannot hold, as cbor::encode gives it
  * @throws std::logic_error a `std::chrono::year_month_day` that is no valid date
  * @see cbor::encode(T const &)
- * @see cbor::to_edn(item const &)
+ * @see cbor::to_edn(item)
  *
  * @ingroup tools
  */

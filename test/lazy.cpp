@@ -1509,10 +1509,10 @@ TEST_CASE("lazy: two threads read one root lazy" * doctest::skip(!test::threads_
                 bool const reference = [&] {
                     if (!named)
                         return false;
-                    auto const tag = (*named)->get<std::pair<std::uint64_t, cbor::item const *>>();
+                    auto const tag = (*named)->get<std::pair<std::uint64_t, cbor::item>>();
                     if (!tag || tag->first != 29)
                         return false;
-                    auto const mark = tag->second->get<std::uint64_t>();
+                    auto const mark = tag->second.get<std::uint64_t>();
                     return mark && *mark == 0;
                 }();
                 right[t] = {text.has_value() && **text == "hello", index == 0u, reference, count == 4, pairs == 1,

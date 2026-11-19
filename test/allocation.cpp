@@ -325,9 +325,9 @@ TEST_CASE("decode: a wide array of nested arrays is read whole after the decode"
     auto const outer = list_children_of_item(*(*r));
     REQUIRE_EQ(outer.size(), count);
     std::uint64_t sum = 0;
-    for (cbor::item const *const inner : outer)
-        for (cbor::item const *const leaf : list_children_of_item(*inner))
-            sum += read_argument_of_item(*leaf);
+    for (cbor::item const inner : outer)
+        for (cbor::item const leaf : list_children_of_item(inner))
+            sum += read_argument_of_item(leaf);
     CHECK_EQ(sum, 3 * count);
 }
 

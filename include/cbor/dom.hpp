@@ -230,11 +230,10 @@ class reader
         return true;
     }
 
-    CBOR_ALWAYS_INLINE static void set_text(item &x, std::span<char const> const buf, std::size_t const first,
-                                            std::size_t const size)
+    CBOR_ALWAYS_INLINE static void set_text(node &x, std::size_t const first, std::size_t const size)
     {
         x.m_tag = kind::word(size, heads::preferred_argument_info(size), kind::type_text);
-        x.m_uni.str = buf.subspan(first).data();
+        x.m_uni.ofs = first;
     }
 
     CBOR_ALWAYS_INLINE static bool is_escape_or_end(unsigned char const c)
@@ -242,7 +241,7 @@ class reader
         return c <= rfc3629::one_octet_last;
     }
 
-    CBOR_ALWAYS_INLINE static std::size_t read_str(std::span<char> const buf, std::size_t const at, item &x)
+    CBOR_ALWAYS_INLINE static std::size_t read_str(std::span<char> const buf, std::size_t const at, node &x)
     {
         std::size_t const hdr = at + 1;
         std::size_t src = hdr;
@@ -264,7 +263,7 @@ class reader
 
     skip_ascii_end:
         if (buf[src] == '"') [[likely]] {
-            set_text(x, buf, hdr, src - hdr);
+            set_text(x, hdr, src - hdr);
             return src + 1;
         }
 
@@ -335,7 +334,7 @@ class reader
                 return failed;
             }
         } else if (buf[src] == '"') [[likely]] {
-            set_text(x, buf, hdr, dst - hdr);
+            set_text(x, hdr, dst - hdr);
             return src + 1;
         } else [[unlikely]] {
             return failed;
@@ -389,7 +388,7 @@ class reader
     }
 
     CBOR_ALWAYS_INLINE static std::size_t
-    read_num(std::span<char const> const buf, std::string_view const text, std::size_t const hdr, item &x)
+    read_num(std::span<char const> const buf, std::string_view const text, std::size_t const hdr, node &x)
     {
         enum class digi { intg_more, frac, frac_more, frac_end, exp_more, exp_finish, finish };
         auto const ch = [buf](std::size_t const at) { return static_cast<unsigned char>(buf[at]); };
@@ -726,7 +725,7 @@ class reader
     }
 
     CBOR_ALWAYS_INLINE static std::size_t read_true(std::span<char const> const buf, std::size_t const cur,
-                                                    item &x)
+                                                    node &x)
     {
         if (byte_match<literal_true.size()>(buf, cur, literal_true)) [[likely]] {
             x.m_tag = kind::word(0, std::to_underlying(simple_value::true_value),
@@ -737,7 +736,7 @@ class reader
     }
 
     CBOR_ALWAYS_INLINE static std::size_t read_false(std::span<char const> const buf, std::size_t const cur,
-                                                     item &x)
+                                                     node &x)
     {
         if (byte_match<literal_false.size() - 1>(buf, cur + 1, literal_false.substr(1))) [[likely]] {
             x.m_tag = kind::word(0, std::to_underlying(simple_value::false_value),
@@ -748,7 +747,7 @@ class reader
     }
 
     CBOR_ALWAYS_INLINE static std::size_t read_null(std::span<char const> const buf, std::size_t const cur,
-                                                    item &x)
+                                                    node &x)
     {
         if (byte_match<literal_null.size()>(buf, cur, literal_null)) [[likely]] {
             x.m_tag = kind::word(0, std::to_underlying(simple_value::null), kind::type_null);
@@ -757,7 +756,7 @@ class reader
         return failed;
     }
 
-    static std::expected<void, error> check_string_length(item const &x)
+    static std::expected<void, error> check_string_length(node const &x)
     {
         return validity::check_argument<true>(major_type::text_string, kind::high_of(x.m_tag));
     }
@@ -822,7 +821,7 @@ class reader
             return {};
         };
         auto const container_end = [&](major_type const major) -> std::expected<void, error> {
-            item &c = block.items[ctn];
+            node &c = block.items[ctn];
             std::size_t const count =
                 major == major_type::map ? ctn_len / rfc8949::data_items_per_pair : ctn_len;
             if (auto const a = validity::check_argument<true>(major, count); !a) [[unlikely]]
@@ -1113,7 +1112,7 @@ class reader
     {
         value_block block = value_block::allocated(1);
         std::span<char> const buf = text.padded();
-        item &x = block.items.front();
+        node &x = block.items.front();
         std::size_t r = failed;
         unsigned char const c = byte(buf, cur);
         if (edn::char_is_num(c))

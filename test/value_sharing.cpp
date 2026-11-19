@@ -45,35 +45,35 @@ using tree = cbor::owning<cbor::item>;
 // encoder find the value that a tag 29 names in the tree itself.
 struct place {
     tree t;
-    cbor::item const *i;
+    cbor::item i;
 
-    cbor::item const &operator*() const
+    cbor::item operator*() const
     {
-        return *i;
+        return i;
     }
 
     cbor::item const *operator->() const
     {
-        return i;
+        return &i;
     }
 };
 
 // The tags 28 of a tree in stream order. RFC 8949 3.4 and the value-sharing registration number the marks in this
 // order, and a tag 29 holds the index of one of them.
-std::vector<cbor::item const *> marks_of(tree const &t)
+std::vector<cbor::item> marks_of(tree const &t)
 {
-    std::vector<cbor::item const *> marks;
-    std::vector<cbor::item const *> pending{&*t};
+    std::vector<cbor::item> marks;
+    std::vector<cbor::item> pending{*t};
     while (!pending.empty()) {
-        cbor::item const *const i = pending.back();
+        cbor::item const i = pending.back();
         pending.pop_back();
-        if (auto const tag = i->get<std::pair<std::uint64_t, cbor::item const *>>(); tag && i->type() == cbor::type::tag) {
+        if (auto const tag = i.get<std::pair<std::uint64_t, cbor::item>>(); tag && i.type() == cbor::type::tag) {
             if (tag->first == 28)
                 marks.push_back(i);
             pending.push_back(tag->second);
         }
-        if (i->type() == cbor::type::array || i->type() == cbor::type::map) {
-            auto const c = list_children_of_item(*i);
+        if (i.type() == cbor::type::array || i.type() == cbor::type::map) {
+            auto const c = list_children_of_item(i);
             for (auto it = c.rbegin(); it != c.rend(); ++it)
                 pending.push_back(*it);
         }
@@ -87,10 +87,10 @@ place target(place n)
 {
     constexpr int most_steps = 1000;
     for (int steps = 0; steps < most_steps; ++steps) {
-        auto const t = n.i->get<std::pair<std::uint64_t, cbor::item const *>>();
+        auto const t = n.i.get<std::pair<std::uint64_t, cbor::item>>();
         if (t && t->first == 29) {
             auto const marks = marks_of(n.t);
-            auto const index = t->second->get<std::uint64_t>();
+            auto const index = t->second.get<std::uint64_t>();
             REQUIRE(index.has_value());
             REQUIRE(*index < marks.size());
             n.i = marks[static_cast<std::size_t>(*index)];
@@ -105,7 +105,7 @@ place target(place n)
 
 place target(tree const &t)
 {
-    return target(place{t, &*t});
+    return target(place{t, *t});
 }
 
 tree decoded_ref(std::string_view const wire)
@@ -122,7 +122,7 @@ std::vector<place> children(P const &container)
 {
     place const c = target(container);
     std::vector<place> out;
-    for (cbor::item const *const child : list_children_of_item(*c))
+    for (cbor::item const child : list_children_of_item(*c))
         out.push_back(place{c.t, child});
     return out;
 }
@@ -157,14 +157,14 @@ template <class P>
 place content(P const &tagged)
 {
     place const t = target(tagged);
-    return target(place{t.t, t->get<std::pair<std::uint64_t, cbor::item const *>>().value().second});
+    return target(place{t.t, t->get<std::pair<std::uint64_t, cbor::item>>().value().second});
 }
 
 // A resolved tag 29 gives a tree of its own, so two places are compared by the encoded form of their targets.
 std::string encoded_of(place const &p)
 {
     std::string out;
-    REQUIRE(cbor::encode(out, *p.i).has_value());
+    REQUIRE(cbor::encode(out, p.i).has_value());
     return out;
 }
 
@@ -172,7 +172,7 @@ std::string encoded_of(place const &p)
 // two values are distinct checks that the second one is written in full.
 inline bool is_reference(place const &p)
 {
-    auto const t = p->get<std::pair<std::uint64_t, cbor::item const *>>();
+    auto const t = p->get<std::pair<std::uint64_t, cbor::item>>();
     return t && t->first == 29;
 }
 
@@ -506,10 +506,10 @@ TEST_CASE("value sharing: lazy, at_path, decode and diagnostic notation read tag
             for (auto const &[element, number, index] : {std::tuple{elements[0], 28u, 5u},
                                                         std::tuple{elements[1], 29u, 0u},
                                                         std::tuple{elements[2], 29u, 7u}}) {
-                std::pair<std::uint64_t, cbor::item const *> const t =
-                    element->get<std::pair<std::uint64_t, cbor::item const *>>().value();
+                std::pair<std::uint64_t, cbor::item> const t =
+                    element.get<std::pair<std::uint64_t, cbor::item>>().value();
                 CHECK_EQ(t.first, number);
-                CHECK_EQ(t.second->get<std::uint64_t>(), index);
+                CHECK_EQ(t.second.get<std::uint64_t>(), index);
             }
         }
         auto const text = cbor::diagnostic_notation(doc);
@@ -540,14 +540,14 @@ namespace shared_test
 {
 
 // The node of the target of a shared_reference node.
-cbor::item const *target_of(cbor::item const &reference)
+cbor::item target_of(cbor::item const reference)
 {
-    auto const r = reference.get<std::pair<std::uint64_t, cbor::item const *>>();
+    auto const r = reference.get<std::pair<std::uint64_t, cbor::item>>();
     REQUIRE(r.has_value());
     return r->second;
 }
 
-std::vector<std::reference_wrapper<cbor::item const>> elements_of(cbor::item const &array)
+std::vector<cbor::item> elements_of(cbor::item const array)
 {
     auto const e = array.get<cbor::array_range>();
     REQUIRE(e.has_value());
@@ -570,12 +570,12 @@ TEST_CASE("value sharing: cbor::decode_cycles reads each case of the model")
     // 28([29(0)]): an array that holds itself.
     auto const cyclic = cbor::decode_cycles("\xd8\x1c\x81\xd8\x1d\x00"sv);
     REQUIRE(cyclic.has_value());
-    CHECK_EQ(target_of(elements_of(**cyclic)[0]), &**cyclic);
+    CHECK(target_of(elements_of(**cyclic)[0]) == **cyclic);
     // 28(1234([29(0)])): a cycle through a tag that is not 28.
     auto const through_tag = cbor::decode_cycles("\xd8\x1c\xd9\x04\xd2\x81\xd8\x1d\x00"sv);
     REQUIRE(through_tag.has_value());
-    auto const *const content = (*through_tag)->get<std::pair<std::uint64_t, cbor::item const *>>().value().second;
-    CHECK_EQ(target_of(elements_of(*content)[0]), &**through_tag);
+    auto const content = (*through_tag)->get<std::pair<std::uint64_t, cbor::item>>().value().second;
+    CHECK(target_of(elements_of(content)[0]) == **through_tag);
     // A mark whose content is only marks and a reference to one of them names no value.
     for (std::string_view const own : {"\xd8\x1c\xd8\x1d\x00"sv, "\xd8\x1c\xd8\x1c\xd8\x1d\x00"sv,
                                        "\xd8\x1c\xd8\x1c\xd8\x1d\x01"sv}) {
@@ -587,8 +587,8 @@ TEST_CASE("value sharing: cbor::decode_cycles reads each case of the model")
     auto const mark_of_reference = cbor::decode_cycles("\xd8\x1c\x82\xd8\x1c\xd8\x1d\x00\xd8\x1d\x01"sv);
     REQUIRE(mark_of_reference.has_value());
     auto const m = elements_of(**mark_of_reference);
-    CHECK_EQ(target_of(m[0]), &**mark_of_reference);
-    CHECK_EQ(target_of(m[1]), &**mark_of_reference);
+    CHECK(target_of(m[0]) == **mark_of_reference);
+    CHECK(target_of(m[1]) == **mark_of_reference);
     // [28(1), 28(29(0)), 29(1)]: the mark of the reference names the integer, whose decode has ended.
     CHECK_EQ(cbor::decode_cycles("\x83\xd8\x1c\x01\xd8\x1c\xd8\x1d\x00\xd8\x1d\x01"sv).error(),
              error::sharedref_not_cyclic);
@@ -596,8 +596,8 @@ TEST_CASE("value sharing: cbor::decode_cycles reads each case of the model")
     auto const two_marks = cbor::decode_cycles("\xd8\x1c\xd8\x1c\x82\xd8\x1d\x00\xd8\x1d\x01"sv);
     REQUIRE(two_marks.has_value());
     auto const t = elements_of(**two_marks);
-    CHECK_EQ(target_of(t[0]), &**two_marks);
-    CHECK_EQ(target_of(t[1]), &**two_marks);
+    CHECK(target_of(t[0]) == **two_marks);
+    CHECK(target_of(t[1]) == **two_marks);
     // A reference before any mark, and a reference to a mark that comes later.
     CHECK_EQ(cbor::decode_cycles("\x81\xd8\x1d\x00"sv).error(), error::sharedref_index_not_marked);
     CHECK_EQ(cbor::decode_cycles("\x82\xd8\x1d\x00\xd8\x1c\x01"sv).error(), error::sharedref_index_not_marked);
@@ -609,7 +609,7 @@ TEST_CASE("value sharing: cbor::decode_cycles reads each case of the model")
     // 28({29(0): 1}): a map that holds itself as its key.
     auto const own_key = cbor::decode_cycles("\xd8\x1c\xa1\xd8\x1d\x00\x01"sv);
     REQUIRE(own_key.has_value());
-    CHECK_EQ(target_of(std::get<0>((*own_key)->get<cbor::map_range>().value().front())), &**own_key);
+    CHECK(target_of(std::get<0>((*own_key)->get<cbor::map_range>().value().front())) == **own_key);
 }
 
 // A tag 29 may name any marked value whose read has not ended: the value itself or one above it. A tag 28 over a tag
@@ -641,7 +641,7 @@ TEST_CASE("value sharing: cbor::decode_cycles reads a tag 29 and its index in ea
         std::string const wire = "\xd8\x1c\x81"s + head_of(6, 29, bytes) + head_of(0, 0, bytes);
         auto const tree = cbor::decode_cycles(wire);
         REQUIRE(tree.has_value());
-        CHECK_EQ(shared_test::target_of(shared_test::elements_of(**tree)[0]), &**tree);
+        CHECK(shared_test::target_of(shared_test::elements_of(**tree)[0]) == **tree);
     }
     CHECK_EQ(cbor::decode_cycles("\xd8\x1c\x81\xd8\x1d\x1b\xff\xff\xff\xff\xff\xff\xff\xff"sv).error(),
              error::sharedref_index_not_marked);
@@ -671,7 +671,7 @@ TEST_CASE("value sharing: lazy::to_item keeps tags 28 and 29")
     REQUIRE(top_level.has_value());
     auto const tree = top_level->to_item();
     REQUIRE(tree.has_value());
-    CHECK_EQ((*tree)->get<std::pair<std::uint64_t, cbor::item const *>>().value().first, 28u);
+    CHECK_EQ((*tree)->get<std::pair<std::uint64_t, cbor::item>>().value().first, 28u);
 }
 
 // The marks of the model reach every kind of node: a bignum that decode reads as an integer, a tag 24 and a typed array.
@@ -693,7 +693,7 @@ TEST_CASE("value sharing: cbor::decode marks every kind of node and resolves ins
     REQUIRE(outer.has_value());
     auto const embedded = cbor::encoded_cbor_data_item(*outer, **outer);
     REQUIRE(embedded.has_value());
-    CHECK_EQ(target_of(elements_of(embedded->get())[0]), &embedded->get());
+    CHECK(target_of(elements_of(*embedded)[0]) == *embedded);
     CHECK_EQ(cbor::decode_cycles("\xd8\x1c\xd8\x1c\xd8\x1d\x02"sv).error(), error::sharedref_index_not_marked);
     CHECK_EQ(cbor::decode_cycles("\xd8\x1d"sv).error(), error::too_little_data);
     CHECK_EQ(cbor::decode_cycles("\xd8\x1c"sv).error(), error::too_little_data);
@@ -707,12 +707,12 @@ TEST_CASE("value sharing: clone at an inner offset keeps tags 28, 29 and 55799")
     REQUIRE(top_level.has_value());
     auto const reference = top_level->at(1).and_then([](cbor::lazy const &l) { return l.to_item(); });
     REQUIRE(reference.has_value());
-    CHECK_EQ((*reference)->get<std::pair<std::uint64_t, cbor::item const *>>().value().first, 29u);
+    CHECK_EQ((*reference)->get<std::pair<std::uint64_t, cbor::item>>().value().first, 29u);
     auto const marked = test::make_lazy_from_copy("\x81\xd9\xd9\xf7\x01"s);
     REQUIRE(marked.has_value());
     auto const inner = marked->at(0).and_then([](cbor::lazy const &l) { return l.to_item(); });
     REQUIRE(inner.has_value());
-    CHECK_EQ((*inner)->get<std::pair<std::uint64_t, cbor::item const *>>().value().first, 55799u);
+    CHECK_EQ((*inner)->get<std::pair<std::uint64_t, cbor::item>>().value().first, 55799u);
 }
 
 namespace shared_test
@@ -742,7 +742,7 @@ namespace shared_test
 {
 
 // The bytes of cbor::encode for the node. encode_iov gives the same bytes, so both choose the walk from the same node.
-std::string written_by_encode(cbor::item const &node)
+std::string written_by_encode(cbor::item const node)
 {
     std::string out;
     REQUIRE(cbor::encode(out, node).has_value());
@@ -763,7 +763,7 @@ std::string written_by_encode(std::string_view const edn)
 }
 
 // The elements of the array at the root of the tree.
-std::vector<std::reference_wrapper<cbor::item const>> elements_of(tree const &array)
+std::vector<cbor::item> elements_of(tree const &array)
 {
     auto const elements = array->get<cbor::array_range>();
     REQUIRE(elements.has_value());
@@ -792,7 +792,7 @@ TEST_CASE("value sharing: cbor::encode of a shared_reference node and of a marke
     auto const tree = cbor::decode_cycles(cbor::diag2cbor("28([1, 29(0)])").value());
     REQUIRE(tree.has_value());
     auto const elements = shared_test::elements_of(*tree);
-    CHECK_EQ(elements[1].get().type(), cbor::type::shared_reference);
+    CHECK_EQ(elements[1].type(), cbor::type::shared_reference);
     CHECK_EQ(written_by_encode(elements[1]), cbor::diag2cbor("28([1, 29(0)])").value());
     CHECK_EQ(written_by_encode(**tree), cbor::diag2cbor("28([1, 29(0)])").value());
     CHECK_EQ(written_by_encode("28([29(0)])"), cbor::diag2cbor("28([29(0)])").value());
@@ -813,7 +813,7 @@ TEST_CASE("value sharing: cbor::encode of the content of a tag 24 writes its cyc
     CHECK_EQ(shared_test::written_by_encode(**tree), outer);
     auto const content = cbor::encoded_cbor_data_item(*tree, **tree);
     REQUIRE(content.has_value());
-    CHECK_EQ(shared_test::written_by_encode(content->get()), inner);
+    CHECK_EQ(shared_test::written_by_encode(*content), inner);
 }
 
 // The mark of a reference must reach every node above it, through siblings that hold none. A sibling without a

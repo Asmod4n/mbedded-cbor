@@ -77,7 +77,7 @@ void check_pieces_give_the_wire(std::string const &wire)
 } // namespace
 
 // A head and a float write nine bytes before they count their own size. At each of the nine offsets before the end of a
-// block, encode_iov must take a new block in time and lose no byte. The overload for item const & copies every string,
+// block, encode_iov must take a new block in time and lose no byte. The overload for item copies every string,
 // so the text before the head fills the block. A tag and an integer each test the space left on their own path.
 TEST_CASE("encode_iov: a head and a float at each offset before the end of a block")
 {
@@ -202,7 +202,7 @@ TEST_CASE("encode_iov: both overloads give the bytes of encode for a decoded tre
 
 // A string longer than the copy limit must be a piece that points at the bytes that the tree holds, or the overload
 // copies and gains nothing. A string at the limit must not point there, or the limit is not the one that holds. The
-// overload for item const & copies every string, so no piece of it points into the tree.
+// overload for item copies every string, so no piece of it points into the tree.
 TEST_CASE("encode_iov: a decoded tree is referred to above the copy limit and copied up to it")
 {
     for (std::size_t const size : sizes_around_copybreak()) {

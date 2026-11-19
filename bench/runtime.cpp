@@ -28,12 +28,12 @@
 }
 
 #if defined(ARM_READ) || defined(ARM_MB_TREE) || defined(ARM_MB_DECODE) || defined(ARM_MB_PATH_ALL)
-static std::uint64_t item_tree_sum(cbor::item const &it);
+static std::uint64_t item_tree_sum(cbor::item const it);
 
-static std::uint64_t item_tree_sum(cbor::item const &it)
+static std::uint64_t item_tree_sum(cbor::item const it)
 {
     if (it.type() == cbor::type::shared_reference)
-        return it.get<std::pair<std::uint64_t, cbor::item const *>>().value().first;
+        return it.get<std::pair<std::uint64_t, cbor::item>>().value().first;
     return it.visit([](auto const v) -> std::uint64_t {
         using V = std::remove_cvref_t<decltype(v)>;
         if constexpr (std::is_same_v<V, std::string_view>) {
@@ -42,7 +42,7 @@ static std::uint64_t item_tree_sum(cbor::item const &it)
             return v.size() + bytes_sum(std::string_view(reinterpret_cast<char const *>(v.data()), v.size()));
         } else if constexpr (std::is_same_v<V, cbor::array_range>) {
             std::uint64_t s = v.size();
-            for (cbor::item const &child : v)
+            for (cbor::item const child : v)
                 s += item_tree_sum(child);
             return s;
         } else if constexpr (std::is_same_v<V, cbor::map_range>) {
@@ -50,8 +50,8 @@ static std::uint64_t item_tree_sum(cbor::item const &it)
             for (auto const pair : v)
                 s += item_tree_sum(std::get<0>(pair)) + item_tree_sum(std::get<1>(pair));
             return s;
-        } else if constexpr (std::is_same_v<V, std::pair<std::uint64_t, cbor::item const *>>) {
-            return v.first + item_tree_sum(*v.second);
+        } else if constexpr (std::is_same_v<V, std::pair<std::uint64_t, cbor::item>>) {
+            return v.first + item_tree_sum(v.second);
         } else if constexpr (std::is_same_v<V, cbor::typed_array>) {
             return v.tag + v.bytes.size() +
                    bytes_sum(std::string_view(reinterpret_cast<char const *>(v.bytes.data()), v.bytes.size()));

@@ -17,12 +17,12 @@
 
 #include <doctest/doctest.h>
 
-using item_pair = std::pair<std::uint64_t, cbor::item const *>;
+using item_pair = std::pair<std::uint64_t, cbor::item>;
 using item_pairs = cbor::map_range;
 
 // The argument of the head that cbor::encode writes for the item. A float has no value as an argument, and the argument
 // of a negative integer can be larger than an int64_t holds, so both are read back from the encoding.
-inline std::uint64_t read_argument_from_encoding(cbor::item const &node)
+inline std::uint64_t read_argument_from_encoding(cbor::item const node)
 {
     std::string head;
     REQUIRE(cbor::encode(head, node).has_value());
@@ -37,7 +37,7 @@ inline std::uint64_t read_argument_from_encoding(cbor::item const &node)
 
 // The argument of the head of an item, as cbor::encode writes it. So that a test compares an item with the bytes of its
 // head without a case for each type.
-inline std::uint64_t read_argument_of_item(cbor::item const &node)
+inline std::uint64_t read_argument_of_item(cbor::item const node)
 {
     switch (node.type()) {
     case cbor::type::byte_string:
@@ -74,31 +74,27 @@ inline std::uint64_t read_argument_of_item(cbor::item const &node)
 
 // The tag content of an item of a tag type whose content is an item. So that a test reads the content of a tag whose
 // type comes from the wire. A typed array gives its bytes instead, through get<cbor::typed_array>.
-inline cbor::item const *read_tag_content_of_item(cbor::item const &node)
+inline cbor::item read_tag_content_of_item(cbor::item const node)
 {
     auto const tagged = node.get<item_pair>();
-    if (!tagged) {
-        FAIL("the item is no tag");
-        return nullptr;
-    }
+    REQUIRE_MESSAGE(tagged.has_value(), "the item is no tag");
     return tagged->second;
 }
 
-// The children of an array or a map as pointers, a key and its value one after the other, so that a test reads each
-// child as it read it before.
-inline std::vector<cbor::item const *> list_children_of_item(cbor::item const &container)
+// The children of an array or a map, a key and its value one after the other, so that a test reads each child by its
+// index.
+inline std::vector<cbor::item> list_children_of_item(cbor::item const container)
 {
     auto const array = container.get<cbor::array_range>();
     auto const map = container.get<item_pairs>();
     REQUIRE((array || map));
-    std::vector<cbor::item const *> children;
+    std::vector<cbor::item> children;
     if (array)
-        for (cbor::item const &child : *array)
-            children.push_back(&child);
+        children.assign(array->begin(), array->end());
     else
-        for (auto const pair : *map) {
-            children.push_back(&std::get<0>(pair));
-            children.push_back(&std::get<1>(pair));
+        for (auto const [key, value] : *map) {
+            children.push_back(key);
+            children.push_back(value);
         }
     return children;
 }
@@ -136,23 +132,23 @@ inline cbor::major_type find_major_type_of(cbor::type const t)
 // by its width and its bits. So a NaN keeps its payload; a bignum is compared by its magnitude without leading zeros
 // (RFC 8949 3.4.3). The tests compare encode(item) with its input by this, and not by the bytes, because the encoder
 // writes its own form.
-inline bool item_values_are_equal(cbor::item const &a, cbor::item const &b);
+inline bool item_values_are_equal(cbor::item const a, cbor::item const b);
 
-inline std::string_view read_digits_of_bignum(cbor::item const &n)
+inline std::string_view read_digits_of_bignum(cbor::item const n)
 {
-    std::span<std::byte const> const magnitude = n.get<item_pair>().value().second->get<std::span<std::byte const>>().value();
+    std::span<std::byte const> const magnitude = n.get<item_pair>().value().second.get<std::span<std::byte const>>().value();
     std::string_view const s(reinterpret_cast<char const *>(magnitude.data()), magnitude.size());
     return s.substr(std::min(s.find_first_not_of('\0'), s.size()));
 }
 
-inline bool tag_values_are_equal(cbor::item const &a, cbor::item const &b)
+inline bool tag_values_are_equal(cbor::item const a, cbor::item const b)
 {
     item_pair const x = a.get<item_pair>().value();
     item_pair const y = b.get<item_pair>().value();
-    return x.first == y.first && item_values_are_equal(*x.second, *y.second);
+    return x.first == y.first && item_values_are_equal(x.second, y.second);
 }
 
-inline bool item_values_are_equal(cbor::item const &a, cbor::item const &b)
+inline bool item_values_are_equal(cbor::item const a, cbor::item const b)
 {
     if (a.type() != b.type())
         return false;
@@ -165,7 +161,7 @@ inline bool item_values_are_equal(cbor::item const &a, cbor::item const &b)
     case cbor::type::map: {
         auto const x = list_children_of_item(a);
         auto const y = list_children_of_item(b);
-        return std::ranges::equal(x, y, [](cbor::item const *l, cbor::item const *r) { return item_values_are_equal(*l, *r); });
+        return std::ranges::equal(x, y, [](cbor::item const l, cbor::item const r) { return item_values_are_equal(l, r); });
     }
     case cbor::type::unsigned_bignum:
     case cbor::type::negative_bignum:

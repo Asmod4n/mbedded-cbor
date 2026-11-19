@@ -331,11 +331,11 @@ inline value text_value(std::string_view const t)
     return {s};
 }
 
-inline value value_of(cbor::item const &it);
+inline value value_of(cbor::item const it);
 
-inline value tag_value(std::uint64_t const number, cbor::item const *const content)
+inline value tag_value(std::uint64_t const number, cbor::item const content)
 {
-    auto const magnitude = content->get<std::span<std::byte const>>();
+    auto const magnitude = content.get<std::span<std::byte const>>();
     if ((number == 2 || number == 3) && magnitude) {
         std::string m(reinterpret_cast<char const *>(magnitude->data()), magnitude->size());
         m.erase(0, std::min(m.find_first_not_of('\0'), m.size()));
@@ -347,10 +347,10 @@ inline value tag_value(std::uint64_t const number, cbor::item const *const conte
         }
         return {bignum{number == 3, std::move(m)}};
     }
-    return {tagged{number, value_of(*content)}};
+    return {tagged{number, value_of(content)}};
 }
 
-inline value value_of(cbor::item const &it)
+inline value value_of(cbor::item const it)
 {
     switch (it.type()) {
     case cbor::type::text_string:
@@ -388,7 +388,7 @@ inline value value_of(cbor::item const &it)
         auto const children = it.get<cbor::array_range>().value();
         array a;
         a.reserve(children.size());
-        for (cbor::item const &child : children)
+        for (cbor::item const child : children)
             a.push_back(value_of(child));
         return {std::move(a)};
     }
@@ -403,7 +403,7 @@ inline value value_of(cbor::item const &it)
     case cbor::type::tag:
     case cbor::type::unsigned_bignum:
     case cbor::type::negative_bignum: {
-        auto const [number, content] = it.get<std::pair<std::uint64_t, cbor::item const *>>().value();
+        auto const [number, content] = it.get<std::pair<std::uint64_t, cbor::item>>().value();
         return tag_value(number, content);
     }
     case cbor::type::typed_array: {
@@ -412,7 +412,7 @@ inline value value_of(cbor::item const &it)
     }
     case cbor::type::shared_reference:
         return {tagged{std::uint64_t{29},
-                       value{it.get<std::pair<std::uint64_t, cbor::item const *>>().value().first}}};
+                       value{it.get<std::pair<std::uint64_t, cbor::item>>().value().first}}};
     }
     std::unreachable();
 }

@@ -35,11 +35,11 @@ inline std::expected<cbor::lazy, cbor::error> select_element_by_index(cbor::lazy
     return l.at(static_cast<std::size_t>(*size - back));
 }
 
-inline std::expected<value, error> make_value_from_item(cbor::item const &it);
+inline std::expected<value, error> make_value_from_item(cbor::item const it);
 
 // The model keeps a negative integer as its argument n, for the value -1 - n (RFC 8949 3.1). get<std::int64_t> gives
 // the value down to -2^63; a smaller value is read back from the head that cbor::encode writes.
-inline std::uint64_t argument_of_negative_integer(cbor::item const &it)
+inline std::uint64_t argument_of_negative_integer(cbor::item const it)
 {
     if (auto const v = it.get<std::int64_t>())
         return static_cast<std::uint64_t>(-1 - *v);
@@ -52,11 +52,11 @@ inline std::uint64_t argument_of_negative_integer(cbor::item const &it)
     return argument;
 }
 
-inline std::expected<value, error> make_value_from_tag_item(cbor::item const &it)
+inline std::expected<value, error> make_value_from_tag_item(cbor::item const it)
 {
-    std::pair<std::uint64_t, cbor::item const *> const tag = it.get<std::pair<std::uint64_t, cbor::item const *>>().value();
+    std::pair<std::uint64_t, cbor::item> const tag = it.get<std::pair<std::uint64_t, cbor::item>>().value();
     std::uint64_t const number = tag.first;
-    cbor::item const &inner = *tag.second;
+    cbor::item const inner = tag.second;
     auto const magnitude = inner.get<std::span<std::byte const>>();
     if ((number == 2 || number == 3) && magnitude) {
         bool const negative_value = number == 3;
@@ -79,7 +79,7 @@ inline std::expected<value, error> make_value_from_tag_item(cbor::item const &it
 // The reference model of a decoded item tree. Tags 28 and 29 are plain tags over their content. RFC 8949 3.4 lets a
 // reader that does not know a tag pass it on. A bignum that fits 64 bits is an integer. Tag 24 is a tag over its byte
 // string.
-inline std::expected<value, error> make_value_from_item(cbor::item const &it)
+inline std::expected<value, error> make_value_from_item(cbor::item const it)
 {
     switch (it.type()) {
     case cbor::type::text_string:
@@ -111,7 +111,7 @@ inline std::expected<value, error> make_value_from_item(cbor::item const &it)
     case cbor::type::array: {
         array a;
         auto const children = it.get<cbor::array_range>().value();
-        for (cbor::item const &child : children) {
+        for (cbor::item const child : children) {
             auto e = make_value_from_item(child);
             if (!e)
                 return std::unexpected(e.error());
@@ -142,7 +142,7 @@ inline std::expected<value, error> make_value_from_item(cbor::item const &it)
     }
     case cbor::type::shared_reference:
         return value{tagged{std::uint64_t{29},
-                            value{it.get<std::pair<std::uint64_t, cbor::item const *>>().value().first}}};
+                            value{it.get<std::pair<std::uint64_t, cbor::item>>().value().first}}};
     }
     std::unreachable();
 }
