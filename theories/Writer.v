@@ -464,20 +464,27 @@ Variable be : list nat.
 Hypothesis g_closed : closed g.
 Hypothesis g_plain : plain_tags g.
 
-(* Each open node of be has its mark in the table of the reader, and Q pairs the id of that mark with it. *)
+(* Each open node of be has its mark in the table of the reader, the node of that mark is not complete, and Q pairs
+   the id of that mark with it. *)
 Definition marks_in_table (s : state) (path : list (nat * nat)) (Q : list (nat * nat)) : Prop :=
   forall u i, assoc path u = Some i -> mem u be = true ->
-    exists r, nth_error (table s) i = Some r /\ r < next s /\ In (r, u) Q.
+    exists r, nth_error (table s) i = Some r /\ r < next s /\ complete r (graph s) = false /\ In (r, u) Q.
 
 (* Each pair of N names a node of G and a node of g with the same shape under P. *)
 Definition bisim_pairs (G : list (nat * node)) (P N : list (nat * nat)) : Prop :=
   forall a b, In (a, b) N -> exists na nb, In (a, na) G /\ assoc g b = Some nb /\ same_shape P na nb.
 
-Lemma marks_in_table_extends : forall s s' path Q, extends s s' -> marks_in_table s path Q -> marks_in_table s' path Q.
+(* A read that adds only nodes with new ids keeps each mark of the table not complete. *)
+Lemma marks_in_table_extends : forall s s' ts rest path Q, extends s s' -> Meaning.fresh_step s ts s' rest ->
+  marks_in_table s path Q -> marks_in_table s' path Q.
 Proof.
-  intros s s' path Q [_ [[t T] L]] H u i P M.
-  destruct (H u i P M) as [r [E [Lr I]]].
-  exists r. split; [rewrite T; apply nth_error_app_prefix; exact E | split; [lia | exact I]].
+  intros s s' ts rest path Q [_ [[t T] L]] [_ Fr] H u i P M.
+  destruct (H u i P M) as [r [E [Lr [C I]]]].
+  exists r. split; [rewrite T; apply nth_error_app_prefix; exact E | split; [lia | split; [| exact I]]].
+  unfold complete in *. destruct (existsb _ (graph s')) eqn:Ex; [| reflexivity].
+  apply existsb_exists in Ex as [e [Ie Ee]]. apply Nat.eqb_eq in Ee.
+  destruct (Fr e Ie) as [I0 | L0]; [| lia].
+  rewrite <- C. symmetry. apply existsb_exists. exists e. split; [exact I0 | apply Nat.eqb_eq; exact Ee].
 Qed.
 
 Lemma extends_graph : forall s s' e, extends s s' -> In e (graph s) -> In e (graph s').
@@ -487,7 +494,7 @@ Proof. intros s s' e [[gg G] _] H. rewrite G. apply in_or_app. right. exact H. Q
 Definition reads_back (f : nat) (path : list (nat * nat)) (v : nat) : Prop :=
   forall m ts m' Q s F rest,
     write_item g be f path m v = (ts, m') ->
-    marks_in_table s path Q -> length (table s) = m -> length ts < F ->
+    marks_in_table s path Q -> sound s -> length (table s) = m -> length ts < F ->
     exists r s' N,
       read_item F (ts ++ rest) s = ok (r, rest, s') /\ extends s s' /\ length (table s') = m' /\
       In (r, v) (N ++ Q) /\ (forall P, incl (N ++ Q) P -> bisim_pairs (graph s') P N).
@@ -496,21 +503,23 @@ Lemma write_items_read : forall f path l,
   (forall c, In c l -> reads_back f path c) ->
   forall m ts m' Q s F rest,
     write_items (write_item g be f path) l m = (ts, m') ->
-    marks_in_table s path Q -> length (table s) = m -> length ts < F ->
+    marks_in_table s path Q -> sound s -> length (table s) = m -> length ts < F ->
     exists ids s' N,
       items (read_item F) (length l) (ts ++ rest) s = ok (ids, rest, s') /\ extends s s' /\
       length (table s') = m' /\ Forall2 (fun a b => In (a, b) (N ++ Q)) ids l /\
       (forall P, incl (N ++ Q) P -> bisim_pairs (graph s') P N).
 Proof.
-  intros f path. induction l as [| c l IH]; intros Hc m ts m' Q s F rest W R T L; simpl in W.
+  intros f path. induction l as [| c l IH]; intros Hc m ts m' Q s F rest W R Sd T L; simpl in W.
   - inversion W; subst. exists [], s, []. simpl.
     split; [reflexivity | split; [apply extends_refl | split; [reflexivity | split; [constructor | intros P _ a b []]]]].
   - destruct (write_item g be f path m c) as [ts1 m1] eqn:W1.
     destruct (write_items (write_item g be f path) l m1) as [ts2 m2] eqn:W2.
     injection W as Ets Em; subst ts m'. rewrite length_app in L.
-    destruct (Hc c (or_introl eq_refl) m ts1 m1 Q s F (ts2 ++ rest) W1 R T ltac:(lia))
+    destruct (Hc c (or_introl eq_refl) m ts1 m1 Q s F (ts2 ++ rest) W1 R Sd T ltac:(lia))
       as [r [s1 [N1 [E1 [X1 [T1 [I1 B1]]]]]]].
-    destruct (IH (fun c' H' => Hc c' (or_intror H')) m1 ts2 m2 Q s1 F rest W2 (marks_in_table_extends _ _ _ _ X1 R) T1 ltac:(lia))
+    destruct (IH (fun c' H' => Hc c' (or_intror H')) m1 ts2 m2 Q s1 F rest W2
+                (marks_in_table_extends _ _ _ _ _ _ X1 (Meaning.read_item_fresh _ _ _ _ _ _ E1) R)
+                (proj1 (read_item_sound _ _ _ _ _ _ E1 Sd)) T1 ltac:(lia))
       as [ids [s2 [N2 [E2 [X2 [T2 [F2 B2]]]]]]].
     exists (r :: ids), s2, (N1 ++ N2). simpl. rewrite <- app_assoc, E1, E2.
     split; [reflexivity |]. split; [eapply extends_trans; eassumption |]. split; [exact T2 |]. split.
@@ -526,16 +535,16 @@ Qed.
 Lemma reads_back_ref : forall f path v i,
   assoc path v = Some i -> incl (back_targets g f (map fst path) v) be -> reads_back f path v.
 Proof.
-  intros f path v i P Rv m ts m' Q s F rest W R T L.
+  intros f path v i P Rv m ts m' Q s F rest W R Sd T L.
   assert (W' : write_item g be f path m v = ([TTag sharedref; TUInt i], m)) by (destruct f; simpl; rewrite P; reflexivity).
   rewrite W' in W. injection W as Ets Em; subst ts m'.
   assert (Mv : mem v (map fst path) = true) by (apply mem_In; eapply assoc_key; exact P).
   assert (Rb : mem v be = true).
   { apply mem_In. apply Rv. destruct f; simpl; rewrite Mv; left; reflexivity. }
-  destruct (R v i P Rb) as [r [E [Lr I]]].
+  destruct (R v i P Rb) as [r [E [Lr [C I]]]].
   destruct F as [| F]; simpl in L; [lia |].
   exists r, (looked 2 s), [].
-  split; [simpl; rewrite E; apply Nat.ltb_lt in Lr; rewrite Lr; reflexivity |].
+  split; [simpl; rewrite E; apply Nat.ltb_lt in Lr; rewrite Lr, C; reflexivity |].
   split; [apply extends_looked | split; [exact T | split; [exact I | intros P0 _ a b []]]].
 Qed.
 
@@ -548,7 +557,7 @@ Proof.
     (assert (Nv : ~ In v (map fst path)) by (apply assoc_None; exact Pv));
     (assert (Bound := path_bound g (map fst path) v Np Ip Nv Iv)); rewrite length_map in Bound; [lia |].
   destruct (assoc g v) as [n |] eqn:Gv; [| exfalso; apply assoc_None in Gv; exact (Gv Iv)].
-  intros m ts m' Q s F rest W R T L.
+  intros m ts m' Q s F rest W R Sd T L.
   assert (Mp : mem v (map fst path) = false) by (apply mem_false; exact Nv).
   assert (Hplain : forall t c, n = NTag t c -> t <> shareable /\ t <> sharedref) by (intros t c ->; exact (g_plain v t c Gv)).
   assert (Hchild : forall c, In c (children n) -> reads_back f ((v, m) :: path) c).
@@ -559,16 +568,16 @@ Proof.
     - intros u Hu. apply Rv. simpl. rewrite Mp, Gv. apply in_flat_map. exists c. split; assumption.
     - specialize (g_closed v n Gv). rewrite Forall_forall in g_closed. apply g_closed. exact Hc. }
   (* The node itself, from its head, at the state s0 after its mark if it has one. *)
-  assert (Node : forall s0 m1 Q', next s0 = next s -> extends s s0 -> length (table s0) = m1 ->
+  assert (Node : forall s0 m1 Q', next s0 = next s -> extends s s0 -> sound s0 -> length (table s0) = m1 ->
             marks_in_table (reserved (looked 1 s0)) ((v, m) :: path) Q' -> incl Q' ((next s, v) :: Q) ->
             forall body F1, write_items (write_item g be f ((v, m) :: path)) (children n) m1 = (body, m') ->
             length body < F1 ->
             exists s' N2, read_item (S F1) (item_head n :: body ++ rest) s0 = ok (next s, rest, s') /\
               extends s s' /\ length (table s') = m' /\
               (forall P, incl ((next s, v) :: N2 ++ Q) P -> bisim_pairs (graph s') P ((next s, v) :: N2))).
-  { intros s0 m1 Q' N0 X0 T0 R0 IQ body F1 Wb Lb.
+  { intros s0 m1 Q' N0 X0 S0 T0 R0 IQ body F1 Wb Lb.
     destruct (write_items_read f ((v, m) :: path) (children n) Hchild m1 body m' Q' (reserved (looked 1 s0)) F1 rest
-                Wb R0 T0 Lb) as [ids [s2 [N2 [E2 [X2 [T2 [F2 B2]]]]]]].
+                Wb R0 (Meaning.sound_rl _ S0) T0 Lb) as [ids [s2 [N2 [E2 [X2 [T2 [F2 B2]]]]]]].
     exists (made (next s0) (rebuild n ids) s2), N2.
     split; [rewrite (read_node n F1 body rest s0 ids s2 Hplain E2), N0; reflexivity |].
     split; [eapply extends_trans; [exact X0 | eapply extends_trans; [apply extends_rl | eapply extends_trans; [exact X2 | apply extends_made]]] |].
@@ -593,12 +602,12 @@ Proof.
     assert (R0 : marks_in_table (reserved (looked 1 (marked_as (next s) 1 (looked 1 s)))) ((v, m) :: path) ((next s, v) :: Q)).
     { intros u i Pu Mu. simpl in Pu. destruct (Nat.eqb v u) eqn:Evu.
       - apply Nat.eqb_eq in Evu. subst u. inversion Pu; subst i. exists (next s).
-        split; [| split; [simpl; lia | left; reflexivity]].
+        split; [| split; [simpl; lia | split; [exact (Meaning.complete_next s Sd) | left; reflexivity]]].
         simpl. rewrite nth_error_app2; [| lia]. rewrite T, Nat.sub_diag. reflexivity.
-      - destruct (R u i Pu Mu) as [r [E [Lr I]]]. exists r.
-        split; [simpl; apply nth_error_app_prefix; exact E | split; [simpl; lia | right; exact I]]. }
+      - destruct (R u i Pu Mu) as [r [E [Lr [C I]]]]. exists r.
+        split; [simpl; apply nth_error_app_prefix; exact E | split; [simpl; lia | split; [exact C | right; exact I]]]. }
     destruct (Node (marked_as (next s) 1 (looked 1 s)) (S m) ((next s, v) :: Q) eq_refl
-                ltac:(eapply extends_trans; [apply extends_looked | apply extends_marked_as])
+                ltac:(eapply extends_trans; [apply extends_looked | apply extends_marked_as]) Sd
                 ltac:(simpl; rewrite length_app, T; simpl; lia) R0 (incl_refl _) body F1 Wb ltac:(lia))
       as [s' [N2 [E [X [T' B]]]]].
     exists (next s), s', ((next s, v) :: N2).
@@ -612,9 +621,9 @@ Proof.
     assert (R0 : marks_in_table (reserved (looked 1 s)) ((v, m) :: path) Q).
     { intros u i Pu Mu. simpl in Pu. destruct (Nat.eqb v u) eqn:Evu.
       - apply Nat.eqb_eq in Evu. subst u. rewrite Mb in Mu. discriminate.
-      - destruct (R u i Pu Mu) as [r [E [Lr I]]]. exists r.
-        split; [exact E | split; [simpl; lia | exact I]]. }
-    destruct (Node s m Q eq_refl (extends_refl s) T R0 (fun x Hx => or_intror Hx) body F1 Wb ltac:(lia))
+      - destruct (R u i Pu Mu) as [r [E [Lr [C I]]]]. exists r.
+        split; [exact E | split; [simpl; lia | split; [exact C | exact I]]]. }
+    destruct (Node s m Q eq_refl (extends_refl s) Sd T R0 (fun x Hx => or_intror Hx) body F1 Wb ltac:(lia))
       as [s' [N2 [E [X [T' B]]]]].
     exists (next s), s', ((next s, v) :: N2).
     split; [exact E |].
@@ -634,7 +643,7 @@ Proof.
   destruct (write_item g (back_edges g root) (length g) [] 0 root) as [ts m'] eqn:W. simpl.
   destruct (write_item_read g (back_edges g root) Hc Hp (length g) [] root ltac:(simpl; lia) (NoDup_nil _)
               (incl_nil_l _) ltac:(intros x H; unfold back_edges; apply nodup_In; exact H) Hr
-              0 ts m' [] start (S (length ts)) [] W ltac:(intros u i P; discriminate) eq_refl ltac:(lia))
+              0 ts m' [] start (S (length ts)) [] W ltac:(intros u i P; discriminate) Meaning.sound_start eq_refl ltac:(lia))
     as [r [s' [N [E [X [T [I B]]]]]]].
   rewrite app_nil_r in E, I.
   assert (Rd : read ts = ok (r, s')) by (unfold read; rewrite E; reflexivity).
@@ -684,7 +693,7 @@ Proof.
     + destruct (Nat.eqb tg sharedref) eqn:M29.
       * destruct ts as [| [i | | | |] ts']; try discriminate.
         destruct (nth_error (table s) i); [| discriminate].
-        destruct (_ <? _); [| discriminate].
+        destruct (_ <? _); [| discriminate]. drop_cyclic.
         inversion H; subst. exact Pl.
       * destruct (read_item fuel ts (reserved (looked 1 s))) as [[[c r1] s1] | e] eqn:E; [| discriminate].
         inversion H; subst. apply plain_made; [exact (IH _ _ _ _ _ E Pl) |].
