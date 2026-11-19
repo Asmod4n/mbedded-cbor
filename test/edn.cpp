@@ -296,18 +296,25 @@ TEST_CASE("cbor::to_edn: an item inside a tree gives the text of that item")
     CHECK_EQ(cbor::to_edn(element_of(*tree, 1)), "{\"a\": [2_0]}");
 }
 
-// A tree of cbor::decode_cycles keeps the node that each tag 28 stood before, and a shared_reference keeps its
-// index. The owning form writes both again and never follows a reference, so a cycle ends. A tag 28 with no reference
-// to it, a chain of two tags 28 and a tag 28 over a tag 29 keep the index of every later tag 29. Each tag 29 closes a
-// cycle, as decode_cycles requires.
-TEST_CASE("cbor::to_edn: a tree of decode_cycles keeps its tags 28 and 29")
+// A tree of cbor::decode_cycles with a shared_reference gives the text of the bytes of cbor::encode. So a tag 28
+// stands only on a value that a tag 29 names, each tag 29 has the index of its mark in the text and its shortest head,
+// and a tag 28 over a tag 29 marks no value of its own. A tag 28 that no tag 29 names makes no shared_reference, so
+// its tree is walked, and the walk writes no tag 28.
+TEST_CASE("cbor::to_edn: a tree of decode_cycles gives tags 28 and 29 only for its cycles")
 {
-    for (std::string_view const text :
-         {"28([1, 29(0)])", "28([29(0)])", "[28(1)]", "28(28([29(0), 29(1)]))", "28([28(29(0)), 29(1)])",
-          "28(999(29(0)))", "28({\"k\": 29(0)})", "28([1, 29(0_1)])", "28([1, 28([2, 29(1)]), 29(0)])",
-          "2(28(h'05'))"}) {
+    for (auto const &[text, expected] : std::initializer_list<std::pair<std::string_view, std::string_view>>{
+             {"28([1, 29(0)])", "28([1, 29(0)])"},
+             {"28([29(0)])", "28([29(0)])"},
+             {"[28(1)]", "[1]"},
+             {"28(28([29(0), 29(1)]))", "28([29(0), 29(0)])"},
+             {"28([28(29(0)), 29(1)])", "28([29(0), 29(0)])"},
+             {"28(999(29(0)))", "28(999(29(0)))"},
+             {"28({\"k\": 29(0)})", "28({\"k\": 29(0)})"},
+             {"28([1, 29(0_1)])", "28([1, 29(0)])"},
+             {"28([1, 28([2, 29(1)]), 29(0)])", "28([1, 28([2, 29(1)]), 29(0)])"},
+             {"2(28(h'05'))", "2(h'05')"}}) {
         CAPTURE(text);
-        CHECK_EQ(cbor::to_edn(shared_from_edn(text)), text);
+        CHECK_EQ(cbor::to_edn(shared_from_edn(text)), expected);
     }
 }
 
@@ -329,14 +336,16 @@ TEST_CASE("cbor::to_edn: the text of a shared tree reads back to the same tree")
     CHECK_EQ(target_of_reference(element_of(*cycle, 0)), &*cycle);
 }
 
-// Without its owner an item does not know the marks of its tags 28, so a text of it would name marks that are not
-// there. The call refuses that use. An owning item that holds no tree is a wrong use too.
-TEST_CASE("cbor::to_edn: an item that holds a shared_reference without its owner is a wrong use")
+// An item of a tree with a shared_reference needs no owner: a shared_reference stands for its target, and an inner
+// item also writes the values above it that its references name. An owning item that holds no tree is a wrong use.
+TEST_CASE("cbor::to_edn: an item of a tree with a cycle gives its text without the owner")
 {
     auto const shared = shared_from_edn("28([1, 29(0)])");
-    CHECK_THROWS_AS(std::ignore = cbor::to_edn(*shared), std::logic_error);
-    CHECK_THROWS_AS(std::ignore = cbor::to_edn(element_of(*shared, 1)), std::logic_error);
+    CHECK_EQ(cbor::to_edn(*shared), "28([1, 29(0)])");
+    CHECK_EQ(cbor::to_edn(element_of(*shared, 1)), "28([1, 29(0)])");
     CHECK_EQ(cbor::to_edn(element_of(*shared, 0)), "1");
+    auto const nested = shared_from_edn("28([1, 28([2, 29(1), 29(0)])])");
+    CHECK_EQ(cbor::to_edn(element_of(*nested, 1)), "28([2, 29(0), [1, 29(0)]])");
     cbor::owning<cbor::item> moved = shared_from_edn("1");
     cbor::owning<cbor::item> const kept = std::move(moved);
     CHECK_THROWS_AS(std::ignore = cbor::to_edn(moved), std::logic_error);

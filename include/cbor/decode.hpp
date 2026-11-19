@@ -49,7 +49,6 @@ struct zone {
     string_saver strings{memory};
     std::pmr::forward_list<std::pmr::vector<item>> items{&memory};
     std::vector<link> encoded_cbor_data_items;
-    std::vector<item const *> shareables;
 
     std::pmr::vector<item> &items_reserved(std::size_t const count)
     {
@@ -160,12 +159,11 @@ struct tree_decoder {
 
     CBOR_NEVER_INLINE std::expected<bool, error> decode_bignum(std::pmr::vector<item> &into, std::uint64_t tag);
 
-    void mark(item const &target, item const &marked_item, std::size_t const count)
+    void mark(item const &target, std::size_t const count)
     {
         for (std::size_t i = 0; i < count; ++i)
             open_marks.push_back(open_mark{marks + i, &target});
         marks += count;
-        decoded.shareables.insert(decoded.shareables.end(), count, &marked_item);
     }
 };
 
@@ -252,7 +250,7 @@ std::expected<void, error> tree_decoder<Resolve>::decode_content(std::pmr::vecto
         if (*r) {
             if constexpr (Resolve)
                 if (marked != 0) [[unlikely]]
-                    mark(into.back(), into.back(), marked);
+                    mark(into.back(), marked);
             return {};
         }
     }
@@ -260,7 +258,7 @@ std::expected<void, error> tree_decoder<Resolve>::decode_content(std::pmr::vecto
         item{detail::heads::type_of(head.major, head.info, head.argument), head.info, {.u64 = head.argument}});
     if constexpr (Resolve)
         if (marked != 0) [[unlikely]]
-            mark(node, node, marked);
+            mark(node, marked);
     switch (head.major) {
     case major_type::unsigned_integer:
     case major_type::negative_integer:
@@ -389,7 +387,7 @@ std::expected<void, error> tree_decoder<Resolve>::decode_sharedref(std::pmr::vec
     item const &target = *named->target;
     item &reference = into.emplace_back(item{cbor::type::shared_reference, h->info, {.tag = {h->argument, &target}}});
     reference.m_holds_shared_reference = true;
-    mark(target, reference, marked);
+    mark(target, marked);
     ++shared_references;
     return {};
 }
@@ -412,7 +410,6 @@ std::expected<decoded_tree, error> decode_tree(std::string_view const encoded)
     if (auto const built = tree.decode_item(root); !built) [[unlikely]]
         return std::unexpected(built.error());
     std::ranges::sort(decoded->encoded_cbor_data_items, std::less<>{}, &zone::link::first);
-    std::ranges::sort(decoded->shareables, std::less<>{});
     item const &top = root.front();
     return decoded_tree{zone_owner::tree_owned(&top, std::move(decoded))};
 }
@@ -490,9 +487,9 @@ std::expected<owning<item>, error> decode(Encoded &&encoded)
  * Tags 28 and 29 of the value-sharing registration are resolved, with a table for this call: a tag 28 makes no
  * node and marks the node of its content, and a tag 29 with the index n is a `shared_reference` node whose target is
  * the node that the n-th tag 28 marks. A tag 29 closes a cycle: its target is a node whose decode has not ended,
- * the node above the tag 29 or that node itself. A tag 29 that names a node whose decode has ended is an error. The content of a tag 24 has its own table. The tree keeps the node that each tag 28 stood before, and
- * cbor::to_edn(owning<item> const &) writes those tags again.
- * cbor::encode() writes such a tree, with a tag 28 and a tag 29 only for a cycle.
+ * the node above the tag 29 or that node itself. A tag 29 that names a node whose decode has ended is an error. The
+ * content of a tag 24 has its own table. cbor::encode() and cbor::to_edn() write such a tree, with a tag 28 and a
+ * tag 29 only for a cycle.
  *
  * @code{.example}
  * bytes: d8 1c 81 d8 1d 00
@@ -511,7 +508,7 @@ std::expected<owning<item>, error> decode(Encoded &&encoded)
  * @retval inadmissible_type_for_tag_content a tag 29 over an item that is not an unsigned integer, or a typed array
  * (RFC 8746) whose content is not a byte string of whole elements
  * @see cbor::decode()
- * @see cbor::to_edn(owning<item> const &)
+ * @see cbor::to_edn(item const &)
  * @see cbor::encode()
  *
  * @ingroup decode
