@@ -91,7 +91,7 @@ struct node {
     {
     }
 
-    constexpr cbor::type type() const;
+    CBOR_ALWAYS_INLINE constexpr cbor::type type() const;
 };
 
 struct kind {
@@ -390,7 +390,7 @@ public:
      *
      * @see cbor::lazy::type()
      */
-    cbor::type type() const
+    CBOR_ALWAYS_INLINE cbor::type type() const
     {
         return node().type();
     }
