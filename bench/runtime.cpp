@@ -40,12 +40,12 @@ static std::uint64_t item_tree_sum(cbor::item const &it)
             return v.size() + bytes_sum(v);
         } else if constexpr (std::is_same_v<V, std::span<std::byte const>>) {
             return v.size() + bytes_sum(std::string_view(reinterpret_cast<char const *>(v.data()), v.size()));
-        } else if constexpr (std::is_same_v<V, std::span<cbor::item const>>) {
+        } else if constexpr (std::is_same_v<V, cbor::array_range>) {
             std::uint64_t s = v.size();
             for (cbor::item const &child : v)
                 s += item_tree_sum(child);
             return s;
-        } else if constexpr (std::is_same_v<V, cbor::pairs>) {
+        } else if constexpr (std::is_same_v<V, cbor::map_range>) {
             std::uint64_t s = v.size();
             for (auto const pair : v)
                 s += item_tree_sum(std::get<0>(pair)) + item_tree_sum(std::get<1>(pair));

@@ -123,7 +123,7 @@ TEST_CASE("simple value: lazy::to_item gives every simple value 0 to 255 as its 
         REQUIRE(r.has_value());
         cbor::item const &it = **r;
         CHECK_EQ(find_major_type_of(it.type()), cbor::major_type::simple);
-        CHECK_EQ(it.additional_information, v < 24 ? v : 24);
+        CHECK_EQ(it.additional_information(), v < 24 ? v : 24);
         CHECK_EQ(read_argument_of_item(it), v);
     }
 }

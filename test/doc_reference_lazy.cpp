@@ -306,9 +306,9 @@ TEST_CASE("doc reference lazy: clone")
     }();
     REQUIRE(tree);
     CHECK_EQ((*tree)->type(), cbor::type::array);
-    auto const children = (*tree)->get<std::span<cbor::item const>>().value();
+    auto const children = (*tree)->get<cbor::array_range>().value();
     REQUIRE_EQ(children.size(), 2u);
-    CHECK_EQ(children[1].get<std::string_view>().value(), "x"sv);
+    CHECK_EQ(children.next().front().get<std::string_view>().value(), "x"sv);
 }
 
 // lazy.hpp, snippet lazy_elements: the range concepts, count_if, a deleted front, and an error that repeats.

@@ -171,13 +171,13 @@ std::uint64_t scalars_sum(Item const &it)
             return bytes_sum(it.template get<std::string_view>().value());
         case cbor::type::array: {
             std::uint64_t s = 0;
-            for (Item const &child : it.template get<std::span<Item const>>().value())
+            for (Item const &child : it.template get<cbor::array_range>().value())
                 s += scalars_sum(child);
             return s;
         }
         case cbor::type::map: {
             std::uint64_t s = 0;
-            for (auto const pair : it.template get<cbor::pairs>().value())
+            for (auto const pair : it.template get<cbor::map_range>().value())
                 s += scalars_sum(std::get<0>(pair)) + scalars_sum(std::get<1>(pair));
             return s;
         }
@@ -270,12 +270,12 @@ std::uint64_t tree_sum(Item const &it)
                 return bytes_sum(value);
             else if constexpr (std::is_same_v<V, std::span<std::byte const>>)
                 return value.size();
-            else if constexpr (std::is_same_v<V, std::span<Item const>>) {
+            else if constexpr (std::is_same_v<V, cbor::array_range>) {
                 std::uint64_t s = 0;
                 for (Item const &child : value)
                     s += tree_sum(child);
                 return s;
-            } else if constexpr (std::is_same_v<V, cbor::pairs>) {
+            } else if constexpr (std::is_same_v<V, cbor::map_range>) {
                 std::uint64_t s = 0;
                 for (auto const pair : value)
                     s += tree_sum(std::get<0>(pair)) + tree_sum(std::get<1>(pair));

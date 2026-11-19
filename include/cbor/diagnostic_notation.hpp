@@ -2781,7 +2781,7 @@ class extended_diagnostic_notation
     {
         if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
             return r;
-        std::uint8_t const info = node.additional_information;
+        std::uint8_t const info = node.m_info;
         switch (node.m_type) {
         case cbor::type::unsigned_integer:
             out += std::to_string(node.via.u64) + encoding_indicator(info, node.via.u64);

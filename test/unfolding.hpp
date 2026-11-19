@@ -37,12 +37,12 @@ class bisimilarity
         return out;
     }
 
-    bool all_hold(std::span<cbor::item const> const l, std::span<cbor::item const> const r)
+    bool all_hold(cbor::array_range const l, cbor::array_range const r)
     {
         if (l.size() != r.size())
             return false;
-        for (std::size_t i = 0; i < l.size(); ++i)
-            if (!holds(l[i], r[i]))
+        for (auto x = l.begin(), y = r.begin(); x != l.end(); ++x, ++y)
+            if (!holds(*x, *y))
                 return false;
         return true;
     }
@@ -54,8 +54,8 @@ class bisimilarity
         return l.first == r.first && holds(*l.second, *r.second);
     }
 
-    bool all_pairs_hold(cbor::pairs const l,
-                        cbor::pairs const r)
+    bool all_pairs_hold(cbor::map_range const l,
+                        cbor::map_range const r)
     {
         if (l.size() != r.size())
             return false;
@@ -72,14 +72,14 @@ public:
         cbor::item const &b = resolved(y);
         if (!assumed.emplace(&a, &b).second)
             return true;
-        if (a.type() != b.type() || a.additional_information != b.additional_information)
+        if (a.type() != b.type() || a.additional_information() != b.additional_information())
             return false;
         switch (a.type()) {
         case cbor::type::array:
-            return all_hold(a.get<std::span<cbor::item const>>().value(), b.get<std::span<cbor::item const>>().value());
+            return all_hold(a.get<cbor::array_range>().value(), b.get<cbor::array_range>().value());
         case cbor::type::map:
-            return all_pairs_hold(a.get<cbor::pairs>().value(),
-                                  b.get<cbor::pairs>().value());
+            return all_pairs_hold(a.get<cbor::map_range>().value(),
+                                  b.get<cbor::map_range>().value());
         case cbor::type::tag:
             return tags_hold(a, b);
         default:

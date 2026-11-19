@@ -433,7 +433,7 @@ std::expected<decoded_tree, error> decode_tree(std::string_view const encoded)
  * message: ["hi", 1]
  * call: auto const tree = cbor::decode(bytes)
  * result: owning item of ["hi", 1]
- * call: (*tree)->get<std::span<cbor::item const>>()->size()
+ * call: (*tree)->get<cbor::array_range>()->size()
  * result: 2
  * @endcode
  * @code{.example}
@@ -495,7 +495,7 @@ std::expected<owning<item>, error> decode(Encoded &&encoded)
  * bytes: d8 1c 81 d8 1d 00
  * call: auto const tree = cbor::decode_cycles(bytes)
  * result: owning item of 28([29(0)])
- * call: (*tree)->get<std::span<cbor::item const>>().value()[0].type()
+ * call: (*tree)->get<cbor::array_range>()->front().type()
  * result: cbor::type::shared_reference
  * @endcode
  *

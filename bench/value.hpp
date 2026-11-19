@@ -385,7 +385,7 @@ inline value value_of(cbor::item const &it)
                 return 0;
         }))}};
     case cbor::type::array: {
-        std::span<cbor::item const> const children = it.get<std::span<cbor::item const>>().value();
+        auto const children = it.get<cbor::array_range>().value();
         array a;
         a.reserve(children.size());
         for (cbor::item const &child : children)
@@ -393,7 +393,7 @@ inline value value_of(cbor::item const &it)
         return {std::move(a)};
     }
     case cbor::type::map: {
-        auto const pairs = it.get<cbor::pairs>().value();
+        auto const pairs = it.get<cbor::map_range>().value();
         map m;
         m.reserve(pairs.size());
         for (auto const pair : pairs)

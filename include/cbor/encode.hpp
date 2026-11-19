@@ -233,7 +233,7 @@ private:
 /**
  * @brief Writes the tree at `root` and gives the count of bytes written.
  *
- * Each integer, length and tag number keeps the width of its head, from `additional_information`.
+ * Each integer, length and tag number keeps the width of its head, from `additional_information()`.
  * A float keeps its width.
  * A tree without a `shared_reference` is written in one walk, and the call writes no tag 28 or 29 of its own.
  * A tag 28 and a tag 29 of a tree of cbor::lazy::to_item() are written as they are.
@@ -508,7 +508,7 @@ class detail::encoding::iov_writer
 
 inline detail::encoding::head_parts detail::encoding::head_of(item const &node)
 {
-    head_parts head{detail::heads::major_type_of(node.m_type), node.additional_information, node.via.u64};
+    head_parts head{detail::heads::major_type_of(node.m_type), node.m_info, node.via.u64};
     switch (node.m_type) {
     case cbor::type::byte_string:
         head.argument = node.via.bin.size();

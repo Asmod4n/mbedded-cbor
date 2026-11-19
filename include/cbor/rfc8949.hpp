@@ -19,9 +19,8 @@ namespace detail
 {
 
 class canonical_ids;
-template <class Item>
-struct pair_at;
 class encoding;
+class map_iterator;
 class extended_diagnostic_notation;
 class edn_text;
 template <bool Reflected>
@@ -167,14 +166,13 @@ class rfc8949
 
     friend class detail::canonical_ids;
 
-    template <class Item>
-    friend struct detail::pair_at;
-
     friend class detail::encoding;
 
     friend struct lazy;
 
     friend struct item;
+
+    friend class detail::map_iterator;
 
     template <bool>
     friend struct detail::tree_decoder;

@@ -148,7 +148,7 @@ TEST_CASE("test vectors: RFC 8949 Appendix A decodes to items with the head fiel
         for (std::size_t i = 1; i <= argument_bytes; ++i)
             argument = argument << 8 | static_cast<std::uint8_t>(wire[i]);
         cbor::major_type const major = static_cast<cbor::major_type>(initial >> 5);
-        CHECK_EQ(it.additional_information, info);
+        CHECK_EQ(it.additional_information(), info);
         CHECK_EQ(read_argument_of_item(it), argument);
         std::string_view const after_head = std::string_view(wire).substr(1 + argument_bytes);
         switch (major) {
@@ -424,7 +424,7 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
     case cbor::major_type::tag: {
         // RFC 8949 3: the content follows the head, whose argument takes 1 << (ai - 24) bytes from ai 24 on.
         std::size_t const argument_bytes =
-            it.additional_information < 24 ? 0 : std::size_t{1} << (it.additional_information - 24);
+            it.additional_information() < 24 ? 0 : std::size_t{1} << (it.additional_information() - 24);
         auto const content_lazy = test::make_lazy_from_copy(std::string(l.encoded().substr(1 + argument_bytes)));
         if (!content_lazy)
             return std::unexpected(content_lazy.error());
@@ -434,7 +434,7 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
         return value{tagged{read_argument_of_item(it), std::move(*content)}};
     }
     case cbor::major_type::simple:
-        if (it.additional_information >= 25 && it.additional_information <= 27) {
+        if (it.additional_information() >= 25 && it.additional_information() <= 27) {
             auto const d = l.get<double>();
             if (!d)
                 return std::unexpected(d.error());

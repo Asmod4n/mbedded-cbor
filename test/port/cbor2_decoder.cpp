@@ -701,11 +701,11 @@ TEST_CASE("cbor2 decoder: test_fraction, test_bigfloat")
     auto const tag = (*tree)->get<std::pair<std::uint64_t, cbor::item const *>>();
     REQUIRE(tag.has_value());
     CHECK_EQ(tag->first, 4u);
-    auto const pair = tag->second->get<std::span<cbor::item const>>();
+    auto const pair = tag->second->get<cbor::array_range>();
     REQUIRE(pair.has_value());
     REQUIRE_EQ(pair->size(), 2u);
-    CHECK_EQ((*pair)[0].get<std::int64_t>().value(), -78);
-    auto const mantissa = (*pair)[1].get<std::pair<std::uint64_t, cbor::item const *>>();
+    CHECK_EQ(pair->front().get<std::int64_t>().value(), -78);
+    auto const mantissa = pair->next(1).front().get<std::pair<std::uint64_t, cbor::item const *>>();
     REQUIRE(mantissa.has_value());
     CHECK_EQ(mantissa->first, 2u);
     auto const magnitude = mantissa->second->get<std::span<std::byte const>>();
@@ -845,7 +845,7 @@ TEST_CASE("cbor2 decoder: TestSharedReference read by cbor::decode_cycles")
     // A tag 29 gives the node of its mark: in 28([29(0)]) the element names the array itself.
     auto const cyclic = cbor::decode_cycles(unhexlify("d81c81d81d00"));
     REQUIRE(cyclic.has_value());
-    CHECK_EQ((*cyclic)->get<std::span<cbor::item const>>().value()[0].get<std::pair<std::uint64_t, cbor::item const *>>().value().second,
+    CHECK_EQ((*cyclic)->get<cbor::array_range>().value().front().get<std::pair<std::uint64_t, cbor::item const *>>().value().second,
              &**cyclic);
 }
 

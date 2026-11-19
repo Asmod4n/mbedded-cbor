@@ -29,7 +29,7 @@ cbor::owning<cbor::item> read_vectors()
 
 std::optional<cbor::item> member_of(cbor::item const &object, std::string_view const key)
 {
-    auto const pairs = object.get<cbor::pairs>();
+    auto const pairs = object.get<cbor::map_range>();
     REQUIRE(pairs.has_value());
     for (auto const pair : *pairs)
         if (std::get<0>(pair).get<std::string_view>() == key)
@@ -75,7 +75,7 @@ bool round_trips(cbor::item const &vector)
 TEST_CASE("parse_edn: the diagnostic notation of RFC 8949 Appendix A gives the bytes of the vector")
 {
     auto const vectors = read_vectors();
-    auto const all = vectors->get<std::span<cbor::item const>>();
+    auto const all = vectors->get<cbor::array_range>();
     REQUIRE(all.has_value());
     std::size_t checked = 0;
     for (cbor::item const &vector : *all) {
@@ -97,7 +97,7 @@ TEST_CASE("parse_edn: the diagnostic notation of RFC 8949 Appendix A gives the b
 TEST_CASE("parse_edn: the JSON values of RFC 8949 Appendix A give the bytes of the vector")
 {
     auto const vectors = read_vectors();
-    auto const all = vectors->get<std::span<cbor::item const>>();
+    auto const all = vectors->get<cbor::array_range>();
     REQUIRE(all.has_value());
     std::size_t checked = 0;
     for (cbor::item const &vector : *all) {
@@ -116,7 +116,7 @@ TEST_CASE("parse_edn: the JSON values of RFC 8949 Appendix A give the bytes of t
 TEST_CASE("item::to_edn: the text of each vector reads back to its bytes")
 {
     auto const vectors = read_vectors();
-    auto const all = vectors->get<std::span<cbor::item const>>();
+    auto const all = vectors->get<cbor::array_range>();
     REQUIRE(all.has_value());
     for (cbor::item const &vector : *all) {
         std::string const bytes = bytes_of(vector);
@@ -174,7 +174,7 @@ TEST_CASE("diag2cbor: an encoding indicator gives the width of the head")
 TEST_CASE("diag2cbor: the diagnostic notation of RFC 8949 Appendix A gives the bytes of the vector")
 {
     auto const vectors = read_vectors();
-    auto const all = vectors->get<std::span<cbor::item const>>();
+    auto const all = vectors->get<cbor::array_range>();
     REQUIRE(all.has_value());
     std::size_t checked = 0;
     for (cbor::item const &vector : *all) {
@@ -257,10 +257,10 @@ cbor::owning<cbor::item> shared_from_edn(std::string_view const text)
 
 cbor::item const &element_of(cbor::item const &array, std::size_t const index)
 {
-    auto const elements = array.get<std::span<cbor::item const>>();
+    auto const elements = array.get<cbor::array_range>();
     REQUIRE(elements.has_value());
     REQUIRE_LT(index, elements->size());
-    return (*elements)[index];
+    return elements->next(static_cast<std::ptrdiff_t>(index)).front();
 }
 
 cbor::item const *target_of_reference(cbor::item const &reference)

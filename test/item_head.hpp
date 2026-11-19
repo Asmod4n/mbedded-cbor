@@ -18,7 +18,7 @@
 #include <doctest/doctest.h>
 
 using item_pair = std::pair<std::uint64_t, cbor::item const *>;
-using item_pairs = cbor::pairs;
+using item_pairs = cbor::map_range;
 
 // The argument of the head that cbor::encode writes for the item. A float has no value as an argument, and the argument
 // of a negative integer can be larger than an int64_t holds, so both are read back from the encoding.
@@ -45,7 +45,7 @@ inline std::uint64_t read_argument_of_item(cbor::item const &node)
     case cbor::type::text_string:
         return node.get<std::string_view>().value().size();
     case cbor::type::array:
-        return node.get<std::span<cbor::item const>>().value().size();
+        return node.get<cbor::array_range>().value().size();
     case cbor::type::map:
         return node.get<item_pairs>().value().size();
     case cbor::type::tag:
@@ -88,7 +88,7 @@ inline cbor::item const *read_tag_content_of_item(cbor::item const &node)
 // child as it read it before.
 inline std::vector<cbor::item const *> list_children_of_item(cbor::item const &container)
 {
-    auto const array = container.get<std::span<cbor::item const>>();
+    auto const array = container.get<cbor::array_range>();
     auto const map = container.get<item_pairs>();
     REQUIRE((array || map));
     std::vector<cbor::item const *> children;

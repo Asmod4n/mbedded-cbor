@@ -288,12 +288,12 @@ TEST_CASE("qcbor GeneralFloatDecodeTests: floats of each width decode to double"
 
     auto const tree = cbor::decode(expected_floats);
     REQUIRE(tree.has_value());
-    auto const elements = (**tree).get<std::span<cbor::item const>>();
+    auto const elements = (**tree).get<cbor::array_range>();
     REQUIRE(elements.has_value());
     REQUIRE_EQ(elements->size(), 11u);
-    CHECK((*elements)[0].type() == cbor::type::half_float);
-    CHECK((*elements)[1].type() == cbor::type::double_float);
-    CHECK((*elements)[6].type() == cbor::type::single_float);
-    CHECK_EQ(std::bit_cast<std::uint64_t>((*elements)[6].get<double>().value_or(0.0)),
+    CHECK(elements->front().type() == cbor::type::half_float);
+    CHECK(elements->next(1).front().type() == cbor::type::double_float);
+    CHECK(elements->next(6).front().type() == cbor::type::single_float);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(elements->next(6).front().get<double>().value_or(0.0)),
              std::bit_cast<std::uint64_t>(3.1400001049041748));
 }

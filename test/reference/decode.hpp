@@ -110,7 +110,7 @@ inline std::expected<value, error> make_value_from_item(cbor::item const &it)
         return value{negative{argument_of_negative_integer(it)}};
     case cbor::type::array: {
         array a;
-        auto const children = it.get<std::span<cbor::item const>>().value();
+        auto const children = it.get<cbor::array_range>().value();
         for (cbor::item const &child : children) {
             auto e = make_value_from_item(child);
             if (!e)
@@ -121,7 +121,7 @@ inline std::expected<value, error> make_value_from_item(cbor::item const &it)
     }
     case cbor::type::map: {
         map m;
-        for (auto const pair : it.get<cbor::pairs>().value()) {
+        for (auto const pair : it.get<cbor::map_range>().value()) {
             auto k = make_value_from_item(std::get<0>(pair));
             if (!k)
                 return std::unexpected(k.error());

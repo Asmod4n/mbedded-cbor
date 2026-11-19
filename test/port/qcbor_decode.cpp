@@ -146,18 +146,18 @@ std::expected<std::uint64_t, error> count_pieces(std::expected<cbor::lazy, error
     return at.and_then([](cbor::lazy const &l) { return l.size(); });
 }
 
-std::span<cbor::item const> elements_of(cbor::item const &node)
+std::vector<std::reference_wrapper<cbor::item const>> elements_of(cbor::item const &node)
 {
-    auto const a = node.get<std::span<cbor::item const>>();
+    auto const a = node.get<cbor::array_range>();
     REQUIRE(a.has_value());
-    return *a;
+    return {a->begin(), a->end()};
 }
 
-std::vector<cbor::item> entries_of(cbor::item const &node)
+std::vector<std::reference_wrapper<cbor::item const>> entries_of(cbor::item const &node)
 {
-    auto const m = node.get<cbor::pairs>();
+    auto const m = node.get<cbor::map_range>();
     REQUIRE(m.has_value());
-    std::vector<cbor::item> entries;
+    std::vector<std::reference_wrapper<cbor::item const>> entries;
     for (auto const pair : *m) {
         entries.push_back(std::get<0>(pair));
         entries.push_back(std::get<1>(pair));
@@ -341,21 +341,21 @@ TEST_CASE("qcbor EmptyMapsAndArraysTest: empty arrays and maps decode at each le
     REQUIRE(tree.has_value());
     auto const top = elements_of(**tree);
     REQUIRE_EQ(top.size(), 3u);
-    CHECK(top[0].get<std::uint64_t>() == 0u);
+    CHECK(top[0].get().get<std::uint64_t>() == 0u);
     CHECK(elements_of(top[1]).empty());
     auto const inner = elements_of(top[2]);
     REQUIRE_EQ(inner.size(), 4u);
     CHECK(elements_of(inner[0]).empty());
     REQUIRE_EQ(elements_of(inner[1]).size(), 1u);
-    CHECK(elements_of(inner[1])[0].get<std::uint64_t>() == 0u);
+    CHECK(elements_of(inner[1])[0].get().get<std::uint64_t>() == 0u);
     CHECK(entries_of(inner[2]).empty());
     auto const three = entries_of(inner[3]);
     REQUIRE_EQ(three.size(), 6u);
-    CHECK(three[0].get<std::uint64_t>() == 1u);
+    CHECK(three[0].get().get<std::uint64_t>() == 1u);
     CHECK(entries_of(three[1]).empty());
-    CHECK(three[2].get<std::uint64_t>() == 2u);
+    CHECK(three[2].get().get<std::uint64_t>() == 2u);
     CHECK(entries_of(three[3]).empty());
-    CHECK(three[4].get<std::uint64_t>() == 3u);
+    CHECK(three[4].get().get<std::uint64_t>() == 3u);
     CHECK(elements_of(three[5]).empty());
 }
 
@@ -393,7 +393,7 @@ TEST_CASE("qcbor ParseDeepArrayTest: seven nested arrays decode")
     for (int level = 0; level != 6; ++level) {
         auto const e = elements_of(*at);
         REQUIRE_EQ(e.size(), 1u);
-        at = e.data();
+        at = &e.front().get();
     }
     CHECK(elements_of(*at).empty());
 }
@@ -421,7 +421,7 @@ TEST_CASE("qcbor ParseMapTest: a map with nested array and map decodes")
     auto const top = entries_of(**tree);
     REQUIRE_EQ(top.size(), 6u);
     CHECK_EQ(text_in(top[0]), "first integer");
-    CHECK(top[1].get<std::uint64_t>() == 42u);
+    CHECK(top[1].get().get<std::uint64_t>() == 42u);
     CHECK_EQ(text_in(top[2]), "an array of two strings");
     auto const strings = elements_of(top[3]);
     REQUIRE_EQ(strings.size(), 2u);
@@ -431,15 +431,15 @@ TEST_CASE("qcbor ParseMapTest: a map with nested array and map decodes")
     auto const inner = entries_of(top[5]);
     REQUIRE_EQ(inner.size(), 8u);
     CHECK_EQ(text_in(inner[0]), "bytes 1");
-    auto const b1 = inner[1].get<std::span<std::byte const>>();
+    auto const b1 = inner[1].get().get<std::span<std::byte const>>();
     REQUIRE(b1.has_value());
     CHECK_EQ(as_string(*b1), "xxxx");
     CHECK_EQ(text_in(inner[2]), "bytes 2");
-    auto const b2 = inner[3].get<std::span<std::byte const>>();
+    auto const b2 = inner[3].get().get<std::span<std::byte const>>();
     REQUIRE(b2.has_value());
     CHECK_EQ(as_string(*b2), "yyyy");
     CHECK_EQ(text_in(inner[4]), "another int");
-    CHECK(inner[5].get<std::uint64_t>() == 98u);
+    CHECK(inner[5].get().get<std::uint64_t>() == 98u);
     CHECK_EQ(text_in(inner[6]), "text 2");
     CHECK_EQ(text_in(inner[7]), "lies, damn lies and statistics");
 
@@ -928,9 +928,9 @@ TEST_CASE("qcbor BignumParseTest: bignums larger than 64 bits keep their bytes")
     CHECK_EQ(magnitude_of(top[1], cbor::type::negative_bignum), magnitude);
     auto const map = entries_of(top[2]);
     REQUIRE_EQ(map.size(), 8u);
-    CHECK(map[0].get<std::int64_t>() == -64);
+    CHECK(map[0].get().get<std::int64_t>() == -64);
     CHECK_EQ(magnitude_of(map[1], cbor::type::negative_bignum), magnitude);
-    CHECK(map[2].get<std::uint64_t>() == 64u);
+    CHECK(map[2].get().get<std::uint64_t>() == 64u);
     CHECK_EQ(magnitude_of(map[3], cbor::type::unsigned_bignum), magnitude);
     CHECK_EQ(text_in(map[4]), "BN+");
     CHECK_EQ(magnitude_of(map[5], cbor::type::unsigned_bignum), magnitude);

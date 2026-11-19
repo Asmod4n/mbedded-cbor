@@ -25,6 +25,7 @@
 #include "reference.hpp"
 #include <cbor/structs.hpp>
 
+#include <functional>
 #include <ranges>
 #include <span>
 #include <unordered_map>
@@ -546,11 +547,11 @@ cbor::item const *target_of(cbor::item const &reference)
     return r->second;
 }
 
-std::span<cbor::item const> elements_of(cbor::item const &array)
+std::vector<std::reference_wrapper<cbor::item const>> elements_of(cbor::item const &array)
 {
-    auto const e = array.get<std::span<cbor::item const>>();
+    auto const e = array.get<cbor::array_range>();
     REQUIRE(e.has_value());
-    return *e;
+    return {e->begin(), e->end()};
 }
 
 } // namespace shared_test
@@ -608,7 +609,7 @@ TEST_CASE("value sharing: cbor::decode_cycles reads each case of the model")
     // 28({29(0): 1}): a map that holds itself as its key.
     auto const own_key = cbor::decode_cycles("\xd8\x1c\xa1\xd8\x1d\x00\x01"sv);
     REQUIRE(own_key.has_value());
-    CHECK_EQ(target_of(std::get<0>((*own_key)->get<cbor::pairs>().value()[0])), &**own_key);
+    CHECK_EQ(target_of(std::get<0>((*own_key)->get<cbor::map_range>().value().front())), &**own_key);
 }
 
 // A tag 29 may name any marked value whose read has not ended: the value itself or one above it. A tag 28 over a tag
@@ -762,11 +763,11 @@ std::string written_by_encode(std::string_view const edn)
 }
 
 // The elements of the array at the root of the tree.
-std::span<cbor::item const> elements_of(tree const &array)
+std::vector<std::reference_wrapper<cbor::item const>> elements_of(tree const &array)
 {
-    auto const elements = array->get<std::span<cbor::item const>>();
+    auto const elements = array->get<cbor::array_range>();
     REQUIRE(elements.has_value());
-    return *elements;
+    return {elements->begin(), elements->end()};
 }
 
 } // namespace shared_test
@@ -791,7 +792,7 @@ TEST_CASE("value sharing: cbor::encode of a shared_reference node and of a marke
     auto const tree = cbor::decode_cycles(cbor::diag2cbor("28([1, 29(0)])").value());
     REQUIRE(tree.has_value());
     auto const elements = shared_test::elements_of(*tree);
-    CHECK_EQ(elements[1].type(), cbor::type::shared_reference);
+    CHECK_EQ(elements[1].get().type(), cbor::type::shared_reference);
     CHECK_EQ(written_by_encode(elements[1]), cbor::diag2cbor("28([1, 29(0)])").value());
     CHECK_EQ(written_by_encode(**tree), cbor::diag2cbor("28([1, 29(0)])").value());
     CHECK_EQ(written_by_encode("28([29(0)])"), cbor::diag2cbor("28([29(0)])").value());

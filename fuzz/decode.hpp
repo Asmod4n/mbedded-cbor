@@ -100,10 +100,10 @@ inline std::vector<cbor::item const *> nodes_of(cbor::owning<cbor::item> const &
                 nodes.push_back(&embedded->get());
         n.visit([&nodes](auto const value) {
             using V = std::remove_cvref_t<decltype(value)>;
-            if constexpr (std::same_as<V, std::span<cbor::item const>>) {
+            if constexpr (std::same_as<V, cbor::array_range>) {
                 for (cbor::item const &c : value)
                     nodes.push_back(&c);
-            } else if constexpr (std::same_as<V, cbor::pairs>) {
+            } else if constexpr (std::same_as<V, cbor::map_range>) {
                 for (auto const pair : value) {
                     nodes.push_back(&std::get<0>(pair));
                     nodes.push_back(&std::get<1>(pair));
