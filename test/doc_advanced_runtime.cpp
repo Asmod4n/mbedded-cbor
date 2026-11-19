@@ -24,9 +24,8 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 using cbor::error;
 
-// Each test in this file is one example of the former advanced runtime guide, whose facts now stand in
-// tools/doc/groups/lazy.dox, decode.dox and tools.dox. The tests exist so that every example compiles and gives the
-// result that the text states.
+// Each test in this file is one example of the former advanced runtime guide. The tests exist so that every example
+// compiles and gives the result that the text states.
 
 // The section "lazy::adopt and lazy::view" lists the three forms, and states that a form does not check that
 // the bytes are one complete item.

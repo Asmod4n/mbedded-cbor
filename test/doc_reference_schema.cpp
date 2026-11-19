@@ -53,9 +53,9 @@ unsigned char byte_at(std::string_view const bytes, std::size_t const i)
 
 using namespace doc_reference_schema;
 
-// tools/doc/groups/schema.dox, snippet schema group. The EXAMPLES section of the man page of the group schema writes one
-// car. It reads one field at its offset. It also reads the whole car. So a reader sees one round trip. The test checks
-// each value that the comments of the example state.
+// The snippet of the group schema, between the markers "schema group". The example on the page of the group schema
+// writes one car. It reads one field at its offset. It also reads the whole car. So a reader sees one round trip. The
+// test checks each value that the comments of the example state.
 TEST_CASE("doc reference schema: the example of the group schema")
 {
     // [schema group]

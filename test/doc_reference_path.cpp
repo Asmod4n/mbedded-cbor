@@ -18,9 +18,9 @@ using namespace std::string_view_literals;
 // lazy.hpp take the examples through the snippet markers. The tests exist so that every example compiles and gives the
 // result that its page states.
 
-// tools/doc/groups/path.dox, snippet path group. The EXAMPLES section of the man page of the group path uses four things
-// together on a store with books. These are a path at compile time and a nodelist. They are also a descendant segment
-// and a filter. The test checks each value that the comments of the example state.
+// The snippet of the group path, between the markers "path group". The example on the page of the group path uses four
+// things together on a store with books. These are a path at compile time and a nodelist. They are also a descendant
+// segment and a filter. The test checks each value that the comments of the example state.
 TEST_CASE("doc reference path: the example of the group path")
 {
     std::string bytes = test::encode_in_preferred_form(test::M(

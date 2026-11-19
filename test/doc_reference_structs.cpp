@@ -33,10 +33,10 @@ using reference_structs::reading;
 using reference_structs::senml;
 using reference_structs::trailer;
 
-// tools/doc/groups/structs.dox, snippet structs group: the EXAMPLES section of the man page of the group structs writes
-// a struct and reads it back. So a reader sees one round trip. The expected bytes are the ones that RFC 8949 gives for
-// the map, a text and an integer, and not the output of the library. The test checks each value that the comments of the
-// example state.
+// The snippet of the group structs, between the markers "structs group". The example on the page of the group structs
+// writes a struct and reads it back. So a reader sees one round trip. The expected bytes are the ones that RFC 8949
+// gives for the map, a text and an integer, and not the output of the library. The test checks each value that the
+// comments of the example state.
 TEST_CASE("doc reference structs: the example of the group structs")
 {
     // [structs group]

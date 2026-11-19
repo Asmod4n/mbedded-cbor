@@ -284,10 +284,6 @@ cmake -S mbedded-cbor -B build -DBUILD_TESTING=OFF
 cmake --install build --prefix /usr/local
 ```
 
-On Linux and macOS the install also writes the reference as man pages in
-section 3: `man mbedded-cbor` gives the overview, and `man cbor::lazy`
-gives one class.
-
 ```cmake
 find_package(mbedded-cbor 0.9 CONFIG REQUIRED)
 target_link_libraries(app PRIVATE mbedded-cbor::mbedded-cbor)
@@ -387,13 +383,9 @@ auto const age = doc.at_path<"$.user.age", int>();                 // cbor::erro
 
 - <https://asmod4n.github.io/mbedded-cbor-docs/>: every function and type,
   with examples that run in the browser.
-- The comments of the headers in `include/cbor/`: every function and type; Doxygen makes the site and the man
-  pages from them.
-- [man/man3](man/man3): the reference as man pages, one page per group.
-  `mbedded-cbor(3)` is the overview, with the threads, the limits and
-  the memory. `mbedded-cbor-errors(3)` holds the errors. `mbedded-cbor-path(3)` holds the
-  paths of RFC 9535 on CBOR. `mbedded-cbor-schema(3)` holds structs as
-  Packed CBOR. `mbedded-cbor-structs(3)` reads any CBOR into a struct.
+- The comments of the headers in `include/cbor/`: every function and type. The site and the man pages
+  are made from them in [Asmod4n/mbedded-cbor-docs](https://github.com/Asmod4n/mbedded-cbor-docs).
+- The man pages, one for each class and one for each group, install from that repository.
 - The section "Compared with other libraries" above: other libraries, task by task.
 
 ## Testing

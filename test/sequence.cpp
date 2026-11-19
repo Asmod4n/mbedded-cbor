@@ -190,7 +190,7 @@ TEST_CASE("sequence: a count larger than the bytes left is too_little_data befor
     }
 }
 
-// tools/site/guides/complexity.md proves that a loop over a sequence reads each item once. A form that read the sequence
+// A loop over a sequence reads each item once. A form that read the sequence
 // from its start for each item would take 10^10 steps here. The test run would not end in its time.
 TEST_CASE("sequence: a loop over 100000 items reads each item once")
 {

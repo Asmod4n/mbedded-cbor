@@ -197,7 +197,7 @@ TEST_CASE(
     CHECK_EQ(cbor::item_size(two).error(), error::string_length_exceeded);
 }
 
-// The former basics guide, section "Limits", whose facts now stand in tools/doc/groups/errors.dox: the list names
+// The former basics guide, section "Limits": the list names
 // the error of each size limit.
 TEST_CASE("doc basics: the error of each size limit")
 {
@@ -208,9 +208,9 @@ TEST_CASE("doc basics: the error of each size limit")
     CHECK_EQ(cbor::at_path<"$[0]", int>(three).error(), error::container_elements_exceeded);
 }
 
-// This comes from the former advanced basics guide, section "Limits". Its facts now stand in tools/doc/groups/errors.dox
-// and lazy.dox. A limit is checked by the step that reads the item. So a string that is too long gives
-// string_length_exceeded at get, not at lazy::copy. A user expected it at lazy::copy.
+// This comes from the former advanced basics guide, section "Limits". A limit is checked by the step that reads the
+// item. So a string that is too long gives string_length_exceeded at get, not at lazy::copy. A user expected it at
+// lazy::copy.
 TEST_CASE("doc advanced basics: a string limit is checked at get")
 {
     auto const l = test::make_lazy_from_copy(encode_in_preferred_form(V("xyz"s)));
@@ -219,7 +219,7 @@ TEST_CASE("doc advanced basics: a string limit is checked at get")
     CHECK_EQ(test::make_lazy_from_copy(array_of(3))->size().error(), error::container_elements_exceeded);
 }
 
-// The former advanced basics guide, section "Limits", whose facts now stand in tools/doc/groups/errors.dox: the limits
+// The former advanced basics guide, section "Limits": the limits
 // count what a call reads. A skip does not count.
 TEST_CASE("doc advanced basics: a skip does not count")
 {
@@ -231,7 +231,7 @@ TEST_CASE("doc advanced basics: a skip does not count")
     CHECK_EQ(test::make_value_from_item(*test::make_lazy_from_copy(bytes)).error(), error::string_length_exceeded);
 }
 
-// This comes from the former advanced path guide, section "Limits". Its facts now stand in tools/doc/groups/path.dox. A
+// This comes from the former advanced path guide, section "Limits". A
 // string that a path reads counts. A string that it only skips does not count. Every container that the walk reads
 // counts.
 TEST_CASE("doc advanced path: the size limits")
