@@ -24,6 +24,7 @@
 #include <system_error>
 #include <tuple>
 #include <type_traits>
+#include <optional>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -201,10 +202,11 @@ private:
     };
 
     static head_parts head_of(item const &node);
-    static std::span<item const> children_of(item const &node, major_type major);
-    static item const *content_of(item const &node, major_type major);
+    static std::optional<detail::heads::head> integer_of_bignum(item const &node);
+    template <class F>
+    static std::expected<void, error> for_each_child(item const &node, F &&f);
     template <bool AppendRef, class Writer>
-    static std::expected<void, error> encode_item(binary_writer<Writer> &out, item const &node);
+    static std::expected<void, error> encode_items(binary_writer<Writer> &out, item const &root);
     template <bool AppendRef, class Writer>
     static std::expected<void, std::errc> encode_head_and_payload(binary_writer<Writer> &out, item const &node,
                                                                   head_parts const &head)
@@ -235,7 +237,8 @@ private:
  *
  * Each integer, length and tag number keeps the width of its head, from `additional_information()`.
  * A float keeps its width.
- * A tree without a `shared_reference` is written in one walk, and the call writes no tag 28 or 29 of its own.
+ * A tree without a `shared_reference` is written in one pass over its items in their order, with no recursion, and
+ * the call writes no tag 28 or 29 of its own. A bignum whose magnitude fits 64 bits is written as the integer.
  * A tag 28 and a tag 29 of a tree of cbor::lazy::to_item() are written as they are.
  * A `shared_reference` stands for the item it names.
  * A walk before the write finds each item that a depth-first walk reaches again while it is inside that item.
@@ -274,7 +277,8 @@ private:
  * @endcode
  *
  * @retval no_buffer_space the span is too short
- * @retval nesting_depth_exceeded the tree, or the path through its references, is deeper than the limit
+ * @retval nesting_depth_exceeded the tree holds a `shared_reference`, and the path through its references is deeper
+ * than the stack of the thread holds
  * @retval value_too_large, not_enough_memory, io_error the error of a writer, from its `std::errc`
  * @snippet doc_reference_item.cpp encode
  * @see cbor::encode_iov()
@@ -508,91 +512,70 @@ class detail::encoding::iov_writer
 
 inline detail::encoding::head_parts detail::encoding::head_of(item const &node)
 {
-    head_parts head{detail::heads::major_type_of(node.m_type), node.m_info, node.via.u64};
-    switch (node.m_type) {
+    std::uint8_t const info = node.additional_information();
+    switch (node.type()) {
+    case cbor::type::unsigned_integer:
+        return {major_type::unsigned_integer, info, node.argument()};
+    case cbor::type::negative_integer:
+        return {major_type::negative_integer, info, node.argument()};
     case cbor::type::byte_string:
-        head.argument = node.via.bin.size();
-        break;
+        return {major_type::byte_string, info, node.length()};
     case cbor::type::text_string:
-        head.argument = node.via.str.size();
-        break;
+        return {major_type::text_string, info, node.length()};
     case cbor::type::array:
-        head.argument = node.via.array.size();
-        break;
+        return {major_type::array, info, node.length()};
     case cbor::type::map:
-        detail::validity::throw_logic_error_if(node.via.map.size() % rfc8949::data_items_per_pair != 0,
-                                               "cbor::encode: a map holds a key and a value for each entry");
-        head.argument = node.via.map.size() / rfc8949::data_items_per_pair;
-        break;
+        return {major_type::map, info, node.length()};
     case cbor::type::unsigned_bignum:
     case cbor::type::negative_bignum:
-        if (node.via.tag.content->m_type == cbor::type::byte_string)
-            if (auto const r = detail::heads::convert_bignum_to_integer(node.via.tag.number,
-                                                                          node.via.tag.content->via.bin)) {
-                head.major = r->major;
-                head.info = r->info;
-                head.argument = r->argument;
-                break;
-            }
-        head.argument = node.via.tag.number;
-        break;
     case cbor::type::tag:
     case cbor::type::typed_array:
-        head.argument = node.via.tag.number;
-        break;
+        return {major_type::tag, info, node.m_uni.u64};
     case cbor::type::shared_reference:
-        head.argument = std::to_underlying(rfc8949::tag_number::sharedref);
-        head.info = detail::heads::preferred_argument_info(head.argument);
-        break;
+        return {major_type::tag,
+                detail::heads::preferred_argument_info(std::to_underlying(rfc8949::tag_number::sharedref)),
+                std::to_underlying(rfc8949::tag_number::sharedref)};
     case cbor::type::false_value:
     case cbor::type::true_value:
     case cbor::type::null:
     case cbor::type::undefined:
+        return {major_type::simple, info, info};
     case cbor::type::simple_value:
-        head.argument = std::to_underlying(node.via.simple_value);
-        break;
+        return {major_type::simple, info, node.m_uni.u64};
     case cbor::type::half_float:
-        head.info = std::to_underlying(rfc8949::simple_information::half_precision_float);
-        head.argument = detail::ieee754::encode_float(rfc8949::simple_information::half_precision_float, node.via.f64);
-        break;
     case cbor::type::single_float:
-        head.info = std::to_underlying(rfc8949::simple_information::single_precision_float);
-        head.argument = detail::ieee754::encode_float(rfc8949::simple_information::single_precision_float, node.via.f64);
-        break;
     case cbor::type::double_float:
-        head.info = std::to_underlying(rfc8949::simple_information::double_precision_float);
-        head.argument = detail::ieee754::encode_float(rfc8949::simple_information::double_precision_float, node.via.f64);
-        break;
-    case cbor::type::unsigned_integer:
-    case cbor::type::negative_integer:
-        break;
+        return {major_type::simple, info,
+                detail::ieee754::encode_float(static_cast<rfc8949::simple_information>(info), node.m_uni.f64)};
     }
-    return head;
+    return {major_type::simple, info, info};
 }
 
-inline std::span<item const> detail::encoding::children_of(item const &node, major_type const major)
+template <class F>
+std::expected<void, error> detail::encoding::for_each_child(item const &node, F &&f)
 {
-    switch (major) {
-    case major_type::array:
-        return node.via.array;
-    case major_type::map:
-        return node.via.map;
-    case major_type::tag:
-    case major_type::unsigned_integer:
-    case major_type::negative_integer:
-    case major_type::byte_string:
-    case major_type::text_string:
-    case major_type::simple:
+    switch (node.type()) {
+    case cbor::type::array:
+        for (item const &child : node.elements())
+            if (auto const r = f(child); !r) [[unlikely]]
+                return r;
+        return {};
+    case cbor::type::map:
+        for (auto const [key, value] : node.entries()) {
+            if (auto const r = f(key); !r) [[unlikely]]
+                return r;
+            if (auto const r = f(value); !r) [[unlikely]]
+                return r;
+        }
+        return {};
+    case cbor::type::tag:
+    case cbor::type::unsigned_bignum:
+    case cbor::type::negative_bignum:
+    case cbor::type::typed_array:
+        return f(node.content());
+    default:
         return {};
     }
-    return {};
-}
-
-inline item const *detail::encoding::content_of(item const &node, major_type const major)
-{
-    if (major != major_type::tag || node.m_type == cbor::type::shared_reference)
-        return nullptr;
-    return node.via.tag.content;
 }
 
 template <bool AppendRef, class Writer>
@@ -601,16 +584,13 @@ CBOR_ALWAYS_INLINE inline std::expected<void, std::errc> detail::encoding::encod
     requires(!AppendRef || binary_writer<Writer>::blocks)
 {
     std::expected<void, std::errc> written = out.encode_head(head.major, head.info, head.argument);
-    if constexpr (AppendRef) {
-        if (written && head.major == major_type::byte_string && node.via.bin.size() > copybreak)
-            return out.append_ref(node.via.bin);
-        if (written && head.major == major_type::text_string && node.via.str.size() > copybreak)
-            return out.append_ref(std::as_bytes(std::span(node.via.str)));
-    }
-    if (written && head.major == major_type::byte_string)
-        written = out.encode_payload(node.via.bin);
-    else if (written && head.major == major_type::text_string)
-        written = out.encode_payload(std::span(node.via.str));
+    if (head.major != major_type::byte_string && head.major != major_type::text_string)
+        return written;
+    if constexpr (AppendRef)
+        if (written && node.length() > copybreak)
+            return out.append_ref(node.bytes());
+    if (written)
+        written = out.encode_payload(node.bytes());
     return written;
 }
 
@@ -624,22 +604,33 @@ std::expected<void, std::errc> detail::encoding::encode_sharedref(binary_writer<
     return out.encode_head(major_type::unsigned_integer, index);
 }
 
-template <bool AppendRef, class Writer>
-std::expected<void, error> detail::encoding::encode_item(binary_writer<Writer> &out, item const &node)
+inline std::optional<detail::heads::head> detail::encoding::integer_of_bignum(item const &node)
 {
-    if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
-        return r;
-    detail::validity::throw_logic_error_if(node.m_type == cbor::type::shared_reference,
-                                           "cbor::encode: a shared_reference stands below a node that does not hold it");
-    head_parts const head = head_of(node);
-    std::expected<void, std::errc> const written = encode_head_and_payload<AppendRef>(out, node, head);
-    if (!written) [[unlikely]]
-        return std::unexpected(detail::validity::writer_error(written.error()));
-    for (item const &child : children_of(node, head.major))
-        if (auto const r = encode_item<AppendRef>(out, child); !r) [[unlikely]]
-            return r;
-    if (item const *const content = content_of(node, head.major))
-        return encode_item<AppendRef>(out, *content);
+    cbor::type const t = node.type();
+    if (t != cbor::type::unsigned_bignum && t != cbor::type::negative_bignum) [[likely]]
+        return std::nullopt;
+    item const &content = node.content();
+    if (content.type() != cbor::type::byte_string)
+        return std::nullopt;
+    return detail::heads::convert_bignum_to_integer(node.m_uni.u64, content.bytes());
+}
+
+template <bool AppendRef, class Writer>
+std::expected<void, error> detail::encoding::encode_items(binary_writer<Writer> &out, item const &root)
+{
+    for (std::span<item const> rest = root.descendants(); !rest.empty();) {
+        item const &node = rest.front();
+        if (auto const integer = integer_of_bignum(node)) [[unlikely]] {
+            if (auto const r = out.encode_head(integer->major, integer->info, integer->argument); !r) [[unlikely]]
+                return std::unexpected(detail::validity::writer_error(r.error()));
+            rest = rest.subspan(dom::kind::width_of(node));
+            continue;
+        }
+        std::expected<void, std::errc> const written = encode_head_and_payload<AppendRef>(out, node, head_of(node));
+        if (!written) [[unlikely]]
+            return std::unexpected(detail::validity::writer_error(written.error()));
+        rest = rest.subspan(1);
+    }
     return {};
 }
 
@@ -655,6 +646,13 @@ class detail::encoding::depth_first_search
     std::unordered_map<item const *, std::uint64_t> open;
     bool path_in_map = false;
 
+    static item const &followed(item const &child)
+    {
+        if (child.type() == cbor::type::shared_reference) [[unlikely]]
+            return child.target();
+        return child;
+    }
+
     void enter_path(frame const &here)
     {
         for (frame const *f = &here; f != nullptr; f = f->up)
@@ -666,16 +664,12 @@ class detail::encoding::depth_first_search
     {
         if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
             return r;
-        head_parts const head = head_of(node);
         frame const here{&node, 0, up};
         if (path_in_map) [[unlikely]]
             open.emplace(&node, 0);
-        for (item const &child : children_of(node, head.major))
-            if (auto const r = follow_edge(child, here); !r) [[unlikely]]
-                return r;
-        if (item const *const content = content_of(node, head.major))
-            if (auto const r = follow_edge(*content, here); !r) [[unlikely]]
-                return r;
+        if (auto const r = for_each_child(node, [this, &here](item const &child) { return follow_edge(child, here); });
+            !r) [[unlikely]]
+            return r;
         if (path_in_map) [[unlikely]]
             open.erase(&node);
         return {};
@@ -683,8 +677,8 @@ class detail::encoding::depth_first_search
 
     std::expected<void, error> follow_edge(item const &child, frame const &here)
     {
-        bool const reference = child.m_type == cbor::type::shared_reference;
-        item const &next = reference ? *child.via.tag.content : child;
+        bool const reference = child.type() == cbor::type::shared_reference;
+        item const &next = followed(child);
         if (reference && !path_in_map) [[unlikely]]
             enter_path(here);
         if (path_in_map && open.contains(&next)) [[unlikely]] {
@@ -707,25 +701,28 @@ class detail::encoding::depth_first_search
                 return std::unexpected(detail::validity::writer_error(r.error()));
             ++marks;
         }
-        head_parts const head = head_of(node);
-        std::expected<void, std::errc> const written = detail::encoding::encode_head_and_payload<AppendRef>(out, node, head);
+        if (auto const integer = integer_of_bignum(node)) [[unlikely]] {
+            if (auto const r = out.encode_head(integer->major, integer->info, integer->argument); !r) [[unlikely]]
+                return std::unexpected(detail::validity::writer_error(r.error()));
+            return marks;
+        }
+        std::expected<void, std::errc> const written =
+            detail::encoding::encode_head_and_payload<AppendRef>(out, node, head_of(node));
         if (!written) [[unlikely]]
             return std::unexpected(detail::validity::writer_error(written.error()));
         frame const here{&node, index, up};
         if (path_in_map) [[unlikely]]
             open.emplace(&node, index);
-        for (item const &child : children_of(node, head.major)) {
-            auto const r = write_edge<AppendRef>(out, child, here, marks);
-            if (!r) [[unlikely]]
-                return r;
-            marks = *r;
-        }
-        if (item const *const content = content_of(node, head.major)) {
-            auto const r = write_edge<AppendRef>(out, *content, here, marks);
-            if (!r) [[unlikely]]
-                return r;
-            marks = *r;
-        }
+        if (auto const r = for_each_child(node,
+                                          [this, &out, &here, &marks](item const &child) -> std::expected<void, error> {
+                                              auto const m = write_edge<AppendRef>(out, child, here, marks);
+                                              if (!m) [[unlikely]]
+                                                  return std::unexpected(m.error());
+                                              marks = *m;
+                                              return {};
+                                          });
+            !r) [[unlikely]]
+            return std::unexpected(r.error());
         if (path_in_map) [[unlikely]]
             open.erase(&node);
         return marks;
@@ -735,8 +732,8 @@ class detail::encoding::depth_first_search
     std::expected<std::uint64_t, error> write_edge(binary_writer<Writer> &out, item const &child, frame const &here,
                                                    std::uint64_t const marks)
     {
-        bool const reference = child.m_type == cbor::type::shared_reference;
-        item const &next = reference ? *child.via.tag.content : child;
+        bool const reference = child.type() == cbor::type::shared_reference;
+        item const &next = followed(child);
         if (reference && !path_in_map) [[unlikely]]
             enter_path(here);
         if (path_in_map) [[unlikely]] {
@@ -754,7 +751,7 @@ public:
     template <bool AppendRef, class Writer>
     std::expected<void, error> encode(binary_writer<Writer> &out, item const &root)
     {
-        item const &start = root.m_type == cbor::type::shared_reference ? *root.via.tag.content : root;
+        item const &start = followed(root);
         if (auto const r = find_back_edges(start, nullptr); !r) [[unlikely]]
             return r;
         std::ranges::sort(targets);
@@ -771,11 +768,11 @@ public:
 template <bool AppendRef, class Writer>
 std::expected<void, error> detail::encoding::encode_tree(binary_writer<Writer> &out, item const &root)
 {
-    if (root.m_holds_shared_reference) [[unlikely]] {
+    if (root.holds_shared_reference()) [[unlikely]] {
         depth_first_search walk;
         return walk.encode<AppendRef>(out, root);
     }
-    return encode_item<AppendRef>(out, root);
+    return encode_items<AppendRef>(out, root);
 }
 
 template <class Target>

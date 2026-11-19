@@ -240,7 +240,7 @@ public:
 namespace detail
 {
 
-struct zone_owner;
+struct tree_owner;
 
 }
 
@@ -278,7 +278,7 @@ class CBOR_OWNER owning
     {
     }
 
-    friend struct detail::zone_owner;
+    friend struct detail::tree_owner;
 
     friend class detail::encoding;
 

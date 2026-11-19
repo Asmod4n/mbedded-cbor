@@ -75,9 +75,6 @@ class owning;
 namespace detail
 {
 
-template <bool>
-struct tree_decoder;
-
 }
 
 std::expected<owning<item>, error> decode(std::string_view encoded);
@@ -764,9 +761,6 @@ class heads
 
     friend struct cbor::lazy;
 
-    template <bool>
-    friend struct detail::tree_decoder;
-
     friend std::expected<owning<item>, error> cbor::decode(std::string_view encoded);
 
     friend std::expected<owning<item>, error> cbor::decode_cycles(std::string_view encoded);
@@ -793,6 +787,8 @@ class heads
     friend class cbor::schema;
 
     friend class detail::dom::reader;
+
+    friend class detail::dom::decoder;
 
     friend class detail::dom::writer;
 };

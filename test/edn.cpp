@@ -27,14 +27,14 @@ cbor::owning<cbor::item> read_vectors()
     return std::move(*tree);
 }
 
-std::optional<cbor::item> member_of(cbor::item const &object, std::string_view const key)
+cbor::item const *member_of(cbor::item const &object, std::string_view const key)
 {
     auto const pairs = object.get<cbor::map_range>();
     REQUIRE(pairs.has_value());
     for (auto const pair : *pairs)
         if (std::get<0>(pair).get<std::string_view>() == key)
-            return std::get<1>(pair);
-    return std::nullopt;
+            return &std::get<1>(pair);
+    return nullptr;
 }
 
 std::string encoded(cbor::item const &node)
@@ -58,7 +58,7 @@ std::string bytes_of_hex(std::string_view const hex)
 std::string bytes_of(cbor::item const &vector)
 {
     auto const hex = member_of(vector, "hex");
-    REQUIRE(hex.has_value());
+    REQUIRE(hex != nullptr);
     return bytes_of_hex(*hex->get<std::string_view>());
 }
 

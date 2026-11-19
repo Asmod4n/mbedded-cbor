@@ -143,8 +143,8 @@ TEST_CASE("recursion limit: diagnostic_notation")
     refused_on_small_stack([&deep] { return cbor::diagnostic_notation(deep); });
 }
 
-// encode of a tree recurses once for each array, as decode does. The tree comes from a decode on the main thread;
-// its encode on the small stack stops where that stack ends.
+// encode writes a tree with no shared_reference in one pass over the array of its items, with no recursion. The tree
+// comes from a decode on the main thread; its encode on the small stack writes the whole tree.
 TEST_CASE("recursion limit: encode")
 {
     auto const read = test::make_lazy_from_copy(encode_in_preferred_form(arrays_around_zero(held)))->to_item();
@@ -159,12 +159,9 @@ TEST_CASE("recursion limit: encode")
         }
     }
     REQUIRE(deep.has_value());
-    auto const failure = test::error_on_small_stack([&deep] {
-        std::string written;
-        return cbor::encode(written, **deep);
-    });
-    REQUIRE(failure.has_value());
-    CHECK_EQ(*failure, error::nesting_depth_exceeded);
+    std::string written;
+    test::run_on_small_stack([&deep, &written] { CHECK(cbor::encode(written, **deep).has_value()); });
+    CHECK_EQ(written, arrays_around(test::levels_main_thread_holds, "\x00"sv));
 }
 
 // cbor::to_edn of a tree recurses once for each array, as encode does. The tree comes from a decode on the main
@@ -189,10 +186,12 @@ TEST_CASE("recursion limit: to_edn")
 }
 
 // A shared value and a reference to it. A lazy at the second element meets the reference. It reads the mark at the depth
-// of its own position. So the stack holds the frames of both nests.
+// of its own position. So the stack holds the frames of both nests. The outer array and the tag 28 are two of the
+// open items that a decode holds at one point, so each nest has two levels less than held.
 TEST_CASE("recursion limit: a shared value read through its reference")
 {
-    std::string const shared = "\x82\xd8\x1c"s + std::string(held, '\x81') + '\x00' + std::string(held, '\x81') +
+    constexpr std::size_t nest = held - 2;
+    std::string const shared = "\x82\xd8\x1c"s + std::string(nest, '\x81') + '\x00' + std::string(nest, '\x81') +
                                "\xd8\x1d\x00"s;
     auto const whole = test::make_lazy_from_copy(shared);
     REQUIRE(whole.has_value());

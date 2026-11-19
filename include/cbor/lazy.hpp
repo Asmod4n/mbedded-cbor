@@ -1697,8 +1697,7 @@ inline std::expected<owning<item>, error> lazy::to_item() const
         return cbor::decode(encoded);
     }
     if (offset == 0)
-        return detail::decode_tree<false>(top_level.encoded)
-            .transform([](detail::decoded_tree const &d) { return d.tree; });
+        return detail::decode_tree<false>(top_level.encoded);
     std::string_view const rest = detail::validity::subspan(top_level.encoded, detail::validity::offset{offset});
     auto const size = item_size(rest);
     if (!size) [[unlikely]]
@@ -1706,8 +1705,7 @@ inline std::expected<owning<item>, error> lazy::to_item() const
     auto const item = detail::validity::substr(rest, detail::validity::offset{0}, *size);
     if (!item) [[unlikely]]
         return std::unexpected(item.error());
-    return detail::decode_tree<false>(*item).transform(
-        [](detail::decoded_tree const &d) { return d.tree; });
+    return detail::decode_tree<false>(*item);
 }
 
 }

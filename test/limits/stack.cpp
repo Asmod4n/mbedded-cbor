@@ -213,9 +213,9 @@ TEST_CASE("stack: every recursive reader on a small stack refuses an input deepe
 }
 
 // A value that decode made on the main thread is ended and encoded on a thread with a small stack. The trees of the
-// library are kept in zones and end without a recursion; encode recurses and stops with nesting_depth_exceeded where
-// the small stack ends. Where the main thread does not hold the decode, it stops with nesting_depth_exceeded and
-// there is no tree to end.
+// library are one array of items and end without a recursion; encode writes a tree with no shared_reference in one
+// pass over that array, so it writes the whole tree on the small stack too. Where the main thread does not hold the
+// decode, it stops with nesting_depth_exceeded and there is no tree to end.
 constexpr std::size_t tree_levels = test::levels_main_thread_holds;
 
 // A deep tree must not overflow a small stack when it ends or when it is encoded. The test fails if a recursion enters either step.
@@ -235,11 +235,12 @@ TEST_CASE("stack: a deep tree of the library ends and encodes on a small stack")
     auto cloned = l->to_item();
     REQUIRE(cloned.has_value());
     std::optional<cbor::owning<cbor::item>> clone(std::move(*cloned));
-    test::run_on_small_stack([&tree, &clone] {
+    std::string const expected = arrays_around_one(tree_levels);
+    test::run_on_small_stack([&tree, &clone, &expected] {
         std::string out;
         auto const written = cbor::encode(out, **tree);
-        REQUIRE_FALSE(written.has_value());
-        CHECK_EQ(written.error(), error::nesting_depth_exceeded);
+        REQUIRE(written.has_value());
+        CHECK_EQ(out, expected);
         tree.reset();
         clone.reset();
     });

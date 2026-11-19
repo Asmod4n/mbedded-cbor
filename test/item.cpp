@@ -100,15 +100,18 @@ TEST_CASE("null and undefined are two items")
     CHECK(null.additional_information() != undefined.additional_information());
 }
 
-// An item owns no memory, so a cache of many items costs only their own size. Each member of the union is an immediate
-// value or a view. The item takes 24 bytes: one byte of type, one of additional information, and a union of 16 bytes. It
-// is no aggregate, because only a decode builds one.
-TEST_CASE("an item owns no memory")
+// An item owns no memory, so a tree of many items costs only their own size. The item takes the 16 bytes of a value of
+// the yyjson DOM: one word of kind, additional information and length, and one word of content. Its children follow
+// it in the array of its tree, so a copy of an item would read memory that is not its tree: an item cannot be copied
+// or moved, and it is no aggregate, because only a decode builds one.
+TEST_CASE("an item owns no memory and takes 16 bytes")
 {
     CHECK(std::is_trivially_destructible_v<cbor::item>);
-    CHECK(std::is_trivially_copyable_v<cbor::item>);
+    CHECK_FALSE(std::is_copy_constructible_v<cbor::item>);
+    CHECK_FALSE(std::is_move_constructible_v<cbor::item>);
+    CHECK_FALSE(std::is_copy_assignable_v<cbor::item>);
     CHECK_FALSE(std::is_aggregate_v<cbor::item>);
-    CHECK_EQ(sizeof(cbor::item), 24u);
+    CHECK_EQ(sizeof(cbor::item), 16u);
 }
 
 // RFC 8949 3.1: an array holds its elements in order, and its argument is their count. The range of an array gives

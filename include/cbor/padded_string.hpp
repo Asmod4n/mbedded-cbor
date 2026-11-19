@@ -18,6 +18,10 @@ namespace cbor
 namespace detail
 {
 
+#if defined(__clang__)
+#pragma clang unsafe_buffer_usage begin
+#endif
+
 class padded_string
 {
 public:
@@ -68,6 +72,10 @@ public:
         return {bytes.get(), length + padding};
     }
 };
+
+#if defined(__clang__)
+#pragma clang unsafe_buffer_usage end
+#endif
 
 }
 

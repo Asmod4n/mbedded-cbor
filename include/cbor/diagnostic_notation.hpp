@@ -1120,103 +1120,6 @@ class extended_diagnostic_notation
         return parse_number(text, at, out);
     }
 
-    static item scalar_item(major_type const major, std::uint64_t const argument)
-    {
-        std::uint8_t const info = detail::heads::preferred_argument_info(argument);
-        return item{detail::heads::type_of(major, info, argument), info, {.u64 = argument}};
-    }
-
-    struct sax_dom_parser {
-        zone &decoded;
-        std::vector<item> &values;
-
-        std::expected<void, error> null()
-        {
-            item simple = scalar_item(major_type::simple, std::to_underlying(simple_value::null));
-            simple.via.simple_value = simple_value::null;
-            values.push_back(simple);
-            return {};
-        }
-
-        std::expected<void, error> boolean(bool const value)
-        {
-            simple_value const v = value ? simple_value::true_value : simple_value::false_value;
-            item simple = scalar_item(major_type::simple, std::to_underlying(v));
-            simple.via.simple_value = v;
-            values.push_back(simple);
-            return {};
-        }
-
-        std::expected<void, error> number_unsigned(std::uint64_t const value)
-        {
-            values.push_back(scalar_item(major_type::unsigned_integer, value));
-            return {};
-        }
-
-        std::expected<void, error> number_integer(std::uint64_t const argument)
-        {
-            values.push_back(scalar_item(major_type::negative_integer, argument));
-            return {};
-        }
-
-        std::expected<void, error> number_float(double const value)
-        {
-            std::uint8_t const info = std::to_underlying(detail::ieee754::preferred_float_info(value));
-            values.push_back(item{detail::heads::type_of(major_type::simple, info, 0), info, {.f64 = value}});
-            return {};
-        }
-
-        std::expected<void, error> string(std::string_view const content, std::size_t const text_left)
-        {
-            if (!detail::validity::check_argument<true>(major_type::text_string, content.size())) [[unlikely]]
-                return std::unexpected(error::syntax_error);
-            item string = scalar_item(major_type::text_string, content.size());
-            string.via.str = decoded.strings.save(
-                content, content.size() + std::min(detail::validity::string_saver_chunk_size, text_left));
-            values.push_back(string);
-            return {};
-        }
-
-        std::size_t start_object() const
-        {
-            return values.size();
-        }
-
-        std::size_t start_array() const
-        {
-            return values.size();
-        }
-
-        std::expected<void, error> end_object(std::size_t const start, std::size_t const pairs)
-        {
-            return end(start, major_type::map, pairs);
-        }
-
-        std::expected<void, error> end_array(std::size_t const start, std::size_t const elements)
-        {
-            return end(start, major_type::array, elements);
-        }
-
-        std::expected<void, error> end(std::size_t const start, major_type const major, std::size_t const count)
-        {
-            if (!detail::validity::check_argument<true>(major, count)) [[unlikely]]
-                return std::unexpected(error::syntax_error);
-            std::size_t const n = values.size() - start;
-            std::span<item const> const children = std::span<item const>(values).subspan(start);
-            std::pmr::vector<item> &block = decoded.items_reserved(n);
-            std::ranges::copy(children, std::back_inserter(block));
-            while (values.size() != start)
-                values.pop_back();
-            item container = scalar_item(major, count);
-            if (major == major_type::map)
-                container.via.map = block;
-            else
-                container.via.array = block;
-            values.push_back(container);
-            return {};
-        }
-    };
-
     struct writer {
         std::string &out;
         backpatches &patches;
@@ -2499,33 +2402,6 @@ class extended_diagnostic_notation
         return std::unexpected(error::syntax_error);
     }
 
-    static std::expected<owning<item>, error> read_root_minify(std::string_view const text)
-    {
-        auto const start = optional_space_end(text, 0);
-        if (!start) [[unlikely]]
-            return std::unexpected(start.error());
-        auto decoded = std::make_unique<zone>(detail::validity::checked_mul(text.size(), sizeof(item) + 1)
-                                                  .transform([](std::size_t const size) {
-                                                      return std::clamp(size, std::size_t{1},
-                                                                        detail::validity::initial_size_limit);
-                                                  })
-                                                  .value_or(detail::validity::initial_size_limit));
-        std::vector<item> values;
-        std::string unescaped;
-        sax_dom_parser handler{*decoded, values};
-        auto const next = char_is_ctn(padded_char(text, *start))
-                              ? read_root_minify(text, *start, handler, unescaped)
-                              : read_root_single(text, *start, handler, unescaped);
-        if (!next) [[unlikely]]
-            return std::unexpected(next.error());
-        auto const end = optional_space_end(text, *next);
-        if (!end || *end != text.size()) [[unlikely]]
-            return std::unexpected(error::syntax_error);
-        std::pmr::vector<item> &root = decoded->items_reserved(1);
-        root.push_back(values.front());
-        return zone_owner::tree_owned(&root.front(), std::move(decoded));
-    }
-
     static constexpr std::expected<std::size_t, error> parse_literal(literal_cursor const cursor, std::string &out)
     {
         std::size_t const size_before = out.size();
@@ -2781,48 +2657,66 @@ class extended_diagnostic_notation
     {
         if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
             return r;
-        std::uint8_t const info = node.m_info;
-        switch (node.m_type) {
+        std::uint8_t const info = node.additional_information();
+        switch (node.type()) {
         case cbor::type::unsigned_integer:
-            out += std::to_string(node.via.u64) + encoding_indicator(info, node.via.u64);
+            out += std::to_string(node.argument()) + encoding_indicator(info, node.argument());
             break;
-        case cbor::type::negative_integer:
-            out += node.via.u64 == std::numeric_limits<std::uint64_t>::max() ? std::string("-18446744073709551616")
-                                                                              : "-" + std::to_string(node.via.u64 + 1);
-            out += encoding_indicator(info, node.via.u64);
+        case cbor::type::negative_integer: {
+            std::uint64_t const argument = node.argument();
+            out += argument == std::numeric_limits<std::uint64_t>::max() ? std::string("-18446744073709551616")
+                                                                          : "-" + std::to_string(argument + 1);
+            out += encoding_indicator(info, argument);
             break;
+        }
         case cbor::type::byte_string:
             out += "h'";
-            for (std::byte const b : node.via.bin)
+            for (std::byte const b : node.bytes())
                 encode_base16(out, std::to_integer<std::uint8_t>(b));
-            out += "'" + encoding_indicator(info, node.via.bin.size());
+            out += "'" + encoding_indicator(info, node.length());
             break;
         case cbor::type::text_string:
-            out += quoted_of(node.via.str) + encoding_indicator(info, node.via.str.size());
+            out += quoted_of(node.text()) + encoding_indicator(info, node.length());
             break;
-        case cbor::type::array:
-        case cbor::type::map: {
-            bool const map = node.m_type == cbor::type::map;
-            std::span<item const> const children = map ? node.via.map : node.via.array;
-            std::size_t const count = map ? children.size() / rfc8949::data_items_per_pair : children.size();
-            out += map ? "{" : "[";
-            if (std::string const indicator = encoding_indicator(info, count); !indicator.empty())
+        case cbor::type::array: {
+            out += "[";
+            if (std::string const indicator = encoding_indicator(info, node.length()); !indicator.empty())
                 out += indicator + " ";
-            for (std::size_t i = 0; i != children.size(); ++i) {
-                if (i != 0)
-                    out += map && i % rfc8949::data_items_per_pair != 0 ? ": " : ", ";
-                if (auto const r = write_item(out, children[i]); !r) [[unlikely]]
+            bool first = true;
+            for (item const &element : node.elements()) {
+                if (!first)
+                    out += ", ";
+                first = false;
+                if (auto const r = write_item(out, element); !r) [[unlikely]]
                     return r;
             }
-            out += map ? "}" : "]";
+            out += "]";
+            break;
+        }
+        case cbor::type::map: {
+            out += "{";
+            if (std::string const indicator = encoding_indicator(info, node.length()); !indicator.empty())
+                out += indicator + " ";
+            bool first = true;
+            for (auto const [key, value] : node.entries()) {
+                if (!first)
+                    out += ", ";
+                first = false;
+                if (auto const r = write_item(out, key); !r) [[unlikely]]
+                    return r;
+                out += ": ";
+                if (auto const r = write_item(out, value); !r) [[unlikely]]
+                    return r;
+            }
+            out += "}";
             break;
         }
         case cbor::type::tag:
         case cbor::type::typed_array:
         case cbor::type::unsigned_bignum:
         case cbor::type::negative_bignum:
-            out += std::to_string(node.via.tag.number) + encoding_indicator(info, node.via.tag.number) + "(";
-            if (auto const r = write_item(out, *node.via.tag.content); !r) [[unlikely]]
+            out += std::to_string(node.m_uni.u64) + encoding_indicator(info, node.m_uni.u64) + "(";
+            if (auto const r = write_item(out, node.content()); !r) [[unlikely]]
                 return r;
             out += ")";
             break;
@@ -2842,17 +2736,14 @@ class extended_diagnostic_notation
             out += "undefined";
             break;
         case cbor::type::simple_value:
-            out += "simple(" + std::to_string(std::to_underlying(node.via.simple_value)) + ")";
+            out += "simple(" + std::to_string(node.m_uni.u64) + ")";
             break;
         case cbor::type::half_float:
         case cbor::type::single_float:
-        case cbor::type::double_float: {
-            auto const width = static_cast<rfc8949::simple_information>(
-                std::to_underlying(rfc8949::simple_information::half_precision_float) +
-                (std::to_underlying(node.m_type) - std::to_underlying(cbor::type::half_float)));
-            out += float_of(std::to_underlying(width), detail::ieee754::encode_float(width, node.via.f64));
+        case cbor::type::double_float:
+            out += float_of(info, detail::ieee754::encode_float(static_cast<rfc8949::simple_information>(info),
+                                                                node.m_uni.f64));
             break;
-        }
         }
         return {};
     }
@@ -3353,12 +3244,7 @@ consteval auto operator""_edn()
  *
  * @ingroup tools
  */
-inline std::expected<owning<item>, error> parse_edn(std::string_view const text)
-{
-    if (auto tree = detail::extended_diagnostic_notation::read_root_minify(text)) [[likely]]
-        return tree;
-    return diag2cbor(text).and_then([](std::string const &bytes) { return decode(std::string_view(bytes)); });
-}
+inline std::expected<owning<item>, error> parse_edn(std::string_view text);
 
 inline std::expected<std::string, error> item::to_edn() const
 {
@@ -3397,7 +3283,7 @@ inline std::expected<std::string, error> item::to_edn() const
  */
 inline std::expected<std::string, error> to_edn(item const &root)
 {
-    if (root.m_holds_shared_reference) [[unlikely]]
+    if (root.holds_shared_reference()) [[unlikely]]
         return root.to_edn();
     std::string out;
     if (auto const r = detail::extended_diagnostic_notation::write_item(out, root); !r) [[unlikely]]
@@ -3427,8 +3313,10 @@ inline std::expected<std::string, error> to_edn(item const &root)
  */
 inline std::expected<std::string, error> to_edn(owning<item> const &tree)
 {
-    std::ignore = detail::zone_owner::zone_found(tree, "cbor::to_edn: the owning item holds no decoded tree");
+    std::ignore = detail::tree_owner::tree_found(tree, "cbor::to_edn: the owning item holds no decoded tree");
     return to_edn(*tree);
 }
 
 }
+
+#include "dom.hpp"

@@ -31,12 +31,10 @@ class reflection;
 class well_formedness;
 class validity;
 
-template <bool>
-struct tree_decoder;
-
 namespace dom
 {
 
+class decoder;
 class reader;
 class writer;
 
@@ -174,9 +172,6 @@ class rfc8949
 
     friend class detail::map_iterator;
 
-    template <bool>
-    friend struct detail::tree_decoder;
-
     template <fixed_string Path>
     friend class is_singular_query;
 
@@ -186,6 +181,8 @@ class rfc8949
     friend class detail::basic_generic;
 
     friend class detail::dom::reader;
+
+    friend class detail::dom::decoder;
 
     friend class detail::dom::writer;
 };
