@@ -2095,7 +2095,7 @@ using generic = basic_generic<false>;
  * @see cbor::structs::decode()
  * @see cbor::describe_members
  *
- * @ingroup structs
+ * @ingroup encode
  */
 template <class T>
     requires(!std::same_as<T, item> && !std::same_as<T, owning<item>>)
@@ -2118,7 +2118,7 @@ CBOR_ALWAYS_INLINE inline std::expected<std::string, error> encode(T const &valu
  * @throws std::logic_error a `std::chrono::year_month_day` that is no valid date
  * @see cbor::encode(T const &)
  *
- * @ingroup structs
+ * @ingroup encode
  */
 template <class T, class Target>
     requires(detail::is_target_v<std::remove_reference_t<Target>> && !std::same_as<T, item> &&
@@ -2146,7 +2146,7 @@ CBOR_ALWAYS_INLINE inline std::expected<std::size_t, error> encode(Target &&out,
  * @see cbor::encode(T const &)
  * @see cbor::to_edn(item const &)
  *
- * @ingroup structs
+ * @ingroup tools
  */
 template <class T>
     requires(!std::same_as<T, item> && !std::same_as<T, owning<item>>)

@@ -280,7 +280,7 @@ private:
  * @see cbor::encode_iov()
  * @see cbor::decode()
  *
- * @ingroup decode
+ * @ingroup encode
  */
 template <class Target>
     requires detail::is_target_v<std::remove_reference_t<Target>>

@@ -8,6 +8,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <optional>
 #include <set>
@@ -42,7 +43,7 @@ TEST_CASE("doc reference structs: the example of the group structs")
     // [structs group]
     // person: struct { std::string name; int age; }, described by CBOR_DEFINE_TYPE_MEMBERS
     // encoded: 16 bytes, {"age": 30, "name": "ann"}
-    auto const encoded = cbor::encode<person>(person{"ann", 30});
+    auto const encoded = cbor::structs<person>::encode(person{"ann", 30});
     // back: a ref to person{"ann", 30}
     auto const back = cbor::structs<person>::decode(std::string(*encoded));
     auto const age = (*back)->age;    // 30
@@ -53,6 +54,27 @@ TEST_CASE("doc reference structs: the example of the group structs")
     REQUIRE(back.has_value());
     CHECK_EQ(age, 30);
     CHECK_EQ(name, "ann");
+}
+
+// The snippet of the group encode, between the markers "encode group". The example on the page of the group encode
+// writes a described struct, a container and the text of a value. So a reader sees that one call takes any value. The
+// expected bytes and text are written from the values with the encoder of the tests, and not from the output under test.
+TEST_CASE("doc reference structs: the example of the group encode")
+{
+    // [encode group]
+    // person: struct { std::string name; int age; }, described by CBOR_DEFINE_TYPE_MEMBERS
+    auto const bytes = cbor::encode<person>(person{"ann", 30});  // 16 bytes, {"age": 30, "name": "ann"}
+    std::string out;
+    auto const n = cbor::encode(out, std::map<std::string, int>{{"a", 1}});  // 4: the bytes of {"a": 1} appended
+    auto const text = cbor::to_edn<person>(person{"ann", 30});   // "{\"age\": 30, \"name\": \"ann\"}"
+    // [encode group]
+    REQUIRE(bytes.has_value());
+    CHECK_EQ(*bytes, test::encode_in_preferred_form(test::M("age"s, 30, "name"s, "ann"s)));
+    REQUIRE(n.has_value());
+    CHECK_EQ(*n, 4u);
+    CHECK_EQ(out, test::encode_in_preferred_form(test::M("a"s, 1)));
+    REQUIRE(text.has_value());
+    CHECK_EQ(*text, "{\"age\": 30, \"name\": \"ann\"}");
 }
 
 // structs.hpp, snippet encode: encode(value) gives the bytes of a map with the member names as keys, sorted by
