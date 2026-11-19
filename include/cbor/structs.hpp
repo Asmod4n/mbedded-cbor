@@ -54,6 +54,7 @@
 
 #include "item_size.hpp"
 #include "rfc9581.hpp"
+#include "diagnostic_notation.hpp"
 #include "encode.hpp"
 #include "error.hpp"
 #include "validity.hpp"
@@ -1665,9 +1666,9 @@ class generic
         return size + *content;
     }
 
-    template <class U>
+    template <class Out, class U>
     static std::expected<std::size_t, error>
-    write_extended_time(std::span<char> const out, std::size_t at, U const &value,
+    write_extended_time(Out const out, std::size_t at, U const &value,
                         rfc9581::timescale const scale = rfc9581::timescale::utc,
                         std::optional<std::string_view> const zone = std::nullopt)
     {
@@ -1675,9 +1676,9 @@ class generic
         if (!seconds) [[unlikely]]
             return std::unexpected(seconds.error());
         std::uint64_t const tag = extended_time_tag<U>(*seconds, scale, zone);
-        at += detail::heads::write_head(out, at, major_type::tag, tag);
+        at += put_head(out, at, major_type::tag, tag);
         if (tag != std::to_underlying(rfc8949::tag_number::epoch_based_date_time)) {
-            at += detail::heads::write_head(out, at, major_type::map, extended_time_entries(*seconds, scale, zone));
+            at += put_head(out, at, major_type::map, extended_time_entries(*seconds, scale, zone));
             auto const key = write_generic(out, at, std::to_underlying(rfc9581::map_key::base_time));
             if (!key) [[unlikely]]
                 return key;
@@ -1736,29 +1737,104 @@ class generic
         }
     }
 
-    static std::size_t write_bytes(std::span<char> const out, std::size_t const at, std::span<char const> const bytes)
+    CBOR_ALWAYS_INLINE static std::size_t put_head(std::span<char> const out, std::size_t const at, major_type const major,
+                                                   std::uint64_t const argument)
+    {
+        return detail::heads::write_head(out, at, major, argument);
+    }
+
+    CBOR_ALWAYS_INLINE static std::size_t put_head(std::span<char> const out, std::size_t const at, major_type const major,
+                                                   std::uint8_t const info, std::uint64_t const argument)
+    {
+        return detail::heads::write_head(out, at, major, info, argument);
+    }
+
+    CBOR_ALWAYS_INLINE static std::size_t put_simple(std::span<char> const out, std::size_t const at,
+                                                     simple_value const value)
+    {
+        out.subspan(at).front() = detail::heads::initial_byte(major_type::simple, std::to_underlying(value));
+        return at + detail::heads::initial_byte_size;
+    }
+
+    CBOR_ALWAYS_INLINE static std::size_t put_bytes(std::span<char> const out, std::size_t const at,
+                                                    std::span<char const> const bytes)
     {
         std::ranges::copy(bytes, out.subspan(at, bytes.size()).begin());
         return at + bytes.size();
     }
 
-    template <class U>
-    static std::expected<std::size_t, error> write_generic(std::span<char> const out, std::size_t at, U const &value)
+    CBOR_ALWAYS_INLINE static std::size_t put_bytes(std::span<char> const out, std::size_t const at,
+                                                    std::span<std::byte const> const bytes)
+    {
+        std::ranges::copy(bytes, std::as_writable_bytes(out.subspan(at, bytes.size())).begin());
+        return at + bytes.size();
+    }
+
+    template <class E>
+    CBOR_ALWAYS_INLINE static std::size_t put_typed_array_element(std::span<char> const out, std::size_t const at,
+                                                                  E const e)
+    {
+        detail::reflection::write_typed_array_element<E>(out.subspan(at).template first<sizeof(E)>(), e);
+        return at + sizeof(E);
+    }
+
+    struct edn_out {
+        detail::edn_text &text;
+    };
+
+    static std::size_t put_head(edn_out const out, std::size_t, major_type const major, std::uint64_t const argument)
+    {
+        out.text.write_head(major, argument);
+        return 0;
+    }
+
+    static std::size_t put_head(edn_out const out, std::size_t, major_type const major, std::uint8_t const info,
+                                std::uint64_t const argument)
+    {
+        out.text.write_head(major, info, argument);
+        return 0;
+    }
+
+    static std::size_t put_simple(edn_out const out, std::size_t const at, simple_value const value)
+    {
+        out.text.write_head(major_type::simple, std::to_underlying(value));
+        return at;
+    }
+
+    static std::size_t put_bytes(edn_out const out, std::size_t const at, std::span<char const> const bytes)
+    {
+        out.text.write_payload(std::string_view(bytes));
+        return at;
+    }
+
+    static std::size_t put_bytes(edn_out const out, std::size_t const at, std::span<std::byte const> const bytes)
+    {
+        out.text.write_payload(bytes);
+        return at;
+    }
+
+    template <class E>
+    static std::size_t put_typed_array_element(edn_out const out, std::size_t const at, E const e)
+    {
+        std::array<char, sizeof(E)> element;
+        detail::reflection::write_typed_array_element<E>(std::span<char, sizeof(E)>(element), e);
+        out.text.write_payload(std::string_view(element));
+        return at;
+    }
+
+    template <class Out, class U>
+    static std::expected<std::size_t, error> write_generic(Out const out, std::size_t at, U const &value)
     {
         if constexpr (!std::is_arithmetic_v<U> && !std::is_enum_v<U> && !is_basic_string<U> &&
                       !std::same_as<U, std::string_view> && !std::same_as<U, std::span<std::byte const>>)
             if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
                 return std::unexpected(r.error());
         if constexpr (std::same_as<U, bool>) {
-            out.subspan(at).front() =
-                detail::heads::initial_byte(major_type::simple, value ? std::to_underlying(simple_value::true_value)
-                                                                    : std::to_underlying(simple_value::false_value));
-            return at + detail::heads::initial_byte_size;
+            return put_simple(out, at, value ? simple_value::true_value : simple_value::false_value);
         } else if constexpr (std::same_as<U, std::nullptr_t>) {
-            out.subspan(at).front() = detail::heads::initial_byte(major_type::simple, std::to_underlying(simple_value::null));
-            return at + detail::heads::initial_byte_size;
+            return put_simple(out, at, simple_value::null);
         } else if constexpr (std::same_as<U, simple_value>) {
-            return at + detail::heads::write_head(out, at, major_type::simple, std::to_underlying(value));
+            return at + put_head(out, at, major_type::simple, std::to_underlying(value));
 #ifdef CBOR_HAS_INT128
         } else if constexpr (detail::reflection::is_wide_integer<U>) {
             bool negative = false;
@@ -1767,18 +1843,18 @@ class generic
             uint128 const magnitude =
                 negative ? ~static_cast<uint128>(value) : static_cast<uint128>(value);
             if (magnitude <= std::numeric_limits<std::uint64_t>::max())
-                return at + detail::heads::write_head(out, at,
+                return at + put_head(out, at,
                                        negative ? major_type::negative_integer : major_type::unsigned_integer,
                                        static_cast<std::uint64_t>(magnitude));
             std::size_t const digits =
                 sizeof(uint128) - static_cast<std::size_t>(std::countl_zero(static_cast<std::uint64_t>(magnitude >> std::numeric_limits<std::uint64_t>::digits))) /
                                       std::numeric_limits<std::uint8_t>::digits;
-            at += detail::heads::write_head(out, at, major_type::tag,
+            at += put_head(out, at, major_type::tag,
                                     std::to_underlying(negative ? rfc8949::tag_number::negative_bignum
                                                                 : rfc8949::tag_number::unsigned_bignum));
-            at += detail::heads::write_head(out, at, major_type::byte_string, digits);
+            at += put_head(out, at, major_type::byte_string, digits);
             auto const bytes = detail::heads::big_endian(magnitude);
-            return write_bytes(out, at, std::span<char const>(bytes).last(digits));
+            return put_bytes(out, at, std::span<char const>(bytes).last(digits));
 #endif
         } else if constexpr (detail::is_std_variant<U>) {
             return std::visit([&](auto const &e) { return write_generic(out, at, e); }, value);
@@ -1787,20 +1863,19 @@ class generic
         } else if constexpr (std::is_integral_v<U>) {
             if constexpr (std::is_signed_v<U>) {
                 if (value < 0)
-                    return at + detail::heads::write_head(out, at, major_type::negative_integer,
+                    return at + put_head(out, at, major_type::negative_integer,
                                            static_cast<std::uint64_t>(-1 - static_cast<std::int64_t>(value)));
             }
-            return at + detail::heads::write_head(out, at, major_type::unsigned_integer, static_cast<std::uint64_t>(value));
+            return at + put_head(out, at, major_type::unsigned_integer, static_cast<std::uint64_t>(value));
         } else if constexpr (std::is_floating_point_v<U>) {
             rfc8949::simple_information const info = detail::ieee754::preferred_float_info(value);
-            return at + detail::heads::write_head(out, at, major_type::simple, std::to_underlying(info), detail::ieee754::encode_float(info, value));
+            return at + put_head(out, at, major_type::simple, std::to_underlying(info), detail::ieee754::encode_float(info, value));
         } else if constexpr (is_basic_string<U> || std::same_as<U, std::string_view>) {
-            at += detail::heads::write_head(out, at, major_type::text_string, value.size());
-            return write_bytes(out, at, value);
+            at += put_head(out, at, major_type::text_string, value.size());
+            return put_bytes(out, at, std::span<char const>(value));
         } else if constexpr (std::same_as<U, std::span<std::byte const>>) {
-            at += detail::heads::write_head(out, at, major_type::byte_string, value.size());
-            std::ranges::copy(value, std::as_writable_bytes(out.subspan(at, value.size())).begin());
-            return at + value.size();
+            at += put_head(out, at, major_type::byte_string, value.size());
+            return put_bytes(out, at, value);
         } else if constexpr (is_clock_time<U>) {
             auto const t = extended_time_of(value);
             if (!t) [[unlikely]]
@@ -1809,19 +1884,18 @@ class generic
         } else if constexpr (is_extended_time<U>) {
             return write_extended_time(out, at, value);
         } else if constexpr (is_tagged_standard_type<U>) {
-            at += detail::heads::write_head(out, at, major_type::tag, tag_of_standard_type<U>());
+            at += put_head(out, at, major_type::tag, tag_of_standard_type<U>());
             return write_tag_content(out, at, value);
         } else if constexpr (detail::reflection::is_optional<U>) {
             if (!value) {
-                out.subspan(at).front() = detail::heads::initial_byte(major_type::simple, std::to_underlying(simple_value::null));
-                return at + detail::heads::initial_byte_size;
+                return put_simple(out, at, simple_value::null);
             }
             return write_generic(out, at, *value);
         } else if constexpr (is_tagged_item<U>) {
-            at += detail::heads::write_head(out, at, major_type::tag, U::number);
+            at += put_head(out, at, major_type::tag, U::number);
             return write_generic(out, at, value.content);
         } else if constexpr (is_std_tuple<U> || is_std_array<U>) {
-            at += detail::heads::write_head(out, at, major_type::array, std::tuple_size_v<U>);
+            at += put_head(out, at, major_type::array, std::tuple_size_v<U>);
             std::expected<std::size_t, error> written = at;
             std::apply([&](auto const &...e) {
                 ((written = written.and_then([&](std::size_t const w) { return write_generic(out, w, e); })), ...);
@@ -1829,14 +1903,14 @@ class generic
             return written;
         } else if constexpr (is_multimap<U>) {
             auto groups = key_groups(value);
-            at += detail::heads::write_head(out, at, major_type::map,
+            at += put_head(out, at, major_type::map,
                                     std::ranges::fold_left(groups, std::uint64_t{0}, element_count));
             for (auto const group : groups) {
                 auto const key = write_generic(out, at, group.front().first);
                 if (!key) [[unlikely]]
                     return key;
                 at = *key;
-                at += detail::heads::write_head(out, at, major_type::array,
+                at += put_head(out, at, major_type::array,
                                         std::ranges::fold_left(group, std::uint64_t{0}, element_count));
                 for (auto const &[k, v] : group) {
                     auto const mapped = write_generic(out, at, v);
@@ -1847,7 +1921,7 @@ class generic
             }
             return at;
         } else if constexpr (detail::reflection::is_map<U>) {
-            at += detail::heads::write_head(out, at, major_type::map, value.size());
+            at += put_head(out, at, major_type::map, value.size());
             for (auto const &[k, v] : value) {
                 auto const pair = write_generic(out, at, k).and_then(
                     [&](std::size_t const w) { return write_generic(out, w, v); });
@@ -1864,12 +1938,12 @@ class generic
         } else {
             static_assert(detail::pfr::struct_writable<U>());
             if constexpr (constexpr std::optional<std::uint64_t> tag = detail::reflection::tag_number_of<U>(); tag.has_value())
-                at += detail::heads::write_head(out, at, major_type::tag, *tag);
+                at += put_head(out, at, major_type::tag, *tag);
             std::size_t const present = [&]<std::size_t... I>(std::index_sequence<I...>) {
                 return (std::size_t{0} + ... +
                         (member_present(detail::pfr::get<I>(value)) ? std::size_t{1} : std::size_t{0}));
             }(std::make_index_sequence<detail::pfr::tuple_size_v<U>>());
-            at += detail::heads::write_head(out, at, major_type::map, present);
+            at += put_head(out, at, major_type::map, present);
             static constexpr auto order = key_order<U>();
             std::expected<std::size_t, error> written = at;
             [&]<std::size_t... J>(std::index_sequence<J...>) {
@@ -1879,10 +1953,10 @@ class generic
         }
     }
 
-    template <class U>
-    static std::expected<std::size_t, error> write_elements(std::span<char> const out, std::size_t at, U const &value)
+    template <class Out, class U>
+    static std::expected<std::size_t, error> write_elements(Out const out, std::size_t at, U const &value)
     {
-        at += detail::heads::write_head(out, at, major_type::array, value.size());
+        at += put_head(out, at, major_type::array, value.size());
         for (typename U::value_type const &e : value) {
             auto const element = write_generic(out, at, e);
             if (!element) [[unlikely]]
@@ -1892,9 +1966,8 @@ class generic
         return at;
     }
 
-    template <class U>
-    static std::expected<std::size_t, error> write_tag_content(std::span<char> const out, std::size_t at,
-                                                               U const &value)
+    template <class Out, class U>
+    static std::expected<std::size_t, error> write_tag_content(Out const out, std::size_t at, U const &value)
     {
         if constexpr (is_whole_seconds<U>) {
             return write_generic(out, at, value.time_since_epoch().count());
@@ -1904,24 +1977,22 @@ class generic
             return write_elements(out, at, value);
         } else {
             using E = typename U::value_type;
-            at += detail::heads::write_head(out, at, major_type::byte_string, value.size() * sizeof(E));
-            for (E const e : value) {
-                detail::reflection::write_typed_array_element<E>(out.subspan(at).template first<sizeof(E)>(), e);
-                at += sizeof(E);
-            }
+            at += put_head(out, at, major_type::byte_string, value.size() * sizeof(E));
+            for (E const e : value)
+                at = put_typed_array_element(out, at, e);
             return at;
         }
     }
 
-    template <std::size_t I, class U>
-    static std::expected<std::size_t, error> write_member(std::span<char> const out, std::size_t at, U const &value)
+    template <std::size_t I, class Out, class U>
+    static std::expected<std::size_t, error> write_member(Out const out, std::size_t at, U const &value)
     {
         auto const &m = detail::pfr::get<I>(value);
         if (!member_present(m))
             return at;
         constexpr map_key key = detail::pfr::key_of<I, U>();
-        at += detail::heads::write_head(out, at, key.major, key.argument);
-        at = write_bytes(out, at, key.text);
+        at += put_head(out, at, key.major, key.argument);
+        at = put_bytes(out, at, std::span<char const>(key.text));
         if constexpr (detail::reflection::is_optional<std::remove_cvref_t<decltype(m)>>)
             return write_generic(out, at, *m);
         else
@@ -1929,6 +2000,15 @@ class generic
     }
 
 public:
+    template <class T>
+    static std::expected<std::string, error> edn_of(T const &value)
+    {
+        detail::edn_text text;
+        if (auto const r = write_generic(edn_out{text}, 0, value); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        return text.release();
+    }
+
     template <class T>
     CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode_to_string(T const &value)
     {
@@ -2049,6 +2129,33 @@ template <class T, class Target>
 CBOR_ALWAYS_INLINE inline std::expected<std::size_t, error> encode(Target &&out, T const &value)
 {
     return detail::generic::encode_into(std::forward<Target>(out), value);
+}
+
+/**
+ * @brief Gives the text of `value` in the extended diagnostic notation (EDN): the text that
+ * cbor::diagnostic_notation() gives for the bytes of cbor::encode(T const &).
+ *
+ * The call writes the text from the value, with the type dispatch of cbor::encode, and makes no bytes. It takes the
+ * types that cbor::encode takes; a cbor::item and a cbor::owning<cbor::item> take the overload that walks a tree.
+ *
+ * @code{.example}
+ * call: cbor::to_edn<reading>(reading{4, std::nullopt})
+ * result: "{\"id\": 4}"
+ * @endcode
+ *
+ * @retval nesting_depth_exceeded the value is deeper than the stack of the thread holds
+ * @retval number_out_of_range a time that its tag cannot hold, as cbor::encode gives it
+ * @throws std::logic_error a `std::chrono::year_month_day` that is no valid date
+ * @see cbor::encode(T const &)
+ * @see cbor::to_edn(item const &)
+ *
+ * @ingroup structs
+ */
+template <class T>
+    requires(!std::same_as<T, item> && !std::same_as<T, owning<item>>)
+inline std::expected<std::string, error> to_edn(T const &value)
+{
+    return detail::generic::edn_of(value);
 }
 
 /**

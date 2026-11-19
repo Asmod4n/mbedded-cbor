@@ -53,6 +53,8 @@ std::expected<std::string, error> to_edn(owning<item> const &tree);
 namespace detail
 {
 
+class edn_text;
+
 class extended_diagnostic_notation
 {
     struct parsed {
@@ -3004,6 +3006,156 @@ class extended_diagnostic_notation
     friend std::expected<std::string, error> cbor::to_edn(item const &root);
 
     friend std::expected<std::string, error> cbor::to_edn(owning<item> const &tree);
+
+    friend class detail::edn_text;
+};
+
+class edn_text
+{
+    struct open {
+        std::uint64_t items;
+        std::uint64_t done;
+        major_type major;
+    };
+
+    using notation = extended_diagnostic_notation;
+
+    std::string text;
+    std::vector<open> opened;
+    major_type string_major = major_type::text_string;
+    std::uint64_t string_left = 0;
+    std::uint8_t string_info = 0;
+
+    void begin_item()
+    {
+        if (opened.empty() || opened.back().major == major_type::tag || opened.back().done == 0)
+            return;
+        bool const value = opened.back().major == major_type::map && opened.back().done % rfc8949::data_items_per_pair != 0;
+        text += value ? ": " : ", ";
+    }
+
+    void end_item()
+    {
+        while (!opened.empty()) {
+            open &o = opened.back();
+            if (++o.done != o.items)
+                return;
+            text += o.major == major_type::array ? "]" : o.major == major_type::map ? "}" : ")";
+            opened.pop_back();
+        }
+    }
+
+    void end_string()
+    {
+        text += string_major == major_type::text_string ? "\"" : "'";
+        text += notation::encoding_indicator(string_info, 0);
+        end_item();
+    }
+
+public:
+    void write_head(major_type const major, std::uint8_t const info, std::uint64_t const argument)
+    {
+        begin_item();
+        std::string const indicator = notation::encoding_indicator(info, argument);
+        switch (major) {
+        case major_type::unsigned_integer:
+            text += std::to_string(argument) + indicator;
+            end_item();
+            return;
+        case major_type::negative_integer:
+            text += argument == std::numeric_limits<std::uint64_t>::max() ? std::string("-18446744073709551616")
+                                                                          : "-" + std::to_string(argument + 1);
+            text += indicator;
+            end_item();
+            return;
+        case major_type::byte_string:
+        case major_type::text_string:
+            text += major == major_type::text_string ? "\"" : "h'";
+            string_major = major;
+            string_left = argument;
+            string_info = indicator.empty() ? std::uint8_t{0} : info;
+            if (argument == 0)
+                end_string();
+            return;
+        case major_type::array:
+        case major_type::map:
+            text += major == major_type::map ? "{" : "[";
+            if (!indicator.empty())
+                text += indicator + " ";
+            if (argument == 0) {
+                text += major == major_type::map ? "}" : "]";
+                end_item();
+                return;
+            }
+            opened.push_back({major == major_type::map ? argument * rfc8949::data_items_per_pair : argument, 0, major});
+            return;
+        case major_type::tag:
+            text += std::to_string(argument) + indicator + "(";
+            opened.push_back({1, 0, major});
+            return;
+        case major_type::simple:
+            break;
+        }
+        switch (info) {
+        case std::to_underlying(simple_value::false_value):
+            text += "false";
+            break;
+        case std::to_underlying(simple_value::true_value):
+            text += "true";
+            break;
+        case std::to_underlying(simple_value::null):
+            text += "null";
+            break;
+        case std::to_underlying(simple_value::undefined):
+            text += "undefined";
+            break;
+        case std::to_underlying(rfc8949::simple_information::half_precision_float):
+        case std::to_underlying(rfc8949::simple_information::single_precision_float):
+        case std::to_underlying(rfc8949::simple_information::double_precision_float):
+            text += notation::float_of(info, argument);
+            break;
+        default:
+            text += "simple(" + std::to_string(argument) + ")";
+            break;
+        }
+        end_item();
+    }
+
+    void write_head(major_type const major, std::uint64_t const argument)
+    {
+        write_head(major, detail::heads::preferred_argument_info(argument), argument);
+    }
+
+    void write_payload(std::string_view const part)
+    {
+        if (part.empty())
+            return;
+        if (string_major == major_type::text_string) {
+            std::string const quoted = notation::quoted_of(part);
+            text.append(quoted, 1, quoted.size() - std::string_view("\"\"").size());
+        } else {
+            text += notation::hex_of(part);
+        }
+        string_left -= part.size();
+        if (string_left == 0)
+            end_string();
+    }
+
+    void write_payload(std::span<std::byte const> const part)
+    {
+        if (part.empty())
+            return;
+        for (std::byte const b : part)
+            notation::encode_base16(text, std::to_integer<std::uint8_t>(b));
+        string_left -= part.size();
+        if (string_left == 0)
+            end_string();
+    }
+
+    std::string release()
+    {
+        return std::move(text);
+    }
 };
 
 }

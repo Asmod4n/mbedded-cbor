@@ -1743,3 +1743,60 @@ TEST_CASE("cbor::encode: a value of a type that is also a target is written as t
     CHECK_EQ(cbor::encode(typed, std::vector<std::byte>{std::byte{1}}), 4u);
     CHECK_EQ(typed, cbor::diag2cbor("64(h'01')").value());
 }
+
+namespace
+{
+
+template <class T>
+void check_edn_of_value(T const &value)
+{
+    auto const bytes = cbor::encode(value);
+    REQUIRE(bytes.has_value());
+    auto const text = cbor::diagnostic_notation(*bytes);
+    REQUIRE(text.has_value());
+    CAPTURE(*text);
+    CHECK_EQ(cbor::to_edn(value), text);
+}
+
+} // namespace
+
+// cbor::to_edn of a value is declared as the text that diagnostic_notation gives for the bytes of cbor::encode. The
+// value has one row of each kind of the table of cbor::structs, and the edges of the text: a NaN with a payload, a
+// float that needs its width, an escaped text, an empty string and container, a multimap and a tagged struct.
+TEST_CASE("cbor::to_edn: a value gives the text of the bytes that cbor::encode writes")
+{
+    using namespace std::chrono;
+    check_edn_of_value(0);
+    check_edn_of_value(-25);
+    check_edn_of_value(std::numeric_limits<std::uint64_t>::max());
+    check_edn_of_value(std::numeric_limits<std::int64_t>::min());
+    check_edn_of_value(true);
+    check_edn_of_value(nullptr);
+    check_edn_of_value(cbor::simple_value{99});
+    check_edn_of_value(1.5);
+    check_edn_of_value(1.1);
+    check_edn_of_value(100000.0f);
+    check_edn_of_value(std::bit_cast<double>(std::uint64_t{0x7ff8000000000001}));
+    check_edn_of_value(std::string("a\"b\n\x01"));
+    check_edn_of_value(std::string());
+    std::array<std::byte, 2> const raw{std::byte{1}, std::byte{0xab}};
+    check_edn_of_value(std::span<std::byte const>(raw));
+    check_edn_of_value(std::vector<std::int32_t>{1, -2});
+    check_edn_of_value(std::vector<std::string>{"a", "b"});
+    check_edn_of_value(std::vector<std::string>{});
+    check_edn_of_value(std::set<int>{3, 1});
+    check_edn_of_value(std::list<int>{1, 2});
+    check_edn_of_value(std::map<std::string, int>{{"a", 1}, {"b", 2}});
+    check_edn_of_value(std::multimap<int, std::string>{{1, "a"}, {1, "b"}, {2, "c"}});
+    check_edn_of_value(std::optional<int>{});
+    check_edn_of_value(std::variant<int, std::string>{"v"});
+    check_edn_of_value(std::tuple<int, bool, std::string>{1, true, "x"});
+    check_edn_of_value(sys_seconds{seconds{1700000000}});
+    check_edn_of_value(sys_time<milliseconds>{milliseconds{1700000000123}});
+    check_edn_of_value(milliseconds{-1500});
+    check_edn_of_value(year_month_day{year{1970}, month{1}, day{2}});
+    check_edn_of_value(tai_time<seconds>{seconds{100}});
+    check_edn_of_value(cbor::tagged_item<99, std::string>{"t"});
+    check_edn_of_value(integer_order{10, 20, 30});
+    check_edn_of_value(std::vector<pair_ab>{{1, {2, 3}}, {4, {}}});
+}

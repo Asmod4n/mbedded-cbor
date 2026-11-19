@@ -39,6 +39,7 @@ namespace detail
 
 class encoding;
 class extended_diagnostic_notation;
+class edn_text;
 class generic;
 class reflection;
 class well_formedness;
@@ -753,6 +754,8 @@ class heads
     friend class detail::well_formedness;
 
     friend class detail::extended_diagnostic_notation;
+
+    friend class detail::edn_text;
 
     friend class cbor::path;
 

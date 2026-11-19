@@ -23,6 +23,7 @@ template <class Item>
 struct pair_at;
 class encoding;
 class extended_diagnostic_notation;
+class edn_text;
 class generic;
 class heads;
 class ieee754;
@@ -150,6 +151,8 @@ class rfc8949
     friend class detail::well_formedness;
 
     friend class detail::extended_diagnostic_notation;
+
+    friend class detail::edn_text;
 
     friend class path;
 
