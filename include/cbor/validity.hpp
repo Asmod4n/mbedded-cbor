@@ -349,7 +349,7 @@ public:
     static constexpr std::expected<void, error> check_text_left(std::string_view const text, std::size_t const at,
                                                                 std::size_t const count)
     {
-        if (!bytes_fit(at, text.size()) || !bytes_fit(count, text.size() - at)) [[unlikely]]
+        if (!substr(text, offset{at}, count)) [[unlikely]]
             return std::unexpected(error::invalid_path);
         return {};
     }
@@ -664,10 +664,17 @@ public:
     CBOR_ALWAYS_INLINE static constexpr std::expected<std::string_view, error>
     substr(std::string_view const encoded, offset const at, std::size_t const size)
     {
-        if (!bytes_fit(std::to_underlying(at), encoded.size()) ||
-            !bytes_fit(size, encoded.size() - std::to_underlying(at))) [[unlikely]]
-            return std::unexpected(error::too_little_data);
-        return std::string_view(std::span(encoded).subspan(std::to_underlying(at), size));
+        return substr(std::span(encoded), at, size).transform(
+            [](std::span<char const> const bytes) { return std::string_view(bytes); });
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr std::string_view checked_substr(std::string_view const whole,
+                                                                        std::size_t const at, std::size_t const size)
+    {
+        auto const bytes = substr(whole, offset{at}, size);
+        if (!bytes) [[unlikely]]
+            throw_logic_error("cbor::detail::validity: the bytes are after the end of their input");
+        return *bytes;
     }
 
     template <class T>

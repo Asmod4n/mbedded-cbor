@@ -443,7 +443,7 @@ class extended_diagnostic_notation
                 std::size_t run_end = skip_ascii(text, at);
                 while (padded_char(text, run_end) > rfc3629::one_octet_last)
                     run_end = skip_ascii(text, skip_utf8(text, run_end));
-                out.append(std::string_view(text).substr(at, run_end - at));
+                out.append(detail::validity::checked_substr(text, at, run_end - at));
                 at = run_end;
             }
             if (auto const left = detail::validity::check_text_left(text, at, 1); !left) [[unlikely]]
@@ -802,7 +802,7 @@ class extended_diagnostic_notation
             if (overflow) {
                 if (indicator != no_indicator) [[unlikely]]
                     return std::unexpected(error::invalid_path);
-                if (auto const r = append_bignum(out, text.substr(first, at - first), base, negative); !r) [[unlikely]]
+                if (auto const r = append_bignum(out, detail::validity::checked_substr(text, first, at - first), base, negative); !r) [[unlikely]]
                     return std::unexpected(r.error());
                 return next->at;
             }
@@ -2290,7 +2290,7 @@ class extended_diagnostic_notation
         std::size_t src = skip_ascii(text, hdr);
         while (padded_char(text, src) > rfc3629::one_octet_last)
             src = skip_ascii(text, skip_utf8(text, src));
-        std::string_view content = text.substr(hdr, src - hdr);
+        std::string_view content = detail::validity::checked_substr(text, hdr, src - hdr);
         if (padded_char(text, src) != '"') {
             unescaped.assign(content);
             for (;;) {
@@ -2335,7 +2335,7 @@ class extended_diagnostic_notation
                 std::size_t run = skip_ascii(text, src);
                 while (padded_char(text, run) > rfc3629::one_octet_last)
                     run = skip_ascii(text, skip_utf8(text, run));
-                unescaped.append(text.substr(src, run - src));
+                unescaped.append(detail::validity::checked_substr(text, src, run - src));
                 src = run;
             }
             content = unescaped;
@@ -2733,13 +2733,13 @@ class extended_diagnostic_notation
         detail::validity::throw_logic_error_if(written.ec != std::errc{},
                                                "cbor::diagnostic_notation: the text of a double does not fit");
         std::string out(text.data(), written.ptr);
-        std::size_t const e = out.find('e');
-        std::string mantissa(std::string_view(out).substr(0, e));
+        auto const e = std::ranges::find(out, 'e');
+        std::string mantissa(out.begin(), e);
         if (mantissa.find('.') == std::string::npos)
             mantissa += ".0";
-        if (e == std::string::npos)
+        if (e == out.end())
             return mantissa;
-        std::string_view exponent{std::span(out).subspan(e + 1)};
+        std::string_view exponent(std::next(e), out.end());
         char const sign = exponent.front();
         exponent.remove_prefix(1);
         exponent.remove_prefix(std::min(exponent.find_first_not_of('0'), exponent.size() - 1));
