@@ -471,7 +471,8 @@ std::expected<owning<item>, error> decode(Encoded &&encoded)
  * Tags 28 and 29 of the value-sharing registration are resolved, with a table for this call: a tag 28 makes no
  * node and marks the node of its content, and a tag 29 with the index n is a `shared_reference` node whose target is
  * the node that the n-th tag 28 marks. A target can be the node itself or a node above it, so the tree can hold a
- * cycle. The content of a tag 24 has its own table.
+ * cycle. The content of a tag 24 has its own table. The tree keeps the node that each tag 28 stood before, and
+ * cbor::to_edn(owning<item> const &) writes those tags again.
  * cbor::encode() writes such a tree, with a tag 28 and a tag 29 only for a cycle.
  *
  * @code{.example}
@@ -489,6 +490,7 @@ std::expected<owning<item>, error> decode(Encoded &&encoded)
  * @retval inadmissible_type_for_tag_content a tag 29 over an item that is not an unsigned integer, or a typed array
  * (RFC 8746) whose content is not a byte string of whole elements
  * @see cbor::decode()
+ * @see cbor::to_edn(owning<item> const &)
  * @see cbor::encode()
  *
  * @ingroup decode

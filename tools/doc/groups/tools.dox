@@ -99,6 +99,14 @@ hold exactly one item. A byte after the item gives `syntax_error`.
 The bytes `a1 61 61 83 01 f9 41 00 41 01` give the text
 `{"a": [1, 2.5, h'01']}`.
 
+`cbor::to_edn(tree)` gives the same text for a tree of `cbor::decode`. It
+walks the items and reads no bytes: each item keeps the width of its head
+and of its float. `cbor::to_edn(*tree)` writes one item of a tree.
+`cbor::to_edn(tree)` with the `cbor::owning<cbor::item>` of
+`cbor::decode_shared_refs` writes a tag 28 over each item that a tag 28
+marked, and a tag 29 with its index for each `shared_reference`. It never
+follows a reference, so a tree with a cycle gives its text too.
+
 @section tools_read READ DIAGNOSTIC NOTATION
 
 `cbor::diag2cbor(text)` gives the CBOR bytes that `text` writes, as a
