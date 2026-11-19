@@ -1024,7 +1024,7 @@ TEST_CASE("lazy: get reads every integer width up to its edge")
 // string. RFC 8746 2: the content of tags 64 to 87 is a byte string. Tag 76 is reserved, and the library reads it as a
 // tag that it does not interpret. The registration of tag 29 (value-sharing) makes its content an unsigned integer. The
 // rule table holds a row only for a tag that the library interprets (owner, 2026-10-13), so every other tag takes every
-// major type. A lazy reads the content of tags 2, 3 and 24 when it reads the value; cbor::decode_shared_refs reads the
+// major type. A lazy reads the content of tags 2, 3 and 24 when it reads the value; cbor::decode_cycles reads the
 // content of tag 29, which cbor::decode passes as a tag; cbor::decode reads the content of the other tags. This test has two purposes. No content that these sections forbid may pass a reader that interprets
 // the tag. No reader may refuse a tag that the library does not interpret.
 TEST_CASE("lazy: the content of each tag for every major type")
@@ -1068,7 +1068,7 @@ TEST_CASE("lazy: the content of each tag for every major type")
             if (tag == 2 || tag == 3 || tag == 24)
                 read = get<std::int64_t>(tagged).transform([](std::int64_t) {});
             else if (tag == 29) {
-                read = cbor::decode_shared_refs("\xd8\x1c\x81"s + tagged).transform([](auto const &) {});
+                read = cbor::decode_cycles("\xd8\x1c\x81"s + tagged).transform([](auto const &) {});
                 CHECK(cbor::decode("\x82\xd8\x1c\x00"s + tagged).has_value());
             } else
                 read = cbor::decode("\x82\xd8\x1c\x00"s + tagged).transform([](auto const &) {});

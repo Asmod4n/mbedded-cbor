@@ -250,7 +250,7 @@ cbor::owning<cbor::item> shared_from_edn(std::string_view const text)
 {
     auto const bytes = cbor::diag2cbor(text);
     REQUIRE(bytes.has_value());
-    auto tree = cbor::decode_shared_refs(*bytes);
+    auto tree = cbor::decode_cycles(*bytes);
     REQUIRE(tree.has_value());
     return std::move(*tree);
 }
@@ -296,11 +296,11 @@ TEST_CASE("cbor::to_edn: an item inside a tree gives the text of that item")
     CHECK_EQ(cbor::to_edn(element_of(*tree, 1)), "{\"a\": [2_0]}");
 }
 
-// A tree of cbor::decode_shared_refs keeps the node that each tag 28 stood before, and a shared_reference keeps its
+// A tree of cbor::decode_cycles keeps the node that each tag 28 stood before, and a shared_reference keeps its
 // index. The owning form writes both again and never follows a reference, so a cycle ends. A tag 28 with no reference
 // to it, a chain of two tags 28 and a tag 28 over a tag 29 keep the index of every later tag 29. Each tag 29 closes a
-// cycle, as decode_shared_refs requires.
-TEST_CASE("cbor::to_edn: a tree of decode_shared_refs keeps its tags 28 and 29")
+// cycle, as decode_cycles requires.
+TEST_CASE("cbor::to_edn: a tree of decode_cycles keeps its tags 28 and 29")
 {
     for (std::string_view const text :
          {"28([1, 29(0)])", "28([29(0)])", "[28(1)]", "28(28([29(0), 29(1)]))", "28([28(29(0)), 29(1)])",
@@ -312,7 +312,7 @@ TEST_CASE("cbor::to_edn: a tree of decode_shared_refs keeps its tags 28 and 29")
 }
 
 // The text of a shared tree, read back, must name the same targets: cbor::parse_edn keeps tags 28 and 29 as tags and
-// gives the text back, and cbor::decode_shared_refs of its bytes resolves each tag 29 to the node it named before.
+// gives the text back, and cbor::decode_cycles of its bytes resolves each tag 29 to the node it named before.
 TEST_CASE("cbor::to_edn: the text of a shared tree reads back to the same tree")
 {
     auto const shared = shared_from_edn("28([1, 28([2, 29(1), 29(0)])])");

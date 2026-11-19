@@ -103,7 +103,7 @@ The bytes `a1 61 61 83 01 f9 41 00 41 01` give the text
 walks the items and reads no bytes: each item keeps the width of its head
 and of its float. `cbor::to_edn(*tree)` writes one item of a tree.
 `cbor::to_edn(tree)` with the `cbor::owning<cbor::item>` of
-`cbor::decode_shared_refs` writes a tag 28 over each item that a tag 28
+`cbor::decode_cycles` writes a tag 28 over each item that a tag 28
 marked, and a tag 29 with its index for each `shared_reference`. It never
 follows a reference, so a tree with a cycle gives its text too.
 

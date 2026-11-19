@@ -3371,7 +3371,7 @@ inline std::expected<std::string, error> item::to_edn() const
  * The call walks the tree and reads no bytes. Each integer, length and tag number carries the encoding indicator of
  * the width that its item keeps, as cbor::diagnostic_notation() writes it, and a float keeps its width. A tag 24
  * gives its byte string. cbor::parse_edn() reads the text back into the same tree.
- * A tree of cbor::decode_shared_refs() whose `root` holds a `shared_reference` is written by
+ * A tree of cbor::decode_cycles() whose `root` holds a `shared_reference` is written by
  * cbor::to_edn(owning<item> const &), which holds the marks of its tags 28.
  *
  * @code{.example}
@@ -3403,14 +3403,14 @@ inline std::expected<std::string, error> to_edn(item const &root)
 /**
  * @brief Gives the text of the whole tree that `tree` owns in the extended diagnostic notation (EDN).
  *
- * The text is that of cbor::to_edn(item const &). A tree of cbor::decode_shared_refs() keeps the node that each tag
+ * The text is that of cbor::to_edn(item const &). A tree of cbor::decode_cycles() keeps the node that each tag
  * 28 stood before: the call writes a tag 28 over each such node, and a tag 29 with the index that a
  * `shared_reference` keeps. The call never follows a reference, so it ends on a tree with a cycle.
- * cbor::decode_shared_refs() of the bytes of cbor::diag2cbor() of the text gives the same tree.
+ * cbor::decode_cycles() of the bytes of cbor::diag2cbor() of the text gives the same tree.
  *
  * @code{.example}
  * bytes: d8 1c 81 d8 1d 00
- * call: auto const tree = cbor::decode_shared_refs(bytes)
+ * call: auto const tree = cbor::decode_cycles(bytes)
  * result: owning item of 28([29(0)])
  * call: cbor::to_edn(*tree)
  * result: "28([29(0)])"
@@ -3419,7 +3419,7 @@ inline std::expected<std::string, error> to_edn(item const &root)
  * @retval nesting_depth_exceeded the tree is deeper than the stack of the thread holds
  * @throws std::logic_error `tree` owns no tree
  * @see cbor::to_edn(item const &)
- * @see cbor::decode_shared_refs()
+ * @see cbor::decode_cycles()
  *
  * @ingroup tools
  */

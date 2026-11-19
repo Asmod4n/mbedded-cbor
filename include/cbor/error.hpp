@@ -63,7 +63,7 @@ enum class error {
     sharedref_index_not_marked,
     /** `structs` or `%schema` meets a tag 28 or a tag 29 where it reads a value. */
     invalid_tag,
-    /** `decode_shared_refs` meets a tag 29 that names a tag 28 whose content is only tags 28 and this tag 29. */
+    /** `decode_cycles` meets a tag 29 that names a tag 28 whose content is only tags 28 and this tag 29. */
     sharedref_not_defined,
     /** A key or an index meets an item that is not a map or an array. */
     not_indexable,
@@ -102,7 +102,7 @@ enum class error {
     container_elements_exceeded,
     /** `path::compile<T>` gets a path that is not singular, and `T` is not `nodelist`. */
     not_singular_query,
-    /** `decode_shared_refs` meets a tag 29 that names a tag 28 whose content is decoded to its end, so no cycle. */
+    /** `decode_cycles` meets a tag 29 that names a tag 28 whose content is decoded to its end, so no cycle. */
     sharedref_not_cyclic
 };
 

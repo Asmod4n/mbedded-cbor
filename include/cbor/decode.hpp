@@ -3,7 +3,7 @@
  * Decodes the first CBOR data item in a buffer into a tree of
  * cbor::item. The tree holds a copy of each string in its own memory.
  * Decodes a bignum that fits in 64 bits as an integer. Decodes the
- * content of a tag 24 as one more data item. decode_shared_refs also
+ * content of a tag 24 as one more data item. decode_cycles also
  * resolves tags 28 and 29 of the value-sharing registration.
  * https://www.rfc-editor.org/rfc/rfc8949
  * http://cbor.schmorp.de/value-sharing
@@ -423,7 +423,7 @@ std::expected<decoded_tree, error> decode_tree(std::string_view const encoded)
  * A bignum whose magnitude fits 64 bits becomes an integer node.
  * A tag 24 is a tag node, and cbor::encoded_cbor_data_item() gives its decoded content.
  * A tag 28 and a tag 29 of the value-sharing registration are tag nodes, as every tag that decode does not interpret;
- * cbor::decode_shared_refs() resolves them.
+ * cbor::decode_cycles() resolves them.
  * One leading tag 55799 is read as its content, so the root is that content.
  * A second tag 55799 and a tag 55799 inside an item stay tag nodes.
  *
@@ -455,7 +455,7 @@ std::expected<decoded_tree, error> decode_tree(std::string_view const encoded)
  * a tag 24 over another content is a `tag` item over that content, and decode checks the content of no other tag.
  * @snippet doc_reference_item.cpp decode
  * @see cbor::item
- * @see cbor::decode_shared_refs()
+ * @see cbor::decode_cycles()
  * @see cbor::encode()
  *
  * @ingroup decode
@@ -491,7 +491,7 @@ std::expected<owning<item>, error> decode(Encoded &&encoded)
  *
  * @code{.example}
  * bytes: d8 1c 81 d8 1d 00
- * call: auto const tree = cbor::decode_shared_refs(bytes)
+ * call: auto const tree = cbor::decode_cycles(bytes)
  * result: owning item of 28([29(0)])
  * call: (*tree)->get<std::span<cbor::item const>>().value()[0].type()
  * result: cbor::type::shared_reference
@@ -511,7 +511,7 @@ std::expected<owning<item>, error> decode(Encoded &&encoded)
  *
  * @ingroup decode
  */
-inline std::expected<owning<item>, error> decode_shared_refs(std::string_view const encoded)
+inline std::expected<owning<item>, error> decode_cycles(std::string_view const encoded)
 {
     auto const decoded = detail::decode_tree<true>(detail::heads::self_described_cbor_content(encoded));
     if (!decoded) [[unlikely]]
@@ -525,9 +525,9 @@ inline std::expected<owning<item>, error> decode_shared_refs(std::string_view co
  */
 template <borrowed_range_of_bytes Encoded>
     requires(!std::is_array_v<std::remove_cvref_t<Encoded>>)
-std::expected<owning<item>, error> decode_shared_refs(Encoded &&encoded)
+std::expected<owning<item>, error> decode_cycles(Encoded &&encoded)
 {
-    return decode_shared_refs(detail::chars_of(encoded));
+    return decode_cycles(detail::chars_of(encoded));
 }
 
 }

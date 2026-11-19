@@ -116,16 +116,16 @@ inline std::vector<cbor::item const *> nodes_of(cbor::owning<cbor::item> const &
     return nodes;
 }
 
-// cbor::decode_shared_refs resolves tags 28 and 29 (theories/ValueSharing.v). A decode that succeeds reads a stream
+// cbor::decode_cycles resolves tags 28 and 29 (theories/ValueSharing.v). A decode that succeeds reads a stream
 // that to_item also reads; each shared_reference names a node of the tree (theorem read_no_dangling); the tree has no
 // more nodes than the tree of to_item, which keeps one node per tag (read_no_expansion). Each shared_reference names a
 // node above it or itself, since a tag 29 must close a cycle. encode writes a tree with a shared_reference unless the
-// depth or the bounded span stops it, and decode_shared_refs
+// depth or the bounded span stops it, and decode_cycles
 // reads back a graph with the same unfolding (theories/Writer.v write_read_back). A tree with as many nodes as the
 // tree of clone holds no tag 28, so encode writes it as it writes the tree of clone.
 inline void resolving_decode(std::string_view const input)
 {
-    auto const resolved = cbor::decode_shared_refs(input);
+    auto const resolved = cbor::decode_cycles(input);
     if (!resolved)
         return;
     auto const top_level = test::make_lazy_from_copy(input);
@@ -149,7 +149,7 @@ inline void resolving_decode(std::string_view const input)
                     size.error() == cbor::error::no_buffer_space);
             return;
         }
-        auto const back = cbor::decode_shared_refs(std::string_view(bounded.data(), *size));
+        auto const back = cbor::decode_cycles(std::string_view(bounded.data(), *size));
         require(back.has_value() && test::unfoldings_equal(**resolved, **back));
         return;
     }

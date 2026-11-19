@@ -1367,11 +1367,11 @@ void check_every_type(cbor::type const kind, cbor::item const &it, cbor::item co
     }
 }
 
-// Only cbor::decode_shared_refs makes a shared_reference node; cbor::decode reads its sample as tags.
+// Only cbor::decode_cycles makes a shared_reference node; cbor::decode reads its sample as tags.
 std::expected<cbor::owning<cbor::item>, error> tree_of(sample const &s)
 {
     if (s.type == cbor::type::shared_reference)
-        return cbor::decode_shared_refs(s.encoded);
+        return cbor::decode_cycles(s.encoded);
     return cbor::decode(s.encoded);
 }
 
@@ -1486,7 +1486,7 @@ TEST_CASE("item get<double>: an integer that a double holds and one that it does
 // RFC 8949 3.4: a decoder passes a tag that it does not interpret. get passes the tags that cbor::lazy::get passes.
 // A tag 24 is not passed: its content is a byte string, and cbor::encoded_cbor_data_item gives the item in it. A tag
 // 55799 inside an item is a tag of its own (RFC 8949 3.4.6) and is passed. The tag 1 in 28(1(29(0))) holds a shared
-// reference to itself after cbor::decode_shared_refs; a shared reference is not passed, so the call ends.
+// reference to itself after cbor::decode_cycles; a shared reference is not passed, so the call ends.
 TEST_CASE("item get<T>: the tags that get passes")
 {
     auto const epoch = cbor::decode("\xc1\x05"sv);
@@ -1497,7 +1497,7 @@ TEST_CASE("item get<T>: the tags that get passes")
     CHECK_EQ((*embedded)->get<pair>()->first, 24u);
     auto const self_described = cbor::decode("\x81\xd9\xd9\xf7\x07"sv);
     CHECK_EQ((*self_described)->get<std::span<cbor::item const>>().value()[0].get<int>().value(), 7);
-    auto const loop = cbor::decode_shared_refs("\xd8\x1c\xc1\xd8\x1d\x00"sv);
+    auto const loop = cbor::decode_cycles("\xd8\x1c\xc1\xd8\x1d\x00"sv);
     REQUIRE(loop.has_value());
     CHECK_EQ((*loop)->get<int>().error(), error::incorrect_type);
     CHECK_EQ((*loop)->get<pair>()->first, 1u);
@@ -1542,7 +1542,7 @@ void check_agreements(cbor::item const &it, cbor::lazy const &doc, types<T...>)
 
 // A program reads a value either from a tree or from a lazy, and both must give the same value or the same error. The
 // exceptions are a ref against a plain view, a tag 24, which a lazy passes into its content, and the tags 28 and 29,
-// which cbor::decode_shared_refs resolves and a lazy passes.
+// which cbor::decode_cycles resolves and a lazy passes.
 TEST_CASE("item get<T> and lazy get<T> agree")
 {
     for (sample const &s : samples) {

@@ -111,7 +111,7 @@ makes. These are the checks of mbedded-cbor.
   to 87 (RFC 8746) a byte string. Other content gives
   `inadmissible_type_for_tag_content`. The content of every other tag
   is not checked.
-- **Shared references.** `cbor::decode_shared_refs` resolves tags 28
+- **Shared references.** `cbor::decode_cycles` resolves tags 28
   and 29 for cycles only. A reference of tag 29 names an item that tag
   28 marked before it and whose decode has not ended; else the read
   gives `sharedref_not_cyclic`, `sharedref_not_defined` or
