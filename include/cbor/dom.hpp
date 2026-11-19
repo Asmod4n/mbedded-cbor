@@ -757,13 +757,6 @@ class reader
         return failed;
     }
 
-    static std::expected<void, error> check_text_size(std::size_t const size)
-    {
-        if (std::cmp_greater_equal(size, kind::high_bound)) [[unlikely]]
-            return std::unexpected(error::value_too_large);
-        return {};
-    }
-
     static std::expected<void, error> check_string_length(item const &x)
     {
         return validity::check_argument<true>(major_type::text_string, kind::high_of(x.m_tag));
@@ -1146,7 +1139,7 @@ class reader
 public:
     static std::expected<std::unique_ptr<tree>, error> read(std::string_view const json)
     {
-        if (auto const r = check_text_size(json.size()); !r) [[unlikely]]
+        if (auto const r = decoder::check_input_size(json.size()); !r) [[unlikely]]
             return std::unexpected(r.error());
         padded_string text(json);
         std::size_t const cur = space_end(text, 0);

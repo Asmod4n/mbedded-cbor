@@ -40,11 +40,11 @@ private:
     }
 
 public:
-    explicit padded_string(std::string_view const text)
-        : bytes(std::make_unique_for_overwrite<char[]>(padded_size(text.size()))), length(text.size())
+    explicit padded_string(std::string_view const text) : length(text.size())
     {
-        std::span<char> const all(bytes.get(), length + padding);
-        std::ranges::fill(std::ranges::copy(text, all.begin()).out, all.end(), '\0');
+        std::size_t const size = padded_size(length);
+        bytes = std::make_unique<char[]>(size);
+        std::ranges::copy(text, std::span<char>(bytes.get(), size).begin());
     }
 
     std::size_t size() const

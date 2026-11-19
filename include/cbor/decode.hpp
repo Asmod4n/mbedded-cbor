@@ -135,6 +135,13 @@ public:
         return {};
     }
 
+    static std::expected<void, error> check_input_size(std::size_t const size)
+    {
+        if (std::cmp_greater_equal(size, kind::high_bound)) [[unlikely]]
+            return std::unexpected(error::value_too_large);
+        return {};
+    }
+
     static void set_integer(item &x, major_type const major, std::uint8_t const info, std::uint64_t const argument)
     {
         if (major == major_type::unsigned_integer) {
@@ -533,6 +540,8 @@ public:
         std::size_t const size = bytes.size();
         if (size == 0) [[unlikely]]
             return std::unexpected(error::too_little_data);
+        if (auto const r = check_input_size(size); !r) [[unlikely]]
+            return std::unexpected(r.error());
         auto decoded = std::make_unique<tree>(value_block::allocated(size), padded_string(bytes),
                                               std::vector<tree::link>{});
         items_decoder out{decoded->block, {}, {}};
