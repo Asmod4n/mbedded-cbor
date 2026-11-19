@@ -661,6 +661,16 @@ public:
         return elements.subspan(*end - size, size);
     }
 
+    template <class T>
+    CBOR_ALWAYS_INLINE static constexpr std::expected<std::span<T const>, error>
+    substr(std::span<T const> const encoded, offset const at, std::size_t const size)
+    {
+        if (!bytes_fit(std::to_underlying(at), encoded.size()) ||
+            !bytes_fit(size, encoded.size() - std::to_underlying(at))) [[unlikely]]
+            return std::unexpected(error::too_little_data);
+        return encoded.subspan(std::to_underlying(at), size);
+    }
+
     CBOR_ALWAYS_INLINE static constexpr std::expected<std::string_view, error>
     substr(std::string_view const encoded, offset const at, std::size_t const size)
     {
@@ -675,16 +685,6 @@ public:
         if (!bytes) [[unlikely]]
             throw_logic_error("cbor::detail::validity: the bytes are after the end of their input");
         return *bytes;
-    }
-
-    template <class T>
-    CBOR_ALWAYS_INLINE static constexpr std::expected<std::span<T const>, error>
-    substr(std::span<T const> const encoded, offset const at, std::size_t const size)
-    {
-        if (!bytes_fit(std::to_underlying(at), encoded.size()) ||
-            !bytes_fit(size, encoded.size() - std::to_underlying(at))) [[unlikely]]
-            return std::unexpected(error::too_little_data);
-        return encoded.subspan(std::to_underlying(at), size);
     }
 
     template <std::integral I>
