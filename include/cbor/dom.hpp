@@ -249,25 +249,23 @@ class reader
         std::size_t pos = 0;
         std::uint32_t uni = 0;
 
-    skip_ascii:
         for (;;) {
+            for (;;) {
+                std::size_t i = 0;
 #pragma GCC unroll edn::repeat16
-            for (std::size_t i = 0; i < edn::repeat16; ++i) {
-                if (!edn::char_is_ascii_skip(byte(buf, src + i))) [[unlikely]] {
-                    src += i;
-                    goto skip_ascii_end;
-                }
+                for (; i < edn::repeat16; ++i)
+                    if (!edn::char_is_ascii_skip(byte(buf, src + i))) [[unlikely]]
+                        break;
+                src += i;
+                if (i < edn::repeat16)
+                    break;
             }
-            src += edn::repeat16;
-        }
-
-    skip_ascii_end:
-        if (buf[src] == '"') [[likely]] {
-            set_text(x, hdr, src - hdr);
-            return src + 1;
-        }
-
-        if (!is_escape_or_end(byte(buf, src))) {
+            if (buf[src] == '"') [[likely]] {
+                set_text(x, hdr, src - hdr);
+                return src + 1;
+            }
+            if (is_escape_or_end(byte(buf, src)))
+                break;
             pos = src;
             uni = byte_load_4(buf, src);
             while (is_utf8_seq3(uni)) {
@@ -275,7 +273,7 @@ class reader
                 uni = byte_load_4(buf, src);
             }
             if (is_utf8_seq1(uni))
-                goto skip_ascii;
+                continue;
             while (is_utf8_seq2(uni)) {
                 src += two_octets;
                 uni = byte_load_4(buf, src);
@@ -286,105 +284,104 @@ class reader
             }
             if (pos == src) [[unlikely]]
                 return failed;
-            goto skip_ascii;
         }
 
         dst = src;
-    copy_escape:
-        if (buf[src] == '\\') [[likely]] {
-            switch (buf[++src]) {
-            case '"':
-                buf[dst++] = '"';
-                ++src;
-                break;
-            case '\\':
-                buf[dst++] = '\\';
-                ++src;
-                break;
-            case '/':
-                buf[dst++] = '/';
-                ++src;
-                break;
-            case 'b':
-                buf[dst++] = '\b';
-                ++src;
-                break;
-            case 'f':
-                buf[dst++] = '\f';
-                ++src;
-                break;
-            case 'n':
-                buf[dst++] = '\n';
-                ++src;
-                break;
-            case 'r':
-                buf[dst++] = '\r';
-                ++src;
-                break;
-            case 't':
-                buf[dst++] = '\t';
-                ++src;
-                break;
-            case 'u':
-                --src;
-                if (!read_uni_esc(buf, src, dst)) [[unlikely]]
-                    return failed;
-                break;
-            [[unlikely]] default:
-                return failed;
-            }
-        } else if (buf[src] == '"') [[likely]] {
-            set_text(x, hdr, dst - hdr);
-            return src + 1;
-        } else [[unlikely]] {
-            return failed;
-        }
-
-    copy_ascii:
         for (;;) {
-#pragma GCC unroll edn::repeat16
-            for (std::size_t i = 0; i < edn::repeat16; ++i) {
-                if (!edn::char_is_ascii_skip(byte(buf, src + i))) [[unlikely]] {
-                    byte_move_forward(buf, dst, src, i);
-                    dst += i;
-                    src += i;
-                    goto copy_utf8;
+            if (buf[src] == '\\') [[likely]] {
+                switch (buf[++src]) {
+                case '"':
+                    buf[dst++] = '"';
+                    ++src;
+                    break;
+                case '\\':
+                    buf[dst++] = '\\';
+                    ++src;
+                    break;
+                case '/':
+                    buf[dst++] = '/';
+                    ++src;
+                    break;
+                case 'b':
+                    buf[dst++] = '\b';
+                    ++src;
+                    break;
+                case 'f':
+                    buf[dst++] = '\f';
+                    ++src;
+                    break;
+                case 'n':
+                    buf[dst++] = '\n';
+                    ++src;
+                    break;
+                case 'r':
+                    buf[dst++] = '\r';
+                    ++src;
+                    break;
+                case 't':
+                    buf[dst++] = '\t';
+                    ++src;
+                    break;
+                case 'u':
+                    --src;
+                    if (!read_uni_esc(buf, src, dst)) [[unlikely]]
+                        return failed;
+                    break;
+                [[unlikely]] default:
+                    return failed;
                 }
-            }
-            byte_move<edn::repeat16>(buf, dst, src);
-            dst += edn::repeat16;
-            src += edn::repeat16;
-        }
-
-    copy_utf8:
-        if (!is_escape_or_end(byte(buf, src))) {
-            pos = src;
-            uni = byte_load_4(buf, src);
-            while (is_utf8_seq3(uni)) {
-                byte_store(buf, dst, uni, utf8_seq_size);
-                dst += three_octets;
-                src += three_octets;
-                uni = byte_load_4(buf, src);
-            }
-            if (is_utf8_seq1(uni))
-                goto copy_ascii;
-            while (is_utf8_seq2(uni)) {
-                byte_store(buf, dst, uni, two_octets);
-                dst += two_octets;
-                src += two_octets;
-                uni = byte_load_4(buf, src);
-            }
-            while (is_utf8_seq4(uni)) {
-                byte_store(buf, dst, uni, four_octets);
-                dst += four_octets;
-                src += four_octets;
-                uni = byte_load_4(buf, src);
-            }
-            if (pos == src) [[unlikely]]
+            } else if (buf[src] == '"') [[likely]] {
+                set_text(x, hdr, dst - hdr);
+                return src + 1;
+            } else [[unlikely]] {
                 return failed;
-            goto copy_ascii;
+            }
+
+            for (;;) {
+                for (;;) {
+                    std::size_t i = 0;
+#pragma GCC unroll edn::repeat16
+                    for (; i < edn::repeat16; ++i)
+                        if (!edn::char_is_ascii_skip(byte(buf, src + i))) [[unlikely]]
+                            break;
+                    if (i < edn::repeat16) {
+                        byte_move_forward(buf, dst, src, i);
+                        dst += i;
+                        src += i;
+                        break;
+                    }
+                    byte_move<edn::repeat16>(buf, dst, src);
+                    dst += edn::repeat16;
+                    src += edn::repeat16;
+                }
+                if (is_escape_or_end(byte(buf, src)))
+                    break;
+                pos = src;
+                uni = byte_load_4(buf, src);
+                while (is_utf8_seq3(uni)) {
+                    byte_store(buf, dst, uni, utf8_seq_size);
+                    dst += three_octets;
+                    src += three_octets;
+                    uni = byte_load_4(buf, src);
+                }
+                if (is_utf8_seq1(uni))
+                    continue;
+                while (is_utf8_seq2(uni)) {
+                    byte_store(buf, dst, uni, two_octets);
+                    dst += two_octets;
+                    src += two_octets;
+                    uni = byte_load_4(buf, src);
+                }
+                while (is_utf8_seq4(uni)) {
+                    byte_store(buf, dst, uni, four_octets);
+                    dst += four_octets;
+                    src += four_octets;
+                    uni = byte_load_4(buf, src);
+                }
+                if (pos == src) [[unlikely]]
+                    return failed;
+            }
         }
-        goto copy_escape;
     }
 
     CBOR_ALWAYS_INLINE static std::size_t
@@ -834,280 +831,408 @@ class reader
             return {};
         };
 
+        enum class label {
+            arr_begin,
+            arr_val_begin,
+            arr_val_end,
+            arr_end,
+            obj_begin,
+            obj_key_begin,
+            obj_key_end,
+            obj_val_begin,
+            obj_val_end,
+            obj_end,
+            ctn_end,
+            doc_end
+        };
+        label at = label::arr_val_begin;
         block.items[ctn].m_uni.ofs = 0;
         if (buf[cur++] == '{') {
             block.items[ctn].m_tag = kind::word(0, 0, kind::type_map);
             newline();
-            goto obj_key_begin;
+            at = label::obj_key_begin;
+        } else {
+            block.items[ctn].m_tag = kind::word(0, 0, kind::type_array);
+            newline();
         }
-        block.items[ctn].m_tag = kind::word(0, 0, kind::type_array);
-        newline();
-        goto arr_val_begin;
+        for (;;) {
+            switch (at) {
 
-    arr_begin:
-        if (auto const o = container_begin(kind::type_array); !o) [[unlikely]]
-            return std::unexpected(o.error());
+            case label::arr_begin:
+                if (auto const o = container_begin(kind::type_array); !o) [[unlikely]]
+                    return std::unexpected(o.error());
 
-    arr_val_begin:
-        if constexpr (Pretty)
-            skip_indent();
-        if (buf[cur] == '{') {
-            ++cur;
-            goto obj_begin;
-        }
-        if (buf[cur] == '[') {
-            ++cur;
-            goto arr_begin;
-        }
-        if (edn::char_is_num(byte(buf, cur))) {
-            val_incr();
-            ++ctn_len;
-            r = read_num(buf, chars, cur, block.items[val]);
-            if (r != failed) [[likely]] {
-                cur = r;
-                goto arr_val_end;
-            }
-            goto fail;
-        }
-        if (buf[cur] == '"') {
-            val_incr();
-            ++ctn_len;
-            r = read_str(buf, cur, block.items[val]);
-            if (r != failed) [[likely]] {
-                if (auto const a = check_string_length(block.items[val]); !a) [[unlikely]]
-                    return std::unexpected(a.error());
-                cur = r;
-                goto arr_val_end;
-            }
-            goto fail;
-        }
-        if (buf[cur] == 't') {
-            val_incr();
-            ++ctn_len;
-            r = read_true(buf, cur, block.items[val]);
-            if (r != failed) [[likely]] {
-                cur = r;
-                goto arr_val_end;
-            }
-            goto fail;
-        }
-        if (buf[cur] == 'f') {
-            val_incr();
-            ++ctn_len;
-            r = read_false(buf, cur, block.items[val]);
-            if (r != failed) [[likely]] {
-                cur = r;
-                goto arr_val_end;
-            }
-            goto fail;
-        }
-        if (buf[cur] == 'n') {
-            val_incr();
-            ++ctn_len;
-            r = read_null(buf, cur, block.items[val]);
-            if (r != failed) [[likely]] {
-                cur = r;
-                goto arr_val_end;
-            }
-            goto fail;
-        }
-        if (buf[cur] == ']') {
-            ++cur;
-            if (ctn_len == 0) [[likely]]
-                goto arr_end;
-            goto fail;
-        }
-        if (edn::char_is_space(byte(buf, cur))) {
-            space();
-            goto arr_val_begin;
-        }
-        goto fail;
+                [[fallthrough]];
+            case label::arr_val_begin:
+                if constexpr (Pretty)
+                    skip_indent();
+                if (buf[cur] == '{') {
+                    ++cur;
+                    {
+                        at = label::obj_begin;
+                        continue;
+                    }
+                }
+                if (buf[cur] == '[') {
+                    ++cur;
+                    {
+                        at = label::arr_begin;
+                        continue;
+                    }
+                }
+                if (edn::char_is_num(byte(buf, cur))) {
+                    val_incr();
+                    ++ctn_len;
+                    r = read_num(buf, chars, cur, block.items[val]);
+                    if (r != failed) [[likely]] {
+                        cur = r;
+                        {
+                            at = label::arr_val_end;
+                            continue;
+                        }
+                    }
+                    return std::unexpected(error::syntax_error);
+                }
+                if (buf[cur] == '"') {
+                    val_incr();
+                    ++ctn_len;
+                    r = read_str(buf, cur, block.items[val]);
+                    if (r != failed) [[likely]] {
+                        if (auto const a = check_string_length(block.items[val]); !a) [[unlikely]]
+                            return std::unexpected(a.error());
+                        cur = r;
+                        {
+                            at = label::arr_val_end;
+                            continue;
+                        }
+                    }
+                    return std::unexpected(error::syntax_error);
+                }
+                if (buf[cur] == 't') {
+                    val_incr();
+                    ++ctn_len;
+                    r = read_true(buf, cur, block.items[val]);
+                    if (r != failed) [[likely]] {
+                        cur = r;
+                        {
+                            at = label::arr_val_end;
+                            continue;
+                        }
+                    }
+                    return std::unexpected(error::syntax_error);
+                }
+                if (buf[cur] == 'f') {
+                    val_incr();
+                    ++ctn_len;
+                    r = read_false(buf, cur, block.items[val]);
+                    if (r != failed) [[likely]] {
+                        cur = r;
+                        {
+                            at = label::arr_val_end;
+                            continue;
+                        }
+                    }
+                    return std::unexpected(error::syntax_error);
+                }
+                if (buf[cur] == 'n') {
+                    val_incr();
+                    ++ctn_len;
+                    r = read_null(buf, cur, block.items[val]);
+                    if (r != failed) [[likely]] {
+                        cur = r;
+                        {
+                            at = label::arr_val_end;
+                            continue;
+                        }
+                    }
+                    return std::unexpected(error::syntax_error);
+                }
+                if (buf[cur] == ']') {
+                    ++cur;
+                    if (ctn_len == 0) [[likely]] {
+                        at = label::arr_end;
+                        continue;
+                    }
+                    return std::unexpected(error::syntax_error);
+                }
+                if (edn::char_is_space(byte(buf, cur))) {
+                    space();
+                    {
+                        at = label::arr_val_begin;
+                        continue;
+                    }
+                }
+                return std::unexpected(error::syntax_error);
 
-    arr_val_end:
-        if constexpr (Pretty) {
-            if (byte_match<pretty_comma.size()>(buf, cur, pretty_comma)) {
-                cur += pretty_comma.size();
-                goto arr_val_begin;
+                [[fallthrough]];
+            case label::arr_val_end:
+                if constexpr (Pretty) {
+                    if (byte_match<pretty_comma.size()>(buf, cur, pretty_comma)) {
+                        cur += pretty_comma.size();
+                        {
+                            at = label::arr_val_begin;
+                            continue;
+                        }
+                    }
+                }
+                if (buf[cur] == ',') {
+                    ++cur;
+                    {
+                        at = label::arr_val_begin;
+                        continue;
+                    }
+                }
+                if (buf[cur] == ']') {
+                    ++cur;
+                    {
+                        at = label::arr_end;
+                        continue;
+                    }
+                }
+                if (edn::char_is_space(byte(buf, cur))) {
+                    space();
+                    {
+                        at = label::arr_val_end;
+                        continue;
+                    }
+                }
+                return std::unexpected(error::syntax_error);
+
+                [[fallthrough]];
+            case label::arr_end:
+                if (auto const e = container_end(major_type::array); !e) [[unlikely]]
+                    return std::unexpected(e.error());
+                {
+                    at = label::ctn_end;
+                    continue;
+                }
+
+                [[fallthrough]];
+            case label::obj_begin:
+                if (auto const o = container_begin(kind::type_map); !o) [[unlikely]]
+                    return std::unexpected(o.error());
+
+                [[fallthrough]];
+            case label::obj_key_begin:
+                if constexpr (Pretty)
+                    skip_indent();
+                if (buf[cur] == '"') [[likely]] {
+                    val_incr();
+                    ++ctn_len;
+                    r = read_str(buf, cur, block.items[val]);
+                    if (r != failed) [[likely]] {
+                        if (auto const a = check_string_length(block.items[val]); !a) [[unlikely]]
+                            return std::unexpected(a.error());
+                        cur = r;
+                        {
+                            at = label::obj_key_end;
+                            continue;
+                        }
+                    }
+                    return std::unexpected(error::syntax_error);
+                }
+                if (buf[cur] == '}') [[likely]] {
+                    ++cur;
+                    if (ctn_len == 0) [[likely]] {
+                        at = label::obj_end;
+                        continue;
+                    }
+                    return std::unexpected(error::syntax_error);
+                }
+                if (edn::char_is_space(byte(buf, cur))) {
+                    space();
+                    {
+                        at = label::obj_key_begin;
+                        continue;
+                    }
+                }
+                return std::unexpected(error::syntax_error);
+
+                [[fallthrough]];
+            case label::obj_key_end:
+                if constexpr (Pretty) {
+                    if (byte_match<pretty_colon.size()>(buf, cur, pretty_colon)) {
+                        cur += pretty_colon.size();
+                        {
+                            at = label::obj_val_begin;
+                            continue;
+                        }
+                    }
+                }
+                if (buf[cur] == ':') {
+                    ++cur;
+                    {
+                        at = label::obj_val_begin;
+                        continue;
+                    }
+                }
+                if (edn::char_is_space(byte(buf, cur))) {
+                    space();
+                    {
+                        at = label::obj_key_end;
+                        continue;
+                    }
+                }
+                return std::unexpected(error::syntax_error);
+
+                [[fallthrough]];
+            case label::obj_val_begin:
+                if (buf[cur] == '"') {
+                    ++val;
+                    ++ctn_len;
+                    r = read_str(buf, cur, block.items[val]);
+                    if (r != failed) [[likely]] {
+                        if (auto const a = check_string_length(block.items[val]); !a) [[unlikely]]
+                            return std::unexpected(a.error());
+                        cur = r;
+                        {
+                            at = label::obj_val_end;
+                            continue;
+                        }
+                    }
+                    return std::unexpected(error::syntax_error);
+                }
+                if (edn::char_is_num(byte(buf, cur))) {
+                    ++val;
+                    ++ctn_len;
+                    r = read_num(buf, chars, cur, block.items[val]);
+                    if (r != failed) [[likely]] {
+                        cur = r;
+                        {
+                            at = label::obj_val_end;
+                            continue;
+                        }
+                    }
+                    return std::unexpected(error::syntax_error);
+                }
+                if (buf[cur] == '{') {
+                    ++cur;
+                    {
+                        at = label::obj_begin;
+                        continue;
+                    }
+                }
+                if (buf[cur] == '[') {
+                    ++cur;
+                    {
+                        at = label::arr_begin;
+                        continue;
+                    }
+                }
+                if (buf[cur] == 't') {
+                    ++val;
+                    ++ctn_len;
+                    r = read_true(buf, cur, block.items[val]);
+                    if (r != failed) [[likely]] {
+                        cur = r;
+                        {
+                            at = label::obj_val_end;
+                            continue;
+                        }
+                    }
+                    return std::unexpected(error::syntax_error);
+                }
+                if (buf[cur] == 'f') {
+                    ++val;
+                    ++ctn_len;
+                    r = read_false(buf, cur, block.items[val]);
+                    if (r != failed) [[likely]] {
+                        cur = r;
+                        {
+                            at = label::obj_val_end;
+                            continue;
+                        }
+                    }
+                    return std::unexpected(error::syntax_error);
+                }
+                if (buf[cur] == 'n') {
+                    ++val;
+                    ++ctn_len;
+                    r = read_null(buf, cur, block.items[val]);
+                    if (r != failed) [[likely]] {
+                        cur = r;
+                        {
+                            at = label::obj_val_end;
+                            continue;
+                        }
+                    }
+                    return std::unexpected(error::syntax_error);
+                }
+                if (edn::char_is_space(byte(buf, cur))) {
+                    space();
+                    {
+                        at = label::obj_val_begin;
+                        continue;
+                    }
+                }
+                return std::unexpected(error::syntax_error);
+
+                [[fallthrough]];
+            case label::obj_val_end:
+                if constexpr (Pretty) {
+                    if (byte_match<pretty_comma.size()>(buf, cur, pretty_comma)) {
+                        cur += pretty_comma.size();
+                        {
+                            at = label::obj_key_begin;
+                            continue;
+                        }
+                    }
+                }
+                if (buf[cur] == ',') [[likely]] {
+                    ++cur;
+                    {
+                        at = label::obj_key_begin;
+                        continue;
+                    }
+                }
+                if (buf[cur] == '}') [[likely]] {
+                    ++cur;
+                    {
+                        at = label::obj_end;
+                        continue;
+                    }
+                }
+                if (edn::char_is_space(byte(buf, cur))) {
+                    space();
+                    {
+                        at = label::obj_val_end;
+                        continue;
+                    }
+                }
+                return std::unexpected(error::syntax_error);
+
+                [[fallthrough]];
+            case label::obj_end:
+                if (auto const e = container_end(major_type::map); !e) [[unlikely]]
+                    return std::unexpected(e.error());
+
+                [[fallthrough]];
+            case label::ctn_end:
+                if (ctn == ctn_parent) [[unlikely]] {
+                    at = label::doc_end;
+                    continue;
+                }
+                --depth;
+                ctn = ctn_parent;
+                ctn_len = static_cast<std::size_t>(kind::high_of(block.items[ctn].m_tag));
+                newline();
+                if ((block.items[ctn].m_tag & kind::type_mask) == kind::type_map) {
+                    at = label::obj_val_end;
+                    continue;
+                }
+                {
+                    at = label::arr_val_end;
+                    continue;
+                }
+
+                [[fallthrough]];
+            case label::doc_end:
+                if (space_end(text, cur) != len) [[unlikely]]
+                    return std::unexpected(error::syntax_error);
+                block.items.resize(val + 1);
+                return std::make_unique<tree>(std::move(block), std::move(text), std::vector<tree::link>{});
             }
         }
-        if (buf[cur] == ',') {
-            ++cur;
-            goto arr_val_begin;
-        }
-        if (buf[cur] == ']') {
-            ++cur;
-            goto arr_end;
-        }
-        if (edn::char_is_space(byte(buf, cur))) {
-            space();
-            goto arr_val_end;
-        }
-        goto fail;
-
-    arr_end:
-        if (auto const e = container_end(major_type::array); !e) [[unlikely]]
-            return std::unexpected(e.error());
-        goto ctn_end;
-
-    obj_begin:
-        if (auto const o = container_begin(kind::type_map); !o) [[unlikely]]
-            return std::unexpected(o.error());
-
-    obj_key_begin:
-        if constexpr (Pretty)
-            skip_indent();
-        if (buf[cur] == '"') [[likely]] {
-            val_incr();
-            ++ctn_len;
-            r = read_str(buf, cur, block.items[val]);
-            if (r != failed) [[likely]] {
-                if (auto const a = check_string_length(block.items[val]); !a) [[unlikely]]
-                    return std::unexpected(a.error());
-                cur = r;
-                goto obj_key_end;
-            }
-            goto fail;
-        }
-        if (buf[cur] == '}') [[likely]] {
-            ++cur;
-            if (ctn_len == 0) [[likely]]
-                goto obj_end;
-            goto fail;
-        }
-        if (edn::char_is_space(byte(buf, cur))) {
-            space();
-            goto obj_key_begin;
-        }
-        goto fail;
-
-    obj_key_end:
-        if constexpr (Pretty) {
-            if (byte_match<pretty_colon.size()>(buf, cur, pretty_colon)) {
-                cur += pretty_colon.size();
-                goto obj_val_begin;
-            }
-        }
-        if (buf[cur] == ':') {
-            ++cur;
-            goto obj_val_begin;
-        }
-        if (edn::char_is_space(byte(buf, cur))) {
-            space();
-            goto obj_key_end;
-        }
-        goto fail;
-
-    obj_val_begin:
-        if (buf[cur] == '"') {
-            ++val;
-            ++ctn_len;
-            r = read_str(buf, cur, block.items[val]);
-            if (r != failed) [[likely]] {
-                if (auto const a = check_string_length(block.items[val]); !a) [[unlikely]]
-                    return std::unexpected(a.error());
-                cur = r;
-                goto obj_val_end;
-            }
-            goto fail;
-        }
-        if (edn::char_is_num(byte(buf, cur))) {
-            ++val;
-            ++ctn_len;
-            r = read_num(buf, chars, cur, block.items[val]);
-            if (r != failed) [[likely]] {
-                cur = r;
-                goto obj_val_end;
-            }
-            goto fail;
-        }
-        if (buf[cur] == '{') {
-            ++cur;
-            goto obj_begin;
-        }
-        if (buf[cur] == '[') {
-            ++cur;
-            goto arr_begin;
-        }
-        if (buf[cur] == 't') {
-            ++val;
-            ++ctn_len;
-            r = read_true(buf, cur, block.items[val]);
-            if (r != failed) [[likely]] {
-                cur = r;
-                goto obj_val_end;
-            }
-            goto fail;
-        }
-        if (buf[cur] == 'f') {
-            ++val;
-            ++ctn_len;
-            r = read_false(buf, cur, block.items[val]);
-            if (r != failed) [[likely]] {
-                cur = r;
-                goto obj_val_end;
-            }
-            goto fail;
-        }
-        if (buf[cur] == 'n') {
-            ++val;
-            ++ctn_len;
-            r = read_null(buf, cur, block.items[val]);
-            if (r != failed) [[likely]] {
-                cur = r;
-                goto obj_val_end;
-            }
-            goto fail;
-        }
-        if (edn::char_is_space(byte(buf, cur))) {
-            space();
-            goto obj_val_begin;
-        }
-        goto fail;
-
-    obj_val_end:
-        if constexpr (Pretty) {
-            if (byte_match<pretty_comma.size()>(buf, cur, pretty_comma)) {
-                cur += pretty_comma.size();
-                goto obj_key_begin;
-            }
-        }
-        if (buf[cur] == ',') [[likely]] {
-            ++cur;
-            goto obj_key_begin;
-        }
-        if (buf[cur] == '}') [[likely]] {
-            ++cur;
-            goto obj_end;
-        }
-        if (edn::char_is_space(byte(buf, cur))) {
-            space();
-            goto obj_val_end;
-        }
-        goto fail;
-
-    obj_end:
-        if (auto const e = container_end(major_type::map); !e) [[unlikely]]
-            return std::unexpected(e.error());
-
-    ctn_end:
-        if (ctn == ctn_parent) [[unlikely]]
-            goto doc_end;
-        --depth;
-        ctn = ctn_parent;
-        ctn_len = static_cast<std::size_t>(kind::high_of(block.items[ctn].m_tag));
-        newline();
-        if ((block.items[ctn].m_tag & kind::type_mask) == kind::type_map)
-            goto obj_val_end;
-        goto arr_val_end;
-
-    doc_end:
-        if (space_end(text, cur) != len) [[unlikely]]
-            goto fail;
-        block.items.resize(val + 1);
-        return std::make_unique<tree>(std::move(block), std::move(text), std::vector<tree::link>{});
-
-    fail:
-        return std::unexpected(error::syntax_error);
     }
 
     static std::expected<std::unique_ptr<tree>, error> read_root_single(padded_string text, std::size_t const cur)
