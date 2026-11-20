@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <fstream>
 #include <iterator>
+#include <memory>
 #include <optional>
 #include <span>
 #include <sstream>
@@ -196,9 +197,9 @@ TEST_CASE("parse_edn: a JSON number with a long fraction gives the double of std
             numbers.push_back(integer + "." + digits.substr(0, n));
     for (std::string const &number : numbers) {
         double expected = 0;
-        auto const [end, ec] = std::from_chars(number.data(), number.data() + number.size(), expected);
+        auto const [end, ec] = std::from_chars(number.data(), std::to_address(number.end()), expected);
         REQUIRE(ec == std::errc{});
-        REQUIRE(end == number.data() + number.size());
+        REQUIRE(end == std::to_address(number.end()));
         for (std::string const &text :
              {number, "[" + number + "]", "[" + number + ",0]", "{\"a\":" + number + "}"}) {
             CAPTURE(text);
