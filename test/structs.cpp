@@ -1842,3 +1842,229 @@ TEST_CASE("structs: encode of a described struct equals cbor::encode, and append
     CHECK_EQ(*n, bytes->size());
     CHECK_EQ(out, "x" + *bytes);
 }
+
+namespace
+{
+
+// A binding holds objects whose kind is known only at run time. This handle stands for such an object: the
+// test builds a tree of handles and lets cbor::encode read it through describe_members<handle>::value.
+struct handle {
+    enum class kind { number, text, array, map, failing };
+    kind k = kind::number;
+    long long number = 0;
+    std::string text;
+    std::vector<handle> elements;
+    std::vector<std::pair<std::string, handle>> pairs;
+};
+
+struct handle_failure : std::runtime_error {
+    using std::runtime_error::runtime_error;
+};
+
+handle number_handle(long long const n)
+{
+    return {handle::kind::number, n, {}, {}, {}};
+}
+
+handle text_handle(std::string t)
+{
+    return {handle::kind::text, 0, std::move(t), {}, {}};
+}
+
+handle array_handle(std::vector<handle> e)
+{
+    return {handle::kind::array, 0, {}, std::move(e), {}};
+}
+
+handle map_handle(std::vector<std::pair<std::string, handle>> p)
+{
+    return {handle::kind::map, 0, {}, {}, std::move(p)};
+}
+
+// A type that is a range itself, but whose description gives a number: the description decides.
+struct counted_range {
+    std::vector<int> items;
+    auto begin() const
+    {
+        return items.begin();
+    }
+    auto end() const
+    {
+        return items.end();
+    }
+    std::size_t size() const
+    {
+        return items.size();
+    }
+};
+
+struct integer_keys {
+    std::vector<std::pair<long long, handle>> pairs;
+};
+
+struct handle_keys {
+    std::vector<std::pair<handle, handle>> pairs;
+};
+
+}
+
+template <>
+struct cbor::describe_members<handle> {
+    static constexpr std::optional<cbor::tag> tag = cbor::untagged;
+    static std::variant<long long, std::string_view, std::span<handle const>,
+                        std::span<std::pair<std::string, handle> const>>
+    value(handle const &h)
+    {
+        switch (h.k) {
+        case handle::kind::number:
+            return h.number;
+        case handle::kind::text:
+            return std::string_view(h.text);
+        case handle::kind::array:
+            return std::span<handle const>(h.elements);
+        case handle::kind::map:
+            return std::span<std::pair<std::string, handle> const>(h.pairs);
+        case handle::kind::failing:
+            break;
+        }
+        throw handle_failure("the object cannot give its value");
+    }
+};
+
+template <>
+struct cbor::describe_members<counted_range> {
+    static constexpr std::optional<cbor::tag> tag = cbor::untagged;
+    static std::size_t value(counted_range const &r)
+    {
+        return r.size();
+    }
+};
+
+template <>
+struct cbor::describe_members<integer_keys> {
+    static constexpr std::optional<cbor::tag> tag = cbor::untagged;
+    static std::span<std::pair<long long, handle> const> value(integer_keys const &k)
+    {
+        return k.pairs;
+    }
+};
+
+template <>
+struct cbor::describe_members<handle_keys> {
+    static constexpr std::optional<cbor::tag> tag = cbor::untagged;
+    static std::span<std::pair<handle, handle> const> value(handle_keys const &k)
+    {
+        return k.pairs;
+    }
+};
+
+namespace
+{
+
+std::string bytes_of_edn(std::string_view const text)
+{
+    auto const tree = cbor::parse_edn(text);
+    REQUIRE(tree.has_value());
+    std::string out;
+    REQUIRE(cbor::encode(out, **tree).has_value());
+    return out;
+}
+
+handle sample_handle()
+{
+    return map_handle({{"a", number_handle(7)}, {"b", array_handle({text_handle("x"), number_handle(-3)})}});
+}
+
+}
+
+// A binding writes no byte itself: cbor::encode asks each handle for its value and writes it. The bytes must
+// be those of the same data as EDN, in every target form that encode takes.
+TEST_CASE("structs: a type described by its value is written as that value, for each target")
+{
+    std::string const expected = bytes_of_edn(R"({"a": 7, "b": ["x", -3]})");
+    handle const h = sample_handle();
+    auto const fresh = cbor::encode(h);
+    REQUIRE(fresh.has_value());
+    CHECK_EQ(*fresh, expected);
+
+    std::string appended = "z";
+    REQUIRE(cbor::encode(appended, h).has_value());
+    CHECK_EQ(appended, "z" + expected);
+
+    std::vector<std::byte> bytes;
+    REQUIRE(cbor::encode(bytes, h).has_value());
+    CHECK_EQ(std::string(reinterpret_cast<char const *>(bytes.data()), bytes.size()), expected);
+
+    std::string room(expected.size(), '\0');
+    auto const n = cbor::encode(std::span<char>(room), h);
+    REQUIRE(n.has_value());
+    CHECK_EQ(*n, expected.size());
+    CHECK_EQ(room, expected);
+    CHECK_EQ(cbor::to_edn(h).value(), R"({"a": 7, "b": ["x", -3]})");
+}
+
+// RFC 8949 3.1: the head of an array or a map holds the count, and a key is any data item. Empty containers,
+// integer keys and keys that are handles themselves must be written with their count.
+TEST_CASE("structs: a range of pairs is a map with any key, and an empty range is an empty container")
+{
+    CHECK_EQ(cbor::encode(array_handle({})).value(), bytes_of_edn("[]"));
+    CHECK_EQ(cbor::encode(map_handle({})).value(), bytes_of_edn("{}"));
+    integer_keys const ints{{{1, text_handle("one")}, {-2, number_handle(2)}}};
+    CHECK_EQ(cbor::encode(ints).value(), bytes_of_edn(R"({1: "one", -2: 2})"));
+    handle_keys const keyed{{{array_handle({number_handle(1)}), text_handle("v")}}};
+    CHECK_EQ(cbor::encode(keyed).value(), bytes_of_edn(R"({[1]: "v"})"));
+    std::vector<std::pair<int const, int>> const constant_keys{{1, 2}, {3, 4}};
+    CHECK_EQ(cbor::encode(constant_keys).value(), bytes_of_edn("{1: 2, 3: 4}"));
+}
+
+// A type that has a description with a value is written through it, even where the type is also a range.
+TEST_CASE("structs: the value of a description wins over the range form of the type")
+{
+    counted_range const r{{5, 6, 7}};
+    CHECK_EQ(cbor::encode(r).value(), bytes_of_edn("3"));
+}
+
+// A std::span target has a fixed size. A value that does not fit gives no_buffer_space, and the span holds
+// the bytes that came before the item that did not fit.
+TEST_CASE("structs: a span that is too small gives no_buffer_space and keeps the bytes before")
+{
+    handle const h = sample_handle();
+    std::string const expected = cbor::encode(h).value();
+    std::string room(expected.size() - 1, '\0');
+    auto const n = cbor::encode(std::span<char>(room), h);
+    REQUIRE_FALSE(n.has_value());
+    CHECK_EQ(n.error(), cbor::error::no_buffer_space);
+    CHECK_EQ(room.substr(0, 3), expected.substr(0, 3));
+}
+
+// An object of a binding may fail while it gives its value; that exception belongs to the binding and passes
+// through cbor::encode unchanged, and a string target keeps what it held.
+TEST_CASE("structs: an exception from a value passes through encode")
+{
+    handle const h = array_handle({number_handle(1), handle{handle::kind::failing, 0, {}, {}, {}}});
+    CHECK_THROWS_AS(static_cast<void>(cbor::encode(h)), handle_failure);
+    std::string out = "keep";
+    CHECK_THROWS_AS(static_cast<void>(cbor::encode(out, h)), handle_failure);
+    CHECK_EQ(out, "keep");
+}
+
+// The nesting of a binding's objects is not known at compile time; a depth over the stack of the thread gives
+// nesting_depth_exceeded and not a crash. The tree is built and taken apart one level at a time, so that the
+// test itself does not recurse as deep as it nests.
+TEST_CASE("structs: a value nested deeper than the stack gives nesting_depth_exceeded")
+{
+    constexpr std::size_t depth = 1'000'000;
+    handle deep = number_handle(0);
+    for (std::size_t i = 0; i < depth; ++i) {
+        handle outer = array_handle({});
+        outer.elements.push_back(std::move(deep));
+        deep = std::move(outer);
+    }
+    auto const e = cbor::encode(deep);
+    REQUIRE_FALSE(e.has_value());
+    CHECK_EQ(e.error(), cbor::error::nesting_depth_exceeded);
+    while (!deep.elements.empty()) {
+        handle inner = std::move(deep.elements.front());
+        deep = std::move(inner);
+    }
+}

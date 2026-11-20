@@ -710,7 +710,7 @@ class reflection
     template <class U>
     static consteval std::optional<std::uint64_t> tag_number_of()
     {
-        if constexpr (has_describe_members<U>) {
+        if constexpr (has_describe_members<U> || has_describe_value<U>) {
             if constexpr (tag_declared<U>())
                 if (describe_members<U>::tag.has_value())
                     return describe_members<U>::tag->number;
@@ -889,7 +889,7 @@ class reflection
     }
 
     template <class U>
-    static consteval bool description_valid()
+    static consteval bool tag_valid()
     {
         static_assert(tag_declared<U>(), "cbor::describe_members<T>::tag is a std::optional<cbor::tag>.");
         if constexpr (tag_declared<U>()) {
@@ -909,6 +909,13 @@ class reflection
                 "cbor::describe_members takes no tag 55799; it has no semantics (RFC 8949 3.4.6), and structs "
                 "reads through it.");
         }
+        return true;
+    }
+
+    template <class U>
+    static consteval bool description_valid()
+    {
+        static_assert(tag_valid<U>());
         static_assert(members_of_class<U>(), "cbor::describe_members lists a member of another class.");
         if constexpr (members_of_class<U>()) {
             static_assert(pointers_unique<U>(), "cbor::describe_members lists a member twice.");

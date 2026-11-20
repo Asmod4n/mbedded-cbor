@@ -568,6 +568,7 @@ class basic_generic
     static std::expected<void, error> read_generic_value(detail::heads::decoder<true> &d,
                                                          detail::heads::head const &h, U &out)
     {
+        static_assert(!has_describe_value<U>, "cbor::structs reads no type whose description holds a value.");
         if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
             return std::unexpected(r.error());
         if constexpr (std::same_as<U, bool>) {
@@ -1337,205 +1338,6 @@ class basic_generic
             return true;
     }
 
-    template <std::floating_point F>
-    static std::size_t float_size(F const value)
-    {
-        switch (detail::ieee754::preferred_float_info(value)) {
-        case rfc8949::simple_information::half_precision_float:
-            return detail::heads::initial_byte_size + sizeof(std::uint16_t);
-        case rfc8949::simple_information::single_precision_float:
-            return detail::heads::initial_byte_size + sizeof(std::uint32_t);
-        default:
-            return detail::heads::initial_byte_size + sizeof(std::uint64_t);
-        }
-    }
-
-    template <class U>
-    static std::expected<std::size_t, error> generic_size(U const &value)
-    {
-        if constexpr (!std::is_arithmetic_v<U> && !std::is_enum_v<U>)
-            if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
-                return std::unexpected(r.error());
-        if constexpr (std::same_as<U, bool> || std::same_as<U, std::nullptr_t>) {
-            return detail::heads::initial_byte_size;
-        } else if constexpr (std::same_as<U, simple_value>) {
-            return detail::heads::head_size(std::to_underlying(value));
-#ifdef CBOR_HAS_INT128
-        } else if constexpr (detail::reflection::is_wide_integer<U>) {
-            bool negative = false;
-            if constexpr (std::same_as<U, int128>)
-                negative = value < 0;
-            uint128 const magnitude =
-                negative ? ~static_cast<uint128>(value) : static_cast<uint128>(value);
-            if (magnitude <= std::numeric_limits<std::uint64_t>::max())
-                return detail::heads::head_size(static_cast<std::uint64_t>(magnitude));
-            std::size_t const digits =
-                sizeof(uint128) - static_cast<std::size_t>(std::countl_zero(static_cast<std::uint64_t>(magnitude >> std::numeric_limits<std::uint64_t>::digits))) /
-                                      std::numeric_limits<std::uint8_t>::digits;
-            return detail::heads::initial_byte_size + detail::heads::head_size(digits) + digits;
-#endif
-        } else if constexpr (detail::is_std_variant<U>) {
-            return std::visit([](auto const &e) { return generic_size(e); }, value);
-        } else if constexpr (std::is_enum_v<U>) {
-            return generic_size(std::to_underlying(value));
-        } else if constexpr (std::is_integral_v<U>) {
-            if constexpr (std::is_signed_v<U>)
-                return detail::heads::head_size(value < 0 ? static_cast<std::uint64_t>(-1 - static_cast<std::int64_t>(value))
-                                           : static_cast<std::uint64_t>(value));
-            else
-                return detail::heads::head_size(value);
-        } else if constexpr (std::is_floating_point_v<U>) {
-            static_assert(std::same_as<U, float> || std::same_as<U, double>, "cbor::structs reads and writes float and double only.");
-            return float_size(value);
-        } else if constexpr (is_clock_time<U>) {
-            auto const t = extended_time_of(value);
-            if (!t) [[unlikely]]
-                return std::unexpected(t.error());
-            return extended_time_size(std::get<0>(*t), std::get<1>(*t), std::get<2>(*t));
-        } else if constexpr (is_extended_time<U>) {
-            return extended_time_size(value);
-        } else if constexpr (is_tagged_standard_type<U>) {
-            auto const content = tag_content_size(value);
-            if (!content) [[unlikely]]
-                return content;
-            return detail::validity::checked_add(detail::heads::head_size(tag_of_standard_type<U>()), *content)
-                .transform_error(detail::validity::writer_error);
-        } else if constexpr (is_basic_string<U> || std::same_as<U, std::string_view> ||
-                             std::same_as<U, std::span<std::byte const>>) {
-            return detail::validity::checked_add(detail::heads::head_size(value.size()), value.size())
-                .transform_error(detail::validity::writer_error);
-        } else if constexpr (detail::reflection::is_optional<U>) {
-            if (!value)
-                return detail::heads::initial_byte_size;
-            return generic_size(*value);
-        } else if constexpr (is_tagged_item<U>) {
-            auto const content = generic_size(value.content);
-            if (!content) [[unlikely]]
-                return content;
-            return detail::validity::checked_add(detail::heads::head_size(U::number), *content)
-                .transform_error(detail::validity::writer_error);
-        } else if constexpr (is_std_tuple<U> || is_std_array<U>) {
-            std::expected<std::size_t, error> size = detail::heads::head_size(std::tuple_size_v<U>);
-            std::apply(
-                [&](auto const &...e) {
-                    ((size = size.and_then([&](std::size_t const sum) {
-                         return generic_size(e).and_then([sum](std::size_t const n) {
-                             return detail::validity::checked_add(sum, n).transform_error(
-                                 detail::validity::writer_error);
-                         });
-                     })),
-                     ...);
-                },
-                value);
-            return size;
-        } else if constexpr (is_multimap<U>) {
-            auto groups = key_groups(value);
-            std::expected<std::size_t, error> size =
-                detail::heads::head_size(std::ranges::fold_left(groups, std::uint64_t{0}, element_count));
-            for (auto const group : groups) {
-                size = size.and_then([&](std::size_t const sum) {
-                    return generic_size(group.front().first).and_then([&](std::size_t const n) {
-                        return detail::validity::checked_add(sum, n)
-                            .transform_error(detail::validity::writer_error)
-                            .and_then([&group](std::size_t const total) {
-                                return detail::validity::checked_add(
-                                           total, detail::heads::head_size(std::ranges::fold_left(
-                                                      group, std::uint64_t{0}, element_count)))
-                                    .transform_error(detail::validity::writer_error);
-                            });
-                    });
-                });
-                for (auto const &[k, v] : group)
-                    size = size.and_then([&v](std::size_t const sum) {
-                        return generic_size(v).and_then([sum](std::size_t const n) {
-                            return detail::validity::checked_add(sum, n).transform_error(
-                                detail::validity::writer_error);
-                        });
-                    });
-                if (!size) [[unlikely]]
-                    return size;
-            }
-            return size;
-        } else if constexpr (detail::reflection::is_map<U>) {
-            std::size_t size = detail::heads::head_size(value.size());
-            for (auto const &[k, v] : value) {
-                auto const key = generic_size(k).and_then([size](std::size_t const n) {
-                    return detail::validity::checked_add(size, n).transform_error(
-                        detail::validity::writer_error);
-                });
-                if (!key) [[unlikely]]
-                    return key;
-                auto const mapped = generic_size(v).and_then([&key](std::size_t const n) {
-                    return detail::validity::checked_add(*key, n).transform_error(
-                        detail::validity::writer_error);
-                });
-                if (!mapped) [[unlikely]]
-                    return mapped;
-                size = *mapped;
-            }
-            return size;
-        } else if constexpr (requires {
-                                 value.size();
-                                 typename U::value_type;
-                             }) {
-            return elements_size(value);
-        } else {
-            static_assert(detail::pfr::struct_writable<U, Reflected>());
-            std::size_t present = 0;
-            auto const member_size =
-                [&]<std::size_t I>(std::integral_constant<std::size_t, I>,
-                                   std::size_t const sum) -> std::expected<std::size_t, error> {
-                auto const &m = detail::pfr::get<I>(value);
-                if (!member_present(m))
-                    return sum;
-                ++present;
-                constexpr map_key key = detail::pfr::key_of<I, U>();
-                auto const keyed =
-                    detail::validity::checked_add(sum, detail::heads::head_size(key.argument) + key.text.size())
-                        .transform_error(detail::validity::writer_error);
-                if (!keyed) [[unlikely]]
-                    return keyed;
-                std::expected<std::size_t, error> encoded_size;
-                if constexpr (detail::reflection::is_optional<std::remove_cvref_t<decltype(m)>>)
-                    encoded_size = generic_size(*m);
-                else
-                    encoded_size = generic_size(m);
-                return encoded_size.and_then([&keyed](std::size_t const n) {
-                    return detail::validity::checked_add(*keyed, n).transform_error(
-                        detail::validity::writer_error);
-                });
-            };
-            std::expected<std::size_t, error> size = std::size_t{0};
-            [&]<std::size_t... I>(std::index_sequence<I...>) {
-                ((size = size.and_then([&](std::size_t const sum) {
-                     return member_size(std::integral_constant<std::size_t, I>{}, sum);
-                 })),
-                 ...);
-            }(std::make_index_sequence<detail::pfr::tuple_size_v<U>>());
-            if (!size) [[unlikely]]
-                return size;
-            std::size_t head = detail::heads::head_size(present);
-            if constexpr (constexpr std::optional<std::uint64_t> tag = detail::reflection::tag_number_of<U>(); tag.has_value())
-                head += detail::heads::head_size(*tag);
-            return detail::validity::checked_add(*size, head).transform_error(detail::validity::writer_error);
-        }
-    }
-
-    template <class U>
-    static std::expected<std::size_t, error> elements_size(U const &value)
-    {
-        std::size_t size = detail::heads::head_size(value.size());
-        for (typename U::value_type const &e : value) {
-            auto const sum = generic_size(e).and_then([size](std::size_t const n) {
-                return detail::validity::checked_add(size, n).transform_error(detail::validity::writer_error);
-            });
-            if (!sum) [[unlikely]]
-                return sum;
-            size = *sum;
-        }
-        return size;
-    }
-
     template <class U>
     static auto duration_of(U const &value)
     {
@@ -1613,54 +1415,6 @@ class basic_generic
                std::size_t{zone.has_value()};
     }
 
-    template <class U>
-    static std::expected<std::size_t, error>
-    extended_time_size(U const &value, rfc9581::timescale const scale = rfc9581::timescale::utc,
-                       std::optional<std::string_view> const zone = std::nullopt)
-    {
-        auto const seconds = detail::validity::check_epoch_seconds(duration_of(value));
-        if (!seconds) [[unlikely]]
-            return std::unexpected(seconds.error());
-        std::uint64_t const tag = extended_time_tag<U>(*seconds, scale, zone);
-        std::size_t size = detail::heads::head_size(tag);
-        if (tag != std::to_underlying(rfc8949::tag_number::epoch_based_date_time))
-            size += detail::heads::head_size(extended_time_entries(*seconds, scale, zone)) +
-                    detail::heads::head_size(std::to_underlying(rfc9581::map_key::base_time));
-        if (scale != rfc9581::timescale::utc)
-            size += detail::heads::head_size(std::to_underlying(rfc9581::map_key::timescale_critical)) +
-                    detail::heads::head_size(std::to_underlying(scale));
-        if (zone) {
-            auto const hint = generic_size(std::to_underlying(rfc9581::map_key::time_zone_hint))
-                                  .and_then([&](std::size_t const k) {
-                                      return generic_size(*zone).transform([&](std::size_t const v) { return k + v; });
-                                  });
-            if (!hint) [[unlikely]]
-                return hint;
-            size += *hint;
-        }
-        auto const content = std::visit(
-            [](auto const &s) -> std::expected<std::size_t, error> {
-                if constexpr (is_std_pair<std::remove_cvref_t<decltype(s)>> &&
-                              detail::validity::fraction_key_of_period<typename U::period>().has_value()) {
-                    constexpr auto key = detail::validity::fraction_key_of_period<typename U::period>();
-                    return generic_size(s.first).and_then([&](std::size_t const n) {
-                        return generic_size(std::to_underlying(*key)).and_then([&](std::size_t const m) {
-                            return generic_size(s.second.count()).transform(
-                                [&](std::size_t const f) { return n + m + f; });
-                        });
-                    });
-                } else if constexpr (is_std_pair<std::remove_cvref_t<decltype(s)>>) {
-                    return std::unexpected(error::number_out_of_range);
-                } else {
-                    return generic_size(s);
-                }
-            },
-            *seconds);
-        if (!content) [[unlikely]]
-            return content;
-        return size + *content;
-    }
-
     template <class Out, class U>
     static std::expected<std::size_t, error>
     write_extended_time(Out const out, std::size_t at, U const &value,
@@ -1708,28 +1462,6 @@ class basic_generic
             return write_generic(out, at, std::to_underlying(rfc9581::map_key::time_zone_hint))
                 .and_then([&](std::size_t const n) { return write_generic(out, n, *zone); });
         return at;
-    }
-
-    template <class U>
-    static std::expected<std::size_t, error> tag_content_size(U const &value)
-    {
-        if constexpr (is_whole_seconds<U>) {
-            return generic_size(value.time_since_epoch().count());
-        } else if constexpr (std::same_as<U, std::chrono::year_month_day>) {
-            if (!value.ok()) [[unlikely]]
-                detail::validity::throw_logic_error(
-                    "cbor::encode: the year_month_day is no valid date");
-            return generic_size(std::chrono::sys_days{value}.time_since_epoch().count());
-        } else if constexpr (is_set<U>) {
-            return elements_size(value);
-        } else {
-            auto const bytes = detail::validity::checked_mul(value.size(), sizeof(typename U::value_type))
-                                   .transform_error(detail::validity::writer_error);
-            if (!bytes) [[unlikely]]
-                return bytes;
-            return detail::validity::checked_add(detail::heads::head_size(*bytes), *bytes)
-                .transform_error(detail::validity::writer_error);
-        }
     }
 
     CBOR_ALWAYS_INLINE static std::size_t put_head(std::span<char> const out, std::size_t const at, major_type const major,
@@ -1817,6 +1549,102 @@ class basic_generic
         return at;
     }
 
+    template <class Target>
+    struct bytes_sink {
+        Target &bytes;
+        error &failure;
+    };
+
+    template <class Target>
+    [[gnu::cold, gnu::noinline]] static bool grow(bytes_sink<Target> const out, std::size_t const at,
+                                                  std::size_t const need)
+    {
+        if constexpr (requires { out.bytes.resize(std::size_t{}); }) {
+            auto const wanted = detail::validity::checked_add(at, need);
+            if (!wanted || *wanted > out.bytes.max_size()) [[unlikely]] {
+                out.failure = error::value_too_large;
+                return false;
+            }
+            std::size_t const twice =
+                detail::validity::checked_mul(out.bytes.size(), std::size_t{2}).value_or(*wanted);
+            std::size_t const size = std::min(std::max(twice, *wanted), out.bytes.max_size());
+            out.bytes.resize_and_overwrite(size, [](char *, std::size_t const n) { return n; });
+            return true;
+        } else {
+            out.failure = error::no_buffer_space;
+            return false;
+        }
+    }
+
+    template <class Target>
+    CBOR_ALWAYS_INLINE static bool room(bytes_sink<Target> const out, std::size_t const at,
+                                        std::size_t const need)
+    {
+        if (out.failure != error{}) [[unlikely]]
+            return false;
+        if (detail::validity::bytes_fit(need, std::ranges::size(out.bytes) - at)) [[likely]]
+            return true;
+        return grow(out, at, need);
+    }
+
+    template <class Target>
+    CBOR_ALWAYS_INLINE static std::span<char> written_part(bytes_sink<Target> const out,
+                                                           std::size_t const end)
+    {
+        if constexpr (requires { out.bytes.resize(std::size_t{}); })
+            return std::span<char>(out.bytes);
+        else
+            return std::span<char>(out.bytes).first(end);
+    }
+
+    template <class Target>
+    CBOR_ALWAYS_INLINE static std::size_t put_head(bytes_sink<Target> const out, std::size_t const at,
+                                                   major_type const major, std::uint64_t const argument)
+    {
+        std::size_t const need = detail::heads::head_size(argument);
+        if (!room(out, at, need)) [[unlikely]]
+            return 0;
+        return put_head(written_part(out, at + need), at, major, argument);
+    }
+
+    template <class Target>
+    CBOR_ALWAYS_INLINE static std::size_t put_head(bytes_sink<Target> const out, std::size_t const at,
+                                                   major_type const major, std::uint8_t const info,
+                                                   std::uint64_t const argument)
+    {
+        std::size_t const need = detail::heads::initial_byte_size + detail::heads::argument_size(info);
+        if (!room(out, at, need)) [[unlikely]]
+            return 0;
+        return put_head(written_part(out, at + need), at, major, info, argument);
+    }
+
+    template <class Target>
+    CBOR_ALWAYS_INLINE static std::size_t put_simple(bytes_sink<Target> const out, std::size_t const at,
+                                                     simple_value const value)
+    {
+        if (!room(out, at, detail::heads::initial_byte_size)) [[unlikely]]
+            return at;
+        return put_simple(std::span<char>(out.bytes), at, value);
+    }
+
+    template <class Target, class Bytes>
+    CBOR_ALWAYS_INLINE static std::size_t put_bytes(bytes_sink<Target> const out, std::size_t const at,
+                                                    Bytes const bytes)
+    {
+        if (!room(out, at, bytes.size())) [[unlikely]]
+            return at;
+        return put_bytes(std::span<char>(out.bytes), at, bytes);
+    }
+
+    template <class Target, class E>
+    CBOR_ALWAYS_INLINE static std::size_t put_typed_array_element(bytes_sink<Target> const out,
+                                                                  std::size_t const at, E const e)
+    {
+        if (!room(out, at, sizeof(E))) [[unlikely]]
+            return at;
+        return put_typed_array_element(std::span<char>(out.bytes), at, e);
+    }
+
     template <class Out, class U>
     static std::expected<std::size_t, error> write_generic(Out const out, std::size_t at, U const &value)
     {
@@ -1824,7 +1652,15 @@ class basic_generic
                       !std::same_as<U, std::string_view> && !std::same_as<U, std::span<std::byte const>>)
             if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
                 return std::unexpected(r.error());
-        if constexpr (std::same_as<U, bool>) {
+        if constexpr (has_describe_value<U>) {
+            static_assert(!has_describe_members<U>,
+                          "cbor::describe_members holds either members or a value, not both.");
+            static_assert(detail::reflection::tag_valid<U>());
+            if constexpr (constexpr std::optional<std::uint64_t> tag = detail::reflection::tag_number_of<U>();
+                          tag.has_value())
+                at += put_head(out, at, major_type::tag, *tag);
+            return write_generic(out, at, describe_members<U>::value(value));
+        } else if constexpr (std::same_as<U, bool>) {
             return put_simple(out, at, value ? simple_value::true_value : simple_value::false_value);
         } else if constexpr (std::same_as<U, std::nullptr_t>) {
             return put_simple(out, at, simple_value::null);
@@ -1926,10 +1762,26 @@ class basic_generic
             }
             return at;
         } else if constexpr (requires {
-                                 value.size();
-                                 typename U::value_type;
+                                 requires std::ranges::sized_range<U>;
+                                 requires is_std_pair<std::ranges::range_value_t<U>>;
                              }) {
+            at += put_head(out, at, major_type::map, std::ranges::size(value));
+            for (auto const &[k, v] : value) {
+                auto const pair = write_generic(out, at, k).and_then([&](std::size_t const w) {
+                    return write_generic(out, w, v);
+                });
+                if (!pair) [[unlikely]]
+                    return pair;
+                at = *pair;
+            }
+            return at;
+        } else if constexpr (std::ranges::sized_range<U>) {
             return write_elements(out, at, value);
+        } else if constexpr (std::ranges::range<U>) {
+            static_assert(
+                std::ranges::sized_range<U>,
+                "cbor::encode writes a range only with its size: the library writes no indefinite length.");
+            return at;
         } else {
             static_assert(detail::pfr::struct_writable<U, Reflected>());
             if constexpr (constexpr std::optional<std::uint64_t> tag = detail::reflection::tag_number_of<U>(); tag.has_value())
@@ -1951,8 +1803,8 @@ class basic_generic
     template <class Out, class U>
     static std::expected<std::size_t, error> write_elements(Out const out, std::size_t at, U const &value)
     {
-        at += put_head(out, at, major_type::array, value.size());
-        for (typename U::value_type const &e : value) {
+        at += put_head(out, at, major_type::array, std::ranges::size(value));
+        for (auto const &e : value) {
             auto const element = write_generic(out, at, e);
             if (!element) [[unlikely]]
                 return element;
@@ -1967,6 +1819,8 @@ class basic_generic
         if constexpr (is_whole_seconds<U>) {
             return write_generic(out, at, value.time_since_epoch().count());
         } else if constexpr (std::same_as<U, std::chrono::year_month_day>) {
+            if (!value.ok()) [[unlikely]]
+                detail::validity::throw_logic_error("cbor::encode: the year_month_day is no valid date");
             return write_generic(out, at, std::chrono::sys_days{value}.time_since_epoch().count());
         } else if constexpr (is_set<U>) {
             return write_elements(out, at, value);
@@ -2007,17 +1861,13 @@ public:
     template <class T>
     CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode_to_string(T const &value)
     {
-        auto const counted = generic_size(value);
-        if (!counted) [[unlikely]]
-            return std::unexpected(counted.error());
-        auto const sum = detail::heads::padded_size(*counted);
-        if (!sum) [[unlikely]]
-            return std::unexpected(sum.error());
-        std::size_t const padded = *sum;
-        std::string out(padded, '\0');
-        auto const written = write_generic(std::span<char>(out), 0, value);
+        std::string out;
+        error failure{};
+        auto const written = write_generic(bytes_sink<std::string>{out, failure}, 0, value);
         if (!written) [[unlikely]]
             return std::unexpected(written.error());
+        if (failure != error{}) [[unlikely]]
+            return std::unexpected(failure);
         out.resize(*written);
         return out;
     }
@@ -2026,44 +1876,26 @@ public:
     CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode_into(Target &&out, T const &value)
     {
         using U = std::remove_cvref_t<Target>;
-        auto const counted = generic_size(value);
-        if (!counted) [[unlikely]]
-            return std::unexpected(counted.error());
-        auto const sum = detail::heads::padded_size(*counted);
-        if (!sum) [[unlikely]]
-            return std::unexpected(sum.error());
-        std::size_t const padded = *sum;
-        std::size_t const size = *counted;
-        if constexpr (detail::byte_container<U> && requires { requires std::same_as<std::ranges::range_value_t<U>, char>; }) {
-            std::size_t const at = std::ranges::size(out);
-            auto const total = detail::validity::checked_add(at, padded);
-            if (!total) [[unlikely]]
-                return std::unexpected(detail::validity::writer_error(total.error()));
-            out.resize(*total);
-            auto const written = write_generic(std::span<char>(out), at, value);
-            out.resize(written ? at + size : at);
+        if constexpr (!detail::byte_container<U> && requires { std::span<char>(out); }) {
+            std::span<char> bytes(out);
+            error failure{};
+            auto const written = write_generic(bytes_sink<std::span<char>>{bytes, failure}, 0, value);
             if (!written) [[unlikely]]
                 return std::unexpected(written.error());
-            return size;
-        } else if constexpr (!detail::byte_container<U> && requires { std::span<char>(out); }) {
-            if (detail::validity::bytes_fit(size, std::span<char>(out).size())) {
-                auto const written = write_generic(std::span<char>(out).first(size), 0, value);
-                if (!written) [[unlikely]]
-                    return std::unexpected(written.error());
-                return size;
-            }
+            if (failure != error{}) [[unlikely]]
+                return std::unexpected(failure);
+            return *written;
+        } else {
+            auto const encoded = encode_to_string(value);
+            if (!encoded) [[unlikely]]
+                return std::unexpected(encoded.error());
+            decltype(auto) message = detail::message_of(out, encoded->size());
+            if (auto const r = message.append(*encoded); !r) [[unlikely]]
+                return std::unexpected(detail::validity::writer_error(r.error()));
+            if (auto const r = message.done(encoded->size()); !r) [[unlikely]]
+                return std::unexpected(detail::validity::writer_error(r.error()));
+            return encoded->size();
         }
-        std::string encoded(padded, '\0');
-        auto const written = write_generic(std::span<char>(encoded), 0, value);
-        if (!written) [[unlikely]]
-            return std::unexpected(written.error());
-        encoded.resize(*written);
-        decltype(auto) message = detail::message_of(out, encoded.size());
-        if (auto const r = message.append(encoded); !r) [[unlikely]]
-            return std::unexpected(detail::validity::writer_error(r.error()));
-        if (auto const r = message.done(encoded.size()); !r) [[unlikely]]
-            return std::unexpected(detail::validity::writer_error(r.error()));
-        return encoded.size();
     }
 };
 
@@ -2105,13 +1937,14 @@ CBOR_ALWAYS_INLINE inline std::expected<std::string, error> encode(T const &valu
 }
 
 /**
- * @brief Appends `value` as one CBOR item in preferred serialization to `out`, and gives the count of bytes that it
- * appended.
+ * @brief Appends `value` as one CBOR item in preferred serialization to `out`, and gives the count of bytes
+ * that it appended.
  *
  * The item is that of cbor::encode(T const &).
  * `out` is a container of bytes, for example `std::string`, a `std::span` of bytes, or a writer.
  *
- * @retval no_buffer_space a `std::span` that is too small for the bytes, or the writer gives this error
+ * @retval no_buffer_space a `std::span` that is too small for the bytes, or the writer gives this error; the
+ * span then holds the bytes written before the first one that did not fit
  * @retval value_too_large the size of the bytes does not fit in `std::size_t`, or the writer gives this error
  * @retval nesting_depth_exceeded the value is deeper than the stack of the thread holds
  * @retval not_enough_memory, io_error the writer gives this error

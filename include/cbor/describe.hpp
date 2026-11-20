@@ -96,18 +96,24 @@ struct member {
 /**
  * @brief Describes how cbor::encode, cbor::structs and cbor::schema write and read `T`.
  *
- * A specialization holds `tag`, a `std::optional<cbor::tag>`, and `members`, a `std::tuple` of cbor::member entries.
- * `cbor::untagged` gives a map with no tag.
- * The specialization stands outside every namespace, after `T`.
- * `cbor::has_describe_members<T>` is true when `T` has a specialization.
+ * A specialization holds `tag`, a `std::optional<cbor::tag>`, and `members`, a `std::tuple` of cbor::member
+ * entries. `cbor::untagged` gives a map with no tag. The specialization stands outside every namespace, after
+ * `T`. `cbor::has_describe_members<T>` is true when `T` has a specialization.
  *
- * cbor::encode writes a struct only through its description. For cbor::structs, a class that is not an aggregate,
- * or that has a base class, needs a description; cbor::structs then reads the members, the keys and the tag from the
- * description only.
- * `using base = B;` in the specialization names the direct base class `B`; cbor::schema takes a class with a base
- * class only so, and the members of `B` stand in `members` too.
- * `CBOR_DEFINE_DERIVED_TYPE` and `CBOR_DEFINE_DERIVED_TYPE_MEMBERS` write such a specialization; they take `BASE`
- * after `T`.
+ * A type whose content is known only at run time, such as an object of another language in a binding, holds
+ * `value` in place of `members`: a static function `value(T const &)` that gives a value cbor::encode writes.
+ * That value is a number, a string, a bool, `nullptr`, a `std::variant` of these, a sized range of `T` (an
+ * array) or a sized range of `std::pair<K, T>` (a map); cbor::encode calls `value` again for each `T` in it.
+ * `cbor::has_describe_value<T>` is true for such a specialization. cbor::encode writes `T` in one pass and
+ * calls `value` once for each object. A specialization with both `members` and `value` does not compile, and
+ * cbor::structs and cbor::schema do not read such a `T`.
+ *
+ * cbor::encode writes a struct only through its description. For cbor::structs, a class that is not an
+ * aggregate, or that has a base class, needs a description; cbor::structs then reads the members, the keys
+ * and the tag from the description only. `using base = B;` in the specialization names the direct base class
+ * `B`; cbor::schema takes a class with a base class only so, and the members of `B` stand in `members` too.
+ * `CBOR_DEFINE_DERIVED_TYPE` and `CBOR_DEFINE_DERIVED_TYPE_MEMBERS` write such a specialization; they take
+ * `BASE` after `T`.
  *
  * `CBOR_DEFINE_TYPE(T, TAG, members...)` writes this specialization.
  * The macro stands at global scope.
@@ -115,11 +121,10 @@ struct member {
  * Where each key is the name of its member, CBOR_DEFINE_TYPE_MEMBERS takes the names only.
  *
  * `decode` gives `incorrect_type` for a missing tag or another tag.
- * A description does not compile when it lists a member twice, gives two members one key, names a member of another
- * class, or has no `tag`.
- * A tag of a standard type or an invalid tag does not compile.
- * With reflection, a list that differs from the public data members does not compile.
- * An annotation on `T` does not compile.
+ * A description does not compile when it lists a member twice, gives two members one key, names a member of
+ * another class, or has no `tag`. A tag of a standard type or an invalid tag does not compile. With
+ * reflection, a list that differs from the public data members does not compile. An annotation on `T` does
+ * not compile.
  *
  * @code{.example}
  * message: {"content-type": "text/plain"}
@@ -152,6 +157,9 @@ struct describe_members;
 
 template <class T>
 concept has_describe_members = requires { describe_members<T>::members; };
+
+template <class T>
+concept has_describe_value = requires(T const &value) { describe_members<T>::value(value); };
 
 template <class T>
 concept has_described_base = requires { typename describe_members<T>::base; };
