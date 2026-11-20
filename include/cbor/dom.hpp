@@ -80,6 +80,37 @@ class reader
         std::ranges::copy(bytes_at<N>(buf, src), buf.subspan(dst).begin());
     }
 
+    static constexpr std::size_t eight_digits = 8;
+    static constexpr std::uint64_t eight_digit_scale = 100000000;
+    static constexpr std::uint64_t byte_bits = std::numeric_limits<unsigned char>::digits;
+    static constexpr std::uint64_t pair_bits = 2 * byte_bits;
+    static constexpr std::uint64_t quad_bits = 2 * pair_bits;
+    static constexpr std::uint64_t nibble_bits = byte_bits / 2;
+    static constexpr std::uint64_t low_nibbles = 0x0F0F0F0F0F0F0F0F;
+    static constexpr std::uint64_t high_nibbles = 0xF0F0F0F0F0F0F0F0;
+    static constexpr std::uint64_t digit_high_nibbles = 0x3333333333333333;
+    static constexpr std::uint64_t above_nine_carry = 0x0606060606060606;
+    static constexpr std::uint64_t pair_mask = 0x00FF00FF00FF00FF;
+    static constexpr std::uint64_t quad_mask = 0x0000FFFF0000FFFF;
+    static constexpr std::uint64_t decimal = edn::decimal;
+    static constexpr std::uint64_t pair_multiplier = decimal * (std::uint64_t{1} << byte_bits) + 1;
+    static constexpr std::uint64_t quad_multiplier = decimal * decimal * (std::uint64_t{1} << pair_bits) + 1;
+    static constexpr std::uint64_t octet_multiplier =
+        decimal * decimal * decimal * decimal * (std::uint64_t{1} << quad_bits) + 1;
+
+    CBOR_ALWAYS_INLINE static bool is_made_of_eight_digits_fast(std::uint64_t const v)
+    {
+        return ((v & high_nibbles) | (((v + above_nine_carry) & high_nibbles) >> nibble_bits)) ==
+               digit_high_nibbles;
+    }
+
+    CBOR_ALWAYS_INLINE static std::uint64_t parse_eight_digits_unrolled(std::uint64_t const v)
+    {
+        std::uint64_t const pairs = (v & low_nibbles) * pair_multiplier >> byte_bits;
+        std::uint64_t const quads = (pairs & pair_mask) * quad_multiplier >> pair_bits;
+        return (quads & quad_mask) * octet_multiplier >> quad_bits;
+    }
+
     CBOR_ALWAYS_INLINE static void byte_move_forward(std::span<char> const buf, std::size_t dst,
                                                      std::size_t src, std::size_t n)
     {
@@ -443,6 +474,17 @@ class reader
         while (next != digi::finish) {
             switch (next) {
             case digi::frac:
+                if constexpr (std::endian::native == std::endian::little) {
+                    while (i + eight_digits <= edn::u64_safe_dig &&
+                           cur + i + 1 + eight_digits <= buf.size()) {
+                        auto const chunk =
+                            std::bit_cast<std::uint64_t>(bytes_at<eight_digits>(buf, cur + i + 1));
+                        if (!is_made_of_eight_digits_fast(chunk))
+                            break;
+                        sig = sig * eight_digit_scale + parse_eight_digits_unrolled(chunk);
+                        i += eight_digits;
+                    }
+                }
 #pragma GCC unroll edn::u64_safe_dig - 1
                 for (; i < edn::u64_safe_dig; ++i) {
                     std::uint64_t const num = digit_value(cur + i + 1);

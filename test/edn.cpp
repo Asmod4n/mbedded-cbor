@@ -1,6 +1,7 @@
 #include <cbor/cbor.hpp>
 #include <doctest/doctest.h>
 
+#include <charconv>
 #include <cstddef>
 #include <cstdint>
 #include <fstream>
@@ -13,6 +14,7 @@
 #include <string_view>
 #include <tuple>
 #include <utility>
+#include <vector>
 
 namespace
 {
@@ -167,6 +169,47 @@ TEST_CASE("parse_edn: a text string that is not UTF-8 gives syntax_error on the 
                                     std::string("[h'00', \"\xe2\x82\xac \xf0\x9f\x98\x80\"]")}) {
         CAPTURE(text);
         CHECK(cbor::parse_edn(text).has_value());
+    }
+}
+
+// RFC 8259 section 6: a number is an integer part, a fraction and an exponent, all decimal. parse_edn reads
+// the fraction of JSON text in groups of eight digits where eight digits follow, and digit by digit
+// otherwise; both must give the double that a correct reader gives. std::from_chars gives that double. The
+// cases put the end of a group at each place: fractions of 1 to 30 digits; a fraction that ends at the end of
+// the text, where the padding after the text is shorter than a group; a non-digit at each of the eight places
+// of a group; integer parts of 10 to 12 digits, so the 19 significant digits end inside a group; leading
+// zeros before a long fraction; a negative number; and an exponent after the fraction.
+TEST_CASE("parse_edn: a JSON number with a long fraction gives the double of std::from_chars")
+{
+    std::string const digits = "123456789012345678901234567890";
+    std::vector<std::string> numbers;
+    for (std::size_t n = 1; n <= digits.size(); ++n) {
+        numbers.push_back("0." + digits.substr(0, n));
+        numbers.push_back("7." + digits.substr(0, n));
+        numbers.push_back("-3." + digits.substr(0, n));
+        numbers.push_back("0.0000000" + digits.substr(0, n));
+        numbers.push_back("0." + digits.substr(0, n) + "e3");
+        numbers.push_back("0." + digits.substr(0, n) + "E-2");
+    }
+    for (std::string const integer : {"1234567890", "12345678901", "123456789012"})
+        for (std::size_t n = 1; n <= digits.size(); ++n)
+            numbers.push_back(integer + "." + digits.substr(0, n));
+    for (std::string const &number : numbers) {
+        double expected = 0;
+        auto const [end, ec] = std::from_chars(number.data(), number.data() + number.size(), expected);
+        REQUIRE(ec == std::errc{});
+        REQUIRE(end == number.data() + number.size());
+        for (std::string const &text :
+             {number, "[" + number + "]", "[" + number + ",0]", "{\"a\":" + number + "}"}) {
+            CAPTURE(text);
+            auto const tree = cbor::parse_edn(text);
+            REQUIRE(tree.has_value());
+            cbor::item const root = **tree;
+            auto const elements = root.get<cbor::array_range>();
+            auto const members = root.get<cbor::map_range>();
+            cbor::item const value = elements ? elements->front() : members ? members->front().second : root;
+            CHECK_EQ(value.get<double>().value(), expected);
+        }
     }
 }
 
