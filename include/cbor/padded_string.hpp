@@ -36,9 +36,11 @@ private:
     }
 
 public:
-    explicit padded_string(std::string_view const text) : bytes(padded_size(text.size())), length(text.size())
+    explicit padded_string(std::string_view const text) : length(text.size())
     {
-        std::ranges::copy(text, bytes.begin());
+        bytes.reserve(padded_size(text.size()));
+        bytes.assign(text.begin(), text.end());
+        bytes.resize(padded_size(text.size()));
     }
 
     std::size_t size() const
