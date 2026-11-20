@@ -288,12 +288,12 @@ class map_iterator
 {
     tree const *owner = nullptr;
     std::size_t index = 0;
+    std::size_t value_index = 0;
+    std::size_t end = 0;
 
     friend struct cbor::item;
 
-    map_iterator(tree const *const of, std::size_t const at) : owner(of), index(at)
-    {
-    }
+    map_iterator(tree const *const of, std::size_t const at, std::size_t const last);
 
 public:
     using value_type = std::pair<item, item>;
@@ -699,15 +699,20 @@ inline detail::array_iterator &detail::array_iterator::operator++()
     return *this;
 }
 
+inline detail::map_iterator::map_iterator(tree const *const of, std::size_t const at, std::size_t const last)
+    : owner(of), index(at), value_index(at < last ? item{of, at}.next() : last), end(last)
+{
+}
+
 inline std::pair<item, item> detail::map_iterator::operator*() const
 {
-    item const key{owner, index};
-    return {key, item{owner, key.next()}};
+    return {item{owner, index}, item{owner, value_index}};
 }
 
 inline detail::map_iterator &detail::map_iterator::operator++()
 {
-    index = (**this).second.next();
+    index = item{owner, value_index}.next();
+    value_index = index < end ? item{owner, index}.next() : end;
     return *this;
 }
 
@@ -718,7 +723,9 @@ inline auto item::elements() const
 
 inline auto item::entries() const
 {
-    return map_range(detail::map_iterator(owner, index + 1), detail::map_iterator(owner, next()), length());
+    std::size_t const last = next();
+    return map_range(detail::map_iterator(owner, index + 1, last), detail::map_iterator(owner, last, last),
+                     length());
 }
 
 template <class T>

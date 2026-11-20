@@ -153,6 +153,47 @@ TEST_CASE("cbor::map_range gives each key with its value in order, and the count
     CHECK_EQ((*tree)->get<cbor::array_range>().error(), cbor::error::incorrect_type);
 }
 
+// RFC 8949 3.1: a key and a value are each one data item, and an array, a map or a tag holds further items.
+// The range must step over all of them, so a value after a wide key, and a key after a wide value, are the
+// right nodes. A map with no pairs gives an empty range. A forward range can be passed more than once: two
+// copies of the first iterator give the same pairs.
+TEST_CASE("cbor::map_range steps over keys and values that hold further items")
+{
+    auto const tree =
+        cbor::parse_edn(R"([{[1, 2]: {"x": 1}, "k": [3], 1([4, 5]): 100(h'01')}, {}, {"b": 2}])");
+    REQUIRE(tree.has_value());
+    auto const maps = (*tree)->get<cbor::array_range>();
+    REQUIRE(maps.has_value());
+    REQUIRE_EQ(maps->size(), 3u);
+    auto const wide = maps->front().get<cbor::map_range>();
+    REQUIRE(wide.has_value());
+    CHECK_EQ(wide->size(), 3u);
+    std::vector<std::string> pairs;
+    for (auto const [key, value] : *wide)
+        pairs.push_back(cbor::to_edn(key).value() + ": " + cbor::to_edn(value).value());
+    CHECK_EQ(pairs, std::vector<std::string>{"[1, 2]: {\"x\": 1}", "\"k\": [3]", "1([4, 5]): 100(h'01')"});
+
+    auto first = wide->begin();
+    auto copy = first;
+    auto const before = first++;
+    CHECK(before == wide->begin());
+    CHECK_EQ(cbor::to_edn((*first).first).value(), "\"k\"");
+    ++copy;
+    CHECK(copy == first);
+    CHECK_EQ(cbor::to_edn((*copy).second).value(), "[3]");
+
+    auto const empty = (*std::ranges::next(maps->begin())).get<cbor::map_range>();
+    REQUIRE(empty.has_value());
+    CHECK_EQ(empty->size(), 0u);
+    CHECK(empty->begin() == empty->end());
+
+    auto const last = (*std::ranges::next(maps->begin(), 2)).get<cbor::map_range>();
+    REQUIRE(last.has_value());
+    REQUIRE_EQ(last->size(), 1u);
+    CHECK_EQ(last->front().first.get<std::string_view>().value(), "b");
+    CHECK_EQ(last->front().second.get<int>().value(), 2);
+}
+
 // RFC 8949 3: the additional information is the low 5 bits of the initial byte. The item keeps it, so that a head in
 // a wider form than the shortest one keeps its width.
 TEST_CASE("cbor::item::additional_information gives the low 5 bits of the initial byte")
