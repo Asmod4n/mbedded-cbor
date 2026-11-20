@@ -269,10 +269,16 @@ class extended_diagnostic_notation
     }
 
     template <class Text>
-    static constexpr std::size_t skip_utf8(Text const &text, std::size_t at)
+    static constexpr std::expected<std::size_t, error> skip_utf8(Text const &text, std::size_t at)
     {
-        while (padded_char(text, at) > rfc3629::one_octet_last)
-            ++at;
+        while (padded_char(text, at) > rfc3629::one_octet_last) {
+            std::size_t const size = detail::validity::utf8_sequence_size(
+                detail::utf8_seq(padded_char(text, at), padded_char(text, at + 1), padded_char(text, at + 2),
+                                 padded_char(text, at + 3)));
+            if (size == 0) [[unlikely]]
+                return std::unexpected(error::syntax_error);
+            at += size;
+        }
         return at;
     }
 
@@ -447,8 +453,12 @@ class extended_diagnostic_notation
         for (;;) {
             if (quote == '"') {
                 std::size_t run_end = skip_ascii(text, at);
-                while (padded_char(text, run_end) > rfc3629::one_octet_last)
-                    run_end = skip_ascii(text, skip_utf8(text, run_end));
+                while (padded_char(text, run_end) > rfc3629::one_octet_last) {
+                    auto const utf8_end = skip_utf8(text, run_end);
+                    if (!utf8_end) [[unlikely]]
+                        return std::unexpected(utf8_end.error());
+                    run_end = skip_ascii(text, *utf8_end);
+                }
                 out.append(detail::validity::checked_substr(text, at, run_end - at));
                 at = run_end;
             }
@@ -2200,8 +2210,12 @@ class extended_diagnostic_notation
         std::string_view const logical(text);
         std::size_t const hdr = at + 1;
         std::size_t src = skip_ascii(text, hdr);
-        while (padded_char(text, src) > rfc3629::one_octet_last)
-            src = skip_ascii(text, skip_utf8(text, src));
+        while (padded_char(text, src) > rfc3629::one_octet_last) {
+            auto const utf8_end = skip_utf8(text, src);
+            if (!utf8_end) [[unlikely]]
+                return std::unexpected(utf8_end.error());
+            src = skip_ascii(text, *utf8_end);
+        }
         std::string_view content = detail::validity::checked_substr(logical, hdr, src - hdr);
         if (padded_char(text, src) != '"') {
             unescaped.assign(content);
@@ -2245,8 +2259,12 @@ class extended_diagnostic_notation
                     return std::unexpected(error::syntax_error);
                 }
                 std::size_t run = skip_ascii(text, src);
-                while (padded_char(text, run) > rfc3629::one_octet_last)
-                    run = skip_ascii(text, skip_utf8(text, run));
+                while (padded_char(text, run) > rfc3629::one_octet_last) {
+                    auto const utf8_end = skip_utf8(text, run);
+                    if (!utf8_end) [[unlikely]]
+                        return std::unexpected(utf8_end.error());
+                    run = skip_ascii(text, *utf8_end);
+                }
                 unescaped.append(detail::validity::checked_substr(logical, src, run - src));
                 src = run;
             }
@@ -3152,12 +3170,12 @@ std::expected<std::string, error> diagnostic_notation(Encoded &&encoded)
 /**
  * @brief Gives the CBOR bytes that the extended diagnostic notation (EDN) in @p text writes.
  *
- * The text holds one item, with white space and comments around it, in the notation of RFC 8949 section 8 and of
- * draft-ietf-cbor-edn-literals. The bytes are one well-formed item. Each head has the width that its encoding
- * indicator gives, for example `1_1`, and else the preferred width. Embedded CBOR `<<...>>` holds its bytes as they
- * are written, also a CBOR sequence or no item.
- * The call does not check validity: a repeated key, a tag content as written, such as `64(1)` or `29(0)`, and a text
- * string that is not UTF-8 stay in the bytes. cbor::parse_edn() gives the tree and checks it.
+ * The text holds one item, with white space and comments around it, in the notation of RFC 8949 section 8 and
+ * of draft-ietf-cbor-edn-literals. The bytes are one well-formed item. Each head has the width that its
+ * encoding indicator gives, for example `1_1`, and else the preferred width. Embedded CBOR `<<...>>` holds
+ * its bytes as they are written, also a CBOR sequence or no item. The call does not check validity: a
+ * repeated key and a tag content as written, such as `64(1)` or `29(0)`, stay in the bytes. cbor::parse_edn()
+ * gives the tree and checks it. A text string must be UTF-8, as the source of EDN is.
  *
  * @code{.example}
  * call: cbor::diag2cbor("[1, 1_1]")
@@ -3264,18 +3282,19 @@ consteval auto operator""_edn()
 /**
  * @brief Reads the extended diagnostic notation (EDN) in @p text into a tree.
  *
- * The text holds one item, with white space and comments around it, in the notation of RFC 8949 section 8 and of
- * draft-ietf-cbor-edn-literals. JSON text is EDN text. The tree is the one that cbor::decode() gives for the bytes
- * of cbor::diag2cbor(); cbor::encode() writes it, and item::to_edn() gives the text back.
+ * The text holds one item, with white space and comments around it, in the notation of RFC 8949 section 8 and
+ * of draft-ietf-cbor-edn-literals. JSON text is EDN text. The tree is the one that cbor::decode() gives for
+ * the bytes of cbor::diag2cbor(); cbor::encode() writes it, and item::to_edn() gives the text back.
  *
- * @retval syntax_error the text is not one item of the notation, text follows the item, or the content of a tag 24
- * is not one item
+ * @retval syntax_error the text is not one item of the notation, text follows the item, a text string is not
+ * UTF-8, or the content of a tag 24 is not one item
  * @retval nesting_depth_exceeded the item is deeper than the stack of the thread holds
- * @retval string_length_exceeded a string is longer than `limits::string_length`, where a build sets that limit
- * @retval container_elements_exceeded an array or a map holds more than `limits::container_elements` items, where a
- * build sets that limit
- * @retval inadmissible_type_for_tag_content a typed array (RFC 8746) whose content is not a byte string of whole
- * elements
+ * @retval string_length_exceeded a string is longer than `limits::string_length`, where a build sets that
+ * limit
+ * @retval container_elements_exceeded an array or a map holds more than `limits::container_elements` items,
+ * where a build sets that limit
+ * @retval inadmissible_type_for_tag_content a typed array (RFC 8746) whose content is not a byte string of
+ * whole elements
  * @see cbor::diag2cbor()
  * @see item::to_edn()
  *

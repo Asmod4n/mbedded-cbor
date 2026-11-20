@@ -144,6 +144,32 @@ TEST_CASE("parse_edn: a text that is not one item gives syntax_error")
     }
 }
 
+// draft-ietf-cbor-edn-literals section 2.3.5: the source of EDN is UTF-8, and a text string of the notation
+// is UTF-8. parse_edn makes the text string from the source, so a source that is not UTF-8 would give a text
+// string that is not valid CBOR (RFC 8949 5.3.1), read as one text by a lax reader and refused by a strict
+// one. JSON text takes the fast reader, any other EDN the general one; both must refuse it. The bytes are
+// those that RFC 3629 section 3 forbids: a lone continuation octet, a truncated sequence, an overlong form of
+// "/", a surrogate and a code point above U+10FFFF. Valid sequences of two, three and four octets must still
+// pass.
+TEST_CASE("parse_edn: a text string that is not UTF-8 gives syntax_error on the JSON and on the EDN reader")
+{
+    for (std::string_view const bad : {"\xff", "a\xc3", "\xc0\xaf", "\xed\xa0\x80", "\xf4\x90\x80\x80"}) {
+        for (std::string const &text :
+             {"[\"" + std::string(bad) + "\"]", "[h'00', \"" + std::string(bad) + "\"]"}) {
+            CAPTURE(text);
+            auto const tree = cbor::parse_edn(text);
+            REQUIRE_FALSE(tree.has_value());
+            CHECK_EQ(tree.error(), cbor::error::syntax_error);
+        }
+    }
+    for (std::string const &text : {std::string("[\"gr\xc3\xb6\xc3\x9f"
+                                                "e\"]"),
+                                    std::string("[h'00', \"\xe2\x82\xac \xf0\x9f\x98\x80\"]")}) {
+        CAPTURE(text);
+        CHECK(cbor::parse_edn(text).has_value());
+    }
+}
+
 // RFC 8949 section 3: the encoding indicators _0 to _3 put the argument in 1, 2, 4 and 8 bytes after the initial
 // byte. diag2cbor must write the width that the text gives, and diagnostic_notation must give the text back, or the
 // two functions do not agree on the head.
@@ -204,13 +230,12 @@ TEST_CASE("diag2cbor: a text that is not one item gives syntax_error")
     }
 }
 
-// diag2cbor does not check validity: the declaration says that a tag content and a text string stay as written.
+// diag2cbor does not check the validity of tags: the declaration says that a tag content stays as written.
 // parse_edn decodes the bytes, so it refuses the tags that diag2cbor gives.
 TEST_CASE("diag2cbor: bytes that are not valid stay as written")
 {
-    for (auto const &[text, hex] : {std::pair<std::string_view, std::string_view>{"64(1)", "d84001"},
-                                    {"24(<<1, 2>>)", "d818420102"},
-                                    {"\"\xff\"", "61ff"}}) {
+    for (auto const &[text, hex] :
+         {std::pair<std::string_view, std::string_view>{"64(1)", "d84001"}, {"24(<<1, 2>>)", "d818420102"}}) {
         CAPTURE(hex);
         auto const bytes = cbor::diag2cbor(text);
         REQUIRE(bytes.has_value());

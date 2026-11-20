@@ -26,6 +26,7 @@
 #endif
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <chrono>
 #include <cmath>
@@ -178,6 +179,14 @@ struct limits {
 
 namespace detail
 {
+
+inline constexpr std::size_t utf8_seq_size = 4;
+
+constexpr std::uint32_t utf8_seq(std::uint8_t const b0, std::uint8_t const b1, std::uint8_t const b2,
+                                 std::uint8_t const b3)
+{
+    return std::bit_cast<std::uint32_t>(std::array<std::uint8_t, utf8_seq_size>{b0, b1, b2, b3});
+}
 
 class validity
 {
@@ -384,6 +393,56 @@ public:
         if (major != major_type::array && major != major_type::map)
             return {};
         return check_bytes_left(count_enclosed_data_items(major, argument), bytes_left);
+    }
+
+    static constexpr std::uint32_t b1_mask = utf8_seq(0x80, 0x00, 0x00, 0x00);
+    static constexpr std::uint32_t b1_patt = utf8_seq(0x00, 0x00, 0x00, 0x00);
+    static constexpr std::uint32_t b2_mask = utf8_seq(0xE0, 0xC0, 0x00, 0x00);
+    static constexpr std::uint32_t b2_patt = utf8_seq(0xC0, 0x80, 0x00, 0x00);
+    static constexpr std::uint32_t b2_requ = utf8_seq(0x1E, 0x00, 0x00, 0x00);
+    static constexpr std::uint32_t b3_mask = utf8_seq(0xF0, 0xC0, 0xC0, 0x00);
+    static constexpr std::uint32_t b3_patt = utf8_seq(0xE0, 0x80, 0x80, 0x00);
+    static constexpr std::uint32_t b3_requ = utf8_seq(0x0F, 0x20, 0x00, 0x00);
+    static constexpr std::uint32_t b3_erro = utf8_seq(0x0D, 0x20, 0x00, 0x00);
+    static constexpr std::uint32_t b4_mask = utf8_seq(0xF8, 0xC0, 0xC0, 0xC0);
+    static constexpr std::uint32_t b4_patt = utf8_seq(0xF0, 0x80, 0x80, 0x80);
+    static constexpr std::uint32_t b4_requ = utf8_seq(0x07, 0x30, 0x00, 0x00);
+    static constexpr std::uint32_t b4_req1 = utf8_seq(0x04, 0x00, 0x00, 0x00);
+    static constexpr std::uint32_t b4_req2 = utf8_seq(0x03, 0x30, 0x00, 0x00);
+
+    CBOR_ALWAYS_INLINE static constexpr bool is_utf8_seq1(std::uint32_t const uni)
+    {
+        return (uni & b1_mask) == b1_patt;
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr bool is_utf8_seq2(std::uint32_t const uni)
+    {
+        return (uni & b2_mask) == b2_patt && (uni & b2_requ) != 0;
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr bool is_utf8_seq3(std::uint32_t const uni)
+    {
+        std::uint32_t const requ = uni & b3_requ;
+        return (uni & b3_mask) == b3_patt && requ != 0 && requ != b3_erro;
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr bool is_utf8_seq4(std::uint32_t const uni)
+    {
+        std::uint32_t const requ = uni & b4_requ;
+        return (uni & b4_mask) == b4_patt && requ != 0 && ((requ & b4_req1) == 0 || (requ & b4_req2) == 0);
+    }
+
+    CBOR_ALWAYS_INLINE static constexpr std::size_t utf8_sequence_size(std::uint32_t const octets)
+    {
+        if (is_utf8_seq1(octets))
+            return 1;
+        if (is_utf8_seq2(octets))
+            return 2;
+        if (is_utf8_seq3(octets))
+            return 3;
+        if (is_utf8_seq4(octets))
+            return 4;
+        return 0;
     }
 
     [[noreturn]] static void throw_logic_error(char const *const what)

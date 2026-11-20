@@ -39,14 +39,6 @@ namespace detail
 namespace dom
 {
 
-inline constexpr std::size_t utf8_seq_size = 4;
-
-constexpr std::uint32_t utf8_seq(std::uint8_t const b0, std::uint8_t const b1, std::uint8_t const b2,
-                                 std::uint8_t const b3)
-{
-    return std::bit_cast<std::uint32_t>(std::array<std::uint8_t, utf8_seq_size>{b0, b1, b2, b3});
-}
-
 class reader
 {
     using heads = detail::heads;
@@ -71,43 +63,6 @@ class reader
     static constexpr std::size_t two_octets = 2;
     static constexpr std::size_t three_octets = 3;
     static constexpr std::size_t four_octets = 4;
-
-    static constexpr std::uint32_t b1_mask = utf8_seq(0x80, 0x00, 0x00, 0x00);
-    static constexpr std::uint32_t b1_patt = utf8_seq(0x00, 0x00, 0x00, 0x00);
-    static constexpr std::uint32_t b2_mask = utf8_seq(0xE0, 0xC0, 0x00, 0x00);
-    static constexpr std::uint32_t b2_patt = utf8_seq(0xC0, 0x80, 0x00, 0x00);
-    static constexpr std::uint32_t b2_requ = utf8_seq(0x1E, 0x00, 0x00, 0x00);
-    static constexpr std::uint32_t b3_mask = utf8_seq(0xF0, 0xC0, 0xC0, 0x00);
-    static constexpr std::uint32_t b3_patt = utf8_seq(0xE0, 0x80, 0x80, 0x00);
-    static constexpr std::uint32_t b3_requ = utf8_seq(0x0F, 0x20, 0x00, 0x00);
-    static constexpr std::uint32_t b3_erro = utf8_seq(0x0D, 0x20, 0x00, 0x00);
-    static constexpr std::uint32_t b4_mask = utf8_seq(0xF8, 0xC0, 0xC0, 0xC0);
-    static constexpr std::uint32_t b4_patt = utf8_seq(0xF0, 0x80, 0x80, 0x80);
-    static constexpr std::uint32_t b4_requ = utf8_seq(0x07, 0x30, 0x00, 0x00);
-    static constexpr std::uint32_t b4_req1 = utf8_seq(0x04, 0x00, 0x00, 0x00);
-    static constexpr std::uint32_t b4_req2 = utf8_seq(0x03, 0x30, 0x00, 0x00);
-
-    CBOR_ALWAYS_INLINE static bool is_utf8_seq1(std::uint32_t const uni)
-    {
-        return (uni & b1_mask) == b1_patt;
-    }
-
-    CBOR_ALWAYS_INLINE static bool is_utf8_seq2(std::uint32_t const uni)
-    {
-        return (uni & b2_mask) == b2_patt && (uni & b2_requ) != 0;
-    }
-
-    CBOR_ALWAYS_INLINE static bool is_utf8_seq3(std::uint32_t const uni)
-    {
-        std::uint32_t const requ = uni & b3_requ;
-        return (uni & b3_mask) == b3_patt && requ != 0 && requ != b3_erro;
-    }
-
-    CBOR_ALWAYS_INLINE static bool is_utf8_seq4(std::uint32_t const uni)
-    {
-        std::uint32_t const requ = uni & b4_requ;
-        return (uni & b4_mask) == b4_patt && requ != 0 && ((requ & b4_req1) == 0 || (requ & b4_req2) == 0);
-    }
 
     template <std::size_t N>
     [[gnu::always_inline, gnu::flatten]] static std::array<char, N> bytes_at(std::span<char const> const buf,
@@ -268,17 +223,17 @@ class reader
                 break;
             pos = src;
             uni = byte_load_4(buf, src);
-            while (is_utf8_seq3(uni)) {
+            while (validity::is_utf8_seq3(uni)) {
                 src += three_octets;
                 uni = byte_load_4(buf, src);
             }
-            if (is_utf8_seq1(uni))
+            if (validity::is_utf8_seq1(uni))
                 continue;
-            while (is_utf8_seq2(uni)) {
+            while (validity::is_utf8_seq2(uni)) {
                 src += two_octets;
                 uni = byte_load_4(buf, src);
             }
-            while (is_utf8_seq4(uni)) {
+            while (validity::is_utf8_seq4(uni)) {
                 src += four_octets;
                 uni = byte_load_4(buf, src);
             }
@@ -358,21 +313,21 @@ class reader
                     break;
                 pos = src;
                 uni = byte_load_4(buf, src);
-                while (is_utf8_seq3(uni)) {
+                while (validity::is_utf8_seq3(uni)) {
                     byte_store(buf, dst, uni, utf8_seq_size);
                     dst += three_octets;
                     src += three_octets;
                     uni = byte_load_4(buf, src);
                 }
-                if (is_utf8_seq1(uni))
+                if (validity::is_utf8_seq1(uni))
                     continue;
-                while (is_utf8_seq2(uni)) {
+                while (validity::is_utf8_seq2(uni)) {
                     byte_store(buf, dst, uni, two_octets);
                     dst += two_octets;
                     src += two_octets;
                     uni = byte_load_4(buf, src);
                 }
-                while (is_utf8_seq4(uni)) {
+                while (validity::is_utf8_seq4(uni)) {
                     byte_store(buf, dst, uni, four_octets);
                     dst += four_octets;
                     src += four_octets;
