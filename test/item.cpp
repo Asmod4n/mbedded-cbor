@@ -1836,3 +1836,26 @@ TEST_CASE("decode, item_size, diagnostic_notation: a range of bytes reads as the
     CHECK_EQ(out_u, *encoded);
     CHECK_EQ(out_b, *encoded);
 }
+
+// cbor::encode appends to a std::string. The writer grows that string while it writes, so the bytes that the string
+// held before must stay, a second encode must follow the first, and the string must hold no byte past the item.
+// A long text makes the string grow in the middle of an item.
+TEST_CASE("cbor::encode of a tree appends to a string that holds bytes, also twice")
+{
+    std::string const text = "[\"" + std::string(100000, 'x') + "\", 1, {\"a\": [2.5, -3]}]";
+    auto const tree = cbor::parse_edn(text);
+    REQUIRE(tree.has_value());
+    std::string alone;
+    REQUIRE(cbor::encode(alone, **tree).has_value());
+    std::string room(alone.size(), '\0');
+    REQUIRE(cbor::encode(std::span<char>(room), **tree).has_value());
+    CHECK_EQ(room, alone);
+    std::string out = "pre";
+    auto const first = cbor::encode(out, **tree);
+    auto const second = cbor::encode(out, **tree);
+    REQUIRE(first.has_value());
+    REQUIRE(second.has_value());
+    CHECK_EQ(*first, alone.size());
+    CHECK_EQ(*second, alone.size());
+    CHECK_EQ(out, "pre" + alone + alone);
+}

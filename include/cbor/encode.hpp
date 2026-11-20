@@ -293,7 +293,8 @@ std::expected<std::size_t, error> encode(Target &&out, item const root);
 
 template <class Writer>
 struct detail::encoding::binary_writer {
-    static constexpr bool direct = std::same_as<Writer, detail::span_message<char>>;
+    static constexpr bool string_target = std::same_as<Writer, detail::container_message<std::string>>;
+    static constexpr bool direct = std::same_as<Writer, detail::span_message<char>> || string_target;
 #if __has_include(<sys/uio.h>)
     static constexpr bool blocks = std::same_as<Writer, detail::encoding::iov_writer>;
 #else
@@ -308,7 +309,11 @@ struct detail::encoding::binary_writer {
 
     explicit binary_writer(Writer &w) : writer(w)
     {
-        if constexpr (direct) {
+        if constexpr (string_target) {
+            closed = w.container.size();
+            used = closed;
+            block = std::span<char>(w.container);
+        } else if constexpr (direct) {
             block = w.out;
             used = w.used;
         } else if constexpr (blocks) {
@@ -336,9 +341,36 @@ struct detail::encoding::binary_writer {
         }
     }
 
+    binary_writer(binary_writer const &) = delete;
+    binary_writer &operator=(binary_writer const &) = delete;
+
+    ~binary_writer()
+    {
+        if constexpr (string_target)
+            if (writer.container.size() > used)
+                writer.container.resize(used);
+    }
+
+    std::expected<void, std::errc> grow(std::size_t const needed)
+        requires string_target
+    {
+        auto const size = detail::validity::grown_size(writer.container.size(), used, needed,
+                                                       writer.container.max_size());
+        if (!size) [[unlikely]]
+            return std::unexpected(std::errc::value_too_large);
+        writer.container.resize(*size);
+        block = std::span<char>(writer.container);
+        return {};
+    }
+
     std::expected<void, std::errc> flush()
     {
-        if constexpr (direct) {
+        if constexpr (string_target) {
+            written = used - closed;
+            writer.container.resize(used);
+            block = std::span<char>(writer.container);
+            return {};
+        } else if constexpr (direct) {
             written += used - writer.used;
             writer.used = used;
             return {};
@@ -372,6 +404,14 @@ struct detail::encoding::binary_writer {
             std::span<char> const out = block;
             std::size_t const at = used;
             std::size_t const size = detail::heads::initial_byte_size + detail::heads::argument_size(info);
+            if constexpr (string_target) {
+                if (!detail::validity::bytes_fit(detail::heads::head_size_max, out.size() - at)) [[unlikely]] {
+                    if (auto const r = grow(detail::heads::head_size_max); !r) [[unlikely]]
+                        return r;
+                }
+                used = at + detail::heads::write_head(std::span<char>(block), at, major, info, argument);
+                return {};
+            }
             if (!detail::validity::bytes_fit(size, out.size() - at)) [[unlikely]]
                 return std::unexpected(std::errc::no_buffer_space);
             used = at + detail::heads::write_head(out.first(at + size), at, major, info, argument);
@@ -407,7 +447,13 @@ struct detail::encoding::binary_writer {
             used = at + bytes.size();
             return {};
         }
-        if constexpr (direct) {
+        if constexpr (string_target) {
+            if (auto const r = grow(bytes.size()); !r) [[unlikely]]
+                return r;
+            copy_into(bytes, std::span<char>(block).subspan(at));
+            used = at + bytes.size();
+            return {};
+        } else if constexpr (direct) {
             return std::unexpected(std::errc::no_buffer_space);
         } else if constexpr (blocks) {
             std::size_t const first = out.size() - at;
