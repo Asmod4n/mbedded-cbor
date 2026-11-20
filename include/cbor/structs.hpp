@@ -1560,15 +1560,12 @@ class basic_generic
                                                   std::size_t const need)
     {
         if constexpr (requires { out.bytes.resize(std::size_t{}); }) {
-            auto const wanted = detail::validity::checked_add(at, need);
-            if (!wanted || *wanted > out.bytes.max_size()) [[unlikely]] {
-                out.failure = error::value_too_large;
+            auto const size = detail::validity::grown_size(out.bytes.size(), at, need, out.bytes.max_size());
+            if (!size) [[unlikely]] {
+                out.failure = size.error();
                 return false;
             }
-            std::size_t const twice =
-                detail::validity::checked_mul(out.bytes.size(), std::size_t{2}).value_or(*wanted);
-            std::size_t const size = std::min(std::max(twice, *wanted), out.bytes.max_size());
-            out.bytes.resize_and_overwrite(size, [](char *, std::size_t const n) { return n; });
+            out.bytes.resize(*size);
             return true;
         } else {
             out.failure = error::no_buffer_space;

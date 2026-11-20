@@ -528,6 +528,16 @@ public:
         return a + b;
     }
 
+    static constexpr std::expected<std::size_t, error> grown_size(std::size_t const size, std::size_t const used,
+                                                                  std::size_t const needed, std::size_t const largest)
+    {
+        auto const wanted = checked_add(used, needed);
+        if (!wanted || *wanted > largest) [[unlikely]]
+            return std::unexpected(error::value_too_large);
+        std::size_t const twice = checked_mul(size, std::size_t{2}).value_or(*wanted);
+        return std::min(std::max(twice, *wanted), largest);
+    }
+
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_key_unique(bool const equal_key_seen)
     {
         if (equal_key_seen) [[unlikely]]
