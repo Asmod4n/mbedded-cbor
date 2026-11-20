@@ -1805,7 +1805,7 @@ class basic_generic
     {
         at += put_head(out, at, major_type::array, std::ranges::size(value));
         for (auto const &e : value) {
-            auto const element = write_generic(out, at, e);
+            auto const element = write_generic(out, at, static_cast<std::ranges::range_value_t<U> const &>(e));
             if (!element) [[unlikely]]
                 return element;
             at = *element;
