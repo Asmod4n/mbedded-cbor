@@ -147,7 +147,8 @@ public:
      */
     std::string_view encoded() const
     {
-        return top_level.encoded.substr(std::min(offset, top_level.encoded.size()));
+        return detail::validity::subspan(top_level.encoded,
+                                         detail::validity::offset{std::min(offset, top_level.encoded.size())});
     }
 
     /**

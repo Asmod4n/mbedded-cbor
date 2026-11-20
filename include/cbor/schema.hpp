@@ -2378,12 +2378,13 @@ class reflection
             });
         static_assert(least_size.has_value(), "The least size of an encoded item must fit in std::size_t.");
         constexpr std::size_t least = *least_size;
+        static_assert(least >= prefix.size(), "The least size of an encoded item must hold its packing prefix.");
         if (auto const fits = detail::validity::check_bytes_left(least, encoded.size()); !fits) [[unlikely]]
             return std::unexpected(fits.error());
         if constexpr (Verified)
             if (!packing_prefix_valid<T, D>(encoded)) [[unlikely]]
                 return std::unexpected(
-                    error_of_refused_field(std::span<char const>(encoded.substr(0, prefix.size()))));
+                    error_of_refused_field(std::span<char const>(encoded).template first<prefix.size()>()));
         std::size_t const length =
             detail::heads::read_unsigned<std::uint32_t>(std::span<char const>(encoded)
                                                     .subspan(prefix.size() + detail::heads::initial_byte_size)
