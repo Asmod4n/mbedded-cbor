@@ -379,12 +379,12 @@ public:
      * `negative_integer`.
      *
      * @code{.example}
-     * message: [1, 2(h'010000000000000000')]
+     * message: [2(h'010000000000000000'), 1]
      * call: auto const tree = cbor::decode(bytes)
-     * result: owning item of [1, 2(h'010000000000000000')]
+     * result: owning item of [2(h'010000000000000000'), 1]
      * call: (*tree)->type()
      * result: cbor::type::array
-     * call: std::ranges::next((*tree)->get<cbor::array_range>()->begin())->type()
+     * call: (*tree)->get<cbor::array_range>()->front().type()
      * result: cbor::type::unsigned_bignum
      * @endcode
      *
@@ -459,13 +459,13 @@ public:
      * message: {"a": -500}
      * call: auto const tree = cbor::decode(bytes)
      * result: owning item of {"a": -500}
-     * call: auto const [key, value] = (*tree)->get<cbor::map_range>()->front()
-     * result: "a": -500
-     * call: key.get<std::string_view>()
+     * call: auto const entry = (*tree)->get<cbor::map_range>()->front()
+     * result: pair of "a" and -500
+     * call: entry.first.get<std::string_view>()
      * result: "a"
-     * call: value.get<std::int64_t>()
+     * call: entry.second.get<std::int64_t>()
      * result: -500
-     * call: value.get<std::uint64_t>()
+     * call: entry.second.get<std::uint64_t>()
      * result: unexpected cbor::error::number_out_of_range
      * @endcode
      *
@@ -670,8 +670,12 @@ using array_range =
  * message: {"a": 1}
  * call: auto const tree = cbor::decode(bytes)
  * result: owning item of {"a": 1}
- * call: for (auto const [key, value] : *(*tree)->get<cbor::map_range>())
- * result: key "a", value 1
+ * call: auto const entries = *(*tree)->get<cbor::map_range>()
+ * result: 1 entry: "a": 1
+ * call: entries.size()
+ * result: 1
+ * call: entries.front().first.get<std::string_view>()
+ * result: "a"
  * @endcode
  *
  * @ingroup decode

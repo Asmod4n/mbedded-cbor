@@ -238,7 +238,7 @@ private:
     }
 
     struct marks_table {
-        std::uint64_t marks = 0;
+        std::size_t marks = 0;
         std::size_t marked = 0;
         std::vector<open_mark> open;
 
