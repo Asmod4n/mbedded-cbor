@@ -141,6 +141,13 @@ struct kind {
         return tag >> tag_bit;
     }
 
+    static constexpr std::uint64_t argument_of(node const &x)
+    {
+        if ((x.m_tag & subtype_mask) == subtype_sint)
+            return static_cast<std::uint64_t>(~x.m_uni.i64);
+        return x.m_uni.u64;
+    }
+
     static constexpr std::uint64_t word(std::uint64_t const high, std::uint8_t const info, std::uint8_t const low)
     {
         return high << tag_bit | std::uint64_t{info} << info_bit | low;
@@ -537,10 +544,7 @@ private:
 
     std::uint64_t argument() const
     {
-        detail::dom::node const &x = node();
-        if ((x.m_tag & detail::dom::kind::subtype_mask) == detail::dom::kind::subtype_sint)
-            return static_cast<std::uint64_t>(~x.m_uni.i64);
-        return x.m_uni.u64;
+        return detail::dom::kind::argument_of(node());
     }
 
     bool holds_shared_reference() const

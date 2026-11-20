@@ -202,6 +202,7 @@ private:
     };
 
     static head_parts head_of(item const node);
+    static head_parts head_of(item const node, cbor::type t);
     static std::optional<detail::heads::head> integer_of_bignum(item const node);
     template <class F>
     static std::expected<void, error> for_each_child(item const node, F &&f);
@@ -512,8 +513,13 @@ class detail::encoding::iov_writer
 
 inline detail::encoding::head_parts detail::encoding::head_of(item const node)
 {
+    return head_of(node, node.type());
+}
+
+inline detail::encoding::head_parts detail::encoding::head_of(item const node, cbor::type const t)
+{
     std::uint8_t const info = node.additional_information();
-    switch (node.type()) {
+    switch (t) {
     case cbor::type::unsigned_integer:
         return {major_type::unsigned_integer, info, node.argument()};
     case cbor::type::negative_integer:
@@ -621,13 +627,50 @@ std::expected<void, error> detail::encoding::encode_items(binary_writer<Writer> 
     std::span<dom::node const> const all = root.descendants();
     for (std::size_t at = 0; at != all.size();) {
         item const node = root.descendant(at);
-        if (auto const integer = integer_of_bignum(node)) [[unlikely]] {
+        cbor::type const t = node.type();
+        if (t == cbor::type::unsigned_bignum || t == cbor::type::negative_bignum) [[unlikely]]
+        if (auto const integer = integer_of_bignum(node)) {
             if (auto const r = out.encode_head(integer->major, integer->info, integer->argument); !r) [[unlikely]]
                 return std::unexpected(detail::validity::writer_error(r.error()));
             at += dom::kind::width_of(all[at]);
             continue;
         }
-        std::expected<void, std::errc> const written = encode_head_and_payload<AppendRef>(out, node, head_of(node));
+        std::expected<void, std::errc> written;
+        if constexpr (!AppendRef) {
+            dom::node const &n = all[at];
+            std::uint8_t const info = dom::kind::info_of(n.m_tag);
+            switch (t) {
+            case cbor::type::unsigned_integer:
+                written = out.encode_head(major_type::unsigned_integer, info, dom::kind::argument_of(n));
+                break;
+            case cbor::type::negative_integer:
+                written = out.encode_head(major_type::negative_integer, info, dom::kind::argument_of(n));
+                break;
+            case cbor::type::text_string:
+            case cbor::type::byte_string: {
+                std::size_t const length = static_cast<std::size_t>(dom::kind::high_of(n.m_tag));
+                written = out.encode_head(t == cbor::type::text_string ? major_type::text_string
+                                                                       : major_type::byte_string,
+                                          info, length);
+                if (written)
+                    written = out.encode_payload(std::span<char const>(
+                        detail::validity::checked_substr(root.owner->text, n.m_uni.ofs, length)));
+                break;
+            }
+            case cbor::type::array:
+            case cbor::type::map:
+                written = out.encode_head(t == cbor::type::array ? major_type::array : major_type::map, info,
+                                          dom::kind::high_of(n.m_tag));
+                break;
+            default: {
+                head_parts const h = head_of(node, t);
+                written = out.encode_head(h.major, h.info, h.argument);
+                break;
+            }
+            }
+        } else {
+            written = encode_head_and_payload<AppendRef>(out, node, head_of(node, t));
+        }
         if (!written) [[unlikely]]
             return std::unexpected(detail::validity::writer_error(written.error()));
         ++at;
