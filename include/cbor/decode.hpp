@@ -491,8 +491,10 @@ public:
                                               std::vector<tree::link>{});
         items_decoder out{decoded->block, {}, {}};
         auto const outer = out.decode_item<Cycles>(0, 0, std::string_view(decoded->text), 0, false);
-        if (out.embedded.empty() && out.links.empty() && outer) [[likely]]
+        if (out.embedded.empty() && out.links.empty() && outer) [[likely]] {
+            decoded->block.items.resize(*outer);
             return decoded;
+        }
         bool failed = !outer;
         std::size_t written = outer.value_or(0);
         std::vector<embedded_item> pending;
@@ -515,6 +517,7 @@ public:
             schedule(pending, out.embedded, inner);
         }
         decoded->encoded_cbor_data_items = links_of(out.links);
+        decoded->block.items.resize(written);
         return decoded;
     }
 };

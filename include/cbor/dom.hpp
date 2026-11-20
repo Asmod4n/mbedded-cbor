@@ -1103,6 +1103,7 @@ class reader
     doc_end:
         if (space_end(text, cur) != len) [[unlikely]]
             goto fail;
+        block.items.resize(val + 1);
         return std::make_unique<tree>(std::move(block), std::move(text), std::vector<tree::link>{});
 
     fail:
