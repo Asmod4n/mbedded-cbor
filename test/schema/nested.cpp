@@ -331,6 +331,36 @@ TEST_CASE("nested: a message followed by a second message reads as alone")
     CHECK_EQ(form<field_grid>::adopt(both.substr(*end))->at_path<"$.title">().value(), "next"sv);
 }
 
+// A struct with no reference member has no item. Its directory holds the one entry 0: the start of the rump, which is
+// the end of the directory (RFC 8949 3: the directory head 5a and its length take 5 bytes, the entry 4). The test
+// exists because the verified forms find the end of the message there, and the unverified forms bound every read by it.
+// Each cut gives too_little_data in every form.
+TEST_CASE("nested: a struct with no reference member reads, and each cut of it is too_little_data")
+{
+    std::string const bytes = encode_with_schema(tire{17, 2.5f});
+    std::size_t const directory = root_offset(bytes) + form<tire>::fixed_size();
+    constexpr std::size_t directory_size = 9;
+    CHECK_EQ(bytes.size(), directory + directory_size + rump_size);
+    CHECK_EQ(form<tire>::at_path<"$.diameter">(bytes), 17u);
+    CHECK_EQ(form<tire>::unverified_at_path<"$.diameter">(bytes), 17u);
+    auto const back = form<tire>::decode(std::string(bytes));
+    REQUIRE(back.has_value());
+    CHECK_EQ((*back)->airPressure, 2.5f);
+    auto const fast = form<tire>::unverified_decode(std::string(bytes));
+    REQUIRE(fast.has_value());
+    CHECK_EQ((*fast)->diameter, 17u);
+    CHECK_EQ(form<tire>::adopt(std::string(bytes))->at_path<"$.airPressure">(), 2.5f);
+    for (std::size_t size = 0; size < bytes.size(); ++size) {
+        CAPTURE(size);
+        std::string const cut = bytes.substr(0, size);
+        CHECK_EQ(form<tire>::at_path<"$.diameter">(cut).error(), error::too_little_data);
+        CHECK_EQ(form<tire>::unverified_at_path<"$.diameter">(cut).error(), error::too_little_data);
+        CHECK_EQ(form<tire>::decode(std::string(cut)).error(), error::too_little_data);
+        CHECK_EQ(form<tire>::unverified_decode(std::string(cut)).error(), error::too_little_data);
+        CHECK_EQ(form<tire>::adopt(std::string(cut)).error(), error::too_little_data);
+    }
+}
+
 // Each cut and each changed byte of a message with nested records reads no memory outside the message. The test exists
 // because the base of a nested record comes from the message, and every entry that it selects is checked against the
 // directory. A cut message gives no value in the verified forms and in unverified_decode, which reads every item. An

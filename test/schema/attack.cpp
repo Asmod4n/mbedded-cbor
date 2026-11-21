@@ -279,7 +279,7 @@ TEST_CASE("attack: a directory entry out of range is an error")
     std::size_t const head = bytes.find("\x5a\x00\x00\x00\x10"s);
     REQUIRE_NE(head, std::string::npos);
     std::size_t const root = root_offset(bytes);
-    for (std::size_t j = 0; j < 3; ++j) {
+    for (std::size_t j = 0; j < 4; ++j) {
         for (std::uint32_t const to : {0u, static_cast<std::uint32_t>(head), static_cast<std::uint32_t>(root),
                                        static_cast<std::uint32_t>(bytes.size()), 0x7fffffffu, 0xffffffffu}) {
             std::string f = bytes;
@@ -346,7 +346,7 @@ TEST_CASE("attack: a directory entry into the root or into the directory is synt
     for (std::size_t const to : {root, root + 10, head, head + 5}) {
         CAPTURE(to);
         std::string forged = bytes;
-        forged.replace(head + 5, 4, big_endian(to));
+        forged.replace(head + 9, 4, big_endian(to));
         CHECK_EQ(read_leaf_with_copying_path<probe, "$.text">(forged).error(), error::syntax_error);
         CHECK_EQ(form<probe>::decode(std::string(forged)).error(), error::syntax_error);
         CHECK_EQ(form<probe>::unverified_adopt(std::string(forged))->at_path<"$.text">().error(), error::syntax_error);
@@ -363,11 +363,11 @@ TEST_CASE("attack: overlapping items are an error")
     std::size_t const head = bytes.find("\x5a\x00\x00\x00\x10"s);
     REQUIRE_NE(head, std::string::npos);
     std::string same = bytes;
-    same.replace(head + 9, 4, bytes.substr(head + 5, 4));
+    same.replace(head + 13, 4, bytes.substr(head + 9, 4));
     CHECK_FALSE(read_leaf_with_copying_path<probe, "$.text">(same).has_value());
     CHECK_FALSE(read_leaf_with_copying_path<probe, "$.maybe">(same).has_value());
     std::string next = bytes;
-    next.replace(head + 13, 4, bytes.substr(head + 9, 4));
+    next.replace(head + 17, 4, bytes.substr(head + 13, 4));
     CHECK_FALSE(read_leaf_with_copying_path<probe, "$.maybe">(next).has_value());
     CHECK_FALSE(read_leaf_with_copying_path<probe, "$.tires[0].diameter">(next).has_value());
 
@@ -383,7 +383,8 @@ TEST_CASE("attack: overlapping items are an error")
 // Each item of a packed message starts with an RFC 8949 head. A typed array has the tag head d8 56 and the head 5a of
 // its byte string. A text has the head 7a. A four-byte argument is read big endian (RFC 8949 Section 3). A directory
 // entry is forged so that the head of the last item no longer fits before the rump. The test exists because the
-// read of that head must stop at the bytes that are left and give too_little_data.
+// read of that head must stop at the bytes that are left and give too_little_data. The item is the first one, so the
+// verified forms find first that it does not start behind the directory and give syntax_error.
 TEST_CASE("attack: an item head that does not fit before the rump is too_little_data")
 {
     auto const big_endian = [](std::size_t const x) {
@@ -397,7 +398,8 @@ TEST_CASE("attack: an item head that does not fit before the rump is too_little_
     REQUIRE_LT(entry, head);
     std::string cut_array = array;
     cut_array.replace(entry, 4, big_endian(array.size() - rump_size - 3));
-    CHECK_EQ(read_leaf_with_copying_path<doubles, "$.v[0]">(cut_array).error(), error::too_little_data);
+    CHECK_EQ(read_leaf_with_copying_path<doubles, "$.v[0]">(cut_array).error(), error::syntax_error);
+    CHECK_EQ(form<doubles>::unverified_at_path<"$.v[0]">(cut_array).error(), error::too_little_data);
 
     std::string const text = encode_with_schema(login{5, true, "ab"});
     std::size_t const name = text.find("\x7a\x00\x00\x00\x02" "ab"sv);
@@ -406,7 +408,8 @@ TEST_CASE("attack: an item head that does not fit before the rump is too_little_
     REQUIRE_LT(name_entry, name);
     std::string cut_text = text;
     cut_text.replace(name_entry, 4, big_endian(text.size() - rump_size - 3));
-    CHECK_EQ(read_leaf_with_copying_path<login, "$.name">(cut_text).error(), error::too_little_data);
+    CHECK_EQ(read_leaf_with_copying_path<login, "$.name">(cut_text).error(), error::syntax_error);
+    CHECK_EQ(form<login>::unverified_adopt(std::string(cut_text))->at_path<"$.name">().error(), error::too_little_data);
 }
 
 // The directory is a byte string with a four-byte argument (RFC 8949 Section 3.1, major type 2). Its length is
@@ -542,8 +545,9 @@ TEST_CASE("attack: a variant member under a cut or a changed byte")
 }
 
 // A tag that names no alternative is incorrect_type. A record whose tag head fits but whose values do not is
-// too_little_data. A directory entry that points one byte into the record finds no tag of an alternative there. Decode
-// checks first that the first item starts behind the directory, and finds the entry off its place.
+// too_little_data. A directory entry that points one byte into the record finds no tag of an alternative there in the
+// unverified path. The verified forms check first that the first item starts behind the directory, and find the entry
+// off its place.
 TEST_CASE("attack: an unknown tag, a cut record and a wrong directory entry of a variant member")
 {
     std::string const bytes = *form<home>::encode(make_home_with_dog());
@@ -562,13 +566,14 @@ TEST_CASE("attack: an unknown tag, a cut record and a wrong directory entry of a
         return std::string{static_cast<char>(x >> 24), static_cast<char>(x >> 16), static_cast<char>(x >> 8),
                            static_cast<char>(x)};
     };
-    REQUIRE_EQ(bytes.substr(head + 5, 4), big_endian(at));
+    REQUIRE_EQ(bytes.substr(head + 9, 4), big_endian(at));
     std::string cut = bytes;
-    cut.replace(head + 9, 4, big_endian(at + 4));
+    cut.replace(head + 13, 4, big_endian(at + 4));
     CHECK_EQ(form<home>::adopt(std::string(cut))->at_path<"$.pet">().error(), error::too_little_data);
     std::string moved = bytes;
-    moved.replace(head + 5, 4, big_endian(at + 1));
-    CHECK_EQ(form<home>::adopt(std::string(moved))->at_path<"$.pet">().error(), error::incorrect_type);
+    moved.replace(head + 9, 4, big_endian(at + 1));
+    CHECK_EQ(form<home>::unverified_adopt(std::string(moved))->at_path<"$.pet">().error(), error::incorrect_type);
+    CHECK_EQ(form<home>::adopt(std::string(moved)).error(), error::syntax_error);
     CHECK_EQ(form<home>::decode(std::string(moved)).error(), error::syntax_error);
 }
 

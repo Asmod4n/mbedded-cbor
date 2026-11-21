@@ -93,7 +93,7 @@ void reference_append(std::string &out, std::uint32_t const item)
 }
 
 // A chain of nodes, each with one child, as an attacker writes it by hand. The table holds the description of node,
-// 15 fillers, the root, the directory and the items. The last directory entry is the start of the rump. Item k is the list of children of the node at depth k: one node
+// 15 fillers, the root, the directory and the items. The first directory entry is the start of the rump, entry k + 1 the start of item k. Item k is the list of children of the node at depth k: one node
 // that refers to item k + 1. The last item is empty. Each record carries the class tag 1515 = d9 05 eb of node. The
 // rump 6(0) refers to the root. The encoder of this library cannot write it, because gcc does not inline a recursive
 // encoder.
@@ -114,7 +114,7 @@ std::string node_chain(std::size_t const levels)
     for (std::uint32_t k = 0; k < items; ++k) {
         std::string offset;
         u32_append(offset, static_cast<std::uint32_t>(out.size()));
-        out.replace(directory + 4 * k, 4, offset);
+        out.replace(directory + 4 + 4 * k, 4, offset);
         bool const last = k + 1 == items;
         out += "\x9a"s;
         u32_append(out, last ? 0 : 1);
@@ -125,7 +125,7 @@ std::string node_chain(std::size_t const levels)
     }
     std::string end;
     u32_append(end, static_cast<std::uint32_t>(out.size()));
-    out.replace(directory + 4 * items, 4, end);
+    out.replace(directory, 4, end);
     out += "\xc6\x00"s;
     return out;
 }
