@@ -43,7 +43,8 @@ TEST_CASE("doc reference lazy: the example of the group lazy")
     // [lazy group]
     // bytes: a std::string with {"name": "ann", "scores": [4, 5, 6]}
     auto const doc = cbor::lazy::adopt(std::move(bytes));
-    auto const name = doc->at("name")->get<std::string_view>();  // a ref to "ann"
+    auto const name_2 = doc->at("name");
+    auto const name = name_2->get<std::string_view>();  // a ref to "ann"
     auto const scores = doc->at("scores");
     auto const count = scores->size();                             // 3
     auto const elements = scores->elements();
@@ -66,8 +67,10 @@ TEST_CASE("doc reference lazy: adopt")
     // [adopt]
     // bytes: a std::string with {"id": 42}
     auto const doc = cbor::lazy::adopt(std::move(bytes));
-    if (doc)
-        id = doc->at("id")->get<std::int64_t>().value_or(0);  // 42
+    if (doc) {
+        auto const at_id = doc->at("id");
+        id = at_id->get<std::int64_t>().value_or(0);  // 42
+    }
     // [adopt]
     REQUIRE(doc);
     CHECK_EQ(id, 42);
@@ -85,12 +88,15 @@ TEST_CASE("doc reference lazy: view")
     // [view]
     // owner: a std::shared_ptr<std::string const> with {"id": 42}
     auto const doc = cbor::lazy::view(owner);
-    auto const id = doc->at("id")->get<std::int64_t>();  // 42
+    auto const id_2 = doc->at("id");
+    auto const id = id_2->get<std::int64_t>();  // 42
     // [view]
     REQUIRE(doc);
     CHECK_EQ(id.value(), 42);
     auto const in_place = cbor::lazy::view(std::shared_ptr<void const>(owner), std::string_view(*owner));
-    CHECK_EQ(in_place->at("id")->get<std::int64_t>().value(), 42);
+    auto const id_3 = in_place->at("id");
+    auto const read = id_3->get<std::int64_t>();
+    CHECK_EQ(read.value(), 42);
     CHECK_THROWS_AS((void)cbor::lazy::view(std::shared_ptr<std::string const>()), std::logic_error);
     CHECK_THROWS_AS((void)cbor::lazy::view(std::shared_ptr<void const>(), std::string_view(*owner)),
                     std::logic_error);
@@ -105,7 +111,8 @@ TEST_CASE("doc reference lazy: lazy")
     // bytes: a std::string with [1, 2]
     auto const doc = cbor::lazy::adopt(std::move(bytes));
     cbor::lazy const copy = *doc;
-    auto const second = copy.at(1)->get<int>();  // 2
+    auto const at_1 = copy.at(1);
+    auto const second = at_1->get<int>();  // 2
     // cbor::lazy{}.size() throws std::logic_error
     // [lazy]
     CHECK_EQ(second.value(), 2);
@@ -122,10 +129,15 @@ TEST_CASE("doc reference lazy: at with a text key")
     // [at_text_key]
     // bytes: a std::string with {"cars": [{"hp": 5}, {"hp": 7}], 7: "seven"}
     auto const doc = cbor::lazy::adopt(std::move(bytes));
-    auto const hp = doc->at("cars")->at(1)->at("hp")->get<int>(); // 7
-    auto const seven = doc->at(7)->get<std::string_view>();       // a ref to "seven"
+    auto const cars = doc->at("cars");
+    auto const at_1 = cars->at(1);
+    auto const hp_2 = at_1->at("hp");
+    auto const hp = hp_2->get<int>(); // 7
+    auto const at_7 = doc->at(7);
+    auto const seven = at_7->get<std::string_view>();       // a ref to "seven"
     auto const bus = doc->at("bus");                              // key_not_found
-    auto const first = doc->at("cars")->at("hp");                 // not_indexable
+    auto const cars_2 = doc->at("cars");
+    auto const first = cars_2->at("hp");                 // not_indexable
     // [at_text_key]
     CHECK_EQ(hp.value(), 7);
     CHECK_EQ(**seven, "seven"sv);
@@ -141,7 +153,9 @@ TEST_CASE("doc reference lazy: at")
     // bytes: a std::string with {"cars": [{"hp": 5}, {"hp": 7}]}
     auto const doc = cbor::lazy::adopt(std::move(bytes));
     auto const cars = doc->at("cars");
-    auto const hp = cars->at(1)->at("hp")->get<int>();  // 7
+    auto const at_1 = cars->at(1);
+    auto const hp_2 = at_1->at("hp");
+    auto const hp = hp_2->get<int>();  // 7
     auto const first = doc->at(0);                           // key_not_found
     auto const past = cars->at(5);                           // index_out_of_bounds
     // [at]
@@ -158,9 +172,12 @@ TEST_CASE("doc reference lazy: at with an EDN literal")
     // bytes: a std::string with {h'01': "bytes", [1, 2]: "pair", 1.5: "float"}
     using namespace cbor::literals;
     auto const doc = cbor::lazy::adopt(std::move(bytes));
-    auto const bytes_value = doc->at("h'01'"_edn)->get<std::string_view>();  // a ref to "bytes"
-    auto const pair_value = doc->at("[1, 2]"_edn)->get<std::string_view>();  // a ref to "pair"
-    auto const float_value = doc->at("55799(1.5)"_edn)->get<std::string_view>(); // a ref to "float"
+    auto const found = doc->at("h'01'"_edn);
+    auto const bytes_value = found->get<std::string_view>();  // a ref to "bytes"
+    auto const found_2 = doc->at("[1, 2]"_edn);
+    auto const pair_value = found_2->get<std::string_view>();  // a ref to "pair"
+    auto const found_3 = doc->at("55799(1.5)"_edn);
+    auto const float_value = found_3->get<std::string_view>(); // a ref to "float"
     // [at_edn]
     CHECK_EQ(**bytes_value, "bytes"sv);
     CHECK_EQ(**pair_value, "pair"sv);
@@ -182,7 +199,8 @@ TEST_CASE("doc reference lazy: at_path")
     CHECK_EQ(id.value(), 42);
     CHECK_EQ(**last, "b"sv);
     CHECK_EQ(tags->size(), 2u);
-    CHECK_EQ(doc->at_path<"$.user.id">()->get<int>().value(), 42);
+    auto const read = doc->at_path<"$.user.id">()->get<int>();
+    CHECK_EQ(read.value(), 42);
     auto const query = cbor::path::compile<std::int64_t>("$.user.id");
     REQUIRE(query);
     CHECK_EQ(doc->at_path(*query).value(), 42);
@@ -197,7 +215,8 @@ TEST_CASE("doc reference lazy: size")
     // bytes: a std::string with {"a": 1, "b": 2}
     auto const map = cbor::lazy::adopt(std::move(bytes));
     auto const pairs = map->size();          // 2
-    auto const none = map->at("a")->size();  // not_indexable
+    auto const a = map->at("a");
+    auto const none = a->size();  // not_indexable
     // [size]
     CHECK_EQ(pairs.value(), 2u);
     CHECK_EQ(none.error(), cbor::error::not_indexable);
@@ -210,8 +229,10 @@ TEST_CASE("doc reference lazy: empty")
     // [empty]
     // bytes: a std::string with {"a": [], "b": [1]}
     auto const doc = cbor::lazy::adopt(std::move(bytes));
-    auto const a = doc->at("a")->empty();  // true
-    auto const b = doc->at("b")->empty();  // false
+    auto const a_2 = doc->at("a");
+    auto const a = a_2->empty();  // true
+    auto const b_2 = doc->at("b");
+    auto const b = b_2->empty();  // false
     // [empty]
     CHECK(a.value());
     CHECK_FALSE(b.value());
@@ -224,10 +245,14 @@ TEST_CASE("doc reference lazy: type")
     // [type]
     // bytes: a std::string with [1, "a", 2(h'05'), 1(0)]
     auto const doc = cbor::lazy::adopt(std::move(bytes));
-    auto const one = doc->at(0)->type();     // cbor::type::unsigned_integer
-    auto const text = doc->at(1)->type();    // cbor::type::text_string
-    auto const bignum = doc->at(2)->type();  // cbor::type::unsigned_integer
-    auto const time = doc->at(3)->type();    // cbor::type::tag
+    auto const at_0 = doc->at(0);
+    auto const one = at_0->type();     // cbor::type::unsigned_integer
+    auto const at_1 = doc->at(1);
+    auto const text = at_1->type();    // cbor::type::text_string
+    auto const at_2 = doc->at(2);
+    auto const bignum = at_2->type();  // cbor::type::unsigned_integer
+    auto const at_3 = doc->at(3);
+    auto const time = at_3->type();    // cbor::type::tag
     // [type]
     CHECK_EQ(one.value(), cbor::type::unsigned_integer);
     CHECK_EQ(text.value(), cbor::type::text_string);
@@ -242,10 +267,14 @@ TEST_CASE("doc reference lazy: get")
     // [get]
     // bytes: a std::string with {"name": "ann", "age": 300}
     auto const doc = cbor::lazy::adopt(std::move(bytes));
-    auto const name = doc->at("name")->get<std::string_view>();  // a ref to "ann"
-    auto const age = doc->at("age")->get<std::int64_t>();        // 300
-    auto const small = doc->at("age")->get<std::uint8_t>();      // number_out_of_range
-    auto const other = doc->at("name")->get<int>();              // incorrect_type
+    auto const name_2 = doc->at("name");
+    auto const name = name_2->get<std::string_view>();  // a ref to "ann"
+    auto const age_2 = doc->at("age");
+    auto const age = age_2->get<std::int64_t>();        // 300
+    auto const age_3 = doc->at("age");
+    auto const small = age_3->get<std::uint8_t>();      // number_out_of_range
+    auto const name_3 = doc->at("name");
+    auto const other = name_3->get<int>();              // incorrect_type
     // [get]
     CHECK_EQ(**name, "ann"sv);
     CHECK_EQ(age.value(), 300);
@@ -269,7 +298,8 @@ TEST_CASE("doc reference lazy: elements")
     // [elements]
     CHECK_EQ(sum, 6);
     CHECK_EQ(cbor::lazy::adopt("\x9f\x01\xff"s)->elements().error(), cbor::error::indefinite_length);
-    CHECK_EQ(array->at(0)->elements().error(), cbor::error::not_indexable);
+    auto const at_0 = array->at(0);
+    CHECK_EQ(at_0->elements().error(), cbor::error::not_indexable);
 }
 
 // lazy.hpp, snippet entries: the pairs of a map in the order of the bytes.
@@ -302,7 +332,8 @@ TEST_CASE("doc reference lazy: clone")
         // [to_item]
         // bytes: a std::string with {"a": [1, "x"]}
         auto const doc = cbor::lazy::adopt(std::move(bytes));
-        auto const copy = doc->at("a")->to_item();  // the tree of [1, "x"], valid after doc ends
+        auto const a = doc->at("a");
+        auto const copy = a->to_item();  // the tree of [1, "x"], valid after doc ends
         // [to_item]
         return copy;
     }();
@@ -310,7 +341,8 @@ TEST_CASE("doc reference lazy: clone")
     CHECK_EQ((*tree)->type(), cbor::type::array);
     auto const children = (*tree)->elements().value();
     REQUIRE_EQ(children.size(), 2u);
-    CHECK_EQ(children.next().front().get<std::string_view>().value(), "x"sv);
+    auto const read = children.next().front().get<std::string_view>();
+    CHECK_EQ(read.value(), "x"sv);
 }
 
 // lazy.hpp, snippet lazy_elements: the range concepts, count_if, a deleted front, and an error that repeats.
@@ -326,7 +358,10 @@ TEST_CASE("doc reference lazy: lazy_elements")
     auto const people = cbor::lazy::adopt(std::move(bytes));
     auto const view = *people->elements();  // 3 elements
     auto const older = std::ranges::count_if(view, [](std::expected<cbor::lazy, cbor::error> const &e) {
-        return e && e->at("age")->get<int>().value_or(0) > 30;
+        if (!e)
+            return false;
+        auto const age = e->at("age");
+        return age->get<int>().value_or(0) > 30;
     });  // 2
     // [lazy_elements]
     CHECK_EQ(view.size(), 3u);

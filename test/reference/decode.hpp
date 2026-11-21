@@ -22,17 +22,28 @@ namespace test
 // On a map it names the integer key, as at_path reads it.
 inline std::expected<cbor::lazy, cbor::error> select_element_by_index(cbor::lazy const &l, std::int64_t const index)
 {
-    if (auto const e = l.elements(); !e && e.error() == cbor::error::not_indexable)
-        return l.at(index);
-    if (index >= 0)
-        return l.at(static_cast<std::size_t>(index));
+    if (auto const e = l.elements(); !e && e.error() == cbor::error::not_indexable) {
+        auto const found = l.at(index);
+        if (!found)
+            return std::unexpected(found.error());
+        return *found;
+    }
+    if (index >= 0) {
+        auto const found = l.at(static_cast<std::size_t>(index));
+        if (!found)
+            return std::unexpected(found.error());
+        return *found;
+    }
     auto const size = l.size();
     if (!size)
         return std::unexpected(size.error());
     std::uint64_t const back = std::uint64_t{0} - static_cast<std::uint64_t>(index);
     if (back > *size)
         return std::unexpected(cbor::error::index_out_of_bounds);
-    return l.at(static_cast<std::size_t>(*size - back));
+    auto const found = l.at(static_cast<std::size_t>(*size - back));
+    if (!found)
+        return std::unexpected(found.error());
+    return *found;
 }
 
 inline std::expected<value, error> make_value_from_item(cbor::item const it);

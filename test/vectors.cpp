@@ -628,7 +628,8 @@ TEST_CASE("cbor-wg test vectors: indefinite length is refused")
     REQUIRE(top.has_value());
     auto const tests = top->at("tests");
     REQUIRE(tests.has_value());
-    CHECK_EQ(tests->at(1).error(), error::indefinite_length);
+    auto const at_1 = tests->at(1);
+    CHECK_EQ(at_1.error(), error::indefinite_length);
 
     std::string const edn = file_read(CBOR_TEST_VECTORS "/tests/rfc8949-appendixA/streaming.edn");
     std::size_t checked = 0;

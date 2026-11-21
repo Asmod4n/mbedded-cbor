@@ -31,7 +31,8 @@ TEST_CASE("doc reference ref: the example of the group ref")
     // bytes: a std::string with {"name": "ann"}
     {
         auto const doc = cbor::lazy::adopt(std::move(bytes));
-        auto const name = doc->at("name")->get<std::string_view>();
+        auto const name_2 = doc->at("name");
+        auto const name = name_2->get<std::string_view>();
         if (name)
             kept = *name;  // a copy of the ref: it shares the owner of the bytes
     }  // doc and name end here; kept keeps the bytes

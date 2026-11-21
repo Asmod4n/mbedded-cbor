@@ -74,9 +74,13 @@ std::string encode_in_preferred_form(T const value)
 
 std::expected<double, error> double_of(std::string encoded)
 {
-    return cbor::lazy::adopt(std::move(encoded)).and_then([](cbor::lazy const &l) {
-        return l.get<double>();
-    });
+    auto const doc = cbor::lazy::adopt(std::move(encoded));
+    if (!doc)
+        return std::unexpected(doc.error());
+    auto const read = doc->get<double>();
+    if (!read)
+        return std::unexpected(read.error());
+    return *read;
 }
 
 struct double_test_case {
@@ -271,7 +275,8 @@ TEST_CASE("qcbor GeneralFloatDecodeTests: floats of each width decode to double"
     auto const doc = cbor::lazy::adopt(std::string(expected_floats));
     REQUIRE(doc.has_value());
     auto at = [&doc](std::size_t const i) {
-        auto const d = doc->at(i).and_then([](cbor::lazy const &l) { return l.get<double>(); });
+        auto const element = doc->at(i);
+        auto const d = element.and_then([](cbor::lazy const &l) { return l.get<double>(); });
         REQUIRE(d.has_value());
         return *d;
     };

@@ -51,17 +51,20 @@ TEST_CASE("sequence_reader: hands out each item when its last byte arrives")
     r.feed("\x01\x82\x01"sv);
     auto const first = r.next();
     REQUIRE(first.has_value());
-    CHECK_EQ(first->get<std::uint64_t>().value(), 1u);
+    auto const read = first->get<std::uint64_t>();
+    CHECK_EQ(read.value(), 1u);
     CHECK_EQ(r.next().error(), error::too_little_data);
     r.feed("\x02\x63"sv);
     auto const second = r.next();
     REQUIRE(second.has_value());
-    CHECK_EQ(second->size().value(), 2u);
+    auto const count = second->size();
+    CHECK_EQ(count.value(), 2u);
     CHECK_EQ(r.next().error(), error::too_little_data);
     r.feed("abc"sv);
     auto const third = r.next();
     REQUIRE(third.has_value());
-    CHECK_EQ(third->get<std::string_view>().value(), "abc"sv);
+    auto const read_2 = third->get<std::string_view>();
+    CHECK_EQ(read_2.value(), "abc"sv);
     CHECK_EQ(r.next().error(), error::too_little_data);
 }
 
@@ -77,8 +80,10 @@ TEST_CASE("sequence_reader: each form of bytes that a user tries first")
     r.feed(std::move(moved));
     r.feed(std::make_shared<std::string const>("\x04"s));
     std::vector<std::uint64_t> got;
-    while (auto item = r.next())
-        got.push_back(item->get<std::uint64_t>().value());
+    while (auto item = r.next()) {
+        auto const read = item->get<std::uint64_t>();
+        got.push_back(read.value());
+    }
     CHECK_EQ(got, std::vector<std::uint64_t>{1, 2, 3, 4});
     CHECK(r.empty());
 }
@@ -242,7 +247,8 @@ TEST_CASE("sequence_reader: an item over a copied piece and held pieces")
             s.feed(std::make_shared<std::string const>("x"s));
         auto const string = s.next();
         REQUIRE(string.has_value());
-        CHECK_EQ(string->get<std::string_view>().value(), std::string(n, 'x'));
+        auto const read = string->get<std::string_view>();
+        CHECK_EQ(read.value(), std::string(n, 'x'));
     }
 }
 
@@ -280,8 +286,10 @@ TEST_CASE("sequence_reader: an item stays valid after later feeds and after the 
             }
         }
         REQUIRE_EQ(held.size(), 1000u);
-        for (cbor::lazy const &l : held)
-            CHECK_EQ(l.get<std::string_view>().value(), "abc"sv);
+        for (cbor::lazy const &l : held) {
+            auto const read = l.get<std::string_view>();
+            CHECK_EQ(read.value(), "abc"sv);
+        }
     }
 }
 
@@ -295,8 +303,10 @@ TEST_CASE("sequence_reader: an item stays valid after the caller releases the pi
     piece.reset();
     auto const item = r.next();
     REQUIRE(item.has_value());
-    CHECK_EQ(item->get<std::string_view>().value(), "abc"sv);
-    CHECK_EQ(r.next()->get<std::uint64_t>().value(), 1u);
+    auto const read = item->get<std::string_view>();
+    CHECK_EQ(read.value(), "abc"sv);
+    auto const read_2 = r.next()->get<std::uint64_t>();
+    CHECK_EQ(read_2.value(), 1u);
 }
 
 // RFC 8949 3: the initial byte alone decides that additional information 28 to 30 is not well-formed. That 31 is an

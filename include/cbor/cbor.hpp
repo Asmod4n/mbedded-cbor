@@ -18,6 +18,7 @@
 #include "path.hpp"
 #include "rfc9535.hpp"
 #include "validity.hpp"
+#include "result.hpp"
 #include "ieee754.hpp"
 #include "head.hpp"
 #include "encode.hpp"

@@ -30,7 +30,8 @@ void refuses(char const tag, error const expected)
     auto const l = test::make_lazy_from_copy(typed_array_claiming_more(tag));
     REQUIRE(l.has_value());
     CHECK_EQ(l->elements().error(), expected);
-    CHECK_EQ(l->at(std::size_t{0}).error(), expected);
+    auto const found = l->at(std::size_t{0});
+    CHECK_EQ(found.error(), expected);
     auto const q = cbor::path::compile<cbor::lazy>("$[0]");
     REQUIRE(q.has_value());
     CHECK_EQ(l->at_path(*q).error(), expected);

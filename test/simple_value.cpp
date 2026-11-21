@@ -60,10 +60,12 @@ TEST_CASE("simple value: lazy::get gives every simple value 0 to 255")
         CAPTURE(i);
         auto const top_level = test::make_lazy_from_copy(wire_of(v));
         if (reserved(v)) {
-            if (top_level.has_value())
-                CHECK_EQ(top_level->get<cbor::simple_value>().error(), error::syntax_error);
-            else
+            if (top_level.has_value()) {
+                auto const read = top_level->get<cbor::simple_value>();
+                CHECK_EQ(read.error(), error::syntax_error);
+            } else {
                 CHECK_EQ(top_level.error(), error::syntax_error);
+            }
             continue;
         }
         REQUIRE(top_level.has_value());
@@ -81,7 +83,8 @@ TEST_CASE("simple value: lazy::get refuses a float and an integer")
                              "\xfb\x3f\xf1\x99\x99\x99\x99\x99\x9a"s, "\x01"s, "\x14"s}) {
         auto const top_level = test::make_lazy_from_copy(wire);
         REQUIRE(top_level.has_value());
-        CHECK_EQ(top_level->get<cbor::simple_value>().error(), error::incorrect_type);
+        auto const read = top_level->get<cbor::simple_value>();
+        CHECK_EQ(read.error(), error::incorrect_type);
     }
 }
 

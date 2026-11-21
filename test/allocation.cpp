@@ -217,7 +217,8 @@ TEST_CASE("path: a key is compared without an allocation")
 {
     std::string const bytes = "\x82\x61x\xa1\x82\x01\x61x\x01"s;
     auto const root = *test::make_lazy_from_copy(std::string(bytes));
-    auto const map = *root.at(1);
+    auto const at_1 = root.at(1);
+    auto const map = *at_1;
     REQUIRE(map.at_path<"$[[1, \"x\"]]">().has_value());
     std::size_t const before = allocations;
     auto const found = map.at_path<"$[[1, \"x\"]]">();
@@ -485,7 +486,8 @@ TEST_CASE("sequence_reader: an rvalue std::string is taken without a copy")
     r.feed(std::move(bytes));
     std::size_t const after = allocated_bytes;
     CHECK_LT(after - before, size / share_of_size);
-    CHECK_EQ(r.next()->get<std::uint64_t>().value(), 1u);
+    auto const read = r.next()->get<std::uint64_t>();
+    CHECK_EQ(read.value(), 1u);
 }
 
 // A count in the input reserves nothing (rule). An array can claim 2^64 - 1 elements. The memory that the reader holds

@@ -60,12 +60,13 @@ void check_valid_cases(
     for (auto const &[index, selector, query_of] : entries) {
         CAPTURE(index);
         CAPTURE(selector);
-        auto const c = make_value_from_item(*suite.at(index));
+        auto const entry = suite.at(index);
+        auto const c = make_value_from_item(*entry);
         REQUIRE(c.has_value());
         array const &fields = *get_if<array>(*c);
         REQUIRE_EQ(fields.size(), 4u);
         CHECK_EQ(fields.at(1).text(), selector);
-        auto const document = suite.at(index)->at(2);
+        auto const document = entry->at(2);
         REQUIRE(document.has_value());
         auto const compiled = query_of(*document);
         CHECK_EQ(compiled, query(selector, *document));
@@ -84,7 +85,8 @@ void check_validity(cbor::lazy const &suite,
     for (auto const &[index, selector, valid] : entries) {
         CAPTURE(index);
         CAPTURE(selector);
-        auto const c = make_value_from_item(*suite.at(index));
+        auto const entry = suite.at(index);
+        auto const c = make_value_from_item(*entry);
         REQUIRE(c.has_value());
         array const &fields = *get_if<array>(*c);
         CHECK_EQ(fields.at(1).text(), selector);

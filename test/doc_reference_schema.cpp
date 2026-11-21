@@ -54,7 +54,8 @@ unsigned char byte_at(std::string_view const bytes, std::size_t const i)
 std::size_t root_offset(std::string_view const bytes)
 {
     auto const owner = std::make_shared<std::string const>(bytes);
-    auto const root = cbor::lazy::view(owner)->at(0)->at(16);
+    auto const at_0 = cbor::lazy::view(owner)->at(0);
+    auto const root = at_0->at(16);
     REQUIRE(root.has_value());
     return static_cast<std::size_t>(root->encoded().data() - owner->data());
 }
@@ -398,7 +399,9 @@ TEST_CASE("doc reference schema: tag")
     // point: a struct whose description has the tag 1802
     auto const bytes = cbor::schema<point>::encode(point{1, 2});
     auto const message = cbor::lazy::adopt(std::string(*bytes));
-    auto const root = message->at(0)->at(16)->encoded();  // table entry 16, the root record, starts with d9 07 0a
+    auto const at_0 = message->at(0);
+    auto const at_16 = at_0->at(16);
+    auto const root = at_16->encoded();  // table entry 16, the root record, starts with d9 07 0a
     // [tag]
     REQUIRE(bytes.has_value());
     CHECK_EQ(byte_at(root, 0), 0xd9);

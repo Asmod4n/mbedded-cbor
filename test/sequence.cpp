@@ -128,7 +128,8 @@ TEST_CASE("sequence: lazy, path and decode read each element")
     CHECK_FALSE(inside(*owner, (*view)->data()));
     auto const second = items[1].at(1);
     REQUIRE(second.has_value());
-    CHECK_EQ(second->get<std::uint64_t>().value(), 2u);
+    auto const read = second->get<std::uint64_t>();
+    CHECK_EQ(read.value(), 2u);
 
     std::vector<std::string_view> views;
     for (auto const e : cbor::sequence{owner})
@@ -155,9 +156,10 @@ TEST_CASE("sequence: shared references do not cross elements")
     REQUIRE_EQ(views.size(), 2u);
     auto const l = test::make_lazy_from_copy(views[1]);
     REQUIRE(l.has_value());
-    auto const element = l->at(0).and_then([](cbor::lazy const &e) { return e.get<std::uint64_t>(); });
+    auto const at_0 = l->at(0);
+    auto const element = at_0.and_then([](cbor::lazy const &e) { return e.get<std::uint64_t>(); });
     CHECK_EQ(element, 0u);
-    CHECK_EQ(l->at(0)->type(), cbor::type::tag);
+    CHECK_EQ(at_0->type(), cbor::type::tag);
     CHECK_EQ(cbor::at_path<"$[0]", std::uint64_t>(views[1]), 0u);
 }
 

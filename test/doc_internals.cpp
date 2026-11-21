@@ -49,11 +49,14 @@ TEST_CASE("doc internals: a lazy reads heads when a step needs them")
     CHECK_EQ(described->type(), cbor::type::unsigned_integer);
     auto const broken = test::make_lazy_from_copy("\xff"s);
     REQUIRE(broken.has_value());
-    CHECK_EQ(broken->get<std::int64_t>().error(), error::syntax_error);
+    auto const read = broken->get<std::int64_t>();
+    CHECK_EQ(read.error(), error::syntax_error);
     auto const cut = test::make_lazy_from_copy("\x82\x01"s);
     REQUIRE(cut.has_value());
-    CHECK_EQ(cut->at(0).error(), error::too_little_data);
-    CHECK_EQ(cut->at(1).error(), error::too_little_data);
+    auto const at_0 = cut->at(0);
+    CHECK_EQ(at_0.error(), error::too_little_data);
+    auto const at_1 = cut->at(1);
+    CHECK_EQ(at_1.error(), error::too_little_data);
 }
 
 // The section "A skip keeps a count" states that the nesting depth does not bound a skip. That a skip stops where the
@@ -76,8 +79,10 @@ TEST_CASE("doc internals: a skip keeps a count")
 TEST_CASE("doc internals: two references to one mark")
 {
     auto const l = *test::make_lazy_from_copy("\x83\xd8\x1c\x01\xd8\x1d\x00\xd8\x1d\x00"s);
-    CHECK_EQ(l.at(1)->get<std::int64_t>(), 0);
-    CHECK_EQ(l.at(2)->get<std::int64_t>(), 0);
+    auto const at_1 = l.at(1);
+    CHECK_EQ(at_1->get<std::int64_t>(), 0);
+    auto const at_2 = l.at(2);
+    CHECK_EQ(at_2->get<std::int64_t>(), 0);
     CHECK_EQ(cbor::at_path<"$[2]", int>("\x83\xd8\x1c\x01\xd8\x1d\x00\xd8\x1d\x00"s), 0);
 }
 

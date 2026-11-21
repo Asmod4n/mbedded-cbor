@@ -41,6 +41,7 @@
 #include "ref.hpp"
 #include "item.hpp"
 #include "decode.hpp"
+#include "result.hpp"
 
 namespace cbor
 {
@@ -108,7 +109,9 @@ inline constexpr bool is_path_query_v = false;
  * message: [1, 2]
  * call: cbor::lazy const copy = *doc
  * result: lazy of [1, 2]
- * call: copy.at(1)->get<int>()
+ * call: auto const second = copy.at(1)
+ * result: lazy of 2
+ * call: second->get<int>()
  * result: 2
  * @endcode
  *
@@ -167,7 +170,9 @@ public:
      * message: {"id": 42}
      * call: auto const owner = std::make_shared<std::string const>(bytes)
      * result: shared_ptr to 6 bytes: a1 62 69 64 18 2a
-     * call: cbor::lazy::view(owner)->at("id")->get<std::int64_t>()
+     * call: auto const id = cbor::lazy::view(owner)->at("id")
+     * result: lazy of 42
+     * call: id->get<std::int64_t>()
      * result: 42
      * @endcode
      *
@@ -199,7 +204,9 @@ public:
      * message: {"id": 42}
      * call: auto const doc2 = cbor::lazy::adopt(std::move(bytes))
      * result: lazy of {"id": 42}
-     * call: doc2->at("id")->get<std::int64_t>()
+     * call: auto const id = doc2->at("id")
+     * result: lazy of 42
+     * call: id->get<std::int64_t>()
      * result: 42
      * @endcode
      *
@@ -222,13 +229,25 @@ public:
      *
      * @code{.example}
      * bytes: a2 64 63 61 72 73 82 a1 62 68 70 05 a1 62 68 70 07 07 65 73 65 76 65 6e
-     * call: doc->at("cars")->at(1)->at("hp")->get<int>()
-     * result: 7
-     * call: doc->at(7)->get<std::string_view>()
-     * result: ref to "seven"
-     * call: doc->at("cars")->size()
+     * call: auto const cars = doc->at("cars")
+     * result: lazy of [{"hp": 5}, {"hp": 7}]
+     * call: cars->size()
      * result: 2
-     * call: doc->at("cars")->at(0)->at("hp")->get<int>()
+     * call: auto const car = cars->at(1)
+     * result: lazy of {"hp": 7}
+     * call: auto const hp = car->at("hp")
+     * result: lazy of 7
+     * call: hp->get<int>()
+     * result: 7
+     * call: auto const seven = doc->at(7)
+     * result: lazy of "seven"
+     * call: seven->get<std::string_view>()
+     * result: ref to "seven"
+     * call: auto const first = cars->at(0)
+     * result: lazy of {"hp": 5}
+     * call: auto const first_hp = first->at("hp")
+     * result: lazy of 5
+     * call: first_hp->get<int>()
      * result: 5
      * @endcode
      *
@@ -240,7 +259,7 @@ public:
      * @see cbor::lazy::get()
      * @see cbor::lazy::entries()
      */
-    std::expected<lazy, error> at(std::string_view key) const;
+    result<lazy> at(std::string_view key) const;
 
     /**
      * @brief Gives the lazy of the value of an integer key of a map, or of one element of an array.
@@ -255,11 +274,17 @@ public:
      *
      * @code{.example}
      * message: {"key": [1, 2, 3], 7: "seven"}
-     * call: doc->at("key")->at(1)->get<int>()
-     * result: 2
-     * call: doc->at(7)->get<std::string_view>()
+     * call: auto const seven = doc->at(7)
+     * result: lazy of "seven"
+     * call: seven->get<std::string_view>()
      * result: ref to "seven"
-     * call: doc->at("key")->at(-1)
+     * call: auto const list = doc->at("key")
+     * result: lazy of [1, 2, 3]
+     * call: auto const second = list->at(1)
+     * result: lazy of 2
+     * call: second->get<int>()
+     * result: 2
+     * call: list->at(-1)
      * result: unexpected cbor::error::index_out_of_bounds
      * @endcode
      *
@@ -275,7 +300,7 @@ public:
         requires(std::integral<Integer> && !std::same_as<Integer, bool> && !std::same_as<Integer, char> &&
                  !std::same_as<Integer, wchar_t> && !std::same_as<Integer, char8_t> &&
                  !std::same_as<Integer, char16_t> && !std::same_as<Integer, char32_t>)
-    std::expected<lazy, error> at(Integer key_or_index) const;
+    result<lazy> at(Integer key_or_index) const;
 
     /**
      * @brief Gives the lazy of the value of a key of any kind, written as an EDN literal `"..."_edn`.
@@ -291,11 +316,17 @@ public:
      *
      * @code{.example}
      * message: {h'01': "bytes", [1, 2]: "pair", 1.5: "float"}
-     * call: doc->at("h'01'"_edn)->get<std::string_view>()
+     * call: auto const bytes = doc->at("h'01'"_edn)
+     * result: lazy of "bytes"
+     * call: bytes->get<std::string_view>()
      * result: ref to "bytes"
-     * call: doc->at("[1, 2]"_edn)->get<std::string_view>()
+     * call: auto const pair = doc->at("[1, 2]"_edn)
+     * result: lazy of "pair"
+     * call: pair->get<std::string_view>()
      * result: ref to "pair"
-     * call: doc->at("55799(1.5)"_edn)->get<std::string_view>()
+     * call: auto const real = doc->at("55799(1.5)"_edn)
+     * result: lazy of "float"
+     * call: real->get<std::string_view>()
      * result: ref to "float"
      * @endcode
      *
@@ -308,7 +339,7 @@ public:
      * @see cbor::lazy::at_path()
      */
     template <std::size_t N>
-    std::expected<lazy, error> at(edn_literal<N> const &key) const;
+    result<lazy> at(edn_literal<N> const &key) const;
 
 
     /**
@@ -386,7 +417,7 @@ public:
      * @see cbor::lazy::elements()
      * @see cbor::lazy::entries()
      */
-    std::expected<std::uint64_t, error> size() const;
+    result<std::uint64_t> size() const;
 
     /**
      * @brief Gives `true` when cbor::lazy::size() gives 0, and `false` when it gives another count.
@@ -395,16 +426,20 @@ public:
      *
      * @code{.example}
      * message: {"a": [], "b": [1]}
-     * call: doc->at("a")->empty()
+     * call: auto const a = doc->at("a")
+     * result: lazy of []
+     * call: a->empty()
      * result: true
-     * call: doc->at("b")->empty()
+     * call: auto const b = doc->at("b")
+     * result: lazy of [1]
+     * call: b->empty()
      * result: false
      * @endcode
      *
      * @snippet doc_reference_lazy.cpp empty
      * @see cbor::lazy::size()
      */
-    std::expected<bool, error> empty() const;
+    result<bool> empty() const;
 
     /**
      * @brief Gives the kind of the value at the lazy.
@@ -416,13 +451,21 @@ public:
      *
      * @code{.example}
      * bytes: 84 01 61 61 c2 41 05 c1 00
-     * call: doc->at(0)->type()
+     * call: auto const one = doc->at(0)
+     * result: lazy of 1
+     * call: one->type()
      * result: cbor::type::unsigned_integer
-     * call: doc->at(1)->type()
+     * call: auto const text = doc->at(1)
+     * result: lazy of "a"
+     * call: text->type()
      * result: cbor::type::text_string
-     * call: doc->at(2)->type()
+     * call: auto const big = doc->at(2)
+     * result: lazy of 2(h'05')
+     * call: big->type()
      * result: cbor::type::unsigned_integer
-     * call: doc->at(3)->type()
+     * call: auto const tagged = doc->at(3)
+     * result: lazy of 1(0)
+     * call: tagged->type()
      * result: cbor::type::tag
      * @endcode
      *
@@ -431,7 +474,7 @@ public:
      * @see cbor::lazy::get()
      * @see cbor::lazy::to_item()
      */
-    std::expected<cbor::type, error> type() const;
+    result<cbor::type> type() const;
 
     /**
      * @brief Reads the value at the lazy as `T`.
@@ -452,15 +495,19 @@ public:
      *
      * @code{.example}
      * message: {"name": "ann", "age": 300}
-     * call: auto const name = doc->at("name")->get<std::string_view>()
+     * call: auto const at_name = doc->at("name")
+     * result: lazy of "ann"
+     * call: auto const name = at_name->get<std::string_view>()
      * result: ref to "ann"
      * call: **name
      * result: "ann"
-     * call: doc->at("age")->get<std::int64_t>()
+     * call: auto const age = doc->at("age")
+     * result: lazy of 300
+     * call: age->get<std::int64_t>()
      * result: 300
-     * call: doc->at("age")->get<std::uint16_t>()
+     * call: age->get<std::uint16_t>()
      * result: 300
-     * call: doc->at("name")->type()
+     * call: at_name->type()
      * result: cbor::type::text_string
      * @endcode
      *
@@ -474,7 +521,7 @@ public:
      */
     template <class T>
         requires scalar_result<T> || view_result<T>
-    std::expected<std::conditional_t<view_result<T>, ref<T>, T>, error> get() const;
+    result<std::conditional_t<view_result<T>, ref<T>, T>> get() const;
 
     /**
      * @brief Gives the elements of an array, or of a typed array, as a view.
@@ -534,9 +581,11 @@ public:
      *
      * @code{.example}
      * message: {"a": [1, "x"]}
-     * call: doc->at("a")->to_item()
+     * call: auto const a = doc->at("a")
+     * result: lazy of [1, "x"]
+     * call: auto const tree = a->to_item()
      * result: owning item of [1, "x"]
-     * call: (*doc->at("a")->to_item())->type()
+     * call: (*tree)->type()
      * result: cbor::type::array
      * @endcode
      *
@@ -550,6 +599,27 @@ public:
     std::expected<owning<item>, error> to_item() const;
 
 private:
+    std::expected<lazy, error> at_or_error(std::string_view key) const;
+
+    template <class Integer>
+        requires(std::integral<Integer> && !std::same_as<Integer, bool> && !std::same_as<Integer, char> &&
+                 !std::same_as<Integer, wchar_t> && !std::same_as<Integer, char8_t> &&
+                 !std::same_as<Integer, char16_t> && !std::same_as<Integer, char32_t>)
+    std::expected<lazy, error> at_or_error(Integer key_or_index) const;
+
+    template <std::size_t N>
+    std::expected<lazy, error> at_or_error(edn_literal<N> const &key) const;
+
+    std::expected<std::uint64_t, error> size_or_error() const;
+
+    std::expected<bool, error> empty_or_error() const;
+
+    std::expected<cbor::type, error> type_or_error() const;
+
+    template <class T>
+        requires scalar_result<T> || view_result<T>
+    std::expected<std::conditional_t<view_result<T>, ref<T>, T>, error> get_or_error() const;
+
     template <class Entries = lazy_entries>
     std::expected<typename Entries::iterator, error> find(std::string_view key) const;
 
@@ -1500,7 +1570,12 @@ std::expected<lazy, error> lazy::select_index(resolved const &found, Index const
     return lazy{found.source, std::to_underlying(element), {}};
 }
 
-inline std::expected<std::uint64_t, error> lazy::size() const
+inline result<std::uint64_t> lazy::size() const
+{
+    return result<std::uint64_t>(size_or_error());
+}
+
+inline std::expected<std::uint64_t, error> lazy::size_or_error() const
 {
     throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
     auto const found = resolve(*this);
@@ -1516,12 +1591,22 @@ inline std::expected<std::uint64_t, error> lazy::size() const
     return h.argument;
 }
 
-inline std::expected<bool, error> lazy::empty() const
+inline result<bool> lazy::empty() const
 {
-    return size().transform([](std::uint64_t const n) { return n == 0; });
+    return result<bool>(empty_or_error());
 }
 
-inline std::expected<cbor::type, error> lazy::type() const
+inline std::expected<bool, error> lazy::empty_or_error() const
+{
+    return size_or_error().transform([](std::uint64_t const n) { return n == 0; });
+}
+
+inline result<cbor::type> lazy::type() const
+{
+    return result<cbor::type>(type_or_error());
+}
+
+inline std::expected<cbor::type, error> lazy::type_or_error() const
 {
     throw_logic_error_if_no_top_level("cbor::lazy::type: the lazy holds no top-level item");
     if (typed_array_tag != 0) [[unlikely]] {
@@ -1564,7 +1649,12 @@ std::expected<lazy, error> lazy::value_of(std::expected<Iterator, error> found)
     return lazy{std::move(found->top_level), std::to_underlying(found->value), {}};
 }
 
-inline std::expected<lazy, error> lazy::at(std::string_view const key) const
+inline result<lazy> lazy::at(std::string_view const key) const
+{
+    return result<lazy>(at_or_error(key));
+}
+
+inline std::expected<lazy, error> lazy::at_or_error(std::string_view const key) const
 {
     return value_of(find(key));
 }
@@ -1573,7 +1663,16 @@ template <class Integer>
     requires(std::integral<Integer> && !std::same_as<Integer, bool> && !std::same_as<Integer, char> &&
              !std::same_as<Integer, wchar_t> && !std::same_as<Integer, char8_t> &&
              !std::same_as<Integer, char16_t> && !std::same_as<Integer, char32_t>)
-std::expected<lazy, error> lazy::at(Integer const key_or_index) const
+result<lazy> lazy::at(Integer const key_or_index) const
+{
+    return result<lazy>(at_or_error(key_or_index));
+}
+
+template <class Integer>
+    requires(std::integral<Integer> && !std::same_as<Integer, bool> && !std::same_as<Integer, char> &&
+             !std::same_as<Integer, wchar_t> && !std::same_as<Integer, char8_t> &&
+             !std::same_as<Integer, char16_t> && !std::same_as<Integer, char32_t>)
+std::expected<lazy, error> lazy::at_or_error(Integer const key_or_index) const
 {
     bool const argument_fits = detail::validity::check_integer_argument_range(key_or_index).has_value();
     return select_integer_key_or_index(
@@ -1602,7 +1701,14 @@ inline std::expected<lazy, error> lazy::select_integer_key_or_index(detail::head
 
 template <class T>
     requires scalar_result<T> || view_result<T>
-std::expected<std::conditional_t<view_result<T>, ref<T>, T>, error> lazy::get() const
+result<std::conditional_t<view_result<T>, ref<T>, T>> lazy::get() const
+{
+    return result<std::conditional_t<view_result<T>, ref<T>, T>>(get_or_error<T>());
+}
+
+template <class T>
+    requires scalar_result<T> || view_result<T>
+std::expected<std::conditional_t<view_result<T>, ref<T>, T>, error> lazy::get_or_error() const
 {
     throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
     if constexpr (std::is_same_v<T, std::span<std::byte const>>) {

@@ -81,7 +81,8 @@ TEST_CASE("bignum: content that is not a byte string")
 {
     CHECK(*decode_wire_into_value("\xc2\x05"sv) == value{tagged{2, value{std::uint64_t{5}}}});
     CHECK(*decode_wire_into_value("\xc3\x05"sv) == value{tagged{3, value{std::uint64_t{5}}}});
-    CHECK_EQ(test::make_lazy_from_copy("\xc2\x05"s)->get<std::uint64_t>().error(), error::inadmissible_type_for_tag_content);
+    auto const read = test::make_lazy_from_copy("\xc2\x05"s)->get<std::uint64_t>();
+    CHECK_EQ(read.error(), error::inadmissible_type_for_tag_content);
 }
 
 // Ported from test.rb: 'bignum: mixed with normal integers in array'.
@@ -145,12 +146,18 @@ TEST_CASE("bignum: a magnitude that fits 64 bits is an integer in decode and in 
         CHECK_EQ((*tree)->type(), r.type);
         CHECK_EQ(read_argument_of_item(**tree), r.argument);
     }
-    CHECK_EQ(test::make_lazy_from_copy("\xc3\x48"s + max)->get<std::int64_t>().error(), error::number_out_of_range);
-    CHECK_EQ(*test::make_lazy_from_copy("\xc2\x40"s)->get<std::int64_t>(), 0);
-    CHECK_EQ(*test::make_lazy_from_copy("\xc2\x41\x05"s)->get<double>(), 5.0);
-    CHECK_EQ(*test::make_lazy_from_copy("\xc3\x41\x05"s)->get<double>(), -6.0);
-    CHECK_EQ(test::make_lazy_from_copy("\xc2\x41\x05"s)->get<std::span<std::byte const>>().error(), error::incorrect_type);
-    CHECK_EQ(*test::make_lazy_from_copy("\xc3\x40"s)->get<std::int64_t>(), -1);
+    auto const read = test::make_lazy_from_copy("\xc3\x48"s + max)->get<std::int64_t>();
+    CHECK_EQ(read.error(), error::number_out_of_range);
+    auto const read_2 = test::make_lazy_from_copy("\xc2\x40"s)->get<std::int64_t>();
+    CHECK_EQ(*read_2, 0);
+    auto const read_3 = test::make_lazy_from_copy("\xc2\x41\x05"s)->get<double>();
+    CHECK_EQ(*read_3, 5.0);
+    auto const read_4 = test::make_lazy_from_copy("\xc3\x41\x05"s)->get<double>();
+    CHECK_EQ(*read_4, -6.0);
+    auto const read_5 = test::make_lazy_from_copy("\xc2\x41\x05"s)->get<std::span<std::byte const>>();
+    CHECK_EQ(read_5.error(), error::incorrect_type);
+    auto const read_6 = test::make_lazy_from_copy("\xc3\x40"s)->get<std::int64_t>();
+    CHECK_EQ(*read_6, -1);
 }
 
 // A path read as double gives a bignum as the number of its magnitude (RFC 8949 3.4.3). The errors are those of
@@ -234,8 +241,12 @@ TEST_CASE("bignum: tag 28 around a bignum that fits is a tag over the integer")
     REQUIRE(mark.has_value());
     CHECK_EQ(mark->second.get<std::uint64_t>(), 1u);
     CHECK_EQ(elements[1].get<std::pair<std::uint64_t, cbor::item>>().value().first, 29u);
-    CHECK_EQ(*l->at(1)->type(), cbor::type::tag);
-    CHECK_EQ(*l->at(1)->get<std::int64_t>(), 0);
+    auto const at_1 = l->at(1);
+    auto const kind = at_1->type();
+    CHECK_EQ(*kind, cbor::type::tag);
+    auto const at_1_2 = l->at(1);
+    auto const read = at_1_2->get<std::int64_t>();
+    CHECK_EQ(*read, 0);
     std::string again;
     REQUIRE(cbor::encode(again, **tree).has_value());
     CHECK_EQ(again, "\x82\xd8\x1c\x01\xd8\x1d\x00"s);
@@ -246,11 +257,16 @@ TEST_CASE("bignum: tag 28 around a bignum that fits is a tag over the integer")
 // refuses a tag 2 whose content is not a byte string.
 TEST_CASE("bignum: a key that fits 64 bits is the same key as the integer")
 {
-    CHECK_EQ(test::make_lazy_from_copy("\xa2\xc2\x41\x01\x00\x01\x01"s)->at(1)->get<int>(), 0);
-    CHECK_EQ(test::make_lazy_from_copy("\xa2\xc3\x41\x00\x00\x20\x01"s)->at(-1)->get<int>(), 0);
-    CHECK_EQ(test::make_lazy_from_copy("\xa1\xc2\x41\x01\x61\x61"s)->at(1)->get<std::string_view>().has_value(), true);
-    CHECK_EQ(test::make_lazy_from_copy("\xa1\xc2\x41\x01\x61\x61"s)->at(-2).error(), error::key_not_found);
-    CHECK_EQ(test::make_lazy_from_copy("\xa1\xc2\x61\x61\x61\x61"s)->at(1).error(), error::inadmissible_type_for_tag_content);
+    auto const at_1 = test::make_lazy_from_copy("\xa2\xc2\x41\x01\x00\x01\x01"s)->at(1);
+    CHECK_EQ(at_1->get<int>(), 0);
+    auto const at_minus_1 = test::make_lazy_from_copy("\xa2\xc3\x41\x00\x00\x20\x01"s)->at(-1);
+    CHECK_EQ(at_minus_1->get<int>(), 0);
+    auto const at_1_2 = test::make_lazy_from_copy("\xa1\xc2\x41\x01\x61\x61"s)->at(1);
+    CHECK_EQ(at_1_2->get<std::string_view>().has_value(), true);
+    auto const at_minus_2 = test::make_lazy_from_copy("\xa1\xc2\x41\x01\x61\x61"s)->at(-2);
+    CHECK_EQ(at_minus_2.error(), error::key_not_found);
+    auto const at_1_3 = test::make_lazy_from_copy("\xa1\xc2\x61\x61\x61\x61"s)->at(1);
+    CHECK_EQ(at_1_3.error(), error::inadmissible_type_for_tag_content);
     CHECK(test::query("$[1]", *test::make_lazy_from_copy("\xa1\xc2\x41\x01\x61\x61"s)) ==
           test::query("$[1]", *test::make_lazy_from_copy("\xa1\x01\x61\x61"s)));
     CHECK(test::query("$[-1]", *test::make_lazy_from_copy("\xa1\xc3\x40\x61\x61"s)) ==
@@ -268,7 +284,7 @@ std::string encode_edn(std::string const &edn)
 }
 
 template <class T>
-void check_read(std::expected<T, error> const &got, std::expected<T, error> const &expected)
+void check_read(cbor::result<T> const &got, std::expected<T, error> const &expected)
 {
     REQUIRE_EQ(got.has_value(), expected.has_value());
     if (expected)
@@ -277,11 +293,12 @@ void check_read(std::expected<T, error> const &got, std::expected<T, error> cons
         CHECK_EQ(got.error(), expected.error());
 }
 
-bool holds_text_v(std::expected<cbor::lazy, error> const &node)
+template <class Node>
+bool holds_text_v(Node const &node)
 {
     if (!node)
         return false;
-    auto const text = node->get<std::string_view>();
+    auto const text = node->template get<std::string_view>();
     return text.has_value() && *text.value() == "v";
 }
 
@@ -341,7 +358,8 @@ TEST_CASE("bignum: every reader gives the value of a bignum")
         check_read(doc->get<std::int64_t>(), r.as_int64);
         check_read(doc->get<std::uint64_t>(), r.as_uint64);
         check_read(doc->get<double>(), r.as_double);
-        CHECK_EQ(doc->type().value(), r.type);
+        auto const kind = doc->type();
+        CHECK_EQ(kind.value(), r.type);
         auto const tree = cbor::decode(encoded);
         REQUIRE(tree.has_value());
         CHECK_EQ((*tree)->type(), r.type);
@@ -378,7 +396,8 @@ TEST_CASE("bignum: every reader gives the value of a bignum")
 TEST_CASE("bignum: type() gives the error of a cut content head")
 {
     std::string const encoded = encode_edn("2(h'01')");
-    CHECK_EQ(test::make_lazy_from_copy(encoded.substr(0, 1))->type().error(), error::too_little_data);
+    auto const kind = test::make_lazy_from_copy(encoded.substr(0, 1))->type();
+    CHECK_EQ(kind.error(), error::too_little_data);
 }
 
 // RFC 8949 3.4.3: encode writes a bignum that fits 64 bits as the integer, the preferred form. A tree has such a

@@ -1846,7 +1846,8 @@ constexpr std::size_t rump_size = 2;
 inline std::size_t root_offset(std::string_view const message, std::size_t const index = 16)
 {
     auto const owner = std::make_shared<std::string const>(message);
-    auto const root = cbor::lazy::view(owner)->at(0)->at(index);
+    auto const table = cbor::lazy::view(owner)->at(0);
+    auto const root = table->at(index);
     REQUIRE(root.has_value());
     return static_cast<std::size_t>(root->encoded().data() - owner->data());
 }

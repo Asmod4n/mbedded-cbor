@@ -930,7 +930,7 @@ class path
         auto const node = walk_singular_query(v, top, root);
         if (!node) [[unlikely]]
             return std::unexpected(node.error());
-        auto const value = node->template get<T>();
+        auto const value = node->template get_or_error<T>();
         if (!value) [[unlikely]]
             return std::unexpected(value.error());
         if constexpr (view_result<T>)
@@ -1297,7 +1297,13 @@ inline std::expected<lazy, error> path::select_index(lazy const &node, std::int6
 }
 
 template <std::size_t N>
-std::expected<lazy, error> lazy::at(edn_literal<N> const &key) const
+result<lazy> lazy::at(edn_literal<N> const &key) const
+{
+    return result<lazy>(at_or_error(key));
+}
+
+template <std::size_t N>
+std::expected<lazy, error> lazy::at_or_error(edn_literal<N> const &key) const
 {
     std::string_view const encoded(std::span(key.encoded));
     auto const h = detail::heads::decoder<false>{encoded}.decode_head();

@@ -25,7 +25,8 @@ TEST_CASE("doc reference errors: the example of the group errors")
     // [errors group]
     // bytes: a std::string with {"a": 1}
     auto const doc = cbor::lazy::adopt(std::move(bytes));
-    auto const e = doc->at("b").error();                     // key_not_found
+    auto const b = doc->at("b");
+    auto const e = b.error();                     // key_not_found
     std::error_code const code{e};
     std::string const text = code.message();                 // "key not found"
     // [errors group]

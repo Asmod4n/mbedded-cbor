@@ -53,6 +53,12 @@ std::string make_outcome_text(std::expected<T, cbor::error> const &r)
     return make_error_text(r ? no_error : r.error());
 }
 
+template <class T>
+std::string make_outcome_text(cbor::result<T> const &r)
+{
+    return make_error_text(r ? no_error : r.error());
+}
+
 // The diagnostic notation of the bytes, or the text of the error. A failed check then shows the error.
 inline std::string print_with_diagnostic_notation(std::string_view const bytes)
 {

@@ -45,9 +45,12 @@ TEST_CASE("doc reference path: the example of the group path")
     CHECK_EQ(missing.error(), cbor::error::key_not_found);
     REQUIRE(prices);
     REQUIRE_EQ(prices->size(), 3u);
-    CHECK_EQ((*prices)[0].get<int>().value(), 8);
-    CHECK_EQ((*prices)[1].get<int>().value(), 12);
-    CHECK_EQ((*prices)[2].get<int>().value(), 9);
+    auto const read = (*prices)[0].get<int>();
+    CHECK_EQ(read.value(), 8);
+    auto const read_2 = (*prices)[1].get<int>();
+    CHECK_EQ(read_2.value(), 12);
+    auto const read_3 = (*prices)[2].get<int>();
+    CHECK_EQ(read_3.value(), 9);
     REQUIRE(every);
     CHECK_EQ(every->size(), 4u);
     REQUIRE(cheap);
@@ -220,7 +223,9 @@ TEST_CASE("doc reference path: CBOR beyond JSON")
     REQUIRE(z);
     CHECK_EQ(**z, "z"sv);
     auto const embedded = cbor::lazy::adopt("\xa1\x61\x61\xd8\x18\x43\x82\x01\x02"s);
-    CHECK_EQ(embedded->at_path<"$.a[1]">()->get<int>().value(), 2);
+    auto const read = embedded->at_path<"$.a[1]">()->get<int>();
+    CHECK_EQ(read.value(), 2);
     auto const typed = cbor::lazy::adopt("\xa1\x61\x76\xd8\x45\x44\x07\x00\x08\x00"s);
-    CHECK_EQ(typed->at_path<"$.v[1]">()->get<int>().value(), 8);
+    auto const read_2 = typed->at_path<"$.v[1]">()->get<int>();
+    CHECK_EQ(read_2.value(), 8);
 }

@@ -574,11 +574,17 @@ std::expected<comparable_t<T>, error> lazy_get(std::string const &doc, std::vect
         return std::unexpected(root.error());
     cbor::lazy node = *root;
     for (step const &s : steps) {
-        auto const child = std::holds_alternative<std::int64_t>(s) ? test::select_element_by_index(node, std::get<std::int64_t>(s))
-                                                                   : node.at(std::get<std::string_view>(s));
-        if (!child)
-            return std::unexpected(child.error());
-        node = *child;
+        if (std::holds_alternative<std::int64_t>(s)) {
+            auto const child = test::select_element_by_index(node, std::get<std::int64_t>(s));
+            if (!child)
+                return std::unexpected(child.error());
+            node = *child;
+        } else {
+            auto const child = node.at(std::get<std::string_view>(s));
+            if (!child)
+                return std::unexpected(child.error());
+            node = *child;
+        }
     }
     auto const v = node.get<T>();
     if (!v)
@@ -1185,8 +1191,11 @@ TEST_CASE("path: tag 55799 inside the item is skipped")
     CHECK_EQ(cbor::at_path<"$.a", int>(key), 7);
     auto const l = *test::make_lazy_from_copy(inner);
     CHECK(found(test::query("$.a[1]", l)) == A(2));
-    CHECK_EQ(l.at("a")->at(std::size_t{1})->get<int>(), 2);
-    CHECK_EQ(test::make_lazy_from_copy(leaf)->at("a")->get<int>(), 7);
+    auto const a = l.at("a");
+    auto const found_2 = a->at(std::size_t{1});
+    CHECK_EQ(found_2->get<int>(), 2);
+    auto const a_2 = test::make_lazy_from_copy(leaf)->at("a");
+    CHECK_EQ(a_2->get<int>(), 7);
 }
 
 // RFC 8949 6.1: a generic decoder passes a tag it does not know and gives its content. The owner decided on 2026-10-10
@@ -1380,7 +1389,8 @@ TEST_CASE("path: the member at_path starts at the item of the lazy")
     CHECK_EQ(cbor::path::compile<cbor::lazy>("$.a.b[").error(), error::invalid_path);
     CHECK_EQ(cbor::path::compile<cbor::lazy>("$..b").error(), error::not_singular_query);
     CHECK_EQ(l.at_path(*cbor::path::compile<cbor::lazy>("$.a.c")).error(), error::key_not_found);
-    cbor::lazy const inner = *l.at("a");
+    auto const a = l.at("a");
+    cbor::lazy const inner = *a;
     CHECK_EQ(inner.at_path<"$.b[0]", int>(), 1);
     auto const text = inner.at_path<"$.b[2]", std::string_view>();
     CHECK_EQ(**text, "x"sv);
@@ -1446,7 +1456,9 @@ TEST_CASE("path: a NaN element of a typed array keeps its bits")
 {
     auto const doc = cbor::lazy::adopt("\xa1\x61\x76\xd8\x54\x42\xff\xff"s);
     REQUIRE(doc);
-    auto const nan = doc->at_path<"$.v[0]">().and_then([](cbor::lazy const &l) { return l.get<double>(); });
+    auto const element = doc->at_path<"$.v[0]">();
+    REQUIRE(element);
+    auto const nan = element->get<double>();
     REQUIRE(nan);
     CHECK_EQ(std::bit_cast<std::uint64_t>(*nan), 0xfffffc0000000000u);
 }

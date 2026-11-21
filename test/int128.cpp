@@ -48,9 +48,15 @@ TEST_CASE("int128: lazy get reads -2^64 and 2^64 - 1")
 {
     auto const doc = cbor::lazy::adopt(bytes_of("[-18446744073709551616, 18446744073709551615, -1]"));
     REQUIRE(doc.has_value());
-    CHECK(doc->at(0)->get<cbor::int128>().value() == smallest_negative);
-    CHECK(doc->at(1)->get<cbor::uint128>().value() == largest_unsigned);
-    CHECK_EQ(doc->at(2)->get<cbor::uint128>().error(), cbor::error::number_out_of_range);
+    auto const at_0 = doc->at(0);
+    auto const read = at_0->get<cbor::int128>();
+    CHECK(read.value() == smallest_negative);
+    auto const at_1 = doc->at(1);
+    auto const read_2 = at_1->get<cbor::uint128>();
+    CHECK(read_2.value() == largest_unsigned);
+    auto const at_2 = doc->at(2);
+    auto const read_3 = at_2->get<cbor::uint128>();
+    CHECK_EQ(read_3.error(), cbor::error::number_out_of_range);
 }
 
 // RFC 8949 3.4.3: a bignum of at most 64 bits is the same integer as a head; one above 64 bits is not read as an
@@ -63,8 +69,12 @@ TEST_CASE("int128: a bignum above 64 bits is out of range, one of at most 64 bit
     CHECK_EQ((*tree)->elements()->front().get<cbor::int128>().error(), cbor::error::number_out_of_range);
     auto const doc = cbor::lazy::adopt(bytes_of(edn));
     REQUIRE(doc.has_value());
-    CHECK_EQ(doc->at(0)->get<cbor::int128>().error(), cbor::error::number_out_of_range);
-    CHECK(doc->at(1)->get<cbor::int128>().value() == 1);
+    auto const at_0 = doc->at(0);
+    auto const read = at_0->get<cbor::int128>();
+    CHECK_EQ(read.error(), cbor::error::number_out_of_range);
+    auto const at_1 = doc->at(1);
+    auto const read_2 = at_1->get<cbor::int128>();
+    CHECK(read_2.value() == 1);
 }
 
 TEST_CASE("int128: at_path reads -2^64")

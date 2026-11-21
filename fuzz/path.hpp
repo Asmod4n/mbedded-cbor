@@ -346,12 +346,25 @@ void typed_read_check(std::string const &document, std::vector<step> const &step
     auto const root = test::make_lazy_from_copy(std::string(document));
     require(root.has_value());
     std::expected<cbor::lazy, cbor::error> node = *root;
-    for (step const &s : steps)
-        node = node.and_then([&s](cbor::lazy const &l) {
-            return std::holds_alternative<std::int64_t>(s) ? test::select_element_by_index(l, std::get<std::int64_t>(s))
-                                                           : l.at(std::get<std::string_view>(s));
-        });
-    auto const chained = node.and_then([](cbor::lazy const &l) { return l.get<T>(); });
+    for (step const &s : steps) {
+        if (!node)
+            break;
+        if (std::holds_alternative<std::int64_t>(s)) {
+            node = test::select_element_by_index(*node, std::get<std::int64_t>(s));
+            continue;
+        }
+        auto const child = node->at(std::get<std::string_view>(s));
+        if (child)
+            node = *child;
+        else
+            node = std::unexpected(child.error());
+    }
+    if (!node) {
+        require(!typed.has_value());
+        require(typed.error() == node.error());
+        return;
+    }
+    auto const chained = node->get<T>();
     require(typed.has_value() == chained.has_value());
     if (!typed) {
         require(typed.error() == chained.error());

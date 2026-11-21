@@ -63,17 +63,22 @@ TEST_CASE("path: the JSONPath Compliance Test Suite")
             continue;
         }
         if (c.size() == 2 || test::function_without_support(selector)) {
-            auto const document =
-                c.size() == 2 ? test::make_lazy_from_copy(std::string_view("\xf6")) : root->at(i)->at(2);
-            REQUIRE(document.has_value());
-            auto const r = test::query(selector, *document);
+            auto const null_document = test::make_lazy_from_copy(std::string_view("\xf6"));
+            auto const entry = root->at(i);
+            REQUIRE(entry.has_value());
+            auto const selected = entry->at(2);
+            bool const has_document = c.size() == 2 ? null_document.has_value() : selected.has_value();
+            REQUIRE(has_document);
+            auto const r = test::query(selector, c.size() == 2 ? *null_document : *selected);
             bool const invalid = !r && r.error() == error::invalid_path;
             CHECK(invalid);
             refused += c.size() == 2 ? 0uz : 1uz;
             passed += invalid ? 1uz : 0uz;
             continue;
         }
-        auto const document = root->at(i)->at(2);
+        auto const entry = root->at(i);
+        REQUIRE(entry.has_value());
+        auto const document = entry->at(2);
         REQUIRE(document.has_value());
         auto const r = test::query(selector, *document);
         CAPTURE((r.has_value() ? error{} : r.error()));

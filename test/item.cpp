@@ -708,8 +708,12 @@ TEST_CASE("type: lazy and the item keep tags 28 and 29")
 {
     auto const root = test::make_lazy_from_copy(std::string("\x82\xd8\x1c\x01\xd8\x1d\x00"sv));
     REQUIRE(root.has_value());
-    CHECK_EQ(*root->at(0)->type(), cbor::type::tag);
-    CHECK_EQ(*root->at(1)->type(), cbor::type::tag);
+    auto const at_0 = root->at(0);
+    auto const kind = at_0->type();
+    CHECK_EQ(*kind, cbor::type::tag);
+    auto const at_1 = root->at(1);
+    auto const kind_2 = at_1->type();
+    CHECK_EQ(*kind_2, cbor::type::tag);
     auto const tree = item_of(root->to_item());
     auto const elements = list_children_of_item(*tree);
     CHECK_EQ(elements[0].type(), cbor::type::tag);
@@ -946,10 +950,13 @@ TEST_CASE("tag 24 with bytes after its data item is refused by decode and not se
     auto const tree = top_level->to_item();
     REQUIRE_FALSE(tree.has_value());
     CHECK_EQ(tree.error(), cbor::error::syntax_error);
-    CHECK_EQ(*top_level->get<int>(), 1);
+    auto const read = top_level->get<int>();
+    CHECK_EQ(*read, 1);
     CHECK_EQ(*cbor::at_path<"$", int>(std::string_view(wire)), 1);
     std::string const in_array = "\xd8\x18\x43\x81\x01\x02"s;
-    CHECK_EQ(*test::make_lazy_from_copy(in_array)->at(0)->get<int>(), 1);
+    auto const at_0 = test::make_lazy_from_copy(in_array)->at(0);
+    auto const read_2 = at_0->get<int>();
+    CHECK_EQ(*read_2, 1);
     CHECK_EQ(*cbor::at_path<"$[0]", int>(std::string_view(in_array)), 1);
 }
 

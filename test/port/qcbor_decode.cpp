@@ -123,27 +123,40 @@ std::expected<cbor::lazy, error> lazy_of(std::string encoded)
     return cbor::lazy::adopt(std::move(encoded));
 }
 
-template <class T>
-std::expected<T, error> read_as(std::expected<cbor::lazy, error> const &at)
+template <class T, class At>
+auto read_as(At const &at) -> std::expected<typename decltype(at->template get<T>())::value_type, error>
 {
-    return at.and_then([](cbor::lazy const &l) { return l.get<T>(); });
+    if (!at)
+        return std::unexpected(at.error());
+    auto const read = at->template get<T>();
+    if (!read)
+        return std::unexpected(read.error());
+    return *read;
 }
 
-std::expected<std::string, error> text_of(std::expected<cbor::lazy, error> const &at)
+template <class At>
+std::expected<std::string, error> text_of(At const &at)
 {
-    return at.and_then([](cbor::lazy const &l) { return l.get<std::string_view>(); })
-        .transform([](cbor::ref<std::string_view> const &r) { return std::string(*r); });
+    auto const text = read_as<std::string_view>(at);
+    return text.transform([](cbor::ref<std::string_view> const &r) { return std::string(*r); });
 }
 
-std::expected<std::string, error> bytes_of(std::expected<cbor::lazy, error> const &at)
+template <class At>
+std::expected<std::string, error> bytes_of(At const &at)
 {
-    return at.and_then([](cbor::lazy const &l) { return l.get<std::span<std::byte const>>(); })
-        .transform([](cbor::ref<std::span<std::byte const>> const &r) { return as_string(*r); });
+    auto const bytes = read_as<std::span<std::byte const>>(at);
+    return bytes.transform([](cbor::ref<std::span<std::byte const>> const &r) { return as_string(*r); });
 }
 
-std::expected<std::uint64_t, error> count_pieces(std::expected<cbor::lazy, error> const &at)
+template <class At>
+std::expected<std::uint64_t, error> count_pieces(At const &at)
 {
-    return at.and_then([](cbor::lazy const &l) { return l.size(); });
+    if (!at)
+        return std::unexpected(at.error());
+    auto const count = at->size();
+    if (!count)
+        return std::unexpected(count.error());
+    return *count;
 }
 
 std::vector<cbor::item> elements_of(cbor::item const node)
@@ -538,8 +551,10 @@ TEST_CASE("qcbor SimpleValueDecodeTests: simple values are found by key")
     CHECK(read_as<cbor::simple_value>(doc->at(6)) == cbor::simple_value{19});
     CHECK(read_as<cbor::simple_value>(doc->at(7)) == cbor::simple_value{32});
     CHECK(read_as<cbor::simple_value>(doc->at("@")) == cbor::simple_value{255});
-    CHECK(doc->at(99).error_or(error{}) == error::key_not_found);
-    CHECK(doc->at("xx").error_or(error{}) == error::key_not_found);
+    auto const at_99 = doc->at(99);
+    CHECK(at_99 == std::unexpected(error::key_not_found));
+    auto const xx = doc->at("xx");
+    CHECK(xx == std::unexpected(error::key_not_found));
     CHECK(read_as<cbor::simple_value>(doc->at(15)) == std::unexpected(error::incorrect_type));
 }
 
@@ -941,12 +956,15 @@ TEST_CASE("qcbor BignumParseTest: bignums larger than 64 bits keep their bytes")
     REQUIRE(doc.has_value());
     auto const map_at = doc->at(2);
     REQUIRE(map_at.has_value());
-    CHECK(map_at->at(-64).and_then([](cbor::lazy const &l) { return l.type(); }) ==
-          cbor::type::negative_bignum);
-    CHECK(map_at->at(64).and_then([](cbor::lazy const &l) { return l.type(); }) ==
-          cbor::type::unsigned_bignum);
-    CHECK(map_at->at("BN+").and_then([](cbor::lazy const &l) { return l.type(); }) == cbor::type::unsigned_bignum);
-    CHECK(map_at->at("BN-").and_then([](cbor::lazy const &l) { return l.type(); }) == cbor::type::negative_bignum);
+    auto const kind_of = [](cbor::lazy const &l) { return l.type(); };
+    auto const at_minus_64 = map_at->at(-64);
+    CHECK(at_minus_64.and_then(kind_of) == cbor::type::negative_bignum);
+    auto const at_64 = map_at->at(64);
+    CHECK(at_64.and_then(kind_of) == cbor::type::unsigned_bignum);
+    auto const plus = map_at->at("BN+");
+    CHECK(plus.and_then(kind_of) == cbor::type::unsigned_bignum);
+    auto const minus = map_at->at("BN-");
+    CHECK(minus.and_then(kind_of) == cbor::type::negative_bignum);
 }
 
 namespace

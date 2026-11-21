@@ -149,7 +149,8 @@ TEST_CASE("limits sizes 2: the iterators of elements() and entries() skip withou
     auto const elements = l->elements();
     REQUIRE(elements.has_value());
     auto it = elements->begin();
-    CHECK_EQ((*it)->get<std::string_view>().error(), error::string_length_exceeded);
+    auto const read = (*it)->get<std::string_view>();
+    CHECK_EQ(read.error(), error::string_length_exceeded);
     ++it;
     REQUIRE(it != std::default_sentinel);
     CHECK_EQ((*it)->get<int>(), 1);
@@ -157,7 +158,8 @@ TEST_CASE("limits sizes 2: the iterators of elements() and entries() skip withou
     REQUIRE(entries.has_value());
     auto pair = entries->begin();
     REQUIRE((*pair).has_value());
-    CHECK_EQ((*pair)->first.get<std::string_view>().error(), error::string_length_exceeded);
+    auto const read_2 = (*pair)->first.get<std::string_view>();
+    CHECK_EQ(read_2.error(), error::string_length_exceeded);
     CHECK_EQ((*pair)->second.get<int>(), 1);
     ++pair;
     CHECK_EQ((*pair)->second.get<int>(), 3);
@@ -182,16 +184,19 @@ TEST_CASE(
         auto const l = *test::make_lazy_from_copy(doc);
         CHECK_EQ(cbor::at_path<"$.n", int>(doc), 1);
         CHECK_EQ(l.at_path<"$.n", int>(), 1);
-        CHECK_EQ(l.at("n")->get<int>(), 1);
+        auto const n = l.at("n");
+        CHECK_EQ(n->get<int>(), 1);
         CHECK(test::read_value_at_path("$.n", l) == V(1));
         CHECK(test::query("$.n", l) == A(1));
         CHECK_EQ(test::read_value_at_path("$.a", l).error(), wanted);
-        CHECK_EQ(test::make_value_from_item(*l.at("a")).error(), wanted);
+        auto const a = l.at("a");
+        CHECK_EQ(test::make_value_from_item(*a).error(), wanted);
     }
     std::string const two = "\x82\x63xyz\x83\x01\x02\x03"s;
     auto const l = *test::make_lazy_from_copy("\x82\x82\x63xyz\x83\x01\x02\x03\x05"s);
     CHECK_EQ(l.at_path<"$[1]", int>(), 5);
-    CHECK_EQ(l.at(1)->get<int>(), 5);
+    auto const at_1 = l.at(1);
+    CHECK_EQ(at_1->get<int>(), 5);
     CHECK_EQ(l.at_path<"$[0][1]", int>().error(), error::container_elements_exceeded);
     CHECK_EQ(l.at_path<"$[0][0]", std::int64_t>().error(), error::string_length_exceeded);
     CHECK_EQ(cbor::item_size(two).error(), error::string_length_exceeded);
@@ -201,10 +206,12 @@ TEST_CASE(
 // the error of each size limit.
 TEST_CASE("doc basics: the error of each size limit")
 {
-    CHECK_EQ(test::make_lazy_from_copy(encode_in_preferred_form(V("xyz"s)))->get<std::string_view>().error(),
+    auto const read = test::make_lazy_from_copy(encode_in_preferred_form(V("xyz"s)))->get<std::string_view>();
+    CHECK_EQ(read.error(),
              error::string_length_exceeded);
     std::string const three = encode_in_preferred_form(A(1, 2, 3));
-    CHECK_EQ(test::make_lazy_from_copy(three)->size().error(), error::container_elements_exceeded);
+    auto const count = test::make_lazy_from_copy(three)->size();
+    CHECK_EQ(count.error(), error::container_elements_exceeded);
     CHECK_EQ(cbor::at_path<"$[0]", int>(three).error(), error::container_elements_exceeded);
 }
 
@@ -215,8 +222,10 @@ TEST_CASE("doc advanced basics: a string limit is checked at get")
 {
     auto const l = test::make_lazy_from_copy(encode_in_preferred_form(V("xyz"s)));
     REQUIRE(l.has_value());
-    CHECK_EQ(l->get<std::string_view>().error(), error::string_length_exceeded);
-    CHECK_EQ(test::make_lazy_from_copy(array_of(3))->size().error(), error::container_elements_exceeded);
+    auto const read = l->get<std::string_view>();
+    CHECK_EQ(read.error(), error::string_length_exceeded);
+    auto const count = test::make_lazy_from_copy(array_of(3))->size();
+    CHECK_EQ(count.error(), error::container_elements_exceeded);
 }
 
 // The former advanced basics guide, section "Limits": the limits
@@ -224,8 +233,11 @@ TEST_CASE("doc advanced basics: a string limit is checked at get")
 TEST_CASE("doc advanced basics: a skip does not count")
 {
     std::string const bytes = encode_in_preferred_form(M("a"s, "xyz"s, "n"s, 1));
-    CHECK_EQ(test::make_lazy_from_copy(bytes)->at("n")->get<std::int64_t>(), 1);
-    CHECK_EQ(test::make_lazy_from_copy(bytes)->at("a")->get<std::string_view>().error(),
+    auto const n = test::make_lazy_from_copy(bytes)->at("n");
+    CHECK_EQ(n->get<std::int64_t>(), 1);
+    auto const a = test::make_lazy_from_copy(bytes)->at("a");
+    auto const read = a->get<std::string_view>();
+    CHECK_EQ(read.error(),
              error::string_length_exceeded);
     CHECK_EQ(cbor::item_size(bytes).error(), error::string_length_exceeded);
     CHECK_EQ(test::make_value_from_item(*test::make_lazy_from_copy(bytes)).error(), error::string_length_exceeded);
@@ -310,8 +322,10 @@ TEST_CASE("limits sizes 2: sequence_reader gives an item above a size limit, and
         auto const array = r.next();
         REQUIRE(text.has_value());
         REQUIRE(array.has_value());
-        CHECK_EQ(text->get<std::string_view>().error(), error::string_length_exceeded);
-        CHECK_EQ(array->size().error(), error::container_elements_exceeded);
+        auto const read = text->get<std::string_view>();
+        CHECK_EQ(read.error(), error::string_length_exceeded);
+        auto const count = array->size();
+        CHECK_EQ(count.error(), error::container_elements_exceeded);
         CHECK(r.empty());
     }
 }

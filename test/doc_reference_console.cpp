@@ -26,7 +26,9 @@ std::string user_message()
 TEST_CASE("doc reference console: a field by its key")
 {
     auto const doc = cbor::lazy::adopt(user_message());
-    auto const name = doc->at("user")->at("name")->get<std::string_view>();
+    auto const user = doc->at("user");
+    auto const name_2 = user->at("name");
+    auto const name = name_2->get<std::string_view>();
     REQUIRE(name);
     CHECK_EQ(**name, "ann"sv);
 }
@@ -35,7 +37,9 @@ TEST_CASE("doc reference console: a field by its key")
 TEST_CASE("doc reference console: an element by its index")
 {
     auto const doc = cbor::lazy::adopt(test::encode_in_preferred_form(test::M("tags"s, test::A("a"s, "b"s, "c"s))));
-    auto const tag = doc->at("tags")->at(1)->get<std::string_view>();
+    auto const tags = doc->at("tags");
+    auto const at_1 = tags->at(1);
+    auto const tag = at_1->get<std::string_view>();
     REQUIRE(tag);
     CHECK_EQ(**tag, "b"sv);
 }
@@ -44,7 +48,8 @@ TEST_CASE("doc reference console: an element by its index")
 TEST_CASE("doc reference console: one value by its path")
 {
     auto const doc = cbor::lazy::adopt(user_message());
-    CHECK_EQ(doc->at_path<"$.user.id">()->get<int>().value(), 42);
+    auto const read = doc->at_path<"$.user.id">()->get<int>();
+    CHECK_EQ(read.value(), 42);
 }
 
 // Read all values of a path: [*] with cbor::nodelist gives every match.
@@ -65,5 +70,8 @@ TEST_CASE("doc reference console: the message as text")
 TEST_CASE("doc reference console: a value with the wrong type")
 {
     auto const doc = cbor::lazy::adopt(user_message());
-    CHECK_EQ(doc->at("user")->at("name")->get<int>().error(), cbor::error::incorrect_type);
+    auto const user = doc->at("user");
+    auto const name = user->at("name");
+    auto const read = name->get<int>();
+    CHECK_EQ(read.error(), cbor::error::incorrect_type);
 }

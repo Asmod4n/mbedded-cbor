@@ -47,16 +47,19 @@ TEST_CASE("pending items: every reader refuses a container that claims more item
         CHECK_EQ(cbor::decode(cut).error(), error::too_little_data);
         auto const doc = test::make_lazy_from_copy(cut);
         REQUIRE(doc.has_value());
-        CHECK_EQ(doc->size().error(), error::too_little_data);
+        auto const count = doc->size();
+        CHECK_EQ(count.error(), error::too_little_data);
     }
     auto const a = test::make_lazy_from_copy(array);
     REQUIRE(a.has_value());
     CHECK_EQ(a->elements().error(), error::too_little_data);
-    CHECK_EQ(a->at(0).error(), error::too_little_data);
+    auto const at_0 = a->at(0);
+    CHECK_EQ(at_0.error(), error::too_little_data);
     auto const m = test::make_lazy_from_copy(map);
     REQUIRE(m.has_value());
     CHECK_EQ(m->entries().error(), error::too_little_data);
-    CHECK_EQ(m->at(1).error(), error::too_little_data);
+    auto const at_1 = m->at(1);
+    CHECK_EQ(at_1.error(), error::too_little_data);
     auto const first = cbor::path::compile<std::int64_t>("$[0]");
     REQUIRE(first.has_value());
     CHECK_EQ(cbor::at_path(std::string_view(array), *first).error(), error::too_little_data);
@@ -97,8 +100,10 @@ TEST_CASE("pending items: a container that holds every item it claims is read wh
 {
     std::string const array = encode_edn("[1, 2, 3]");
     std::string const map = encode_edn("{1: 2, 3: 4}");
-    CHECK_EQ(test::make_lazy_from_copy(array)->size().value(), 3u);
-    CHECK_EQ(test::make_lazy_from_copy(map)->size().value(), 2u);
+    auto const count = test::make_lazy_from_copy(array)->size();
+    CHECK_EQ(count.value(), 3u);
+    auto const count_2 = test::make_lazy_from_copy(map)->size();
+    CHECK_EQ(count_2.value(), 2u);
     CHECK_EQ(cbor::item_size(array).value(), array.size());
     CHECK_EQ(cbor::item_size(map).value(), map.size());
 }

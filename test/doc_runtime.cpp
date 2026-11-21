@@ -58,20 +58,28 @@ TEST_CASE("doc runtime: read step by step")
     std::string bytes = encode_in_preferred_form(M("cars"s, A(M("hp"s, 5), M("hp"s, 7))));
     std::int64_t used = 0;
     auto const use = [&used](std::int64_t const v) { used = v; };
-    auto const hp = test::make_lazy_from_copy(bytes)
-                        .and_then([](cbor::lazy const &doc) { return doc.at("cars"); })
-                        .and_then([](cbor::lazy const &cars) { return cars.at(1); })
-                        .and_then([](cbor::lazy const &car) { return car.at("hp"); })
-                        .and_then([](cbor::lazy const &h) { return h.get<std::int64_t>(); });
+    auto const copy = test::make_lazy_from_copy(bytes);
+    REQUIRE(copy.has_value());
+    auto const cars = copy->at("cars");
+    auto const car = cars.and_then([](cbor::lazy const &c) { return c.at(1); });
+    auto const power = car.and_then([](cbor::lazy const &c) { return c.at("hp"); });
+    auto const hp = power.and_then([](cbor::lazy const &h) { return h.get<std::int64_t>(); });
     if (hp)
         use(*hp);
     CHECK_EQ(used, 7);
     CHECK_EQ(cbor::at_path<"$.cars[1].hp", std::int64_t>(bytes), 7);
     auto const doc = cbor::lazy::adopt(std::move(bytes));
     REQUIRE(doc.has_value());
-    CHECK_EQ(doc->at("bus").error(), error::key_not_found);
-    CHECK_EQ(doc->at("cars")->at(2).error(), error::index_out_of_bounds);
-    CHECK_EQ(doc->at("cars")->at(0)->at("hp")->at(0).error(), error::not_indexable);
+    auto const bus = doc->at("bus");
+    CHECK_EQ(bus.error(), error::key_not_found);
+    auto const cars_2 = doc->at("cars");
+    auto const at_2 = cars_2->at(2);
+    CHECK_EQ(at_2.error(), error::index_out_of_bounds);
+    auto const cars_3 = doc->at("cars");
+    auto const at_0 = cars_3->at(0);
+    auto const hp_2 = at_0->at("hp");
+    auto const at_0_2 = hp_2->at(0);
+    CHECK_EQ(at_0_2.error(), error::not_indexable);
     auto const owner = std::make_shared<std::string const>(encode_in_preferred_form(M("cars"s, A(M("hp"s, 5)))));
     auto const viewed = cbor::lazy::view(owner);
     REQUIRE(viewed.has_value());
@@ -83,7 +91,8 @@ TEST_CASE("doc runtime: read step by step")
     REQUIRE(key.has_value());
     CHECK_EQ(**key, "cars"sv);
     auto const keyed = test::make_lazy_from_copy(encode_in_preferred_form(M(7, "seven"s)));
-    auto const seven = keyed->at(7)->get<std::string_view>();
+    auto const at_7 = keyed->at(7);
+    auto const seven = at_7->get<std::string_view>();
     REQUIRE(seven.has_value());
     CHECK_EQ(**seven, "seven"sv);
 }
@@ -93,11 +102,17 @@ TEST_CASE("doc runtime: read a value as a type")
 {
     std::string const bytes = encode_in_preferred_form(M("name"s, "ann"s, "age"s, 300));
     auto const doc = test::make_lazy_from_copy(bytes);
-    auto const name = doc->at("name")->get<std::string_view>();
+    auto const name_2 = doc->at("name");
+    auto const name = name_2->get<std::string_view>();
     CHECK_EQ(**name, "ann"sv);
-    CHECK_EQ(doc->at("age")->get<std::int64_t>(), 300);
-    CHECK_EQ(doc->at("age")->get<std::uint8_t>().error(), error::number_out_of_range);
-    CHECK_EQ(doc->at("name")->get<std::int64_t>().error(), error::incorrect_type);
+    auto const age = doc->at("age");
+    CHECK_EQ(age->get<std::int64_t>(), 300);
+    auto const age_2 = doc->at("age");
+    auto const read = age_2->get<std::uint8_t>();
+    CHECK_EQ(read.error(), error::number_out_of_range);
+    auto const name_3 = doc->at("name");
+    auto const read_2 = name_3->get<std::int64_t>();
+    CHECK_EQ(read_2.error(), error::incorrect_type);
     CHECK(doc_runtime::dereferences<cbor::ref<std::string_view> const &>);
     CHECK_FALSE(doc_runtime::dereferences<cbor::ref<std::string_view>>);
     CHECK(doc_runtime::arrows<cbor::ref<std::string_view> const &>);
@@ -122,8 +137,8 @@ TEST_CASE("doc runtime: loop over an array or a map")
 
     std::string const bytes = encode_in_preferred_form(M("a"s, 1, "b"s, 2));
     std::vector<std::pair<std::string, std::int64_t>> seen;
-    auto const use = [&seen](std::expected<cbor::ref<std::string_view>, error> const &k,
-                             std::expected<std::int64_t, error> const &v) { seen.emplace_back(std::string{**k}, *v); };
+    auto const use = [&seen](cbor::result<cbor::ref<std::string_view>> const &k,
+                             cbor::result<std::int64_t> const &v) { seen.emplace_back(std::string{**k}, *v); };
     auto const map = test::make_lazy_from_copy(bytes);
     auto const entries = *map->entries();
     for (auto const pair : entries)
@@ -138,7 +153,8 @@ TEST_CASE("doc runtime: size and keys")
     std::string const bytes = encode_in_preferred_form(M("a"s, 1, "b"s, 2));
     auto const map = test::make_lazy_from_copy(bytes);
     CHECK_EQ(map->size(), 2u);
-    CHECK_EQ(map->at("z").error(), cbor::error::key_not_found);
+    auto const z = map->at("z");
+    CHECK_EQ(z.error(), cbor::error::key_not_found);
     CHECK_EQ(test::make_lazy_from_copy(encode_in_preferred_form(A(1, 2, 3)))->size(), 3u);
 }
 

@@ -3254,9 +3254,13 @@ inline namespace literals
  *
  * @code{.example}
  * message: {h'01': "bytes", [1, 2]: "pair"}
- * call: doc->at("h'01'"_edn)->get<std::string_view>()
+ * call: auto const bytes = doc->at("h'01'"_edn)
+ * result: lazy of "bytes"
+ * call: bytes->get<std::string_view>()
  * result: ref to "bytes"
- * call: doc->at("[1, 2]"_edn)->get<std::string_view>()
+ * call: auto const pair = doc->at("[1, 2]"_edn)
+ * result: lazy of "pair"
+ * call: pair->get<std::string_view>()
  * result: ref to "pair"
  * @endcode
  *

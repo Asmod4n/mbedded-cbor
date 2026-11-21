@@ -61,6 +61,11 @@
 
 #define CBOR_ALWAYS_INLINE [[gnu::always_inline]]
 #define CBOR_NEVER_INLINE [[gnu::noinline]]
+#if defined(__clang__)
+#define CBOR_LIFETIMEBOUND [[clang::lifetimebound]]
+#else
+#define CBOR_LIFETIMEBOUND
+#endif
 #if defined(_MSC_VER)
 #define CBOR_NO_UNIQUE_ADDRESS [[msvc::no_unique_address]]
 #else

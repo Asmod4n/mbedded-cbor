@@ -488,17 +488,24 @@ TEST_CASE("decode_cycles: lazy, at_path, decode and diagnostic notation read tag
         std::string const doc = "\x83"s + head_of(6, 28, bytes) + "\x05"s + head_of(6, 29, bytes) +
                                 head_of(0, 0, bytes) + head_of(6, 29, bytes) + head_of(0, 7, bytes);
         auto const l = *test::make_lazy_from_copy(doc);
-        CHECK_EQ(l.at(0)->type(), cbor::type::tag);
-        CHECK_EQ(l.at(1)->type(), cbor::type::tag);
-        CHECK_EQ(l.at(0)->get<std::uint64_t>(), 5u);
-        CHECK_EQ(l.at(1)->get<std::uint64_t>(), 0u);
-        CHECK_EQ(l.at(2)->get<std::uint64_t>(), 7u);
+        auto const at_0 = l.at(0);
+        CHECK_EQ(at_0->type(), cbor::type::tag);
+        auto const at_1 = l.at(1);
+        CHECK_EQ(at_1->type(), cbor::type::tag);
+        auto const at_0_2 = l.at(0);
+        CHECK_EQ(at_0_2->get<std::uint64_t>(), 5u);
+        auto const at_1_2 = l.at(1);
+        CHECK_EQ(at_1_2->get<std::uint64_t>(), 0u);
+        auto const at_2 = l.at(2);
+        CHECK_EQ(at_2->get<std::uint64_t>(), 7u);
         CHECK_EQ(l.at_path<"$[1]", std::uint64_t>(), 0u);
         CHECK_EQ(cbor::at_path<"$[2]", std::uint64_t>(doc), 7u);
         std::vector<cbor::type> types;
         auto const range = *l.elements();
-        for (auto const e : range)
-            types.push_back(*e->type());
+        for (auto const e : range) {
+            auto const kind = e->type();
+            types.push_back(*kind);
+        }
         CHECK(types == std::vector<cbor::type>(3, cbor::type::tag));
         for (auto const &tree : {l.to_item(), cbor::decode(doc)}) {
             REQUIRE(tree.has_value());
@@ -706,14 +713,20 @@ TEST_CASE("decode_cycles: clone at an inner offset keeps tags 28, 29 and 55799")
 {
     auto const top_level = test::make_lazy_from_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
     REQUIRE(top_level.has_value());
-    auto const reference = top_level->at(1).and_then([](cbor::lazy const &l) { return l.to_item(); });
+    auto const at_1 = top_level->at(1);
+    REQUIRE(at_1.has_value());
+    auto const reference = at_1->to_item();
     REQUIRE(reference.has_value());
-    CHECK_EQ((*reference)->get<std::pair<std::uint64_t, cbor::item>>().value().first, 29u);
+    auto const read = (*reference)->get<std::pair<std::uint64_t, cbor::item>>();
+    CHECK_EQ(read.value().first, 29u);
     auto const marked = test::make_lazy_from_copy("\x81\xd9\xd9\xf7\x01"s);
     REQUIRE(marked.has_value());
-    auto const inner = marked->at(0).and_then([](cbor::lazy const &l) { return l.to_item(); });
+    auto const at_0 = marked->at(0);
+    REQUIRE(at_0.has_value());
+    auto const inner = at_0->to_item();
     REQUIRE(inner.has_value());
-    CHECK_EQ((*inner)->get<std::pair<std::uint64_t, cbor::item>>().value().first, 55799u);
+    auto const read_2 = (*inner)->get<std::pair<std::uint64_t, cbor::item>>();
+    CHECK_EQ(read_2.value().first, 55799u);
 }
 
 namespace shared_test

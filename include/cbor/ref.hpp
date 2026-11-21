@@ -20,12 +20,11 @@
 
 #include "string_saver.hpp"
 #include "rfc8746.hpp"
+#include "validity.hpp"
 
 #if defined(__clang__)
-#define CBOR_LIFETIMEBOUND [[clang::lifetimebound]]
 #define CBOR_OWNER [[gsl::Owner]]
 #else
-#define CBOR_LIFETIMEBOUND
 #define CBOR_OWNER
 #endif
 

@@ -109,16 +109,26 @@ TEST_CASE("lazy: access errors")
         "\x83\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x1b\x00\x00\x00\x00\x00\x00\x00\x02"
         "\x1b\x00\x00\x00\x00\x00\x00\x00\x03"s;
     std::string const scalar = "\x1b\x00\x00\x00\x00\x00\x00\x00\x2a"s;
-    CHECK_EQ(lazy_of(empty_array).at(0).error(), error::index_out_of_bounds);
-    CHECK_EQ(lazy_of(empty_map).at("x").error(), error::key_not_found);
-    CHECK_EQ(lazy_of(one).at("missing").error(), error::key_not_found);
-    CHECK_EQ(lazy_of(three).at(99).error(), error::index_out_of_bounds);
-    CHECK_EQ(lazy_of(three).at("invalid").error(), error::not_indexable);
-    CHECK_EQ(lazy_of(scalar).at("key").error(), error::not_indexable);
-    CHECK_EQ(lazy_of(one).at(0).error(), error::key_not_found);
-    CHECK(value_at(*lazy_of(three).at(0)) == V(1));
-    CHECK_EQ(lazy_of(scalar).at(0).error(), error::not_indexable);
-    CHECK_EQ(lazy_of(empty_map).at(0).error(), error::key_not_found);
+    auto const at_0 = lazy_of(empty_array).at(0);
+    CHECK_EQ(at_0.error(), error::index_out_of_bounds);
+    auto const x = lazy_of(empty_map).at("x");
+    CHECK_EQ(x.error(), error::key_not_found);
+    auto const missing = lazy_of(one).at("missing");
+    CHECK_EQ(missing.error(), error::key_not_found);
+    auto const at_99 = lazy_of(three).at(99);
+    CHECK_EQ(at_99.error(), error::index_out_of_bounds);
+    auto const invalid = lazy_of(three).at("invalid");
+    CHECK_EQ(invalid.error(), error::not_indexable);
+    auto const found = lazy_of(scalar).at("key");
+    CHECK_EQ(found.error(), error::not_indexable);
+    auto const at_0_2 = lazy_of(one).at(0);
+    CHECK_EQ(at_0_2.error(), error::key_not_found);
+    auto const at_0_3 = lazy_of(three).at(0);
+    CHECK(value_at(*at_0_3) == V(1));
+    auto const at_0_4 = lazy_of(scalar).at(0);
+    CHECK_EQ(at_0_4.error(), error::not_indexable);
+    auto const at_0_5 = lazy_of(empty_map).at(0);
+    CHECK_EQ(at_0_5.error(), error::key_not_found);
 }
 
 namespace
@@ -144,10 +154,14 @@ TEST_CASE("lazy: at reads an integer key of a map and an element of an array")
     cbor::lazy const root = lazy_of_edn(R"([{1: "one"}, 7])");
     CHECK(value_at(at(root, 1)) == V(7));
     CHECK(value_at(at(at(root, 0), 1)) == V("one"s));
-    CHECK_EQ(at(root, 0).at(0).error(), error::key_not_found);
-    CHECK(value_at(*root.at(1)) == V(7));
-    CHECK(value_at(*lazy_of_edn(R"({-1: "minus"})").at(-1)) == V("minus"s));
-    CHECK_EQ(root.at(std::numeric_limits<std::size_t>::max()).error(), error::index_out_of_bounds);
+    auto const at_0 = at(root, 0).at(0);
+    CHECK_EQ(at_0.error(), error::key_not_found);
+    auto const at_1 = root.at(1);
+    CHECK(value_at(*at_1) == V(7));
+    auto const at_minus_1 = lazy_of_edn(R"({-1: "minus"})").at(-1);
+    CHECK(value_at(*at_minus_1) == V("minus"s));
+    auto const found = root.at(std::numeric_limits<std::size_t>::max());
+    CHECK_EQ(found.error(), error::index_out_of_bounds);
 }
 
 // Each integer type is an exact match of the template, so a literal and a std::size_t loop variable both pass with no
@@ -159,17 +173,28 @@ TEST_CASE("lazy: at takes a text, every integer type and no bool, character, flo
     cbor::lazy const map = lazy_of_edn(R"({0: "zero", 1: "one", -1: "minus one", "a": "text"})");
     cbor::lazy const array = lazy_of_edn(R"(["first", "second"])");
     std::size_t const i = 1;
-    CHECK(value_at(*map.at(0)) == V("zero"s));
-    CHECK(value_at(*map.at(1)) == V("one"s));
-    CHECK(value_at(*map.at(-1)) == V("minus one"s));
-    CHECK(value_at(*map.at(i)) == V("one"s));
-    CHECK(value_at(*array.at(0)) == V("first"s));
-    CHECK(value_at(*array.at(1)) == V("second"s));
-    CHECK(value_at(*array.at(i)) == V("second"s));
-    CHECK_EQ(array.at(-1).error(), error::index_out_of_bounds);
-    CHECK(value_at(*map.at("a")) == V("text"s));
-    CHECK(value_at(*map.at(std::string("a"))) == V("text"s));
-    CHECK_EQ(array.at("a").error(), error::not_indexable);
+    auto const at_0 = map.at(0);
+    CHECK(value_at(*at_0) == V("zero"s));
+    auto const at_1 = map.at(1);
+    CHECK(value_at(*at_1) == V("one"s));
+    auto const at_minus_1 = map.at(-1);
+    CHECK(value_at(*at_minus_1) == V("minus one"s));
+    auto const at_i = map.at(i);
+    CHECK(value_at(*at_i) == V("one"s));
+    auto const at_0_2 = array.at(0);
+    CHECK(value_at(*at_0_2) == V("first"s));
+    auto const at_1_2 = array.at(1);
+    CHECK(value_at(*at_1_2) == V("second"s));
+    auto const at_i_2 = array.at(i);
+    CHECK(value_at(*at_i_2) == V("second"s));
+    auto const at_minus_1_2 = array.at(-1);
+    CHECK_EQ(at_minus_1_2.error(), error::index_out_of_bounds);
+    auto const a = map.at("a");
+    CHECK(value_at(*a) == V("text"s));
+    auto const found = map.at(std::string("a"));
+    CHECK(value_at(*found) == V("text"s));
+    auto const a_2 = array.at("a");
+    CHECK_EQ(a_2.error(), error::not_indexable);
     CHECK(at_accepts<char const *>);
     CHECK(at_accepts<std::string>);
     CHECK(at_accepts<std::string_view>);
@@ -197,22 +222,35 @@ TEST_CASE("lazy: at reaches every integer key of RFC 8949 3.1")
     cbor::lazy const map = lazy_of_edn(
         R"({9223372036854775808: "2^63", 18446744073709551615: "2^64-1", -9223372036854775809: "-2^63-1", )"
         R"(-18446744073709551616: "-2^64"})");
-    CHECK(value_at(*map.at(std::uint64_t{1} << 63)) == V("2^63"s));
-    CHECK(value_at(*map.at(std::numeric_limits<std::uint64_t>::max())) == V("2^64-1"s));
+    auto const found = map.at(std::uint64_t{1} << 63);
+    CHECK(value_at(*found) == V("2^63"s));
+    auto const found_2 = map.at(std::numeric_limits<std::uint64_t>::max());
+    CHECK(value_at(*found_2) == V("2^64-1"s));
 #ifdef CBOR_HAS_INT128
     cbor::lazy const array = lazy_of_edn("[1, 2, 3]");
     cbor::int128 const two_to_64 = cbor::int128{1} << 64;
-    CHECK(value_at(*map.at(-two_to_64)) == V("-2^64"s));
-    CHECK(value_at(*map.at(-(cbor::int128{1} << 63) - 1)) == V("-2^63-1"s));
-    CHECK(value_at(*map.at(two_to_64 - 1)) == V("2^64-1"s));
-    CHECK(value_at(*map.at(cbor::uint128{std::numeric_limits<std::uint64_t>::max()})) == V("2^64-1"s));
-    CHECK_EQ(map.at(-two_to_64 - 1).error(), error::key_not_found);
-    CHECK_EQ(map.at(two_to_64).error(), error::key_not_found);
-    CHECK_EQ(map.at(cbor::uint128{1} << 64).error(), error::key_not_found);
-    CHECK_EQ(array.at(-two_to_64 - 1).error(), error::index_out_of_bounds);
-    CHECK_EQ(array.at(two_to_64).error(), error::index_out_of_bounds);
-    CHECK_EQ(array.at(cbor::uint128{1} << 64).error(), error::index_out_of_bounds);
-    CHECK(value_at(*array.at(cbor::int128{2})) == V(3));
+    auto const found_3 = map.at(-two_to_64);
+    CHECK(value_at(*found_3) == V("-2^64"s));
+    auto const found_4 = map.at(-(cbor::int128{1} << 63) - 1);
+    CHECK(value_at(*found_4) == V("-2^63-1"s));
+    auto const found_5 = map.at(two_to_64 - 1);
+    CHECK(value_at(*found_5) == V("2^64-1"s));
+    auto const found_6 = map.at(cbor::uint128{std::numeric_limits<std::uint64_t>::max()});
+    CHECK(value_at(*found_6) == V("2^64-1"s));
+    auto const found_7 = map.at(-two_to_64 - 1);
+    CHECK_EQ(found_7.error(), error::key_not_found);
+    auto const at_two_to_64 = map.at(two_to_64);
+    CHECK_EQ(at_two_to_64.error(), error::key_not_found);
+    auto const found_8 = map.at(cbor::uint128{1} << 64);
+    CHECK_EQ(found_8.error(), error::key_not_found);
+    auto const found_9 = array.at(-two_to_64 - 1);
+    CHECK_EQ(found_9.error(), error::index_out_of_bounds);
+    auto const at_two_to_64_2 = array.at(two_to_64);
+    CHECK_EQ(at_two_to_64_2.error(), error::index_out_of_bounds);
+    auto const found_10 = array.at(cbor::uint128{1} << 64);
+    CHECK_EQ(found_10.error(), error::index_out_of_bounds);
+    auto const found_11 = array.at(cbor::int128{2});
+    CHECK(value_at(*found_11) == V(3));
 #endif
 }
 
@@ -220,21 +258,27 @@ TEST_CASE("lazy: at reaches every integer key of RFC 8949 3.1")
 // $[-1] counts from the end. A scalar has no element and no key.
 TEST_CASE("lazy: at with a negative index on an array and on a typed array")
 {
-    CHECK_EQ(lazy_of_edn("[1, 2, 3]").at(-1).error(), error::index_out_of_bounds);
+    auto const at_minus_1 = lazy_of_edn("[1, 2, 3]").at(-1);
+    CHECK_EQ(at_minus_1.error(), error::index_out_of_bounds);
     cbor::lazy const typed = lazy_of_edn("64(h'010203')");
-    CHECK_EQ(typed.at(-1).error(), error::index_out_of_bounds);
-    CHECK(value_at(*typed.at(2)) == V(3));
-    CHECK_EQ(lazy_of_edn("1").at(-1).error(), error::not_indexable);
-    CHECK_EQ(lazy_of_edn("1").at(1).error(), error::not_indexable);
+    auto const at_minus_1_2 = typed.at(-1);
+    CHECK_EQ(at_minus_1_2.error(), error::index_out_of_bounds);
+    auto const at_2 = typed.at(2);
+    CHECK(value_at(*at_2) == V(3));
+    auto const at_minus_1_3 = lazy_of_edn("1").at(-1);
+    CHECK_EQ(at_minus_1_3.error(), error::not_indexable);
+    auto const at_1 = lazy_of_edn("1").at(1);
+    CHECK_EQ(at_1.error(), error::not_indexable);
 }
 
 namespace
 {
 
-std::string text_at(std::expected<cbor::lazy, error> const &node)
+template <class Node>
+std::string text_at(Node const &node)
 {
     REQUIRE(node.has_value());
-    auto const text = node->get<std::string_view>();
+    auto const text = node->template get<std::string_view>();
     REQUIRE(text.has_value());
     return std::string(**text);
 }
@@ -258,18 +302,24 @@ TEST_CASE("lazy: at with an EDN literal reads a key of each kind")
     CHECK_EQ(text_at(map.at("[1, 2]"_edn)), "array");
     CHECK_EQ(text_at(map.at("{3: 4, 1: 2}"_edn)), "map");
     CHECK_EQ(text_at(map.at("1(0)"_edn)), "tag");
-    CHECK_EQ(map.at("0"_edn).error(), error::key_not_found);
+    auto const found = map.at("0"_edn);
+    CHECK_EQ(found.error(), error::key_not_found);
     CHECK_EQ(text_at(map.at("simple(16)"_edn)), "simple");
     CHECK_EQ(text_at(map.at("true"_edn)), "true");
     CHECK_EQ(text_at(map.at("2(h'010000000000000000')"_edn)), "big");
     CHECK_EQ(text_at(map.at("1"_edn)), "one");
     CHECK_EQ(text_at(map.at("\"a\""_edn)), text_at(map.at("a")));
     cbor::lazy const empty = lazy_of_edn("{}");
-    CHECK_EQ(empty.at("h'01'"_edn).error(), error::key_not_found);
-    CHECK_EQ(empty.at("1.5"_edn).error(), error::key_not_found);
-    CHECK_EQ(empty.at("[1, 2]"_edn).error(), error::key_not_found);
-    CHECK_EQ(empty.at("1"_edn).error(), error::key_not_found);
-    CHECK_EQ(empty.at("\"a\""_edn).error(), error::key_not_found);
+    auto const found_2 = empty.at("h'01'"_edn);
+    CHECK_EQ(found_2.error(), error::key_not_found);
+    auto const found_3 = empty.at("1.5"_edn);
+    CHECK_EQ(found_3.error(), error::key_not_found);
+    auto const found_4 = empty.at("[1, 2]"_edn);
+    CHECK_EQ(found_4.error(), error::key_not_found);
+    auto const found_5 = empty.at("1"_edn);
+    CHECK_EQ(found_5.error(), error::key_not_found);
+    auto const found_6 = empty.at("\"a\""_edn);
+    CHECK_EQ(found_6.error(), error::key_not_found);
 }
 
 // An integer literal is an index on an array, as at(1) and $[1] are; a negative one is an error as at(-1) is. Any
@@ -281,11 +331,16 @@ TEST_CASE("lazy: at with an EDN literal on an array, a typed array, a scalar and
     using namespace cbor::literals;
     cbor::lazy const array = lazy_of_edn(R"(["x", "y"])");
     CHECK_EQ(text_at(array.at("1"_edn)), "y");
-    CHECK_EQ(array.at("-1"_edn).error(), error::index_out_of_bounds);
-    CHECK_EQ(array.at("55799(1)"_edn).error(), error::not_indexable);
-    CHECK_EQ(array.at("h'01'"_edn).error(), error::not_indexable);
-    CHECK_EQ(lazy_of_edn("64(h'0102')").at("h'01'"_edn).error(), error::not_indexable);
-    CHECK_EQ(lazy_of_edn("1").at("h'01'"_edn).error(), error::not_indexable);
+    auto const found = array.at("-1"_edn);
+    CHECK_EQ(found.error(), error::index_out_of_bounds);
+    auto const found_2 = array.at("55799(1)"_edn);
+    CHECK_EQ(found_2.error(), error::not_indexable);
+    auto const found_3 = array.at("h'01'"_edn);
+    CHECK_EQ(found_3.error(), error::not_indexable);
+    auto const found_4 = lazy_of_edn("64(h'0102')").at("h'01'"_edn);
+    CHECK_EQ(found_4.error(), error::not_indexable);
+    auto const found_5 = lazy_of_edn("1").at("h'01'"_edn);
+    CHECK_EQ(found_5.error(), error::not_indexable);
     CHECK_EQ(text_at(lazy_of_edn(R"({55799(1.5): "x"})").at("1.5"_edn)), "x");
     CHECK_EQ(text_at(lazy_of_edn(R"({1.5: "x"})").at("55799(1.5)"_edn)), "x");
 }
@@ -392,15 +447,18 @@ TEST_CASE("lazy: negative indices and misses")
     std::string const h =
         "\xa2\x61" "a\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x61" "b"
         "\xa1\x61" "c\x1b\x00\x00\x00\x00\x00\x00\x00\x2a"s;
-    CHECK_EQ(lazy_of(h).at("missing").error(), error::key_not_found);
+    auto const missing = lazy_of(h).at("missing");
+    CHECK_EQ(missing.error(), error::key_not_found);
     CHECK(value_at(at_key(at_key(lazy_of(h), "b"), "c")) == V(42));
     std::string const a =
         "\x85\x1b\x00\x00\x00\x00\x00\x00\x00\x0a\x1b\x00\x00\x00\x00\x00\x00\x00\x14"
         "\x1b\x00\x00\x00\x00\x00\x00\x00\x1e\x1b\x00\x00\x00\x00\x00\x00\x00\x28"
         "\x1b\x00\x00\x00\x00\x00\x00\x00\x32"s;
     cbor::lazy const l = lazy_of(a);
-    CHECK(value_at(at(l, static_cast<std::size_t>(*l.size() - 1))) == V(50));
-    CHECK(value_at(at(l, static_cast<std::size_t>(*l.size() - 5))) == V(10));
+    auto const count = l.size();
+    CHECK(value_at(at(l, static_cast<std::size_t>(*count - 1))) == V(50));
+    auto const count_2 = l.size();
+    CHECK(value_at(at(l, static_cast<std::size_t>(*count_2 - 5))) == V(10));
     CHECK_EQ(cbor::at_path<"$[-1]", std::uint64_t>(a).value(), 50u);
     CHECK_EQ(cbor::at_path<"$[-5]", std::uint64_t>(a).value(), 10u);
     CHECK_EQ(cbor::at_path<"$[-99]", std::uint64_t>(a).error(), error::index_out_of_bounds);
@@ -520,7 +578,8 @@ TEST_CASE("lazy: random access")
 TEST_CASE("lazy: a truncated item before the target")
 {
     std::string const doc = "\x82\x4a\x01\x02\x03\x18\x2a"s;
-    CHECK_EQ(lazy_of(doc).at(1).error(), error::too_little_data);
+    auto const at_1 = lazy_of(doc).at(1);
+    CHECK_EQ(at_1.error(), error::too_little_data);
 }
 
 // Ported from test.rb: 'lazy: huge aref index handled cleanly'.
@@ -529,7 +588,8 @@ TEST_CASE("lazy: a huge index")
     std::string const doc =
         "\x83\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x1b\x00\x00\x00\x00\x00\x00\x00\x02"
         "\x1b\x00\x00\x00\x00\x00\x00\x00\x03"s;
-    CHECK_EQ(lazy_of(doc).at(0x7fffffff).error(), error::index_out_of_bounds);
+    auto const found = lazy_of(doc).at(0x7fffffff);
+    CHECK_EQ(found.error(), error::index_out_of_bounds);
 }
 
 // The fuzz corpus found this. A reference inside the mark it names, d8 1c d8 1d 00, once led the navigation back to
@@ -537,7 +597,8 @@ TEST_CASE("lazy: a huge index")
 TEST_CASE("lazy: a reference inside its own mark is a plain tag")
 {
     std::string const doc = "\xd8\x1c\xd8\x1d\x00"s;
-    CHECK_EQ(lazy_of(doc).at(0).error(), error::not_indexable);
+    auto const at_0 = lazy_of(doc).at(0);
+    CHECK_EQ(at_0.error(), error::not_indexable);
     CHECK(test::make_value_from_item(lazy_of(doc)) == V(tagged{28, V(tagged{29, V(0)})}));
 }
 
@@ -546,7 +607,8 @@ TEST_CASE("lazy: a reference inside its own mark is a plain tag")
 TEST_CASE("lazy: a value inside a huge claimed map")
 {
     std::string const doc = "\xbb\x6a\xc9\xfb\x32\xf6\xd8\xd8\x27\x61\x61\x19\x00\x00"s;
-    CHECK_EQ(lazy_of(doc).at("a").error(), error::too_little_data);
+    auto const a = lazy_of(doc).at("a");
+    CHECK_EQ(a.error(), error::too_little_data);
 }
 
 // Found by the fuzzer: [28(28(29(0))), ...] once led from the reference through two marks back to the same
@@ -556,7 +618,8 @@ TEST_CASE("lazy: a chain of marks over a reference is a chain of plain tags")
     std::string const doc = "\x82\xd8\x1c\xd8\x1c\xd8\x1d\x00\x00"s;
     auto const element = lazy_of(doc).at(0);
     REQUIRE(element.has_value());
-    CHECK_EQ(element->at(0).error(), error::not_indexable);
+    auto const at_0 = element->at(0);
+    CHECK_EQ(at_0.error(), error::not_indexable);
 }
 
 namespace
@@ -757,32 +820,40 @@ TEST_CASE("lazy: std::ranges algorithms over entries and elements")
 TEST_CASE("lazy: at gives the value of a present key")
 {
     cbor::lazy const l = lazy_of("\xa4\x61" "a\x01\x21\x65" "minus\x07\x65" "seven\x61" "b\x02"s);
-    CHECK(value_at(*l.at("b")) == V(2));
-    CHECK(value_at(*l.at(7)) == V("seven"s));
-    CHECK(value_at(*l.at(-2)) == V("minus"s));
-    CHECK_EQ(lazy_of("\xa0"s).at("a").error(), error::key_not_found);
+    auto const b = l.at("b");
+    CHECK(value_at(*b) == V(2));
+    auto const at_7 = l.at(7);
+    CHECK(value_at(*at_7) == V("seven"s));
+    auto const at_minus_2 = l.at(-2);
+    CHECK(value_at(*at_minus_2) == V("minus"s));
+    auto const a = lazy_of("\xa0"s).at("a");
+    CHECK_EQ(a.error(), error::key_not_found);
 }
 
 // On an array an integer is an index, so at(0) gives the first element and not an error. A scalar has no keys and no
 // elements.
 TEST_CASE("lazy: an integer on an array and a key on a scalar")
 {
-    CHECK(value_at(*lazy_of_edn("[1]").at(0)) == V(1));
-    CHECK_EQ(lazy_of("\x1b\x00\x00\x00\x00\x00\x00\x00\x01"s).at("a").error(), error::not_indexable);
+    auto const at_0 = lazy_of_edn("[1]").at(0);
+    CHECK(value_at(*at_0) == V(1));
+    auto const a = lazy_of("\x1b\x00\x00\x00\x00\x00\x00\x00\x01"s).at("a");
+    CHECK_EQ(a.error(), error::not_indexable);
 }
 
 // A key under tag 29 is a tag and no text key.
 TEST_CASE("lazy: at does not resolve a tag 29 key")
 {
     cbor::lazy const l = lazy_of("\xa2\x61" "a\xd8\x1c\x61k\xd8\x1d\x00\x02"s);
-    CHECK_EQ(l.at("k").error(), error::key_not_found);
+    auto const k = l.at("k");
+    CHECK_EQ(k.error(), error::key_not_found);
 }
 
 // A truncated map gives its error from at for a key after the cut, and the value for a key before it.
 TEST_CASE("lazy: at in a truncated map gives the error")
 {
     cbor::lazy const l = lazy_of("\xa2\x61" "a\x01\x61"s);
-    CHECK_EQ(l.at("z").error(), error::too_little_data);
+    auto const z = l.at("z");
+    CHECK_EQ(z.error(), error::too_little_data);
     CHECK(value_at(at_key(l, "a")) == V(1));
 }
 
@@ -854,23 +925,34 @@ auto get(std::string const &document)
 // The integers of RFC 8949 Appendix A, read with get.
 TEST_CASE("lazy: get reads an integer")
 {
-    CHECK_EQ(*get<std::uint64_t>("\x00"s), 0u);
-    CHECK_EQ(*get<std::uint64_t>("\x1b\xff\xff\xff\xff\xff\xff\xff\xff"s), 18446744073709551615u);
-    CHECK_EQ(*get<std::int64_t>("\x20"s), -1);
-    CHECK_EQ(*get<std::int64_t>("\x39\x03\xe7"s), -1000);
-    CHECK_EQ(*get<std::int64_t>("\x3b\x7f\xff\xff\xff\xff\xff\xff\xff"s), std::numeric_limits<std::int64_t>::min());
-    CHECK_EQ(*get<std::uint64_t>("\xc2\x42\x01\x00"s), 256u);
-    CHECK_EQ(*get<std::int64_t>("\xc3\x41\x01"s), -2);
-    CHECK_EQ(*get<std::uint64_t>("\xd8\x1c\x05"s), 5u);
+    auto const read = get<std::uint64_t>("\x00"s);
+    CHECK_EQ(*read, 0u);
+    auto const read_2 = get<std::uint64_t>("\x1b\xff\xff\xff\xff\xff\xff\xff\xff"s);
+    CHECK_EQ(*read_2, 18446744073709551615u);
+    auto const read_3 = get<std::int64_t>("\x20"s);
+    CHECK_EQ(*read_3, -1);
+    auto const read_4 = get<std::int64_t>("\x39\x03\xe7"s);
+    CHECK_EQ(*read_4, -1000);
+    auto const read_5 = get<std::int64_t>("\x3b\x7f\xff\xff\xff\xff\xff\xff\xff"s);
+    CHECK_EQ(*read_5, std::numeric_limits<std::int64_t>::min());
+    auto const read_6 = get<std::uint64_t>("\xc2\x42\x01\x00"s);
+    CHECK_EQ(*read_6, 256u);
+    auto const read_7 = get<std::int64_t>("\xc3\x41\x01"s);
+    CHECK_EQ(*read_7, -2);
+    auto const read_8 = get<std::uint64_t>("\xd8\x1c\x05"s);
+    CHECK_EQ(*read_8, 5u);
 }
 
 // A number that the type cannot hold is out of range; anything that is not a number has the wrong type.
 TEST_CASE("lazy: get refuses an integer it cannot hold")
 {
-    CHECK_EQ(get<std::uint64_t>("\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s).error(),
+    auto const read = get<std::uint64_t>("\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s);
+    CHECK_EQ(read.error(),
              error::number_out_of_range);
-    CHECK_EQ(get<std::uint64_t>("\x61\x61"s).error(), error::incorrect_type);
-    CHECK_EQ(get<std::uint64_t>("\xf9\x3c\x00"s).error(), error::incorrect_type);
+    auto const read_2 = get<std::uint64_t>("\x61\x61"s);
+    CHECK_EQ(read_2.error(), error::incorrect_type);
+    auto const read_3 = get<std::uint64_t>("\xf9\x3c\x00"s);
+    CHECK_EQ(read_3.error(), error::incorrect_type);
 }
 
 // Floats of the three widths of Appendix A. An integer is a double where the double holds it exactly (owner,
@@ -880,32 +962,52 @@ TEST_CASE("lazy: get refuses an integer it cannot hold")
 // must not round the argument first.
 TEST_CASE("lazy: get reads a float")
 {
-    CHECK_EQ(*get<double>("\xf9\x3c\x00"s), 1.0);
-    CHECK_EQ(*get<double>("\xfa\x47\xc3\x50\x00"s), 100000.0);
-    CHECK_EQ(*get<double>("\xfb\x3f\xf1\x99\x99\x99\x99\x99\x9a"s), 1.1);
-    CHECK_EQ(*get<double>("\x01"s), 1.0);
-    CHECK_EQ(*get<double>("\x3b\x00\x1f\xff\xff\xff\xff\xff\xff"s), -0x1p53);
-    CHECK_EQ(get<double>("\x1b\x00\x20\x00\x00\x00\x00\x00\x01"s).error(), error::number_out_of_range);
-    CHECK_EQ(*get<double>("\x00"s), 0.0);
-    CHECK_EQ(*get<double>("\x1b\x10\x00\x00\x00\x00\x00\x00\x00"s), 0x1p60);
-    CHECK_EQ(*get<double>("\x3b\x00\x20\x00\x00\x00\x00\x00\x01"s), -(0x1p53 + 2));
-    CHECK_EQ(get<double>("\x1b\xff\xff\xff\xff\xff\xff\xff\xff"s).error(), error::number_out_of_range);
-    CHECK_EQ(*get<double>("\x3b\x7f\xff\xff\xff\xff\xff\xff\xff"s), -0x1p63);
-    CHECK_EQ(get<double>("\x3b\x7f\xff\xff\xff\xff\xff\xff\xfe"s).error(), error::number_out_of_range);
-    CHECK_EQ(*get<double>("\x3b\xff\xff\xff\xff\xff\xff\xff\xff"s), -0x1p64);
-    CHECK_EQ(*get<double>("\xc3\x48\x7f\xff\xff\xff\xff\xff\xff\xff"s), -0x1p63);
-    CHECK_EQ(*get<double>("\xc3\x48\xff\xff\xff\xff\xff\xff\xff\xff"s), -0x1p64);
-    CHECK_EQ(get<double>("\xf5"s).error(), error::incorrect_type);
+    auto const read = get<double>("\xf9\x3c\x00"s);
+    CHECK_EQ(*read, 1.0);
+    auto const read_2 = get<double>("\xfa\x47\xc3\x50\x00"s);
+    CHECK_EQ(*read_2, 100000.0);
+    auto const read_3 = get<double>("\xfb\x3f\xf1\x99\x99\x99\x99\x99\x9a"s);
+    CHECK_EQ(*read_3, 1.1);
+    auto const read_4 = get<double>("\x01"s);
+    CHECK_EQ(*read_4, 1.0);
+    auto const read_5 = get<double>("\x3b\x00\x1f\xff\xff\xff\xff\xff\xff"s);
+    CHECK_EQ(*read_5, -0x1p53);
+    auto const read_6 = get<double>("\x1b\x00\x20\x00\x00\x00\x00\x00\x01"s);
+    CHECK_EQ(read_6.error(), error::number_out_of_range);
+    auto const read_7 = get<double>("\x00"s);
+    CHECK_EQ(*read_7, 0.0);
+    auto const read_8 = get<double>("\x1b\x10\x00\x00\x00\x00\x00\x00\x00"s);
+    CHECK_EQ(*read_8, 0x1p60);
+    auto const read_9 = get<double>("\x3b\x00\x20\x00\x00\x00\x00\x00\x01"s);
+    CHECK_EQ(*read_9, -(0x1p53 + 2));
+    auto const read_10 = get<double>("\x1b\xff\xff\xff\xff\xff\xff\xff\xff"s);
+    CHECK_EQ(read_10.error(), error::number_out_of_range);
+    auto const read_11 = get<double>("\x3b\x7f\xff\xff\xff\xff\xff\xff\xff"s);
+    CHECK_EQ(*read_11, -0x1p63);
+    auto const read_12 = get<double>("\x3b\x7f\xff\xff\xff\xff\xff\xff\xfe"s);
+    CHECK_EQ(read_12.error(), error::number_out_of_range);
+    auto const read_13 = get<double>("\x3b\xff\xff\xff\xff\xff\xff\xff\xff"s);
+    CHECK_EQ(*read_13, -0x1p64);
+    auto const read_14 = get<double>("\xc3\x48\x7f\xff\xff\xff\xff\xff\xff\xff"s);
+    CHECK_EQ(*read_14, -0x1p63);
+    auto const read_15 = get<double>("\xc3\x48\xff\xff\xff\xff\xff\xff\xff\xff"s);
+    CHECK_EQ(*read_15, -0x1p64);
+    auto const read_16 = get<double>("\xf5"s);
+    CHECK_EQ(read_16.error(), error::incorrect_type);
 }
 
 // The simple values false, true and null of Table 4.
 TEST_CASE("lazy: get reads a simple value")
 {
-    CHECK_EQ(*get<bool>("\xf4"s), false);
-    CHECK_EQ(*get<bool>("\xf5"s), true);
-    CHECK_EQ(get<bool>("\xf6"s).error(), error::incorrect_type);
+    auto const read = get<bool>("\xf4"s);
+    CHECK_EQ(*read, false);
+    auto const read_2 = get<bool>("\xf5"s);
+    CHECK_EQ(*read_2, true);
+    auto const read_3 = get<bool>("\xf6"s);
+    CHECK_EQ(read_3.error(), error::incorrect_type);
     CHECK(get<std::nullptr_t>("\xf6"s).has_value());
-    CHECK_EQ(get<std::nullptr_t>("\xf7"s).error(), error::incorrect_type);
+    auto const read_4 = get<std::nullptr_t>("\xf7"s);
+    CHECK_EQ(read_4.error(), error::incorrect_type);
 }
 
 // A text string and a byte string come as views into the top-level item, each only as its own type. The view holds the
@@ -915,13 +1017,16 @@ TEST_CASE("lazy: get reads a string as a view")
     auto const text = lazy_of("\x64IETF"s).get<std::string_view>();
     REQUIRE(text.has_value());
     CHECK_EQ(**text, "IETF"sv);
-    CHECK_EQ(get<std::string_view>("\x44\x01\x02\x03\x04"s).error(), error::incorrect_type);
+    auto const read = get<std::string_view>("\x44\x01\x02\x03\x04"s);
+    CHECK_EQ(read.error(), error::incorrect_type);
     auto const four = lazy_of("\x44\x01\x02\x03\x04"s);
     auto const bytes = four.get<std::span<std::byte const>>();
     REQUIRE(bytes.has_value());
     CHECK(std::ranges::equal(**bytes, std::array{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}}));
-    CHECK_EQ(get<std::span<std::byte const>>("\x64IETF"s).error(), error::incorrect_type);
-    CHECK_EQ(get<std::string_view>("\x62\x61"s).error(), error::too_little_data);
+    auto const read_2 = get<std::span<std::byte const>>("\x64IETF"s);
+    CHECK_EQ(read_2.error(), error::incorrect_type);
+    auto const read_3 = get<std::string_view>("\x62\x61"s);
+    CHECK_EQ(read_3.error(), error::too_little_data);
 }
 
 // RFC 8746 Table 3: tags 64 to 87 carry a typed array in a byte string; 76 is reserved. The length
@@ -939,11 +1044,16 @@ TEST_CASE("lazy: get reads a typed array")
     auto const f64 = get<cbor::typed_array>("\xd8\x56\x48\x00\x00\x00\x00\x00\x00\xf0\x3f"s);
     REQUIRE(f64.has_value());
     CHECK_EQ((*f64)->tag, 86u);
-    CHECK_EQ(get<cbor::typed_array>("\xd8\x41\x43\x00\x01\x00"s).error(), error::inadmissible_type_for_tag_content);
-    CHECK_EQ(get<cbor::typed_array>("\xd8\x4c\x41\x00"s).error(), error::incorrect_type);
-    CHECK_EQ(get<cbor::typed_array>("\xd8\x3f\x41\x00"s).error(), error::incorrect_type);
-    CHECK_EQ(get<cbor::typed_array>("\xd8\x40\x01"s).error(), error::inadmissible_type_for_tag_content);
-    CHECK_EQ(get<cbor::typed_array>("\x43\x01\x02\x03"s).error(), error::incorrect_type);
+    auto const read = get<cbor::typed_array>("\xd8\x41\x43\x00\x01\x00"s);
+    CHECK_EQ(read.error(), error::inadmissible_type_for_tag_content);
+    auto const read_2 = get<cbor::typed_array>("\xd8\x4c\x41\x00"s);
+    CHECK_EQ(read_2.error(), error::incorrect_type);
+    auto const read_3 = get<cbor::typed_array>("\xd8\x3f\x41\x00"s);
+    CHECK_EQ(read_3.error(), error::incorrect_type);
+    auto const read_4 = get<cbor::typed_array>("\xd8\x40\x01"s);
+    CHECK_EQ(read_4.error(), error::inadmissible_type_for_tag_content);
+    auto const read_5 = get<cbor::typed_array>("\x43\x01\x02\x03"s);
+    CHECK_EQ(read_5.error(), error::incorrect_type);
 }
 
 // RFC 8949 3.4.5.1: tag 24 carries an encoded data item in a byte string. The library never writes tag 24 by itself. So
@@ -957,8 +1067,10 @@ TEST_CASE("tag 24: an embedded item written by the application is read through")
     REQUIRE(inner.has_value());
     auto const three = inner->at(1);
     REQUIRE(three.has_value());
-    CHECK_EQ(*three->get<std::uint64_t>(), 3u);
-    CHECK_EQ(get<std::uint64_t>("\xd8\x18\x05"s).error(), error::inadmissible_type_for_tag_content);
+    auto const read = three->get<std::uint64_t>();
+    CHECK_EQ(*read, 3u);
+    auto const read_2 = get<std::uint64_t>("\xd8\x18\x05"s);
+    CHECK_EQ(read_2.error(), error::inadmissible_type_for_tag_content);
 }
 
 // A 29(0) inside an embedded data item is a plain tag over its index.
@@ -969,7 +1081,8 @@ TEST_CASE("tag 24: a tag 29 inside an embedded data item is a plain tag")
     REQUIRE(embedded.has_value());
     auto const second = embedded->at(1);
     REQUIRE(second.has_value());
-    CHECK_EQ(*second->get<std::uint64_t>(), 0u);
+    auto const read = second->get<std::uint64_t>();
+    CHECK_EQ(*read, 0u);
 }
 
 #ifdef CBOR_HAS_INT128
@@ -1065,9 +1178,11 @@ TEST_CASE("lazy: the content of each tag for every major type")
             else if (tag == 29)
                 admitted = major == cbor::major_type::unsigned_integer;
             std::expected<void, error> read;
-            if (tag == 2 || tag == 3 || tag == 24)
-                read = get<std::int64_t>(tagged).transform([](std::int64_t) {});
-            else if (tag == 29) {
+            if (tag == 2 || tag == 3 || tag == 24) {
+                auto const value_read = get<std::int64_t>(tagged);
+                if (!value_read)
+                    read = std::unexpected(value_read.error());
+            } else if (tag == 29) {
                 read = cbor::decode_cycles("\xd8\x1c\x81"s + tagged).transform([](auto const &) {});
                 CHECK(cbor::decode("\x82\xd8\x1c\x00"s + tagged).has_value());
             } else
@@ -1087,7 +1202,8 @@ TEST_CASE("lazy: a byte string key is not the text key with the same bytes")
     auto const root = lazy_of("\xa2\x41\x61\x01\x61\x61\x02"s);
     auto const a = root.at("a");
     REQUIRE(a.has_value());
-    CHECK_EQ(*a->get<std::uint64_t>(), 2u);
+    auto const read = a->get<std::uint64_t>();
+    CHECK_EQ(*read, 2u);
 }
 
 // A tag 29 before its mark is a plain tag, whatever navigation read first.
@@ -1096,7 +1212,8 @@ TEST_CASE("lazy: a reference forward to a mark is a plain tag")
     auto const root = lazy_of("\x82\xd8\x1d\x00\xd8\x1c\x05"s);
     auto const second = root.at(1);
     REQUIRE(second.has_value());
-    CHECK_EQ(*second->get<std::uint64_t>(), 5u);
+    auto const read = second->get<std::uint64_t>();
+    CHECK_EQ(*read, 5u);
     auto const first = root.at(0);
     REQUIRE(first.has_value());
     CHECK(test::make_value_from_item(*first) == V(tagged{29, V(0)}));
@@ -1128,7 +1245,9 @@ TEST_CASE("lazy: view of an aliasing owner holds the owner until the last lazy e
         auto const owner = std::make_shared<buffer_owner>("\xa1\x64user\xa1\x64name\x63" "ann"s, &released);
         auto const doc = cbor::lazy::view(owner, std::string_view(owner->bytes));
         REQUIRE(doc.has_value());
-        name.emplace(*doc->at("user").and_then([](cbor::lazy const &u) { return u.at("name"); }));
+        auto const user = doc->at("user");
+        auto const user_name = user.and_then([](cbor::lazy const &u) { return u.at("name"); });
+        name.emplace(*user_name);
     }
     CHECK_FALSE(released);
     {
@@ -1149,23 +1268,24 @@ TEST_CASE("lazy: copy, at and get as a chain")
         "\xa1\x64user\xa1\x64name\x63" "bob"s;
     std::span<char const> const data(bytes);
     cbor::lazy const doc = *cbor::lazy::adopt(std::move(bytes));
-    auto const name = doc.at("statuses")
-                          .and_then([](cbor::lazy const &s) { return s.at(1); })
-                          .and_then([](cbor::lazy const &s) { return s.at("user"); })
-                          .and_then([](cbor::lazy const &u) { return u.at("name"); })
-                          .and_then([](cbor::lazy const &n) { return n.get<std::string_view>(); });
+    auto const list = doc.at("statuses");
+    auto const second = list.and_then([](cbor::lazy const &s) { return s.at(1); });
+    auto const user = second.and_then([](cbor::lazy const &s) { return s.at("user"); });
+    auto const user_name = user.and_then([](cbor::lazy const &u) { return u.at("name"); });
+    auto const name = user_name.and_then([](cbor::lazy const &n) { return n.get<std::string_view>(); });
     REQUIRE(name.has_value());
     CHECK_EQ(**name, "bob"sv);
     CHECK_EQ(static_cast<void const *>(doc.encoded().data()), static_cast<void const *>(data.data()));
-    auto const missing = doc.at("statuses")
-                             .and_then([](cbor::lazy const &s) { return s.at(5); })
-                             .and_then([](cbor::lazy const &s) { return s.at("user"); })
-                             .and_then([](cbor::lazy const &u) { return u.get<std::string_view>(); });
+    auto const sixth = list.and_then([](cbor::lazy const &s) { return s.at(5); });
+    auto const sixth_user = sixth.and_then([](cbor::lazy const &s) { return s.at("user"); });
+    auto const missing = sixth_user.and_then([](cbor::lazy const &u) { return u.get<std::string_view>(); });
     REQUIRE_FALSE(missing.has_value());
     CHECK_EQ(missing.error(), error::index_out_of_bounds);
-    CHECK_FALSE(doc.at("nope").and_then([](cbor::lazy const &n) { return n.get<std::string_view>(); }).has_value());
+    auto const nope = doc.at("nope");
+    CHECK_FALSE(nope.and_then([](cbor::lazy const &n) { return n.get<std::string_view>(); }).has_value());
     std::size_t count = 0;
-    auto const statuses = *doc.at("statuses").and_then([](cbor::lazy const &s) { return s.elements(); });
+    auto const elements = list->elements();
+    auto const statuses = *elements;
     for (auto const e : statuses) {
         REQUIRE(e.has_value());
         ++count;
@@ -1177,12 +1297,18 @@ TEST_CASE("lazy: copy, at and get as a chain")
 // key and no integer key. A tag 55799 before a key is still passed.
 TEST_CASE("lazy: a key under tag 28 or tag 29 is a tag")
 {
-    CHECK_EQ(lazy_of("\xa1\xd8\x1c\x61\x61\x01"s).at("a").error(), error::key_not_found);
-    CHECK_EQ(lazy_of("\xa1\xd8\x1c\x07\x03"s).at(7).error(), error::key_not_found);
+    auto const a = lazy_of("\xa1\xd8\x1c\x61\x61\x01"s).at("a");
+    CHECK_EQ(a.error(), error::key_not_found);
+    auto const at_7 = lazy_of("\xa1\xd8\x1c\x07\x03"s).at(7);
+    CHECK_EQ(at_7.error(), error::key_not_found);
     auto const root = lazy_of("\x82\xd8\x1c\x61\x61\xa1\xd8\x1d\x00\x02"s);
     REQUIRE(root.at(0).has_value());
-    CHECK_EQ(root.at(1)->at("a").error(), error::key_not_found);
-    CHECK_EQ(*lazy_of("\xa1\xd9\xd9\xf7\x61\x61\x01"s).at("a")->get<std::uint64_t>(), 1u);
+    auto const at_1 = root.at(1);
+    auto const a_2 = at_1->at("a");
+    CHECK_EQ(a_2.error(), error::key_not_found);
+    auto const a_3 = lazy_of("\xa1\xd9\xd9\xf7\x61\x61\x01"s).at("a");
+    auto const read = a_3->get<std::uint64_t>();
+    CHECK_EQ(*read, 1u);
 }
 
 namespace
@@ -1201,9 +1327,10 @@ TEST_CASE("lazy: a view holds the top-level item")
     std::optional<cbor::ref<std::string_view>> view;
     {
         auto const owner = std::make_shared<buffer_owner>("\xa1\x64name\x63" "ann"s, &released);
-        auto const name = cbor::lazy::view(owner, std::string_view(owner->bytes))
-                              .and_then([](cbor::lazy const &d) { return d.at("name"); })
-                              .and_then([](cbor::lazy const &n) { return n.get<std::string_view>(); });
+        auto const doc = cbor::lazy::view(owner, std::string_view(owner->bytes));
+        REQUIRE(doc.has_value());
+        auto const at_name = doc->at("name");
+        auto const name = at_name.and_then([](cbor::lazy const &n) { return n.get<std::string_view>(); });
         REQUIRE(name.has_value());
         view.emplace(*name);
     }
@@ -1253,9 +1380,10 @@ TEST_CASE("lazy: view checks that the owner holds an object")
             CHECK(cbor::lazy::view(s.owner).has_value());
     }
     CHECK_THROWS_AS((void)cbor::lazy::view(nullptr, std::string_view(*bytes)), std::logic_error);
-    auto const name = cbor::lazy::view(bytes)
-                          .and_then([](cbor::lazy const &d) { return d.at("a"); })
-                          .and_then([](cbor::lazy const &n) { return n.get<std::string_view>(); });
+    auto const doc = cbor::lazy::view(bytes);
+    REQUIRE(doc.has_value());
+    auto const a = doc->at("a");
+    auto const name = a.and_then([](cbor::lazy const &n) { return n.get<std::string_view>(); });
     REQUIRE(name.has_value());
     CHECK_EQ(**name, "xyz"sv);
 }
@@ -1302,8 +1430,12 @@ TEST_CASE("lazy: every member refuses a lazy that holds no top-level item")
 TEST_CASE("lazy: get does not follow a tag 29 in the content of a tag")
 {
     auto const root = lazy_of("\x83\xd8\x1c\x41\x05\xc2\xd8\x1d\x00\xd8\x40\xd8\x1d\x00"s);
-    CHECK_EQ(root.at(1)->get<std::uint64_t>().error(), error::inadmissible_type_for_tag_content);
-    CHECK_EQ(root.at(2)->get<cbor::typed_array>().error(), error::inadmissible_type_for_tag_content);
+    auto const at_1 = root.at(1);
+    auto const read = at_1->get<std::uint64_t>();
+    CHECK_EQ(read.error(), error::inadmissible_type_for_tag_content);
+    auto const at_2 = root.at(2);
+    auto const read_2 = at_2->get<cbor::typed_array>();
+    CHECK_EQ(read_2.error(), error::inadmissible_type_for_tag_content);
 }
 
 // The value category of the bytes says what lazy::copy does. A moved std::string becomes the owner and
@@ -1325,7 +1457,8 @@ TEST_CASE("lazy: copy moves an rvalue string and copies everything else")
     CHECK_EQ(static_cast<void const *>(moved->encoded().data()), static_cast<void const *>(data.data()));
     buffer->assign(message.size(), '\0');
     buffer.reset();
-    CHECK_EQ(text_of(*moved->at("k")), text);
+    auto const k = moved->at("k");
+    CHECK_EQ(text_of(*k), text);
 
     std::string lvalue = message;
     auto const copied = test::make_lazy_from_copy(lvalue);
@@ -1333,7 +1466,8 @@ TEST_CASE("lazy: copy moves an rvalue string and copies everything else")
     CHECK_NE(static_cast<void const *>(copied->encoded().data()), static_cast<void const *>(lvalue.data()));
     CHECK_EQ(lvalue, message);
     lvalue.assign(message.size(), '\0');
-    CHECK_EQ(text_of(*copied->at("k")), text);
+    auto const k_2 = copied->at("k");
+    CHECK_EQ(text_of(*k_2), text);
 
     std::string again = message;
     char const *const again_data = again.data();
@@ -1354,11 +1488,21 @@ TEST_CASE("lazy: copy moves an rvalue string and copies everything else")
 TEST_CASE("lazy: a repeated key gives the first entry with no error")
 {
     std::string const twice = "\xa2\x61\x61\x01\x61\x61\x02"s;
-    CHECK_EQ(*lazy_of(twice).at("a")->get<std::uint64_t>(), 1u);
-    CHECK_EQ(*lazy_of("\xa3\x61\x61\x01\x61\x62\x02\x61\x61\x03"s).at("a")->get<std::uint64_t>(), 1u);
-    CHECK_EQ(*lazy_of("\xa2\x01\x01\x18\x01\x02"s).at(1)->get<std::uint64_t>(), 1u);
-    CHECK_EQ(*lazy_of("\xa2\x20\x01\x38\x00\x02"s).at(-1)->get<std::uint64_t>(), 1u);
-    CHECK_EQ(*lazy_of("\xa3\x61\x61\x01\x61\x61\x02\x61\x62\x03"s).at("b")->get<std::uint64_t>(), 3u);
+    auto const a = lazy_of(twice).at("a");
+    auto const read = a->get<std::uint64_t>();
+    CHECK_EQ(*read, 1u);
+    auto const a_2 = lazy_of("\xa3\x61\x61\x01\x61\x62\x02\x61\x61\x03"s).at("a");
+    auto const read_2 = a_2->get<std::uint64_t>();
+    CHECK_EQ(*read_2, 1u);
+    auto const at_1 = lazy_of("\xa2\x01\x01\x18\x01\x02"s).at(1);
+    auto const read_3 = at_1->get<std::uint64_t>();
+    CHECK_EQ(*read_3, 1u);
+    auto const at_minus_1 = lazy_of("\xa2\x20\x01\x38\x00\x02"s).at(-1);
+    auto const read_4 = at_minus_1->get<std::uint64_t>();
+    CHECK_EQ(*read_4, 1u);
+    auto const b = lazy_of("\xa3\x61\x61\x01\x61\x61\x02\x61\x62\x03"s).at("b");
+    auto const read_5 = b->get<std::uint64_t>();
+    CHECK_EQ(*read_5, 3u);
     CHECK(lazy_of(twice).entries().has_value());
     cbor::lazy const top = lazy_of(twice);
     CHECK(top.to_item().has_value());
@@ -1374,12 +1518,19 @@ TEST_CASE("lazy: a repeated key at depth 3 is read with no error")
     std::string const outer = "\xa2\x61\x61\xa1\x61\x62\xa1\x61\x63\x01\x61\x61\x00"s;
     CHECK(test::make_value_from_item(lazy_of(inner)).has_value());
     CHECK(test::make_value_from_item(lazy_of(outer)).has_value());
-    CHECK_EQ(*lazy_of(inner).at("a")->at("b")->at("d")->get<std::uint64_t>(), 2u);
-    CHECK(lazy_of(outer).at("a")->at("b").has_value());
+    auto const a = lazy_of(inner).at("a");
+    auto const b = a->at("b");
+    auto const d = b->at("d");
+    auto const read = d->get<std::uint64_t>();
+    CHECK_EQ(*read, 2u);
+    auto const a_2 = lazy_of(outer).at("a");
+    CHECK(a_2->at("b").has_value());
     CHECK_EQ(*(cbor::at_path<"$.a.b.d", int>(inner)), 2);
     CHECK(test::query("$..*", lazy_of(inner)).has_value());
     CHECK(test::read_value_at_path("$.a.b.d", lazy_of(inner)).has_value());
-    CHECK(lazy_of(inner).at("a")->at("b")->to_item().has_value());
+    auto const a_3 = lazy_of(inner).at("a");
+    auto const b_2 = a_3->at("b");
+    CHECK(b_2->to_item().has_value());
 }
 
 // The same map many times in one array is no repeated key: a key is compared only with the keys of its own
@@ -1397,7 +1548,10 @@ TEST_CASE("lazy: an array of the same map many times is read with no error")
     CHECK(test::query("$..*", lazy_of(doc)).has_value());
     CHECK(test::query("$[*].a", lazy_of(doc)).has_value());
     CHECK_EQ(*(cbor::at_path<"$[63].b", int>(doc)), 2);
-    CHECK_EQ(*lazy_of(doc).at(63)->at("a")->get<std::uint64_t>(), 1u);
+    auto const at_63 = lazy_of(doc).at(63);
+    auto const a = at_63->at("a");
+    auto const read = a->get<std::uint64_t>();
+    CHECK_EQ(*read, 1u);
 }
 
 // size and empty answer as the size and empty of a container. Each comes in std::expected, because the bytes
@@ -1407,19 +1561,28 @@ TEST_CASE("lazy: size and empty")
     cbor::lazy const map = lazy_of(
         "\xa2\x61" "a\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x1b\x00\x00\x00\x00\x00\x00\x00\x02"
         "\x61" "b"s);
-    CHECK_EQ(map.size().value(), 2u);
-    CHECK_FALSE(map.empty().value());
+    auto const count = map.size();
+    CHECK_EQ(count.value(), 2u);
+    auto const is_empty = map.empty();
+    CHECK_FALSE(is_empty.value());
 
     cbor::lazy const array = lazy_of(
         "\x83\x1b\x00\x00\x00\x00\x00\x00\x00\x01\x1b\x00\x00\x00\x00\x00\x00\x00\x02"
         "\x1b\x00\x00\x00\x00\x00\x00\x00\x03"s);
-    CHECK_EQ(array.size().value(), 3u);
-    CHECK_FALSE(array.empty().value());
-    CHECK(lazy_of("\x80"s).empty().value());
-    CHECK(lazy_of("\xa0"s).empty().value());
-    CHECK_EQ(lazy_of("\x1b\x00\x00\x00\x00\x00\x00\x00\x01"s).size().error(), error::not_indexable);
-    CHECK_EQ(lazy_of("\x61" "a"s).empty().error(), error::not_indexable);
-    CHECK_EQ(lazy_of("\xd8\x1c\x82\x01\x02"s).size().value(), 2u);
+    auto const count_2 = array.size();
+    CHECK_EQ(count_2.value(), 3u);
+    auto const is_empty_2 = array.empty();
+    CHECK_FALSE(is_empty_2.value());
+    auto const is_empty_3 = lazy_of("\x80"s).empty();
+    CHECK(is_empty_3.value());
+    auto const is_empty_4 = lazy_of("\xa0"s).empty();
+    CHECK(is_empty_4.value());
+    auto const count_3 = lazy_of("\x1b\x00\x00\x00\x00\x00\x00\x00\x01"s).size();
+    CHECK_EQ(count_3.error(), error::not_indexable);
+    auto const is_empty_5 = lazy_of("\x61" "a"s).empty();
+    CHECK_EQ(is_empty_5.error(), error::not_indexable);
+    auto const count_4 = lazy_of("\xd8\x1c\x82\x01\x02"s).size();
+    CHECK_EQ(count_4.value(), 2u);
 }
 
 // Fault p30: a truncated array or map gave one value more than size(),
@@ -1456,7 +1619,8 @@ TEST_CASE("lazy: a head that claims more items than bytes is too little data")
 {
     CHECK_EQ(lazy_of("\x9b\xff\xff\xff\xff\xff\xff\xff\xff"s).elements().error(), error::too_little_data);
     CHECK_EQ(lazy_of("\xbb\xff\xff\xff\xff\xff\xff\xff\xff"s).entries().error(), error::too_little_data);
-    CHECK_EQ(lazy_of("\xbb\xff\xff\xff\xff\xff\xff\xff\xff\x61" "a\x01"s).at("a").error(),
+    auto const a = lazy_of("\xbb\xff\xff\xff\xff\xff\xff\xff\xff\x61" "a\x01"s).at("a");
+    CHECK_EQ(a.error(),
              error::too_little_data);
 }
 
@@ -1493,19 +1657,21 @@ TEST_CASE("lazy: two threads read one root lazy" * doctest::skip(!test::threads_
         std::vector<std::thread> workers;
         for (std::size_t t = 0; t < threads; ++t)
             workers.emplace_back([&l, &right, t] {
-                auto const text = l.at(std::size_t{0}).and_then([](cbor::lazy const &r) { return r.get<std::string_view>(); });
+                auto const first = l.at(std::size_t{0});
+                auto const text = first.and_then([](cbor::lazy const &r) { return r.get<std::string_view>(); });
                 auto const index = l.at_path<"$[1]", std::uint64_t>();
-                auto const named = l.at(std::size_t{2})
-                                       .and_then([](cbor::lazy const &m) { return m.at("k"); })
-                                       .and_then([](cbor::lazy const &r) { return r.to_item(); });
+                auto const third = l.at(std::size_t{2});
+                auto const k = third.and_then([](cbor::lazy const &m) { return m.at("k"); });
+                auto const named =
+                    k ? k->to_item() : std::expected<cbor::owning<cbor::item>, error>(std::unexpect, k.error());
                 auto const count = l.elements().transform([](cbor::lazy_elements const &e) {
                     return std::ranges::distance(e.begin(), e.end());
                 });
-                auto const pairs = l.at(std::size_t{2})
-                                       .and_then([](cbor::lazy const &m) { return m.entries(); })
-                                       .transform([](cbor::lazy_entries const &e) {
-                                           return std::ranges::distance(e.begin(), e.end());
-                                       });
+                auto const entries =
+                    third ? third->entries() : std::expected<cbor::lazy_entries, error>(std::unexpect, third.error());
+                auto const pairs = entries.transform([](cbor::lazy_entries const &e) {
+                    return std::ranges::distance(e.begin(), e.end());
+                });
                 auto const element = l.at_path<"$[3][1]", std::uint64_t>();
                 bool const reference = [&] {
                     if (!named)
@@ -1537,8 +1703,11 @@ TEST_CASE("lazy: a tag 28 that holds a tag 29 reads the index")
     std::string const small("\x83\xd8\x1c\x01\xd8\x1c\xd8\x1d\x00\xd8\x1d\x01", 12);
     auto const l = *test::make_lazy_from_copy(small);
     std::array<std::int64_t, 3> const expected{1, 0, 1};
-    for (std::size_t i = 0; i < expected.size(); ++i)
-        CHECK_EQ(*l.at(i).and_then([](cbor::lazy const &e) { return e.get<std::int64_t>(); }), expected[i]);
+    for (std::size_t i = 0; i < expected.size(); ++i) {
+        auto const element = l.at(i);
+        auto const read = element.and_then([](cbor::lazy const &e) { return e.get<std::int64_t>(); });
+        CHECK_EQ(*read, expected[i]);
+    }
     CHECK_EQ(test::make_lazy_from_copy(std::string("\xd8\x1c\xd8\x1d\x00", 5))->get<std::int64_t>(), 0);
 
     constexpr std::size_t n = 20000;
@@ -1556,7 +1725,12 @@ TEST_CASE("lazy: a tag 28 that holds a tag 29 reads the index")
     std::size_t right = 0;
     std::int64_t k = 0;
     for (auto const e : *all) {
-        right += e.and_then([](cbor::lazy const &x) { return x.get<std::int64_t>(); }).value_or(-1) == (k == 0 ? 1 : k - 1);
+        std::int64_t read = -1;
+        if (e) {
+            auto const got = e->get<std::int64_t>();
+            read = got.value_or(-1);
+        }
+        right += read == (k == 0 ? 1 : k - 1);
         ++k;
     }
     CHECK_EQ(right, n);
@@ -1567,10 +1741,14 @@ TEST_CASE("lazy: a tag 28 that holds a tag 29 reads the index")
 // and gives too_little_data.
 TEST_CASE("lazy: a step to an element past the end of the input fails at once")
 {
-    CHECK_EQ(test::make_lazy_from_copy(std::string("\x82\x01", 2))->at(std::size_t{1}).error(), error::too_little_data);
-    CHECK_EQ(test::make_lazy_from_copy(std::string("\xa1\x61k", 3))->at("k").error(), error::too_little_data);
-    CHECK_EQ(test::make_lazy_from_copy(std::string("\xa1\x01", 2))->at(1).error(), error::too_little_data);
-    CHECK_EQ(test::make_lazy_from_copy(std::string("\x82\x01\x19\x01", 4))->at(std::size_t{1}).error(), error::too_little_data);
+    auto const found = test::make_lazy_from_copy(std::string("\x82\x01", 2))->at(std::size_t{1});
+    CHECK_EQ(found.error(), error::too_little_data);
+    auto const k = test::make_lazy_from_copy(std::string("\xa1\x61k", 3))->at("k");
+    CHECK_EQ(k.error(), error::too_little_data);
+    auto const at_1 = test::make_lazy_from_copy(std::string("\xa1\x01", 2))->at(1);
+    CHECK_EQ(at_1.error(), error::too_little_data);
+    auto const found_2 = test::make_lazy_from_copy(std::string("\x82\x01\x19\x01", 4))->at(std::size_t{1});
+    CHECK_EQ(found_2.error(), error::too_little_data);
 }
 
 // size() returned the count of the head, also when the bytes after the head cannot hold that many items. A caller
@@ -1583,11 +1761,13 @@ TEST_CASE("lazy size refuses a count that the bytes cannot hold")
                                     "\xbb\xff\xff\xff\xff\xff\xff\xff\xff"s}) {
         auto const doc = test::make_lazy_from_copy(bytes);
         REQUIRE(doc.has_value());
-        CHECK_EQ(doc->size().error(), cbor::error::too_little_data);
+        auto const count = doc->size();
+        CHECK_EQ(count.error(), cbor::error::too_little_data);
     }
     auto const pair = test::make_lazy_from_copy("\x82\x01\x02"s);
     REQUIRE(pair.has_value());
-    CHECK_EQ(pair->size().value(), std::size_t{2});
+    auto const count_2 = pair->size();
+    CHECK_EQ(count_2.value(), std::size_t{2});
 }
 
 // Found by fuzz-path on the input d0. RFC 8949 3.4: a tag is followed by its content, so d0 alone ends before its
@@ -1598,10 +1778,14 @@ TEST_CASE("lazy: a step over a tag with no content gives too_little_data")
 {
     std::string const doc = "\xd0"s;
     CHECK_EQ(cbor::at_path<"$[0]", int>(doc).error(), error::too_little_data);
-    CHECK_EQ(lazy_of(doc).at(0).error(), error::too_little_data);
-    CHECK_EQ(lazy_of(doc).at("a").error(), error::too_little_data);
-    CHECK_EQ(lazy_of(doc).at(0).error(), error::too_little_data);
-    CHECK_EQ(lazy_of(doc).size().error(), error::too_little_data);
+    auto const at_0 = lazy_of(doc).at(0);
+    CHECK_EQ(at_0.error(), error::too_little_data);
+    auto const a = lazy_of(doc).at("a");
+    CHECK_EQ(a.error(), error::too_little_data);
+    auto const at_0_2 = lazy_of(doc).at(0);
+    CHECK_EQ(at_0_2.error(), error::too_little_data);
+    auto const count = lazy_of(doc).size();
+    CHECK_EQ(count.error(), error::too_little_data);
     CHECK_EQ(lazy_of(doc).elements().error(), error::too_little_data);
     CHECK_EQ(lazy_of(doc).entries().error(), error::too_little_data);
 }
@@ -1611,8 +1795,11 @@ TEST_CASE("lazy: a step passes a tag that it does not read")
 {
     std::string const doc = "\xd9\x03\xe8\x82\x01\x02"s;
     CHECK_EQ(cbor::at_path<"$[1]", int>(doc), 2);
-    CHECK_EQ(*lazy_of(doc).at(1)->get<int>(), 2);
-    CHECK_EQ(*lazy_of(doc).size(), 2u);
+    auto const at_1 = lazy_of(doc).at(1);
+    auto const read = at_1->get<int>();
+    CHECK_EQ(*read, 2);
+    auto const count = lazy_of(doc).size();
+    CHECK_EQ(*count, 2u);
 }
 
 namespace two_forms
@@ -1627,7 +1814,8 @@ std::string long_text()
 char const *text_data(std::expected<cbor::lazy, error> const &l)
 {
     auto const text = l->get<std::string_view>();
-    return (**text).data();
+    std::string_view const view = **text;
+    return view.data();
 }
 
 } // namespace two_forms
@@ -1692,12 +1880,16 @@ TEST_CASE("lazy: a count larger than the bytes left is too_little_data before th
     for (std::string const &wire : {"\x8c\xff"s, "\x95\xf8\x04"s, "\x95\xbf"s, "\x88\x00\x7f"s, "\x87\xd8\x1c\x1f"s,
                                    "\x85\xd8\x1c\xd8\x1c"s}) {
         CAPTURE(wire);
-        CHECK_EQ(lazy_of(wire).size().error(), error::too_little_data);
-        CHECK_EQ(lazy_of(wire).at(0).error(), error::too_little_data);
+        auto const count = lazy_of(wire).size();
+        CHECK_EQ(count.error(), error::too_little_data);
+        auto const at_0 = lazy_of(wire).at(0);
+        CHECK_EQ(at_0.error(), error::too_little_data);
         CHECK_EQ(lazy_of(wire).elements().error(), error::too_little_data);
     }
-    CHECK_EQ(lazy_of("\xa2\xff\x00\x00"s).at("a").error(), error::too_little_data);
-    CHECK_EQ(lazy_of("\xa2\xff\x00\x00"s).at(std::int64_t{0}).error(), error::too_little_data);
+    auto const a = lazy_of("\xa2\xff\x00\x00"s).at("a");
+    CHECK_EQ(a.error(), error::too_little_data);
+    auto const found = lazy_of("\xa2\xff\x00\x00"s).at(std::int64_t{0});
+    CHECK_EQ(found.error(), error::too_little_data);
     CHECK_EQ(lazy_of("\xa2\xff\x00\x00"s).entries().error(), error::too_little_data);
 }
 
@@ -1747,12 +1939,19 @@ TEST_CASE("lazy: an index reads an element of each typed array")
     for (auto const &[tag, bytes, second] : integers) {
         CAPTURE(tag);
         auto const l = lazy_of(typed_array_of(tag, bytes));
-        CHECK_EQ(*l.size(), 2u);
-        CHECK_EQ(*l.at(0)->get<std::int64_t>(), 0);
-        CHECK_EQ(*l.at(1)->get<std::int64_t>(), second);
-        CHECK_EQ(l.at(2).error(), error::index_out_of_bounds);
+        auto const count = l.size();
+        CHECK_EQ(*count, 2u);
+        auto const at_0 = l.at(0);
+        auto const read = at_0->get<std::int64_t>();
+        CHECK_EQ(*read, 0);
+        auto const at_1 = l.at(1);
+        auto const read_2 = at_1->get<std::int64_t>();
+        CHECK_EQ(*read_2, second);
+        auto const at_2 = l.at(2);
+        CHECK_EQ(at_2.error(), error::index_out_of_bounds);
         CHECK_EQ(std::ranges::distance(*l.elements()), 2);
-        CHECK_EQ(*(*std::ranges::next(l.elements()->begin()))->get<std::int64_t>(), second);
+        auto const read_3 = (*std::ranges::next(l.elements()->begin()))->get<std::int64_t>();
+        CHECK_EQ(*read_3, second);
     }
     struct float_row {
         std::uint64_t tag;
@@ -1769,33 +1968,45 @@ TEST_CASE("lazy: an index reads an element of each typed array")
     for (auto const &[tag, bytes] : floats) {
         CAPTURE(tag);
         auto const l = lazy_of(typed_array_of(tag, bytes));
-        CHECK_EQ(*l.size(), 2u);
-        CHECK_EQ(std::bit_cast<std::uint64_t>(*l.at(1)->get<double>()), 0x3ff8000000000000u);
-        CHECK_EQ(l.at(1)->get<std::int64_t>().error(), error::incorrect_type);
+        auto const count_2 = l.size();
+        CHECK_EQ(*count_2, 2u);
+        auto const at_1_2 = l.at(1);
+        auto const read_4 = at_1_2->get<double>();
+        CHECK_EQ(std::bit_cast<std::uint64_t>(*read_4), 0x3ff8000000000000u);
+        auto const at_1_3 = l.at(1);
+        auto const read_5 = at_1_3->get<std::int64_t>();
+        CHECK_EQ(read_5.error(), error::incorrect_type);
     }
     // A float of 128 bits has no C++ type that the library reads. The index selects the element, and the read
     // of its value is incorrect_type.
     for (std::uint64_t const tag : {83u, 87u}) {
         CAPTURE(tag);
         auto const l = lazy_of(typed_array_of(tag, std::string(32, '\0')));
-        CHECK_EQ(*l.size(), 2u);
+        auto const count_3 = l.size();
+        CHECK_EQ(*count_3, 2u);
         auto const element = l.at(1);
         REQUIRE(element.has_value());
-        CHECK_EQ(element->get<double>().error(), error::incorrect_type);
-        CHECK_EQ(element->get<std::int64_t>().error(), error::incorrect_type);
+        auto const read_6 = element->get<double>();
+        CHECK_EQ(read_6.error(), error::incorrect_type);
+        auto const read_7 = element->get<std::int64_t>();
+        CHECK_EQ(read_7.error(), error::incorrect_type);
     }
     // An element is a number and no container, and its type and its decoded item are those of the number.
     auto const element = lazy_of(typed_array_of(81, "\x00\x00\x00\x00\x3f\xc0\x00\x00"sv)).at(1);
     REQUIRE(element.has_value());
-    CHECK_EQ(*element->type(), cbor::type::single_float);
-    CHECK_EQ(element->at(0).error(), error::not_indexable);
+    auto const kind = element->type();
+    CHECK_EQ(*kind, cbor::type::single_float);
+    auto const at_0_2 = element->at(0);
+    CHECK_EQ(at_0_2.error(), error::not_indexable);
     auto const element_tree = element->to_item();
     CHECK_EQ((*element_tree)->type(), cbor::type::single_float);
     auto const negative = lazy_of(typed_array_of(72, "\x00\xff"sv)).at(1);
     REQUIRE(negative.has_value());
-    CHECK_EQ(*negative->type(), cbor::type::negative_integer);
+    auto const kind_2 = negative->type();
+    CHECK_EQ(*kind_2, cbor::type::negative_integer);
     // Tag 76 is reserved in RFC 8746 2.1, so it is no typed array.
-    CHECK_EQ(lazy_of(typed_array_of(76, "\x00\x00"sv)).at(0).error(), error::not_indexable);
+    auto const at_0_3 = lazy_of(typed_array_of(76, "\x00\x00"sv)).at(0);
+    CHECK_EQ(at_0_3.error(), error::not_indexable);
 }
 
 // The raw bytes of an element are the input bytes in place, for each of the 23 typed array tags of RFC 8746 2.1.
@@ -1846,29 +2057,42 @@ TEST_CASE("lazy: an element of a float128 typed array")
         CAPTURE(tag);
         auto const l = lazy_of(typed_array_of(tag, bytes));
         constexpr std::size_t elements = 4;
-        CHECK_EQ(*l.size(), elements);
+        auto const count = l.size();
+        CHECK_EQ(*count, elements);
         for (std::size_t i = 0; i < elements; ++i) {
             auto const element = l.at(i);
             REQUIRE(element.has_value());
             CHECK_EQ(element->to_item().error(), error::incorrect_type);
-            CHECK_EQ(element->get<double>().error(), error::incorrect_type);
+            auto const read = element->get<double>();
+            CHECK_EQ(read.error(), error::incorrect_type);
             auto const raw = element->get<std::span<std::byte const>>();
             REQUIRE(raw.has_value());
             CHECK(std::ranges::equal(**raw, std::as_bytes(std::span(bytes).subspan(16 * i, 16))));
         }
 #ifdef __STDCPP_FLOAT128_T__
-        CHECK_EQ(*l.at(0)->get<std::float128_t>(), std::float128_t{1});
-        CHECK_EQ(*l.at(1)->get<std::float128_t>(), std::float128_t{-2});
-        CHECK_EQ(*l.at(2)->get<std::float128_t>(), std::numeric_limits<std::float128_t>::infinity());
-        auto const n = *l.at(3)->get<std::float128_t>();
+        auto const at_0 = l.at(0);
+        auto const read_2 = at_0->get<std::float128_t>();
+        CHECK_EQ(*read_2, std::float128_t{1});
+        auto const at_1 = l.at(1);
+        auto const read_3 = at_1->get<std::float128_t>();
+        CHECK_EQ(*read_3, std::float128_t{-2});
+        auto const at_2 = l.at(2);
+        auto const read_4 = at_2->get<std::float128_t>();
+        CHECK_EQ(*read_4, std::numeric_limits<std::float128_t>::infinity());
+        auto const at_3 = l.at(3);
+        auto const read_5 = at_3->get<std::float128_t>();
+        auto const n = *read_5;
         CHECK(n != n);
 #endif
     }
 #ifdef __STDCPP_FLOAT128_T__
     // A float128 is read only from an element of tag 83 or 87; every other item has no such value.
-    CHECK_EQ(lazy_of(typed_array_of(82, std::string(8, '\0'))).at(0)->get<std::float128_t>().error(),
+    auto const at_0_2 = lazy_of(typed_array_of(82, std::string(8, '\0'))).at(0);
+    auto const read_6 = at_0_2->get<std::float128_t>();
+    CHECK_EQ(read_6.error(),
              error::incorrect_type);
-    CHECK_EQ(lazy_of("\xf9\x3c\x00"s).get<std::float128_t>().error(), error::incorrect_type);
+    auto const read_7 = lazy_of("\xf9\x3c\x00"s).get<std::float128_t>();
+    CHECK_EQ(read_7.error(), error::incorrect_type);
 #endif
 }
 
@@ -1903,23 +2127,33 @@ TEST_CASE("path: at_path reads an element of a float128 typed array")
 TEST_CASE("lazy: a cut typed array is too_little_data")
 {
     auto const cut = lazy_of("\xd8\x41\x44\x00\x01"s);
-    CHECK_EQ(cut.at(0).error(), error::too_little_data);
-    CHECK_EQ(cut.size().error(), error::too_little_data);
+    auto const at_0 = cut.at(0);
+    CHECK_EQ(at_0.error(), error::too_little_data);
+    auto const count = cut.size();
+    CHECK_EQ(count.error(), error::too_little_data);
     CHECK_EQ(cut.elements().error(), error::too_little_data);
-    CHECK_EQ(lazy_of("\xd8\x41\x43\x00\x01\x02"s).at(0).error(), error::inadmissible_type_for_tag_content);
+    auto const at_0_2 = lazy_of("\xd8\x41\x43\x00\x01\x02"s).at(0);
+    CHECK_EQ(at_0_2.error(), error::inadmissible_type_for_tag_content);
 }
 
 // A typed array inside tag 24 and a typed array under tag 28 are indexed like a typed array in place. A tag 29 is
 // a plain tag over its index, so it has no element.
 TEST_CASE("lazy: an index reads a typed array through tag 24 and tag 28")
 {
-    CHECK_EQ(*lazy_of("\xd8\x18\x45\xd8\x40\x42\x01\x02"s).at(1)->get<int>(), 2);
+    auto const at_1 = lazy_of("\xd8\x18\x45\xd8\x40\x42\x01\x02"s).at(1);
+    auto const read = at_1->get<int>();
+    CHECK_EQ(*read, 2);
     auto const doc = lazy_of("\x82\xd8\x1c\xd8\x40\x42\x01\x02\xd8\x1d\x00"s);
     auto const marked = doc.at(0);
     REQUIRE(marked.has_value());
-    CHECK_EQ(*marked->at(1)->get<int>(), 2);
-    CHECK_EQ(*marked->size(), 2u);
-    CHECK_EQ(doc.at(1)->at(1).error(), error::not_indexable);
+    auto const at_1_2 = marked->at(1);
+    auto const read_2 = at_1_2->get<int>();
+    CHECK_EQ(*read_2, 2);
+    auto const count = marked->size();
+    CHECK_EQ(*count, 2u);
+    auto const at_1_3 = doc.at(1);
+    auto const at_1_4 = at_1_3->at(1);
+    CHECK_EQ(at_1_4.error(), error::not_indexable);
 }
 
 // lazy does not reject a map with a repeated key (RFC 8949 5.6 leaves that to the decoder). Every way to read
@@ -1927,11 +2161,13 @@ TEST_CASE("lazy: an index reads a typed array through tag 24 and tag 28")
 TEST_CASE("lazy: a repeated key gives the first pair")
 {
     cbor::lazy const twice = lazy_of("\xa3\x61" "a\x01\x61" "b\x02\x61" "a\x03"s);
-    CHECK(value_at(*twice.at("a")) == V(1));
+    auto const a = twice.at("a");
+    CHECK(value_at(*a) == V(1));
     CHECK(value_at(*twice.at_path(*cbor::path::compile<cbor::lazy>("$.a"))) == V(1));
     CHECK_EQ(twice.at_path<"$.a", int>(), 1);
     cbor::lazy const numbers = lazy_of("\xa3\x01\x01\x01\x02\x01\x03"s);
-    CHECK(value_at(*numbers.at(1)) == V(1));
+    auto const at_1 = numbers.at(1);
+    CHECK(value_at(*at_1) == V(1));
 }
 
 // RFC 9535 2.3.5.1: a single result needs a singular query. compile refuses any other query for every result type that
@@ -2143,19 +2379,23 @@ TEST_CASE("lazy: a typed array tag with content that is no byte string is refuse
 TEST_CASE("lazy: a read through a temporary lazy keeps the bytes alive")
 {
     auto const message = [] { return "\x82\x63" "abc\x81\x63" "xyz"s; };
-    auto const first = cbor::lazy::adopt(message())->at(0)->get<std::string_view>();
+    auto const at_0 = cbor::lazy::adopt(message())->at(0);
+    auto const first = at_0->get<std::string_view>();
     REQUIRE(first.has_value());
     CHECK_EQ(**first, "abc"sv);
     auto const inner = cbor::lazy::adopt(message())->at(1);
     REQUIRE(inner.has_value());
-    auto const second = inner->at(0)->get<std::string_view>();
+    auto const at_0_2 = inner->at(0);
+    auto const second = at_0_2->get<std::string_view>();
     REQUIRE(second.has_value());
     CHECK_EQ(**second, "xyz"sv);
     auto const elements = cbor::lazy::adopt(message())->elements();
     REQUIRE(elements.has_value());
     std::vector<cbor::type> types;
-    for (auto const &e : *elements)
-        types.push_back(*e->type());
+    for (auto const &e : *elements) {
+        auto const kind = e->type();
+        types.push_back(*kind);
+    }
     CHECK_EQ(types, std::vector{cbor::type::text_string, cbor::type::array});
     auto const copy = cbor::lazy::adopt(message())->to_item();
     REQUIRE(copy.has_value());
@@ -2168,7 +2408,8 @@ TEST_CASE("lazy: a count longer than the bytes is too_little_data before the fir
 {
     auto const map = cbor::lazy::adopt("\xa2\x61\x6b\x01"s);
     REQUIRE(map);
-    CHECK_EQ(map->at("k").error(), error::too_little_data);
+    auto const k = map->at("k");
+    CHECK_EQ(k.error(), error::too_little_data);
     // Three elements over three bytes pass the first check; after the element 100 (two bytes) two elements are
     // left over one byte.
     auto const array = cbor::lazy::adopt("\x83\x18\x64\x01"s);
@@ -2177,7 +2418,8 @@ TEST_CASE("lazy: a count longer than the bytes is too_little_data before the fir
     REQUIRE(elements);
     auto it = elements->begin();
     REQUIRE(*it);
-    CHECK_EQ((*it)->get<int>().value(), 100);
+    auto const read = (*it)->get<int>();
+    CHECK_EQ(read.value(), 100);
     ++it;
     REQUIRE(it != elements->end());
     CHECK_EQ((*it).error(), error::too_little_data);
@@ -2188,8 +2430,8 @@ TEST_CASE("lazy: a count longer than the bytes is too_little_data before the fir
 // type, because one function has one return type. The expectation comes from that decision, not from the header.
 TEST_CASE("lazy: each count of a head is a std::uint64_t")
 {
-    CHECK((std::is_same_v<decltype(std::declval<cbor::lazy const &>().size()), std::expected<std::uint64_t, error>>));
-    CHECK((std::is_same_v<decltype(std::declval<cbor::lazy const &>().empty()), std::expected<bool, error>>));
+    CHECK((std::is_same_v<decltype(std::declval<cbor::lazy const &>().size()), cbor::result<std::uint64_t>>));
+    CHECK((std::is_same_v<decltype(std::declval<cbor::lazy const &>().empty()), cbor::result<bool>>));
     CHECK((std::is_same_v<decltype(std::declval<cbor::lazy_elements const &>().size()), std::uint64_t>));
     CHECK((std::is_same_v<decltype(std::declval<cbor::lazy_entries const &>().size()), std::uint64_t>));
 }
@@ -2199,7 +2441,8 @@ TEST_CASE("lazy: each count of a head is a std::uint64_t")
 TEST_CASE("lazy: a head that claims 2^32 elements over no bytes is too_little_data")
 {
     auto const doc = lazy_of("\x9b\x00\x00\x00\x01\x00\x00\x00\x00"s);
-    CHECK_EQ(doc.size().error(), error::too_little_data);
+    auto const count = doc.size();
+    CHECK_EQ(count.error(), error::too_little_data);
     CHECK_EQ(doc.elements().error(), error::too_little_data);
 }
 
@@ -2209,7 +2452,8 @@ TEST_CASE("lazy: a head that claims 2^32 elements over no bytes is too_little_da
 TEST_CASE("lazy: the count of a typed array is its whole elements, not its bytes")
 {
     auto const doc = lazy_of("\xd8\x46\x4c"s + std::string(12, '\x01'));
-    CHECK_EQ(doc.size().value(), 3u);
+    auto const count = doc.size();
+    CHECK_EQ(count.value(), 3u);
     auto const elements = doc.elements();
     REQUIRE(elements.has_value());
     CHECK_EQ(elements->size(), 3u);
@@ -2246,8 +2490,10 @@ TEST_CASE("lazy: view and adopt read a range of bytes as the std::string of the 
     auto const b = std::as_bytes(std::span(*owner));
     auto const from_b = cbor::lazy::view(owner, b);
     REQUIRE(from_b.has_value());
-    CHECK_EQ(from_b->size().value(), std::size_t{2});
+    auto const count = from_b->size();
+    CHECK_EQ(count.value(), std::size_t{2});
     auto const from_u = cbor::lazy::adopt(unsigned_bytes_of_bytes_lazy(*encoded));
     REQUIRE(from_u.has_value());
-    CHECK_EQ(from_u->size().value(), std::size_t{2});
+    auto const count_2 = from_u->size();
+    CHECK_EQ(count_2.value(), std::size_t{2});
 }

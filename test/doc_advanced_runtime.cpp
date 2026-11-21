@@ -43,11 +43,13 @@ TEST_CASE("doc advanced runtime: lazy::adopt and lazy::view in every form")
     REQUIRE(b.has_value());
     CHECK_NE(b->encoded().data(), kept.data());
     REQUIRE(c.has_value());
-    CHECK_EQ(c->at(1)->get<std::int64_t>(), 2);
+    auto const at_1 = c->at(1);
+    CHECK_EQ(at_1->get<std::int64_t>(), 2);
     CHECK_EQ(c->encoded().data(), held->data());
     auto const cut = test::make_lazy_from_copy("\x82\x01"s);
     REQUIRE(cut.has_value());
-    CHECK_EQ(cut->at(1).error(), error::too_little_data);
+    auto const at_1_2 = cut->at(1);
+    CHECK_EQ(at_1_2.error(), error::too_little_data);
     CHECK_EQ(test::make_lazy_from_copy("\x01\x02"s)->get<std::int64_t>(), 1);
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&t) { cbor::lazy::view(std::forward<S>(t)); }; }(*held)));
 }
@@ -56,25 +58,40 @@ TEST_CASE("doc advanced runtime: lazy::adopt and lazy::view in every form")
 TEST_CASE("doc advanced runtime: steps and searches")
 {
     auto const doc = *test::make_lazy_from_copy(encode_in_preferred_form(M("cars"s, A(M("hp"s, 5), M("hp"s, 7)), 7, "seven"s)));
-    auto const seven = doc.at(7)->get<std::string_view>();
+    auto const at_7 = doc.at(7);
+    auto const seven = at_7->get<std::string_view>();
     CHECK_EQ(**seven, "seven"sv);
-    CHECK_EQ(*doc.size(), 2u);
-    CHECK_FALSE(*doc.empty());
-    CHECK_EQ(*doc.at("cars")->size(), 2u);
-    CHECK_EQ(doc.at("cars")->at(1)->at("hp")->get<std::int64_t>(), 7);
-    CHECK_EQ(doc.at("cars")->at(5).error(), error::index_out_of_bounds);
-    CHECK_EQ(doc.at("bus").error(), error::key_not_found);
-    CHECK_EQ(doc.at(0).error(), error::key_not_found);
+    auto const count = doc.size();
+    CHECK_EQ(*count, 2u);
+    auto const is_empty = doc.empty();
+    CHECK_FALSE(*is_empty);
+    auto const cars = doc.at("cars");
+    auto const count_2 = cars->size();
+    CHECK_EQ(*count_2, 2u);
+    auto const cars_2 = doc.at("cars");
+    auto const at_1 = cars_2->at(1);
+    auto const hp = at_1->at("hp");
+    CHECK_EQ(hp->get<std::int64_t>(), 7);
+    auto const cars_3 = doc.at("cars");
+    auto const at_5 = cars_3->at(5);
+    CHECK_EQ(at_5.error(), error::index_out_of_bounds);
+    auto const bus = doc.at("bus");
+    CHECK_EQ(bus.error(), error::key_not_found);
+    auto const at_0 = doc.at(0);
+    CHECK_EQ(at_0.error(), error::key_not_found);
 }
 
 // The section "Steps and searches in a map or an array" states that a byte string is not a text key. That a repeated key
 // gives the first pair.
 TEST_CASE("doc advanced runtime: keys")
 {
-    CHECK_EQ(test::make_lazy_from_copy("\xa1\x41" "a\x01"s)->at("a").error(), error::key_not_found);
-    CHECK_EQ(test::make_lazy_from_copy("\xa1\xd8\x1c\x61" "a\x01"s)->at("a").error(), error::key_not_found);
+    auto const a = test::make_lazy_from_copy("\xa1\x41" "a\x01"s)->at("a");
+    CHECK_EQ(a.error(), error::key_not_found);
+    auto const a_2 = test::make_lazy_from_copy("\xa1\xd8\x1c\x61" "a\x01"s)->at("a");
+    CHECK_EQ(a_2.error(), error::key_not_found);
     auto const twice = *test::make_lazy_from_copy("\xa2\x61" "a\x01\x61" "a\x02"s);
-    CHECK_EQ(twice.at("a")->get<std::int64_t>(), 1);
+    auto const a_3 = twice.at("a");
+    CHECK_EQ(a_3->get<std::int64_t>(), 1);
     CHECK_EQ(twice.at_path<"$.a", std::int64_t>(), 1);
 }
 
@@ -82,7 +99,7 @@ TEST_CASE("doc advanced runtime: keys")
 TEST_CASE("doc advanced runtime: elements and entries")
 {
     auto const l = *test::make_lazy_from_copy(encode_in_preferred_form(A(1, "a"s, A(2))));
-    std::vector<std::expected<std::int64_t, error>> read;
+    std::vector<cbor::result<std::int64_t>> read;
     auto const elements = *l.elements();
     for (auto const e : elements)
         read.push_back(e->get<std::int64_t>());
@@ -139,7 +156,8 @@ TEST_CASE("doc advanced runtime: an algorithm over elements")
 TEST_CASE("doc advanced runtime: get")
 {
     CHECK_EQ(test::make_lazy_from_copy("\x18\x2a"s)->get<std::int64_t>(), 42);
-    CHECK_EQ(test::make_lazy_from_copy("\x19\x01\x00"s)->get<std::uint8_t>().error(), error::number_out_of_range);
+    auto const read = test::make_lazy_from_copy("\x19\x01\x00"s)->get<std::uint8_t>();
+    CHECK_EQ(read.error(), error::number_out_of_range);
     CHECK_EQ(test::make_lazy_from_copy("\xf9\x3e\x00"s)->get<double>(), 1.5);
     CHECK_EQ(test::make_lazy_from_copy("\x18\x2a"s)->get<double>(), 42.0);
     CHECK_EQ(test::make_lazy_from_copy("\xf5"s)->get<bool>(), true);
@@ -153,10 +171,13 @@ TEST_CASE("doc advanced runtime: get")
     REQUIRE(typed.has_value());
     CHECK_EQ((*typed)->tag, 69u);
     CHECK_EQ((*typed)->bytes.size(), 4u);
-    CHECK_EQ(test::make_lazy_from_copy("\x63" "abc"s)->get<bool>().error(), error::incorrect_type);
+    auto const read_2 = test::make_lazy_from_copy("\x63" "abc"s)->get<bool>();
+    CHECK_EQ(read_2.error(), error::incorrect_type);
     CHECK_EQ(test::make_lazy_from_copy("\xc2\x41\x05"s)->get<std::int64_t>(), 5);
-    CHECK_EQ(test::make_lazy_from_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->at(1)->get<std::int64_t>(), 0);
-    CHECK_EQ(test::make_lazy_from_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->at(0)->get<std::int64_t>(), 1);
+    auto const at_1 = test::make_lazy_from_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->at(1);
+    CHECK_EQ(at_1->get<std::int64_t>(), 0);
+    auto const at_0 = test::make_lazy_from_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->at(0);
+    CHECK_EQ(at_0->get<std::int64_t>(), 1);
 }
 
 // The section "clone and decode" shows the item of an array, its children, an error, and type().
@@ -176,9 +197,13 @@ TEST_CASE("doc advanced runtime: clone and decode")
     auto const cut = std::make_shared<std::string const>("\x82\x01"s);
     CHECK_EQ(cbor::lazy::view(cut)->to_item().error(), error::too_little_data);
     CHECK_EQ(test::make_lazy_from_copy("\x9b\x80\x00\x00\x00\x00\x00\x00\x00\x01"s)->to_item().error(), error::too_little_data);
-    CHECK_EQ(*test::make_lazy_from_copy("\xc2\x41\x05"s)->type(), cbor::type::unsigned_integer);
-    CHECK_EQ(*test::make_lazy_from_copy("\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s)->type(), cbor::type::unsigned_bignum);
-    CHECK_EQ(*test::make_lazy_from_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->at(1)->type(), cbor::type::tag);
+    auto const kind = test::make_lazy_from_copy("\xc2\x41\x05"s)->type();
+    CHECK_EQ(*kind, cbor::type::unsigned_integer);
+    auto const kind_2 = test::make_lazy_from_copy("\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s)->type();
+    CHECK_EQ(*kind_2, cbor::type::unsigned_bignum);
+    auto const at_1 = test::make_lazy_from_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->at(1);
+    auto const kind_3 = at_1->type();
+    CHECK_EQ(*kind_3, cbor::type::tag);
     auto const tags = test::make_lazy_from_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s)->to_item();
     REQUIRE(tags.has_value());
     CHECK_EQ(list_children_of_item(*(*tags))[1].type(), cbor::type::tag);
@@ -277,8 +302,11 @@ TEST_CASE("doc advanced runtime: cbor::sequence")
     CHECK_EQ(it.encoded(), "\x19\x01"sv);
     std::vector<std::int64_t> last;
     for (auto const e : cbor::sequence{owner})
-        if (auto const l = test::make_lazy_from_copy(*e); l->size().has_value())
-            last.push_back(*l->at(1)->get<std::int64_t>());
+        if (auto const l = test::make_lazy_from_copy(*e); l->size().has_value()) {
+            auto const at_1 = l->at(1);
+            auto const read = at_1->get<std::int64_t>();
+            last.push_back(*read);
+        }
     CHECK(last == std::vector<std::int64_t>{2});
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&t) { cbor::sequence{std::forward<S>(t)}; }; }(std::string())));
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&t) { cbor::sequence{std::forward<S>(t)}; }; }(bytes)));
@@ -322,21 +350,25 @@ TEST_CASE("doc advanced runtime: tags 28 and 29")
     CHECK_EQ(cbor::encode(cycle, **cyclic), cycle_written.size());
     CHECK_EQ(cycle, cycle_written);
     auto const l = *test::make_lazy_from_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
-    CHECK_EQ(l.at(1)->type(), cbor::type::tag);
-    CHECK_EQ(l.at(1)->get<std::int64_t>(), 0);
+    auto const at_1 = l.at(1);
+    CHECK_EQ(at_1->type(), cbor::type::tag);
+    auto const at_1_2 = l.at(1);
+    CHECK_EQ(at_1_2->get<std::int64_t>(), 0);
     CHECK_EQ(cbor::diagnostic_notation("\x82\xd8\x1c\x01\xd8\x1d\x00"sv), "[28(1), 29(0)]");
     auto const forward = test::make_lazy_from_copy("\x82\xd8\x1d\x00\xd8\x1c\x05"s)->to_item();
     REQUIRE(forward.has_value());
     CHECK_EQ((*forward)->elements().value().front().get<std::pair<std::uint64_t, cbor::item>>().value().first, 29u);
     CHECK(test::make_lazy_from_copy("\xd8\x1c\x81\xd8\x1d\x00"s)->to_item().has_value());
-    CHECK_EQ(test::make_lazy_from_copy("\xd8\x1c\xd8\x1d\x00"s)->at(0).error(), error::not_indexable);
+    auto const at_0 = test::make_lazy_from_copy("\xd8\x1c\xd8\x1d\x00"s)->at(0);
+    CHECK_EQ(at_0.error(), error::not_indexable);
 }
 
 // The section "Tag 55799" shows that one leading tag 55799 is read as its content, by a lazy and by decode.
 TEST_CASE("doc advanced runtime: tag 55799")
 {
     auto const owner = std::make_shared<std::string const>("\xd9\xd9\xf7\x82\x01\x02"s);
-    CHECK_EQ(cbor::lazy::view(owner)->at(1)->get<std::int64_t>(), 2);
+    auto const at_1 = cbor::lazy::view(owner)->at(1);
+    CHECK_EQ(at_1->get<std::int64_t>(), 2);
     auto const content = cbor::lazy::view(owner)->to_item();
     REQUIRE(content.has_value());
     CHECK_EQ((*content)->type(), cbor::type::array);
