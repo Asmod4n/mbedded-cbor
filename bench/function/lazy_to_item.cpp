@@ -52,8 +52,10 @@ void run(benchmark::State &state, bool const inside)
             lazies.push_back(top);
             continue;
         }
-        for (std::size_t i = 0; i < elements; ++i)
-            lazies.push_back(*top.at(i));
+        for (std::size_t i = 0; i < elements; ++i) {
+            auto const element = top.at(i);
+            lazies.push_back(*element);
+        }
     }
     auto const sample = tree_of(lazies.front());
     if (!sample) {

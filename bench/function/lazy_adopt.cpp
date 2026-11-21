@@ -36,10 +36,18 @@ auto lazy_of(Encoded &&encoded)
         return Lazy::take_ownership(std::move(encoded));
 }
 
+std::int64_t second_element_of_b(cbor::lazy const &doc)
+{
+    auto const b = doc.at("b");
+    auto const element = b->at(1);
+    auto const value = element->get<std::int64_t>();
+    return value ? *value : -1;
+}
+
 void lazy_adopt(benchmark::State &state)
 {
     auto const sample = lazy_of(std::string(message));
-    if (!sample || sample->at("b")->at(1)->get<std::int64_t>() != 3) {
+    if (!sample || second_element_of_b(*sample) != 3) {
         state.SkipWithError("the lazy of {\"a\": 1, \"b\": [2, 3]} does not give 3 at $.b[1]");
         return;
     }
