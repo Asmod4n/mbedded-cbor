@@ -1,4 +1,9 @@
-# mbedded-cbor
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
+    <img src="assets/logo-light.svg" alt="mbedded-cbor" width="560">
+  </picture>
+</h1>
 
 A fast C++ library for CBOR (RFC 8949) that follows the specifications,
 for microcontrollers and for large servers. It does more than decode a
