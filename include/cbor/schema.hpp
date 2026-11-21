@@ -4263,8 +4263,6 @@ public:
      * An lvalue `std::string` does not compile.
      * `adopt` and `view` check the length, the table, the directory and the tag of the root once.
      * It reads no field.
-     * One leading tag 55799 (RFC 8949, section 3.4.6) is skipped, so a message under that tag opens as the
-     * message.
      *
      * @code{.example}
      * bytes: d8 71 82 9a 00 00 00 13 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 5a 00 00 00 0c 00 00 00 71 00 00 00 7b 00 00 00 91 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 00 18 05 c6 3a 00 00 00 00 c6 1a 00 00 00 01
@@ -4363,8 +4361,6 @@ public:
      * A `std::string_view` member views the bytes.
      * Nothing is copied: an rvalue moves into a new owner, and an owner is read in place.
      * An lvalue `std::string` does not compile.
-     * One leading tag 55799 (RFC 8949, section 3.4.6) is skipped, so a message under that tag reads as the
-     * message.
      * `target` gives the start value, for example `std::pmr` containers with their memory resource; the forms with
      * `target` need a default constructor of `T`.
      * A struct with a default constructor is made with it, and then each described member is set.
@@ -4748,7 +4744,7 @@ private:
     static auto at_path_with_directory(std::string_view const encoded, Index const... indexes)
     {
         using X = typename decltype(detail::reflection::path_result<T, T, Path, 1, Verified>())::type;
-        std::string_view const message = detail::heads::self_described_cbor_content(encoded);
+        std::string_view const message = encoded;
         auto const dir = detail::reflection::read_directory<T, Verified, D>(message);
         if (!dir) [[unlikely]]
             return std::expected<X, error>(std::unexpect, dir.error());
@@ -4779,7 +4775,7 @@ private:
     {
         detail::validity::throw_logic_error_if_empty(
             owner, "cbor::schema::view: the owner of the encoded data item is empty");
-        std::string_view const message = detail::heads::self_described_cbor_content(encoded);
+        std::string_view const message = encoded;
         auto const dir = detail::reflection::read_directory<T, Verified, D>(message);
         if (!dir) [[unlikely]]
             return std::unexpected(dir.error());
@@ -4815,7 +4811,7 @@ private:
         } else {
             detail::validity::throw_logic_error_if_empty(
                 owner, "cbor::schema::decode: the owner of the encoded data item is empty");
-            std::string_view const message = detail::heads::self_described_cbor_content(encoded);
+            std::string_view const message = encoded;
             std::optional<T> made;
             if (auto const r = detail::reflection::read_root<T, Verified, D>(made, message); !r) [[unlikely]]
                 return std::unexpected(Verified ? detail::reflection::too_little_data_if_truncated<T, D>(message, r.error()) : r.error());
@@ -4838,7 +4834,7 @@ private:
     {
         detail::validity::throw_logic_error_if_empty(
             owner, "cbor::schema::decode: the owner of the encoded data item is empty");
-        std::string_view const message = detail::heads::self_described_cbor_content(encoded);
+        std::string_view const message = encoded;
         if (auto const r = detail::reflection::read_root<T, Verified, D>(target, message); !r)
             [[unlikely]]
             return std::unexpected(Verified ? detail::reflection::too_little_data_if_truncated<T, D>(message, r.error()) : r.error());

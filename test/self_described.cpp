@@ -34,25 +34,6 @@ struct tagged_reading {
     std::uint64_t a;
 };
 
-class built_reading
-{
-public:
-    explicit built_reading(std::uint64_t const value) : a(value)
-    {
-    }
-
-    std::uint64_t a;
-};
-
-std::string put_under_self_described_cbor_tag(std::string const &message)
-{
-    auto const edn = cbor::diagnostic_notation(message);
-    REQUIRE(edn.has_value());
-    auto tagged = cbor::diag2cbor("55799(" + *edn + ")");
-    REQUIRE(tagged.has_value());
-    return std::move(*tagged);
-}
-
 template <class T>
 std::expected<cbor::ref<T>, error> decode_edn_with_structs(std::string_view const edn)
 {
@@ -64,7 +45,6 @@ std::expected<cbor::ref<T>, error> decode_edn_with_structs(std::string_view cons
 } // namespace
 
 CBOR_DEFINE_TYPE_MEMBERS(tagged_reading, cbor::tag{1900}, a);
-CBOR_DEFINE_TYPE_MEMBERS(built_reading, cbor::tag{1901}, a);
 
 // RFC 8949 3.4.6: the semantics of the tag content enclosed in tag number 55799 is exactly identical to the
 // semantics of the tag content itself. So decode gives the tag content and no tag.
@@ -389,71 +369,3 @@ TEST_CASE("self-described CBOR: structs does not read through tag 55799 in a big
     CHECK_EQ(through.error(), text.error());
 }
 
-// A schema message is a stored item, and RFC 8949 3.4.6 puts tag 55799 at the start of a stored item. So every read
-// form of schema skips one leading tag 55799, as cbor::decode does, and gives what it gives for the message alone.
-TEST_CASE("self-described CBOR: schema reads a message under a leading tag 55799 as the message")
-{
-    std::string const message = cbor::schema<tagged_reading>::encode(tagged_reading{7}).value();
-    std::string const tagged = put_under_self_described_cbor_tag(message);
-    REQUIRE_NE(tagged, message);
-    SUBCASE("decode")
-    {
-        auto const plain = cbor::schema<tagged_reading>::decode(std::string(message));
-        auto const through = cbor::schema<tagged_reading>::decode(std::string(tagged));
-        REQUIRE(plain.has_value());
-        REQUIRE(through.has_value());
-        CHECK_EQ((*through)->a, (*plain)->a);
-    }
-    SUBCASE("decode of a class with a constructor")
-    {
-        std::string const built = cbor::schema<built_reading>::encode(built_reading{7}).value();
-        auto const plain = cbor::schema<built_reading>::decode(std::string(built));
-        auto const through =
-            cbor::schema<built_reading>::decode(std::string(put_under_self_described_cbor_tag(built)));
-        REQUIRE(plain.has_value());
-        REQUIRE(through.has_value());
-        CHECK_EQ((*through)->a, (*plain)->a);
-    }
-    SUBCASE("unverified_decode")
-    {
-        auto const plain = cbor::schema<tagged_reading>::unverified_decode(std::string(message));
-        auto const through = cbor::schema<tagged_reading>::unverified_decode(std::string(tagged));
-        REQUIRE(plain.has_value());
-        REQUIRE(through.has_value());
-        CHECK_EQ((*through)->a, (*plain)->a);
-    }
-    SUBCASE("adopt")
-    {
-        auto const plain = cbor::schema<tagged_reading>::adopt(std::string(message));
-        auto const through = cbor::schema<tagged_reading>::adopt(std::string(tagged));
-        REQUIRE(plain.has_value());
-        REQUIRE(through.has_value());
-        CHECK_EQ(through->at_path<"$.a">().value(), plain->at_path<"$.a">().value());
-    }
-    SUBCASE("view")
-    {
-        auto const plain = cbor::schema<tagged_reading>::view(std::make_shared<std::string const>(message));
-        auto const through = cbor::schema<tagged_reading>::view(std::make_shared<std::string const>(tagged));
-        REQUIRE(plain.has_value());
-        REQUIRE(through.has_value());
-        CHECK_EQ(through->at_path<"$.a">().value(), plain->at_path<"$.a">().value());
-    }
-    SUBCASE("at_path")
-    {
-        auto const plain = cbor::schema<tagged_reading>::at_path<"$.a">(message);
-        auto const through = cbor::schema<tagged_reading>::at_path<"$.a">(tagged);
-        REQUIRE(plain.has_value());
-        REQUIRE(through.has_value());
-        CHECK_EQ(*through, *plain);
-    }
-    SUBCASE("static_dictionary::decode")
-    {
-        std::string const data = cbor::static_dictionary<tagged_reading>::encode(tagged_reading{7}).value();
-        auto const plain = cbor::static_dictionary<tagged_reading>::decode(std::string(data));
-        auto const through =
-            cbor::static_dictionary<tagged_reading>::decode(std::string(put_under_self_described_cbor_tag(data)));
-        REQUIRE(plain.has_value());
-        REQUIRE(through.has_value());
-        CHECK_EQ((*through)->a, (*plain)->a);
-    }
-}
