@@ -1,12 +1,12 @@
 #!/bin/sh
-# Checks the proof of tags 28 and 29 in theories/ with the Rocq prover of the image mbedded-cbor-rocq
-# (containers/rocq.Containerfile). The build runs in a copy, so no build file enters the tree. The check fails when a
+# Checks the proof of tags 28 and 29 in theories/ with the Rocq prover of the image verification; when the image is
+# missing, it is built from containers/rocq.Containerfile. The build runs in a copy, so no build file enters the tree. The check fails when a
 # file holds an admitted proof or a declaration that adds an assumption, or when a theorem of Assumptions.v rests on
 # an axiom.
 set -eu
 tree=$(cd "$(dirname "$0")/../.." && pwd)
-podman build -q -t mbedded-cbor-rocq -f "$tree/containers/rocq.Containerfile" "$tree/containers"
-podman run --rm --network none -v "$tree/theories":/src:ro mbedded-cbor-rocq sh -ec '
+podman image exists verification || podman build -q -t verification -f "$tree/containers/rocq.Containerfile" "$tree/containers"
+podman run --rm --network none -v "$tree/theories":/src:ro verification sh -ec '
   cp -r /src /tmp/theories
   cd /tmp/theories
   coq_makefile -f _CoqProject -o Makefile

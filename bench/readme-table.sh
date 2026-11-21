@@ -8,7 +8,7 @@ set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(dirname "$here")
 root=${CBOR_BUILD_ROOT:-/home/user/mbedded-cbor-build}
-image=${BENCH_IMAGE:-mbedded-cbor-sid-bench}
+image=${BENCH_IMAGE:-compiler}
 RESULTS_DIR=${RESULTS_DIR:-$here/results}
 for tool in podman git flock vmstat ps python3; do
 	command -v "$tool" > /dev/null || { echo "missing tool: $tool" >&2; exit 2; }

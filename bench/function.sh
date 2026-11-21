@@ -12,7 +12,7 @@ source_file=bench/function/$block.cpp
 [ -f "$repo/$source_file" ] || { echo "no file $source_file" >&2; exit 2; }
 root=${CBOR_BUILD_ROOT:-/home/user/mbedded-cbor-build}
 cache=${CCACHE_HOST_DIR:-/home/user/.ccache}
-image=${BENCH_IMAGE:-mbedded-cbor-sid-bench}
+image=${BENCH_IMAGE:-compiler}
 RESULTS_DIR=${RESULTS_DIR:-$here/results}
 ROUNDS=${ROUNDS:-9}
 MIN_TIME=${MIN_TIME:-0.05s}
