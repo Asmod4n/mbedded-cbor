@@ -103,7 +103,8 @@ TEST_CASE("description apart: every target of encode writes the same bytes")
 
 // A message read as the data form is refused. The data form read as a message is refused. The byte after the head of the
 // table is the head of the directory in one form. In the other form it is the first entry of the description. A short
-// input ends as too_little_data before that byte is read.
+// input ends as too_little_data before that byte is read. decode checks the packing prefix and gives incorrect_type; a
+// read of one item takes the end of the message from bytes of the description and gives too_little_data.
 TEST_CASE("description apart: one form read as the other is refused")
 {
     for (std::string const &inside : {encode_with_schema(sample_everything), encode_with_schema(empty{}), encode_with_schema(eighteen_entries{})}) {
@@ -112,9 +113,9 @@ TEST_CASE("description apart: one form read as the other is refused")
     }
     std::string const inside = encode_with_schema(sample_everything);
     std::string const data = encode_data_apart(sample_everything);
-    CHECK_EQ(cbor::static_dictionary<everything>::adopt(std::string(inside)).error(), error::incorrect_type);
+    CHECK_EQ(cbor::static_dictionary<everything>::adopt(std::string(inside)).error(), error::too_little_data);
     CHECK_EQ(cbor::static_dictionary<everything>::decode(std::string(inside)).error(), error::incorrect_type);
-    CHECK_EQ((cbor::static_dictionary<everything>::at_path<"$.big">(inside)).error(), error::incorrect_type);
+    CHECK_EQ((cbor::static_dictionary<everything>::at_path<"$.big">(inside)).error(), error::too_little_data);
     // The data form holds no description. So read as the form with the description inside it is shorter than its table:
     // the doc of schema::adopt gives too_little_data for that.
     for (auto const e : {form<everything>::adopt(std::string(data)).error(),
@@ -125,7 +126,7 @@ TEST_CASE("description apart: one form read as the other is refused")
 }
 
 // The data form keeps every check of the message. A cut gives too_little_data. A forged directory entry and a forged
-// filler give an error in the verified forms. The data form holds the 8 bytes of its prefix, the fillers, the root and
+// filler give an error in decode; the filler lies outside every item, so adopt opens the message. The data form holds the 8 bytes of its prefix, the fillers, the root and
 // the directory, in this order.
 TEST_CASE("description apart: the checks of the message hold for the data form")
 {
@@ -145,7 +146,8 @@ TEST_CASE("description apart: the checks of the message hold for the data form")
     CHECK_FALSE(cbor::static_dictionary<everything>::decode(std::string(entry)).has_value());
     std::string filler = data;
     filler[prefix] = '\xf6';
-    CHECK_EQ(cbor::static_dictionary<everything>::adopt(std::string(filler)).error(), error::incorrect_type);
+    CHECK(cbor::static_dictionary<everything>::adopt(std::string(filler)).has_value());
+    CHECK_EQ(cbor::static_dictionary<everything>::decode(std::string(filler)).error(), error::incorrect_type);
 }
 
 // The unverified forms read the data form inside its bounds: every changed byte and every cut. A message read as the

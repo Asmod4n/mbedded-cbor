@@ -79,7 +79,8 @@ TEST_CASE("unverified: the same results as the verified forms on a message that 
 }
 
 // The unverified forms skip the checks of the data. They give a value for four forged parts. The parts are a class tag,
-// a head of a number, a tag of a typed array and a head of a fixed-size vector. The verified forms give incorrect_type.
+// a head of a number, a tag of a typed array and a head of a fixed-size vector. The verified forms give incorrect_type,
+// but a verified read of a member does not read the class tag on its path: only decode gives an error for it.
 TEST_CASE("unverified: a forged type byte gives a value, not an error")
 {
     std::string const bytes = encode_with_schema(sample_everything);
@@ -91,7 +92,8 @@ TEST_CASE("unverified: a forged type byte gives a value, not an error")
         return out;
     };
     std::string const root_tag = forged("\xd9\x06\x7c"s, 2, '\x7d');
-    CHECK_EQ(read_leaf_with_copying_path<everything, "$.flag">(root_tag).error(), error::incorrect_type);
+    CHECK_EQ(read_leaf_with_copying_path<everything, "$.flag">(root_tag), true);
+    CHECK_EQ(form<everything>::decode(std::string(root_tag)).error(), error::incorrect_type);
     CHECK_EQ(form<everything>::unverified_at_path<"$.flag">(root_tag), true);
     CHECK(form<everything>::unverified_decode(std::string(root_tag)).has_value());
     std::string const track_tag = forged("\xd8\x56\x5a"s, 1, '\x55');

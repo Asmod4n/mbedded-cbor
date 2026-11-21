@@ -306,7 +306,8 @@ TEST_CASE("doc advanced schema: a typed array view")
 
 // The section "Errors" gives the error of a cut message, of a message of another struct and of a forged head. The root
 // is read from the end. So a message of another struct that is shorter than the table and the root of car gives
-// too_little_data, and a longer one gives incorrect_type.
+// too_little_data, and a longer one gives incorrect_type in decode. adopt checks no table: it takes the end of the
+// message from the place of the directory of tire, and the bytes there give an end past the message.
 TEST_CASE("doc advanced schema: errors")
 {
     std::string const bytes = *cbor::schema<car>::encode(sample);
@@ -317,7 +318,7 @@ TEST_CASE("doc advanced schema: errors")
     std::string const small = *cbor::schema<tire>::encode(tire{1, 1.0f});
     CHECK_EQ(cbor::schema<car>::decode(std::string(small)).error(), error::too_little_data);
     CHECK_EQ(cbor::schema<tire>::decode(std::string(bytes)).error(), error::incorrect_type);
-    CHECK_EQ(cbor::schema<tire>::adopt(std::string(bytes)).error(), error::incorrect_type);
+    CHECK_EQ(cbor::schema<tire>::adopt(std::string(bytes)).error(), error::too_little_data);
     std::size_t const seats = bytes.find("\x18\x05"sv);
     REQUIRE_NE(seats, std::string::npos);
     std::string forged = bytes;

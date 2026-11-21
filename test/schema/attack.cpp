@@ -214,7 +214,8 @@ TEST_CASE("attack: every prefix of a message is an error for every path")
 TEST_CASE("attack: a shifted root is incorrect_type, a byte behind the message is not read")
 {
     std::string const bytes = *form<probe>::encode(sample_probe);
-    CHECK_EQ(read_leaf_with_copying_path<probe, "$.i16">("\x00"s + bytes).error(), error::incorrect_type);
+    CHECK_EQ(read_leaf_with_copying_path<probe, "$.i16">("\x00"s + bytes).error(), error::too_little_data);
+    CHECK_EQ(form<probe>::decode("\x00"s + bytes).error(), error::incorrect_type);
     CHECK_EQ(probe_paths_read("\x00"s + bytes), 0u);
     CHECK_EQ(probe_lot_read("\x00"s + bytes), 0u);
     CHECK_EQ(read_leaf_with_copying_path<probe, "$.i16">(bytes + "\x00"s), -300);
@@ -296,16 +297,16 @@ TEST_CASE("attack: a directory entry out of range is an error")
 
 // The rump 6(0) refers to table entry 16, the root (draft-ietf-cbor-packed-19 3.1 and Table 1). The rump is forged to
 // 6(1), table entry 18, the first shared item. The test exists because a generic unpacker takes the entry that the rump
-// names as the message. The verified forms compare the rump and give incorrect_type. The unverified forms do not read
-// the rump and give the value.
-TEST_CASE("attack: a forged rump index is incorrect_type")
+// names as the message. decode compares the rump and gives incorrect_type. A read of one item does not read the rump
+// and gives the value.
+TEST_CASE("attack: a forged rump index is incorrect_type in decode")
 {
     std::string const bytes = *form<probe>::encode(sample_probe);
     std::string forged = bytes;
     forged.back() = '\x01';
-    CHECK_EQ(form<probe>::adopt(std::string(forged)).error(), error::incorrect_type);
+    CHECK(form<probe>::adopt(std::string(forged)).has_value());
     CHECK_EQ(form<probe>::decode(std::string(forged)).error(), error::incorrect_type);
-    CHECK_EQ(form<probe>::at_path<"$.i16">(forged).error(), error::incorrect_type);
+    CHECK_EQ(form<probe>::at_path<"$.i16">(forged), -300);
     CHECK_EQ(form<probe>::unverified_at_path<"$.i16">(forged), -300);
     CHECK_EQ(form<probe>::at_path<"$.i16">(bytes), -300);
 }
@@ -383,8 +384,8 @@ TEST_CASE("attack: overlapping items are an error")
 // Each item of a packed message starts with an RFC 8949 head. A typed array has the tag head d8 56 and the head 5a of
 // its byte string. A text has the head 7a. A four-byte argument is read big endian (RFC 8949 Section 3). A directory
 // entry is forged so that the head of the last item no longer fits before the rump. The test exists because the
-// read of that head must stop at the bytes that are left and give too_little_data. The item is the first one, so the
-// verified forms find first that it does not start behind the directory and give syntax_error.
+// read of that head must stop at the bytes that are left and give too_little_data. The item is the first one, so
+// decode finds first that it does not start behind the directory and gives syntax_error.
 TEST_CASE("attack: an item head that does not fit before the rump is too_little_data")
 {
     auto const big_endian = [](std::size_t const x) {
@@ -398,7 +399,8 @@ TEST_CASE("attack: an item head that does not fit before the rump is too_little_
     REQUIRE_LT(entry, head);
     std::string cut_array = array;
     cut_array.replace(entry, 4, big_endian(array.size() - rump_size - 3));
-    CHECK_EQ(read_leaf_with_copying_path<doubles, "$.v[0]">(cut_array).error(), error::syntax_error);
+    CHECK_EQ(read_leaf_with_copying_path<doubles, "$.v[0]">(cut_array).error(), error::too_little_data);
+    CHECK_EQ(form<doubles>::decode(std::string(cut_array)).error(), error::syntax_error);
     CHECK_EQ(form<doubles>::unverified_at_path<"$.v[0]">(cut_array).error(), error::too_little_data);
 
     std::string const text = encode_with_schema(login{5, true, "ab"});
@@ -408,7 +410,8 @@ TEST_CASE("attack: an item head that does not fit before the rump is too_little_
     REQUIRE_LT(name_entry, name);
     std::string cut_text = text;
     cut_text.replace(name_entry, 4, big_endian(text.size() - rump_size - 3));
-    CHECK_EQ(read_leaf_with_copying_path<login, "$.name">(cut_text).error(), error::syntax_error);
+    CHECK_EQ(read_leaf_with_copying_path<login, "$.name">(cut_text).error(), error::too_little_data);
+    CHECK_EQ(form<login>::decode(std::string(cut_text)).error(), error::syntax_error);
     CHECK_EQ(form<login>::unverified_adopt(std::string(cut_text))->at_path<"$.name">().error(), error::too_little_data);
 }
 
@@ -433,7 +436,7 @@ TEST_CASE("attack: a directory longer than the message is too_little_data")
     std::string forged = bytes;
     forged.replace(4, 4, big_endian(first + forged_length / 4));
     forged.replace(directory + 1, 4, big_endian(forged_length));
-    CHECK_EQ(form<login>::adopt(std::string(forged)).error(), error::too_little_data);
+    CHECK(form<login>::adopt(std::string(forged)).has_value());
     CHECK_EQ(form<login>::decode(std::string(forged)).error(), error::too_little_data);
 }
 
@@ -546,8 +549,8 @@ TEST_CASE("attack: a variant member under a cut or a changed byte")
 
 // A tag that names no alternative is incorrect_type. A record whose tag head fits but whose values do not is
 // too_little_data. A directory entry that points one byte into the record finds no tag of an alternative there in the
-// unverified path. The verified forms check first that the first item starts behind the directory, and find the entry
-// off its place.
+// unverified path and in the verified read of it. decode checks first that the first item starts behind the directory,
+// and finds the entry off its place.
 TEST_CASE("attack: an unknown tag, a cut record and a wrong directory entry of a variant member")
 {
     std::string const bytes = *form<home>::encode(make_home_with_dog());
@@ -573,7 +576,7 @@ TEST_CASE("attack: an unknown tag, a cut record and a wrong directory entry of a
     std::string moved = bytes;
     moved.replace(head + 9, 4, big_endian(at + 1));
     CHECK_EQ(form<home>::unverified_adopt(std::string(moved))->at_path<"$.pet">().error(), error::incorrect_type);
-    CHECK_EQ(form<home>::adopt(std::string(moved)).error(), error::syntax_error);
+    CHECK_EQ(form<home>::adopt(std::string(moved))->at_path<"$.pet">().error(), error::incorrect_type);
     CHECK_EQ(form<home>::decode(std::string(moved)).error(), error::syntax_error);
 }
 
@@ -623,4 +626,108 @@ TEST_CASE("attack: value and text alternatives of a variant member")
     std::string unknown = bytes;
     unknown[head] = '\x7b';
     CHECK_EQ(form<setting>::decode(std::string(unknown)).error(), error::incorrect_type);
+}
+
+// A verified read checks the head of the one item that it reads, and no part on the path to it (owner 2026-11-21).
+// Each row forges that head for one kind of read: a bool, a field of a nested record, the tag of a variant item, the
+// tag of a typed array, the reference and the length of a vector of fixed-size structs, and the presence head of an
+// optional record. The test exists because each of these heads tells the read which type stands at its place; a read
+// that did not check it would read the bytes of another type. The same message cut by one byte gives too_little_data,
+// because its end lies past its bytes.
+TEST_CASE("attack: a verified read checks the head of the item that it reads")
+{
+    auto const cut = [](std::string const &m) { return m.substr(0, m.size() - 1); };
+    std::string const bytes = *form<probe>::encode(sample_probe);
+    std::size_t const root = root_offset(bytes);
+
+    std::string flag = bytes;
+    flag.at(root + form<probe>::member_offset<&probe::flag>()) = '\xf6';
+    CHECK_EQ(form<probe>::at_path<"$.flag">(flag).error(), error::incorrect_type);
+    CHECK_EQ(form<probe>::at_path<"$.flag">(cut(flag)).error(), error::too_little_data);
+    CHECK_EQ(form<probe>::at_path<"$.i16">(flag), -300);
+
+    std::string cc = bytes;
+    cc.at(root + form<probe>::member_offset<&probe::motor>() + form<engine>::member_offset<&engine::cc>()) = '\x19';
+    CHECK_EQ(form<probe>::at_path<"$.motor.cc">(cc).error(), error::incorrect_type);
+    CHECK_EQ(form<probe>::at_path<"$.motor.cc">(cut(cc)).error(), error::too_little_data);
+    CHECK_EQ(form<probe>::at_path<"$.motor.horsepower">(cc), sample_probe.motor.horsepower);
+
+    std::string tires = bytes;
+    std::size_t const vector = tires.find("\xd9\x80\x69\x82"s);
+    REQUIRE_NE(vector, std::string::npos);
+    tires.at(vector + 4) = static_cast<char>(tires.at(vector + 4) + 1);
+    CHECK_EQ(form<probe>::at_path<"$.tires[1].diameter">(tires).error(), error::incorrect_type);
+    CHECK_EQ(form<probe>::at_path<"$.tires[1].diameter">(cut(tires)).error(), error::too_little_data);
+
+    std::string const points = encode_with_schema(cloud{{{1.0f, 0.5f}, {2.0f, -1.0f}}});
+    std::size_t const head = points.find("\xd9\x80\x69\x82\xe2\x5a"s);
+    REQUIRE_NE(head, std::string::npos);
+    std::string partial = points;
+    partial[head + 9] = '\x0f';
+    CHECK_EQ(form<cloud>::at_path<"$.points[0].x">(partial).error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(form<cloud>::at_path<"$.points[0].x">(cut(partial)).error(), error::too_little_data);
+
+    std::string const array = encode_with_schema(doubles{{1.0, 2.0}});
+    std::size_t const typed = array.find("\xd8\x56\x5a"sv);
+    REQUIRE_NE(typed, std::string::npos);
+    std::string wrong = array;
+    wrong[typed + 1] = '\x52';
+    CHECK_EQ(form<doubles>::at_path<"$.v[0]">(wrong).error(), error::incorrect_type);
+    CHECK_EQ(form<doubles>::at_path<"$.v[0]">(cut(wrong)).error(), error::too_little_data);
+
+    std::string const pet = *form<home>::encode(make_home_with_dog());
+    std::size_t const tag = pet.find("\xd9\x06\xcc"sv);
+    REQUIRE_NE(tag, std::string::npos);
+    std::string unknown = pet;
+    unknown[tag + 2] = '\xcf';
+    CHECK_EQ(form<home>::adopt(std::string(unknown))->at_path<"$.pet">().error(), error::incorrect_type);
+    CHECK_EQ(form<home>::adopt(cut(unknown)).error(), error::too_little_data);
+
+    std::string const all = encode_with_schema(sample_everything);
+    std::size_t const inner = root_offset(all) + form<everything>::member_offset<&everything::inner>();
+    std::string presence = all;
+    presence.at(inner + 1) = '\xf6';
+    auto const opened = form<everything>::adopt(std::string(presence));
+    REQUIRE(opened.has_value());
+    CHECK_EQ(opened->at_path<"$.inner">().error(), error::incorrect_type);
+    CHECK_EQ(opened->at_path<"$.maybe">().value(), std::optional<std::int32_t>{-9});
+    CHECK_EQ(form<everything>::decode(std::string(presence)).error(), error::incorrect_type);
+    CHECK_EQ(form<everything>::adopt(cut(presence)).error(), error::too_little_data);
+}
+
+// The directory is read in one form for every read: its count is clamped to the entries that the bytes hold, and only
+// decode checks the length of the directory (draft-ietf-cbor-packed-19 3.1). The length is forged short and long. The
+// test exists because a forged length must not lead a read out of the message: a fixed member of the root gives its
+// value, a dynamic member whose entry lies past the clamped count gives unpopulated_table_index, and nothing reads
+// outside the buffer under the sanitizers.
+TEST_CASE("attack: a forged directory length leaves the fixed members readable")
+{
+    auto const big_endian = [](std::size_t const x) {
+        return std::string{static_cast<char>(x >> 24), static_cast<char>(x >> 16), static_cast<char>(x >> 8),
+                           static_cast<char>(x)};
+    };
+    std::string const bytes = *form<probe>::encode(sample_probe);
+    std::size_t const directory = bytes.find("\x5a\x00\x00\x00\x10"s);
+    REQUIRE_NE(directory, std::string::npos);
+    std::string shorter = bytes;
+    shorter.replace(directory + 1, 4, big_endian(2 * sizeof(std::uint32_t)));
+    auto const root = form<probe>::view(std::make_shared<std::string const>(shorter));
+    REQUIRE(root.has_value());
+    CHECK_EQ(root->at_path<"$.i16">(), -300);
+    CHECK_EQ(root->at_path<"$.motor.cc">(), sample_probe.motor.cc);
+    CHECK_EQ(root->at_path<"$.maybe">().error(), error::unpopulated_table_index);
+    CHECK_EQ(root->at_path<"$.tires[0].diameter">().error(), error::unpopulated_table_index);
+    CHECK_FALSE(form<probe>::decode(std::string(shorter)).has_value());
+    for (std::size_t const length : {std::size_t{0}, std::size_t{3}, std::size_t{0x00fffff0}, std::size_t{0xffffffff}}) {
+        CAPTURE(length);
+        std::string longer = bytes;
+        longer.replace(directory + 1, 4, big_endian(length));
+        auto const opened = form<probe>::view(std::make_shared<std::string const>(longer));
+        REQUIRE(opened.has_value());
+        CHECK_EQ(opened->at_path<"$.i16">(), -300);
+        (void)opened->at_path<"$.text">();
+        (void)opened->at_path<"$.maybe">();
+        (void)opened->at_path<"$.tires[1].diameter">();
+        CHECK_FALSE(form<probe>::decode(std::string(longer)).has_value());
+    }
 }

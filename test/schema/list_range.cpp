@@ -177,9 +177,10 @@ TEST_CASE("at_path: a list of const elements is a range of its elements")
     CHECK(ys == std::vector<std::uint32_t>{std::bit_cast<std::uint32_t>(2.0f), std::bit_cast<std::uint32_t>(4.0f)});
 }
 
-// A record with a wrong class tag is an error. The test exists because the element from the iterator must give the same
-// error as at_path with the index. The other elements must still read.
-TEST_CASE("at_path: a record with a wrong tag in a list gives the error of at_path")
+// A record with a wrong class tag lies on the path to its member: a verified read checks only the member that it
+// reads, so the member reads, and decode gives the error. The test exists because the element from the iterator must
+// give the same result as at_path with the index. The other elements must still read.
+TEST_CASE("at_path: a record with a wrong tag in a list gives the result of at_path")
 {
     std::string bytes = encode_with_schema(make_sample_lot());
     std::size_t const tag = bytes.find("\xd9\x05\xf6"s);
@@ -190,8 +191,9 @@ TEST_CASE("at_path: a record with a wrong tag in a list gives the error of at_pa
     auto const cars = root->at_path<"$.cars">();
     REQUIRE(cars.has_value());
     auto const first = *cars->begin();
-    CHECK_EQ(root->at_path<"$.cars[].make">(0).error(), error::incorrect_type);
-    CHECK_EQ(first.at_path<"@.make">().error(), root->at_path<"$.cars[].make">(0).error());
+    CHECK_EQ(root->at_path<"$.cars[].make">(0), "make0"sv);
+    CHECK_EQ(first.at_path<"@.make">(), root->at_path<"$.cars[].make">(0));
+    CHECK_EQ(form<parking_lot>::decode(std::string(bytes)).error(), error::incorrect_type);
     auto const second = cars->begin()[1];
     CHECK_EQ(make_of(second), "make1");
 }

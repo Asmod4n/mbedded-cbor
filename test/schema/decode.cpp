@@ -488,7 +488,8 @@ CBOR_DEFINE_TYPE_MEMBERS(long_code, cbor::tag{1751}, code);
 // tag 28 or 29 stands in the field, the error is invalid_tag. Each row puts a tag 28 head of the same width
 // into one kind of field: the packing prefix, the tag of the root and of a member struct, the head of a
 // number, a reference into the table, the head of a text, of a typed array, of an array of fixed structs and
-// of a fixed text.
+// of a fixed text. The packing prefix and the tags of the root and of a member struct lie on the path to the
+// member that a verified read reads, not in it: that read gives the value, and decode the error.
 TEST_CASE("decode and at_path: a tag 28 in the place of a head is invalid_tag")
 {
     std::string const bytes = encode_with_schema(sample_everything);
@@ -497,14 +498,14 @@ TEST_CASE("decode and at_path: a tag 28 in the place of a head is invalid_tag")
     };
     std::string const prefix = with("113(", "28_0(");
     CHECK_EQ(form<everything>::decode(std::string(prefix)).error(), error::invalid_tag);
-    CHECK_EQ(read_leaf_with_copying_path<everything, "$.flag">(prefix).error(), error::invalid_tag);
+    CHECK_EQ(read_leaf_with_copying_path<everything, "$.flag">(prefix), true);
     std::string const root = with("1660(", "28_1(");
     CHECK_EQ(form<everything>::decode(std::string(root)).error(), error::invalid_tag);
-    CHECK_EQ(read_leaf_with_copying_path<everything, "$.flag">(root).error(), error::invalid_tag);
-    CHECK_EQ(form<everything>::at_path<"$.flag">(root).error(), error::invalid_tag);
+    CHECK_EQ(read_leaf_with_copying_path<everything, "$.flag">(root), true);
+    CHECK_EQ(form<everything>::at_path<"$.flag">(root), true);
     std::string const member = with("[1501(132([_2 1800_2", "[28_1(132([_2 1800_2");
     CHECK_EQ(form<everything>::decode(std::string(member)).error(), error::invalid_tag);
-    CHECK_EQ(read_leaf_with_copying_path<everything, "$.engines[0].cc">(member).error(), error::invalid_tag);
+    CHECK_EQ(read_leaf_with_copying_path<everything, "$.engines[0].cc">(member), 1800u);
     std::string const number = with("1800_2", "28_0(1800_1)");
     CHECK_EQ(form<everything>::decode(std::string(number)).error(), error::invalid_tag);
     CHECK_EQ(read_leaf_with_copying_path<everything, "$.engines[0].cc">(number).error(), error::invalid_tag);

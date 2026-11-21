@@ -17,8 +17,9 @@ C chain_of(std::uint8_t const v)
 } // namespace schema_types
 
 // schema::at reads one number from the message with no accessor and no owner, because the number is returned by value.
-// It makes every check that path and accessor::at make. The checks are the table of keys, the undefined values before the
-// root and the tag of the root. They are also the tag and the length of the typed array, and the index. The
+// It makes every check that path and accessor::at make: the tag and the length of the typed array, and the index. The
+// undefined values before the root and the tag of the root lie outside the item that it reads, so it gives the value
+// there, and decode gives the error. The
 // expected bits of 1.0 and 2.0 are 3ff0000000000000 and 4000000000000000 in binary64 (IEEE 754).
 TEST_CASE("schema::at: one number of a typed array, with every check of path")
 {
@@ -45,13 +46,13 @@ TEST_CASE("schema::at: one number of a typed array, with every check of path")
     for (std::size_t j = filler; j < bytes.size() && bytes[j] == '\xf7'; ++j) {
         std::string defined = bytes;
         defined[j] = '\xf6';
-        CHECK_EQ(S::at_path<"$.v[0]">(defined).error(), error::incorrect_type);
-        CHECK_EQ(read_leaf_with_copying_path<doubles, "$.v[0]">(defined).error(), error::incorrect_type);
+        CHECK_EQ(std::bit_cast<std::uint64_t>(*S::at_path<"$.v[0]">(defined)), 0x3ff0000000000000u);
+        CHECK_EQ(form<doubles>::decode(std::string(defined)).error(), error::incorrect_type);
     }
     std::string root = bytes;
     root[root_offset(bytes) + 2] = '\xfc';
-    CHECK_EQ(S::at_path<"$.v[0]">(root).error(), error::incorrect_type);
-    CHECK_EQ(read_leaf_with_copying_path<doubles, "$.v[0]">(root).error(), error::incorrect_type);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*S::at_path<"$.v[0]">(root)), 0x3ff0000000000000u);
+    CHECK_EQ(form<doubles>::decode(std::string(root)).error(), error::incorrect_type);
 }
 
 // schema::at gives only a value that holds no reference into the message, because no owner keeps the message alive.
@@ -211,21 +212,22 @@ TEST_CASE("schema: a root with 17 struct types starts its shared items at index 
 
 // The tag of the class names the class on the wire. point_a and point_b have the same keys and the same layout. So only
 // the class tag tells them apart: 1520 = d9 05 f0 against 1521 = d9 05 f1 (RFC 8949 3.4). The test exists because a
-// reader that ignored the class tag would take a message of one class for the other.
-TEST_CASE("schema: a root of another class tag is incorrect_type")
+// reader that ignored the class tag would take a message of one class for the other: decode checks it. A verified read
+// of one member checks only that member, and the member has the same place and head in both classes.
+TEST_CASE("schema: a root of another class tag is incorrect_type in decode")
 {
     std::string const bytes = *form<point_a>::encode(point_a{7});
     CHECK_EQ(bytes.substr(root_offset(bytes), 3), "\xd9\x05\xf0"s);
     auto const point = *form<point_a>::decode(std::string(bytes));
     CHECK_EQ(point->x, 7u);
     CHECK_EQ(form<point_b>::decode(std::string(bytes)).error(), error::incorrect_type);
-    CHECK_EQ(read_leaf_with_copying_path<point_b, "$.x">(bytes).error(), error::incorrect_type);
+    CHECK_EQ(read_leaf_with_copying_path<point_b, "$.x">(bytes), 7u);
     CHECK_EQ(read_leaf_with_copying_path<point_a, "$.x">(bytes), 7u);
 }
 
 // The class tag of a nested record is a fixed head like any other. car holds the engine record at offset 12. The low
 // byte of its tag 1501 = d9 05 dd is changed to de. The test exists because a forged nested tag must stop decode. A path
-// through that record must stop too, while the root and the other fields still read.
+// through that record reads only the field at its end, so it gives the value, as the other fields do.
 TEST_CASE("schema: a forged class tag of a nested record is incorrect_type")
 {
     std::string const bytes = *form<car>::encode(car{4, {300, 1800}, true});
@@ -235,7 +237,7 @@ TEST_CASE("schema: a forged class tag of a nested record is incorrect_type")
     forged.at(motor + 2) = '\xde';
     CHECK_EQ(form<car>::decode(std::string(forged)).error(), error::incorrect_type);
     CHECK_EQ(read_leaf_with_copying_path<car, "$.seats">(forged), 4u);
-    CHECK_EQ(read_leaf_with_copying_path<car, "$.motor.cc">(forged).error(), error::incorrect_type);
+    CHECK_EQ(read_leaf_with_copying_path<car, "$.motor.cc">(forged), 1800u);
     CHECK_EQ(read_leaf_with_copying_path<car, "$.motor.cc">(bytes), 1800u);
 }
 

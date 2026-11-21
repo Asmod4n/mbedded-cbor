@@ -63,9 +63,10 @@ concept temporary_car_reads = requires(D const &d) { (*d.template at_path<"$.car
 
 } // namespace schema_types
 
-// path checks the least size of the message and the table of keys once, as decode does. The test exists so that a
-// change to either side shows here.
-TEST_CASE("path: a message shorter than the least size is too_little_data, a foreign key is incorrect_type")
+// path checks the least size of the message. Only decode checks the table of keys; a verified read checks only the
+// item that it reads, so a foreign key in the table leaves the value readable. The test exists so that a change to
+// either side shows here.
+TEST_CASE("path: a message shorter than the least size is too_little_data, a foreign key is incorrect_type in decode")
 {
     std::string const bytes = encode_with_schema(login{5, true, "ab"});
     CHECK_EQ(read_leaf_with_copying_path<login, "$.id">(bytes), 5u);
@@ -73,7 +74,7 @@ TEST_CASE("path: a message shorter than the least size is too_little_data, a for
     std::string other = bytes;
     other.replace(8, 2, "ID");
     CHECK_EQ(form<login>::decode(std::string(other)).error(), error::incorrect_type);
-    CHECK_EQ(read_leaf_with_copying_path<login, "$.id">(other).error(), error::incorrect_type);
+    CHECK_EQ(read_leaf_with_copying_path<login, "$.id">(other), 5u);
 }
 
 // A path that ends at a leaf gives the value. A path that ends at a struct, a list, a fixed array or a map gives an

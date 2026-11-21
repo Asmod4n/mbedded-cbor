@@ -141,7 +141,7 @@ TEST_CASE("doc reference schema: path")
     REQUIRE(shared.has_value());
     CHECK_EQ(shared->at_path<"$.seats">(), 5);
 
-    CHECK_EQ(cbor::schema<tire>::adopt(sample_bytes()).error(), error::incorrect_type);
+    CHECK_EQ(cbor::schema<tire>::decode(sample_bytes()).error(), error::incorrect_type);
     CHECK_THROWS_AS(std::ignore = cbor::schema<car>::view(std::shared_ptr<std::string const>()), std::logic_error);
 }
 

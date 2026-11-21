@@ -2305,6 +2305,15 @@ class reflection
     }
 
     template <class Root, class U>
+    CBOR_ALWAYS_INLINE static bool presence_head_valid(std::span<char const, fixed_size<U, Root>()> const field)
+    {
+        char const present = field.template subspan<1, 1>().front();
+        return field.front() == zero_initialized<Root, U>().front() &&
+               (present == detail::heads::initial_byte(major_type::simple, std::to_underlying(simple_value::true_value)) ||
+                present == detail::heads::initial_byte(major_type::simple, std::to_underlying(simple_value::false_value)));
+    }
+
+    template <class Root, class U>
     CBOR_ALWAYS_INLINE static bool fixed_length_head_valid(std::span<char const, fixed_size<U, Root>()> const field)
     {
         constexpr std::size_t head = detail::heads::head_size(fixed_length<U>::value);
@@ -2659,41 +2668,49 @@ class reflection
         return error::too_little_data;
     }
 
-    template <class T, bool Verified, description_place D>
+    template <class T, description_place D>
     CBOR_ALWAYS_INLINE static std::expected<detail::directory, error> read_directory(std::string_view const encoded)
     {
         constexpr std::size_t at = item_entries_at<T, D>();
-        if (auto const fits = detail::validity::check_bytes_left(least_size_of<T, D>(), encoded.size()); !fits) [[unlikely]]
-            return std::unexpected(fits.error());
-        if constexpr (Verified)
-            if (!packing_prefix_valid<T, D>(encoded)) [[unlikely]]
-                return std::unexpected(
-                    error_of_refused_field(std::span<char const>(encoded).template first<packing_prefix_of<T, D>().size()>()));
         auto const end = message_end<T, D>(encoded);
         if (!end) [[unlikely]]
             return std::unexpected(end.error());
         std::size_t const length = detail::heads::read_unsigned<std::uint32_t>(
             std::span<char const>(encoded).template subspan<directory_head_at<T, D>() + detail::heads::initial_byte_size,
                                                             sizeof(std::uint32_t)>());
-        if constexpr (Verified) {
-            if (length < sizeof(std::uint32_t) || length % sizeof(std::uint32_t) != 0 ||
-                detail::heads::read_unsigned<std::uint32_t>(
-                    std::span<char const>(encoded).template subspan<table_count_at, sizeof(std::uint32_t)>()) !=
-                    table_first_of<T, D>() + length / sizeof(std::uint32_t) - 1) [[unlikely]]
-                return std::unexpected(error::incorrect_type);
-            if (*end < directory_at<T, D>() || !detail::validity::bytes_fit(length, *end - directory_at<T, D>())) [[unlikely]]
-                return std::unexpected(error::too_little_data);
-            detail::directory const dir{at, length / sizeof(std::uint32_t) - 1, *end};
-            std::size_t const items = at + sizeof(std::uint32_t) * dir.count;
-            if (!rump_valid<T>(encoded, *end)) [[unlikely]]
-                return std::unexpected(error::incorrect_type);
-            if ((dir.count == 0 ? *end : directory_entry(encoded, dir, 0)) != items) [[unlikely]]
-                return std::unexpected(error::syntax_error);
-            return dir;
-        } else {
-            std::size_t const entries = std::max(length / sizeof(std::uint32_t), 1uz) - 1;
-            return detail::directory{at, std::min(entries, (encoded.size() - at) / sizeof(std::uint32_t)), *end};
-        }
+        std::size_t const entries = std::max(length / sizeof(std::uint32_t), 1uz) - 1;
+        return detail::directory{at, std::min(entries, (encoded.size() - at) / sizeof(std::uint32_t)), *end};
+    }
+
+    template <class T, description_place D>
+    static std::expected<void, error> packing_valid(std::string_view const encoded)
+    {
+        constexpr std::size_t at = item_entries_at<T, D>();
+        if (auto const fits = detail::validity::check_bytes_left(least_size_of<T, D>(), encoded.size()); !fits) [[unlikely]]
+            return std::unexpected(fits.error());
+        if (!packing_prefix_valid<T, D>(encoded)) [[unlikely]]
+            return std::unexpected(
+                error_of_refused_field(std::span<char const>(encoded).template first<packing_prefix_of<T, D>().size()>()));
+        auto const end = message_end<T, D>(encoded);
+        if (!end) [[unlikely]]
+            return std::unexpected(end.error());
+        std::size_t const length = detail::heads::read_unsigned<std::uint32_t>(
+            std::span<char const>(encoded).template subspan<directory_head_at<T, D>() + detail::heads::initial_byte_size,
+                                                            sizeof(std::uint32_t)>());
+        if (length < sizeof(std::uint32_t) || length % sizeof(std::uint32_t) != 0 ||
+            detail::heads::read_unsigned<std::uint32_t>(
+                std::span<char const>(encoded).template subspan<table_count_at, sizeof(std::uint32_t)>()) !=
+                table_first_of<T, D>() + length / sizeof(std::uint32_t) - 1) [[unlikely]]
+            return std::unexpected(error::incorrect_type);
+        if (*end < directory_at<T, D>() || !detail::validity::bytes_fit(length, *end - directory_at<T, D>())) [[unlikely]]
+            return std::unexpected(error::too_little_data);
+        detail::directory const dir{at, length / sizeof(std::uint32_t) - 1, *end};
+        std::size_t const items = at + sizeof(std::uint32_t) * dir.count;
+        if (!rump_valid<T>(encoded, *end)) [[unlikely]]
+            return std::unexpected(error::incorrect_type);
+        if ((dir.count == 0 ? *end : directory_entry(encoded, dir, 0)) != items) [[unlikely]]
+            return std::unexpected(error::syntax_error);
+        return {};
     }
 
     static consteval std::size_t count_index_arguments(std::string_view const path)
@@ -2955,6 +2972,9 @@ class reflection
             } else if constexpr (is_inline_optional<U>) {
                 using E = typename U::value_type;
                 using X = typename decltype(path_result<Root, E, Path, At, Verified>())::type;
+                if constexpr (Verified)
+                    if (!presence_head_valid<Root, U>(field)) [[unlikely]]
+                        return std::unexpected(error_of_refused_field(field));
                 if (field.template subspan<1, 1>().front() !=
                     detail::heads::initial_byte(major_type::simple, std::to_underlying(simple_value::true_value)))
                     return std::optional<X>{};
@@ -3030,9 +3050,6 @@ class reflection
             constexpr std::size_t end = step_end(path, At);
             constexpr std::size_t m = member_named<U>(std::string_view(std::span(path).subspan(At + 1, end - At - 1)));
             using M = describe::member_t<U, m>;
-            if constexpr (Verified)
-                if (!class_tag_valid<Root, U>(field)) [[unlikely]]
-                    return std::unexpected(error_of_refused_field(field));
             return walk_path<Root, M, Path, end, Verified, InRoot>(
                 encoded, field.template subspan<member_offset<U, m, Root>(), fixed_size<M, Root>()>(), floor,
                 base + reference_offset<U, m>(), indexes);
@@ -3273,6 +3290,9 @@ class reflection
             } else if constexpr (is_inline_optional<U>) {
                 using E = typename U::value_type;
                 auto const inner = field.template subspan<inline_optional_head, fixed_size<E, Root>()>();
+                if constexpr (Verified)
+                    if (!presence_head_valid<Root, U>(field)) [[unlikely]]
+                        return std::unexpected(error_of_refused_field(field));
                 if (field.template subspan<1, 1>().front() !=
                     detail::heads::initial_byte(major_type::simple, std::to_underlying(simple_value::true_value))) {
                     out.reset();
@@ -3527,7 +3547,10 @@ class reflection
     template <class T, bool Verified, description_place D, class Target>
     static std::expected<void, error> read_root(Target &out, std::string_view const encoded)
     {
-        auto const dir = read_directory<T, Verified, D>(encoded);
+        if constexpr (Verified)
+            if (auto const packing = packing_valid<T, D>(encoded); !packing) [[unlikely]]
+                return std::unexpected(packing.error());
+        auto const dir = read_directory<T, D>(encoded);
         if (!dir) [[unlikely]]
             return std::unexpected(dir.error());
         auto const field = std::span<char const>(encoded).template subspan<root_at<T, D>(), fixed_size<T, T>()>();
@@ -4074,6 +4097,18 @@ public:
      * An accessor of a vector of fixed-size structs is a random access range of `fixed_element` accessors.
      * `at_path` on a temporary does not compile.
      *
+     * A verified read checks, beyond the bounds that every read checks, only the item that it reads:
+     * - the head of a fixed field, with its type and its width; a `bool` is `f4` or `f5`;
+     * - the reference `6(N)` of a dynamic field, and that its index is populated;
+     * - the head and the length of its item: the item ends where its directory entry ends;
+     * - the tag of a typed array and the head of a vector of fixed-size structs, each with whole elements, and each
+     *   `bool` element 0 or 1;
+     * - the class tag that selects the alternative of a variant;
+     * - the presence head of an optional struct before its value is read.
+     *
+     * It does not check the class tag of a struct on its path, the items of an absent optional, the packing prefix,
+     * the table count, the length of the directory or the rump. cbor::schema::decode() checks them.
+     *
      * @code{.example}
      * bytes: d8 71 82 9a 00 00 00 15 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 10 00 00 00 d3 00 00 00 94 00 00 00 9e 00 00 00 b4 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00
      * call: auto const root = cbor::schema<car>::adopt(std::move(bytes))
@@ -4129,7 +4164,7 @@ public:
      * @endcode
      *
      * @retval index_out_of_bounds an index past the end of a list
-     * @retval incorrect_type a wrong head or tag on the path; a variant item whose head names no alternative;
+     * @retval incorrect_type a wrong head of the item that is read; a variant item whose head names no alternative;
      * `get<A>()` of another alternative
      * @retval invalid_tag a tag 28 or a tag 29 where the path reads a head
      * @retval unpopulated_table_index, syntax_error a broken reference
@@ -4685,8 +4720,10 @@ public:
      * An owner is read in place.
      * Nothing is copied.
      * An lvalue `std::string` does not compile.
-     * `adopt` and `view` check the length, the table, the directory, the tag of the root and the rump once.
-     * It reads no field.
+     * `adopt` and `view` check only that the message holds its table, its root and the end that its directory gives.
+     * They read no field, and they do not check the packing prefix, the table count, the length of the directory, the
+     * tag of the root or the rump: cbor::schema::decode() checks them.
+     * Each read of the accessor then checks the one item that it reads.
      *
      * @code{.example}
      * bytes: d8 71 82 9a 00 00 00 15 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 10 00 00 00 d3 00 00 00 94 00 00 00 9e 00 00 00 b4 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00
@@ -4699,8 +4736,6 @@ public:
      * @endcode
      *
      * @retval too_little_data the message is shorter than its table and root, or its end is missing
-     * @retval incorrect_type a message of another layout, a wrong tag of the root, or a rump that names another entry
-     * @retval invalid_tag a tag 28 or a tag 29 in the place of the packing prefix or of the tag of the root
      * @throws std::bad_alloc an allocation of the owner fails (the rvalue form)
      * @snippet doc_reference_schema.cpp path
      * @see cbor::schema::accessor
@@ -4738,7 +4773,8 @@ public:
     /**
      * @brief Reads one value at `Path` and returns a `std::expected` of it.
      *
-     * It makes the checks of cbor::schema::adopt() and of an accessor in one call and keeps nothing.
+     * It makes the checks of cbor::schema::adopt() and of an accessor in one call and keeps nothing: it checks the
+     * item that it reads and no part on the path to it.
      * It exists only for a value that holds no view into the bytes: a number, a `bool`, an enum, or a
      * `std::optional` of one.
      * A path starts with `$`, names a member with `.name` and an element with `[n]`.
@@ -4763,7 +4799,8 @@ public:
      * result: 2.25
      * @endcode
      *
-     * @retval too_little_data, incorrect_type as cbor::schema::adopt()
+     * @retval too_little_data as cbor::schema::adopt()
+     * @retval incorrect_type a wrong head of the item that it reads
      * @retval index_out_of_bounds an index past the end of a list
      * @retval unpopulated_table_index, syntax_error a broken reference
      * @snippet doc_reference_schema.cpp at_path
@@ -4799,6 +4836,9 @@ public:
      * call: (*back)->make
      * result: "Volvo"
      * @endcode
+     *
+     * It checks every item and the parts that no read of one item checks: the packing prefix, the table count, the
+     * length of the directory, the tag of the root and of each struct, the rump and the start of the first item.
      *
      * @retval too_little_data the message is shorter than its table and root
      * @retval incorrect_type a message of another struct, or a wrong head; a variant item whose head names no
@@ -5178,7 +5218,7 @@ private:
     {
         using X = typename decltype(detail::reflection::path_result<T, T, Path, 1, Verified>())::type;
         std::string_view const message = encoded;
-        auto const dir = detail::reflection::read_directory<T, Verified, D>(message);
+        auto const dir = detail::reflection::read_directory<T, D>(message);
         if (!dir) [[unlikely]]
             return std::expected<X, error>(
                 std::unexpect, Verified ? detail::reflection::too_little_data_if_truncated<T, D>(message, dir.error()) : dir.error());
@@ -5209,16 +5249,12 @@ private:
         detail::validity::throw_logic_error_if_empty(
             owner, "cbor::schema::view: the owner of the encoded data item is empty");
         std::string_view const message = encoded;
-        auto const dir = detail::reflection::read_directory<T, Verified, D>(message);
+        auto const dir = detail::reflection::read_directory<T, D>(message);
         if (!dir) [[unlikely]]
             return std::unexpected(Verified ? detail::reflection::too_little_data_if_truncated<T, D>(message, dir.error())
                                             : dir.error());
         auto const root = std::span<char const>(message)
                               .template subspan<detail::reflection::root_at<T, D>(), detail::reflection::fixed_size<T, T>()>();
-        if constexpr (Verified)
-            if (!detail::reflection::class_tag_valid<T, T>(root)) [[unlikely]]
-                return std::unexpected(detail::reflection::too_little_data_if_truncated<T, D>(
-                    message, detail::reflection::error_of_refused_field(root)));
         return accessor<T, Verified>(std::move(owner), message, root, *dir);
     }
 

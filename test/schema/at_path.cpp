@@ -139,7 +139,8 @@ TEST_CASE("at_path: an accessor of a fixed-size vector and of one element")
 }
 
 // The bytes of the vector come from the wire. Three things are checked before a value is read. The first is the head of
-// the vector with the description in the header. The second is the length of the byte string. The third is every bool.
+// the vector with its reference to the description. The second is the length of the byte string. The third is every
+// bool. The description itself lies in the table, outside the item that a read reads: only decode checks it.
 TEST_CASE("at_path and decode: a broken fixed-size vector is an error")
 {
     std::string const bytes = encode_with_schema(cloud{{{1.0f, 0.5f}, {2.0f, -1.0f}}});
@@ -151,7 +152,7 @@ TEST_CASE("at_path and decode: a broken fixed-size vector is an error")
     CHECK_EQ(form<cloud>::decode(std::string(reference)).error(), error::incorrect_type);
     std::string description = bytes;
     description[description.find("\x18\x55"s) + 1] = '\x56';
-    CHECK_EQ(form<cloud>::adopt(std::string(description)).error(), error::incorrect_type);
+    CHECK_EQ(read_leaf_with_copying_path<cloud, "$.points[1].x">(description), 2.0f);
     CHECK_EQ(form<cloud>::decode(std::string(description)).error(), error::incorrect_type);
     std::string partial = bytes;
     partial[head + 9] = '\x0f';
