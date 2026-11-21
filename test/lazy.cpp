@@ -1165,7 +1165,8 @@ TEST_CASE("lazy: copy, at and get as a chain")
     CHECK_EQ(missing.error(), error::index_out_of_bounds);
     CHECK_FALSE(doc.at("nope").and_then([](cbor::lazy const &n) { return n.get<std::string_view>(); }).has_value());
     std::size_t count = 0;
-    for (auto const e : *doc.at("statuses").and_then([](cbor::lazy const &s) { return s.elements(); })) {
+    auto const statuses = *doc.at("statuses").and_then([](cbor::lazy const &s) { return s.elements(); });
+    for (auto const e : statuses) {
         REQUIRE(e.has_value());
         ++count;
     }
