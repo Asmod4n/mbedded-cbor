@@ -35,6 +35,24 @@ TEST_CASE("doc readme: read a message")
     CHECK_EQ(sum, 12);
 }
 
+// "Decode a tree" decodes the message, loops over the key/value pairs of the map, and writes the tree back: the bytes
+// are the same, because the encoder writes each head in the width that the decoded head had.
+TEST_CASE("doc readme: decode a tree and write it back")
+{
+    std::string const bytes = test::encode_in_preferred_form(test::M("sensor"s, "t1"s, "value"s, 21.5));
+    auto const tree = cbor::decode(bytes).value();
+
+    std::vector<std::string_view> keys;
+    auto const pairs = tree->pairs().value();
+    for (auto const [key, value] : pairs)
+        keys.push_back(*key.get<std::string_view>());
+
+    std::string out;
+    REQUIRE(cbor::encode(out, *tree).has_value());
+    CHECK_EQ(keys, std::vector<std::string_view>{"sensor", "value"});
+    CHECK_EQ(out, bytes);
+}
+
 // "Read one value by its path" reads the bytes in place through the shared_ptr; a missing member gives
 // key_not_found.
 TEST_CASE("doc readme: read one value by its path")
