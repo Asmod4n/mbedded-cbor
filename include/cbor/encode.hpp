@@ -180,6 +180,7 @@ public:
     static constexpr std::size_t copybreak = CBOR_ENCODER_COPYBREAK;
     static_assert(block_size >= item_size_max, "A block must hold one whole head or float.");
     static constexpr std::size_t inline_buffer_size = CBOR_ENCODER_INLINE_BUFFER_SIZE;
+    static constexpr std::size_t short_copy = 32;
     static_assert(inline_buffer_size >= item_size_max, "The inline buffer must hold one whole head or float.");
 
 private:
@@ -388,6 +389,19 @@ struct detail::encoding::binary_writer {
             return {};
         }
         return encode_head(major, detail::heads::preferred_argument_info(argument), argument);
+    }
+
+    CBOR_ALWAYS_INLINE std::expected<void, std::errc>
+    encode_short_payload(std::span<char const, short_copy> const from, std::size_t const size)
+    {
+        if constexpr (!direct && !blocks) {
+            if (detail::validity::bytes_fit(short_copy, block.size() - used)) [[likely]] {
+                std::ranges::copy(from, std::span(block).subspan(used).template first<short_copy>().begin());
+                used += size;
+                return {};
+            }
+        }
+        return encode_payload(std::span<char const>(from).first(size));
     }
 
     template <class E>
@@ -652,9 +666,16 @@ std::expected<void, error> detail::encoding::encode_items(binary_writer<Writer> 
                 written = out.encode_head(t == cbor::type::text_string ? major_type::text_string
                                                                        : major_type::byte_string,
                                           info, length);
-                if (written)
-                    written = out.encode_payload(std::span<char const>(
-                        detail::validity::checked_substr(root.owner->text, n.m_uni.ofs, length)));
+                if (written) {
+                    std::span<char const> const padded = root.owner->text.padded();
+                    if (length <= short_copy && detail::validity::bytes_fit(short_copy, padded.size()) &&
+                        n.m_uni.ofs <= padded.size() - short_copy)
+                        written = out.encode_short_payload(
+                            padded.subspan(n.m_uni.ofs).template first<short_copy>(), length);
+                    else
+                        written = out.encode_payload(std::span<char const>(
+                            detail::validity::checked_substr(root.owner->text, n.m_uni.ofs, length)));
+                }
                 break;
             }
             case cbor::type::array:
