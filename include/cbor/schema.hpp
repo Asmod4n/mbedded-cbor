@@ -2496,10 +2496,14 @@ class reflection
         if (!bounds) [[unlikely]]
             return std::unexpected(bounds.error());
         if constexpr (Verified) {
-            auto r = read_item_reference<Root, Major, E, Verified>(encoded, bounds->at, bounds->end, element);
-            if (r && r->data + r->length * element != bounds->end) [[unlikely]]
+            auto const r = read_item_reference<Root, Major, E, Verified>(encoded, bounds->at, bounds->end, element);
+            if (!r) [[unlikely]]
+                return std::unexpected(r.error());
+            std::size_t const data = r->data;
+            std::size_t const length = r->length;
+            if (data + length * element != bounds->end) [[unlikely]]
                 return std::unexpected(error::syntax_error);
-            return r;
+            return reference{data, length};
         } else {
             return read_item_reference<Root, Major, E, Verified>(encoded, bounds->at, bounds->end, element);
         }
