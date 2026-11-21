@@ -78,6 +78,24 @@ TEST_CASE("unverified: the same results as the verified forms on a message that 
     CHECK_EQ(encode_again(form<vehicle>::unverified_decode(owner)), *owner);
 }
 
+// verify checks the whole message once, after FlatBuffers VerifyBuffer, and the unverified forms then read it. The
+// test exists because that pair is the way to read a message from a peer that is not trusted without a check on each
+// read: each value is the one that went in.
+TEST_CASE("verify: on a message that the encoder wrote, the unverified reads after it give the values")
+{
+    std::string const bytes = encode_with_schema(sample_everything);
+    REQUIRE(form<everything>::verify(bytes).has_value());
+    CHECK_EQ(form<everything>::unverified_at_path<"$.engines[1].cc">(bytes), 1200u);
+    CHECK_EQ(form<everything>::unverified_at_path<"$.gauges[].at.x">(bytes, 1uz), -6);
+    CHECK_EQ(form<everything>::unverified_at_path<"$.tires[].airPressure">(bytes, 1uz), 3.0f);
+    auto const root = form<everything>::unverified_view(std::make_shared<std::string const>(bytes));
+    REQUIRE(root.has_value());
+    CHECK_EQ(root->at_path<"$.text">(), "text"sv);
+    CHECK_EQ(root->at_path<"$.names[1]">(), "bc"sv);
+    CHECK_EQ(root->at_path<"$.flag">(), true);
+    CHECK_EQ(encode_again(form<everything>::unverified_decode(std::string(bytes))), bytes);
+}
+
 // The unverified forms skip the checks of the data. They give a value for four forged parts. The parts are a class tag,
 // a head of a number, a tag of a typed array and a head of a fixed-size vector. The verified forms give incorrect_type.
 TEST_CASE("unverified: a forged type byte gives a value, not an error")

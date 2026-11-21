@@ -3137,11 +3137,23 @@ class reflection
         }
     }
 
-    template <bool Verified>
+    template <bool Verified, bool Keep>
     struct decode_cursor {
         std::string_view encoded;
         detail::directory dir;
         std::size_t index;
+
+        template <class T>
+        using target = std::conditional_t<Keep, T, decltype(std::ignore)>;
+
+        template <class T, class Part>
+        CBOR_ALWAYS_INLINE static decltype(auto) subobject(target<T> &out, Part const part)
+        {
+            if constexpr (Keep)
+                return part(out);
+            else
+                return out;
+        }
 
         template <class Root, class E>
         CBOR_ALWAYS_INLINE std::size_t enter()
@@ -3182,19 +3194,22 @@ class reflection
         }
 
         template <class Root, class V, std::size_t K>
-        std::expected<void, error> read_alternative(V &out, variant_reference const r)
+        std::expected<void, error> read_alternative(target<V> &out, variant_reference const r)
         {
             using A = std::variant_alternative_t<K, V>;
             if constexpr (is_string_alternative<A>) {
-                assign_string(out.template emplace<K>(), std::string_view(std::span(encoded).subspan(r.data, r.size)));
+                if constexpr (Keep)
+                    assign_string(out.template emplace<K>(), std::string_view(std::span(encoded).subspan(r.data, r.size)));
                 return {};
             } else if constexpr (is_value_alternative<A>) {
-                out.template emplace<K>(read_fixed_value<A>(
-                    std::span<char const>(encoded).subspan(r.data).template first<fixed_size<A, A>()>()));
+                if constexpr (Keep)
+                    out.template emplace<K>(read_fixed_value<A>(
+                        std::span<char const>(encoded).subspan(r.data).template first<fixed_size<A, A>()>()));
                 return {};
-            } else if constexpr (std::is_default_constructible_v<A>) {
+            } else if constexpr (!Keep || std::is_default_constructible_v<A>) {
                 auto const record = std::span<char const>(encoded).subspan(r.data).template first<fixed_size<A, Root>()>();
-                return read_value<Root>(out.template emplace<K>(), record, enter<Root, A>());
+                return read_value<Root, A>(subobject<V>(out, [](auto &o) -> auto & { return o.template emplace<K>(); }), record,
+                                           enter<Root, A>());
             } else {
                 auto const record = std::span<char const>(encoded).subspan(r.data).template first<fixed_size<A, Root>()>();
                 auto made = read_constructed<Root, A>(make_arguments<A>(), record, enter<Root, A>());
@@ -3206,7 +3221,7 @@ class reflection
         }
 
         template <class Root, class T>
-        std::expected<void, error> read_value(T &out, std::span<char const, fixed_size<T, Root>()> const field,
+        std::expected<void, error> read_value(target<T> &out, std::span<char const, fixed_size<T, Root>()> const field,
                                               std::size_t const base)
         {
             using U = std::remove_cv_t<T>;
@@ -3219,9 +3234,9 @@ class reflection
                     constexpr std::size_t I = decltype(i)::value;
                     using M = describe::member_t<U, I>;
                     if (done)
-                        done = read_value<Root>(describe::get<I>(out),
-                                                field.template subspan<member_offset<U, I, Root>(), fixed_size<M, Root>()>(),
-                                                base + reference_offset<U, I>());
+                        done = read_value<Root, M>(subobject<T>(out, [](auto &o) -> auto & { return describe::get<I>(o); }),
+                                                   field.template subspan<member_offset<U, I, Root>(), fixed_size<M, Root>()>(),
+                                                   base + reference_offset<U, I>());
                 });
                 return done;
             } else if constexpr (detail::is_std_variant<U>) {
@@ -3240,10 +3255,12 @@ class reflection
                 if constexpr (Verified)
                     if (!fixed_length_head_valid<Root, U>(field)) [[unlikely]]
                         return std::unexpected(error_of_refused_field(field));
-                auto const text = field.template last<fixed_length<U>::value>();
-                std::ranges::transform(text, std::ranges::begin(out), [](char const c) {
-                    return static_cast<typename fixed_length<U>::element>(c);
-                });
+                if constexpr (Keep) {
+                    auto const text = field.template last<fixed_length<U>::value>();
+                    std::ranges::transform(text, std::ranges::begin(out), [](char const c) {
+                        return static_cast<typename fixed_length<U>::element>(c);
+                    });
+                }
                 return {};
             } else if constexpr (requires { fixed_length<U>::value; }) {
                 using E = typename fixed_length<U>::element;
@@ -3255,8 +3272,8 @@ class reflection
                 auto const elements = field.template subspan<detail::heads::head_size(n), n * fixed_size<E, Root>()>();
                 auto const read_element = [&]<std::size_t I>() {
                     constexpr detail::validity::index position = detail::validity::check_index(I, n).value();
-                    return read_value<Root>(
-                        std::span(out).template subspan<I, 1>().front(),
+                    return read_value<Root, E>(
+                        subobject<T>(out, [](auto &o) -> auto & { return std::span(o).template subspan<I, 1>().front(); }),
                         detail::validity::element_span(elements, position, fixed_size<E, Root>())
                             .template first<fixed_size<E, Root>()>(),
                         base + I * reference_count<E>());
@@ -3270,13 +3287,14 @@ class reflection
                 auto const inner = field.template subspan<inline_optional_head, fixed_size<E, Root>()>();
                 if (field.template subspan<1, 1>().front() !=
                     detail::heads::initial_byte(major_type::simple, std::to_underlying(simple_value::true_value))) {
-                    out.reset();
+                    if constexpr (Keep)
+                        out.reset();
                     if constexpr (Verified)
                         return undefined_items_valid<Root>(encoded, dir, base, reference_count<E>());
                     return {};
                 }
-                if constexpr (std::is_default_constructible_v<E>) {
-                    return read_value<Root>(out.emplace(), inner, base);
+                if constexpr (!Keep || std::is_default_constructible_v<E>) {
+                    return read_value<Root, E>(subobject<T>(out, [](auto &o) -> auto & { return o.emplace(); }), inner, base);
                 } else {
                     auto made = read_constructed<Root, E>(make_arguments<E>(), inner, base);
                     if (!made) [[unlikely]]
@@ -3292,7 +3310,8 @@ class reflection
                 if (r->length > 1) [[unlikely]]
                     return std::unexpected(error::syntax_error);
                 if (r->length == 0) {
-                    out.reset();
+                    if constexpr (Keep)
+                        out.reset();
                     return {};
                 }
                 if (auto const nesting = detail::validity::check_recursion_limit();
@@ -3300,9 +3319,11 @@ class reflection
                     return std::unexpected(nesting.error());
                 auto const inner = std::span<char const>(encoded).subspan(r->data).template first<fixed_size<E, Root>()>();
                 std::size_t const inner_base = enter<Root, E>();
-                if constexpr (std::is_default_constructible_v<E>) {
+                if constexpr (!Keep) {
+                    return read_value<Root, E>(out, inner, inner_base);
+                } else if constexpr (std::is_default_constructible_v<E>) {
                     E element{};
-                    if (auto const e = read_value<Root>(element, inner, inner_base); !e) [[unlikely]]
+                    if (auto const e = read_value<Root, E>(element, inner, inner_base); !e) [[unlikely]]
                         return e;
                     out = std::move(element);
                 } else {
@@ -3317,7 +3338,8 @@ class reflection
                     take_reference<Root, is_text_range<U> ? major_type::text_string : major_type::byte_string>(field, base, 1);
                 if (!r) [[unlikely]]
                     return std::unexpected(r.error());
-                assign_string(out, std::string_view(std::span(encoded).subspan(r->data, r->length)));
+                if constexpr (Keep)
+                    assign_string(out, std::string_view(std::span(encoded).subspan(r->data, r->length)));
                 return {};
             } else if constexpr (is_map<U>) {
                 using K = typename U::key_type;
@@ -3330,19 +3352,27 @@ class reflection
                         detail::validity::check_recursion_limit();
                     !c) [[unlikely]]
                     return std::unexpected(c.error());
-                out.clear();
+                if constexpr (Keep)
+                    out.clear();
                 auto const entries = list_span(encoded, *r, pair);
                 for (std::size_t i = 0; i < r->length; ++i) {
                     auto const entry = detail::validity::element_span(
                                            entries, *detail::validity::check_index(i, r->length), pair)
                                            .template first<pair>();
-                    if constexpr (std::is_default_constructible_v<K> && std::is_default_constructible_v<V>) {
-                        K key = make_element<K>(out);
-                        V value = make_element<V>(out);
-                        if (auto const e = read_value<Root>(key, entry.template first<fixed_size<K, Root>()>(), enter<Root, K>());
+                    if constexpr (!Keep) {
+                        if (auto const e = read_value<Root, K>(out, entry.template first<fixed_size<K, Root>()>(), enter<Root, K>());
                             !e) [[unlikely]]
                             return e;
-                        if (auto const e = read_value<Root>(value, entry.template last<fixed_size<V, Root>()>(), enter<Root, V>());
+                        if (auto const e = read_value<Root, V>(out, entry.template last<fixed_size<V, Root>()>(), enter<Root, V>());
+                            !e) [[unlikely]]
+                            return e;
+                    } else if constexpr (std::is_default_constructible_v<K> && std::is_default_constructible_v<V>) {
+                        K key = make_element<K>(out);
+                        V value = make_element<V>(out);
+                        if (auto const e = read_value<Root, K>(key, entry.template first<fixed_size<K, Root>()>(), enter<Root, K>());
+                            !e) [[unlikely]]
+                            return e;
+                        if (auto const e = read_value<Root, V>(value, entry.template last<fixed_size<V, Root>()>(), enter<Root, V>());
                             !e) [[unlikely]]
                             return e;
                         out.try_emplace(std::move(key), std::move(value));
@@ -3366,21 +3396,23 @@ class reflection
                         detail::validity::check_recursion_limit();
                     !c) [[unlikely]]
                     return std::unexpected(c.error());
-                std::span<char const> const all = list_span(encoded, *r, sizeof(E)).first(r->length * sizeof(E));
-                auto const elements =
-                    std::views::iota(std::size_t{0}, r->length) | std::views::transform([all](std::size_t const i) {
-                        std::array<char, sizeof(E)> bytes;
-                        std::ranges::copy_n(std::ranges::next(all.begin(), static_cast<std::ptrdiff_t>(i * sizeof(E))),
-                                            sizeof(E), bytes.begin());
-                        return read_typed_array_element<E>(bytes);
-                    });
-                if constexpr (requires { out.assign_range(elements); }) {
-                    out.assign_range(elements);
-                } else {
-                    out.clear();
-                    out.reserve(r->length);
-                    for (E const e : elements)
-                        out.push_back(e);
+                if constexpr (Keep) {
+                    std::span<char const> const all = list_span(encoded, *r, sizeof(E)).first(r->length * sizeof(E));
+                    auto const elements =
+                        std::views::iota(std::size_t{0}, r->length) | std::views::transform([all](std::size_t const i) {
+                            std::array<char, sizeof(E)> bytes;
+                            std::ranges::copy_n(std::ranges::next(all.begin(), static_cast<std::ptrdiff_t>(i * sizeof(E))),
+                                                sizeof(E), bytes.begin());
+                            return read_typed_array_element<E>(bytes);
+                        });
+                    if constexpr (requires { out.assign_range(elements); }) {
+                        out.assign_range(elements);
+                    } else {
+                        out.clear();
+                        out.reserve(r->length);
+                        for (E const e : elements)
+                            out.push_back(e);
+                    }
                 }
                 return {};
             } else if constexpr (is_fixed_vector<U>) {
@@ -3394,17 +3426,22 @@ class reflection
                     !c) [[unlikely]]
                     return std::unexpected(c.error());
                 auto const elements = list_span(encoded, *r, width);
-                out.clear();
-                out.reserve(r->length);
+                if constexpr (Keep) {
+                    out.clear();
+                    out.reserve(r->length);
+                }
                 for (std::size_t i = 0; i < r->length; ++i) {
-                    E element = make_element<E>(out);
-                    if (auto const e = read_fixed_struct<E>(
-                            element, detail::validity::element_span(
-                                         elements, *detail::validity::check_index(i, r->length), width)
-                                         .template first<width>());
-                        !e) [[unlikely]]
+                    auto const in = detail::validity::element_span(
+                                        elements, *detail::validity::check_index(i, r->length), width)
+                                        .template first<width>();
+                    if constexpr (Keep) {
+                        E element = make_element<E>(out);
+                        if (auto const e = read_fixed_struct<E>(element, in); !e) [[unlikely]]
+                            return e;
+                        out.push_back(std::move(element));
+                    } else if (auto const e = read_fixed_struct<E>(out, in); !e) [[unlikely]] {
                         return e;
-                    out.push_back(std::move(element));
+                    }
                 }
                 return {};
             } else if constexpr (std::ranges::sized_range<U>) {
@@ -3417,16 +3454,21 @@ class reflection
                     !c) [[unlikely]]
                     return std::unexpected(c.error());
                 auto const entries = list_span(encoded, *r, fixed_size<E, Root>());
-                out.clear();
-                out.reserve(r->length);
+                if constexpr (Keep) {
+                    out.clear();
+                    out.reserve(r->length);
+                }
                 for (std::size_t i = 0; i < r->length; ++i) {
                     auto const entry =
                         detail::validity::element_span(entries, *detail::validity::check_index(i, r->length),
                                                        fixed_size<E, Root>())
                             .template first<fixed_size<E, Root>()>();
-                    if constexpr (std::is_default_constructible_v<E>) {
+                    if constexpr (!Keep) {
+                        if (auto const e = read_value<Root, E>(out, entry, enter<Root, E>()); !e) [[unlikely]]
+                            return e;
+                    } else if constexpr (std::is_default_constructible_v<E>) {
                         E element = make_element<E>(out);
-                        if (auto const e = read_value<Root>(element, entry, enter<Root, E>()); !e) [[unlikely]]
+                        if (auto const e = read_value<Root, E>(element, entry, enter<Root, E>()); !e) [[unlikely]]
                             return e;
                         out.push_back(std::move(element));
                     } else {
@@ -3441,7 +3483,8 @@ class reflection
                 if constexpr (Verified)
                     if (!fixed_head_valid<U>(field)) [[unlikely]]
                         return std::unexpected(error_of_refused_field(field));
-                out = read_fixed_value<U>(field);
+                if constexpr (Keep)
+                    out = read_fixed_value<U>(field);
                 return {};
             }
         }
@@ -3458,9 +3501,9 @@ class reflection
                 constexpr std::size_t I = decltype(i)::value;
                 using M = describe::member_t<U, I>;
                 if (done)
-                    done = read_value<Root>(std::get<I>(arguments),
-                                            field.template subspan<member_offset<U, I, Root>(), fixed_size<M, Root>()>(),
-                                            base + reference_offset<U, I>());
+                    done = read_value<Root, std::tuple_element_t<I, Arguments>>(
+                        std::get<I>(arguments), field.template subspan<member_offset<U, I, Root>(), fixed_size<M, Root>()>(),
+                        base + reference_offset<U, I>());
             });
             if (!done) [[unlikely]]
                 return std::unexpected(done.error());
@@ -3473,7 +3516,7 @@ class reflection
         {
             if constexpr (std::is_default_constructible_v<E>) {
                 E element = make_element<E>(container);
-                if (auto const e = read_value<Root>(element, field, base); !e) [[unlikely]]
+                if (auto const e = read_value<Root, E>(element, field, base); !e) [[unlikely]]
                     return std::unexpected(e.error());
                 return element;
             } else {
@@ -3482,7 +3525,7 @@ class reflection
         }
 
         template <class S>
-        static std::expected<void, error> read_fixed_struct(S &out, std::span<char const, fixed_width<S>()> const in)
+        static std::expected<void, error> read_fixed_struct(target<S> &out, std::span<char const, fixed_width<S>()> const in)
         {
             std::expected<void, error> done;
             for_each_field<S>([&] CBOR_ALWAYS_INLINE(auto i) {
@@ -3492,10 +3535,10 @@ class reflection
                 if (done) {
                     if constexpr (is_fixed_leaf<M>) {
                         auto const v = read_fixed_leaf<M, Verified>(in.template subspan<at, sizeof(fixed_leaf_t<M>)>());
-                        if (v)
-                            describe::get<I>(out) = *v;
-                        else [[unlikely]]
+                        if (!v) [[unlikely]]
                             done = std::unexpected(v.error());
+                        else if constexpr (Keep)
+                            describe::get<I>(out) = *v;
                     } else if constexpr (requires { fixed_length<M>::value; }) {
                         using L = std::remove_cv_t<typename fixed_length<M>::element>;
                         for (std::size_t k = 0; k < fixed_length<M>::value && done; ++k) {
@@ -3505,13 +3548,14 @@ class reflection
                                     *detail::validity::check_index(k, fixed_length<M>::value),
                                     sizeof(fixed_leaf_t<L>))
                                     .template first<sizeof(fixed_leaf_t<L>)>());
-                            if (v)
-                                describe::get<I>(out)[k] = *v;
-                            else [[unlikely]]
+                            if (!v) [[unlikely]]
                                 done = std::unexpected(v.error());
+                            else if constexpr (Keep)
+                                describe::get<I>(out)[k] = *v;
                         }
                     } else {
-                        done = read_fixed_struct<M>(describe::get<I>(out), in.template subspan<at, fixed_width<M>()>());
+                        done = read_fixed_struct<M>(subobject<S>(out, [](auto &o) -> auto & { return describe::get<I>(o); }),
+                                                    in.template subspan<at, fixed_width<M>()>());
                     }
                 }
             });
@@ -3522,6 +3566,7 @@ class reflection
     template <class T, bool Verified, description_place D, class Target>
     static std::expected<void, error> read_root(Target &out, std::string_view const encoded)
     {
+        constexpr bool keep = !std::same_as<Target, decltype(std::ignore)>;
         auto const dir = read_directory<T, Verified, D>(encoded);
         if (!dir) [[unlikely]]
             return std::unexpected(dir.error());
@@ -3529,9 +3574,9 @@ class reflection
         if constexpr (Verified)
             if (!class_tag_valid<T, T>(field)) [[unlikely]]
                 return std::unexpected(error_of_refused_field(field));
-        decode_cursor<Verified> c{encoded, *dir, reference_count<T>()};
-        if constexpr (std::is_same_v<Target, T>) {
-            if (auto const r = c.template read_value<T>(out, field, 0); !r) [[unlikely]]
+        decode_cursor<Verified, keep> c{encoded, *dir, reference_count<T>()};
+        if constexpr (!keep || std::is_same_v<Target, T>) {
+            if (auto const r = c.template read_value<T, T>(out, field, 0); !r) [[unlikely]]
                 return std::unexpected(r.error());
         } else {
             auto made = c.template read_constructed<T, T>(make_arguments<T>(), field, 0);
@@ -4613,6 +4658,32 @@ public:
     CBOR_ALWAYS_INLINE static auto at_path(std::string_view const encoded, Index const... indexes)
     {
         return at_path_with_directory<Path, true, detail::description_place::inside>(encoded, indexes...);
+    }
+
+    /**
+     * @brief Checks the whole message with every check of cbor::schema::decode() and keeps nothing.
+     *
+     * It runs the walk of cbor::schema::decode() and gives its first error.
+     * It makes no object and allocates nothing.
+     * After it, the unverified forms read the message: cbor::schema::unverified_view(), cbor::schema::unverified_adopt(),
+     * cbor::schema::unverified_at_path() and cbor::schema::unverified_decode().
+     * The bytes are checked at the call.
+     * If they change after it, the unverified reads still check every bound and stay inside the buffer, but a value is
+     * then only as checked as the bytes.
+     *
+     * @retval too_little_data, incorrect_type, invalid_tag, syntax_error, unpopulated_table_index,
+     * inadmissible_type_for_tag_content, nesting_depth_exceeded as cbor::schema::decode()
+     * @see cbor::schema::decode()
+     * @see cbor::schema::unverified_view()
+     */
+    static std::expected<void, error> verify(std::string_view const encoded)
+        requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
+    {
+        if (auto const r = detail::reflection::read_root<T, true, detail::description_place::inside>(std::ignore, encoded); !r)
+            [[unlikely]]
+            return std::unexpected(
+                detail::reflection::too_little_data_if_truncated<T, detail::description_place::inside>(encoded, r.error()));
+        return {};
     }
 
     /**
