@@ -17,6 +17,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <functional>
 #include <iterator>
 #include <limits>
 #include <memory>
@@ -4091,6 +4092,9 @@ public:
             return detail::reflection::member_offset<U, detail::reflection::member_index_of<std::remove_cv_t<U>>(Member), T>();
     }
 
+    template <class U, bool Verified>
+    class borrowed_accessor;
+
     /**
      * @brief Reads the part `U` of a message of `T`.
      *
@@ -4209,8 +4213,10 @@ public:
         {
         }
 
+        static constexpr bool iterable = detail::reflection::is_fixed_vector<U> || detail::reflection::is_record_list<U>;
+
         static consteval std::size_t stride()
-            requires(detail::reflection::is_fixed_vector<U> || detail::reflection::is_record_list<U>)
+            requires(iterable)
         {
             using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
             if constexpr (detail::reflection::is_fixed_vector<U>)
@@ -4219,12 +4225,87 @@ public:
                 return detail::reflection::fixed_size<E, T>();
         }
 
+        template <fixed_string Path, std::convertible_to<std::size_t>... Index>
+            requires(((Path.view().starts_with('@') && detail::reflection::path_valid<U, Path, 1>()) ||
+                      (Path.view().starts_with('$') && detail::reflection::path_valid<T, Path, 1>())) &&
+                     sizeof...(Index) == detail::reflection::index_arguments<Path>())
+        CBOR_ALWAYS_INLINE auto walk(Index const... indexes) const
+        {
+            std::array<std::size_t, sizeof...(Index)> const i{static_cast<std::size_t>(indexes)...};
+            constexpr std::string_view path = Path.view();
+            if constexpr (path.starts_with('$')) {
+                return detail::reflection::walk_path<T, T, Path, 1, Verified, true>(encoded, root_of(encoded, dir),
+                                                                                    dir, 0, i);
+            } else if constexpr (detail::reflection::is_typed_array<U> && path.size() > 1) {
+                using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
+                std::size_t const at = detail::reflection::index_selected<U, Path, 1>(i);
+                return detail::reflection::typed_array_element_at<E>(
+                    detail::reflection::list_span(encoded, items, sizeof(E)), items.length, at);
+            } else if constexpr (detail::reflection::is_fixed_vector<U> && path.size() > 1) {
+                using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
+                constexpr std::size_t close = detail::reflection::index_end(path, 1);
+                using X = typename decltype(detail::reflection::fixed_path_result<T, E, Path, close + 1, Verified>())::type;
+                std::size_t const at = detail::reflection::index_selected<U, Path, 1>(i);
+                constexpr std::size_t width = detail::reflection::fixed_width<E>();
+                auto const position = detail::validity::check_index(at, items.length);
+                if (!position) [[unlikely]]
+                    return std::expected<X, error>(std::unexpect, position.error());
+                return detail::reflection::walk_fixed<T, E, Path, close + 1, Verified>(
+                    encoded,
+                    detail::validity::element_span(detail::reflection::list_span(encoded, items, width),
+                                                   *position, width)
+                        .template first<width>(),
+                    dir, i);
+            } else if constexpr (detail::reflection::is_list<U> && path.size() > 1) {
+                using E = std::ranges::range_value_t<U>;
+                constexpr std::size_t close = detail::reflection::index_end(path, 1);
+                using X = typename decltype(detail::reflection::path_result<T, E, Path, close + 1, Verified>())::type;
+                std::size_t const at = detail::reflection::index_selected<U, Path, 1>(i);
+                constexpr std::size_t width = detail::reflection::fixed_size<E, T>();
+                auto const position = detail::validity::check_index(at, items.length);
+                if (!position) [[unlikely]]
+                    return std::expected<X, error>(std::unexpect, position.error());
+                return detail::reflection::walk_record<T, E, Path, close + 1, Verified>(
+                    encoded,
+                    detail::validity::element_span(detail::reflection::list_span(encoded, items, width),
+                                                   *position, width)
+                        .template first<width>(),
+                    dir, i);
+            } else {
+                return detail::reflection::walk_record<T, U, Path, 1, Verified>(encoded, field, dir, i);
+            }
+        }
+
+        template <class F>
+            requires(iterable)
+        void for_each(F &f, std::shared_ptr<void const> const *const parent) const
+        {
+            using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
+            using X = std::conditional_t<detail::reflection::is_fixed_vector<U>, fixed_element<E>, E>;
+            static_assert(std::is_void_v<std::invoke_result_t<F &, borrowed_accessor<X, Verified> const &>>,
+                          "cbor::schema::accessor::for_each: the function must return void");
+            auto const list = detail::reflection::list_span(encoded, items, stride());
+            for (std::size_t i = 0; i < items.length; ++i) {
+                borrowed_accessor<X, Verified> const element(
+                    accessor<X, Verified>(encoded,
+                                          detail::validity::element_span(
+                                              list, *detail::validity::check_index(i, items.length), stride())
+                                              .template first<stride()>(),
+                                          dir),
+                    parent);
+                std::invoke(f, element);
+            }
+        }
+
         friend class schema;
 
         friend class detail::reflection;
 
         template <class, bool>
         friend class accessor;
+
+        template <class, bool>
+        friend class borrowed_accessor;
 
     public:
         accessor(accessor const &) = default;
@@ -4257,52 +4338,7 @@ public:
         {
             detail::validity::throw_logic_error_if_empty(
                 self.owner, "cbor::schema::accessor::at_path: the accessor was moved from");
-            auto result = [&] {
-                std::array<std::size_t, sizeof...(Index)> const i{static_cast<std::size_t>(indexes)...};
-                constexpr std::string_view path = Path.view();
-                if constexpr (path.starts_with('$')) {
-                    return detail::reflection::walk_path<T, T, Path, 1, Verified, true>(self.encoded, root_of(self.encoded, self.dir),
-                                                                                       self.dir, 0, i);
-                } else if constexpr (detail::reflection::is_typed_array<U> && path.size() > 1) {
-                    using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
-                    std::size_t const at = detail::reflection::index_selected<U, Path, 1>(i);
-                    return detail::reflection::typed_array_element_at<E>(detail::reflection::list_span(self.encoded, self.items, sizeof(E)),
-                                                                  self.items.length, at);
-                } else if constexpr (detail::reflection::is_fixed_vector<U> && path.size() > 1) {
-                    using E = std::remove_cv_t<std::ranges::range_value_t<U>>;
-                    constexpr std::size_t close = detail::reflection::index_end(path, 1);
-                    using X = typename decltype(detail::reflection::fixed_path_result<T, E, Path, close + 1, Verified>())::type;
-                    std::size_t const at = detail::reflection::index_selected<U, Path, 1>(i);
-                    constexpr std::size_t width = detail::reflection::fixed_width<E>();
-                    auto const position = detail::validity::check_index(at, self.items.length);
-                    if (!position) [[unlikely]]
-                        return std::expected<X, error>(std::unexpect, position.error());
-                    return detail::reflection::walk_fixed<T, E, Path, close + 1, Verified>(
-                        self.encoded,
-                        detail::validity::element_span(detail::reflection::list_span(self.encoded, self.items, width),
-                                                       *position, width)
-                            .template first<width>(),
-                        self.dir, i);
-                } else if constexpr (detail::reflection::is_list<U> && path.size() > 1) {
-                    using E = std::ranges::range_value_t<U>;
-                    constexpr std::size_t close = detail::reflection::index_end(path, 1);
-                    using X = typename decltype(detail::reflection::path_result<T, E, Path, close + 1, Verified>())::type;
-                    std::size_t const at = detail::reflection::index_selected<U, Path, 1>(i);
-                    constexpr std::size_t width = detail::reflection::fixed_size<E, T>();
-                    auto const position = detail::validity::check_index(at, self.items.length);
-                    if (!position) [[unlikely]]
-                        return std::expected<X, error>(std::unexpect, position.error());
-                    return detail::reflection::walk_record<T, E, Path, close + 1, Verified>(
-                        self.encoded,
-                        detail::validity::element_span(detail::reflection::list_span(self.encoded, self.items, width),
-                                                       *position, width)
-                            .template first<width>(),
-                        self.dir, i);
-                } else {
-                    return detail::reflection::walk_record<T, U, Path, 1, Verified>(self.encoded, self.field, self.dir, i);
-                }
-            
-            }();
+            auto result = self.template walk<Path>(indexes...);
             if constexpr (requires { result->owner; })
                 if (result)
                     result->owner = self.owner;
@@ -4336,6 +4372,30 @@ public:
             requires(listed)
         {
             return items.length;
+        }
+
+        /**
+         * @brief Calls @p f once for each element of the list, in order, and returns nothing.
+         *
+         * It exists for a vector of records and for a vector of fixed-size structs.
+         * @p f takes the element as a `borrowed_accessor const &` and returns `void`.
+         * The element is valid during the call of @p f.
+         * It cannot be copied or moved out of the call.
+         * A value read from it, and a `std::string_view` of a text, lives as long as the owner of this accessor.
+         * An exception from @p f passes through.
+         * Unlike `std::ranges::for_each`, which returns `std::ranges::in_fun_result`, it returns `void`.
+         * No owner is copied for an element.
+         *
+         * @see cbor::schema::borrowed_accessor
+         * @throws std::logic_error a call on a moved-from accessor
+         */
+        template <class F, class Self>
+            requires(std::is_lvalue_reference_v<Self> && iterable)
+        void for_each(this Self &&self, F f)
+        {
+            detail::validity::throw_logic_error_if_empty(
+                self.owner, "cbor::schema::accessor::for_each: the accessor was moved from");
+            self.for_each(f, &self.owner);
         }
 
         using iterator = typename decltype(detail::reflection::list_iterator_result<T, U, Verified>())::type;
@@ -4446,12 +4506,28 @@ public:
         {
         }
 
+        template <fixed_string Path, std::convertible_to<std::size_t>... Index>
+            requires(((Path.view().starts_with('@') && detail::reflection::path_valid<S, Path, 1>()) ||
+                      (Path.view().starts_with('$') && detail::reflection::path_valid<T, Path, 1>())) &&
+                     sizeof...(Index) == detail::reflection::index_arguments<Path>())
+        CBOR_ALWAYS_INLINE auto walk(Index const... indexes) const
+        {
+            std::array<std::size_t, sizeof...(Index)> const i{static_cast<std::size_t>(indexes)...};
+            if constexpr (Path.view().starts_with('$'))
+                return detail::reflection::walk_path<T, T, Path, 1, Verified, true>(encoded, root_of(encoded, dir), dir, 0, i);
+            else
+                return detail::reflection::walk_fixed<T, S, Path, 1, Verified>(encoded, element, dir, i);
+        }
+
         friend class schema;
 
         friend class detail::reflection;
 
         template <class, bool>
         friend class accessor;
+
+        template <class, bool>
+        friend class borrowed_accessor;
 
     public:
         template <fixed_string Path, class Self, std::convertible_to<std::size_t>... Index>
@@ -4462,15 +4538,7 @@ public:
         {
             detail::validity::throw_logic_error_if_empty(
                 self.owner, "cbor::schema::accessor::at_path: the accessor was moved from");
-            auto result = [&] {
-                std::array<std::size_t, sizeof...(Index)> const i{static_cast<std::size_t>(indexes)...};
-                if constexpr (Path.view().starts_with('$')) {
-                    return detail::reflection::walk_path<T, T, Path, 1, Verified, true>(self.encoded, root_of(self.encoded, self.dir),
-                                                                                       self.dir, 0, i);
-                } else {
-                    return detail::reflection::walk_fixed<T, S, Path, 1, Verified>(self.encoded, self.element, self.dir, i);
-                }
-            }();
+            auto result = self.template walk<Path>(indexes...);
             if constexpr (requires { result->owner; })
                 if (result)
                     result->owner = self.owner;
@@ -4478,6 +4546,98 @@ public:
                 if (result && *result)
                     (*result)->owner = self.owner;
             return result;
+        }
+    };
+
+    /**
+     * @brief Reads one element of a list during a call of cbor::schema::accessor::for_each().
+     *
+     * `for_each` gives it as a `const &` to its function, one element after the other.
+     * `U` is the record of the element, or `fixed_element<S>` for an element of a vector of fixed-size structs.
+     * It holds the bytes, the directory and the bounds of the element, and a pointer to the owner of the accessor that
+     * called `for_each`.
+     * It is valid during the call of the function and cannot be copied or moved.
+     * `at_path` reads as the `at_path` of cbor::schema::accessor and gives the same values and errors.
+     * A value and a `std::string_view` copy no owner.
+     * A path to a vector of records or of fixed-size structs gives a `borrowed_accessor` of the vector, which copies
+     * no owner and offers `for_each` and `size`.
+     * A path to another part gives a cbor::schema::accessor, which copies the owner.
+     *
+     * @see cbor::schema::accessor::for_each()
+     *
+     * @ingroup schema
+     */
+    template <class U, bool Verified>
+    class borrowed_accessor
+    {
+        accessor<U, Verified> held;
+        std::shared_ptr<void const> const *owner;
+
+        borrowed_accessor(accessor<U, Verified> &&h, std::shared_ptr<void const> const *const o) : held(std::move(h)), owner(o)
+        {
+        }
+
+        template <class V>
+        static consteval bool iterable(std::type_identity<accessor<V, Verified>>)
+        {
+            return accessor<V, Verified>::iterable;
+        }
+
+        static consteval bool iterable(auto)
+        {
+            return false;
+        }
+
+        template <class, bool>
+        friend class accessor;
+
+        template <class, bool>
+        friend class borrowed_accessor;
+
+    public:
+        borrowed_accessor(borrowed_accessor const &) = delete;
+
+        borrowed_accessor &operator=(borrowed_accessor const &) = delete;
+
+        ~borrowed_accessor() = default;
+
+        template <fixed_string Path, std::convertible_to<std::size_t>... Index>
+            requires requires(accessor<U, Verified> const &a, Index const... i) { a.template walk<Path>(i...); }
+        CBOR_ALWAYS_INLINE auto at_path(Index const... indexes) const
+        {
+            auto result = held.template walk<Path>(indexes...);
+            if constexpr (iterable(std::type_identity<typename decltype(result)::value_type>{})) {
+                return std::move(result).transform([this]<class V>(accessor<V, Verified> &&list) {
+                    return borrowed_accessor<V, Verified>(std::move(list), owner);
+                });
+            } else {
+                if constexpr (requires { result->owner; })
+                    if (result)
+                        result->owner = *owner;
+                if constexpr (requires { (*result)->owner; })
+                    if (result && *result)
+                        (*result)->owner = *owner;
+                return result;
+            }
+        }
+
+        /**
+         * @brief Gives the count of the elements of the list.
+         */
+        std::size_t size() const
+            requires(accessor<U, Verified>::iterable)
+        {
+            return held.size();
+        }
+
+        /**
+         * @brief Calls @p f once for each element of the list, in order, as cbor::schema::accessor::for_each() does.
+         */
+        template <class F>
+            requires(accessor<U, Verified>::iterable)
+        void for_each(F f) const
+        {
+            held.for_each(f, owner);
         }
     };
 

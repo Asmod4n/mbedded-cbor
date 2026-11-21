@@ -144,3 +144,129 @@ TEST_CASE("view: a moved view has begin equal to end")
     CHECK_EQ(std::bit_cast<std::uint64_t>(*kept), 0x4010000000000000u);
     CHECK_EQ(std::bit_cast<std::uint64_t>(target[0]), 0x3ff0000000000000u);
 }
+
+// for_each gives each element of a vector of records and of a vector of fixed-size structs, in order. The test exists
+// because for_each is the read of a whole list that copies no owner per element: each value must be the one that
+// at_path with the index gives, for the verified and for the unverified accessor.
+TEST_CASE("for_each: every element of a vector, in order")
+{
+    parking_lot const sample = make_sample_lot();
+    auto const owner = std::make_shared<std::string const>(encode_with_schema(sample));
+    auto const root = form<parking_lot>::view(owner);
+    REQUIRE(root.has_value());
+    auto const cars = root->at_path<"$.cars">();
+    REQUIRE(cars.has_value());
+    std::vector<std::string_view> makes;
+    std::vector<std::uint8_t> seats;
+    cars->for_each([&](auto const &car) {
+        makes.push_back(*car.template at_path<"@.make">());
+        seats.push_back(*car.template at_path<"@.seats">());
+    });
+    std::vector<std::string_view> expected_makes;
+    std::vector<std::uint8_t> expected_seats;
+    for (lot_car const &c : sample.cars) {
+        expected_makes.push_back(c.make);
+        expected_seats.push_back(c.seats);
+    }
+    CHECK(makes == expected_makes);
+    CHECK(seats == expected_seats);
+    auto const g_owner = std::make_shared<std::string const>(encode_with_schema(
+        gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}, {false, color::black, {5, -6}, {7, 8}}, {true, color::black, {0, 9}, {0, 0}}}}));
+    auto const loose = form<gauges>::unverified_view(g_owner);
+    REQUIRE(loose.has_value());
+    auto const g = loose->at_path<"$.g">();
+    REQUIRE(g.has_value());
+    std::vector<int> xs;
+    g->for_each([&xs](auto const &e) { xs.push_back(*e.template at_path<"@.at.x">()); });
+    CHECK(xs == std::vector<int>{3, -6, 9});
+}
+
+// An empty vector has no element, so f is never called. The test exists because the loop of for_each reads the
+// count of the list and must not touch an element that is not there.
+TEST_CASE("for_each: an empty vector calls nothing")
+{
+    auto const root = form<parking_lot>::adopt(encode_with_schema(parking_lot{}));
+    REQUIRE(root.has_value());
+    auto const cars = root->at_path<"$.cars">();
+    REQUIRE(cars.has_value());
+    std::size_t calls = 0;
+    cars->for_each([&calls](auto const &) { ++calls; });
+    CHECK_EQ(calls, 0u);
+}
+
+// A path to a vector of the element gives the vector without an owner, and it offers for_each the same way. A path to
+// a record gives an accessor with the owner. The test exists because a nested list must read the wheels of each car in
+// order, through the owner of the outer accessor.
+TEST_CASE("for_each: a nested for_each reads the vector of each element")
+{
+    parking_lot const sample = make_sample_lot();
+    auto const root = form<parking_lot>::adopt(encode_with_schema(sample));
+    REQUIRE(root.has_value());
+    auto const cars = root->at_path<"$.cars">();
+    REQUIRE(cars.has_value());
+    std::vector<std::vector<std::uint16_t>> diameters;
+    std::vector<std::size_t> sizes;
+    cars->for_each([&](auto const &car) {
+        auto const wheels = car.template at_path<"@.wheels">();
+        REQUIRE(wheels.has_value());
+        CHECK(std::same_as<std::remove_cvref_t<decltype(car)>, form<parking_lot>::borrowed_accessor<lot_car, true>>);
+        CHECK(std::same_as<std::remove_cvref_t<decltype(*wheels)>,
+                           form<parking_lot>::borrowed_accessor<std::vector<lot_wheel>, true>>);
+        CHECK(std::same_as<std::remove_cvref_t<decltype(*car.template at_path<"@.engine">())>,
+                           form<parking_lot>::accessor<lot_engine, true>>);
+        sizes.push_back(wheels->size());
+        diameters.emplace_back();
+        wheels->for_each([&](auto const &wheel) { diameters.back().push_back(*wheel.template at_path<"@.diameter">()); });
+    });
+    std::vector<std::vector<std::uint16_t>> expected;
+    std::vector<std::size_t> expected_sizes;
+    for (lot_car const &c : sample.cars) {
+        expected.emplace_back();
+        for (lot_wheel const &w : c.wheels)
+            expected.back().push_back(w.diameter);
+        expected_sizes.push_back(c.wheels.size());
+    }
+    CHECK(diameters == expected);
+    CHECK(sizes == expected_sizes);
+}
+
+// for_each catches nothing. The test exists because an exception from f must reach the caller unchanged and stop the
+// loop at the element that threw.
+TEST_CASE("for_each: an exception from f passes through")
+{
+    auto const root = form<parking_lot>::adopt(encode_with_schema(make_sample_lot()));
+    REQUIRE(root.has_value());
+    auto const cars = root->at_path<"$.cars">();
+    REQUIRE(cars.has_value());
+    std::size_t calls = 0;
+    auto const second_throws = [&calls](auto const &) {
+        ++calls;
+        if (calls == 2)
+            throw std::range_error("second car");
+    };
+    CHECK_THROWS_AS(cars->for_each(second_throws), std::range_error);
+    CHECK_EQ(calls, 2u);
+}
+
+// The element of for_each points to the owner of the accessor that called it, so it must not leave the call. The test
+// exists because a copy or a move of the element would let it outlive that owner. A moved-from accessor is a wrong use.
+TEST_CASE("for_each: the element cannot be copied or moved")
+{
+    using record = form<parking_lot>::borrowed_accessor<lot_car, true>;
+    using fixed = form<parking_lot>::borrowed_accessor<cbor::fixed_element<lot_wheel>, true>;
+    using list = form<parking_lot>::borrowed_accessor<std::vector<lot_wheel>, false>;
+    CHECK_FALSE(std::is_copy_constructible_v<record>);
+    CHECK_FALSE(std::is_move_constructible_v<record>);
+    CHECK_FALSE(std::is_copy_assignable_v<record>);
+    CHECK_FALSE(std::is_move_assignable_v<record>);
+    CHECK_FALSE(std::is_copy_constructible_v<fixed>);
+    CHECK_FALSE(std::is_move_constructible_v<fixed>);
+    CHECK_FALSE(std::is_copy_constructible_v<list>);
+    CHECK_FALSE(std::is_move_constructible_v<list>);
+    auto root = form<parking_lot>::adopt(encode_with_schema(make_sample_lot()));
+    REQUIRE(root.has_value());
+    auto cars = root->at_path<"$.cars">();
+    REQUIRE(cars.has_value());
+    auto const moved = std::move(*cars);
+    CHECK_THROWS_AS(cars->for_each([](auto const &) {}), std::logic_error);
+}
