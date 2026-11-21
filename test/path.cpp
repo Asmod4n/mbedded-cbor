@@ -208,7 +208,7 @@ TEST_CASE("path: the grammar")
     constexpr std::size_t depth = test::levels_beyond_small_stack;
     std::string const deep = repeat("\x81", depth) + "\x01"s;
     std::string const path = "$" + repeat("[0]", depth);
-    test::run_on_small_stack([&deep, &path] { CHECK(test::read_value_at_path(path, *test::make_lazy_from_copy(deep)) == V(1)); });
+    test::run_on_small_stack([&deep, &path] { CHECK((test::read_value_at_path(path, *test::make_lazy_from_copy(deep)) == V(1))); });
 }
 
 // The compile-time form reads the same grammar and, inside brackets, any literal of CBOR diagnostic notation
@@ -621,8 +621,8 @@ void check_path(std::string const &doc, std::vector<step> const &steps, Expected
 {
     auto const r = path_get<Path, T>(doc);
     CAPTURE(r.has_value() ? cbor::error{} : r.error());
-    CHECK(r == expected);
-    CHECK(r == lazy_get<T>(doc, steps));
+    CHECK((r == expected));
+    CHECK((r == lazy_get<T>(doc, steps)));
 }
 
 std::vector<std::byte> byte_vector(std::string_view const s)
@@ -1060,7 +1060,7 @@ TEST_CASE("path: a typed read that is not safe does not compile")
     CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { cbor::at_path<"$.a", std::int64_t>(o, std::string_view(*o)); }; }(owner)));
     CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::int64_t>(std::forward<S>(s)); }; }(std::string{})));
     CHECK(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a", std::int64_t>(std::forward<S>(s)); }; }(std::string_view(text))));
-    CHECK(cbor::at_path<"$.a", std::int64_t>(std::string(text)) == std::unexpected(error::incorrect_type));
+    CHECK((cbor::at_path<"$.a", std::int64_t>(std::string(text)) == std::unexpected(error::incorrect_type)));
 
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$.a[*]", std::int64_t>(std::forward<S>(s)); }; }(std::string_view(text))));
     CHECK_FALSE(([]<class S>(S &&) { return requires(S &&s) { cbor::at_path<"$..a", std::int64_t>(std::forward<S>(s)); }; }(std::string_view(text))));

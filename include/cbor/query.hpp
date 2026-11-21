@@ -201,7 +201,7 @@ class path
         std::span<selector const> selectors;
         std::span<logical_expr const> expressions;
         std::string_view keys;
-        std::span<std::expected<std::vector<lazy>, error> const> absolute_nodelists;
+        std::vector<std::expected<std::vector<lazy>, error>> const *absolute_nodelists;
     };
 
     static constexpr bool name_first(char const c)
@@ -1675,7 +1675,7 @@ inline std::expected<path::comparable, error> path::comparable_value(query_view 
         std::expected<std::vector<lazy>, error> relative;
         if (q.relative)
             relative = apply_segments(v, q.first, q.second, current, root);
-        auto const &nodes = q.relative ? relative : v.absolute_nodelists[at];
+        auto const &nodes = q.relative ? relative : (*v.absolute_nodelists)[at];
         if (!nodes) [[unlikely]]
             return std::unexpected(nodes.error());
         if (e.kind == logical_expr::kind::count)
@@ -1720,7 +1720,7 @@ inline std::expected<bool, error> path::test_expression(query_view const v, std:
         std::expected<std::vector<lazy>, error> relative;
         if (e.relative)
             relative = apply_segments(v, e.first, e.second, current, root);
-        auto const &nodes = e.relative ? relative : v.absolute_nodelists[at];
+        auto const &nodes = e.relative ? relative : (*v.absolute_nodelists)[at];
         if (!nodes) [[unlikely]]
             return std::unexpected(nodes.error());
         return !nodes->empty();
@@ -1840,7 +1840,7 @@ inline std::expected<std::vector<lazy>, error> path::walk_query(query_view const
 {
     root.throw_logic_error_if_no_top_level("cbor::at_path: the lazy holds no top-level item");
     std::vector<std::expected<std::vector<lazy>, error>> absolute_nodelists(v.expressions.size());
-    query_view const with_nodelists{v.segments, v.selectors, v.expressions, v.keys, absolute_nodelists};
+    query_view const with_nodelists{v.segments, v.selectors, v.expressions, v.keys, &absolute_nodelists};
     for (std::size_t i = 0; i < v.expressions.size(); ++i)
         if (v.expressions[i].kind == logical_expr::kind::filter_query && !v.expressions[i].relative)
             absolute_nodelists[i] =
@@ -2292,7 +2292,7 @@ std::expected<std::vector<lazy>, error> path::generated_walk(lazy const &root)
     constexpr std::size_t expressions = std::get<2>(q).size();
     std::array<std::expected<std::pair<std::uint64_t, std::optional<lazy>>, error>, expressions> absolutes{};
     [&]<std::size_t... I>(std::index_sequence<I...>) {
-        auto const step = [&]<std::size_t J>() {
+        [[maybe_unused]] auto const step = [&]<std::size_t J>() {
             constexpr logical_expr e = std::get<2>(q)[J];
             if constexpr (e.kind == logical_expr::kind::filter_query && !e.relative)
                 absolutes[J] = generated_query<Path, J, nodes_that_decide<Path, J>()>(root, root, absolutes);

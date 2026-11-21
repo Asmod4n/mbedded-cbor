@@ -282,11 +282,11 @@ TEST_CASE("qcbor IntegerValuesParseTest: integers of every head width decode to 
     std::size_t index = 0;
     for (std::int64_t const v : expected) {
         CAPTURE(index);
-        CHECK(read_as<std::int64_t>(doc->at(index)) == v);
+        CHECK((read_as<std::int64_t>(doc->at(index)) == v));
         ++index;
     }
-    CHECK(read_as<std::uint64_t>(doc->at(index)) == std::numeric_limits<std::uint64_t>::max());
-    CHECK(read_as<std::int64_t>(doc->at(index)) == std::unexpected(error::number_out_of_range));
+    CHECK((read_as<std::uint64_t>(doc->at(index)) == std::numeric_limits<std::uint64_t>::max()));
+    CHECK((read_as<std::int64_t>(doc->at(index)) == std::unexpected(error::number_out_of_range)));
 
     auto const tree = cbor::decode(expected_encoded_ints);
     REQUIRE(tree.has_value());
@@ -301,11 +301,11 @@ TEST_CASE("qcbor IntegerValuesParseTest: integers of every head width decode to 
 TEST_CASE("qcbor IntegerValuesParseTest: a negative integer below INT64_MIN does not fit int64_t")
 {
     std::string const too_small = as_string({0x3b, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00});
-    CHECK(read_as<std::int64_t>(lazy_of(too_small)) == std::unexpected(error::number_out_of_range));
+    CHECK((read_as<std::int64_t>(lazy_of(too_small)) == std::unexpected(error::number_out_of_range)));
     auto const tree = cbor::decode(too_small);
     REQUIRE(tree.has_value());
     CHECK((**tree).type() == cbor::type::negative_integer);
-    CHECK((**tree).get<std::int64_t>() == std::unexpected(error::number_out_of_range));
+    CHECK(((**tree).get<std::int64_t>() == std::unexpected(error::number_out_of_range)));
 }
 
 // ShortBufferParseTest: every truncation of the integer array is incomplete. RFC 8949 Appendix F calls this "too
@@ -334,10 +334,10 @@ TEST_CASE("qcbor SimpleArrayTest: a simple array encodes, decodes back, and each
     auto const doc = lazy_of(*encoded);
     REQUIRE(doc.has_value());
     CHECK(doc->size() == 4u);
-    CHECK(read_as<std::int64_t>(doc->at(0)) == 23);
-    CHECK(read_as<std::int64_t>(doc->at(1)) == 6000);
-    CHECK(bytes_of(doc->at(2)) == galactic);
-    CHECK(bytes_of(doc->at(3)) == haven);
+    CHECK((read_as<std::int64_t>(doc->at(0)) == 23));
+    CHECK((read_as<std::int64_t>(doc->at(1)) == 6000));
+    CHECK((bytes_of(doc->at(2)) == galactic));
+    CHECK((bytes_of(doc->at(3)) == haven));
 
     for (std::size_t n = encoded->size() - 1; n != 0; --n) {
         CAPTURE(n);
@@ -354,21 +354,21 @@ TEST_CASE("qcbor EmptyMapsAndArraysTest: empty arrays and maps decode at each le
     REQUIRE(tree.has_value());
     auto const top = elements_of(**tree);
     REQUIRE_EQ(top.size(), 3u);
-    CHECK(top[0].get<std::uint64_t>() == 0u);
+    CHECK((top[0].get<std::uint64_t>() == 0u));
     CHECK(elements_of(top[1]).empty());
     auto const inner = elements_of(top[2]);
     REQUIRE_EQ(inner.size(), 4u);
     CHECK(elements_of(inner[0]).empty());
     REQUIRE_EQ(elements_of(inner[1]).size(), 1u);
-    CHECK(elements_of(inner[1])[0].get<std::uint64_t>() == 0u);
+    CHECK((elements_of(inner[1])[0].get<std::uint64_t>() == 0u));
     CHECK(entries_of(inner[2]).empty());
     auto const three = entries_of(inner[3]);
     REQUIRE_EQ(three.size(), 6u);
-    CHECK(three[0].get<std::uint64_t>() == 1u);
+    CHECK((three[0].get<std::uint64_t>() == 1u));
     CHECK(entries_of(three[1]).empty());
-    CHECK(three[2].get<std::uint64_t>() == 2u);
+    CHECK((three[2].get<std::uint64_t>() == 2u));
     CHECK(entries_of(three[3]).empty());
-    CHECK(three[4].get<std::uint64_t>() == 3u);
+    CHECK((three[4].get<std::uint64_t>() == 3u));
     CHECK(elements_of(three[5]).empty());
 }
 
@@ -382,8 +382,8 @@ TEST_CASE("qcbor EmptyMapsAndArraysTest: the indefinite-length form is well-form
     std::string const empties = as_string({0x9f, 0x00, 0x9f, 0xff, 0x9f, 0x9f, 0xff, 0x9f, 0x00, 0xff, 0xbf, 0xff, 0xbf,
                                            0x01, 0xbf, 0xff, 0x02, 0xbf, 0xff, 0x03, 0x9f, 0xff, 0xff, 0xff, 0xff});
     CHECK(cbor::decode(empties).error_or(error{}) == error::indefinite_length);
-    CHECK(cbor::diagnostic_notation(empties) ==
-          std::string("[_ 0, [_ ], [_ [_ ], [_ 0], {_ }, {_ 1: {_ }, 2: {_ }, 3: [_ ]}]]"));
+    CHECK((cbor::diagnostic_notation(empties) ==
+          std::string("[_ 0, [_ ], [_ [_ ], [_ 0], {_ }, {_ 1: {_ }, 2: {_ }, 3: [_ ]}]]")));
 }
 
 // ParseEmptyMapInMapTest: {2: {}}: the empty map is the value of the integer key 2.
@@ -434,7 +434,7 @@ TEST_CASE("qcbor ParseMapTest: a map with nested array and map decodes")
     auto const top = entries_of(**tree);
     REQUIRE_EQ(top.size(), 6u);
     CHECK_EQ(text_in(top[0]), "first integer");
-    CHECK(top[1].get<std::uint64_t>() == 42u);
+    CHECK((top[1].get<std::uint64_t>() == 42u));
     CHECK_EQ(text_in(top[2]), "an array of two strings");
     auto const strings = elements_of(top[3]);
     REQUIRE_EQ(strings.size(), 2u);
@@ -452,22 +452,22 @@ TEST_CASE("qcbor ParseMapTest: a map with nested array and map decodes")
     REQUIRE(b2.has_value());
     CHECK_EQ(as_string(*b2), "yyyy");
     CHECK_EQ(text_in(inner[4]), "another int");
-    CHECK(inner[5].get<std::uint64_t>() == 98u);
+    CHECK((inner[5].get<std::uint64_t>() == 98u));
     CHECK_EQ(text_in(inner[6]), "text 2");
     CHECK_EQ(text_in(inner[7]), "lies, damn lies and statistics");
 
     auto const doc = lazy_of(valid_map_encoded);
     REQUIRE(doc.has_value());
     CHECK(doc->size() == 3u);
-    CHECK(read_as<std::int64_t>(doc->at("first integer")) == 42);
-    CHECK(count_pieces(doc->at("an array of two strings")) == 2u);
+    CHECK((read_as<std::int64_t>(doc->at("first integer")) == 42));
+    CHECK((count_pieces(doc->at("an array of two strings")) == 2u));
     auto const map = doc->at("map in a map");
-    CHECK(count_pieces(map) == 4u);
+    CHECK((count_pieces(map) == 4u));
     REQUIRE(map.has_value());
-    CHECK(bytes_of(map->at("bytes 1")) == std::string("xxxx"));
-    CHECK(bytes_of(map->at("bytes 2")) == std::string("yyyy"));
-    CHECK(read_as<std::int64_t>(map->at("another int")) == 98);
-    CHECK(text_of(map->at("text 2")) == std::string("lies, damn lies and statistics"));
+    CHECK((bytes_of(map->at("bytes 1")) == std::string("xxxx")));
+    CHECK((bytes_of(map->at("bytes 2")) == std::string("yyyy")));
+    CHECK((read_as<std::int64_t>(map->at("another int")) == 98));
+    CHECK((text_of(map->at("text 2")) == std::string("lies, damn lies and statistics")));
 }
 
 // ParseMapTest with pValidMapIndefEncoded (NestedMapTestIndefLen uses the same form): upstream decodes it.
@@ -476,10 +476,10 @@ TEST_CASE("qcbor ParseMapTest: a map with nested array and map decodes")
 TEST_CASE("qcbor ParseMapTest: the indefinite-length map is well-formed and decode refuses it")
 {
     CHECK(cbor::decode(valid_map_indefinite_encoded).error_or(error{}) == error::indefinite_length);
-    CHECK(cbor::diagnostic_notation(valid_map_indefinite_encoded) ==
+    CHECK((cbor::diagnostic_notation(valid_map_indefinite_encoded) ==
           std::string("{_ \"first integer\": 42, \"an array of two strings\": [_ \"string1\", \"string2\"], "
                       "\"map in a map\": {_ \"bytes 1\": h'78787878', \"bytes 2\": h'79797979', \"another int\": 98, "
-                      "\"text 2\": \"lies, damn lies and statistics\"}}"));
+                      "\"text 2\": \"lies, damn lies and statistics\"}}")));
 }
 
 // ParseMapTest, spLargeArrayFake and the three other heads: an array or map head with a count and no elements.
@@ -492,7 +492,7 @@ TEST_CASE("qcbor ParseMapTest: a large count with no elements gives too_little_d
     for (auto const &head : {as_string({0x99, 0xff, 0xfe}), as_string({0x99, 0xff, 0xff}), as_string({0xb9, 0x7f, 0xff}),
                              as_string({0xba, 0x00, 0x00, 0x80, 0x00})}) {
         CAPTURE(head.size());
-        CHECK(count_pieces(lazy_of(head)) == std::unexpected(error::too_little_data));
+        CHECK((count_pieces(lazy_of(head)) == std::unexpected(error::too_little_data)));
         CHECK(cbor::decode(head).error_or(error{}) == error::too_little_data);
     }
 }
@@ -521,13 +521,13 @@ TEST_CASE("qcbor SimpleValueDecodeTests: simple values decode, and the reserved 
     REQUIRE(u.has_value());
     CHECK((**u).type() == cbor::type::undefined);
     CHECK(cbor::decode(as_string({0xff})).error_or(error{}) == error::syntax_error);
-    CHECK(simple_of(as_string({0xe0})) == cbor::simple_value{0});
-    CHECK(simple_of(as_string({0xf3})) == cbor::simple_value{19});
+    CHECK((simple_of(as_string({0xe0})) == cbor::simple_value{0}));
+    CHECK((simple_of(as_string({0xf3})) == cbor::simple_value{19}));
     CHECK(cbor::decode(as_string({0xf8, 0x00})).error_or(error{}) == error::syntax_error);
     CHECK(cbor::decode(as_string({0xf8, 0x13})).error_or(error{}) == error::syntax_error);
     CHECK(cbor::decode(as_string({0xf8, 0x1f})).error_or(error{}) == error::syntax_error);
-    CHECK(simple_of(as_string({0xf8, 0x20})) == cbor::simple_value{32});
-    CHECK(simple_of(as_string({0xf8, 0xff})) == cbor::simple_value{255});
+    CHECK((simple_of(as_string({0xf8, 0x20})) == cbor::simple_value{32}));
+    CHECK((simple_of(as_string({0xf8, 0xff})) == cbor::simple_value{255}));
 
     std::string const all = as_string(
         {0x8a, 0xf4, 0xf5, 0xf6, 0xf7, 0xff, 0xe0, 0xf3, 0xf8, 0x00, 0xf8, 0x13, 0xf8, 0x1f, 0xf8, 0x20, 0xf8, 0xff});
@@ -543,19 +543,19 @@ TEST_CASE("qcbor SimpleValueDecodeTests: simple values are found by key")
     auto const doc = lazy_of(as_string({0xa9, 0x01, 0xf4, 0x02, 0xf5, 0x03, 0xf6, 0x04, 0xf7, 0x05, 0xe0, 0x06,
                                         0xf3, 0x07, 0xf8, 0x20, 0x61, 0x40, 0xf8, 0xff, 0x0f, 0x0f}));
     REQUIRE(doc.has_value());
-    CHECK(read_as<cbor::simple_value>(doc->at(1)) == cbor::simple_value::false_value);
-    CHECK(read_as<cbor::simple_value>(doc->at(2)) == cbor::simple_value::true_value);
-    CHECK(read_as<cbor::simple_value>(doc->at(3)) == cbor::simple_value::null);
-    CHECK(read_as<cbor::simple_value>(doc->at(4)) == cbor::simple_value::undefined);
-    CHECK(read_as<cbor::simple_value>(doc->at(5)) == cbor::simple_value{0});
-    CHECK(read_as<cbor::simple_value>(doc->at(6)) == cbor::simple_value{19});
-    CHECK(read_as<cbor::simple_value>(doc->at(7)) == cbor::simple_value{32});
-    CHECK(read_as<cbor::simple_value>(doc->at("@")) == cbor::simple_value{255});
+    CHECK((read_as<cbor::simple_value>(doc->at(1)) == cbor::simple_value::false_value));
+    CHECK((read_as<cbor::simple_value>(doc->at(2)) == cbor::simple_value::true_value));
+    CHECK((read_as<cbor::simple_value>(doc->at(3)) == cbor::simple_value::null));
+    CHECK((read_as<cbor::simple_value>(doc->at(4)) == cbor::simple_value::undefined));
+    CHECK((read_as<cbor::simple_value>(doc->at(5)) == cbor::simple_value{0}));
+    CHECK((read_as<cbor::simple_value>(doc->at(6)) == cbor::simple_value{19}));
+    CHECK((read_as<cbor::simple_value>(doc->at(7)) == cbor::simple_value{32}));
+    CHECK((read_as<cbor::simple_value>(doc->at("@")) == cbor::simple_value{255}));
     auto const at_99 = doc->at(99);
     CHECK(at_99 == std::unexpected(error::key_not_found));
     auto const xx = doc->at("xx");
     CHECK(xx == std::unexpected(error::key_not_found));
-    CHECK(read_as<cbor::simple_value>(doc->at(15)) == std::unexpected(error::incorrect_type));
+    CHECK((read_as<cbor::simple_value>(doc->at(15)) == std::unexpected(error::incorrect_type)));
 }
 
 namespace
@@ -764,7 +764,7 @@ TEST_CASE("qcbor NotWellFormedTests: decode and item_size refuse each not-well-f
         std::string const in = as_string(c.input);
         if (in == bare_break_after_array) {
             CHECK(cbor::decode(in).has_value());
-            CHECK(cbor::item_size(in) == std::size_t{1});
+            CHECK((cbor::item_size(in) == std::size_t{1}));
             continue;
         }
         CHECK_FALSE(cbor::decode(in).has_value());
@@ -775,7 +775,7 @@ TEST_CASE("qcbor NotWellFormedTests: decode and item_size refuse each not-well-f
         items.push_back(e);
     REQUIRE_EQ(items.size(), 2u);
     CHECK(items[0].has_value());
-    CHECK(items[1] == std::unexpected(error::syntax_error));
+    CHECK((items[1] == std::unexpected(error::syntax_error)));
 }
 
 // DecodeFailureTests: a text string head with the length SIZE_MAX and no bytes. Upstream gives
@@ -883,7 +883,7 @@ TEST_CASE("qcbor DateParseTest: an epoch date on an integer reads into sys_secon
     auto const t1 = t22->second.get<std::pair<std::uint64_t, cbor::item>>();
     REQUIRE(t1.has_value());
     CHECK_EQ(t1->first, 1u);
-    CHECK(t1->second.get<std::uint64_t>() == 1400000001u);
+    CHECK((t1->second.get<std::uint64_t>() == 1400000001u));
 }
 
 // DateParseTest, rows 7 to 13: tag 1 on a float. Upstream reads 1.1 as 1 second and a fraction of 0.1, and gives
@@ -943,9 +943,9 @@ TEST_CASE("qcbor BignumParseTest: bignums larger than 64 bits keep their bytes")
     CHECK_EQ(magnitude_of(top[1], cbor::type::negative_bignum), magnitude);
     auto const map = entries_of(top[2]);
     REQUIRE_EQ(map.size(), 8u);
-    CHECK(map[0].get<std::int64_t>() == -64);
+    CHECK((map[0].get<std::int64_t>() == -64));
     CHECK_EQ(magnitude_of(map[1], cbor::type::negative_bignum), magnitude);
-    CHECK(map[2].get<std::uint64_t>() == 64u);
+    CHECK((map[2].get<std::uint64_t>() == 64u));
     CHECK_EQ(magnitude_of(map[3], cbor::type::unsigned_bignum), magnitude);
     CHECK_EQ(text_in(map[4]), "BN+");
     CHECK_EQ(magnitude_of(map[5], cbor::type::unsigned_bignum), magnitude);
@@ -1064,8 +1064,8 @@ TEST_CASE("qcbor IntegerConvertTest: numbers read as int64_t, uint64_t and doubl
         std::string const description = c.description;
         CAPTURE(description);
         auto const in = as_string(c.input);
-        CHECK(read_as<std::int64_t>(lazy_of(in)) == c.to_int64);
-        CHECK(read_as<std::uint64_t>(lazy_of(in)) == c.to_uint64);
+        CHECK((read_as<std::int64_t>(lazy_of(in)) == c.to_int64));
+        CHECK((read_as<std::uint64_t>(lazy_of(in)) == c.to_uint64));
         auto const d = read_as<double>(lazy_of(in));
         double const read_value = d.value_or(0.0);
         cbor::error const read_error = d.error_or(error{});
@@ -1080,7 +1080,7 @@ TEST_CASE("qcbor IntegerConvertTest: numbers read as int64_t, uint64_t and doubl
     auto const nan = read_as<double>(lazy_of(as_string({0xfa, 0x7f, 0xc0, 0x00, 0x00})));
     REQUIRE(nan.has_value());
     CHECK_EQ(std::bit_cast<std::uint64_t>(*nan), test::ieee754::binary64_quiet_nan_bits);
-    CHECK(read_as<std::int64_t>(lazy_of(as_string({0xfa, 0x7f, 0xc0, 0x00, 0x00}))) == other_type);
+    CHECK((read_as<std::int64_t>(lazy_of(as_string({0xfa, 0x7f, 0xc0, 0x00, 0x00}))) == other_type));
 }
 
 // IntegerConvertTest, "Positive bignum 0x01020304 indefinite length string": upstream reads the bignum from an
@@ -1105,10 +1105,10 @@ TEST_CASE("qcbor CBORSequenceDecodeTests: a sequence splits into its items")
     auto const four = items_of(as_string({0x6a, '1', '9', '8', '5', '-', '0', '4', '-', '1', '2', 0x00, 0x1a, 0x53,
                                           0x72, 0x4e, 0x00, 0x62, 'h', 'i'}));
     REQUIRE_EQ(four.size(), 4u);
-    CHECK(four[0].transform([](std::string_view const v) { return v.size(); }) == 11u);
-    CHECK(four[1].transform([](std::string_view const v) { return v.size(); }) == 1u);
-    CHECK(four[2].transform([](std::string_view const v) { return v.size(); }) == 5u);
-    CHECK(four[3].transform([](std::string_view const v) { return v.size(); }) == 3u);
+    CHECK((four[0].transform([](std::string_view const v) { return v.size(); }) == 11u));
+    CHECK((four[1].transform([](std::string_view const v) { return v.size(); }) == 1u));
+    CHECK((four[2].transform([](std::string_view const v) { return v.size(); }) == 5u));
+    CHECK((four[3].transform([](std::string_view const v) { return v.size(); }) == 3u));
     CHECK(cbor::sequence{std::make_shared<std::string const>()}.empty());
     CHECK(items_of(std::string{}).empty());
 }
@@ -1125,7 +1125,7 @@ TEST_CASE("qcbor CBORSequenceDecodeTests: an indefinite-length item in a sequenc
             items.push_back(e);
         REQUIRE_EQ(items.size(), 2u);
         CHECK(items[0].has_value());
-        CHECK(items[1] == std::unexpected(error::indefinite_length));
+        CHECK((items[1] == std::unexpected(error::indefinite_length)));
     }
 }
 
@@ -1135,7 +1135,7 @@ TEST_CASE("qcbor CBORSequenceDecodeTests: an indefinite-length item in a sequenc
 TEST_CASE("qcbor IndefiniteLengthArrayMapTest: indefinite-length arrays and their faults")
 {
     std::string const good = as_string({0x9f, 0x01, 0x82, 0x02, 0x03, 0xff});
-    CHECK(cbor::diagnostic_notation(good) == std::string("[_ 1, [2, 3]]"));
+    CHECK((cbor::diagnostic_notation(good) == std::string("[_ 1, [2, 3]]")));
     CHECK(cbor::decode(good).error_or(error{}) == error::indefinite_length);
     CHECK(cbor::diagnostic_notation(as_string({0x9f})).error_or(error{}) == error::too_little_data);
     CHECK(cbor::diagnostic_notation(as_string({0x9f, 0x9f, 0x02, 0xff})).error_or(error{}) ==
@@ -1167,7 +1167,7 @@ TEST_CASE("qcbor IndefiniteLengthStringTest: indefinite-length strings and their
 {
     std::string const good =
         as_string({0x81, 0x7f, 0x65, 0x73, 0x74, 0x72, 0x65, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x67, 0xff});
-    CHECK(cbor::diagnostic_notation(good) == std::string("[(_ \"strea\", \"ming\")]"));
+    CHECK((cbor::diagnostic_notation(good) == std::string("[(_ \"strea\", \"ming\")]")));
     CHECK(cbor::decode(good).error_or(error{}) == error::indefinite_length);
     CHECK(cbor::diagnostic_notation(
               as_string({0x81, 0x7f, 0x65, 0x73, 0x74, 0x72, 0x65, 0x61, 0x44, 0x6d, 0x69, 0x6e, 0x67, 0xff}))
@@ -1177,9 +1177,9 @@ TEST_CASE("qcbor IndefiniteLengthStringTest: indefinite-length strings and their
     CHECK(cbor::diagnostic_notation(
               as_string({0x81, 0x7f, 0x65, 0x73, 0x74, 0x72, 0x65, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x67}))
               .error_or(error{}) == error::too_little_data);
-    CHECK(cbor::diagnostic_notation(
+    CHECK((cbor::diagnostic_notation(
               as_string({0xa1, 0x7f, 0x65, 0x73, 0x74, 0x72, 0x75, 0x75, 0x64, 0x6d, 0x69, 0x6e, 0x67, 0xff, 0x01})) ==
-          std::string("{(_ \"struu\", \"ming\"): 1}"));
+          std::string("{(_ \"struu\", \"ming\"): 1}")));
 
     std::string big = as_string({0x81, 0x5f});
     std::uint8_t next = 0;

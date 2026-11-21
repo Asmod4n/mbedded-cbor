@@ -353,8 +353,8 @@ TEST_CASE("doc advanced path: the limits")
     std::string const deep = test::repeat("\x81"sv, test::levels_beyond_small_stack) + '\x01';
     CHECK_EQ(test::error_on_small_stack([&deep] { return test::query("$..[0]", *test::make_lazy_from_copy(deep)); }),
              error::nesting_depth_exceeded);
-    CHECK(test::read_value_at_path("$" + test::repeat("[0]"sv, test::levels_beyond_small_stack), *test::make_lazy_from_copy(deep)) ==
-          test::V(1));
+    CHECK((test::read_value_at_path("$" + test::repeat("[0]"sv, test::levels_beyond_small_stack), *test::make_lazy_from_copy(deep)) ==
+          test::V(1)));
 }
 
 // The section "Threads" shows that a lazy is read from another thread, and that a tag 29 is a plain tag there too.

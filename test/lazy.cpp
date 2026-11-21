@@ -599,7 +599,7 @@ TEST_CASE("lazy: a reference inside its own mark is a plain tag")
     std::string const doc = "\xd8\x1c\xd8\x1d\x00"s;
     auto const at_0 = lazy_of(doc).at(0);
     CHECK_EQ(at_0.error(), error::not_indexable);
-    CHECK(test::make_value_from_item(lazy_of(doc)) == V(tagged{28, V(tagged{29, V(0)})}));
+    CHECK((test::make_value_from_item(lazy_of(doc)) == V(tagged{28, V(tagged{29, V(0)})})));
 }
 
 // Found by the fuzz corpus: a map that claims about 7.7 * 10^18 pairs. The count is larger than the bytes left, so
@@ -1216,7 +1216,7 @@ TEST_CASE("lazy: a reference forward to a mark is a plain tag")
     CHECK_EQ(*read, 5u);
     auto const first = root.at(0);
     REQUIRE(first.has_value());
-    CHECK(test::make_value_from_item(*first) == V(tagged{29, V(0)}));
+    CHECK((test::make_value_from_item(*first) == V(tagged{29, V(0)})));
 }
 
 namespace
@@ -2251,7 +2251,7 @@ TEST_CASE("lazy: one query applies to many documents")
     CHECK_EQ(cbor::at_path(shared, all)->size(), 3u);
     CHECK_EQ(cbor::at_path(std::string(two), all)->size(), 3u);
     auto const node = cbor::at_path(shared, *cbor::path::compile<cbor::lazy>("$.a[2]"));
-    CHECK(test::make_value_from_item(node) == V(5));
+    CHECK((test::make_value_from_item(node) == V(5)));
     std::string const text = "\xa1\x61s\x61x"s;
     auto const s = *cbor::path::compile<std::string_view>("$.s");
     auto const from_view = cbor::at_path(std::string(text), s);

@@ -198,7 +198,7 @@ TEST_CASE("sequence: a loop over 100000 items reads each item once")
 {
     auto const elements = elements_of(held(std::string(100000, '\x00')));
     CHECK_EQ(elements.size(), 100000u);
-    CHECK(std::ranges::all_of(elements, [](auto const &e) { return e.has_value() && e->size() == 1; }));
+    CHECK(std::all_of(elements.begin(), elements.end(), [](auto const &e) { return e.has_value() && e->size() == 1; }));
 }
 
 namespace

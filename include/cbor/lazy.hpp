@@ -297,7 +297,7 @@ public:
      * @see cbor::lazy::get()
      */
     template <class Integer>
-        requires(std::integral<Integer> && !std::same_as<Integer, bool> && !std::same_as<Integer, char> &&
+        requires(detail::integer<Integer> && !std::same_as<Integer, bool> && !std::same_as<Integer, char> &&
                  !std::same_as<Integer, wchar_t> && !std::same_as<Integer, char8_t> &&
                  !std::same_as<Integer, char16_t> && !std::same_as<Integer, char32_t>)
     result<lazy> at(Integer key_or_index) const;
@@ -602,7 +602,7 @@ private:
     std::expected<lazy, error> at_or_error(std::string_view key) const;
 
     template <class Integer>
-        requires(std::integral<Integer> && !std::same_as<Integer, bool> && !std::same_as<Integer, char> &&
+        requires(detail::integer<Integer> && !std::same_as<Integer, bool> && !std::same_as<Integer, char> &&
                  !std::same_as<Integer, wchar_t> && !std::same_as<Integer, char8_t> &&
                  !std::same_as<Integer, char16_t> && !std::same_as<Integer, char32_t>)
     std::expected<lazy, error> at_or_error(Integer key_or_index) const;
@@ -1660,7 +1660,7 @@ inline std::expected<lazy, error> lazy::at_or_error(std::string_view const key) 
 }
 
 template <class Integer>
-    requires(std::integral<Integer> && !std::same_as<Integer, bool> && !std::same_as<Integer, char> &&
+    requires(detail::integer<Integer> && !std::same_as<Integer, bool> && !std::same_as<Integer, char> &&
              !std::same_as<Integer, wchar_t> && !std::same_as<Integer, char8_t> &&
              !std::same_as<Integer, char16_t> && !std::same_as<Integer, char32_t>)
 result<lazy> lazy::at(Integer const key_or_index) const
@@ -1669,7 +1669,7 @@ result<lazy> lazy::at(Integer const key_or_index) const
 }
 
 template <class Integer>
-    requires(std::integral<Integer> && !std::same_as<Integer, bool> && !std::same_as<Integer, char> &&
+    requires(detail::integer<Integer> && !std::same_as<Integer, bool> && !std::same_as<Integer, char> &&
              !std::same_as<Integer, wchar_t> && !std::same_as<Integer, char8_t> &&
              !std::same_as<Integer, char16_t> && !std::same_as<Integer, char32_t>)
 std::expected<lazy, error> lazy::at_or_error(Integer const key_or_index) const

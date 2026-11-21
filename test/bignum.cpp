@@ -267,10 +267,10 @@ TEST_CASE("bignum: a key that fits 64 bits is the same key as the integer")
     CHECK_EQ(at_minus_2.error(), error::key_not_found);
     auto const at_1_3 = test::make_lazy_from_copy("\xa1\xc2\x61\x61\x61\x61"s)->at(1);
     CHECK_EQ(at_1_3.error(), error::inadmissible_type_for_tag_content);
-    CHECK(test::query("$[1]", *test::make_lazy_from_copy("\xa1\xc2\x41\x01\x61\x61"s)) ==
-          test::query("$[1]", *test::make_lazy_from_copy("\xa1\x01\x61\x61"s)));
-    CHECK(test::query("$[-1]", *test::make_lazy_from_copy("\xa1\xc3\x40\x61\x61"s)) ==
-          test::query("$[-1]", *test::make_lazy_from_copy("\xa1\x20\x61\x61"s)));
+    CHECK((test::query("$[1]", *test::make_lazy_from_copy("\xa1\xc2\x41\x01\x61\x61"s)) ==
+          test::query("$[1]", *test::make_lazy_from_copy("\xa1\x01\x61\x61"s))));
+    CHECK((test::query("$[-1]", *test::make_lazy_from_copy("\xa1\xc3\x40\x61\x61"s)) ==
+          test::query("$[-1]", *test::make_lazy_from_copy("\xa1\x20\x61\x61"s))));
 }
 
 namespace
