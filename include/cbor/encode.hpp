@@ -576,12 +576,12 @@ std::expected<void, error> detail::encoding::for_each_child(item const node, F &
 {
     switch (node.type()) {
     case cbor::type::array:
-        for (item const child : node.elements())
+        for (item const child : *node.elements())
             if (auto const r = f(child); !r) [[unlikely]]
                 return r;
         return {};
     case cbor::type::map:
-        for (auto const [key, value] : node.entries()) {
+        for (auto const [key, value] : *node.pairs()) {
             if (auto const r = f(key); !r) [[unlikely]]
                 return r;
             if (auto const r = f(value); !r) [[unlikely]]

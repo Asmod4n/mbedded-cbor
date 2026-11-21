@@ -74,7 +74,7 @@ TEST_CASE("a float keeps its width in the additional information and its value a
 {
     auto const tree = cbor::decode("\x83\xf9\x3e\x00\xfa\x47\xc3\x50\x00\xfb\x3f\xf1\x99\x99\x99\x99\x99\x9a"sv);
     REQUIRE(tree.has_value());
-    auto const floats = (*tree)->get<cbor::array_range>().value();
+    auto const floats = (*tree)->elements().value();
     auto at = floats.begin();
     cbor::item const f16 = *at;
     cbor::item const f32 = *++at;
@@ -93,7 +93,7 @@ TEST_CASE("null and undefined are two items")
 {
     auto const tree = cbor::decode("\x82\xf6\xf7"sv);
     REQUIRE(tree.has_value());
-    auto const items = (*tree)->get<cbor::array_range>().value();
+    auto const items = (*tree)->elements().value();
     auto at = items.begin();
     cbor::item const null = *at;
     cbor::item const undefined = *++at;
@@ -115,33 +115,33 @@ TEST_CASE("an item owns no memory, is a view of its node and takes 16 bytes")
     cbor::item const root = **tree;
     cbor::item const copy = root;
     CHECK(copy == root);
-    CHECK_EQ(copy.get<cbor::array_range>()->size(), 2u);
-    CHECK(copy != root.get<cbor::array_range>()->front());
+    CHECK_EQ(copy.elements()->size(), 2u);
+    CHECK(copy != root.elements()->front());
 }
 
 // RFC 8949 3.1: an array holds its elements in order, and its argument is their count. The range of an array gives
 // each element once, in the order of the message, and its size is the count of the head.
-TEST_CASE("cbor::array_range gives the elements of an array in order, and their count")
+TEST_CASE("item elements: the elements of an array in order, and their count")
 {
     auto const tree = cbor::parse_edn("[7, 8, 9]");
     REQUIRE(tree.has_value());
-    auto const elements = (*tree)->get<cbor::array_range>();
+    auto const elements = (*tree)->elements();
     REQUIRE(elements.has_value());
     CHECK_EQ(elements->size(), 3u);
     std::vector<int> read;
     for (cbor::item const element : *elements)
         read.push_back(element.get<int>().value());
     CHECK_EQ(read, std::vector<int>{7, 8, 9});
-    CHECK_EQ((*tree)->get<cbor::map_range>().error(), cbor::error::incorrect_type);
+    CHECK_EQ((*tree)->pairs().error(), cbor::error::incorrect_type);
 }
 
 // RFC 8949 3.1: a map holds pairs of a key and a value, and its argument is the count of pairs. The range of a map
 // gives each key with its value, in the order of the message.
-TEST_CASE("cbor::map_range gives each key with its value in order, and the count of pairs")
+TEST_CASE("item pairs: each key with its value in order, and the count of pairs")
 {
     auto const tree = cbor::parse_edn(R"({"a": 1, "b": [2, 3]})");
     REQUIRE(tree.has_value());
-    auto const entries = (*tree)->get<cbor::map_range>();
+    auto const entries = (*tree)->pairs();
     REQUIRE(entries.has_value());
     CHECK_EQ(entries->size(), 2u);
     std::vector<std::string_view> keys;
@@ -149,23 +149,23 @@ TEST_CASE("cbor::map_range gives each key with its value in order, and the count
         keys.push_back(key.get<std::string_view>().value());
     CHECK_EQ(keys, std::vector<std::string_view>{"a", "b"});
     auto const second = std::ranges::next(entries->begin());
-    CHECK_EQ((*second).second.get<cbor::array_range>()->size(), 2u);
-    CHECK_EQ((*tree)->get<cbor::array_range>().error(), cbor::error::incorrect_type);
+    CHECK_EQ((*second).second.elements()->size(), 2u);
+    CHECK_EQ((*tree)->elements().error(), cbor::error::incorrect_type);
 }
 
 // RFC 8949 3.1: a key and a value are each one data item, and an array, a map or a tag holds further items.
 // The range must step over all of them, so a value after a wide key, and a key after a wide value, are the
 // right nodes. A map with no pairs gives an empty range. A forward range can be passed more than once: two
 // copies of the first iterator give the same pairs.
-TEST_CASE("cbor::map_range steps over keys and values that hold further items")
+TEST_CASE("item pairs: the range steps over keys and values that hold further items")
 {
     auto const tree =
         cbor::parse_edn(R"([{[1, 2]: {"x": 1}, "k": [3], 1([4, 5]): 100(h'01')}, {}, {"b": 2}])");
     REQUIRE(tree.has_value());
-    auto const maps = (*tree)->get<cbor::array_range>();
+    auto const maps = (*tree)->elements();
     REQUIRE(maps.has_value());
     REQUIRE_EQ(maps->size(), 3u);
-    auto const wide = maps->front().get<cbor::map_range>();
+    auto const wide = maps->front().pairs();
     REQUIRE(wide.has_value());
     CHECK_EQ(wide->size(), 3u);
     std::vector<std::string> pairs;
@@ -182,12 +182,12 @@ TEST_CASE("cbor::map_range steps over keys and values that hold further items")
     CHECK(copy == first);
     CHECK_EQ(cbor::to_edn((*copy).second).value(), "[3]");
 
-    auto const empty = (*std::ranges::next(maps->begin())).get<cbor::map_range>();
+    auto const empty = (*std::ranges::next(maps->begin())).pairs();
     REQUIRE(empty.has_value());
     CHECK_EQ(empty->size(), 0u);
     CHECK(empty->begin() == empty->end());
 
-    auto const last = (*std::ranges::next(maps->begin(), 2)).get<cbor::map_range>();
+    auto const last = (*std::ranges::next(maps->begin(), 2)).pairs();
     REQUIRE(last.has_value());
     REQUIRE_EQ(last->size(), 1u);
     CHECK_EQ(last->front().first.get<std::string_view>().value(), "b");
@@ -571,7 +571,7 @@ TEST_CASE("decode: a forward tag 29 is a plain tag")
     auto const top_level = test::make_lazy_from_copy(std::string("\x82\xd8\x1d\x00\xd8\x1c\x00"sv));
     REQUIRE(top_level.has_value());
     auto const whole = item_of(top_level->to_item());
-    CHECK_EQ(whole->get<cbor::array_range>().value().front().get<std::pair<std::uint64_t, cbor::item>>().value().first, 29u);
+    CHECK_EQ(whole->elements().value().front().get<std::pair<std::uint64_t, cbor::item>>().value().first, 29u);
     auto const element = top_level->at(0);
     REQUIRE(element.has_value());
     auto const inner = item_of(element->to_item());
@@ -794,7 +794,7 @@ TEST_CASE("decode: a reference before its mark is a plain tag")
     auto const top_level = test::make_lazy_from_copy(std::string("\x82\xd8\x1d\x00\xd8\x1c\x01"sv));
     REQUIRE(top_level.has_value());
     auto const root = item_of(top_level->to_item());
-    CHECK_EQ(root->get<cbor::array_range>().value().front().get<std::pair<std::uint64_t, cbor::item>>().value().first, 29u);
+    CHECK_EQ(root->elements().value().front().get<std::pair<std::uint64_t, cbor::item>>().value().first, 29u);
 }
 // RFC 8949 3.4.5.1: tag 24 holds a byte string with one encoded CBOR data item. The decode gives both the byte string as
 // written and the embedded item as a tree. So a reader takes the item without a second decode, and encode writes the
@@ -864,7 +864,7 @@ TEST_CASE("clone: a tag 28 and a tag 29 are tag nodes")
     std::string const wire = "\x82\xd8\x1c\x82\x01\x02\xd8\x1d\x00"s;
     auto const root = item_of(test::make_lazy_from_copy(std::string(wire))->to_item());
     auto const children = list_children_of_item(*root);
-    CHECK(children[0].get<std::pair<std::uint64_t, cbor::item>>().value().second.get<cbor::array_range>().has_value());
+    CHECK(children[0].get<std::pair<std::uint64_t, cbor::item>>().value().second.elements().has_value());
     CHECK_EQ(children[1].get<std::pair<std::uint64_t, cbor::item>>().value().first, 29u);
     CHECK_EQ(children[1].get<std::pair<std::uint64_t, cbor::item>>().value().second.get<std::uint64_t>().value(), 0u);
 }
@@ -888,7 +888,7 @@ TEST_CASE("decode: a shared reference inside tag 24 does not see a mark outside"
     auto const top_level = test::make_lazy_from_copy(std::string("\x82\xd8\x1c\x61\x61\xd8\x18\x43\xd8\x1d\x00"sv));
     REQUIRE(top_level.has_value());
     auto const root = item_of(top_level->to_item());
-    auto const embedded = cbor::encoded_cbor_data_item(root, root->get<cbor::array_range>().value().next().front());
+    auto const embedded = cbor::encoded_cbor_data_item(root, root->elements().value().next().front());
     REQUIRE(embedded.has_value());
     CHECK_EQ(embedded->get<std::pair<std::uint64_t, cbor::item>>().value().first, 29u);
 }
@@ -899,7 +899,7 @@ TEST_CASE("decode: a mark inside tag 24 does not count outside")
     auto const top_level = test::make_lazy_from_copy(std::string("\x82\xd8\x18\x43\xd8\x1c\x01\xd8\x1d\x00"sv));
     REQUIRE(top_level.has_value());
     auto const root = item_of(top_level->to_item());
-    CHECK_EQ(root->get<cbor::array_range>().value().next().front().get<std::pair<std::uint64_t, cbor::item>>().value().first, 29u);
+    CHECK_EQ(root->elements().value().next().front().get<std::pair<std::uint64_t, cbor::item>>().value().first, 29u);
 }
 
 // The embedded bytes are read with the same checks as the outer bytes. So malformed embedded bytes give the error that
@@ -1115,7 +1115,7 @@ TEST_CASE("encode: a bignum that fits is an integer, a larger bignum and a typed
 TEST_CASE("encoded_cbor_data_item: an item that is not a tag 24 of the tree throws")
 {
     auto const root = item_of(test::make_lazy_from_copy(std::string("\x82\xd8\x1c\x01\xd8\x1d\x00"sv))->to_item());
-    CHECK_THROWS_AS((void)cbor::encoded_cbor_data_item(root, root->get<cbor::array_range>().value().next().front()), std::logic_error);
+    CHECK_THROWS_AS((void)cbor::encoded_cbor_data_item(root, root->elements().value().next().front()), std::logic_error);
     // A tree that no decode made cannot be built: owning<item> has no public constructor.
     CHECK_FALSE((std::is_constructible_v<cbor::owning<cbor::item>, std::shared_ptr<cbor::item const>>));
 }
@@ -1149,7 +1149,7 @@ TEST_CASE("decode: an empty text string and an empty byte string read as empty")
 {
     auto const tree = cbor::decode("\x82\x60\x40"sv);
     REQUIRE(tree.has_value());
-    auto const children = (*tree)->get<cbor::array_range>().value();
+    auto const children = (*tree)->elements().value();
     CHECK_EQ(children.front().get<std::string_view>().value(), ""sv);
     CHECK(children.next().front().get<std::span<std::byte const>>().value().empty());
 }
@@ -1173,7 +1173,7 @@ TEST_CASE("decode: strings at the size of a block and one byte over keep every b
     auto const tree = cbor::decode(*input);
     input.reset();
     REQUIRE(tree.has_value());
-    auto const children = (*tree)->get<cbor::array_range>().value();
+    auto const children = (*tree)->elements().value();
     CHECK_EQ(children.front().get<std::string_view>().value(), "x"sv);
     CHECK_EQ(children.next(1).front().get<std::string_view>().value(), a);
     CHECK_EQ(children.next(2).front().get<std::string_view>().value(), b);
@@ -1354,7 +1354,7 @@ void check_result(std::expected<T, error> const &got, std::expected<E, error> co
 }
 
 using pair = std::pair<std::uint64_t, cbor::item>;
-using pairs = cbor::map_range;
+using pairs = decltype(std::declval<cbor::item>().pairs())::value_type;
 
 template <class T>
 void check_integer(cbor::type const kind, cbor::item const it)
@@ -1423,7 +1423,7 @@ void check_every_type(cbor::type const kind, cbor::item const it, std::optional<
         CHECK(std::ranges::equal(typed->bytes, std::array{std::byte{1}, std::byte{2}}));
     }
 
-    auto const elements = it.get<cbor::array_range>();
+    auto const elements = it.elements();
     check_result(elements, kind == cbor::type::array ? std::expected<int, error>(0)
                                                      : std::unexpected(error::incorrect_type));
     if (elements) {
@@ -1431,7 +1431,7 @@ void check_every_type(cbor::type const kind, cbor::item const it, std::optional<
         CHECK_EQ(elements->next(2).front().get<int>().value(), 3);
     }
 
-    auto const map = it.get<pairs>();
+    auto const map = it.pairs();
     check_result(map, kind == cbor::type::map ? std::expected<int, error>(0) : std::unexpected(error::incorrect_type));
     if (map) {
         REQUIRE_EQ(map->size(), 1u);
@@ -1472,7 +1472,7 @@ cbor::item node_of(sample const &s, cbor::owning<cbor::item> const &tree)
 {
     if (s.type != cbor::type::shared_reference)
         return *tree;
-    return tree->get<cbor::array_range>().value().next().front();
+    return tree->elements().value().next().front();
 }
 
 // get<T> is defined for every pair of a kind of node and a type T. The kinds are the 19 members of cbor::type and the
@@ -1589,7 +1589,7 @@ TEST_CASE("item get<T>: the tags that get passes")
     CHECK_EQ((*embedded)->get<std::span<std::byte const>>().error(), error::incorrect_type);
     CHECK_EQ((*embedded)->get<pair>()->first, 24u);
     auto const self_described = cbor::decode("\x81\xd9\xd9\xf7\x07"sv);
-    CHECK_EQ((*self_described)->get<cbor::array_range>().value().front().get<int>().value(), 7);
+    CHECK_EQ((*self_described)->elements().value().front().get<int>().value(), 7);
     auto const loop = cbor::decode_cycles("\xd8\x1c\xc1\xd8\x1d\x00"sv);
     REQUIRE(loop.has_value());
     CHECK_EQ((*loop)->get<int>().error(), error::incorrect_type);
@@ -1661,132 +1661,43 @@ TEST_CASE("encode: the count of bytes written is a std::size_t")
                           std::expected<std::size_t, cbor::error>>));
 }
 
-#ifdef CBOR_HAS_INT128
-using received = std::variant<std::uint64_t, cbor::int128, double, std::span<std::byte const>, std::string_view,
-                              cbor::array_range, cbor::map_range, bool, std::nullptr_t, cbor::simple_value, pair,
-                              cbor::typed_array, cbor::item>;
-
-// The alternative that f receives for each kind, in the order of received, from the table of item::visit.
-std::size_t alternative_of(cbor::type const kind)
+// The declaration of elements() and pairs() is auto: the doc comment states the element types, and this test holds
+// the declaration to that statement.
+TEST_CASE("item elements and pairs: the element types of the ranges")
 {
-    switch (kind) {
-    case cbor::type::unsigned_integer:
-        return 0;
-    case cbor::type::negative_integer:
-        return 1;
-    case cbor::type::half_float:
-    case cbor::type::single_float:
-    case cbor::type::double_float:
-        return 2;
-    case cbor::type::byte_string:
-        return 3;
-    case cbor::type::text_string:
-        return 4;
-    case cbor::type::array:
-        return 5;
-    case cbor::type::map:
-        return 6;
-    case cbor::type::false_value:
-    case cbor::type::true_value:
-        return 7;
-    case cbor::type::null:
-        return 8;
-    case cbor::type::undefined:
-    case cbor::type::simple_value:
-        return 9;
-    case cbor::type::tag:
-    case cbor::type::unsigned_bignum:
-    case cbor::type::negative_bignum:
-        return 10;
-    case cbor::type::typed_array:
-        return 11;
-    case cbor::type::shared_reference:
-        return 12;
-    }
-    return std::variant_npos;
+    CHECK((std::same_as<std::ranges::range_value_t<decltype(std::declval<cbor::item>().elements())::value_type>,
+                        cbor::item>));
+    CHECK((std::same_as<std::ranges::range_value_t<decltype(std::declval<cbor::item>().pairs())::value_type>,
+                        std::pair<cbor::item, cbor::item>>));
 }
 
-// visit calls f once with the value of the node. Each kind has its own C++ type, so f tells an array from a map and a
-// shared reference from a tag. A negative integer comes as cbor::int128, which holds every value down to -2^64. The
-// kinds are the 19 members of cbor::type, so every kind is checked.
-TEST_CASE("item visit: f receives the value of every kind of node")
+// RFC 8949 3.1: an array of no elements and a map of no pairs are valid. Their ranges are empty, and not an error.
+TEST_CASE("item elements and pairs: an empty array and an empty map")
 {
-    for (sample const &s : samples) {
-        CAPTURE(std::to_underlying(s.type));
-        auto const tree = tree_of(s);
-        REQUIRE(tree.has_value());
-        cbor::item const it = node_of(s, *tree);
-        int calls = 0;
-        auto const got = it.visit([&calls](auto const value) {
-            ++calls;
-            return received(value);
-        });
-        CHECK((std::same_as<decltype(it.visit([](auto) { return received{}; })), received>));
-        CHECK_EQ(calls, 1);
-        REQUIRE_EQ(got.index(), alternative_of(s.type));
-        switch (s.type) {
-        case cbor::type::unsigned_integer:
-            CHECK_EQ(std::get<std::uint64_t>(got), 100u);
-            break;
-        case cbor::type::negative_integer:
-            CHECK(std::get<cbor::int128>(got) == -100);
-            break;
-        case cbor::type::half_float:
-        case cbor::type::single_float:
-        case cbor::type::double_float:
-            CHECK_EQ(std::get<double>(got), double_of(s.type).value());
-            break;
-        case cbor::type::byte_string:
-            CHECK_EQ(std::get<std::span<std::byte const>>(got).size(), 4u);
-            break;
-        case cbor::type::text_string:
-            CHECK_EQ(std::get<std::string_view>(got), "IETF"sv);
-            break;
-        case cbor::type::array:
-            CHECK_EQ(std::get<cbor::array_range>(got).size(), 3u);
-            break;
-        case cbor::type::map:
-            CHECK_EQ(std::get<cbor::map_range>(got).size(), 1u);
-            break;
-        case cbor::type::false_value:
-        case cbor::type::true_value:
-            CHECK_EQ(std::get<bool>(got), s.type == cbor::type::true_value);
-            break;
-        case cbor::type::null:
-            break;
-        case cbor::type::undefined:
-        case cbor::type::simple_value:
-            CHECK_EQ(std::get<cbor::simple_value>(got), simple_of(s.type).value());
-            break;
-        case cbor::type::tag:
-        case cbor::type::unsigned_bignum:
-        case cbor::type::negative_bignum:
-            CHECK_EQ(std::get<pair>(got).first, s.type == cbor::type::tag ? 1u : s.type == cbor::type::unsigned_bignum ? 2u : 3u);
-            break;
-        case cbor::type::typed_array:
-            CHECK_EQ(std::get<cbor::typed_array>(got).tag, 64u);
-            break;
-        case cbor::type::shared_reference:
-            CHECK(std::get<cbor::item>(got) == **tree);
-            break;
-        }
-    }
-}
-
-// RFC 8949 3.1: the smallest negative integer is -2^64, the argument 2^64 - 1. No 64-bit type holds it, cbor::int128
-// does.
-TEST_CASE("item visit: the smallest negative integer")
-{
-    auto const tree = cbor::decode(head_of(negative_major, all_bits));
+    auto const tree = cbor::parse_edn("[[], {}]");
     REQUIRE(tree.has_value());
-    CHECK((*tree)->visit([](auto const value) -> bool {
-        if constexpr (std::same_as<decltype(value), cbor::int128 const>)
-            return value == -static_cast<cbor::int128>(all_bits) - 1;
-        else
-            return false;
-    }));
+    auto const outer = (*tree)->elements();
+    REQUIRE(outer.has_value());
+    CHECK(outer->front().elements()->empty());
+    CHECK(std::ranges::next(outer->begin()).operator*().pairs()->empty());
 }
-#endif
+
+// get<T>() passes a tag that it does not interpret (item.hpp, the table of get). elements() and pairs() give the
+// content of the array and the map under such a tag the same way, and a tag of an integer is still no array.
+TEST_CASE("item elements and pairs: a tag that is passed")
+{
+    auto const tree = cbor::parse_edn(R"([1([1, 2]), 1({"a": 1}), 1(5)])");
+    REQUIRE(tree.has_value());
+    auto const outer = (*tree)->elements();
+    REQUIRE(outer.has_value());
+    auto it = outer->begin();
+    CHECK_EQ((*it).elements()->size(), 2u);
+    ++it;
+    CHECK_EQ((*it).pairs()->size(), 1u);
+    ++it;
+    CHECK_EQ((*it).elements().error(), cbor::error::incorrect_type);
+    CHECK_EQ((*it).pairs().error(), cbor::error::incorrect_type);
+}
 
 }
 

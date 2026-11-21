@@ -148,14 +148,14 @@ std::expected<std::uint64_t, error> count_pieces(std::expected<cbor::lazy, error
 
 std::vector<cbor::item> elements_of(cbor::item const node)
 {
-    auto const a = node.get<cbor::array_range>();
+    auto const a = node.elements();
     REQUIRE(a.has_value());
     return {a->begin(), a->end()};
 }
 
 std::vector<cbor::item> entries_of(cbor::item const node)
 {
-    auto const m = node.get<cbor::map_range>();
+    auto const m = node.pairs();
     REQUIRE(m.has_value());
     std::vector<cbor::item> entries;
     for (auto const pair : *m) {

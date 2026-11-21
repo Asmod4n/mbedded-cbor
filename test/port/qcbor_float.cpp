@@ -288,7 +288,7 @@ TEST_CASE("qcbor GeneralFloatDecodeTests: floats of each width decode to double"
 
     auto const tree = cbor::decode(expected_floats);
     REQUIRE(tree.has_value());
-    auto const elements = (**tree).get<cbor::array_range>();
+    auto const elements = (**tree).elements();
     REQUIRE(elements.has_value());
     REQUIRE_EQ(elements->size(), 11u);
     CHECK(elements->front().type() == cbor::type::half_float);

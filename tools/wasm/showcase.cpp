@@ -100,12 +100,7 @@ void js_value_built(cbor::item const &i)
     case cbor::type::unsigned_integer:
         return value_number(static_cast<double>(i.get<std::uint64_t>().value()));
     case cbor::type::negative_integer:
-        return value_number(i.visit([](auto const v) -> double {
-            if constexpr (std::same_as<decltype(v), cbor::int128 const>)
-                return static_cast<double>(v);
-            else
-                return 0;
-        }));
+        return value_number(static_cast<double>(i.get<cbor::int128>().value()));
     case cbor::type::text_string: {
         std::string_view const s = i.get<std::string_view>().value();
         return value_string(s.data(), s.size());
@@ -125,12 +120,7 @@ void js_value_built(cbor::item const &i)
             } else if (key.type() == cbor::type::unsigned_integer) {
                 key_number(static_cast<double>(*key.get<std::uint64_t>()));
             } else {
-                key_number(key.visit([](auto const v) -> double {
-                    if constexpr (std::same_as<decltype(v), cbor::int128 const>)
-                        return static_cast<double>(v);
-                    else
-                        return 0;
-                }));
+                key_number(static_cast<double>(key.get<cbor::int128>().value()));
             }
             js_value_built(pair[1]);
         }

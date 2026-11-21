@@ -66,6 +66,18 @@ __extension__ typedef __int128 int128;
 __extension__ typedef unsigned __int128 uint128;
 #endif
 
+namespace detail
+{
+
+template <class T>
+concept integer = (std::integral<T> && !std::same_as<T, bool>)
+#ifdef CBOR_HAS_INT128
+                  || std::same_as<T, int128> || std::same_as<T, uint128>
+#endif
+    ;
+
+}
+
 struct lazy;
 struct item;
 struct lazy_elements;
@@ -445,15 +457,15 @@ class heads
         }
 
         template <class T>
-            requires(std::integral<T> || std::same_as<T, double> || std::same_as<T, simple_value> ||
-                     std::same_as<T, std::nullptr_t> || std::same_as<T, std::string_view> ||
-                     std::same_as<T, std::span<std::byte const>>)
+            requires(detail::integer<T> || std::same_as<T, bool> || std::same_as<T, double> ||
+                     std::same_as<T, simple_value> || std::same_as<T, std::nullptr_t> ||
+                     std::same_as<T, std::string_view> || std::same_as<T, std::span<std::byte const>>)
         CBOR_ALWAYS_INLINE std::expected<T, error> decode_value(head const h)
         {
-            if constexpr ((std::integral<T> && !std::same_as<T, bool>) || std::same_as<T, double>)
+            if constexpr (detail::integer<T> || std::same_as<T, double>)
                 if (is_bignum(h.major, h.argument)) [[unlikely]]
                     return decode_bignum_value<T>(h.argument);
-            if constexpr (std::integral<T> && !std::same_as<T, bool>) {
+            if constexpr (detail::integer<T>) {
                 if (h.major != major_type::unsigned_integer && h.major != major_type::negative_integer) [[unlikely]]
                     return std::unexpected(error::incorrect_type);
                 return integer_value<T>(h.major == major_type::negative_integer, h.argument);

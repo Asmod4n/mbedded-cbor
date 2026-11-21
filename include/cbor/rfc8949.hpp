@@ -20,7 +20,6 @@ namespace detail
 
 class canonical_ids;
 class encoding;
-class map_iterator;
 class extended_diagnostic_notation;
 class edn_text;
 template <bool Reflected>
@@ -169,8 +168,6 @@ class rfc8949
     friend struct lazy;
 
     friend struct item;
-
-    friend class detail::map_iterator;
 
     template <fixed_string Path>
     friend class is_singular_query;

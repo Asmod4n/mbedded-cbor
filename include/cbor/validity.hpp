@@ -807,14 +807,20 @@ public:
 
     template <class T, class M>
         requires(std::numeric_limits<T>::is_integer && std::numeric_limits<M>::is_integer &&
-                 !std::numeric_limits<M>::is_signed && sizeof(T) <= sizeof(M))
+                 !std::numeric_limits<M>::is_signed)
     CBOR_ALWAYS_INLINE static constexpr std::expected<void, error> check_number_range(bool const negative,
                                                                                       M const magnitude)
     {
-        if ((!std::numeric_limits<T>::is_signed && negative) ||
-            magnitude > static_cast<M>(std::numeric_limits<T>::max())) [[unlikely]]
-            return std::unexpected(error::number_out_of_range);
-        return {};
+        if constexpr (sizeof(T) > sizeof(M)) {
+            if (!std::numeric_limits<T>::is_signed && negative) [[unlikely]]
+                return std::unexpected(error::number_out_of_range);
+            return {};
+        } else {
+            if ((!std::numeric_limits<T>::is_signed && negative) ||
+                magnitude > static_cast<M>(std::numeric_limits<T>::max())) [[unlikely]]
+                return std::unexpected(error::number_out_of_range);
+            return {};
+        }
     }
 
     template <class T, class M>

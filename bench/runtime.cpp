@@ -34,43 +34,59 @@ static std::uint64_t item_tree_sum(cbor::item const it)
 {
     if (it.type() == cbor::type::shared_reference)
         return it.get<std::pair<std::uint64_t, cbor::item>>().value().first;
-    return it.visit([](auto const v) -> std::uint64_t {
-        using V = std::remove_cvref_t<decltype(v)>;
-        if constexpr (std::is_same_v<V, std::string_view>) {
-            return v.size() + bytes_sum(v);
-        } else if constexpr (std::is_same_v<V, std::span<std::byte const>>) {
-            return v.size() + bytes_sum(std::string_view(reinterpret_cast<char const *>(v.data()), v.size()));
-        } else if constexpr (std::is_same_v<V, cbor::array_range>) {
-            std::uint64_t s = v.size();
-            for (cbor::item const child : v)
-                s += item_tree_sum(child);
-            return s;
-        } else if constexpr (std::is_same_v<V, cbor::map_range>) {
-            std::uint64_t s = v.size();
-            for (auto const pair : v)
-                s += item_tree_sum(std::get<0>(pair)) + item_tree_sum(std::get<1>(pair));
-            return s;
-        } else if constexpr (std::is_same_v<V, std::pair<std::uint64_t, cbor::item>>) {
-            return v.first + item_tree_sum(v.second);
-        } else if constexpr (std::is_same_v<V, cbor::typed_array>) {
-            return v.tag + v.bytes.size() +
-                   bytes_sum(std::string_view(reinterpret_cast<char const *>(v.bytes.data()), v.bytes.size()));
-        } else if constexpr (std::is_same_v<V, double>) {
-            return std::bit_cast<std::uint64_t>(v);
-        } else if constexpr (std::is_same_v<V, bool>) {
-            return v ? 21 : 20;
-        } else if constexpr (std::is_same_v<V, std::nullptr_t>) {
-            return 22;
-        } else if constexpr (std::is_same_v<V, cbor::simple_value>) {
-            return std::to_underlying(v);
-        } else if constexpr (std::is_same_v<V, cbor::int128>) {
-            return static_cast<std::uint64_t>(-1 - v);
-        } else if constexpr (std::is_same_v<V, std::uint64_t>) {
-            return v;
-        } else {
-            return 0;
-        }
-    });
+    switch (it.type()) {
+    case cbor::type::text_string: {
+        auto const v = it.get<std::string_view>().value();
+        return v.size() + bytes_sum(v);
+    }
+    case cbor::type::byte_string: {
+        auto const v = it.get<std::span<std::byte const>>().value();
+        return v.size() + bytes_sum(std::string_view(reinterpret_cast<char const *>(v.data()), v.size()));
+    }
+    case cbor::type::array: {
+        auto const v = *it.elements();
+        std::uint64_t s = v.size();
+        for (cbor::item const child : v)
+            s += item_tree_sum(child);
+        return s;
+    }
+    case cbor::type::map: {
+        auto const v = *it.pairs();
+        std::uint64_t s = v.size();
+        for (auto const [key, value] : v)
+            s += item_tree_sum(key) + item_tree_sum(value);
+        return s;
+    }
+    case cbor::type::tag:
+    case cbor::type::unsigned_bignum:
+    case cbor::type::negative_bignum: {
+        auto const v = it.get<std::pair<std::uint64_t, cbor::item>>().value();
+        return v.first + item_tree_sum(v.second);
+    }
+    case cbor::type::typed_array: {
+        auto const v = it.get<cbor::typed_array>().value();
+        return v.tag + v.bytes.size() +
+               bytes_sum(std::string_view(reinterpret_cast<char const *>(v.bytes.data()), v.bytes.size()));
+    }
+    case cbor::type::half_float:
+    case cbor::type::single_float:
+    case cbor::type::double_float:
+        return std::bit_cast<std::uint64_t>(it.get<double>().value());
+    case cbor::type::false_value:
+    case cbor::type::true_value:
+        return it.get<bool>().value() ? 21 : 20;
+    case cbor::type::null:
+        return 22;
+    case cbor::type::undefined:
+    case cbor::type::simple_value:
+        return std::to_underlying(it.get<cbor::simple_value>().value());
+    case cbor::type::negative_integer:
+        return static_cast<std::uint64_t>(-1 - it.get<cbor::int128>().value());
+    case cbor::type::unsigned_integer:
+        return it.get<std::uint64_t>().value();
+    default:
+        return 0;
+    }
 }
 #endif
 

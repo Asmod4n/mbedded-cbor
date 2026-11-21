@@ -528,7 +528,7 @@ static cbor::item untagged(cbor::item const i)
 #if defined(OP_ITEM_FIELD)
 static cbor::item member(cbor::item const m, std::string_view const key)
 {
-    auto const entries = untagged(m).get<cbor::map_range>();
+    auto const entries = untagged(m).pairs();
     if (!entries) [[unlikely]] std::abort();
     for (auto const pair : *entries)
         if (std::get<0>(pair).get<std::string_view>().value_or(std::string_view{}) == key)
@@ -552,12 +552,12 @@ static double item_sum(cbor::item const tagged)
     case cbor::type::true_value: return 1;
     case cbor::type::array: {
         double s = 0;
-        for (auto const x : *i.get<cbor::array_range>()) s += item_sum(x);
+        for (auto const x : *i.elements()) s += item_sum(x);
         return s;
     }
     case cbor::type::map: {
         double s = 0;
-        for (auto const pair : *i.get<cbor::map_range>()) s += item_sum(std::get<1>(pair));
+        for (auto const pair : *i.pairs()) s += item_sum(std::get<1>(pair));
         return s;
     }
     default: std::abort();
@@ -571,7 +571,7 @@ static double item_field()
 {
     auto const tree = cbor::decode(*plain);
     if (!tree) [[unlikely]] std::abort();
-    auto const cars = member(**tree, "cars").get<cbor::array_range>();
+    auto const cars = member(**tree, "cars").elements();
     if (!cars) [[unlikely]] std::abort();
     return double(*member(member(cars->next(500).front(), "engine"), "cc").get<std::uint64_t>());
 }

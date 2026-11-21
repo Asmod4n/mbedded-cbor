@@ -1,9 +1,9 @@
-// The bench of item::get and item::visit (item.hpp) on a tree from cbor::decode.
+// The bench of item::get, item::elements and item::pairs (item.hpp) on a tree from cbor::decode.
 // The message is an array of records in the form of bench/cars.json: text keys, text values, integers, negative
 // integers, doubles, booleans, nested maps and arrays. The tree is decoded once, and it is as large as COLD_BYTES.
 // item_get_scalars: each iteration reads every integer, double and text string of the tree through get.
 // item_visit_tree: each iteration reads every node of the tree, by a switch on the kind and get<cbor::type> where the
-// item has that get, and by visit where it does not.
+// item has that get, and by get, elements and pairs where it does not.
 // One file serves both forms of the item, so both arms build from one file with one set of flags.
 #include <benchmark/benchmark.h>
 #include <cbor/cbor.hpp>
@@ -171,13 +171,13 @@ std::uint64_t scalars_sum(Item const &it)
             return bytes_sum(it.template get<std::string_view>().value());
         case cbor::type::array: {
             std::uint64_t s = 0;
-            for (Item const &child : it.template get<cbor::array_range>().value())
+            for (Item const &child : it.elements().value())
                 s += scalars_sum(child);
             return s;
         }
         case cbor::type::map: {
             std::uint64_t s = 0;
-            for (auto const pair : it.template get<cbor::map_range>().value())
+            for (auto const pair : it.pairs().value())
                 s += scalars_sum(std::get<0>(pair)) + scalars_sum(std::get<1>(pair));
             return s;
         }
@@ -254,39 +254,51 @@ std::uint64_t tree_sum(Item const &it)
         }
         std::unreachable();
     } else {
-        return it.visit([](auto const value) -> std::uint64_t {
-            using V = std::remove_cvref_t<decltype(value)>;
-            if constexpr (std::is_integral_v<V> && !std::is_same_v<V, bool>)
-                return static_cast<std::uint64_t>(value);
-            else if constexpr (std::is_same_v<V, bool>)
-                return value ? 21 : 20;
-            else if constexpr (std::is_same_v<V, std::nullptr_t>)
-                return 22;
-            else if constexpr (std::is_same_v<V, cbor::simple_value>)
-                return std::to_underlying(value);
-            else if constexpr (std::is_same_v<V, double>)
-                return std::bit_cast<std::uint64_t>(value);
-            else if constexpr (std::is_same_v<V, std::string_view>)
-                return bytes_sum(value);
-            else if constexpr (std::is_same_v<V, std::span<std::byte const>>)
-                return value.size();
-            else if constexpr (std::is_same_v<V, cbor::array_range>) {
-                std::uint64_t s = 0;
-                for (Item const &child : value)
-                    s += tree_sum(child);
-                return s;
-            } else if constexpr (std::is_same_v<V, cbor::map_range>) {
-                std::uint64_t s = 0;
-                for (auto const pair : value)
-                    s += tree_sum(std::get<0>(pair)) + tree_sum(std::get<1>(pair));
-                return s;
-            } else if constexpr (std::is_same_v<V, std::pair<std::uint64_t, Item const *>>)
-                return value.first + tree_sum(*value.second);
-            else if constexpr (std::is_same_v<V, Item const *>)
-                return 0;
-            else
-                return value.tag;
-        });
+        switch (it.type()) {
+        case cbor::type::unsigned_integer:
+            return it.template get<std::uint64_t>().value();
+        case cbor::type::negative_integer:
+            return static_cast<std::uint64_t>(it.template get<cbor::int128>().value());
+        case cbor::type::false_value:
+        case cbor::type::true_value:
+            return it.template get<bool>().value() ? 21 : 20;
+        case cbor::type::null:
+            return 22;
+        case cbor::type::undefined:
+        case cbor::type::simple_value:
+            return std::to_underlying(it.template get<cbor::simple_value>().value());
+        case cbor::type::half_float:
+        case cbor::type::single_float:
+        case cbor::type::double_float:
+            return std::bit_cast<std::uint64_t>(it.template get<double>().value());
+        case cbor::type::text_string:
+            return bytes_sum(it.template get<std::string_view>().value());
+        case cbor::type::byte_string:
+            return it.template get<std::span<std::byte const>>().value().size();
+        case cbor::type::array: {
+            std::uint64_t s = 0;
+            for (Item const &child : *it.elements())
+                s += tree_sum(child);
+            return s;
+        }
+        case cbor::type::map: {
+            std::uint64_t s = 0;
+            for (auto const [key, value] : *it.pairs())
+                s += tree_sum(key) + tree_sum(value);
+            return s;
+        }
+        case cbor::type::tag:
+        case cbor::type::unsigned_bignum:
+        case cbor::type::negative_bignum: {
+            auto const tag = it.template get<std::pair<std::uint64_t, Item>>().value();
+            return tag.first + tree_sum(tag.second);
+        }
+        case cbor::type::typed_array:
+            return it.template get<cbor::typed_array>().value().tag;
+        case cbor::type::shared_reference:
+            return 0;
+        }
+        std::unreachable();
     }
 }
 

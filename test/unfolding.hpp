@@ -38,7 +38,7 @@ class bisimilarity
         return out;
     }
 
-    bool all_hold(cbor::array_range const l, cbor::array_range const r)
+    bool all_hold(std::ranges::forward_range auto const l, std::ranges::forward_range auto const r)
     {
         if (l.size() != r.size())
             return false;
@@ -55,8 +55,7 @@ class bisimilarity
         return l.first == r.first && holds(l.second, r.second);
     }
 
-    bool all_pairs_hold(cbor::map_range const l,
-                        cbor::map_range const r)
+    bool all_pairs_hold(std::ranges::forward_range auto const l, std::ranges::forward_range auto const r)
     {
         if (l.size() != r.size())
             return false;
@@ -78,10 +77,9 @@ public:
             return false;
         switch (a.type()) {
         case cbor::type::array:
-            return all_hold(a.get<cbor::array_range>().value(), b.get<cbor::array_range>().value());
+            return all_hold(a.elements().value(), b.elements().value());
         case cbor::type::map:
-            return all_pairs_hold(a.get<cbor::map_range>().value(),
-                                  b.get<cbor::map_range>().value());
+            return all_pairs_hold(a.pairs().value(), b.pairs().value());
         case cbor::type::tag:
             return tags_hold(a, b);
         default:

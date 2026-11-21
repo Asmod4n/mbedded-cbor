@@ -2158,7 +2158,7 @@ TEST_CASE("lazy: a read through a temporary lazy keeps the bytes alive")
     CHECK_EQ(types, std::vector{cbor::type::text_string, cbor::type::array});
     auto const copy = cbor::lazy::adopt(message())->to_item();
     REQUIRE(copy.has_value());
-    CHECK_EQ((*copy)->get<cbor::array_range>()->size(), 2u);
+    CHECK_EQ((*copy)->elements()->size(), 2u);
 }
 
 // A map or an array whose count claims more items than its bytes can hold gives too_little_data before any item is read.

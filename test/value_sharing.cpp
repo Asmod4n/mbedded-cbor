@@ -549,7 +549,7 @@ cbor::item target_of(cbor::item const reference)
 
 std::vector<cbor::item> elements_of(cbor::item const array)
 {
-    auto const e = array.get<cbor::array_range>();
+    auto const e = array.elements();
     REQUIRE(e.has_value());
     return {e->begin(), e->end()};
 }
@@ -609,7 +609,7 @@ TEST_CASE("value sharing: cbor::decode_cycles reads each case of the model")
     // 28({29(0): 1}): a map that holds itself as its key.
     auto const own_key = cbor::decode_cycles("\xd8\x1c\xa1\xd8\x1d\x00\x01"sv);
     REQUIRE(own_key.has_value());
-    CHECK(target_of(std::get<0>((*own_key)->get<cbor::map_range>().value().front())) == **own_key);
+    CHECK(target_of(std::get<0>((*own_key)->pairs().value().front())) == **own_key);
 }
 
 // A tag 29 may name any marked value whose read has not ended: the value itself or one above it. A tag 28 over a tag
@@ -765,7 +765,7 @@ std::string written_by_encode(std::string_view const edn)
 // The elements of the array at the root of the tree.
 std::vector<cbor::item> elements_of(tree const &array)
 {
-    auto const elements = array->get<cbor::array_range>();
+    auto const elements = array->elements();
     REQUIRE(elements.has_value());
     return {elements->begin(), elements->end()};
 }

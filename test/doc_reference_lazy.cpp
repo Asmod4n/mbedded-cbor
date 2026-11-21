@@ -306,7 +306,7 @@ TEST_CASE("doc reference lazy: clone")
     }();
     REQUIRE(tree);
     CHECK_EQ((*tree)->type(), cbor::type::array);
-    auto const children = (*tree)->get<cbor::array_range>().value();
+    auto const children = (*tree)->elements().value();
     REQUIRE_EQ(children.size(), 2u);
     CHECK_EQ(children.next().front().get<std::string_view>().value(), "x"sv);
 }

@@ -378,14 +378,9 @@ inline value value_of(cbor::item const it)
     case cbor::type::unsigned_integer:
         return {it.get<std::uint64_t>().value()};
     case cbor::type::negative_integer:
-        return {negative{static_cast<std::uint64_t>(-1 - it.visit([](auto const v) -> cbor::int128 {
-            if constexpr (std::is_same_v<decltype(v), cbor::int128 const>)
-                return v;
-            else
-                return 0;
-        }))}};
+        return {negative{static_cast<std::uint64_t>(-1 - it.get<cbor::int128>().value())}};
     case cbor::type::array: {
-        auto const children = it.get<cbor::array_range>().value();
+        auto const children = it.elements().value();
         array a;
         a.reserve(children.size());
         for (cbor::item const child : children)
@@ -393,7 +388,7 @@ inline value value_of(cbor::item const it)
         return {std::move(a)};
     }
     case cbor::type::map: {
-        auto const pairs = it.get<cbor::map_range>().value();
+        auto const pairs = it.pairs().value();
         map m;
         m.reserve(pairs.size());
         for (auto const pair : pairs)

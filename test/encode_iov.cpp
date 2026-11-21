@@ -210,7 +210,7 @@ TEST_CASE("encode_iov: a decoded tree is referred to above the copy limit and co
         std::string const input = array_of_text_bytes_and_seven(size);
         auto const tree = cbor::decode(input);
         REQUIRE(tree.has_value());
-        auto const elements = (**tree).get<cbor::array_range>();
+        auto const elements = (**tree).elements();
         REQUIRE(elements.has_value());
         REQUIRE_EQ(elements->size(), 3uz);
         auto const text = elements->front().get<std::string_view>();
@@ -262,7 +262,7 @@ TEST_CASE("encode_iov: the overload for a decoded tree with a shared_reference r
         auto const referred = cbor::encode_iov(*tree);
         REQUIRE(referred.has_value());
         CHECK_EQ(join_pieces_into_bytes(*referred), encoded);
-        auto const text = (**tree).get<cbor::array_range>().value().front().get<std::string_view>();
+        auto const text = (**tree).elements().value().front().get<std::string_view>();
         REQUIRE(text.has_value());
         CHECK_EQ(points_into(*referred, text->data()), size > copybreak && size > 0);
     }

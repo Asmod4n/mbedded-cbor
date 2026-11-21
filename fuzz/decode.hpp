@@ -98,20 +98,25 @@ inline std::vector<cbor::item> nodes_of(cbor::owning<cbor::item> const &tree)
         if (n.type() == cbor::type::tag && n.get<std::pair<std::uint64_t, cbor::item>>()->first == 24)
             if (auto const embedded = cbor::encoded_cbor_data_item(tree, n))
                 nodes.push_back(*embedded);
-        n.visit([&nodes](auto const value) {
-            using V = std::remove_cvref_t<decltype(value)>;
-            if constexpr (std::same_as<V, cbor::array_range>) {
-                for (cbor::item const c : value)
-                    nodes.push_back(c);
-            } else if constexpr (std::same_as<V, cbor::map_range>) {
-                for (auto const pair : value) {
-                    nodes.push_back(std::get<0>(pair));
-                    nodes.push_back(std::get<1>(pair));
-                }
-            } else if constexpr (std::same_as<V, std::pair<std::uint64_t, cbor::item>>) {
-                nodes.push_back(value.second);
+        switch (n.type()) {
+        case cbor::type::array:
+            for (cbor::item const c : *n.elements())
+                nodes.push_back(c);
+            break;
+        case cbor::type::map:
+            for (auto const [key, value] : *n.pairs()) {
+                nodes.push_back(key);
+                nodes.push_back(value);
             }
-        });
+            break;
+        case cbor::type::tag:
+        case cbor::type::unsigned_bignum:
+        case cbor::type::negative_bignum:
+            nodes.push_back(n.get<std::pair<std::uint64_t, cbor::item>>()->second);
+            break;
+        default:
+            break;
+        }
     }
     return nodes;
 }
