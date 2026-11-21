@@ -99,16 +99,20 @@ inline std::vector<cbor::item> nodes_of(cbor::owning<cbor::item> const &tree)
             if (auto const embedded = cbor::encoded_cbor_data_item(tree, n))
                 nodes.push_back(*embedded);
         switch (n.type()) {
-        case cbor::type::array:
-            for (cbor::item const c : *n.elements())
+        case cbor::type::array: {
+            auto const elements = *n.elements();
+            for (cbor::item const c : elements)
                 nodes.push_back(c);
             break;
-        case cbor::type::map:
-            for (auto const [key, value] : *n.pairs()) {
+        }
+        case cbor::type::map: {
+            auto const pairs = *n.pairs();
+            for (auto const [key, value] : pairs) {
                 nodes.push_back(key);
                 nodes.push_back(value);
             }
             break;
+        }
         case cbor::type::tag:
         case cbor::type::unsigned_bignum:
         case cbor::type::negative_bignum:

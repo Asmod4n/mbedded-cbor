@@ -552,12 +552,14 @@ static double item_sum(cbor::item const tagged)
     case cbor::type::true_value: return 1;
     case cbor::type::array: {
         double s = 0;
-        for (auto const x : *i.elements()) s += item_sum(x);
+        auto const elements = *i.elements();
+        for (auto const x : elements) s += item_sum(x);
         return s;
     }
     case cbor::type::map: {
         double s = 0;
-        for (auto const pair : *i.pairs()) s += item_sum(std::get<1>(pair));
+        auto const pairs = *i.pairs();
+        for (auto const pair : pairs) s += item_sum(std::get<1>(pair));
         return s;
     }
     default: std::abort();

@@ -277,13 +277,15 @@ std::uint64_t tree_sum(Item const &it)
             return it.template get<std::span<std::byte const>>().value().size();
         case cbor::type::array: {
             std::uint64_t s = 0;
-            for (Item const &child : *it.elements())
+            auto const elements = *it.elements();
+            for (Item const &child : elements)
                 s += tree_sum(child);
             return s;
         }
         case cbor::type::map: {
             std::uint64_t s = 0;
-            for (auto const [key, value] : *it.pairs())
+            auto const pairs = *it.pairs();
+            for (auto const [key, value] : pairs)
                 s += tree_sum(key) + tree_sum(value);
             return s;
         }

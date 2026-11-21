@@ -575,19 +575,23 @@ template <class F>
 std::expected<void, error> detail::encoding::for_each_child(item const node, F &&f)
 {
     switch (node.type()) {
-    case cbor::type::array:
-        for (item const child : *node.elements())
+    case cbor::type::array: {
+        auto const elements = *node.elements();
+        for (item const child : elements)
             if (auto const r = f(child); !r) [[unlikely]]
                 return r;
         return {};
-    case cbor::type::map:
-        for (auto const [key, value] : *node.pairs()) {
+    }
+    case cbor::type::map: {
+        auto const pairs = *node.pairs();
+        for (auto const [key, value] : pairs) {
             if (auto const r = f(key); !r) [[unlikely]]
                 return r;
             if (auto const r = f(value); !r) [[unlikely]]
                 return r;
         }
         return {};
+    }
     case cbor::type::tag:
     case cbor::type::unsigned_bignum:
     case cbor::type::negative_bignum:
