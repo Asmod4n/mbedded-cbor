@@ -204,10 +204,10 @@ TEST_CASE("doc reference schema: description")
     CHECK_EQ(seats, 5);
     CHECK_EQ(data->size() + description.size(), sample_bytes().size());
     CHECK_EQ((cbor::static_dictionary<car>::at_path<"$.seats">(*data)), 5);
-    // The data form holds no description. So at_path with the description inside reads a message that is shorter than
-    // its table: the doc of schema::adopt gives too_little_data for that.
+    // The data form holds no description. So at_path with the description inside reads bytes that differ from that
+    // description: the doc of schema::adopt gives incorrect_type for a message of another form.
     auto const refused = cbor::schema<car>::at_path<"$.seats">(*data).error();
-    CHECK_EQ(refused, error::too_little_data);
+    CHECK_EQ(refused, error::incorrect_type);
     auto const root = cbor::static_dictionary<car>::adopt(std::string(*data));
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.tires[1].diameter">(), 18);

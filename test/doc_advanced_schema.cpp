@@ -304,10 +304,10 @@ TEST_CASE("doc advanced schema: a typed array view")
     CHECK_EQ(std::bit_cast<std::uint64_t>(std::ranges::fold_left(*track, 0.0, std::plus<>{})), 0x4018000000000000u);
 }
 
-// The section "Errors" gives the error of a cut message, of a message of another struct and of a forged head. The root
-// is read from the end. So a message of another struct that is shorter than the table and the root of car gives
-// too_little_data, and a longer one gives incorrect_type in decode. adopt checks no table: it takes the end of the
-// message from the place of the directory of tire, and the bytes there give an end past the message.
+// The section "Errors" gives the error of a cut message, of a message of another struct and of a forged head. Only a
+// cut message gives too_little_data, because a reader of a CBOR sequence waits for more bytes on that error. A message
+// of another struct gives incorrect_type, shorter or longer than the table and the root: its bytes differ from the
+// description of the struct that reads it.
 TEST_CASE("doc advanced schema: errors")
 {
     std::string const bytes = *cbor::schema<car>::encode(sample);
@@ -316,9 +316,9 @@ TEST_CASE("doc advanced schema: errors")
     CHECK_EQ(cbor::schema<car>::at_path<"$.seats">(view.substr(0, view.size() - 1)).error(), error::too_little_data);
     CHECK_EQ(cbor::schema<car>::adopt(bytes.substr(0, bytes.size() / 2)).error(), error::too_little_data);
     std::string const small = *cbor::schema<tire>::encode(tire{1, 1.0f});
-    CHECK_EQ(cbor::schema<car>::decode(std::string(small)).error(), error::too_little_data);
+    CHECK_EQ(cbor::schema<car>::decode(std::string(small)).error(), error::incorrect_type);
     CHECK_EQ(cbor::schema<tire>::decode(std::string(bytes)).error(), error::incorrect_type);
-    CHECK_EQ(cbor::schema<tire>::adopt(std::string(bytes)).error(), error::too_little_data);
+    CHECK_EQ(cbor::schema<tire>::adopt(std::string(bytes)).error(), error::incorrect_type);
     std::size_t const seats = bytes.find("\x18\x05"sv);
     REQUIRE_NE(seats, std::string::npos);
     std::string forged = bytes;

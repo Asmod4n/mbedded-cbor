@@ -207,6 +207,21 @@ TEST_CASE("attack: every prefix of a message is an error for every path")
     CHECK_EQ(values, 0u);
 }
 
+// A reader of a CBOR sequence waits for more bytes when it gets too_little_data. The test exists so that only a cut
+// message gives that error, and a whole message of another struct, shorter or longer, gives incorrect_type.
+TEST_CASE("attack: a cut message is too_little_data, a message of another struct is incorrect_type")
+{
+    std::string const bytes = *form<probe>::encode(sample_probe);
+    for (std::size_t size = 0; size < bytes.size(); ++size) {
+        CHECK_EQ(form<probe>::adopt(bytes.substr(0, size)).error(), error::too_little_data);
+        CHECK_EQ(read_leaf_with_copying_path<probe, "$.i16">(std::string_view(bytes).substr(0, size)).error(),
+                 error::too_little_data);
+    }
+    std::string const other = *form<login>::encode(login{5, true, "ab"});
+    CHECK_EQ(form<probe>::adopt(std::string(other)).error(), error::incorrect_type);
+    CHECK_EQ(form<login>::adopt(std::string(bytes)).error(), error::incorrect_type);
+}
+
 // A byte in front of the message moves the root away from its place behind the description. The test exists because
 // a reader that found the root by a fixed offset would read a record that is not there. A byte behind the message is
 // the next item of a CBOR sequence (RFC 8742): the directory gives the end of the message, so that byte stays unread and
@@ -214,7 +229,7 @@ TEST_CASE("attack: every prefix of a message is an error for every path")
 TEST_CASE("attack: a shifted root is incorrect_type, a byte behind the message is not read")
 {
     std::string const bytes = *form<probe>::encode(sample_probe);
-    CHECK_EQ(read_leaf_with_copying_path<probe, "$.i16">("\x00"s + bytes).error(), error::too_little_data);
+    CHECK_EQ(read_leaf_with_copying_path<probe, "$.i16">("\x00"s + bytes).error(), error::incorrect_type);
     CHECK_EQ(form<probe>::decode("\x00"s + bytes).error(), error::incorrect_type);
     CHECK_EQ(probe_paths_read("\x00"s + bytes), 0u);
     CHECK_EQ(probe_lot_read("\x00"s + bytes), 0u);

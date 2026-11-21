@@ -103,8 +103,8 @@ TEST_CASE("description apart: every target of encode writes the same bytes")
 
 // A message read as the data form is refused. The data form read as a message is refused. The byte after the head of the
 // table is the head of the directory in one form. In the other form it is the first entry of the description. A short
-// input ends as too_little_data before that byte is read. decode checks the packing prefix and gives incorrect_type; a
-// read of one item takes the end of the message from bytes of the description and gives too_little_data.
+// input ends as too_little_data before that byte is read. A message of the other form is not cut, so every form
+// gives incorrect_type: its bytes differ from the packing prefix that the reading form expects.
 TEST_CASE("description apart: one form read as the other is refused")
 {
     for (std::string const &inside : {encode_with_schema(sample_everything), encode_with_schema(empty{}), encode_with_schema(eighteen_entries{})}) {
@@ -113,16 +113,16 @@ TEST_CASE("description apart: one form read as the other is refused")
     }
     std::string const inside = encode_with_schema(sample_everything);
     std::string const data = encode_data_apart(sample_everything);
-    CHECK_EQ(cbor::static_dictionary<everything>::adopt(std::string(inside)).error(), error::too_little_data);
+    CHECK_EQ(cbor::static_dictionary<everything>::adopt(std::string(inside)).error(), error::incorrect_type);
     CHECK_EQ(cbor::static_dictionary<everything>::decode(std::string(inside)).error(), error::incorrect_type);
-    CHECK_EQ((cbor::static_dictionary<everything>::at_path<"$.big">(inside)).error(), error::too_little_data);
-    // The data form holds no description. So read as the form with the description inside it is shorter than its table:
-    // the doc of schema::adopt gives too_little_data for that.
+    CHECK_EQ((cbor::static_dictionary<everything>::at_path<"$.big">(inside)).error(), error::incorrect_type);
+    // The data form holds no description. Read as the form with the description inside, its bytes differ from that
+    // description: the doc of schema::adopt gives incorrect_type for that.
     for (auto const e : {form<everything>::adopt(std::string(data)).error(),
                          form<everything>::decode(std::string(data)).error()})
-        CHECK_EQ(e, error::too_little_data);
+        CHECK_EQ(e, error::incorrect_type);
     std::string const small = encode_data_apart(empty{});
-    CHECK_EQ(form<empty>::adopt(std::string(small)).error(), error::too_little_data);
+    CHECK_EQ(form<empty>::adopt(std::string(small)).error(), error::incorrect_type);
 }
 
 // The data form keeps every check of the message. A cut gives too_little_data. A forged directory entry and a forged

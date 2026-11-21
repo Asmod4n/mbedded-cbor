@@ -2633,6 +2633,23 @@ class reflection
                        std::to_underlying(rfc8949::additional_information::four_byte_argument));
     }
 
+    template <class T, description_place D>
+    static bool packing_prefix_contradicted(std::string_view const encoded)
+    {
+        static constexpr auto prefix = packing_prefix_of<T, D>();
+        constexpr std::size_t head = directory_head_at<T, D>();
+        auto const differs = [encoded](std::size_t const from, std::size_t const to) {
+            std::size_t const until = std::min(to, encoded.size());
+            return from < until && !std::ranges::equal(std::span(encoded).subspan(from, until - from),
+                                                       std::span(prefix).subspan(from, until - from));
+        };
+        return differs(0, table_count_at) || differs(table_count_end, prefix.size()) ||
+               (head < encoded.size() &&
+                encoded[head] != detail::heads::initial_byte(
+                                     major_type::byte_string,
+                                     std::to_underlying(rfc8949::additional_information::four_byte_argument)));
+    }
+
     template <class T>
     static bool rump_valid(std::string_view const encoded, std::size_t const at)
     {
@@ -2656,7 +2673,9 @@ class reflection
     template <class T, description_place D>
     static error too_little_data_if_truncated(std::string_view const encoded, error const e)
     {
-        if (e == error::too_little_data || !packing_prefix_valid<T, D>(encoded))
+        if (e == error::too_little_data)
+            return packing_prefix_contradicted<T, D>(encoded) ? error::incorrect_type : e;
+        if (!packing_prefix_valid<T, D>(encoded))
             return e;
         if (auto const end = message_end<T, D>(encoded); !end)
             return error::too_little_data;
@@ -4735,7 +4754,9 @@ public:
      * result: "Volvo"
      * @endcode
      *
-     * @retval too_little_data the message is shorter than its table and root, or its end is missing
+     * @retval too_little_data the message is cut: it is shorter than its table and root, or its end is missing, and its
+     * bytes agree with the description of `T` as far as they go
+     * @retval incorrect_type a message of another struct whose bytes do not reach the end that they give
      * @throws std::bad_alloc an allocation of the owner fails (the rvalue form)
      * @snippet doc_reference_schema.cpp path
      * @see cbor::schema::accessor
@@ -4800,7 +4821,7 @@ public:
      * @endcode
      *
      * @retval too_little_data as cbor::schema::adopt()
-     * @retval incorrect_type a wrong head of the item that it reads
+     * @retval incorrect_type a wrong head of the item that it reads; a message of another struct as cbor::schema::adopt()
      * @retval index_out_of_bounds an index past the end of a list
      * @retval unpopulated_table_index, syntax_error a broken reference
      * @snippet doc_reference_schema.cpp at_path
@@ -4840,8 +4861,9 @@ public:
      * It checks every item and the parts that no read of one item checks: the packing prefix, the table count, the
      * length of the directory, the tag of the root and of each struct, the rump and the start of the first item.
      *
-     * @retval too_little_data the message is shorter than its table and root
-     * @retval incorrect_type a message of another struct, or a wrong head; a variant item whose head names no
+     * @retval too_little_data the message is cut: it is shorter than its table and root, and its bytes agree with the
+     * description of `T` as far as they go
+     * @retval incorrect_type a message of another struct, shorter or longer, or a wrong head; a variant item whose head names no
      * alternative
      * @retval invalid_tag a tag 28 or a tag 29 in the place of a head
      * @retval syntax_error, unpopulated_table_index a broken directory
@@ -5353,7 +5375,6 @@ private:
  *
  * @retval incorrect_type a message with the description read by cbor::static_dictionary, or the data form read by
  * cbor::schema
- * @retval too_little_data the data form read by cbor::schema, when it is shorter than the least message of `T`
  * @snippet doc_reference_schema.cpp description
  * @see cbor::schema::description()
  * @see cbor::schema
