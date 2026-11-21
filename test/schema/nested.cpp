@@ -243,7 +243,8 @@ struct packed_unpacker {
         }
         if (x.type() == cbor::type::array) {
             std::string out = "[";
-            for (cbor::item const e : *x.elements()) {
+            auto const elements = *x.elements();
+            for (cbor::item const e : elements) {
                 auto const v = text(e);
                 if (!v)
                     return v;
@@ -253,7 +254,8 @@ struct packed_unpacker {
         }
         if (x.type() == cbor::type::map) {
             std::string out = "{";
-            for (auto const &[k, v] : *x.pairs()) {
+            auto const pairs = *x.pairs();
+            for (auto const &[k, v] : pairs) {
                 auto const key = text(k);
                 auto const value = text(v);
                 if (!key || !value)
@@ -276,7 +278,8 @@ std::expected<std::string, cbor::error> unpack(std::string const &message)
     REQUIRE_EQ(number, basic_packed);
     auto const parts = *content.elements();
     packed_unpacker u;
-    for (cbor::item const e : *parts.front().elements())
+    auto const table = *parts.front().elements();
+    for (cbor::item const e : table)
         u.table.push_back(e);
     return u.text(*std::next(parts.begin()));
 }
