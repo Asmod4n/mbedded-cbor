@@ -41,7 +41,7 @@ TEST_CASE("at_path: parts of variable size")
 }
 
 // A directory offset from the wire can point at bytes of another kind. A length can reach past the start of the next
-// item. Both are refused and read nothing. The directory of vehicle starts behind the prefix and its head 5a.
+// item. Both are refused and read nothing. The directory of vehicle starts behind the root and its head 5a.
 TEST_CASE("at_path: a broken offset is an error")
 {
     std::string const bytes = encode_with_schema(sample_vehicle);
@@ -68,7 +68,7 @@ TEST_CASE("at_path: a fixed byte array is read inline")
     CHECK_EQ(read_leaf_with_copying_path<badge, "$.mac">(bytes), "\x01\x02\x03\x04"s);
     CHECK_EQ(read_leaf_with_copying_path<badge, "$.tone">(bytes), shade::light);
     std::string zeros = bytes;
-    std::size_t const mac = bytes.size() - form<badge>::fixed_size() + form<badge>::member_offset<&badge::mac>();
+    std::size_t const mac = root_offset(bytes) + form<badge>::member_offset<&badge::mac>();
     zeros.replace(mac + 1, 4, "\x00\x00\x00\x00"s);
     CHECK_EQ(read_leaf_with_copying_path<badge, "$.mac">(zeros), "\x00\x00\x00\x00"s);
 }

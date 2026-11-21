@@ -17,8 +17,8 @@ C chain_of(std::uint8_t const v)
 } // namespace schema_types
 
 // schema::at reads one number from the message with no accessor and no owner, because the number is returned by value.
-// It makes every check that path and accessor::at make. The checks are the table of keys, the undefined values after the
-// directory and the tag of the root. They are also the tag and the length of the typed array, and the index. The
+// It makes every check that path and accessor::at make. The checks are the table of keys, the undefined values before the
+// root and the tag of the root. They are also the tag and the length of the typed array, and the index. The
 // expected bits of 1.0 and 2.0 are 3ff0000000000000 and 4000000000000000 in binary64 (IEEE 754).
 TEST_CASE("schema::at: one number of a typed array, with every check of path")
 {
@@ -49,7 +49,7 @@ TEST_CASE("schema::at: one number of a typed array, with every check of path")
         CHECK_EQ(read_leaf_with_copying_path<doubles, "$.v[0]">(defined).error(), error::incorrect_type);
     }
     std::string root = bytes;
-    root[root.size() - S::fixed_size() + 2] = '\xfc';
+    root[root_offset(bytes) + 2] = '\xfc';
     CHECK_EQ(S::at_path<"$.v[0]">(root).error(), error::incorrect_type);
     CHECK_EQ(read_leaf_with_copying_path<doubles, "$.v[0]">(root).error(), error::incorrect_type);
 }
@@ -84,21 +84,23 @@ TEST_CASE("schema: decode keeps the first entry of a repeated key")
 }
 
 // The key that the description gives takes the place of the member name in the table. The expectation is counted from
-// the draft and RFC 8949 3 by hand. The keys have the text heads 69 and 63. The directory is empty. f7 stands up to
-// index 15. Then comes the class tag 65536, which needs the 4-byte argument da 00 01 00 00 (RFC 8949 3 and 4.1). Then
+// the draft and RFC 8949 3 by hand. The keys have the text heads 69 and 63. f7 stands up to index 15. Then comes the
+// root at index 16: the class tag 65536, which needs the 4-byte argument da 00 01 00 00 (RFC 8949 3 and 4.1). Then
 // comes the record head of 7 bytes. Then come the integer with its fixed width of 18 and 1 byte, and the simple value.
-// The test exists because a tag number above 65535 makes the head of the class tag 5 bytes long. Every offset behind it
-// moves by that.
+// The directory at index 17 is empty. The rump 6(0) = c6 00 refers to the root. The test exists because a tag number
+// above 65535 makes the head of the class tag 5 bytes long. Every offset behind it moves by that.
 TEST_CASE("schema: the description gives the key of a member")
 {
     CHECK_EQ(form<keyed>::fixed_size(), 15u);
     CHECK_EQ(form<keyed>::member_offset<&keyed::m1>(), 12u);
     CHECK_EQ(form<keyed>::member_offset<&keyed::m0>(), 13u);
     std::string const bytes = *form<keyed>::encode(keyed{7, true});
-    CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x10\xd8\x72\x82\x63"
-                    "EOF\x69x-user-id\x5a\x00\x00\x00\x00"
-                    "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
-                    "\xda\x00\x01\x00\x00\xd8\x80\x9a\x00\x00\x00\x02\xf5\x18\x07"s);
+    CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x12\xd8\x72\x82\x63"
+                    "EOF\x69x-user-id"
+                    "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
+                    "\xda\x00\x01\x00\x00\xd8\x80\x9a\x00\x00\x00\x02\xf5\x18\x07"
+                    "\x5a\x00\x00\x00\x00"
+                    "\xc6\x00"s);
     auto const decoded_back = *form<keyed>::decode(std::string(bytes));
     keyed const &back = *decoded_back;
     CHECK_EQ(back.m0, 7u);
@@ -140,10 +142,11 @@ TEST_CASE("schema: an optional struct and an optional string, present and absent
 // draft-ietf-cbor-packed-19 2.3 Table 2 gives tags 128..135 to the first 8 table indexes only. The test exists because
 // of a root with 20 struct types. It needs record functions at indexes 8 to 19. A record reaches them with the straight
 // reference 6([N, rump]) at index 8 + N. chain19 is index 19. So N = 11 (0b): c6 82 0b, then the rump 9a 00 00 00 03.
-// The directory takes index 20, so the shared items start at 21 and no f7 is left. Table 1 maps index 21 to 6(-3) = c6
-// 3a 00 00 00 02. It maps index 22 to 6(3) = c6 1a 00 00 00 03. The table head counts 21 + 4 entries. A record of index
-// 8 or more is one byte longer, so its size depends on the root. The class tag of chainK is 1600 + K. It takes 3 bytes
-// in front of each record. It stands outside the reference: 1619 = d9 06 53 before c6 82 0b.
+// No f7 is left: the root takes index 20 and the directory 21, so the shared items start at 22. Table 1 maps index 22
+// to 6(3) = c6 1a 00 00 00 03. It maps index 23 to 6(-4) = c6 3a 00 00 00 03. The table head counts 22 + 4 entries. A
+// record of index 8 or more is one byte longer, so its size depends on the root. The class tag of chainK is 1600 + K.
+// It takes 3 bytes in front of each record. It stands outside the reference: 1619 = d9 06 53 before c6 82 0b. The rump
+// 6(2) = c6 02 refers to index 20.
 TEST_CASE("schema: a root with 20 struct types reaches indexes 8 and more with tag 6")
 {
     CHECK_EQ(form<chain0>::fixed_size<chain19>(), 3u + 3u + 5u + 2u + 6u + 6u);
@@ -155,10 +158,12 @@ TEST_CASE("schema: a root with 20 struct types reaches indexes 8 and more with t
     chain0 const value = chain_of<chain0>(0);
     std::string const bytes = *form<chain0>::encode(value);
     CHECK_EQ(cbor::item_size(bytes), bytes.size());
-    CHECK_EQ(bytes.substr(0, 8), "\xd8\x71\x82\x9a\x00\x00\x00\x19"s);
-    CHECK_EQ(bytes.substr(bytes.size() - 25),
-             "\xd9\x06\x53\xc6\x82\x0b\x9a\x00\x00\x00\x03\x18\x13\xc6\x3a\x00\x00\x00\x02\xc6\x1a\x00\x00\x00\x03"s);
-    CHECK_EQ(bytes.substr(bytes.size() - form<chain0>::fixed_size() + 8u * 12u, 6), "\xd9\x06\x48\xc6\x82\x00"s);
+    CHECK_EQ(bytes.substr(0, 8), "\xd8\x71\x82\x9a\x00\x00\x00\x1a"s);
+    std::size_t const root = root_offset(bytes, 20);
+    CHECK_EQ(bytes.substr(root + form<chain0>::fixed_size() - 25, 25),
+             "\xd9\x06\x53\xc6\x82\x0b\x9a\x00\x00\x00\x03\x18\x13\xc6\x1a\x00\x00\x00\x03\xc6\x3a\x00\x00\x00\x03"s);
+    CHECK_EQ(bytes.substr(root + 8u * 12u, 6), "\xd9\x06\x48\xc6\x82\x00"s);
+    CHECK_EQ(bytes.substr(bytes.size() - 2), "\xc6\x02"s);
 
     auto const decoded_back = *form<chain0>::decode(std::string(bytes));
     chain0 const &back = *decoded_back;
@@ -176,17 +181,20 @@ TEST_CASE("schema: a root with 20 struct types reaches indexes 8 and more with t
              "yz"s);
 }
 
-// draft-ietf-cbor-packed-19 2.2 Table 1 applies. With 17 struct types the directory is index 17. The first shared item
-// is index 18, which is 6(1) = c6 1a 00 00 00 01. The test exists because a reference below index 18 then names no
-// shared item. 6(0) is index 16, a record function. The reader refuses it.
-TEST_CASE("schema: a root with 17 struct types starts its shared items at index 18")
+// draft-ietf-cbor-packed-19 2.2 Table 1 applies. With 17 struct types the root is index 17 and the directory index 18.
+// The first shared item is index 19, which is 6(-2) = c6 3a 00 00 00 01. The rump is 6(-1) = c6 20. The test exists
+// because a reference below index 19 then names no shared item. 6(0) is index 16, a record function. The reader refuses
+// it.
+TEST_CASE("schema: a root with 17 struct types starts its shared items at index 19")
 {
     chain3 const value = chain_of<chain3>(3);
     std::string const bytes = *form<chain3>::encode(value);
     CHECK_EQ(cbor::item_size(bytes), bytes.size());
-    CHECK_EQ(bytes.substr(0, 8), "\xd8\x71\x82\x9a\x00\x00\x00\x16"s);
-    CHECK_EQ(bytes.substr(bytes.size() - 25),
-             "\xd9\x06\x53\xc6\x82\x08\x9a\x00\x00\x00\x03\x18\x13\xc6\x1a\x00\x00\x00\x01\xc6\x3a\x00\x00\x00\x01"s);
+    CHECK_EQ(bytes.substr(0, 8), "\xd8\x71\x82\x9a\x00\x00\x00\x17"s);
+    std::size_t const end = root_offset(bytes, 17) + form<chain3>::fixed_size();
+    CHECK_EQ(bytes.substr(end - 25, 25),
+             "\xd9\x06\x53\xc6\x82\x08\x9a\x00\x00\x00\x03\x18\x13\xc6\x3a\x00\x00\x00\x01\xc6\x1a\x00\x00\x00\x02"s);
+    CHECK_EQ(bytes.substr(bytes.size() - 2), "\xc6\x20"s);
 
     auto const decoded_back = *form<chain3>::decode(std::string(bytes));
     chain3 const &back = *decoded_back;
@@ -194,7 +202,8 @@ TEST_CASE("schema: a root with 17 struct types starts its shared items at index 
     CHECK_EQ(read_leaf_with_copying_path<chain3, "$.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.text">(bytes), "ab"s);
 
     std::string broken = bytes;
-    broken.at(broken.size() - 7) = '\x00';
+    broken.at(end - 11) = '\x1a';
+    broken.at(end - 7) = '\x00';
     CHECK_EQ(form<chain3>::decode(std::string(broken)).error(), error::unpopulated_table_index);
     CHECK_EQ(read_leaf_with_copying_path<chain3, "$.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.text">(broken).error(),
              error::unpopulated_table_index);
@@ -206,7 +215,7 @@ TEST_CASE("schema: a root with 17 struct types starts its shared items at index 
 TEST_CASE("schema: a root of another class tag is incorrect_type")
 {
     std::string const bytes = *form<point_a>::encode(point_a{7});
-    CHECK_EQ(bytes.substr(bytes.size() - form<point_a>::fixed_size(), 3), "\xd9\x05\xf0"s);
+    CHECK_EQ(bytes.substr(root_offset(bytes), 3), "\xd9\x05\xf0"s);
     auto const point = *form<point_a>::decode(std::string(bytes));
     CHECK_EQ(point->x, 7u);
     CHECK_EQ(form<point_b>::decode(std::string(bytes)).error(), error::incorrect_type);
@@ -220,7 +229,7 @@ TEST_CASE("schema: a root of another class tag is incorrect_type")
 TEST_CASE("schema: a forged class tag of a nested record is incorrect_type")
 {
     std::string const bytes = *form<car>::encode(car{4, {300, 1800}, true});
-    std::size_t const motor = bytes.size() - form<car>::fixed_size() + form<car>::member_offset<&car::motor>();
+    std::size_t const motor = root_offset(bytes) + form<car>::member_offset<&car::motor>();
     CHECK_EQ(bytes.substr(motor, 3), "\xd9\x05\xdd"s);
     std::string forged = bytes;
     forged.at(motor + 2) = '\xde';

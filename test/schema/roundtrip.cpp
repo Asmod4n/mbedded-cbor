@@ -73,8 +73,9 @@ TEST_CASE("encode and decode: a fixed-size vector round trip")
 }
 
 // The table index of the description depends on how many record entries come before it. With 14 record entries the
-// description is index 14, simple(14) = ee, and no filler is left. With 17 record entries the description is index 17,
-// beyond the 16 one-byte references. So the reference is 6(-1) = c6 20 (draft Table 1: 16 - 2N - 1 = 17).
+// description is index 14, simple(14) = ee, and one filler is left before the root at index 16. With 17 record entries
+// the description is index 17, beyond the 16 one-byte references. So the reference is 6(-1) = c6 20 (draft Table 1:
+// 16 - 2N - 1 = 17), and the root follows at index 18 with no filler.
 TEST_CASE("encode and decode: the reference to a description at every table index")
 {
     fifteen_entries fifteen{};
@@ -83,7 +84,7 @@ TEST_CASE("encode and decode: the reference to a description at every table inde
     std::string const a = encode_with_schema(fifteen);
     check_one_item(a);
     CHECK_NE(a.find("\xd9\x80\x69\x82\xee\x5a"s), std::string::npos);
-    CHECK_EQ(a.find('\xf7'), std::string::npos);
+    CHECK_EQ(std::ranges::count(a, '\xf7'), 1);
     auto const a_back = form<fifteen_entries>::decode(std::string(a));
     REQUIRE(a_back.has_value());
     REQUIRE_EQ((*a_back)->p.size(), 1u);

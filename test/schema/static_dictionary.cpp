@@ -125,7 +125,8 @@ TEST_CASE("description apart: one form read as the other is refused")
 }
 
 // The data form keeps every check of the message. A cut gives too_little_data. A forged directory entry and a forged
-// filler give an error in the verified forms.
+// filler give an error in the verified forms. The data form holds the 8 bytes of its prefix, the fillers, the root and
+// the directory, in this order.
 TEST_CASE("description apart: the checks of the message hold for the data form")
 {
     std::string const data = encode_data_apart(sample_everything);
@@ -133,17 +134,17 @@ TEST_CASE("description apart: the checks of the message hold for the data form")
         CHECK_FALSE(cbor::static_dictionary<everything>::decode(data.substr(0, n)).has_value());
         CHECK_FALSE(cbor::static_dictionary<everything>::adopt(data.substr(0, n)).has_value());
     }
-    std::size_t const directory = data.find('\x5a');
-    REQUIRE_EQ(directory, 8u);
+    constexpr std::size_t prefix = 8;
+    std::size_t const root = data.find_first_not_of('\xf7', prefix);
+    REQUIRE_GT(root, prefix);
+    std::size_t const directory = root + form<everything>::fixed_size();
+    REQUIRE_EQ(data[directory], '\x5a');
     std::string entry = data;
     for (std::size_t k = 0; k < sizeof(std::uint32_t); ++k)
         entry[directory + 5 + k] = '\xff';
     CHECK_FALSE(cbor::static_dictionary<everything>::decode(std::string(entry)).has_value());
-    std::uint32_t const length = (std::uint32_t{static_cast<unsigned char>(data[directory + 3])} << 8) |
-                                 static_cast<unsigned char>(data[directory + 4]);
     std::string filler = data;
-    REQUIRE_EQ(filler[directory + 5 + length], '\xf7');
-    filler[directory + 5 + length] = '\xf6';
+    filler[prefix] = '\xf6';
     CHECK_EQ(cbor::static_dictionary<everything>::adopt(std::string(filler)).error(), error::incorrect_type);
 }
 

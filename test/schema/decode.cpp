@@ -508,7 +508,7 @@ TEST_CASE("decode and at_path: a tag 28 in the place of a head is invalid_tag")
     std::string const number = with("1800_2", "28_0(1800_1)");
     CHECK_EQ(form<everything>::decode(std::string(number)).error(), error::invalid_tag);
     CHECK_EQ(read_leaf_with_copying_path<everything, "$.engines[0].cc">(number).error(), error::invalid_tag);
-    std::string const reference = with("6(0_2)", "28_1(0_1)");
+    std::string const reference = with("6(1_2)", "28_1(1_1)");
     CHECK_EQ(form<everything>::decode(std::string(reference)).error(), error::invalid_tag);
     CHECK_EQ(read_leaf_with_copying_path<everything, "$.text">(reference).error(), error::invalid_tag);
     std::string const text = with(R"("text"_2)", R"(28_0("text"_1))");
@@ -536,7 +536,7 @@ TEST_CASE("decode and at_path: a tag 28 in the place of a head is invalid_tag")
 TEST_CASE("decode and at_path: the first byte of a tag 28 head in a one-byte field is incorrect_type")
 {
     std::string const bytes =
-        message_with_part_replaced(encode_with_schema(sample_everything), "true, 6(0_2)", "28_0(0_1), 0_0");
+        message_with_part_replaced(encode_with_schema(sample_everything), "true, 6(1_2)", "28_0(0_1), 0_0");
     CHECK_EQ(form<everything>::decode(std::string(bytes)).error(), error::incorrect_type);
     CHECK_EQ(read_leaf_with_copying_path<everything, "$.flag">(bytes).error(), error::incorrect_type);
 }

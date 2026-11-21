@@ -49,6 +49,16 @@ unsigned char byte_at(std::string_view const bytes, std::size_t const i)
     return static_cast<unsigned char>(bytes[i]);
 }
 
+// The root record is table entry 16 of a message (draft-ietf-cbor-packed-19 3.1, the rump 6(0)). The generic reader
+// cbor::lazy finds it.
+std::size_t root_offset(std::string_view const bytes)
+{
+    auto const owner = std::make_shared<std::string const>(bytes);
+    auto const root = cbor::lazy::view(owner)->at(0)->at(16);
+    REQUIRE(root.has_value());
+    return static_cast<std::size_t>(root->encoded().data() - owner->data());
+}
+
 } // namespace doc_reference_schema
 
 using namespace doc_reference_schema;
@@ -205,7 +215,7 @@ TEST_CASE("doc reference schema: description")
 
 // schema.hpp, snippet fixed_size. The root of tire takes 3 bytes of class tag and 2 bytes of tag 128. It takes 5 bytes
 // of record head, 3 bytes for the std::uint16_t and 5 for the float. A text is a reference 6(N) of 6 bytes. The root
-// ends the message.
+// is table entry 16, at byte 44 of the message of tire.
 TEST_CASE("doc reference schema: fixed_size")
 {
     // [fixed_size]
@@ -220,7 +230,9 @@ TEST_CASE("doc reference schema: fixed_size")
     CHECK_EQ(cbor::schema<car>::fixed_size<std::string>(), 6u);
     auto const bytes = cbor::schema<tire>::encode(tire{17, 2.5f});
     REQUIRE(bytes.has_value());
-    std::size_t const root = bytes->size() - cbor::schema<tire>::fixed_size();
+    std::size_t const root = root_offset(*bytes);
+    CHECK_EQ(root, 44u);
+    CHECK_EQ(bytes->size(), 69u);
     CHECK_EQ(byte_at(*bytes, root), 0xd9);
 }
 
@@ -233,13 +245,14 @@ TEST_CASE("doc reference schema: member_offset")
     // tire: std::uint16_t diameter; float pressure;
     constexpr std::size_t diameter = cbor::schema<tire>::member_offset<&tire::diameter>();  // 10
     constexpr std::size_t pressure = cbor::schema<tire>::member_offset<&tire::pressure>();  // 13
-    // bytes[bytes.size() - fixed_size() + 13] is 0xfa, the head of a float
+    // the root of the message of tire starts at byte 44, so bytes[44 + 13] is 0xfa, the head of a float
     // [member_offset]
     CHECK_EQ(diameter, 10u);
     CHECK_EQ(pressure, 13u);
     auto const bytes = cbor::schema<tire>::encode(tire{17, 2.5f});
     REQUIRE(bytes.has_value());
-    std::size_t const root = bytes->size() - cbor::schema<tire>::fixed_size();
+    std::size_t const root = root_offset(*bytes);
+    CHECK_EQ(root, 44u);
     CHECK_EQ(byte_at(*bytes, root + cbor::schema<tire>::member_offset<&tire::pressure>()), 0xfa);
 }
 
@@ -280,11 +293,11 @@ TEST_CASE("doc reference schema: accessor of a variant member")
     auto const bytes = cbor::schema<home>::encode(home{dog{{"rex"}, 3}});
     REQUIRE(bytes.has_value());
     CHECK_EQ(*bytes,
-             "\xd8\x71\x82\x9a\x00\x00\x00\x12\xd8\x72\x81\x63\x70\x65\x74\xd8\x72\x82\x64\x62\x61\x72\x6b\x64"
-             "\x6e\x61\x6d\x65\xd8\x72\x82\x64\x6e\x61\x6d\x65\x64\x74\x6f\x79\x73\x5a\x00\x00\x00\x08\x00\x00"
-             "\x00\x42\x00\x00\x00\x54\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xd9\x07\x0b\xd8\x81\x9a"
-             "\x00\x00\x00\x02\x18\x03\xc6\x3a\x00\x00\x00\x00\x7a\x00\x00\x00\x03\x72\x65\x78\xd9\x07\x0d\xd8"
-             "\x80\x9a\x00\x00\x00\x01\xc6\x1a\x00\x00\x00\x00"s);
+             "\xd8\x71\x82\x9a\x00\x00\x00\x14\xd8\x72\x81\x63\x70\x65\x74\xd8\x72\x82\x64\x62\x61\x72\x6b\x64"
+             "\x6e\x61\x6d\x65\xd8\x72\x82\x64\x6e\x61\x6d\x65\x64\x74\x6f\x79\x73\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
+             "\xf7\xf7\xf7\xf7\xf7\xf7\xd9\x07\x0d\xd8\x80\x9a\x00\x00\x00\x01\xc6\x1a\x00\x00\x00\x01\x5a\x00"
+             "\x00\x00\x08\x00\x00\x00\x53\x00\x00\x00\x65\xd9\x07\x0b\xd8\x81\x9a\x00\x00\x00\x02\x18\x03\xc6"
+             "\x3a\x00\x00\x00\x01\x7a\x00\x00\x00\x03\x72\x65\x78\xc6\x00"s);
     // [accessor variant]
     // home: struct { std::variant<dog, cat> pet; }; bytes: from schema<home>::encode(home{dog{{"rex"}, 3}})
     auto const doc = cbor::schema<home>::adopt(std::string(*bytes));
@@ -310,10 +323,10 @@ TEST_CASE("doc reference schema: accessor of a variant member of values")
     auto const bytes = cbor::schema<property>::encode(property{"width", std::int64_t{240}});
     REQUIRE(bytes.has_value());
     CHECK_EQ(*bytes,
-             "\xd8\x71\x82\x9a\x00\x00\x00\x12\xd8\x72\x82\x64\x6e\x61\x6d\x65\x65\x76\x61\x6c\x75\x65\x5a\x00"
-             "\x00\x00\x08\x00\x00\x00\x31\x00\x00\x00\x3b\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
-             "\xf7\x7a\x00\x00\x00\x05\x77\x69\x64\x74\x68\x1b\x00\x00\x00\x00\x00\x00\x00\xf0\xd9\x07\x0e\xd8"
-             "\x80\x9a\x00\x00\x00\x02\xc6\x1a\x00\x00\x00\x00\xc6\x3a\x00\x00\x00\x00"s);
+             "\xd8\x71\x82\x9a\x00\x00\x00\x14\xd8\x72\x82\x64\x6e\x61\x6d\x65\x65\x76\x61\x6c\x75\x65\xf7\xf7"
+             "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xd9\x07\x0e\xd8\x80\x9a\x00\x00\x00\x02\xc6"
+             "\x1a\x00\x00\x00\x01\xc6\x3a\x00\x00\x00\x01\x5a\x00\x00\x00\x08\x00\x00\x00\x48\x00\x00\x00\x52"
+             "\x7a\x00\x00\x00\x05\x77\x69\x64\x74\x68\x1b\x00\x00\x00\x00\x00\x00\x00\xf0\xc6\x00"s);
     auto const width = cbor::schema<property>::adopt(std::string(*bytes));
     REQUIRE(width.has_value());
     auto const value = width->at_path<"$.value">();
@@ -383,12 +396,13 @@ TEST_CASE("doc reference schema: tag")
     // [tag]
     // point: a struct whose description has the tag 1802
     auto const bytes = cbor::schema<point>::encode(point{1, 2});
-    std::size_t const root = bytes->size() - cbor::schema<point>::fixed_size();  // the root record starts with d9 07 0a
+    auto const message = cbor::lazy::adopt(std::string(*bytes));
+    auto const root = message->at(0)->at(16)->encoded();  // table entry 16, the root record, starts with d9 07 0a
     // [tag]
     REQUIRE(bytes.has_value());
-    CHECK_EQ(byte_at(*bytes, root), 0xd9);
-    CHECK_EQ(byte_at(*bytes, root + 1), 0x07);
-    CHECK_EQ(byte_at(*bytes, root + 2), 0x0a);
+    CHECK_EQ(byte_at(root, 0), 0xd9);
+    CHECK_EQ(byte_at(root, 1), 0x07);
+    CHECK_EQ(byte_at(root, 2), 0x0a);
 }
 
 // schema/wire.md. The message starts with tag 113 on an array of two. The array holds a table with a four-byte count.
@@ -405,7 +419,7 @@ TEST_CASE("doc reference schema: wire")
     CHECK_EQ(byte_at(bytes, 9), 0x72);
     CHECK_NE(bytes.find("\xd9\x80\x69"sv), std::string::npos);
     CHECK_NE(bytes.find("\xd8\x56"sv), std::string::npos);
-    std::size_t const make = bytes.size() - cbor::schema<car>::fixed_size() + cbor::schema<car>::member_offset<&car::make>();
+    std::size_t const make = root_offset(bytes) + cbor::schema<car>::member_offset<&car::make>();
     CHECK_EQ(byte_at(bytes, make), 0xc6);
     CHECK_EQ(byte_at(bytes, make + 1), 0x1a);
     CHECK_EQ(cbor::item_size(bytes), bytes.size());

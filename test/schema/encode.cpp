@@ -1,21 +1,22 @@
 #include "types.hpp"
 
 // draft-ietf-cbor-packed-19 3.1 and 4.2: tag 113 holds an array of the table and the rump. The table holds the record
-// function 114 over the keys at index 0. It holds the directory at index 1, a byte string of the u32 offsets of the
-// shared items. It holds f7 up to index 15. The shared items from index 16 on, each with a head of fixed width. The rump
-// is the class tag 1507 = d9 05 e3 (RFC 8949 3.4). Then comes the record d8 80 with the count 9a 00 00 00 03. Every
-// number has the width of its type. The string as 6(0) = c6 1a 00 00 00 00, which 2.2 resolves to index 16. The table
-// head counts 17 entries. The string starts at byte 45 (2d). The bytes are written from the draft and RFC 8949 3 by
-// hand.
+// function 114 over the keys at index 0 and f7 up to index 15. The root record is index 16: the class tag 1507 = d9 05
+// e3 (RFC 8949 3.4), the record d8 80 and the count 9a 00 00 00 03. Every number has the width of its type. The string
+// is 6(1) = c6 1a 00 00 00 01, which 2.2 resolves to index 18. The directory is index 17, a byte string of the u32
+// offsets of the shared items. The shared items follow from index 18 on, each with a head of fixed width. The table
+// head counts 19 entries. The string starts at byte 66 (42). The rump is 6(0) = c6 00, the reference to the root. The
+// bytes are written from the draft and RFC 8949 3 by hand.
 TEST_CASE("encode: a struct with a number, a bool and a string")
 {
     std::string const bytes = encode_with_schema(login{5, true, "ab"});
-    CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x11\xd8\x72\x83\x62id\x62ok\x64name"
-                    "\x5a\x00\x00\x00\x04\x00\x00\x00\x2d"
-                    "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
+    CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x13\xd8\x72\x83\x62id\x62ok\x64name"
+                    "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
+                    "\xd9\x05\xe3\xd8\x80\x9a\x00\x00\x00\x03\x19\x00\x05\xf5\xc6\x1a\x00\x00\x00\x01"
+                    "\x5a\x00\x00\x00\x04\x00\x00\x00\x42"
                     "\x7a\x00\x00\x00\x02"
                     "ab"
-                    "\xd9\x05\xe3\xd8\x80\x9a\x00\x00\x00\x03\x19\x00\x05\xf5\xc6\x1a\x00\x00\x00\x00"s);
+                    "\xc6\x00"s);
     check_one_item(bytes);
 }
 
@@ -61,38 +62,42 @@ TEST_CASE("encode: a key given in cbor::describe_members is sorted by that key")
 }
 
 // A negative int16 is major type 1 with -1 - n in two bytes (RFC 8949 3.1). A float stays binary32 (fa). The values
-// stand in the key order of RFC 8949 4.2.1: f, o, t, v. The empty optional is shared item 16, an empty array. The list
-// of uint16 is shared item 17. It is a typed array of RFC 8746. Its tag is 69 (uint16, little endian) = d8 45. The tag
-// is over a byte string of four bytes. Item 17 is 6(-1) = c6 3a 00 00 00 00, because 2.2 maps a negative N to index 16 -
-// 2N - 1. The items start at 46 (2e) and 51 (33). The rump starts with the class tag 1508 = d9 05 e4.
+// stand in the key order of RFC 8949 4.2.1: f, o, t, v. The empty optional is shared item 18, an empty array. The list
+// of uint16 is shared item 19. It is a typed array of RFC 8746. Its tag is 69 (uint16, little endian) = d8 45. The tag
+// is over a byte string of four bytes. Item 18 is 6(1) = c6 1a 00 00 00 01. Item 19 is 6(-2) = c6 3a 00 00 00 01,
+// because 2.2 maps a negative N to index 16 - 2N - 1. The root starts with the class tag 1508 = d9 05 e4. The items
+// start at 77 (4d) and 82 (52).
 TEST_CASE("encode: signed numbers, floats, a list and an empty optional")
 {
     std::string const bytes = encode_with_schema(measures{-5, 1.5f, {7, 8}, std::nullopt});
-    CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x12\xd8\x72\x84\x61\x66\x61o\x61t\x61v"
-                    "\x5a\x00\x00\x00\x08\x00\x00\x00\x2e\x00\x00\x00\x33"
-                    "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
+    CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x14\xd8\x72\x84\x61\x66\x61o\x61t\x61v"
+                    "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
+                    "\xd9\x05\xe4\xd8\x80\x9a\x00\x00\x00\x04\xfa\x3f\xc0\x00\x00"
+                    "\xc6\x1a\x00\x00\x00\x01\x39\x00\x04\xc6\x3a\x00\x00\x00\x01"
+                    "\x5a\x00\x00\x00\x08\x00\x00\x00\x4d\x00\x00\x00\x52"
                     "\x9a\x00\x00\x00\x00"
                     "\xd8\x45\x5a\x00\x00\x00\x04\x07\x00\x08\x00"
-                    "\xd9\x05\xe4\xd8\x80\x9a\x00\x00\x00\x04\xfa\x3f\xc0\x00\x00"
-                    "\xc6\x1a\x00\x00\x00\x00\x39\x00\x04\xc6\x3a\x00\x00\x00\x00"s);
+                    "\xc6\x00"s);
     check_one_item(bytes);
 }
 
-// Two record functions take index 0 and 1, the directory index 2. The list is item 16. Its elements are records of fixed
-// size, each the class tag 1509 = d9 05 e5 over d8 81 for the second type. The strings of the elements follow the list
-// as items 17 and 18, in the order the encoder meets them: 6(-1) and 6(1). The items start at 53 (35), 90 (5a) and 96
-// (60). The root is the class tag 1510 = d9 05 e6 over d8 80.
+// Two record functions take index 0 and 1, the fillers 2 to 15. The list is item 18. Its elements are records of fixed
+// size, each the class tag 1509 = d9 05 e5 over d8 81 for the second type. The block of a record holds its own
+// references first, so the root holds only the list. Each element then holds the reference to its string: items 19
+// and 20, 6(-2) and 6(2). The items start at 70 (46), 107 (6b) and 113 (71). The root is the class tag 1510 = d9 05 e6
+// over d8 80.
 TEST_CASE("encode: a list of structs that hold strings")
 {
     std::string const bytes = encode_with_schema(people{{{"x"}, {"yz"}}});
-    CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x13\xd8\x72\x81\x66people\xd8\x72\x81\x61n"
-                    "\x5a\x00\x00\x00\x0c\x00\x00\x00\x35\x00\x00\x00\x5a\x00\x00\x00\x60"
-                    "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
+    CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x15\xd8\x72\x81\x66people\xd8\x72\x81\x61n"
+                    "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
+                    "\xd9\x05\xe6\xd8\x80\x9a\x00\x00\x00\x01\xc6\x1a\x00\x00\x00\x01"
+                    "\x5a\x00\x00\x00\x0c\x00\x00\x00\x46\x00\x00\x00\x6b\x00\x00\x00\x71"
                     "\x9a\x00\x00\x00\x02"
-                    "\xd9\x05\xe5\xd8\x81\x9a\x00\x00\x00\x01\xc6\x3a\x00\x00\x00\x00"
-                    "\xd9\x05\xe5\xd8\x81\x9a\x00\x00\x00\x01\xc6\x1a\x00\x00\x00\x01"
+                    "\xd9\x05\xe5\xd8\x81\x9a\x00\x00\x00\x01\xc6\x3a\x00\x00\x00\x01"
+                    "\xd9\x05\xe5\xd8\x81\x9a\x00\x00\x00\x01\xc6\x1a\x00\x00\x00\x02"
                     "\x7a\x00\x00\x00\x01x\x7a\x00\x00\x00\x02yz"
-                    "\xd9\x05\xe6\xd8\x80\x9a\x00\x00\x00\x01\xc6\x1a\x00\x00\x00\x00"s);
+                    "\xc6\x00"s);
     check_one_item(bytes);
 }
 
@@ -229,20 +234,22 @@ TEST_CASE("encode: into the exact span that a writer allocates")
 // (draft-ietf-cbor-packed-19 3.1), describes the element once: [class tag, [[key, RFC 8746 tag], ...]]. The description
 // of point stands at table index 2, after the two record entries. It is 82 19 06 5e 82 82 61 78 18 55 82 61 79 18 55.
 // Tag 85 is float32 little endian (RFC 8746 2.1). The vector refers to it with simple(2) = e2 (draft Table 1), so a
-// reader that unpacks finds the description in its place. The directory takes index 3, the fillers 4 to 15. The vector
-// is item 16 at 61 (3d). It is d9 80 69 82 e2 and a byte string of 16 bytes. The bytes are low byte first (IEEE 754).
+// reader that unpacks finds the description in its place. The fillers take index 3 to 15, the root 16 and the directory
+// 17. The vector is item 18 at 78 (4e). It is d9 80 69 82 e2 and a byte string of 16 bytes. The bytes are low byte first
+// (IEEE 754).
 // 1.0f is 3f800000. 2.0f is 40000000. 0.5f is 3f000000. -1.0f is bf800000. The bytes are written from the draft and the
 // RFCs by hand.
 TEST_CASE("encode: a vector of fixed-size structs is one byte string under tag 32873")
 {
     std::string const bytes = encode_with_schema(cloud{{{1.0f, 0.5f}, {2.0f, -1.0f}}});
-    CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x11\xd8\x72\x81\x66points\xd8\x72\x82\x61x\x61y"
+    CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x13\xd8\x72\x81\x66points\xd8\x72\x82\x61x\x61y"
                     "\x82\x19\x06\x5e\x82\x82\x61x\x18\x55\x82\x61y\x18\x55"
-                    "\x5a\x00\x00\x00\x04\x00\x00\x00\x3d"
-                    "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
+                    "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
+                    "\xd9\x06\x5f\xd8\x80\x9a\x00\x00\x00\x01\xc6\x1a\x00\x00\x00\x01"
+                    "\x5a\x00\x00\x00\x04\x00\x00\x00\x4e"
                     "\xd9\x80\x69\x82\xe2\x5a\x00\x00\x00\x10"
                     "\x00\x00\x80\x3f\x00\x00\x00\x3f\x00\x00\x00\x40\x00\x00\x80\xbf"
-                    "\xd9\x06\x5f\xd8\x80\x9a\x00\x00\x00\x01\xc6\x1a\x00\x00\x00\x00"s);
+                    "\xc6\x00"s);
     check_one_item(bytes);
 }
 

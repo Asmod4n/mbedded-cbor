@@ -233,7 +233,7 @@ TEST_CASE("unverified: value and text alternatives read as in the verified forms
             CHECK_EQ(v->get<std::int32_t>().value(), *n);
     }
     std::string forged = *form<setting>::encode(setting{"x", std::int32_t{1}});
-    std::size_t const at = forged.size() - form<setting>::fixed_size() - form<setting>::fixed_size<std::int32_t>();
+    std::size_t const at = forged.size() - rump_size - form<setting>::fixed_size<std::int32_t>();
     forged[at] = '\x1b';
     CHECK_EQ(form<setting>::unverified_decode(std::string(forged)).error(), error::incorrect_type);
     CHECK_EQ(form<setting>::unverified_adopt(std::string(forged))->at_path<"$.value">().error(), error::incorrect_type);

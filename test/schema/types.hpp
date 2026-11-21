@@ -5,6 +5,7 @@
 #include "../schema_golden.hpp"
 #include <cbor/describe.hpp>
 #include <cbor/encode.hpp>
+#include <cbor/lazy.hpp>
 #include <cbor/path.hpp>
 #include <cbor/schema.hpp>
 #include <algorithm>
@@ -1836,12 +1837,26 @@ std::vector<setting> make_sample_settings()
             {"empty", std::string()}};
 }
 
-// The item of a variant member is the last item before the root record. So it starts this many bytes before the root:
-// the size of the item.
+// The rump of a message is 6(0), the reference to table entry 16 (draft-ietf-cbor-packed-19 3.1 and Table 1). Its head
+// and its argument take two bytes (RFC 8949 3).
+constexpr std::size_t rump_size = 2;
+
+// The root record is table entry 16 of the message, or the first entry behind a description of more than 16 entries.
+// The generic reader of the library finds it, so the test does not depend on the layout code of cbor::schema.
+inline std::size_t root_offset(std::string_view const message, std::size_t const index = 16)
+{
+    auto const owner = std::make_shared<std::string const>(message);
+    auto const root = cbor::lazy::view(owner)->at(0)->at(index);
+    REQUIRE(root.has_value());
+    return static_cast<std::size_t>(root->encoded().data() - owner->data());
+}
+
+// The item of a variant member is the last item before the rump. So it starts this many bytes before the rump: the
+// size of the item.
 template <class T>
 std::string_view find_variant_item_in(std::string_view const message, std::size_t const item_size)
 {
-    return message.substr(message.size() - form<T>::fixed_size() - item_size, item_size);
+    return message.substr(message.size() - rump_size - item_size, item_size);
 }
 
 } // namespace schema_types

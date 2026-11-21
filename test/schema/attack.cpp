@@ -9,9 +9,9 @@ constexpr std::size_t tire_reads = 3;
 
 
 template <class = void>
-std::size_t probe_offset(std::size_t const size, std::size_t const member)
+std::size_t probe_offset(std::string_view const message, std::size_t const member)
 {
-    return size - form<probe>::fixed_size() + member;
+    return root_offset(message) + member;
 }
 
 // Reads every leaf path of probe, each through a new root and through a root with an owner, from a copy of the message. Gives the count of
@@ -197,7 +197,7 @@ TEST_CASE("attack: path and decode check that the owner holds an object")
 }
 
 // Each prefix of the message is a cut message. The test exists because a reader that trusted an offset from the
-// wire would read past the end of the cut. No prefix reads a value: the root lies at the end of the message.
+// wire would read past the end of the cut. No prefix reads a value: the rump lies at the end of the message.
 TEST_CASE("attack: every prefix of a message is an error for every path")
 {
     std::string const bytes = *form<probe>::encode(sample_probe);
@@ -207,8 +207,9 @@ TEST_CASE("attack: every prefix of a message is an error for every path")
     CHECK_EQ(values, 0u);
 }
 
-// A byte in front of the message or behind it moves the root away from its place at the end. The test exists because
-// a reader that found the root by an offset from the start would read a record that is not there.
+// A byte in front of the message moves the root away from its place behind the description. A byte behind the message
+// moves the rump away from its place at the end. The test exists because a reader that found the root or the rump by
+// a fixed offset would read a record that is not there.
 TEST_CASE("attack: a shifted root is incorrect_type")
 {
     std::string const bytes = *form<probe>::encode(sample_probe);
@@ -230,7 +231,7 @@ TEST_CASE("attack: every forged head of a fixed field is incorrect_type")
     std::string const bytes = *form<probe>::encode(sample_probe);
     auto const forged = [&bytes](std::size_t const member, unsigned const head) {
         std::string f = bytes;
-        f.at(probe_offset(f.size(), member)) = static_cast<char>(head);
+        f.at(probe_offset(f, member)) = static_cast<char>(head);
         return f;
     };
     using S = form<probe>;
@@ -257,8 +258,8 @@ TEST_CASE("attack: every forged head of a fixed field is incorrect_type")
 TEST_CASE("attack: a forged byte anywhere in the root reads nothing outside the message")
 {
     std::string const bytes = *form<probe>::encode(sample_probe);
-    std::size_t const root = bytes.size() - form<probe>::fixed_size();
-    for (std::size_t at = root; at < bytes.size(); ++at) {
+    std::size_t const root = root_offset(bytes);
+    for (std::size_t at = root; at < root + form<probe>::fixed_size(); ++at) {
         for (int const flip : {0x01, 0x20, 0x80, 0xff}) {
             std::string f = bytes;
             f.at(at) = static_cast<char>(f.at(at) ^ flip);
@@ -276,7 +277,7 @@ TEST_CASE("attack: a directory entry out of range is an error")
     std::string const bytes = *form<probe>::encode(sample_probe);
     std::size_t const head = bytes.find("\x5a\x00\x00\x00\x0c"s);
     REQUIRE_NE(head, std::string::npos);
-    std::size_t const root = bytes.size() - form<probe>::fixed_size();
+    std::size_t const root = root_offset(bytes);
     for (std::size_t j = 0; j < 3; ++j) {
         for (std::uint32_t const to : {0u, static_cast<std::uint32_t>(head), static_cast<std::uint32_t>(root),
                                        static_cast<std::uint32_t>(bytes.size()), 0x7fffffffu, 0xffffffffu}) {
@@ -292,10 +293,69 @@ TEST_CASE("attack: a directory entry out of range is an error")
     }
 }
 
+// The rump 6(0) refers to table entry 16, the root (draft-ietf-cbor-packed-19 3.1 and Table 1). The rump is forged to
+// 6(1), table entry 18, the first shared item. The test exists because a generic unpacker takes the entry that the rump
+// names as the message. The verified forms compare the rump and give incorrect_type. The unverified forms do not read
+// the rump and give the value.
+TEST_CASE("attack: a forged rump index is incorrect_type")
+{
+    std::string const bytes = *form<probe>::encode(sample_probe);
+    std::string forged = bytes;
+    forged.back() = '\x01';
+    CHECK_EQ(form<probe>::adopt(std::string(forged)).error(), error::incorrect_type);
+    CHECK_EQ(form<probe>::decode(std::string(forged)).error(), error::incorrect_type);
+    CHECK_EQ(form<probe>::at_path<"$.i16">(forged).error(), error::incorrect_type);
+    CHECK_EQ(form<probe>::unverified_at_path<"$.i16">(forged), -300);
+    CHECK_EQ(form<probe>::at_path<"$.i16">(bytes), -300);
+}
+
+// Each reference of the root names its item by a table index that the compiler knows. The reference of text is forged
+// to the index of maybe, the next item. The test exists because the directory and the reference then disagree: the
+// verified forms compare the reference with the index of its place and give unpopulated_table_index. The unverified
+// forms take the index of the place and read the text.
+TEST_CASE("attack: a root reference that disagrees with the directory is unpopulated_table_index")
+{
+    std::string const bytes = *form<probe>::encode(sample_probe);
+    std::size_t const root = root_offset(bytes);
+    std::size_t const text = root + form<probe>::member_offset<&probe::text>();
+    std::size_t const maybe = root + form<probe>::member_offset<&probe::maybe>();
+    std::string forged = bytes;
+    forged.replace(text, form<probe>::fixed_size<std::string>(), bytes.substr(maybe, form<probe>::fixed_size<std::string>()));
+    REQUIRE_NE(forged, bytes);
+    CHECK_EQ(read_leaf_with_copying_path<probe, "$.text">(forged).error(), error::unpopulated_table_index);
+    CHECK_EQ(form<probe>::decode(std::string(forged)).error(), error::unpopulated_table_index);
+    CHECK_EQ(read_leaf_with_copying_path<probe, "$.maybe">(forged).value(), std::optional<std::int32_t>{-9});
+    auto const lane = form<probe>::unverified_adopt(std::string(forged));
+    REQUIRE(lane.has_value());
+    CHECK_EQ(lane->at_path<"$.text">().value(), "probe text"sv);
+}
+
+// A directory entry is forged to point into the root record or into the directory itself. The test exists because an
+// item there would overlap the fixed part of the message. Every form gives syntax_error: the verified forms check that
+// an item starts behind the directory, and the unverified forms that it starts behind the entries of the root.
+TEST_CASE("attack: a directory entry into the root or into the directory is syntax_error")
+{
+    std::string const bytes = *form<probe>::encode(sample_probe);
+    std::size_t const root = root_offset(bytes);
+    std::size_t const head = root + form<probe>::fixed_size();
+    auto const big_endian = [](std::size_t const x) {
+        return std::string{static_cast<char>(x >> 24), static_cast<char>(x >> 16), static_cast<char>(x >> 8),
+                           static_cast<char>(x)};
+    };
+    for (std::size_t const to : {root, root + 10, head, head + 5}) {
+        CAPTURE(to);
+        std::string forged = bytes;
+        forged.replace(head + 5, 4, big_endian(to));
+        CHECK_EQ(read_leaf_with_copying_path<probe, "$.text">(forged).error(), error::syntax_error);
+        CHECK_EQ(form<probe>::decode(std::string(forged)).error(), error::syntax_error);
+        CHECK_EQ(form<probe>::unverified_adopt(std::string(forged))->at_path<"$.text">().error(), error::syntax_error);
+    }
+}
+
 // Two directory entries are forged to the same offset, so two items would share their bytes. In key order the items
 // of probe are text, maybe and tires; each pair of neighbours is forged once. The text item of login
-// is the last item; its length is forged to reach into the root record behind it. The test exists because a text
-// that reached into the root would give the bytes of the root's fields as text.
+// is the last item; its length is forged to reach past the rump behind it. The test exists because a text
+// that reached past its item would give the bytes of other fields as text.
 TEST_CASE("attack: overlapping items are an error")
 {
     std::string const bytes = *form<probe>::encode(sample_probe);
@@ -321,9 +381,9 @@ TEST_CASE("attack: overlapping items are an error")
 
 // Each item of a packed message starts with an RFC 8949 head. A typed array has the tag head d8 56 and the head 5a of
 // its byte string. A text has the head 7a. A four-byte argument is read big endian (RFC 8949 Section 3). A directory
-// entry is forged so that the head of the last item no longer fits before the root record. The test exists because the
+// entry is forged so that the head of the last item no longer fits before the rump. The test exists because the
 // read of that head must stop at the bytes that are left and give too_little_data.
-TEST_CASE("attack: an item head that does not fit before the root is too_little_data")
+TEST_CASE("attack: an item head that does not fit before the rump is too_little_data")
 {
     auto const big_endian = [](std::size_t const x) {
         return std::string{static_cast<char>(x >> 24), static_cast<char>(x >> 16), static_cast<char>(x >> 8),
@@ -335,7 +395,7 @@ TEST_CASE("attack: an item head that does not fit before the root is too_little_
     std::size_t const entry = array.find(big_endian(head));
     REQUIRE_LT(entry, head);
     std::string cut_array = array;
-    cut_array.replace(entry, 4, big_endian(array.size() - form<doubles>::fixed_size() - 3));
+    cut_array.replace(entry, 4, big_endian(array.size() - rump_size - 3));
     CHECK_EQ(read_leaf_with_copying_path<doubles, "$.v[0]">(cut_array).error(), error::too_little_data);
 
     std::string const text = encode_with_schema(login{5, true, "ab"});
@@ -344,7 +404,7 @@ TEST_CASE("attack: an item head that does not fit before the root is too_little_
     std::size_t const name_entry = text.find(big_endian(name));
     REQUIRE_LT(name_entry, name);
     std::string cut_text = text;
-    cut_text.replace(name_entry, 4, big_endian(text.size() - form<login>::fixed_size() - 3));
+    cut_text.replace(name_entry, 4, big_endian(text.size() - rump_size - 3));
     CHECK_EQ(read_leaf_with_copying_path<login, "$.name">(cut_text).error(), error::too_little_data);
 }
 
@@ -480,8 +540,8 @@ TEST_CASE("attack: a variant member under a cut or a changed byte")
 }
 
 // A tag that names no alternative is incorrect_type. A record whose tag head fits but whose values do not is
-// too_little_data. A directory entry that points one byte into the record finds no tag of an alternative there. Decode,
-// which reads the items in their order, finds the entry off its place.
+// too_little_data. A directory entry that points one byte into the record finds no tag of an alternative there. Decode
+// checks first that the first item starts behind the directory, and finds the entry off its place.
 TEST_CASE("attack: an unknown tag, a cut record and a wrong directory entry of a variant member")
 {
     std::string const bytes = *form<home>::encode(make_home_with_dog());
@@ -511,9 +571,9 @@ TEST_CASE("attack: an unknown tag, a cut record and a wrong directory entry of a
 }
 
 // A value variant under every cut and every changed byte reads no memory outside the message (ASan, UBSan). A string
-// length can reach past its item. The verified decode checks the order of the items. It gives syntax_error while the
-// length ends inside the items. It gives too_little_data past the root. The unverified decode keeps the check of the end
-// of the items and gives the same. The path form reads to the next directory entry and gives too_little_data.
+// length can reach past its item. The verified forms read each item up to the next directory entry and give
+// too_little_data. The unverified decode reads each item up to the rump: a length that ends inside the items gives a
+// wrong value and reads nothing outside the message. A length past the rump gives too_little_data in both forms.
 TEST_CASE("attack: value and text alternatives of a variant member")
 {
     for (setting const &s : make_sample_settings()) {
@@ -536,19 +596,18 @@ TEST_CASE("attack: value and text alternatives of a variant member")
         }
     }
     // The text "ab" of pet is the first item; note holds the bytes of an empty text and "y". The length of pet grows
-    // from 2 to 7 and swallows the head of note. So the next read starts at the empty text and ends before the root, at
-    // "y".
+    // from 2 to 7 and swallows the head of note. The verified forms stop at the start of note.
     std::string const swallowed = *form<shelter>::encode(shelter{std::string("ab"), "\x7a\x00\x00\x00\x00y"s});
     std::size_t const pet = swallowed.find("\x7a\x00\x00\x00\x02" "ab"sv);
     REQUIRE_NE(pet, std::string::npos);
     std::string inside = swallowed;
     inside[pet + 4] = '\x07';
-    CHECK_EQ(form<shelter>::decode(std::string(inside)).error(), error::syntax_error);
-    CHECK_EQ(form<shelter>::unverified_decode(std::string(inside)).error(), error::syntax_error);
+    CHECK_EQ(form<shelter>::decode(std::string(inside)).error(), error::too_little_data);
+    CHECK(form<shelter>::unverified_decode(std::string(inside)).has_value());
     CHECK_EQ(form<shelter>::adopt(std::string(inside))->at_path<"$.pet">().error(), error::too_little_data);
-    // name "n" is the first item, the text "ab" of value the last; its length grows past the root.
+    // name "n" is the first item, the text "ab" of value the last; its length grows past the rump.
     std::string const bytes = *form<setting>::encode(setting{"n", std::string("ab")});
-    std::size_t const head = bytes.size() - form<setting>::fixed_size() - 7;
+    std::size_t const head = bytes.size() - rump_size - 7;
     REQUIRE_EQ(bytes.substr(head, 7), "\x7a\x00\x00\x00\x02" "ab"sv);
     std::string past = bytes;
     past[head + 3] = '\x7f';
