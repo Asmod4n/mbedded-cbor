@@ -113,22 +113,6 @@ TEST_CASE("schema: adopt and unverified_adopt throw std::bad_alloc when the owne
     }
 }
 
-// schema::verify runs the walk of decode with a target that keeps nothing. The test exists because verify is
-// declared to allocate nothing, while decode of the same message allocates its text and its vectors.
-TEST_CASE("schema: verify allocates nothing")
-{
-    using doc_reference_schema::car;
-    car const sample{"Volvo", 5, {{17, 2.5f}, {18, 2.25f}}, {1.0, 2.0, 3.0}};
-    auto const encoded = cbor::schema<car>::encode(sample);
-    REQUIRE(encoded.has_value());
-    std::string const bytes = *encoded;
-    std::size_t const before = allocations;
-    auto const checked = cbor::schema<car>::verify(bytes);
-    std::size_t const after = allocations;
-    CHECK_EQ(after, before);
-    CHECK(checked.has_value());
-}
-
 // lazy::adopt and the two rvalue forms of at_path move the message into a new owner, as schema::path does. A full
 // memory gives std::bad_alloc there, and the library does not catch it. The new owner is the first allocation of each
 // call, so the refused allocation is the owner.

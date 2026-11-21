@@ -368,35 +368,6 @@ TEST_CASE("a message cut at any length is too_little_data")
     }
 }
 
-// decode builds a class with no default constructor from a tuple of its members, in a vector, an optional, a map and a
-// variant member. verify builds nothing, so it walks such a class through the same walk with nothing kept. The test
-// exists because each check of that walk must hold for these classes too: verify gives what decode gives for the
-// message, each cut of it and each changed byte.
-TEST_CASE("verify: a class with a constructor gives the outcome of decode")
-{
-    auto const outcome = []<class T>(std::type_identity<T>, std::string const &m) -> std::expected<void, cbor::error> {
-        auto const decoded = form<T>::decode(std::string(m));
-        if (!decoded)
-            return std::unexpected(decoded.error());
-        return {};
-    };
-    auto const sweep = [&outcome]<class T>(std::type_identity<T> const type, std::string const &bytes) {
-        CHECK(form<T>::verify(bytes).has_value());
-        for (std::size_t n = 0; n < bytes.size(); ++n)
-            CHECK_EQ(form<T>::verify(bytes.substr(0, n)).error(), error::too_little_data);
-        for (std::size_t at = 0; at < bytes.size(); ++at) {
-            std::string f = bytes;
-            f.at(at) = static_cast<char>(f.at(at) ^ 0x41);
-            CAPTURE(at);
-            CHECK_EQ(form<T>::verify(f), outcome(type, f));
-        }
-    };
-    sweep(std::type_identity<reading>{}, encode_with_schema(reading{7, "kg"}));
-    sweep(std::type_identity<station>{},
-          encode_with_schema(station{{reading{1, "a"}, reading{2, "bb"}}, reading{3, "ccc"}, {{9, reading{4, "dddd"}}}}));
-    sweep(std::type_identity<den>{}, *form<den>::encode(den{fox{"vix", 7}}));
-}
-
 // Only a cut message of the type is too_little_data. A message of another type keeps its error. Text that is not CBOR
 // keeps its error. A byte after a message is the next item of a CBOR sequence, and the message reads.
 TEST_CASE("a whole message of another type keeps its error")

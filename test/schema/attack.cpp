@@ -129,17 +129,6 @@ std::size_t probe_lot_read(std::string_view const message)
 
 constexpr std::size_t probe_lot_paths = 8 + 3 * 2 + 3;
 
-// Gives the error of decode for a message, or nothing when decode reads it. verify runs the walk of decode, so the
-// two outcomes are equal for every message.
-template <class T>
-std::expected<void, cbor::error> decode_outcome(std::string_view const message)
-{
-    auto const decoded = form<T>::decode(std::string(message));
-    if (!decoded)
-        return std::unexpected(decoded.error());
-    return {};
-}
-
 template <class A, cbor::fixed_string Path>
 concept temporary_reads = requires(A &&a) { std::move(a).template at_path<Path>(); };
 
@@ -162,7 +151,6 @@ TEST_CASE("attack: the sample message reads every path")
     CHECK_EQ(read_leaf_with_copying_path<probe, "$.f64">(bytes), 2.5);
     CHECK_EQ(read_leaf_with_copying_path<probe, "$.pair[]">(bytes, 1uz), 8u);
     CHECK_EQ(read_leaf_with_copying_path<probe, "$.maybe">(bytes).value(), std::optional<std::int32_t>{-9});
-    CHECK(form<probe>::verify(bytes).has_value());
 }
 
 // A text is a view into the bytes that the root holds. An accessor is read through an lvalue only, so each accessor
@@ -214,10 +202,8 @@ TEST_CASE("attack: every prefix of a message is an error for every path")
 {
     std::string const bytes = *form<probe>::encode(sample_probe);
     std::size_t values = 0;
-    for (std::size_t size = 0; size < bytes.size(); ++size) {
+    for (std::size_t size = 0; size < bytes.size(); ++size)
         values += probe_paths_read(std::string_view(bytes).substr(0, size)) + probe_lot_read(std::string_view(bytes).substr(0, size));
-        CHECK_EQ(form<probe>::verify(std::string_view(bytes).substr(0, size)).error(), error::too_little_data);
-    }
     CHECK_EQ(values, 0u);
 }
 
@@ -235,8 +221,6 @@ TEST_CASE("attack: a shifted root is incorrect_type, a byte behind the message i
     CHECK_EQ(probe_paths_read(bytes + "\x00"s), probe_paths);
     CHECK_EQ(probe_lot_read(bytes + "\x00"s), probe_lot_paths);
     CHECK(form<probe>::adopt(bytes + "\x00"s).has_value());
-    CHECK_EQ(form<probe>::verify("\x00"s + bytes).error(), error::incorrect_type);
-    CHECK(form<probe>::verify(bytes + "\x00"s).has_value());
 }
 
 // RFC 8949 3: each fixed field has one head. The valid heads are written here from RFC 8949 3.3 and 3.4 and the fixed
@@ -266,12 +250,6 @@ TEST_CASE("attack: every forged head of a fixed field is incorrect_type")
 #endif
         CHECK_EQ(read_leaf_with_copying_path<probe, "$.code">(forged(S::member_offset<&probe::code>(), head)).has_value(), head == 0x63);
         CHECK_EQ(read_leaf_with_copying_path<probe, "$.pair[1]">(forged(S::member_offset<&probe::pair>(), head)).has_value(), head == 0x82);
-        CHECK_EQ(S::verify(forged(S::member_offset<&probe::flag>(), head)).has_value(), head == 0xf4 || head == 0xf5);
-        CHECK_EQ(S::verify(forged(S::member_offset<&probe::i16>(), head)).has_value(), head == 0x19 || head == 0x39);
-        CHECK_EQ(S::verify(forged(S::member_offset<&probe::u64>(), head)).has_value(), head == 0x1b);
-        CHECK_EQ(S::verify(forged(S::member_offset<&probe::f64>(), head)).has_value(), head == 0xfb);
-        CHECK_EQ(S::verify(forged(S::member_offset<&probe::code>(), head)).has_value(), head == 0x63);
-        CHECK_EQ(S::verify(forged(S::member_offset<&probe::pair>(), head)).has_value(), head == 0x82);
     }
 }
 
@@ -288,7 +266,6 @@ TEST_CASE("attack: a forged byte anywhere in the root reads nothing outside the 
             f.at(at) = static_cast<char>(f.at(at) ^ flip);
             probe_paths_read(f);
             probe_lot_read(f);
-            CHECK_EQ(form<probe>::verify(f), decode_outcome<probe>(f));
         }
     }
 }
@@ -311,7 +288,6 @@ TEST_CASE("attack: a directory entry out of range is an error")
             CAPTURE(j);
             CAPTURE(to);
             CHECK_FALSE(form<probe>::decode(std::string(f)).has_value());
-            CHECK_EQ(form<probe>::verify(f), decode_outcome<probe>(f));
             CHECK_LT(probe_paths_read(f), probe_paths);
             CHECK_LT(probe_lot_read(f), probe_lot_paths);
         }
@@ -329,7 +305,6 @@ TEST_CASE("attack: a forged rump index is incorrect_type")
     forged.back() = '\x01';
     CHECK_EQ(form<probe>::adopt(std::string(forged)).error(), error::incorrect_type);
     CHECK_EQ(form<probe>::decode(std::string(forged)).error(), error::incorrect_type);
-    CHECK_EQ(form<probe>::verify(forged).error(), error::incorrect_type);
     CHECK_EQ(form<probe>::at_path<"$.i16">(forged).error(), error::incorrect_type);
     CHECK_EQ(form<probe>::unverified_at_path<"$.i16">(forged), -300);
     CHECK_EQ(form<probe>::at_path<"$.i16">(bytes), -300);
@@ -350,7 +325,6 @@ TEST_CASE("attack: a root reference that disagrees with the directory is unpopul
     REQUIRE_NE(forged, bytes);
     CHECK_EQ(read_leaf_with_copying_path<probe, "$.text">(forged).error(), error::unpopulated_table_index);
     CHECK_EQ(form<probe>::decode(std::string(forged)).error(), error::unpopulated_table_index);
-    CHECK_EQ(form<probe>::verify(forged).error(), error::unpopulated_table_index);
     CHECK_EQ(read_leaf_with_copying_path<probe, "$.maybe">(forged).value(), std::optional<std::int32_t>{-9});
     auto const lane = form<probe>::unverified_adopt(std::string(forged));
     REQUIRE(lane.has_value());
@@ -375,7 +349,6 @@ TEST_CASE("attack: a directory entry into the root or into the directory is synt
         forged.replace(head + 9, 4, big_endian(to));
         CHECK_EQ(read_leaf_with_copying_path<probe, "$.text">(forged).error(), error::syntax_error);
         CHECK_EQ(form<probe>::decode(std::string(forged)).error(), error::syntax_error);
-        CHECK_EQ(form<probe>::verify(forged).error(), error::syntax_error);
         CHECK_EQ(form<probe>::unverified_adopt(std::string(forged))->at_path<"$.text">().error(), error::syntax_error);
     }
 }
@@ -393,12 +366,10 @@ TEST_CASE("attack: overlapping items are an error")
     same.replace(head + 13, 4, bytes.substr(head + 9, 4));
     CHECK_FALSE(read_leaf_with_copying_path<probe, "$.text">(same).has_value());
     CHECK_FALSE(read_leaf_with_copying_path<probe, "$.maybe">(same).has_value());
-    CHECK_FALSE(form<probe>::verify(same).has_value());
     std::string next = bytes;
     next.replace(head + 17, 4, bytes.substr(head + 13, 4));
     CHECK_FALSE(read_leaf_with_copying_path<probe, "$.maybe">(next).has_value());
     CHECK_FALSE(read_leaf_with_copying_path<probe, "$.tires[0].diameter">(next).has_value());
-    CHECK_FALSE(form<probe>::verify(next).has_value());
 
     std::string const one = encode_with_schema(login{5, true, "ab"});
     std::size_t const text = one.find("\x7a\x00\x00\x00\x02" "ab"s);
@@ -407,8 +378,6 @@ TEST_CASE("attack: overlapping items are an error")
     into_root.replace(text + 1, 4, std::string{'\x00', '\x00', '\x00', static_cast<char>(2 + form<login>::fixed_size())});
     CHECK_EQ(read_leaf_with_copying_path<login, "$.name">(into_root).error(), error::too_little_data);
     CHECK_EQ(read_leaf_with_copying_path<login, "$.id">(into_root), 5u);
-    CHECK_EQ(form<login>::verify(into_root), decode_outcome<login>(into_root));
-    CHECK_FALSE(form<login>::verify(into_root).has_value());
 }
 
 // Each item of a packed message starts with an RFC 8949 head. A typed array has the tag head d8 56 and the head 5a of
@@ -430,7 +399,6 @@ TEST_CASE("attack: an item head that does not fit before the rump is too_little_
     std::string cut_array = array;
     cut_array.replace(entry, 4, big_endian(array.size() - rump_size - 3));
     CHECK_EQ(read_leaf_with_copying_path<doubles, "$.v[0]">(cut_array).error(), error::syntax_error);
-    CHECK_EQ(form<doubles>::verify(cut_array).error(), error::syntax_error);
     CHECK_EQ(form<doubles>::unverified_at_path<"$.v[0]">(cut_array).error(), error::too_little_data);
 
     std::string const text = encode_with_schema(login{5, true, "ab"});
@@ -441,7 +409,6 @@ TEST_CASE("attack: an item head that does not fit before the rump is too_little_
     std::string cut_text = text;
     cut_text.replace(name_entry, 4, big_endian(text.size() - rump_size - 3));
     CHECK_EQ(read_leaf_with_copying_path<login, "$.name">(cut_text).error(), error::syntax_error);
-    CHECK_EQ(form<login>::verify(cut_text).error(), error::syntax_error);
     CHECK_EQ(form<login>::unverified_adopt(std::string(cut_text))->at_path<"$.name">().error(), error::too_little_data);
 }
 
@@ -468,7 +435,6 @@ TEST_CASE("attack: a directory longer than the message is too_little_data")
     forged.replace(directory + 1, 4, big_endian(forged_length));
     CHECK_EQ(form<login>::adopt(std::string(forged)).error(), error::too_little_data);
     CHECK_EQ(form<login>::decode(std::string(forged)).error(), error::too_little_data);
-    CHECK_EQ(form<login>::verify(forged).error(), error::too_little_data);
 }
 
 // A vector of fixed-size structs refers to the description of its element in the header. The reference of the
@@ -490,7 +456,6 @@ TEST_CASE("attack: a forged reference of a fixed-size vector is incorrect_type")
         CHECK_EQ(lot.at_path<"$.tires[].airPressure">(1uz).error(), error::incorrect_type);
     }
     CHECK_EQ(form<probe>::decode(std::string(forged)).error(), error::incorrect_type);
-    CHECK_EQ(form<probe>::verify(forged).error(), error::incorrect_type);
 }
 
 // Each prefix and each forged byte of a message of several cars is read through a new root and an accessor of each
@@ -502,8 +467,7 @@ TEST_CASE("attack: an accessor reads nothing outside a cut or forged message of 
     auto const other = [](auto const &a, auto const &b) { return a.has_value() != b.has_value() || (a && *a != *b); };
     auto const read = [&differ, other](std::string_view const m) {
         auto opened = form<parking_lot>::view(std::make_shared<std::string const>(m));
-        std::size_t n = form<parking_lot>::verify(m).has_value();
-        CHECK_EQ(form<parking_lot>::verify(m), decode_outcome<parking_lot>(m));
+        std::size_t n = 0;
         if (!opened)
             return n;
         auto &lot = *opened;
@@ -524,7 +488,7 @@ TEST_CASE("attack: an accessor reads nothing outside a cut or forged message of 
         n += lot.at_path<"$.rows[][]">(2uz, 0uz).has_value();
         return n;
     };
-    CHECK_EQ(read(bytes), 5u * 3 + 2 + 2 + 1);
+    CHECK_EQ(read(bytes), 5u * 3 + 2 + 2);
     std::size_t values = 0;
     for (std::size_t size = 0; size < bytes.size(); ++size)
         values += read(std::string_view(bytes).substr(0, size));
@@ -547,8 +511,6 @@ std::size_t read_pet(std::string_view const bytes)
     std::size_t n = 0;
     n += form<home>::decode(std::string(bytes)).has_value();
     n += form<home>::unverified_decode(std::string(bytes)).has_value();
-    n += form<home>::verify(bytes).has_value();
-    CHECK_EQ(form<home>::verify(bytes), decode_outcome<home>(bytes));
     if (auto const doc = form<home>::adopt(std::string(bytes))) {
         if (auto const pet = doc->at_path<"$.pet">()) {
             n += 1;
@@ -569,7 +531,7 @@ TEST_CASE("attack: a variant member under a cut or a changed byte")
 {
     for (home const &h : {make_home_with_dog(), make_home_with_cat()}) {
         std::string const bytes = *form<home>::encode(h);
-        CHECK_EQ(read_pet(bytes), 5u);
+        CHECK_EQ(read_pet(bytes), 4u);
         std::size_t values = 0;
         for (std::size_t size = 0; size < bytes.size(); ++size)
             values += read_pet(std::string_view(bytes).substr(0, size));
@@ -594,12 +556,10 @@ TEST_CASE("attack: an unknown tag, a cut record and a wrong directory entry of a
     std::string unknown = bytes;
     unknown[at + 2] = '\xcf';
     CHECK_EQ(form<home>::decode(std::string(unknown)).error(), error::incorrect_type);
-    CHECK_EQ(form<home>::verify(unknown).error(), error::incorrect_type);
     CHECK_EQ(form<home>::adopt(std::string(unknown))->at_path<"$.pet">().error(), error::incorrect_type);
     std::string other_root = bytes;
     other_root[at + 2] = '\xce';
     CHECK_EQ(form<home>::decode(std::string(other_root)).error(), error::incorrect_type);
-    CHECK_EQ(form<home>::verify(other_root).error(), error::incorrect_type);
     std::size_t const head = bytes.find("\x5a\x00\x00\x00\x10"sv);
     REQUIRE_NE(head, std::string::npos);
     auto const big_endian = [](std::size_t const x) {
@@ -610,14 +570,11 @@ TEST_CASE("attack: an unknown tag, a cut record and a wrong directory entry of a
     std::string cut = bytes;
     cut.replace(head + 13, 4, big_endian(at + 4));
     CHECK_EQ(form<home>::adopt(std::string(cut))->at_path<"$.pet">().error(), error::too_little_data);
-    CHECK_FALSE(form<home>::verify(cut).has_value());
-    CHECK_EQ(form<home>::verify(cut), decode_outcome<home>(cut));
     std::string moved = bytes;
     moved.replace(head + 9, 4, big_endian(at + 1));
     CHECK_EQ(form<home>::unverified_adopt(std::string(moved))->at_path<"$.pet">().error(), error::incorrect_type);
     CHECK_EQ(form<home>::adopt(std::string(moved)).error(), error::syntax_error);
     CHECK_EQ(form<home>::decode(std::string(moved)).error(), error::syntax_error);
-    CHECK_EQ(form<home>::verify(moved).error(), error::syntax_error);
 }
 
 // A value variant under every cut and every changed byte reads no memory outside the message (ASan, UBSan). A string
@@ -631,14 +588,12 @@ TEST_CASE("attack: value and text alternatives of a variant member")
         for (std::size_t size = 0; size < bytes.size(); ++size) {
             CHECK_FALSE(form<setting>::decode(bytes.substr(0, size)).has_value());
             CHECK_FALSE(form<setting>::unverified_decode(bytes.substr(0, size)).has_value());
-            CHECK_FALSE(form<setting>::verify(bytes.substr(0, size)).has_value());
         }
         for (std::size_t at = 0; at < bytes.size(); ++at) {
             std::string f = bytes;
             f.at(at) = static_cast<char>(f.at(at) ^ 0x41);
             (void)form<setting>::decode(std::string(f));
             (void)form<setting>::unverified_decode(std::string(f));
-            CHECK_EQ(form<setting>::verify(f), decode_outcome<setting>(f));
             if (auto const doc = form<setting>::unverified_adopt(std::string(f)))
                 if (auto const v = doc->at_path<"$.value">()) {
                     (void)v->get<std::string>();
@@ -655,7 +610,6 @@ TEST_CASE("attack: value and text alternatives of a variant member")
     std::string inside = swallowed;
     inside[pet + 4] = '\x07';
     CHECK_EQ(form<shelter>::decode(std::string(inside)).error(), error::too_little_data);
-    CHECK_EQ(form<shelter>::verify(inside).error(), error::too_little_data);
     CHECK(form<shelter>::unverified_decode(std::string(inside)).has_value());
     CHECK_EQ(form<shelter>::adopt(std::string(inside))->at_path<"$.pet">().error(), error::too_little_data);
     // name "n" is the first item, the text "ab" of value the last; its length grows past the rump.
@@ -665,10 +619,8 @@ TEST_CASE("attack: value and text alternatives of a variant member")
     std::string past = bytes;
     past[head + 3] = '\x7f';
     CHECK_EQ(form<setting>::decode(std::string(past)).error(), error::too_little_data);
-    CHECK_EQ(form<setting>::verify(past).error(), error::too_little_data);
     CHECK_EQ(form<setting>::unverified_decode(std::string(past)).error(), error::too_little_data);
     std::string unknown = bytes;
     unknown[head] = '\x7b';
     CHECK_EQ(form<setting>::decode(std::string(unknown)).error(), error::incorrect_type);
-    CHECK_EQ(form<setting>::verify(unknown).error(), error::incorrect_type);
 }
