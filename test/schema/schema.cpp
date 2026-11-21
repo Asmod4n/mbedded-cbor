@@ -87,7 +87,7 @@ TEST_CASE("schema: decode keeps the first entry of a repeated key")
 // the draft and RFC 8949 3 by hand. The keys have the text heads 69 and 63. f7 stands up to index 15. Then comes the
 // root at index 16: the class tag 65536, which needs the 4-byte argument da 00 01 00 00 (RFC 8949 3 and 4.1). Then
 // comes the record head of 7 bytes. Then come the integer with its fixed width of 18 and 1 byte, and the simple value.
-// The directory at index 17 is empty. The rump 6(0) = c6 00 refers to the root. The test exists because a tag number
+// The directory at index 17 holds only the start of the rump, 64 (40). The rump 6(0) = c6 00 refers to the root. The test exists because a tag number
 // above 65535 makes the head of the class tag 5 bytes long. Every offset behind it moves by that.
 TEST_CASE("schema: the description gives the key of a member")
 {
@@ -99,7 +99,7 @@ TEST_CASE("schema: the description gives the key of a member")
                     "EOF\x69x-user-id"
                     "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
                     "\xda\x00\x01\x00\x00\xd8\x80\x9a\x00\x00\x00\x02\xf5\x18\x07"
-                    "\x5a\x00\x00\x00\x00"
+                    "\x5a\x00\x00\x00\x04\x00\x00\x00\x40"
                     "\xc6\x00"s);
     auto const decoded_back = *form<keyed>::decode(std::string(bytes));
     keyed const &back = *decoded_back;

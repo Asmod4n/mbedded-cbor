@@ -1392,15 +1392,6 @@ class reflection
         }
     }
 
-    template <class E>
-    static constexpr E default_value()
-    {
-        if constexpr (std::is_default_constructible_v<E>)
-            return E{};
-        else
-            return std::make_from_tuple<E>(make_arguments<E>());
-    }
-
     static constexpr std::size_t inline_optional_head = 2;
 
     static constexpr std::size_t typed_array_head = detail::heads::initial_byte_size + sizeof(std::uint8_t) + item_head;
@@ -1474,9 +1465,15 @@ class reflection
             std::ranges::copy(count, std::span(encoded).template last<sizeof(std::uint32_t)>().begin());
             for_each_field<U>([&](auto i) { encode_zero_initialized<Root, describe::member_t<U, decltype(i)::value>>(encoded); });
         } else if constexpr (is_inline_optional<U>) {
+            constexpr std::size_t size = fixed_size<typename U::value_type, Root>();
+            static_assert(size >= item_head, "The bytes of an absent struct must hold the head of a byte string.");
             detail::heads::append_head(encoded, major_type::array, inline_optional_elements);
             detail::heads::append_head(encoded, major_type::simple, std::to_underlying(simple_value::false_value));
-            encode_zero_initialized<Root, typename U::value_type>(encoded);
+            encoded.push_back(detail::heads::initial_byte(major_type::byte_string,
+                                                          std::to_underlying(rfc8949::additional_information::four_byte_argument)));
+            auto const length = detail::heads::big_endian(static_cast<std::uint32_t>(size - item_head));
+            encoded.insert(encoded.end(), length.begin(), length.end());
+            encoded.resize(encoded.size() + size - item_head);
         } else {
             detail::heads::append_head(encoded, major_type::tag, std::to_underlying(packed_cbor::tag_number::reference));
             encode_fixed_width_head(encoded, major_type::unsigned_integer, sizeof(std::uint32_t));
@@ -1710,7 +1707,7 @@ class reflection
     template <class Root, description_place D>
     static consteval std::size_t least_size_of()
     {
-        constexpr auto least = detail::validity::checked_mul(reference_count<Root>(), sizeof(std::uint32_t))
+        constexpr auto least = detail::validity::checked_mul(reference_count<Root>() + 1, sizeof(std::uint32_t))
                                    .and_then([](std::size_t const entries) {
                                        return detail::validity::checked_add(directory_at<Root, D>(), entries);
                                    })
@@ -1827,10 +1824,12 @@ class reflection
                     value);
             } else if constexpr (is_inline_optional<U>) {
                 using E = typename U::value_type;
-                if (value.has_value())
+                if (value.has_value()) {
                     add<E>(*value);
-                else if constexpr (reference_count<E>() != 0)
-                    add<E>(default_value<E>());
+                } else {
+                    items += reference_count<E>();
+                    add_bytes(reference_count<E>());
+                }
             } else if constexpr (is_optional<U>) {
                 items += 1;
                 add_bytes(item_head);
@@ -2052,7 +2051,7 @@ class reflection
             auto const inner = field.template subspan<inline_optional_head, fixed_size<E, Root>()>();
             if (value.has_value())
                 return encode_records<Root, E, Exact, D>(out, inner, *value, c);
-            return encode_records<Root, E, Exact, D>(out, inner, default_value<E>(), c);
+            return c;
         } else {
             return encode_reference_records<Root, Exact, D>(out, field, value, c);
         }
@@ -2161,9 +2160,15 @@ class reflection
             if (value.has_value()) {
                 field.template subspan<1, 1>().front() =
                     detail::heads::initial_byte(major_type::simple, std::to_underlying(simple_value::true_value));
+                copy_zero_initialized<Root, E>(inner);
                 position = encode_value<Root, E, Exact, D>(out, inner, *value, position);
-            } else if constexpr (reference_count<E>() != 0) {
-                position = encode_value<Root, E, Exact, D>(out, inner, default_value<E>(), position);
+            } else {
+                for (std::size_t k = 0; k < reference_count<E>(); ++k) {
+                    detail::heads::write_u32(out, directory_at<Root, D>() + sizeof(std::uint32_t) * position.index++,
+                                             position.position);
+                    out[position.position++] = detail::heads::initial_byte(major_type::simple,
+                                                                           std::to_underlying(simple_value::undefined));
+                }
             }
         } else {
             position = encode_reference<Root, Exact, D>(out, field, value, position);
@@ -2464,11 +2469,10 @@ class reflection
                 return std::unexpected(error::unpopulated_table_index);
         std::size_t const item = directory_entry(encoded, dir, j);
         std::size_t end = dir.end;
-        std::size_t first = dir.at + sizeof(std::uint32_t) * reference_count<Root>();
+        std::size_t first = dir.at + sizeof(std::uint32_t) * (reference_count<Root>() + 1);
         if constexpr (Verified) {
-            first = dir.at + sizeof(std::uint32_t) * dir.count;
-            if (j + 1 < dir.count)
-                end = directory_entry(encoded, dir, j + 1);
+            first = dir.at + sizeof(std::uint32_t) * (dir.count + 1);
+            end = directory_entry(encoded, dir, j + 1);
         }
         if (auto const inside = detail::validity::check_subrange(item, end, first, dir.end); !inside) [[unlikely]]
             return std::unexpected(inside.error());
@@ -2566,6 +2570,22 @@ class reflection
         return r;
     }
 
+    template <class Root>
+    static std::expected<void, error> undefined_items_valid(std::string_view const encoded, detail::directory const dir,
+                                                            std::size_t const base, std::size_t const count)
+    {
+        for (std::size_t k = 0; k < count; ++k) {
+            auto const bounds = read_item_bounds<Root, true, false>(encoded, dir, base + k);
+            if (!bounds) [[unlikely]]
+                return std::unexpected(bounds.error());
+            if (bounds->end - bounds->at != 1 ||
+                encoded[bounds->at] != detail::heads::initial_byte(major_type::simple, std::to_underlying(simple_value::undefined)))
+                [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+        }
+        return {};
+    }
+
     template <class Root, class E, bool Verified>
     CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> record_base(std::span<char const, fixed_size<E, Root>()> const record)
     {
@@ -2593,17 +2613,41 @@ class reflection
     }
 
     template <class T>
-    static bool rump_valid(std::string_view const encoded)
+    static bool rump_valid(std::string_view const encoded, std::size_t const at)
     {
         static constexpr auto rump = rump_of<T>();
-        return detail::validity::bytes_fit(rump.size(), encoded.size()) &&
-               std::ranges::equal(std::span(encoded).last(rump.size()), rump);
+        return std::ranges::equal(std::span(encoded).subspan(at).template first<rump.size()>(), rump);
+    }
+
+    template <class T, description_place D>
+    static std::expected<detail::directory, error> directory_of(std::string_view const encoded)
+    {
+        constexpr std::size_t at = directory_at<T, D>();
+        if (auto const fits = detail::validity::check_bytes_left(least_size_of<T, D>(), encoded.size()); !fits) [[unlikely]]
+            return std::unexpected(fits.error());
+        std::size_t const entries = detail::heads::read_unsigned<std::uint32_t>(
+                                        std::span<char const>(encoded).template subspan<directory_head_at<T, D>() +
+                                                                                            detail::heads::initial_byte_size,
+                                                                                        sizeof(std::uint32_t)>()) /
+                                    sizeof(std::uint32_t);
+        if (entries == 0 || !detail::validity::bytes_fit(entries, (encoded.size() - at) / sizeof(std::uint32_t)))
+            [[unlikely]]
+            return std::unexpected(error::too_little_data);
+        detail::directory const dir{at, entries - 1, 0};
+        std::size_t const end = directory_entry(encoded, dir, dir.count);
+        if (end > encoded.size() || !detail::validity::bytes_fit(rump_of<T>().size(), encoded.size() - end)) [[unlikely]]
+            return std::unexpected(error::too_little_data);
+        return detail::directory{at, dir.count, end};
     }
 
     template <class T, description_place D>
     static error too_little_data_if_truncated(std::string_view const encoded, error const e)
     {
-        if (e == error::too_little_data || !packing_prefix_valid<T, D>(encoded) || rump_valid<T>(encoded))
+        if (e == error::too_little_data || !packing_prefix_valid<T, D>(encoded))
+            return e;
+        if (auto const dir = directory_of<T, D>(encoded); !dir)
+            return error::too_little_data;
+        else if (rump_valid<T>(encoded, dir->end))
             return e;
         detail::heads::decoder<true> d{encoded};
         if (detail::well_formedness::skip_items(d, 1).error_or(error{}) != error::too_little_data)
@@ -2614,32 +2658,29 @@ class reflection
     template <class T, bool Verified, description_place D>
     CBOR_ALWAYS_INLINE static std::expected<detail::directory, error> read_directory(std::string_view const encoded)
     {
-        constexpr std::size_t least = least_size_of<T, D>();
-        constexpr std::size_t at = directory_at<T, D>();
-        if (auto const fits = detail::validity::check_bytes_left(least, encoded.size()); !fits) [[unlikely]]
-            return std::unexpected(fits.error());
-        std::size_t const end = encoded.size() - rump_of<T>().size();
-        std::size_t const length = detail::heads::read_unsigned<std::uint32_t>(
-            std::span<char const>(encoded).template subspan<directory_head_at<T, D>() + detail::heads::initial_byte_size,
-                                                            sizeof(std::uint32_t)>());
-        std::size_t const count = length / sizeof(std::uint32_t);
         if constexpr (Verified) {
+            if (auto const fits = detail::validity::check_bytes_left(least_size_of<T, D>(), encoded.size()); !fits)
+                [[unlikely]]
+                return std::unexpected(fits.error());
             if (!packing_prefix_valid<T, D>(encoded)) [[unlikely]]
                 return std::unexpected(
                     error_of_refused_field(std::span<char const>(encoded).template first<packing_prefix_of<T, D>().size()>()));
-            if (length % sizeof(std::uint32_t) != 0 ||
+            std::size_t const length = detail::heads::read_unsigned<std::uint32_t>(
+                std::span<char const>(encoded).template subspan<directory_head_at<T, D>() + detail::heads::initial_byte_size,
+                                                                sizeof(std::uint32_t)>());
+            if (length < sizeof(std::uint32_t) || length % sizeof(std::uint32_t) != 0 ||
                 detail::heads::read_unsigned<std::uint32_t>(
                     std::span<char const>(encoded).template subspan<table_count_at, sizeof(std::uint32_t)>()) !=
-                    table_first_of<T, D>() + count) [[unlikely]]
+                    table_first_of<T, D>() + length / sizeof(std::uint32_t) - 1) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
-            if (auto const fits = detail::validity::check_bytes_left(length, end - at); !fits) [[unlikely]]
-                return std::unexpected(fits.error());
-            if (!rump_valid<T>(encoded)) [[unlikely]]
-                return std::unexpected(error::incorrect_type);
-            return detail::directory{at, count, end};
-        } else {
-            return detail::directory{at, std::min(count, (end - at) / sizeof(std::uint32_t)), end};
         }
+        auto const dir = directory_of<T, D>(encoded);
+        if (!dir) [[unlikely]]
+            return dir;
+        if constexpr (Verified)
+            if (dir->end < dir->at + sizeof(std::uint32_t) * (dir->count + 1) || !rump_valid<T>(encoded, dir->end)) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+        return dir;
     }
 
     static consteval std::size_t count_index_arguments(std::string_view const path)
@@ -3222,9 +3263,8 @@ class reflection
                 if (field.template subspan<1, 1>().front() !=
                     detail::heads::initial_byte(major_type::simple, std::to_underlying(simple_value::true_value))) {
                     out.reset();
-                    if constexpr (reference_count<E>() != 0)
-                        if (auto const skipped = read_element<Root, E>(out, inner, base); !skipped) [[unlikely]]
-                            return std::unexpected(skipped.error());
+                    if constexpr (Verified)
+                        return undefined_items_valid<Root>(encoded, dir, base, reference_count<E>());
                     return {};
                 }
                 if constexpr (std::is_default_constructible_v<E>) {
@@ -3481,8 +3521,7 @@ class reflection
         if constexpr (Verified) {
             if (!class_tag_valid<T, T>(field)) [[unlikely]]
                 return std::unexpected(error_of_refused_field(field));
-            std::size_t const items = dir->at + sizeof(std::uint32_t) * dir->count;
-            if (dir->count == 0 ? items != dir->end : directory_entry(encoded, *dir, 0) != items) [[unlikely]]
+            if (directory_entry(encoded, *dir, 0) != dir->at + sizeof(std::uint32_t) * (dir->count + 1)) [[unlikely]]
                 return std::unexpected(error::syntax_error);
         }
         decode_cursor<Verified> c{encoded, *dir, reference_count<T>()};
@@ -3515,7 +3554,9 @@ class reflection
         constexpr std::size_t fixed = *fixed_part;
         if (second.overflow) [[unlikely]]
             return std::unexpected(std::errc::value_too_large);
-        auto const directory = detail::validity::checked_mul(second.items, sizeof(std::uint32_t));
+        auto const directory = detail::validity::checked_add(second.items, 1uz).and_then([](std::size_t const entries) {
+            return detail::validity::checked_mul(entries, sizeof(std::uint32_t));
+        });
         if (!directory) [[unlikely]]
             return directory;
         auto const second_size = detail::validity::checked_add(*directory, second.bytes);
@@ -3537,8 +3578,9 @@ class reflection
         std::ranges::copy(prefix, encoded.template first<prefix.size()>().begin());
         detail::heads::write_u32(encoded, table_count_at, table_first_of<T, D>() + second.items);
         detail::heads::write_item_head(encoded, directory_head_at<T, D>(), major_type::byte_string,
-                                       sizeof(std::uint32_t) * second.items);
-        std::size_t const data = directory_at<T, D>() + sizeof(std::uint32_t) * second.items;
+                                       sizeof(std::uint32_t) * (second.items + 1));
+        std::size_t const data = directory_at<T, D>() + sizeof(std::uint32_t) * (second.items + 1);
+        detail::heads::write_u32(encoded, directory_at<T, D>() + sizeof(std::uint32_t) * second.items, size - rump.size());
         std::ranges::copy(rump, encoded.subspan(size - rump.size()).template first<rump.size()>().begin());
         auto const root = encoded.template subspan<root_at<T, D>(), fixed_size<T, T>()>();
         if (encode_record<T, T, Exact, D>(encoded, root, value, encode_cursor{data, 0}).depth != 0) [[unlikely]]
@@ -3566,7 +3608,7 @@ class reflection
  * `begin` and `end` on a temporary do not compile.
  *
  * @code{.example}
- * bytes: d8 71 82 9a 00 00 00 15 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 0c 00 00 00 90 00 00 00 9a 00 00 00 b0 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00
+ * bytes: d8 71 82 9a 00 00 00 15 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 10 00 00 00 94 00 00 00 9e 00 00 00 b4 00 00 00 d3 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00
  * call: auto const root = cbor::schema<car>::adopt(std::move(bytes))
  * result: accessor of a car
  * call: auto const track = root->view<"$.track">()
@@ -3900,6 +3942,8 @@ public:
      * The root record is table entry 16 of the message, behind the description and the fillers, or the first entry
      * behind a description of more than 16 entries.
      * The directory follows the root, and the rump at the end of the message refers to the root.
+     * The last entry of the directory is the start of the rump, so the message gives its own end: bytes behind it are
+     * the next item of a CBOR sequence and are not read.
      * A number takes its head and its argument of fixed width.
      * A struct takes its class tag, its table reference, a record head of 5 bytes and its fields.
      * A text, a list, a map, an optional of variable size or a `std::variant` takes a reference `6(N)` of 6 bytes.
@@ -3907,7 +3951,7 @@ public:
      * A type that has no fixed size does not compile.
      *
      * @code{.example}
-     * bytes: d8 71 82 9a 00 00 00 12 d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 08 d8 80 9a 00 00 00 02 19 00 11 fa 40 20 00 00 5a 00 00 00 00 c6 00
+     * bytes: d8 71 82 9a 00 00 00 12 d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 08 d8 80 9a 00 00 00 02 19 00 11 fa 40 20 00 00 5a 00 00 00 04 00 00 00 47 c6 00
      * call: cbor::schema<tire>::fixed_size()
      * result: 18
      * call: cbor::schema<tire>::fixed_size<std::uint16_t>()
@@ -3917,7 +3961,7 @@ public:
      * call: cbor::schema<car>::fixed_size<std::string>()
      * result: 6
      * call: bytes.size()
-     * result: 69
+     * result: 73
      * call: bytes[44]
      * result: '\xd9'
      * @endcode
@@ -3941,7 +3985,7 @@ public:
      * cbor::static_dictionary writes and reads a message without them.
      *
      * @code{.example}
-     * bytes: d8 71 82 9a 00 00 00 15 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 0c 00 00 00 90 00 00 00 9a 00 00 00 b0 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00
+     * bytes: d8 71 82 9a 00 00 00 15 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 10 00 00 00 94 00 00 00 9e 00 00 00 b4 00 00 00 d3 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00
      * call: cbor::schema<car>::description().size()
      * result: 76
      * @endcode
@@ -3969,13 +4013,13 @@ public:
      * A `Member` of another struct, or a member that the description does not list, does not compile.
      *
      * @code{.example}
-     * bytes: d8 71 82 9a 00 00 00 12 d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 08 d8 80 9a 00 00 00 02 19 00 11 fa 40 20 00 00 5a 00 00 00 00 c6 00
+     * bytes: d8 71 82 9a 00 00 00 12 d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 08 d8 80 9a 00 00 00 02 19 00 11 fa 40 20 00 00 5a 00 00 00 04 00 00 00 47 c6 00
      * call: cbor::schema<tire>::member_offset<&tire::diameter>()
      * result: 10
      * call: cbor::schema<tire>::member_offset<&tire::pressure>()
      * result: 13
      * call: bytes.size()
-     * result: 69
+     * result: 73
      * call: bytes[54]
      * result: '\x19'
      * call: bytes[57]
@@ -4018,7 +4062,7 @@ public:
      * `at_path` on a temporary does not compile.
      *
      * @code{.example}
-     * bytes: d8 71 82 9a 00 00 00 15 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 0c 00 00 00 90 00 00 00 9a 00 00 00 b0 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00
+     * bytes: d8 71 82 9a 00 00 00 15 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 10 00 00 00 94 00 00 00 9e 00 00 00 b4 00 00 00 d3 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00
      * call: auto const root = cbor::schema<car>::adopt(std::move(bytes))
      * result: accessor of a car
      * call: auto const tires = root->at_path<"$.tires">()
@@ -4043,7 +4087,7 @@ public:
      * result: accessor of a tire in a std::vector<tire>
      * @endcode
      * @code{.example}
-     * bytes: d8 71 82 9a 00 00 00 14 d8 72 81 63 70 65 74 d8 72 82 64 62 61 72 6b 64 6e 61 6d 65 d8 72 82 64 6e 61 6d 65 64 74 6f 79 73 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 0d d8 80 9a 00 00 00 01 c6 1a 00 00 00 01 5a 00 00 00 08 00 00 00 53 00 00 00 65 d9 07 0b d8 81 9a 00 00 00 02 18 03 c6 3a 00 00 00 01 7a 00 00 00 03 72 65 78 c6 00
+     * bytes: d8 71 82 9a 00 00 00 14 d8 72 81 63 70 65 74 d8 72 82 64 62 61 72 6b 64 6e 61 6d 65 d8 72 82 64 6e 61 6d 65 64 74 6f 79 73 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 0d d8 80 9a 00 00 00 01 c6 1a 00 00 00 01 5a 00 00 00 0c 00 00 00 57 00 00 00 69 00 00 00 71 d9 07 0b d8 81 9a 00 00 00 02 18 03 c6 3a 00 00 00 01 7a 00 00 00 03 72 65 78 c6 00
      * call: auto const house = cbor::schema<home>::adopt(std::move(bytes))
      * result: accessor of a home
      * call: auto const pet = house->at_path<"$.pet">()
@@ -4058,7 +4102,7 @@ public:
      * result: unexpected cbor::error::incorrect_type
      * @endcode
      * @code{.example}
-     * bytes: d8 71 82 9a 00 00 00 14 d8 72 82 64 6e 61 6d 65 65 76 61 6c 75 65 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 0e d8 80 9a 00 00 00 02 c6 1a 00 00 00 01 c6 3a 00 00 00 01 5a 00 00 00 08 00 00 00 48 00 00 00 52 7a 00 00 00 05 77 69 64 74 68 1b 00 00 00 00 00 00 00 f0 c6 00
+     * bytes: d8 71 82 9a 00 00 00 14 d8 72 82 64 6e 61 6d 65 65 76 61 6c 75 65 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 0e d8 80 9a 00 00 00 02 c6 1a 00 00 00 01 c6 3a 00 00 00 01 5a 00 00 00 0c 00 00 00 4c 00 00 00 56 00 00 00 5f 7a 00 00 00 05 77 69 64 74 68 1b 00 00 00 00 00 00 00 f0 c6 00
      * call: auto const width = cbor::schema<property>::adopt(std::move(bytes))
      * result: accessor of a property
      * call: auto const value = width->at_path<"$.value">()
@@ -4319,7 +4363,7 @@ public:
      * `at_path` on a temporary does not compile.
      *
      * @code{.example}
-     * bytes: d8 71 82 9a 00 00 00 15 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 0c 00 00 00 90 00 00 00 9a 00 00 00 b0 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00
+     * bytes: d8 71 82 9a 00 00 00 15 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 10 00 00 00 94 00 00 00 9e 00 00 00 b4 00 00 00 d3 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00
      * call: auto const root = cbor::schema<car>::adopt(std::move(bytes))
      * result: accessor of a car
      * call: auto const second = root->at_path<"$.tires[]">(1u)
@@ -4476,7 +4520,7 @@ public:
      * It reads no field.
      *
      * @code{.example}
-     * bytes: d8 71 82 9a 00 00 00 15 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 0c 00 00 00 90 00 00 00 9a 00 00 00 b0 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00
+     * bytes: d8 71 82 9a 00 00 00 15 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 10 00 00 00 94 00 00 00 9e 00 00 00 b4 00 00 00 d3 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00
      * call: cbor::schema<car>::adopt(std::string(bytes)).has_value()
      * result: true
      * call: auto const root = cbor::schema<car>::adopt(std::move(bytes))
@@ -4535,7 +4579,7 @@ public:
      * A member that `T` does not have, a wrong count of indexes, or a path to a text does not compile.
      *
      * @code{.example}
-     * bytes: d8 71 82 9a 00 00 00 15 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 0c 00 00 00 90 00 00 00 9a 00 00 00 b0 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00
+     * bytes: d8 71 82 9a 00 00 00 15 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 10 00 00 00 94 00 00 00 9e 00 00 00 b4 00 00 00 d3 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00
      * call: cbor::schema<car>::at_path<"$.seats">(bytes)
      * result: 5
      * call: cbor::schema<car>::at_path<"$.tires[1].diameter">(bytes)
@@ -4580,7 +4624,7 @@ public:
      * An element of a container with an allocator makes that tuple with the allocator of the container.
      *
      * @code{.example}
-     * bytes: d8 71 82 9a 00 00 00 15 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 0c 00 00 00 90 00 00 00 9a 00 00 00 b0 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00
+     * bytes: d8 71 82 9a 00 00 00 15 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 10 00 00 00 94 00 00 00 9e 00 00 00 b4 00 00 00 d3 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00
      * call: auto const back = cbor::schema<car>::decode(std::move(bytes))
      * result: ref to car{"Volvo", 5, {tire{17, 2.5f}, tire{18, 2.25f}}, {1, 2, 3}}
      * call: (*back)->make
@@ -4679,7 +4723,7 @@ public:
      * - the limits of the build and, in `unverified_decode`, the nesting depth.
      *
      * @code{.example}
-     * bytes: d8 71 82 9a 00 00 00 15 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 0c 00 00 00 90 00 00 00 9a 00 00 00 b0 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00
+     * bytes: d8 71 82 9a 00 00 00 15 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 10 00 00 00 94 00 00 00 9e 00 00 00 b4 00 00 00 d3 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00
      * call: cbor::schema<car>::unverified_at_path<"$.seats">(bytes)
      * result: 5
      * call: cbor::schema<car>::unverified_at_path<"$.tires[].diameter">(bytes, 0u)
@@ -4737,7 +4781,7 @@ public:
      * The checks and the errors of cbor::schema::unverified_adopt() apply.
      *
      * @code{.example}
-     * bytes: d8 71 82 9a 00 00 00 15 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 0c 00 00 00 90 00 00 00 9a 00 00 00 b0 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00
+     * bytes: d8 71 82 9a 00 00 00 15 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 10 00 00 00 94 00 00 00 9e 00 00 00 b4 00 00 00 d3 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00
      * call: cbor::schema<car>::unverified_at_path<"$.seats">(bytes)
      * result: 5
      * call: cbor::schema<car>::unverified_at_path<"$.tires[].diameter">(bytes, 0u)
@@ -4764,7 +4808,7 @@ public:
      * It does not check the order of the references and of the items.
      *
      * @code{.example}
-     * bytes: d8 71 82 9a 00 00 00 15 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 0c 00 00 00 90 00 00 00 9a 00 00 00 b0 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00
+     * bytes: d8 71 82 9a 00 00 00 15 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 10 00 00 00 94 00 00 00 9e 00 00 00 b4 00 00 00 d3 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00
      * call: (*cbor::schema<car>::unverified_decode(std::string(bytes)))->make
      * result: "Volvo"
      * @endcode
@@ -4834,15 +4878,15 @@ public:
      * A struct with no cbor::tag, two structs with one tag, or a tag of a standard type does not compile.
      *
      * @code{.example}
-     * bytes: d8 71 82 9a 00 00 00 12 d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 08 d8 80 9a 00 00 00 02 19 00 11 fa 40 20 00 00 5a 00 00 00 00 c6 00
+     * bytes: d8 71 82 9a 00 00 00 12 d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 08 d8 80 9a 00 00 00 02 19 00 11 fa 40 20 00 00 5a 00 00 00 04 00 00 00 47 c6 00
      * call: cbor::schema<tire>::encode(tire{17, 2.5f})
-     * result: 69 bytes: d8 71 82 9a 00 00 00 12 d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 08 d8 80 9a 00 00 00 02 19 00 11 fa 40 20 00 00 5a 00 00 00 00 c6 00
+     * result: 73 bytes: d8 71 82 9a 00 00 00 12 d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 08 d8 80 9a 00 00 00 02 19 00 11 fa 40 20 00 00 5a 00 00 00 04 00 00 00 47 c6 00
      * call: std::string out = "x"
      * result: "x"
      * call: auto const n = cbor::schema<tire>::encode(out, tire{17, 2.5f})
-     * result: 69
+     * result: 73
      * call: out.size()
-     * result: 70
+     * result: 74
      * @endcode
      *
      * @retval no_buffer_space a `std::span<char>` is shorter than the message
@@ -5081,21 +5125,21 @@ private:
  * The other errors are the errors of cbor::schema::adopt(), cbor::schema::at_path() and cbor::schema::decode().
  *
  * @code{.example}
- * bytes: d8 71 82 9a 00 00 00 15 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 0c 00 00 00 90 00 00 00 9a 00 00 00 b0 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00
+ * bytes: d8 71 82 9a 00 00 00 15 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 10 00 00 00 94 00 00 00 9e 00 00 00 b4 00 00 00 d3 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00
  * call: auto const data = cbor::static_dictionary<car>::encode(car{"Volvo", 5, std::vector<tire>{tire{17, 2.5f}, tire{18, 2.25f}}, std::vector<double>{1.0, 2.0, 3.0}})
- * result: 133 bytes: d8 71 82 9a 00 00 00 12 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 0c 00 00 00 44 00 00 00 4e 00 00 00 64 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00
+ * result: 137 bytes: d8 71 82 9a 00 00 00 12 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 10 00 00 00 48 00 00 00 52 00 00 00 68 00 00 00 87 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00
  * call: data->size()
- * result: 133
+ * result: 137
  * call: cbor::schema<car>::description().size()
  * result: 76
  * call: bytes.size()
- * result: 209
+ * result: 213
  * call: cbor::static_dictionary<car>::at_path<"$.seats">(*data)
  * result: 5
  * call: cbor::static_dictionary<car>::decode(*data)
  * result: ref to car{"Volvo", 5, {tire{17, 2.5f}, tire{18, 2.25f}}, {1, 2, 3}}
  * call: auto const owner = std::make_shared<std::string const>(*data)
- * result: shared_ptr to 133 bytes: d8 71 82 9a 00 00 00 12 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 0c 00 00 00 44 00 00 00 4e 00 00 00 64 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00
+ * result: shared_ptr to 137 bytes: d8 71 82 9a 00 00 00 12 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 10 00 00 00 48 00 00 00 52 00 00 00 68 00 00 00 87 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00
  * call: auto const root = cbor::static_dictionary<car>::view(owner)
  * result: accessor of a car
  * call: root->at_path<"$.tires[1].diameter">()

@@ -368,13 +368,13 @@ TEST_CASE("a message cut at any length is too_little_data")
     }
 }
 
-// Only a cut message of the type is too_little_data. A message of another type keeps its error. A message with a byte
-// after it keeps its error. Text that is not CBOR keeps its error.
+// Only a cut message of the type is too_little_data. A message of another type keeps its error. Text that is not CBOR
+// keeps its error. A byte after a message is the next item of a CBOR sequence, and the message reads.
 TEST_CASE("a whole message of another type keeps its error")
 {
     std::string const whole = *form<byte_fields>::encode(make_byte_fields());
     CHECK_EQ(form<reading>::decode(std::string(whole)).error(), error::incorrect_type);
-    CHECK_EQ(form<byte_fields>::decode(whole + "\x01").error(), error::incorrect_type);
+    CHECK(form<byte_fields>::decode(whole + "\x01").has_value());
     std::string const text(whole.size(), '{');
     CHECK_EQ(form<byte_fields>::decode(std::string(text)).error(), error::incorrect_type);
 }

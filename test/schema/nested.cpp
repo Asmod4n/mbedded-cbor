@@ -1,4 +1,7 @@
 #include "types.hpp"
+#include <cbor/decode.hpp>
+#include <cbor/diagnostic_notation.hpp>
+#include <cbor/item_size.hpp>
 
 namespace schema_types
 {
@@ -115,7 +118,7 @@ TEST_CASE("nested: a list of lists, an optional and a variant of structs read ba
     CHECK_EQ(lane->at_path<"$.title">().value(), "grid"sv);
 }
 
-// An absent optional struct keeps the items of its references, those of a struct made by its default constructor. The
+// An absent optional struct keeps one item for each of its references: an undefined value, f7 (RFC 8949 3.3). The
 // test exists because the members behind it keep their fixed directory entries, and decode passes over those items.
 TEST_CASE("nested: an absent optional struct keeps the places of the members behind it")
 {
@@ -134,6 +137,198 @@ TEST_CASE("nested: an absent optional struct keeps the places of the members beh
     CHECK_FALSE(extra->has_value());
     CHECK_EQ(root->at_path<"$.pick">()->get<std::string>().value(), "text"sv);
     CHECK_EQ(form<field_grid>::unverified_adopt(std::string(bytes))->at_path<"$.title">().value(), "grid"sv);
+}
+
+// The verified forms read f7 in the place of each reference of an absent optional struct and a real item in the place
+// of each reference of a present one. The test exists because a f7 that stood for a present struct, or an item that
+// stood for an absent one, would give a value that the writer did not write.
+TEST_CASE("nested: an undefined item stands only for an absent optional struct")
+{
+    field_grid absent = make_sample_grid();
+    absent.extra.reset();
+    std::string const bytes = encode_with_schema(absent);
+    std::size_t const flag = bytes.find("\x82\xf4\x5a"sv);
+    REQUIRE_NE(flag, std::string::npos);
+    std::string present = bytes;
+    present[flag + 1] = '\xf5';
+    CHECK_EQ(form<field_grid>::decode(std::string(present)).error(), error::incorrect_type);
+    std::size_t const undefined = bytes.find('\xf7', root_offset(bytes) + form<field_grid>::fixed_size());
+    REQUIRE_NE(undefined, std::string::npos);
+    std::string defined = bytes;
+    defined[undefined] = '\xf6';
+    CHECK_EQ(form<field_grid>::decode(std::string(defined)).error(), error::incorrect_type);
+    CHECK(form<field_grid>::unverified_decode(std::string(defined)).has_value());
+
+    std::string const full = encode_with_schema(make_sample_grid());
+    std::size_t const name = full.find("\x7a\x00\x00\x00\x05xname"sv);
+    REQUIRE_NE(name, std::string::npos);
+    std::string undefined_name = full;
+    undefined_name[name] = '\xf7';
+    CHECK_EQ(form<field_grid>::decode(std::string(undefined_name)).error(), error::incorrect_type);
+    auto const root = form<field_grid>::adopt(std::string(undefined_name));
+    REQUIRE(root.has_value());
+    CHECK_EQ((*root->at_path<"$.extra">())->at_path<"@.name">().error(), error::incorrect_type);
+}
+
+namespace schema_types
+{
+
+// A generic unpacker of draft-ietf-cbor-packed-19: it knows the table of tag 113, the references 6(N) and simple(0) to
+// simple(15) of 2.2, and the record functions 114 that the straight references 128 to 135 and 6([N, rump]) of 2.3 and
+// 4.2 apply. It knows nothing of cbor::schema. It writes the unpacked item in EDN; a reference to an undefined entry
+// is an error.
+struct packed_unpacker {
+    std::vector<cbor::item> table;
+
+    std::expected<std::string, cbor::error> entry(std::uint64_t const index) const
+    {
+        if (index >= table.size() || table[index].type() == cbor::type::undefined)
+            return std::unexpected(cbor::error::unpopulated_table_index);
+        return text(table[index]);
+    }
+
+    std::expected<std::string, cbor::error> record(std::uint64_t const index, cbor::item const rump) const
+    {
+        if (index >= table.size())
+            return std::unexpected(cbor::error::unpopulated_table_index);
+        auto const function = table[index].get<std::pair<std::uint64_t, cbor::item>>();
+        constexpr std::uint64_t record_function = 114;
+        if (!function || function->first != record_function)
+            return std::unexpected(cbor::error::incorrect_type);
+        auto const keys = function->second.elements();
+        auto const values = rump.elements();
+        if (!keys || !values || keys->size() != values->size())
+            return std::unexpected(cbor::error::incorrect_type);
+        std::string out = "{";
+        auto value = values->begin();
+        for (cbor::item const key : *keys) {
+            auto const v = text(*value++);
+            if (!v)
+                return v;
+            out += (out.size() > 1 ? ", " : "") + key.to_edn().value() + ": " + *v;
+        }
+        return out + "}";
+    }
+
+    std::expected<std::string, cbor::error> text(cbor::item const x) const
+    {
+        constexpr std::uint64_t reference = 6;
+        constexpr std::uint64_t straight_first = 128;
+        constexpr std::uint64_t straight_last = 135;
+        constexpr std::uint64_t shared_first = 16;
+        constexpr std::uint64_t argument_first = 8;
+        if (x.type() == cbor::type::simple_value) {
+            auto const n = x.get<cbor::simple_value>();
+            if (n && std::to_underlying(*n) < shared_first)
+                return entry(std::to_underlying(*n));
+        }
+        if (x.type() == cbor::type::tag) {
+            auto const [number, content] = *x.get<std::pair<std::uint64_t, cbor::item>>();
+            if (number == reference && content.type() == cbor::type::unsigned_integer)
+                return entry(shared_first + 2 * *content.get<std::uint64_t>());
+            if (number == reference && content.type() == cbor::type::negative_integer)
+                return entry(shared_first - 2 * static_cast<std::uint64_t>(*content.get<std::int64_t>()) - 1);
+            if (number == reference && content.type() == cbor::type::array) {
+                auto const pair = content.elements();
+                if (!pair || pair->size() != 2)
+                    return std::unexpected(cbor::error::incorrect_type);
+                return record(argument_first + *pair->front().get<std::uint64_t>(), *std::next(pair->begin()));
+            }
+            if (number >= straight_first && number <= straight_last)
+                return record(number - straight_first, content);
+            auto const inner = text(content);
+            if (!inner)
+                return inner;
+            return std::to_string(number) + "(" + *inner + ")";
+        }
+        if (x.type() == cbor::type::array) {
+            std::string out = "[";
+            for (cbor::item const e : *x.elements()) {
+                auto const v = text(e);
+                if (!v)
+                    return v;
+                out += (out.size() > 1 ? ", " : "") + *v;
+            }
+            return out + "]";
+        }
+        if (x.type() == cbor::type::map) {
+            std::string out = "{";
+            for (auto const &[k, v] : *x.pairs()) {
+                auto const key = text(k);
+                auto const value = text(v);
+                if (!key || !value)
+                    return std::unexpected(cbor::error::unpopulated_table_index);
+                out += (out.size() > 1 ? ", " : "") + *key + ": " + *value;
+            }
+            return out + "}";
+        }
+        return x.to_edn();
+    }
+};
+
+template <class = void>
+std::expected<std::string, cbor::error> unpack(std::string const &message)
+{
+    auto const tree = cbor::decode(message);
+    REQUIRE(tree.has_value());
+    auto const [number, content] = *(*tree)->get<std::pair<std::uint64_t, cbor::item>>();
+    constexpr std::uint64_t basic_packed = 113;
+    REQUIRE_EQ(number, basic_packed);
+    auto const parts = *content.elements();
+    packed_unpacker u;
+    for (cbor::item const e : *parts.front().elements())
+        u.table.push_back(e);
+    return u.text(*std::next(parts.begin()));
+}
+
+} // namespace schema_types
+
+// A generic unpacker of Packed CBOR resolves every reference of a message with an absent optional struct. The test
+// exists because the absent struct holds a byte string of zeros and no reference: a reference there would name an
+// undefined entry. The present struct unpacks to its keys and values.
+TEST_CASE("nested: a generic unpacker reads a message with an absent and a present optional struct")
+{
+    auto const absent = unpack(*form<passkey_login>::encode(passkey_login{{std::byte{1}}, std::nullopt, std::nullopt}));
+    REQUIRE(absent.has_value());
+    CHECK_EQ(absent->find("6("), std::string::npos);
+    CHECK_NE(absent->find("\"user\": [false, h'000000"), std::string::npos);
+    CHECK_NE(absent->find("\"signature\": h'01'"), std::string::npos);
+    auto const present = unpack(*form<passkey_login>::encode(passkey_login{{std::byte{1}}, passkey_user{{std::byte{9}}, "alice"}, "hi"}));
+    REQUIRE(present.has_value());
+    CHECK_NE(present->find("\"user\": [true, 1516({\"id\": h'09'"), std::string::npos);
+    CHECK_NE(present->find("\"name\": \"alice\""), std::string::npos);
+    CHECK_NE(present->find("\"note\": [\"hi\""), std::string::npos);
+    CHECK_EQ(unpack(encode_with_schema(make_sample_grid())).error_or(cbor::error{}), cbor::error{});
+}
+
+// A message ends where its directory says: the last entry is the start of the rump. The bytes behind the rump are the
+// next item of a CBOR sequence (RFC 8742) and stay unread. The test exists because a reader that took the end of the
+// buffer for the end of the message would read the second message as a part of the first. The generic item skip of the
+// library finds the second message.
+TEST_CASE("nested: a message followed by a second message reads as alone")
+{
+    field_grid const first = make_sample_grid();
+    field_grid second = make_sample_grid();
+    second.title = "next";
+    second.rows.clear();
+    std::string const one = encode_with_schema(first);
+    std::string const both = one + encode_with_schema(second);
+    auto const back = form<field_grid>::decode(std::string(both));
+    REQUIRE(back.has_value());
+    check_grid(**back, first);
+    auto const fast = form<field_grid>::unverified_decode(std::string(both));
+    REQUIRE(fast.has_value());
+    check_grid(**fast, first);
+    CHECK_EQ(form<field_grid>::adopt(std::string(both))->at_path<"$.title">().value(), "grid"sv);
+    CHECK_EQ(form<field_grid>::unverified_adopt(std::string(both))->at_path<"$.title">().value(), "grid"sv);
+    CHECK_EQ(form<field_grid>::adopt(std::string(both))->at_path<"$.rows[2][0].name">().value(), "c"sv);
+    auto const end = cbor::item_size(both);
+    REQUIRE(end.has_value());
+    CHECK_EQ(*end, one.size());
+    auto const next = form<field_grid>::decode(both.substr(*end));
+    REQUIRE(next.has_value());
+    check_grid(**next, second);
+    CHECK_EQ(form<field_grid>::adopt(both.substr(*end))->at_path<"$.title">().value(), "next"sv);
 }
 
 // Each cut and each changed byte of a message with nested records reads no memory outside the message. The test exists

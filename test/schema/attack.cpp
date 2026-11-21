@@ -207,19 +207,20 @@ TEST_CASE("attack: every prefix of a message is an error for every path")
     CHECK_EQ(values, 0u);
 }
 
-// A byte in front of the message moves the root away from its place behind the description. A byte behind the message
-// moves the rump away from its place at the end. The test exists because a reader that found the root or the rump by
-// a fixed offset would read a record that is not there.
-TEST_CASE("attack: a shifted root is incorrect_type")
+// A byte in front of the message moves the root away from its place behind the description. The test exists because
+// a reader that found the root by a fixed offset would read a record that is not there. A byte behind the message is
+// the next item of a CBOR sequence (RFC 8742): the directory gives the end of the message, so that byte stays unread and
+// every path reads its value.
+TEST_CASE("attack: a shifted root is incorrect_type, a byte behind the message is not read")
 {
     std::string const bytes = *form<probe>::encode(sample_probe);
     CHECK_EQ(read_leaf_with_copying_path<probe, "$.i16">("\x00"s + bytes).error(), error::incorrect_type);
-    CHECK_EQ(read_leaf_with_copying_path<probe, "$.i16">(bytes + "\x00"s).error(), error::incorrect_type);
     CHECK_EQ(probe_paths_read("\x00"s + bytes), 0u);
-    CHECK_EQ(probe_paths_read(bytes + "\x00"s), 0u);
     CHECK_EQ(probe_lot_read("\x00"s + bytes), 0u);
-    CHECK_EQ(probe_lot_read(bytes + "\x00"s), 0u);
-    CHECK_EQ(form<probe>::adopt(bytes + "\x00"s).error(), error::incorrect_type);
+    CHECK_EQ(read_leaf_with_copying_path<probe, "$.i16">(bytes + "\x00"s), -300);
+    CHECK_EQ(probe_paths_read(bytes + "\x00"s), probe_paths);
+    CHECK_EQ(probe_lot_read(bytes + "\x00"s), probe_lot_paths);
+    CHECK(form<probe>::adopt(bytes + "\x00"s).has_value());
 }
 
 // RFC 8949 3: each fixed field has one head. The valid heads are written here from RFC 8949 3.3 and 3.4 and the fixed
@@ -275,7 +276,7 @@ TEST_CASE("attack: a forged byte anywhere in the root reads nothing outside the 
 TEST_CASE("attack: a directory entry out of range is an error")
 {
     std::string const bytes = *form<probe>::encode(sample_probe);
-    std::size_t const head = bytes.find("\x5a\x00\x00\x00\x0c"s);
+    std::size_t const head = bytes.find("\x5a\x00\x00\x00\x10"s);
     REQUIRE_NE(head, std::string::npos);
     std::size_t const root = root_offset(bytes);
     for (std::size_t j = 0; j < 3; ++j) {
@@ -359,7 +360,7 @@ TEST_CASE("attack: a directory entry into the root or into the directory is synt
 TEST_CASE("attack: overlapping items are an error")
 {
     std::string const bytes = *form<probe>::encode(sample_probe);
-    std::size_t const head = bytes.find("\x5a\x00\x00\x00\x0c"s);
+    std::size_t const head = bytes.find("\x5a\x00\x00\x00\x10"s);
     REQUIRE_NE(head, std::string::npos);
     std::string same = bytes;
     same.replace(head + 9, 4, bytes.substr(head + 5, 4));
@@ -409,7 +410,8 @@ TEST_CASE("attack: an item head that does not fit before the rump is too_little_
 }
 
 // The directory is a byte string with a four-byte argument (RFC 8949 Section 3.1, major type 2). Its length is
-// forged far past the end of the message, and the count in the prefix is forged to match it. The test exists
+// forged far past the end of the message, and the count in the prefix is forged to match it: the table counts every
+// entry of the directory but the last one, the start of the rump. The test exists
 // because the read of the directory must stop at the bytes that are left and give too_little_data.
 TEST_CASE("attack: a directory longer than the message is too_little_data")
 {
@@ -418,13 +420,13 @@ TEST_CASE("attack: a directory longer than the message is too_little_data")
                            static_cast<char>(x)};
     };
     std::string const bytes = encode_with_schema(login{5, true, "ab"});
-    std::size_t const directory = bytes.find("\x5a\x00\x00\x00\x04"sv, 8);
+    std::size_t const directory = bytes.find("\x5a\x00\x00\x00\x08"sv, 8);
     REQUIRE_NE(directory, std::string::npos);
     std::size_t const forged_length = 0x00fffff0;
     std::size_t const first =
         (std::size_t{static_cast<std::uint8_t>(bytes[4])} << 24 | std::size_t{static_cast<std::uint8_t>(bytes[5])} << 16 |
          std::size_t{static_cast<std::uint8_t>(bytes[6])} << 8 | std::size_t{static_cast<std::uint8_t>(bytes[7])}) -
-        1;
+        2;
     std::string forged = bytes;
     forged.replace(4, 4, big_endian(first + forged_length / 4));
     forged.replace(directory + 1, 4, big_endian(forged_length));
@@ -554,7 +556,7 @@ TEST_CASE("attack: an unknown tag, a cut record and a wrong directory entry of a
     std::string other_root = bytes;
     other_root[at + 2] = '\xce';
     CHECK_EQ(form<home>::decode(std::string(other_root)).error(), error::incorrect_type);
-    std::size_t const head = bytes.find("\x5a\x00\x00\x00\x0c"sv);
+    std::size_t const head = bytes.find("\x5a\x00\x00\x00\x10"sv);
     REQUIRE_NE(head, std::string::npos);
     auto const big_endian = [](std::size_t const x) {
         return std::string{static_cast<char>(x >> 24), static_cast<char>(x >> 16), static_cast<char>(x >> 8),
