@@ -1,7 +1,7 @@
 # Compared with other libraries, in detail
 
-This page adds the details to the section "Compared with other libraries" of [README.md](../README.md#compared-with-other-libraries). It
-shows six tasks in three kinds of code:
+This page compares mbedded-cbor with other C++ libraries. It shows six
+tasks in three kinds of code:
 
 1. normal C++ on data that is already in memory;
 2. mbedded-cbor;
@@ -11,6 +11,80 @@ Every snippet of kinds 1 and 3 was compiled with g++-16 -std=c++23
 -Wall -Wextra -Werror and run in the podman image
 mbedded-cbor-tw-compare. Every snippet of mbedded-cbor is a test case of
 the library. A comment shows the input in `bytes` as text.
+
+
+## Summary
+
+This section compares mbedded-cbor with four C++ libraries that read and
+write CBOR or a binary format of their own: nlohmann/json, libcbor,
+FlatBuffers and Cap'n Proto. Each code example was compiled and run. The
+sections below give the details.
+
+| Task | mbedded-cbor | nlohmann/json | libcbor | FlatBuffers | Cap'n Proto |
+|---|---|---|---|---|---|
+| Format | CBOR | JSON; CBOR through `from_cbor` and `to_cbor` | CBOR | its own | its own |
+| Read one field | a path; the rest is not decoded | decodes the whole input first | decodes the whole input; no lookup of a key | direct | direct |
+| Write a struct | `CBOR_DEFINE_TYPE_MEMBERS` names each member; the read needs no extra code (C++26 reflection, or Boost.PFR in C++23) | a macro that names each member | no mapping of a struct | a schema file and a code generator | a schema file and a code generator |
+| Cycles through tags 28 and 29 | read and written | not read | not read | one offset in two places | not checked |
+| A list of numbers with no copy | `cbor::schema` | copies | reads each number | direct | direct |
+| Broken input | a `std::expected` error | an exception, or a discarded value | an error code | the Verifier; without it, no check | an exception |
+
+### Summary: Read one field
+
+```cpp
+// mbedded-cbor; bytes: {"user": {"id": 42}}
+auto const id = cbor::at_path<"$.user.id", std::int64_t>(bytes);   // *id == 42
+```
+
+```cpp
+// nlohmann/json
+nlohmann::json const doc = nlohmann::json::from_cbor(bytes);
+int const id = doc.at("user").at("id").get<int>();
+```
+
+### Summary: Write a struct and read it back
+
+```cpp
+// mbedded-cbor
+struct person {
+    std::string name;
+    int age;
+};
+CBOR_DEFINE_TYPE_MEMBERS(person, cbor::untagged, name, age);
+
+auto bytes = cbor::encode(person{"ann", 30});
+auto const back = cbor::structs<person>::decode(std::move(*bytes));
+// (*back)->name is "ann", (*back)->age is 30
+```
+
+```cpp
+// nlohmann/json
+struct person {
+    std::string name;
+    int age;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(person, name, age)
+
+std::vector<std::uint8_t> const bytes = nlohmann::json::to_cbor(person{"ann", 30});
+person const back = nlohmann::json::from_cbor(bytes).get<person>();
+```
+
+`encode` and `decode` return a `std::expected`, and `*` takes the value
+(`mbedded-cbor-structs(3)`).
+
+### Summary: Broken input
+
+```cpp
+// mbedded-cbor; bytes: [1, 2] without its last byte
+auto const r = cbor::at_path<"$[1]", std::int64_t>(bytes);
+bool const broken = !r && r.error() == cbor::error::too_little_data;
+```
+
+```cpp
+// nlohmann/json
+auto const doc = nlohmann::json::from_cbor(bytes, true, false);
+bool const broken = doc.is_discarded();
+```
 
 ## 1. The libraries
 

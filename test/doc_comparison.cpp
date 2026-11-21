@@ -11,9 +11,9 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 using cbor::error;
 
-// Each test in this file is one mbedded-cbor example of the section "Compared with other libraries" of README.md,
-// which was the guide comparison.md. The tests exist so that every example compiles and gives the result that the
-// text states. The text between "begin" and "end" is the text of the README.
+// Each test in this file is one mbedded-cbor example of the section "Summary" of bench/comparison.md.
+// The tests exist so that every example compiles and gives the result that the
+// text states. The text between "begin" and "end" is the text of that page.
 
 // The section "Read one field" reads a number two maps deep without a decode of the whole item.
 TEST_CASE("doc comparison: read one field")

@@ -1,3 +1,67 @@
+# kinds-table.sh
+
+## Result
+
+The carsales message of 1000 cars, read and written by each kind of
+mbedded-cbor and by a library that does the same work. A number says how
+many times faster mbedded-cbor is. A number under 1 says that the library
+is faster. Every library checks its input, except where the row says so.
+
+Read one field (`cars[500].engine.cc`):
+
+| Kind | Library beside it | g++ 16 | clang 23 |
+|---|---|---|---|
+| lazy | tinycbor | 6.6× | 5.1× |
+| at_path | jsoncons JSONPath | 50× | 47× |
+| item | jsoncons `json` | 3.2× | 4.1× |
+| structs | jsoncons `decode_cbor<T>` | 8.6× | 13× |
+| schema | FlatBuffers with Verifier | 4700× | 2800× |
+| schema, unverified | FlatBuffers, no Verifier | 0.40× | 0.27× |
+
+Read the whole message:
+
+| Kind | Library beside it | g++ 16 | clang 23 |
+|---|---|---|---|
+| item | jsoncons `json` | 3.2× | 4.0× |
+| structs | jsoncons `decode_cbor<T>` | 8.7× | 13× |
+| schema | FlatBuffers with Verifier | 1.3× | 1.5× |
+| schema, unverified | FlatBuffers, no Verifier | 0.47× | 0.55× |
+
+lazy and at_path read the values that you ask for and skip the rest.
+For the whole message, use item or structs.
+
+Write the message:
+
+| Kind | Library beside it | g++ 16 | clang 23 |
+|---|---|---|---|
+| item | jsoncons `json` | 3.2× | 4.2× |
+| structs | jsoncons `encode_cbor` | 4.6× | 7.9× |
+| schema | FlatBuffers | 9.0× | 3.4× |
+
+- schema reads Packed CBOR (155849 bytes). The other kinds and the
+  libraries read the CBOR of `cbor::encode` (440957 bytes).
+- item, structs and jsoncons decode the message before they read one
+  field. jsoncons decodes the message before its path.
+- jsoncons `decode_cbor<T>` copies each text into a `std::string`.
+  structs gives views into the message.
+- jsoncons writes no tags (422954 bytes).
+- For one field, the FlatBuffers Verifier checks the whole message and
+  schema checks the items on its path, so that row compares different
+  work. Rows that check the same: schema, unverified against FlatBuffers
+  without its Verifier, and the whole message.
+- schema, unverified checks every bound, so no read leaves the input.
+  It reads the tags and heads as they stand. FlatBuffers without its
+  Verifier checks no bounds.
+
+Measured at commit cb28a52 in a VM with 4 cpus (Intel Xeon, Sapphire
+Rapids), Debian sid, libstdc++ 16, `-O2 -march=native`, the median of 5
+runs of 3 s. The noise of one run is up to 10 %. `kinds-table.sh`
+measures these tables on your machine, in the image of
+`containers/debian-sid-bench.Containerfile`.
+The run and its context:
+[results/kinds-2026-11-07-052855Z.json](results/kinds-2026-11-07-052855Z.json).
+The code of every library, task by task: [comparison.md](comparison.md).
+
 # run-desktop.sh
 
 The script measures two commits of mbedded-cbor on a desktop.
