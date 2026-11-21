@@ -105,14 +105,17 @@ void js_value_built(cbor::item const &i)
         std::string_view const s = i.get<std::string_view>().value();
         return value_string(s.data(), s.size());
     }
-    case cbor::type::array:
+    case cbor::type::array: {
         array_begin();
-        for (auto const &e : i.get<std::span<cbor::item const>>().value())
+        auto const elements = i.get<std::span<cbor::item const>>().value();
+        for (auto const &e : elements)
             js_value_built(e);
         return container_end();
+    }
     case cbor::type::map: {
         object_begin();
-        for (auto const pair : i.get<std::ranges::chunk_view<std::span<cbor::item const>>>().value()) {
+        auto const pairs = i.get<std::ranges::chunk_view<std::span<cbor::item const>>>().value();
+        for (auto const pair : pairs) {
             cbor::item const &key = pair[0];
             if (key.type() == cbor::type::text_string) {
                 std::string_view const s = *key.get<std::string_view>();

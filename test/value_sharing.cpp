@@ -496,7 +496,8 @@ TEST_CASE("value sharing: lazy, at_path, decode and diagnostic notation read tag
         CHECK_EQ(l.at_path<"$[1]", std::uint64_t>(), 0u);
         CHECK_EQ(cbor::at_path<"$[2]", std::uint64_t>(doc), 7u);
         std::vector<cbor::type> types;
-        for (auto const e : *l.elements())
+        auto const range = *l.elements();
+        for (auto const e : range)
             types.push_back(*e->type());
         CHECK(types == std::vector<cbor::type>(3, cbor::type::tag));
         for (auto const &tree : {l.to_item(), cbor::decode(doc)}) {

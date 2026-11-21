@@ -261,7 +261,8 @@ TEST_CASE("doc reference lazy: elements")
     // bytes: a std::string with [1, 2, 3]
     auto const array = cbor::lazy::adopt(std::move(bytes));
     int sum = 0;
-    for (auto const element : *array->elements())
+    auto const elements = *array->elements();
+    for (auto const element : elements)
         if (element)
             sum += element->get<int>().value_or(0);
     // sum: 6
@@ -280,7 +281,8 @@ TEST_CASE("doc reference lazy: entries")
     // [entries]
     // bytes: a std::string with {"a": 1, "b": 2}
     auto const map = cbor::lazy::adopt(std::move(bytes));
-    for (auto const pair : *map->entries()) {
+    auto const entries = *map->entries();
+    for (auto const pair : entries) {
         if (!pair)
             break;
         auto const key = pair->first.get<std::string_view>();  // "a", then "b"

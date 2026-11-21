@@ -147,13 +147,15 @@ std::uint64_t scalars_sum(Item const &it)
             return bytes_sum(it.template get<cbor::type::text_string>().value());
         case cbor::type::array: {
             std::uint64_t s = 0;
-            for (Item const &child : it.template get<cbor::type::array>().value())
+            auto const elements = it.template get<cbor::type::array>().value();
+            for (Item const &child : elements)
                 s += scalars_sum(child);
             return s;
         }
         case cbor::type::map: {
             std::uint64_t s = 0;
-            for (Item const &child : it.template get<cbor::type::map>().value())
+            auto const entries = it.template get<cbor::type::map>().value();
+            for (Item const &child : entries)
                 s += scalars_sum(child);
             return s;
         }
@@ -171,13 +173,15 @@ std::uint64_t scalars_sum(Item const &it)
             return bytes_sum(it.template get<std::string_view>().value());
         case cbor::type::array: {
             std::uint64_t s = 0;
-            for (Item const &child : it.elements().value())
+            auto const elements = it.elements().value();
+            for (Item const &child : elements)
                 s += scalars_sum(child);
             return s;
         }
         case cbor::type::map: {
             std::uint64_t s = 0;
-            for (auto const pair : it.pairs().value())
+            auto const pairs = it.pairs().value();
+            for (auto const pair : pairs)
                 s += scalars_sum(std::get<0>(pair)) + scalars_sum(std::get<1>(pair));
             return s;
         }
@@ -194,7 +198,8 @@ template <class Item, cbor::type K>
 std::uint64_t children_sum(Item const &it)
 {
     std::uint64_t s = 0;
-    for (Item const &child : it.template get<K>().value())
+    auto const children = it.template get<K>().value();
+    for (Item const &child : children)
         s += tree_sum(child);
     return s;
 }

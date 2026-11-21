@@ -70,7 +70,8 @@ TEST_CASE("description apart: each read form reads the data form")
     REQUIRE(inner->has_value());
     CHECK_EQ((*inner)->at_path<"@.y">(), 2);
     std::vector<int> xs;
-    for (auto const g : *root->at_path<"$.gauges">())
+    auto const gauges = *root->at_path<"$.gauges">();
+    for (auto const g : gauges)
         xs.push_back(*g.at_path<"@.at.x">());
     CHECK_EQ(xs, (std::vector<int>{3, -6}));
     CHECK_EQ(root->at_path<"$.tires[1].diameter">(), 18u);

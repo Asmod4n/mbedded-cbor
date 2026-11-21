@@ -220,7 +220,8 @@ elements() gives a forward range. Each element is a std::expected<cbor::lazy, cb
 ```cpp
 auto const doc = cbor::lazy::adopt(std::move(bytes)); // [1, 2, 3]
 std::int64_t sum = 0;
-for (auto const e : *doc->elements())
+auto const elements = *doc->elements();
+for (auto const e : elements)
     sum += e->get<std::int64_t>().value_or(0);
 ```
 

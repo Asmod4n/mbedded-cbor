@@ -125,7 +125,8 @@ TEST_CASE("doc runtime: loop over an array or a map")
     auto const use = [&seen](std::expected<cbor::ref<std::string_view>, error> const &k,
                              std::expected<std::int64_t, error> const &v) { seen.emplace_back(std::string{**k}, *v); };
     auto const map = test::make_lazy_from_copy(bytes);
-    for (auto const pair : *map->entries())
+    auto const entries = *map->entries();
+    for (auto const pair : entries)
         if (pair)
             use(pair->first.get<std::string_view>(), pair->second.get<std::int64_t>());
     CHECK(seen == std::vector<std::pair<std::string, std::int64_t>>{{"a", 1}, {"b", 2}});

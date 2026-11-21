@@ -164,13 +164,15 @@ void render(cbor::item const &i, std::string &out)
         out += "<time datetime=\"" + d + "\">" + d + "</time>";
     } else if (number == ui_table) {
         out += "<table><thead><tr>";
-        for (cbor::item const &h : *value_of(m, "head").get<std::span<cbor::item const>>()) {
+        auto const head = *value_of(m, "head").get<std::span<cbor::item const>>();
+        for (cbor::item const &h : head) {
             out += "<th>";
             render(h, out);
             out += "</th>";
         }
         out += "</tr></thead><tbody>";
-        for (cbor::item const &row : *value_of(m, "rows").get<std::span<cbor::item const>>()) {
+        auto const rows = *value_of(m, "rows").get<std::span<cbor::item const>>();
+        for (cbor::item const &row : rows) {
             out += "<tr>";
             for (std::string_view const key : {"name", "amount", "time"}) {
                 out += "<td>";

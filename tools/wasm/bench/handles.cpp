@@ -142,7 +142,8 @@ __attribute__((export_name("ints_iterate"))) std::uint32_t ints_iterate(std::uin
 {
     auto const root = cbor::lazy::view(documents[doc].bytes);
     std::uint32_t i = 0;
-    for (auto const e : *root->elements())
+    auto const elements = *root->elements();
+    for (auto const e : elements)
         out[i++] = static_cast<std::int32_t>(*e->get<std::int64_t>());
     return i;
 }

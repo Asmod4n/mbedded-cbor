@@ -41,7 +41,8 @@ TEST_CASE("doc advanced comparison: iterate an array")
     // begin iterate
     auto const doc = cbor::lazy::adopt(std::move(bytes)); // [1, 2, 3]
     std::int64_t sum = 0;
-    for (auto const e : *doc->elements())
+    auto const elements = *doc->elements();
+    for (auto const e : elements)
         sum += e->get<std::int64_t>().value_or(0);
     // end iterate
     CHECK_EQ(sum, 6);

@@ -121,7 +121,8 @@ inline std::expected<value, error> make_value_from_item(cbor::item const it)
     }
     case cbor::type::map: {
         map m;
-        for (auto const pair : it.pairs().value()) {
+        auto const pairs = it.pairs().value();
+        for (auto const pair : pairs) {
             auto k = make_value_from_item(std::get<0>(pair));
             if (!k)
                 return std::unexpected(k.error());

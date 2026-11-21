@@ -83,7 +83,8 @@ TEST_CASE("doc advanced runtime: elements and entries")
 {
     auto const l = *test::make_lazy_from_copy(encode_in_preferred_form(A(1, "a"s, A(2))));
     std::vector<std::expected<std::int64_t, error>> read;
-    for (auto const e : *l.elements())
+    auto const elements = *l.elements();
+    for (auto const e : elements)
         read.push_back(e->get<std::int64_t>());
     REQUIRE_EQ(read.size(), 3u);
     CHECK_EQ(read[0], 1);
@@ -92,7 +93,8 @@ TEST_CASE("doc advanced runtime: elements and entries")
     CHECK_EQ(l.elements()->size(), 3u);
     auto const m = *test::make_lazy_from_copy(encode_in_preferred_form(M("a"s, 1, 2, "b"s)));
     std::vector<value> keys;
-    for (auto const p : *m.entries())
+    auto const entries = *m.entries();
+    for (auto const p : entries)
         keys.push_back(*test::make_value_from_item(p->first));
     CHECK(keys == std::vector<value>{V("a"s), V(2)});
     CHECK_EQ(std::ranges::distance(*m.entries() | std::views::drop(1)), 1);
@@ -110,7 +112,8 @@ TEST_CASE("doc advanced runtime: an error repeats at each later position")
     auto const owner = std::make_shared<std::string const>("\x83\x1c\x00\x00"s);
     auto const bad = *cbor::lazy::view(owner);
     std::vector<bool> read;
-    for (auto const e : *bad.elements())
+    auto const elements = *bad.elements();
+    for (auto const e : elements)
         read.push_back(e.has_value());
     CHECK(read == std::vector<bool>{true, false, false});
     auto const first = *bad.elements()->begin();
