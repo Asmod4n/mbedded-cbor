@@ -1,0 +1,1014 @@
+{
+ "time": "2026-11-22-094253Z",
+ "block": "result_read",
+ "what": "each function of bench/function/result_read.cpp over a buffer of COLD_BYTES bytes of items; a = commit a, aa = commit a built again, b = commit b",
+ "commit_a": {
+  "given": "90031cb4",
+  "id": "90031cb4050c68871865ab93393878f11e5fd375"
+ },
+ "commit_b": {
+  "given": "90031cb4-dirty",
+  "id": "90031cb4050c68871865ab93393878f11e5fd375-dirty"
+ },
+ "bench_sources_commit": "90031cb4050c68871865ab93393878f11e5fd375-dirty",
+ "image": "compiler",
+ "flags": "-std=c++26 -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -DNDEBUG -pipe",
+ "warnings": {
+  "gxx": "-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -Wnull-dereference",
+  "clang": "-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -Wnull-dereference -Wunsafe-buffer-usage"
+ },
+ "link_flags": "-pie -fuse-ld=mold",
+ "gxx_binary": {
+  "binary": "a.gxx",
+  "comment": "String dump of section '.comment':\n  [     1]  GCC: (Debian 16.2.0-5) 16.2.0\n  [    1f]  mold 3.0.0 (compatible with GNU ld)",
+  "libraries": {
+   "libbenchmark.so.1.9.1": "/usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1",
+   "libstdc++.so.6": "/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.36",
+   "libc.so.6": "/usr/lib/x86_64-linux-gnu/libc.so.6",
+   "libm.so.6": "/usr/lib/x86_64-linux-gnu/libm.so.6"
+  }
+ },
+ "clang_binary": {
+  "binary": "a.clang",
+  "comment": "String dump of section '.comment':\n  [     1]  Debian clang version 23.1.6 (1)\n  [    21]  GCC: (Debian 16.2.0-5) 16.2.0\n  [    3f]  mold 3.0.0 (compatible with GNU ld)",
+  "libraries": {
+   "libbenchmark.so.1.9.1": "/usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1",
+   "libstdc++.so.6": "/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.36",
+   "libm.so.6": "/usr/lib/x86_64-linux-gnu/libm.so.6",
+   "libc.so.6": "/usr/lib/x86_64-linux-gnu/libc.so.6"
+  }
+ },
+ "rounds": 15,
+ "min_time": "0.05s",
+ "cold_bytes": 4194304,
+ "build": "build: 31.98 s for 6 binaries",
+ "resolved_march": "sapphirerapids",
+ "compilers": [
+  "g++-16 (Debian 16.2.0-5) 16.2.0",
+  "Debian clang version 23.1.6 (1)"
+ ],
+ "libc": "ldd (Debian GLIBC 2.43-7) 2.43",
+ "level_two_cache": "2048K",
+ "kernel": "6.18.44-fc-v726",
+ "scheduler": "no sched_ext state (kernel default)",
+ "virtualization": "docker ",
+ "host_in_container": "no",
+ "host_user": "root 0",
+ "container": "podman compiler, user 65534, network none",
+ "cpu": {
+  "model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "flags_sha256": "19139faa5b3c177a2d253ee9520b13713aee71074562456de06d1ba7833e7890",
+  "cpus": 4,
+  "l3": "266240K"
+ },
+ "uid": 65534,
+ "priority": "nice -10 granted",
+ "threads": 1,
+ "pinned": false,
+ "cpu_left_to_the_machine": "each bench process is single-threaded on 4 cpus",
+ "gate_before_build": [
+  "gate: vmstat 1 2",
+  "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+  " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+  " 1  0      0 15568772  34972 609044    0    0  1904  2552  601    1 19  2 69 10  0  0",
+  " 0  0      0 15569644  34972 609316    0    0     0     0  151  107  0  0 100  0  0  0",
+  "gate: ps --sort=-pcpu (top 7)",
+  "  PID USER     %CPU  NI COMMAND",
+  "  102 root      3.1   0 claude",
+  "    1 root      0.1   0 process_api",
+  "   21 root      0.1   - migration/1",
+  "   26 root      0.1   - migration/2",
+  "   31 root      0.1   - migration/3",
+  "   94 root      0.0   0 environment-man",
+  "   42 root      0.0   0 kworker/u16:1-events_unbound",
+  "gate: busy 0.0% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough"
+ ],
+ "gate_before_runs": [
+  "gate: vmstat 1 2",
+  "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+  " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+  " 0  0      0 15135104  38008 912488    0    0  2760  2247  647    1 21  2 64 13  0  0",
+  " 0  0      0 15150712  38008 912252    0    0     0     0  315  366  0  0 100  0  0  0",
+  "gate: ps --sort=-pcpu (top 7)",
+  "  PID USER     %CPU  NI COMMAND",
+  "  102 root      2.8   0 claude",
+  "    1 root      0.1   0 process_api",
+  "   21 root      0.0   - migration/1",
+  "   26 root      0.0   - migration/2",
+  "   31 root      0.0   - migration/3",
+  "   94 root      0.0   0 environment-man",
+  "   42 root      0.0   0 kworker/u16:1-ext4-rsv-conversion",
+  "gate: busy 0.0% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough"
+ ],
+ "steal_limit_percent": 3,
+ "rounds_detail": [
+  {
+   "round": 1,
+   "attempt": 1,
+   "wall_s": 11.06709599494934,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.36076662908680945
+  },
+  {
+   "round": 2,
+   "attempt": 2,
+   "wall_s": 11.728357076644897,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.14906303236797275
+  },
+  {
+   "round": 3,
+   "attempt": 3,
+   "wall_s": 11.474524974822998,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.32665505226480834
+  },
+  {
+   "round": 4,
+   "attempt": 4,
+   "wall_s": 12.23478102684021,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.3671221700999388
+  },
+  {
+   "round": 5,
+   "attempt": 5,
+   "wall_s": 11.162689924240112,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.3132691877377489
+  },
+  {
+   "round": 6,
+   "attempt": 6,
+   "wall_s": 11.59826397895813,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.30178917870230654
+  },
+  {
+   "round": 7,
+   "attempt": 7,
+   "wall_s": 11.140558958053589,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.15698587127158556
+  },
+  {
+   "round": 8,
+   "attempt": 8,
+   "wall_s": 13.002788066864014,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.17307692307692307
+  },
+  {
+   "round": 9,
+   "attempt": 9,
+   "wall_s": 11.96354603767395,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.20876826722338204
+  },
+  {
+   "round": 10,
+   "attempt": 10,
+   "wall_s": 11.428640842437744,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.175054704595186
+  },
+  {
+   "round": 11,
+   "attempt": 11,
+   "wall_s": 11.807145118713379,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.2536461636017755
+  },
+  {
+   "round": 12,
+   "attempt": 12,
+   "wall_s": 10.930837869644165,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.3200731595793324
+  },
+  {
+   "round": 13,
+   "attempt": 13,
+   "wall_s": 11.699021100997925,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.0640888698995941
+  },
+  {
+   "round": 14,
+   "attempt": 14,
+   "wall_s": 11.854615926742554,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.1687051876845213
+  },
+  {
+   "round": 15,
+   "attempt": 15,
+   "wall_s": 13.312602043151855,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.13135672734096454
+  }
+ ],
+ "failed": [],
+ "stderr_of_runs": "2026-11-22T09:43:28+00:00\nRunning /run-dir/bin/a.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.63, 0.90, 0.37\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T09:43:30+00:00\nRunning /run-dir/bin/aa.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.63, 0.90, 0.37\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T09:43:32+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.63, 0.90, 0.37\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T09:43:34+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.58, 0.90, 0.38\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T09:43:36+00:00\nRunning /run-dir/bin/b.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.58, 0.90, 0.38\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T09:43:38+00:00\nRunning /run-dir/bin/a.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.54, 0.90, 0.38\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T09:43:40+00:00\nRunning /run-dir/bin/aa.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.54, 0.90, 0.38\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T09:43:42+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.54, 0.90, 0.38\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T09:43:43+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.49, 0.90, 0.38\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T09:43:45+00:00\nRunning /run-dir/bin/b.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.49, 0.90, 0.38\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T09:43:47+00:00\nRunning /run-dir/bin/a.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.49, 0.90, 0.38\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T09:43:49+00:00\nRunning /run-dir/bin/a.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.45, 0.90, 0.39\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T09:43:51+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.45, 0.90, 0.39\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T09:43:53+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 K",
+ "packages": [],
+ "noise_floor": {
+  "a_over_a_max_deviation_percent": 10.054245111160508
+ },
+ "difference_test": "two-tailed Mann-Whitney U test of compare.py of Google Benchmark over the rounds, alpha 0.05, and B/A further from 1 than A/A and than the noise floor of the machine (5 %)",
+ "compare_text": {
+  "gxx": {
+   "a_aa": "Comparing /run-dir/out/merged.a.gxx.json to /run-dir/out/merged.aa.gxx.json\nBenchmark                         Time             CPU      Time Old      Time New       CPU Old       CPU New\n--------------------------------------------------------------------------------------------------------------\nread_ref                       +0.3947         +0.3969             1             1             1             1\nread_ref                       +0.0059         -0.0214             1             1             1             1\nread_ref                       -0.2570         -0.2622             1             1             1             1\nread_ref                       +0.1116         +0.1115             1             1             1             1\nread_ref                       -0.0054         -0.0040             1             1             1             1\nread_ref                       +0.0488         +0.0709             1             1             1             1\nread_ref                       +0.2894         +0.2918             1             1             1             1\nread_ref                       +0.1154         -0.0406             1             1             1             1\nread_ref                       +0.1533         +0.1962             1             1             1             1\nread_ref                       +0.0124         +0.1258             1             1             1             1\nread_ref                       -0.0829         -0.0866             1             1             1             1\nread_ref                       -0.1616         -0.1602             1             1             1             1\nread_ref                       +0.0328         +0.0286             1             1             1             1\nread_ref                       -0.1147         -0.1158             1             1             1             1\nread_ref                       -0.0137         -0.0169             1             1             1             1\nread_ref_pvalue                 0.4807          0.5338      U Test, Repetitions: 15 vs 15\nread_scalar                    +0.2319         +0.1441             0             0             0             0\nread_scalar                    -0.0598         -0.0656             0             0             0             0\nread_scalar                    -0.3617         -0.3676             1             0             1             0\nread_scalar                    +0.0102         +0.0061             0             0             0             0\nread_scalar                    +0.0801         +0.0814             0             0             0             0\nread_scalar                    -0.0780         -0.0668             0             0             0             0\nread_scalar                    +0.4656         +0.4889             0             0             0             0\nread_scalar                    +0.0283         +0.0228             0             0             0             0\nread_scalar                    +0.3590         +0.3752             0             0             0             0\nread_scalar                    +0.1169         +0.1219             0             0             0             0\nread_scalar                    +0.2111         +0.2095             0             0             0             0\nread_scalar                    -0.1566         -0.1626             0             0             0             0\nread_scalar                    +0.3312         +0.3524             0             0             0             0\nread_scalar                    -0.2377         -0.2390             0             0             0             0\nread_scalar                    -0.1437         -0.1452             0             0             0             0\nread_scalar_pvalue              0.4553          0.5897      U Test, Repetitions: 15 vs 15\nread_nodelist                  +0.1725         +0.1725             1             1             1             1\nread_nodelist                  +0.1090         +0.0963             1             1             1             1\nread_nodelist                  +0.4713         +0.4713             1             1             1             1\nread_nodelist                  +0.1919         +0.1923             1             1             1             1\nread_nodelist                  -0.1005         -0.1005             1             1             1             1\nread_nodelist                  -0.0501         -0.0206             1             1             1             1\nread_nodelist                  +0.4799         +0.4811             1             1             1             1\nread_nodelist                  +0.0359         +0.0329             1             1             1             1\nread_nodelist                  +0.1885         +0.1941             1             1             1             1\nread_nodelist                  +0.1550         +0.1889             1             1             1             1\nread_nodelist                  +0.2539         +0.2494             1             1             1             1\nread_nodelist                  -0.1666         -0.1815             1             1             1             1\nread_nodelist                  -0.1395         -0.1468             1             1             1             1\nread_nodelist                  -0.1044         -0.1005             1             1             1             1\nread_nodelist                  +0.0810         +0.0809             1             1             1             1\nread_nodelist_pvalue            0.0971          0.0745      U Test, Repetitions: 15 vs 15\nmove_ref                       +0.0355         +0.0246             3             3             3             3\nmove_ref                       -0.1480         -0.1424             3             3             3             3\nmove_ref                       +0.3895         +0.3900             2             3             2             3\nmove_ref                       -0.0870         -0.1268             3             3             3             2\nmove_ref                       +0.0059         +0.0064             3             3             3             3\nmove_ref                       -0.1142         -0.1146             3             2             3             2\nmove_ref                       +0.2380         +0.2467             2             3             2             3\nmove_ref                       +0.0907         +0.1072             3             3             3             3\nmove_ref                       -0.0458         -0.0466             3             3             3             3\nmove_ref                       -0.1452         +0.0844             4             3             3             3\nmove_ref                       -0.0095         -0.0170             3             2             2             2\nmove_ref                       -0.0271         -0.0017             3             3             3             3\nmove_ref                       +0.0713         -0.0123             3             3             3             3\nmove_ref                       -0.1350         -0.1356             4             3             4             3\nmove_ref                       +0.2132         +0.2129             3             3             3             3\nmove_ref_pvalue                 0.5897          0.6187      U Test, Repetitions: 15 vs 15\nmove_nodelist                  -0.0173         -0.0175             9             9             9             9\nmove_nodelist                  +0.0659         +0.0279             9            10             9            10\nmove_nodelist                  +0.2538         +0.3542            10            12             9            12\nmove_nodelist                  +0.0437         +0.0434             9            10             9            10\nmove_nodelist                  -0.0231         -0.0143            10             9             9             9\nmove_nodelist                  -0.1226         -0.1226            13            11            13            11\nmove_nodelist                  +0.0630         +0.0685            10            10            10            10\nmove_nodelist                  -0.1302         -0.1305            12            11            12            11\nmove_nodelist                  -0.0670         -0.0731            10             9            10             9\nmove_nodelist                  +0.0073         -0.0088             9             9             9             9\nmove_nodelist                  +0.3982         +0.4006            12            16            12            16\nmove_nodelist                  +0.2136         +0.2166            10            12            10            12\nmove_nodelist                  +0.3244         +0.3239             9            12             9            12\nmove_nodelist                  +0.0030         +0.0030            13            13            13            13\nmove_nodelist                  -0.0287         -0.0287            12            11            12            11\nmove_nodelist_pvalue            0.3837          0.4807      U Test, Repetitions: 15 vs 15\nOVERALL_GEOMEAN                +0.0409         +0.0427             0             0             0             0",
+   "a_b": "Comparing /run-dir/out/merged.a.gxx.json to /run-dir/out/merged.b.gxx.json\nBenchmark                         Time             CPU      Time Old      Time New       CPU Old       CPU New\n--------------------------------------------------------------------------------------------------------------\nread_ref                       +0.0321         +0.0125             1             1             1             1\nread_ref                       -0.0283         -0.0281             1             1             1             1\nread_ref                       -0.2256         -0.2271             1             1             1             1\nread_ref                       +0.1382         +0.1063             1             1             1             1\nread_ref                       +0.0592         +0.0585             1             1             1             1\nread_ref                       -0.0583         -0.0255             1             1             1             1\nread_ref                       -0.0163         -0.0342             1             1             1             1\nread_ref                       -0.1596         -0.1633             1             1             1             1\nread_ref                       +0.1301         +0.1301             1             1             1             1\nread_ref                       -0.0709         +0.0331             1             1             1             1\nread_ref                       +0.0402         +0.0410             1             1             1             1\nread_ref                       -0.1606         -0.1696             1             1             1             1\nread_ref                       -0.0792         -0.0806             1             1             1             1\nread_ref                       -0.0557         -0.0555             1             1             1             1\nread_ref                       +0.0080         +0.0077             1             1             1             1\nread_ref_pvalue                 0.6187          0.6482      U Test, Repetitions: 15 vs 15\nread_scalar                    +0.2742         +0.2766             0             0             0             0\nread_scalar                    +0.0046         +0.0059             0             0             0             0\nread_scalar                    -0.3119         -0.3326             1             0             1             0\nread_scalar                    +0.2298         +0.1701             0             0             0             0\nread_scalar                    -0.0497         -0.0492             0             0             0             0\nread_scalar                    +0.0531         +0.0675             0             0             0             0\nread_scalar                    +0.1565         +0.1754             0             0             0             0\nread_scalar                    -0.0628         -0.0618             0             0             0             0\nread_scalar                    +0.3193         +0.3354             0             0             0             0\nread_scalar                    +0.2535         +0.2592             0             0             0             0\nread_scalar                    +0.0611         +0.0401             0             0             0             0\nread_scalar                    -0.1366         -0.1429             0             0             0             0\nread_scalar                    -0.0394         -0.0310             0             0             0             0\nread_scalar                    -0.1529         -0.1532             0             0             0             0\nread_scalar                    +0.0937         +0.0945             0             0             0             0\nread_scalar_pvalue              0.2290          0.2455      U Test, Repetitions: 15 vs 15\nread_nodelist                  +0.2617         +0.2607             1             1             1             1\nread_nodelist                  +0.0925         +0.0880             1             1             1             1\nread_nodelist                  +0.2797         +0.2759             1             1             1             1\nread_nodelist                  +0.1387         +0.1380             1             1             1             1\nread_nodelist                  -0.1452         -0.1470             1             1             1             1\nread_nodelist                  +0.0243         +0.0564             1             1             1             1\nread_nodelist                  +0.0190         +0.0203             1             1             1             1\nread_nodelist                  +0.0732         +0.0709             1             1             1             1\nread_nodelist                  +0.0010         +0.0049             1             1             1             1\nread_nodelist                  +0.1790         +0.2115             1             1             1             1\nread_nodelist                  +0.0403         +0.0328             1             1             1             1\nread_nodelist                  -0.1215         -0.1186             1             1             1             1\nread_nodelist                  -0.1996         -0.1993             1             1             1             1\nread_nodelist                  -0.1126         -0.1073             1             1             1             1\nread_nodelist                  +0.1971         +0.1978             1             1             1             1\nread_nodelist_pvalue            0.5069          0.3837      U Test, Repetitions: 15 vs 15\nmove_ref                       +0.0198         +0.0195             3             3             3             3\nmove_ref                       -0.0757         -0.0695             3             3             3             3\nmove_ref                       +0.1815         +0.1786             2             3             2             3\nmove_ref                       -0.0664         -0.0523             3             3             3             3\nmove_ref                       -0.0262         -0.0303             3             3             3             3\nmove_ref                       +0.0047         -0.0028             3             3             3             3\nmove_ref                       +0.2467         +0.2561             2             3             2             3\nmove_ref                       +0.0374         +0.0532             3             3             3             3\nmove_ref                       +0.0402         +0.0347             3             3             3             3\nmove_ref                       -0.1315         +0.1010             4             3             3             3\nmove_ref                       -0.0504         -0.0485             3             2             2             2\nmove_ref                       -0.1198         -0.0922             3             2             3             2\nmove_ref                       -0.0683         -0.0683             3             3             3             3\nmove_ref                       -0.2374         -0.2373             4             3             4             3\nmove_ref                       +0.4931         +0.4327             3             4             3             4\nmove_ref_pvalue                 0.7400          0.4068      U Test, Repetitions: 15 vs 15\nmove_nodelist                  +0.2059         +0.2054             9            10             9            10\nmove_nodelist                  +0.1510         +0.1541             9            11             9            11\nmove_nodelist                  +0.8902         +1.0422            10            18             9            18\nmove_nodelist                  -0.0391         -0.0383             9             9             9             9\nmove_nodelist                  +0.0034         +0.0100            10            10             9            10\nmove_nodelist                  -0.0876         -0.0875            13            12            13            12\nmove_nodelist                  +0.4476         +0.4550            10            14            10            14\nmove_nodelist                  -0.0903         -0.0919            12            11            12            11\nmove_nodelist                  +0.0426         +0.0547            10            10            10            10\nmove_nodelist                  +0.0322         +0.0438             9            10             9            10\nmove_nodelist                  -0.1801         -0.1894            12            10            12             9\nmove_nodelist                  -0.1074         -0.1063            10             9            10             9\nmove_nodelist                  +0.0329         +0.0332             9             9             9             9\nmove_nodelist                  -0.0945         -0.1007            13            12            13            12\nmove_nodelist                  +0.1850         +0.1035            12            14            12            13\nmove_nodelist_pvalue            0.4553          0.3615      U Test, Repetitions: 15 vs 15\nOVERALL_GEOMEAN                +0.0205         +0.0251             0             0             0             0"
+  },
+  "clang": {
+   "a_aa": "Comparing /run-dir/out/merged.a.clang.json to /run-dir/out/merged.aa.clang.json\nBenchmark                         Time             CPU      Time Old      Time New       CPU Old       CPU New\n--------------------------------------------------------------------------------------------------------------\nread_ref                       -0.1675         -0.1069             1             1             1             1\nread_ref                       -0.0167         -0.0170             1             1             1             1\nread_ref                       -0.0110         -0.0043             1             1             1             1\nread_ref                       +0.0921         +0.0990             1             1             1             1\nread_ref                       -0.0825         -0.0869             1             1             1             1\nread_ref                       +0.0729         +0.0788             1             1             1             1\nread_ref                       -0.0678         -0.0798             1             1             1             1\nread_ref                       -0.0230         -0.0148             1             1             1             1\nread_ref                       -0.0511         -0.0511             1             1             1             1\nread_ref                       +0.1630         +0.1649             1             1             1             1\nread_ref                       +0.1148         +0.1134             1             1             1             1\nread_ref                       -0.0405         -0.0424             1             1             1             1\nread_ref                       +0.0187         -0.0895             1             1             1             1\nread_ref                       +0.0180         +0.0511             1             1             1             1\nread_ref                       -0.1576         -0.1601             1             1             1             1\nread_ref_pvalue                 0.6783          0.5338      U Test, Repetitions: 15 vs 15\nread_scalar                    -0.0892         -0.0905             0             0             0             0\nread_scalar                    -0.1762         -0.1710             0             0             0             0\nread_scalar                    +0.1075         +0.0581             0             0             0             0\nread_scalar                    +0.2087         +0.1597             0             0             0             0\nread_scalar                    +0.0837         +0.0822             0             0             0             0\nread_scalar                    -0.0444         -0.0450             0             0             0             0\nread_scalar                    -0.1623         -0.1621             0             0             0             0\nread_scalar                    -0.0644         -0.0644             0             0             0             0\nread_scalar                    +0.0514         +0.0301             0             0             0             0\nread_scalar                    +0.0329         +0.0682             0             0             0             0\nread_scalar                    -0.0514         -0.0473             0             0             0             0\nread_scalar                    -0.0046         -0.0222             0             0             0             0\nread_scalar                    +0.0545         +0.0553             0             0             0             0\nread_scalar                    +0.0289         +0.0651             0             0             0             0\nread_scalar                    -0.0255         -0.0344             0             0             0             0\nread_scalar_pvalue              0.6187          0.6482      U Test, Repetitions: 15 vs 15\nread_nodelist                  -0.1202         -0.1336             1             1             1             1\nread_nodelist                  -0.3270         -0.2661             1             1             1             1\nread_nodelist                  -0.0790         -0.0643             1             1             1             1\nread_nodelist                  +0.1012         +0.1011             1             1             1             1\nread_nodelist                  -0.0379         -0.0429             1             1             1             1\nread_nodelist                  -0.2137         -0.2137             1             1             1             1\nread_nodelist                  -0.0729         -0.0681             1             1             1             1\nread_nodelist                  -0.2301         -0.2013             1             1             1             1\nread_nodelist                  +0.4974         +0.1762             1             1             1             1\nread_nodelist                  +0.1949         +0.1967             1             1             1             1\nread_nodelist                  -0.1172         -0.1169             1             1             1             1\nread_nodelist                  -0.2080         -0.2252             1             1             1             1\nread_nodelist                  -0.1712         -0.1697             1             1             1             1\nread_nodelist                  +0.0375         +0.0282             1             1             1             1\nread_nodelist                  -0.1569         -0.1569             1             1             1             1\nread_nodelist_pvalue            0.0680          0.0421      U Test, Repetitions: 15 vs 15\nmove_ref                       -0.0882         -0.0913             3             2             3             2\nmove_ref                       +0.2198         +0.2199             3             3             3             3\nmove_ref                       -0.1841         -0.1844             3             3             3             3\nmove_ref                       +0.1766         +0.1767             2             3             2             3\nmove_ref                       -0.0563         -0.0701             3             2             3             2\nmove_ref                       -0.3180         -0.3179             3             2             3             2\nmove_ref                       -0.0173         -0.0117             3             3             3             3\nmove_ref                       +0.0579         +0.0632             3             3             3             3\nmove_ref                       +0.1375         +0.1341             2             3             2             3\nmove_ref                       +0.1198         +0.1198             2             3             2             3\nmove_ref                       -0.1101         -0.1136             3             3             3             3\nmove_ref                       -0.0540         -0.0549             3             3             3             3\nmove_ref                       +0.3238         +0.3210             3             4             3             4\nmove_ref                       -0.0975         +0.0755             4             3             3             3\nmove_ref                       -0.2566         -0.2717             3             3             3             3\nmove_ref_pvalue                 0.5338          0.5069      U Test, Repetitions: 15 vs 15\nmove_nodelist                  +0.0217         -0.0012             9             9             9             9\nmove_nodelist                  +0.2649         +0.2650            10            13            10            13\nmove_nodelist                  -0.2831         -0.2831            13             9            13             9\nmove_nodelist                  +0.1460         +0.0434             9            10             9             9\nmove_nodelist                  +0.0403         +0.0401             9            10             9            10\nmove_nodelist                  -0.0722         -0.0537            10             9            10             9\nmove_nodelist                  +0.1083         +0.1077            11            13            11            13\nmove_nodelist                  -0.1235         -0.1121            10             9            10             9\nmove_nodelist                  +0.1247         +0.1178             9            10             9            10\nmove_nodelist                  +0.1202         +0.1188             9            10             9            10\nmove_nodelist                  +0.0264         +0.0265            10            10            10            10\nmove_nodelist                  +0.0744         +0.0773             8             9             8             9\nmove_nodelist                  +0.1353         +0.1348             9            10             9            10\nmove_nodelist                  -0.1722         -0.1641            11             9            11             9\nmove_nodelist                  -0.0301         -0.0332            10            10            10            10\nmove_nodelist_pvalue            0.8035          0.8682      U Test, Repetitions: 15 vs 15\nOVERALL_GEOMEAN                -0.0224         -0.0245             0             0             0             0",
+   "a_b": "Comparing /run-dir/out/merged.a.clang.json to /run-dir/out/merged.b.clang.json\nBenchmark                         Time             CPU      Time Old      Time New       CPU Old       CPU New\n--------------------------------------------------------------------------------------------------------------\nread_ref                       -0.1828         -0.1390             1             1             1             1\nread_ref                       +0.1567         +0.1567             1             1             1             1\nread_ref                       +0.1345         +0.1115             1             1             1             1\nread_ref                       +0.0798         +0.0823             1             1             1             1\nread_ref                       -0.0722         -0.0722             1             1             1             1\nread_ref                       +0.1515         +0.1571             1             1             1             1\nread_ref                       +0.1162         +0.1162             1             1             1             1\nread_ref                       +0.0455         +0.0539             1             1             1             1\nread_ref                       +0.0300         +0.0235             1             1             1             1\nread_ref                       -0.1051         -0.1043             1             1             1             1\nread_ref                       +0.2924         +0.0696             1             1             1             1\nread_ref                       -0.0223         -0.0228             1             1             1             1\nread_ref                       +0.0726         +0.0730             1             1             1             1\nread_ref                       +0.0404         +0.0818             1             1             1             1\nread_ref                       -0.1130         -0.1132             1             1             1             1\nread_ref_pvalue                 0.1354          0.1844      U Test, Repetitions: 15 vs 15\nread_scalar                    -0.1190         -0.1217             0             0             0             0\nread_scalar                    -0.0985         -0.0927             0             0             0             0\nread_scalar                    +0.1461         +0.1473             0             0             0             0\nread_scalar                    +0.0167         +0.0127             0             0             0             0\nread_scalar                    +0.0777         +0.0776             0             0             0             0\nread_scalar                    -0.0741         -0.0838             0             0             0             0\nread_scalar                    -0.0347         -0.0347             0             0             0             0\nread_scalar                    -0.1473         -0.1473             0             0             0             0\nread_scalar                    +0.4227         +0.4248             0             0             0             0\nread_scalar                    +0.4125         +0.4609             0             0             0             0\nread_scalar                    -0.0175         -0.0185             0             0             0             0\nread_scalar                    -0.0299         -0.0296             0             0             0             0\nread_scalar                    +0.0675         -0.0030             0             0             0             0\nread_scalar                    +0.0367         +0.0739             0             0             0             0\nread_scalar                    -0.0477         -0.0854             0             0             0             0\nread_scalar_pvalue              0.7400          0.9010      U Test, Repetitions: 15 vs 15\nread_nodelist                  +0.2134         +0.2112             1             1             1             1\nread_nodelist                  -0.2382         -0.1656             1             1             1             1\nread_nodelist                  -0.2198         -0.1720             1             1             1             1\nread_nodelist                  +0.0951         +0.0956             1             1             1             1\nread_nodelist                  +0.1381         +0.1385             1             1             1             1\nread_nodelist                  -0.2398         -0.2679             1             1             1             1\nread_nodelist                  +0.1442         +0.1506             1             1             1             1\nread_nodelist                  -0.1443         -0.1125             1             1             1             1\nread_nodelist                  +0.0879         +0.0879             1             1             1             1\nread_nodelist                  +0.4706         +0.4717             1             1             1             1\nread_nodelist                  -0.2048         -0.2052             1             1             1             1\nread_nodelist                  -0.0491         -0.0494             1             1             1             1\nread_nodelist                  -0.2310         -0.2298             1             1             1             1\nread_nodelist                  +0.1962         +0.1964             1             1             1             1\nread_nodelist                  +0.0148         +0.0148             1             1             1             1\nread_nodelist_pvalue            0.7716          0.9669      U Test, Repetitions: 15 vs 15\nmove_ref                       -0.0714         -0.0700             3             2             3             2\nmove_ref                       +0.1132         +0.1114             3             3             3             3\nmove_ref                       -0.2394         -0.2400             3             2             3             2\nmove_ref                       +0.2498         +0.2495             2             3             2             3\nmove_ref                       +0.1524         +0.1516             3             3             3             3\nmove_ref                       -0.1447         -0.1457             3             3             3             3\nmove_ref                       +0.3722         +0.3800             3             4             3             4\nmove_ref                       -0.0880         -0.0840             3             3             3             3\nmove_ref                       +0.1394         +0.1427             2             3             2             3\nmove_ref                       +0.1378         +0.0888             2             3             2             3\nmove_ref                       -0.1536         -0.1566             3             2             3             2\nmove_ref                       -0.2247         -0.2259             3             2             3             2\nmove_ref                       -0.1788         -0.1789             3             2             3             2\nmove_ref                       -0.1793         -0.0191             4             3             3             3\nmove_ref                       -0.2011         -0.2383             3             3             3             3\nmove_ref_pvalue                 0.3837          0.3615      U Test, Repetitions: 15 vs 15\nmove_nodelist                  +0.1515         +0.1467             9            11             9            11\nmove_nodelist                  +0.0268         +0.0219            10            10            10            10\nmove_nodelist                  -0.0795         -0.0796            13            12            13            12\nmove_nodelist                  +0.2444         +0.2426             9            11             9            11\nmove_nodelist                  +0.1167         +0.1162             9            11             9            11\nmove_nodelist                  +0.1232         +0.1443            10            11            10            11\nmove_nodelist                  +0.2963         +0.2959            11            15            11            15\nmove_nodelist                  -0.1053         -0.0936            10             9            10             9\nmove_nodelist                  +0.2597         +0.2580             9            11             9            11\nmove_nodelist                  +0.1704         +0.1701             9            10             9            10\nmove_nodelist                  +0.2196         +0.1341            10            12            10            11\nmove_nodelist                  +0.5170         +0.5194             8            13             8            13\nmove_nodelist                  +0.1295         +0.1301             9            10             9            10\nmove_nodelist                  +0.3513         +0.3637            11            15            11            15\nmove_nodelist                  +0.4332         +0.4345            10            14            10            14\nmove_nodelist_pvalue            0.0021          0.0021      U Test, Repetitions: 15 vs 15\nOVERALL_GEOMEAN                +0.0344         +0.0350             0             0             0             0"
+  }
+ },
+ "cells": {
+  "gxx": {
+   "move_nodelist": {
+    "a": {
+     "repetitions_ns": [
+      8671636.375005675,
+      9271107.142849034,
+      9761011.285718268,
+      9463114.28571432,
+      9568184.85713841,
+      13086740.799985819,
+      9605233.999998575,
+      12349816.285734504,
+      9770010.857153011,
+      9242590.714295927,
+      11669618.00000621,
+      9968354.714300988,
+      9109477.142853199,
+      13362344.400002258,
+      11578578.142851777
+     ],
+     "median_ns": 9761011.285718268,
+     "spread": 0.5409253596606802
+    },
+    "aa": {
+     "repetitions_ns": [
+      8521756.714287676,
+      9882171.62500149,
+      12238138.200007142,
+      9876872.666685207,
+      9347006.857142657,
+      11482799.60001446,
+      10209913.857132895,
+      10742407.285712423,
+      9115045.375011733,
+      9309922.124998594,
+      16316980.14287102,
+      12097699.600008126,
+      12064953.71428673,
+      13401802.800001405,
+      11246019.000016835
+     ],
+     "median_ns": 10742407.285712423,
+     "spread": 0.914743718922858
+    },
+    "b": {
+     "repetitions_ns": [
+      10456923.714286858,
+      10671465.571436198,
+      18450092.75000109,
+      9093064.50000713,
+      9600753.285716176,
+      11940780.199995516,
+      13904356.399996232,
+      11234275.285728147,
+      10186157.285707915,
+      9540288.142854283,
+      9567865.571422577,
+      8897373.14284795,
+      9409562.71426785,
+      12099272.714278543,
+      13720290.999998497
+     ],
+     "median_ns": 10456923.714286858,
+     "spread": 1.0736561739946788
+    },
+    "a_over_a_ratio": 1.100542451111605,
+    "b_over_a_ratio": 1.0712951156594612,
+    "utest_a_aa": {
+     "time_pvalue": 0.38373262766250305,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.4553018964198552,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "move_ref": {
+    "a": {
+     "repetitions_ns": [
+      2632621.0384647413,
+      2978995.954547062,
+      2411937.321428224,
+      2802953.9615400922,
+      2686171.761909117,
+      2781283.624990749,
+      2392131.7142878706,
+      2756601.359999422,
+      2681285.2500081398,
+      3573634.384620251,
+      2516554.777777721,
+      2831832.2727200626,
+      2744770.727275636,
+      3607447.368417046,
+      2556581.360006476
+     ],
+     "median_ns": 2744770.727275636,
+     "spread": 0.5080471308792338
+    },
+    "aa": {
+     "repetitions_ns": [
+      2725985.640001909,
+      2537981.461544475,
+      3351267.9523877995,
+      2559150.0740789445,
+      2702060.692310117,
+      2463785.750009606,
+      2961474.999997904,
+      3006633.043489036,
+      2558469.6956546237,
+      3054859.000011826,
+      2492569.5600018115,
+      2755042.0714236777,
+      2940372.041663863,
+      3120610.454539536,
+      3101672.2222242756
+     ],
+     "median_ns": 2755042.0714236777,
+     "spread": 0.360210786337543
+    },
+    "b": {
+     "repetitions_ns": [
+      2684683.041671576,
+      2753531.875003527,
+      2849701.7916701376,
+      2616820.782602348,
+      2615820.5384617234,
+      2794460.476198288,
+      2982252.4761882396,
+      2859618.499996941,
+      2789063.5416625286,
+      3103566.1304387124,
+      2389845.2222249913,
+      2492650.5384625075,
+      2557358.999999119,
+      2751151.1199941197,
+      3817158.545460457
+     ],
+     "median_ns": 2753531.875003527,
+     "spread": 0.5972409049597822
+    },
+    "a_over_a_ratio": 1.0037421501351542,
+    "b_over_a_ratio": 1.003191941549372,
+    "utest_a_aa": {
+     "time_pvalue": 0.5897385933186072,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.7400217511938185,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "read_nodelist": {
+    "a": {
+     "repetitions_ns": [
+      554751.88659817,
+      662190.4024391703,
+      577413.0877193983,
+      577873.1595744665,
+      761639.2837834414,
+      758585.4631578944,
+      664250.6235293159,
+      683234.9117646528,
+      687838.402439372,
+      739257.9619044054,
+      562886.9999997461,
+      683809.634146306,
+      803601.5974022865,
+      833662.865672061,
+      698197.8749998064
+     ],
+     "median_ns": 683809.634146306,
+     "spread": 0.5027670672455375
+    },
+    "aa": {
+     "repetitions_ns": [
+      650469.7428573265,
+      734374.4056607597,
+      849519.3333336223,
+      688769.9166667073,
+      685080.7227718602,
+      720614.9795915365,
+      983040.6000001327,
+      707790.8988761143,
+      817521.9056604505,
+      853809.7846151406,
+      705808.5512822706,
+      569857.7282608451,
+      691522.4756094785,
+      746636.5624999582,
+      754773.4935062546
+     ],
+     "median_ns": 720614.9795915365,
+     "spread": 0.7250632065661107
+    },
+    "b": {
+     "repetitions_ns": [
+      699905.4235293175,
+      723442.9506171283,
+      738940.4320987422,
+      657998.7674414031,
+      651034.5238099479,
+      776996.1095886647,
+      676857.3999998104,
+      733252.231706884,
+      688502.0465118529,
+      871586.1029407828,
+      585586.1946904155,
+      600693.762886674,
+      643163.4622642059,
+      739824.3589744442,
+      835797.5000005661
+     ],
+     "median_ns": 699905.4235293175,
+     "spread": 0.4883993353046312
+    },
+    "a_over_a_ratio": 1.0538239644593186,
+    "b_over_a_ratio": 1.0235384068595437,
+    "utest_a_aa": {
+     "time_pvalue": 0.09709106759647709,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.506914933812496,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "read_ref": {
+    "a": {
+     "repetitions_ns": [
+      701163.2631573367,
+      667023.689655268,
+      972259.4905662485,
+      636734.9381443111,
+      731815.4805201121,
+      751955.7499999034,
+      662181.1702126116,
+      761627.0649346124,
+      693097.1720431023,
+      842707.8488367432,
+      684873.2499996402,
+      768686.141176498,
+      694137.7717391392,
+      851083.887324152,
+      726844.7499998707
+     ],
+     "median_ns": 726844.7499998707,
+     "spread": 0.5269454090265318
+    },
+    "aa": {
+     "repetitions_ns": [
+      977940.7575761621,
+      670991.6853927434,
+      722424.4698800632,
+      707775.9324330158,
+      727891.2467533594,
+      788624.8717942962,
+      853812.8823528602,
+      849485.2816897306,
+      799346.8750000106,
+      853189.803030208,
+      628128.4020619564,
+      644452.7395833196,
+      716880.212500115,
+      753436.6279068055,
+      716922.4705883019
+     ],
+     "median_ns": 727891.2467533594,
+     "spread": 0.5569121765006599
+    },
+    "b": {
+     "repetitions_ns": [
+      723674.9655174301,
+      648178.0543475185,
+      752961.1374998523,
+      724730.0109887484,
+      775150.1999996435,
+      708101.0714285541,
+      651373.4444442636,
+      640042.8762885988,
+      783278.3483145454,
+      782966.3676467229,
+      712417.8421049153,
+      645202.2056076747,
+      639135.8651687747,
+      803698.5131577754,
+      732650.2500000115
+     ],
+     "median_ns": 723674.9655174301,
+     "spread": 0.2574767853866957
+    },
+    "a_over_a_ratio": 1.0014397803017618,
+    "b_over_a_ratio": 0.9956389800126628,
+    "utest_a_aa": {
+     "time_pvalue": 0.48073111045562256,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.6186695570822622,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "read_scalar": {
+    "a": {
+     "repetitions_ns": [
+      268179.59230767813,
+      302130.49999992206,
+      521621.25862078654,
+      284914.0862070071,
+      360555.26106189325,
+      332019.9758454823,
+      300451.3823529727,
+      326198.2349727077,
+      302563.4472574214,
+      359373.46907220216,
+      317077.4139533044,
+      320774.7499999912,
+      282476.6129032883,
+      415511.48484844895,
+      330273.5365854537
+     ],
+     "median_ns": 320774.7499999912,
+     "spread": 0.9450445655922202
+    },
+    "aa": {
+     "repetitions_ns": [
+      330375.1141551232,
+      284051.5550846156,
+      332934.5492955779,
+      287813.46090530255,
+      389428.9482758168,
+      306130.8626374764,
+      440344.6518987885,
+      335440.19907391537,
+      411193.84745746636,
+      401393.02339176746,
+      383999.69565222383,
+      270550.0944882071,
+      376022.2680410635,
+      316742.10731691297,
+      282817.44537807064
+     ],
+     "median_ns": 332934.5492955779,
+     "spread": 0.6275900872693376
+    },
+    "b": {
+     "repetitions_ns": [
+      341725.45856368664,
+      303533.3015267035,
+      358947.61302683095,
+      350397.94202894106,
+      342637.25906720693,
+      349663.1333334221,
+      347486.31472080277,
+      305718.6113536928,
+      399179.6857144436,
+      450475.7482013767,
+      336445.63636367064,
+      276961.6743294712,
+      271353.37735851965,
+      351977.1333332919,
+      361220.1878453667
+     ],
+     "median_ns": 347486.31472080277,
+     "spread": 0.6601073942271063
+    },
+    "a_over_a_ratio": 1.0379075949574805,
+    "b_over_a_ratio": 1.0832720303602834,
+    "utest_a_aa": {
+     "time_pvalue": 0.4553018964198552,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.22902896662469463,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   }
+  },
+  "clang": {
+   "move_nodelist": {
+    "a": {
+     "repetitions_ns": [
+      9211842.285708372,
+      10175924.714303618,
+      12929120.166669842,
+      9045737.750000171,
+      9436064.571421606,
+      9967436.833316393,
+      11345585.500009747,
+      10222612.714301249,
+      8804589.142885432,
+      8879460.000002837,
+      9575969.16666148,
+      8458641.000004264,
+      8709615.857152844,
+      10776073.714290695,
+      9958231.71430337
+     ],
+     "median_ns": 9575969.16666148,
+     "spread": 0.5285103324119471
+    },
+    "aa": {
+     "repetitions_ns": [
+      9411663.285707815,
+      12871697.999983666,
+      9268396.333349451,
+      10366234.999992229,
+      9816701.857135156,
+      9247737.42856847,
+      12574486.500019096,
+      8959976.428570826,
+      9902249.571423128,
+      9947169.28571344,
+      9828682.571440239,
+      9087941.333338752,
+      9888188.28571831,
+      8920183.714289058,
+      9658008.142853955
+     ],
+     "median_ns": 9816701.857135156,
+     "spread": 0.44298575144419505
+    },
+    "b": {
+     "repetitions_ns": [
+      10607830.857151968,
+      10449022.499993058,
+      11901510.999978526,
+      11256872.428581184,
+      10537052.000006497,
+      11195464.999980232,
+      14707355.333342776,
+      9146173.428575821,
+      11091018.571440665,
+      10392093.714301609,
+      11679314.14285509,
+      12831781.28570788,
+      9837130.142857729,
+      14561986.400008209,
+      14272078.571431328
+     ],
+     "median_ns": 11195464.999980232,
+     "spread": 0.6080337256006858
+    },
+    "a_over_a_ratio": 1.0251392507937245,
+    "b_over_a_ratio": 1.169120827890402,
+    "utest_a_aa": {
+     "time_pvalue": 0.8034625743147712,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.0021450570245935504,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": true
+   },
+   "move_ref": {
+    "a": {
+     "repetitions_ns": [
+      2589842.959998805,
+      2526228.69565199,
+      3143014.3043503053,
+      2400625.884615255,
+      2555663.769232279,
+      3429662.6956579927,
+      2720319.3749964307,
+      2766919.4814818725,
+      2415825.037036046,
+      2388132.2857164377,
+      2832531.541666109,
+      3066927.045456292,
+      2946320.318179894,
+      3660994.615383008,
+      3434295.4736799635
+     ],
+     "median_ns": 2766919.4814818725,
+     "spread": 0.532994900357755
+    },
+    "aa": {
+     "repetitions_ns": [
+      2361498.3214404867,
+      3081572.9565189113,
+      2564523.500001752,
+      2824656.9545470634,
+      2411655.923081158,
+      2338860.759998624,
+      2673213.8333305973,
+      2927255.7272680514,
+      2748053.249997421,
+      2674314.71999771,
+      2520578.115381183,
+      2901296.320003439,
+      3900373.1428530435,
+      3303870.7142812503,
+      2553142.259256657
+     ],
+     "median_ns": 2674314.71999771,
+     "spread": 0.6676380268380482
+    },
+    "b": {
+     "repetitions_ns": [
+      2405032.9199985755,
+      2812210.520010012,
+      2390484.4074064824,
+      3000268.476187427,
+      2945134.590907566,
+      2933476.4090833687,
+      3732805.7058750666,
+      2523461.4999979283,
+      2752555.791673217,
+      2717148.0434706453,
+      2397315.249999516,
+      2377694.357144427,
+      2419467.0370392217,
+      3004460.2000032226,
+      2743742.4399909107
+     ],
+     "median_ns": 2743742.4399909107,
+     "spread": 0.5699266369787355
+    },
+    "a_over_a_ratio": 0.9665314577804172,
+    "b_over_a_ratio": 0.9916235215205652,
+    "utest_a_aa": {
+     "time_pvalue": 0.5338294217441396,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.38373262766250305,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "read_nodelist": {
+    "a": {
+     "repetitions_ns": [
+      699338.4444444366,
+      877757.9473681834,
+      746922.2000001234,
+      648720.4260867222,
+      666409.0476188482,
+      870637.2537318853,
+      721757.4871794031,
+      713020.1976739827,
+      633936.3775506329,
+      571487.7526876931,
+      742912.8860754254,
+      813137.9571425767,
+      787320.5357139481,
+      628373.9882352327,
+      835235.5915499623
+     ],
+     "median_ns": 721757.4871794031,
+     "spread": 0.5359173372309538
+    },
+    "aa": {
+     "repetitions_ns": [
+      615260.0531917647,
+      590723.6413044668,
+      687931.7037036917,
+      714400.0519474503,
+      641133.2178213522,
+      684568.1730769553,
+      669117.7195125697,
+      548939.9456518848,
+      949258.8888891942,
+      682875.7294121769,
+      655812.9186049787,
+      644025.7415730496,
+      652541.2500006192,
+      651963.4065935551,
+      704177.2874998741
+     ],
+     "median_ns": 655812.9186049787,
+     "spread": 0.7292581755221277
+    },
+    "b": {
+     "repetitions_ns": [
+      848542.7555550965,
+      668640.231707264,
+      582711.8297869229,
+      710444.6097563007,
+      758466.2597404437,
+      661880.2716053481,
+      825839.3484850606,
+      610139.8958329915,
+      689676.6091954461,
+      840433.8904106786,
+      590791.0824741998,
+      773212.3305081355,
+      605430.7802194991,
+      751655.0422536337,
+      847561.0487804682
+     ],
+     "median_ns": 710444.6097563007,
+     "spread": 0.45619620570493424
+    },
+    "a_over_a_ratio": 0.9086333432686193,
+    "b_over_a_ratio": 0.9843259299362275,
+    "utest_a_aa": {
+     "time_pvalue": 0.06799575043506911,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.7715511878155722,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "read_ref": {
+    "a": {
+     "repetitions_ns": [
+      788223.3604653075,
+      681611.9489792992,
+      658947.2926828797,
+      639156.5799998489,
+      750189.5128201889,
+      687785.3409092567,
+      738039.2000000986,
+      683530.6701029518,
+      681722.0000000036,
+      713879.8295452436,
+      667913.585366117,
+      740581.534884324,
+      712996.6124999499,
+      690485.1238097026,
+      850569.0795453027
+     ],
+     "median_ns": 690485.1238097026,
+     "spread": 0.3307679309904059
+    },
+    "aa": {
+     "repetitions_ns": [
+      656205.5729168274,
+      670200.0641029989,
+      651711.0526314545,
+      698012.9555554666,
+      688270.131868044,
+      737925.2469138604,
+      687998.9120883003,
+      667797.4367818577,
+      646896.5903611962,
+      830254.1923075506,
+      744585.556817738,
+      710597.870129897,
+      726335.9222223344,
+      702891.8247419122,
+      716501.817072967
+     ],
+     "median_ns": 698012.9555554666,
+     "spread": 0.2834419050562258
+    },
+    "b": {
+     "repetitions_ns": [
+      644168.640000089,
+      788428.3294121067,
+      747559.6292133406,
+      690149.3541668913,
+      696038.3493975884,
+      792016.647059099,
+      823806.6164381052,
+      714621.041667011,
+      702150.1264370502,
+      638843.4742266139,
+      863218.7752809433,
+      724048.306818371,
+      764778.2162161941,
+      718352.3529413511,
+      754457.6547617442
+     ],
+     "median_ns": 724048.306818371,
+     "spread": 0.35122108952581677
+    },
+    "a_over_a_ratio": 1.0109022359587267,
+    "b_over_a_ratio": 1.048608118917155,
+    "utest_a_aa": {
+     "time_pvalue": 0.6783024655972324,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.13538211004560674,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "read_scalar": {
+    "a": {
+     "repetitions_ns": [
+      290125.4774774889,
+      300699.1627906461,
+      238973.72426476108,
+      272283.7238805559,
+      259910.87007865665,
+      305171.26839831646,
+      316756.12608696806,
+      290746.20869565755,
+      257776.97727286952,
+      266039.7745454578,
+      280267.8434783917,
+      282094.84513284836,
+      269480.07812488405,
+      271861.8222222294,
+      300172.18907572853
+     ],
+     "median_ns": 280267.8434783917,
+     "spread": 0.325485163950624
+    },
+    "aa": {
+     "repetitions_ns": [
+      264249.44402989827,
+      247704.25670489887,
+      264671.2536231818,
+      329110.1417910646,
+      281662.30400006496,
+      291609.7208332265,
+      265340.8282442724,
+      272012.10902259155,
+      271017.1970801453,
+      274781.5782608699,
+      265848.9271255124,
+      280800.27952749183,
+      284171.9590164161,
+      279728.6194331829,
+      292530.65416649333
+     ],
+     "median_ns": 274781.5782608699,
+     "spread": 0.32864144592859446
+    },
+    "b": {
+     "repetitions_ns": [
+      255595.42682948284,
+      271076.8541668074,
+      273898.528925472,
+      276830.8704453688,
+      280099.0311283623,
+      282545.9911112678,
+      305776.43778808694,
+      247924.1567165184,
+      366750.5373134906,
+      375772.1414143991,
+      275357.4199133959,
+      273666.7351779813,
+      287674.7153847576,
+      281846.7521740825,
+      285868.5992508273
+     ],
+     "median_ns": 280099.0311283623,
+     "spread": 0.5156737705235586
+    },
+    "a_over_a_ratio": 0.9804249208563065,
+    "b_over_a_ratio": 0.9993976749243356,
+    "utest_a_aa": {
+     "time_pvalue": 0.6186695570822622,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.7400217511938185,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   }
+  }
+ }
+}
