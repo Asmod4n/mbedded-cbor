@@ -315,8 +315,8 @@ TEST_CASE("qcbor ShortBufferParseTest: each truncation of the integer array give
     for (std::size_t n = expected_encoded_ints.size() - 1; n != 0; --n) {
         CAPTURE(n);
         std::string const prefix = expected_encoded_ints.substr(0, n);
-        CHECK(cbor::decode(prefix).error_or(error{}) == error::too_little_data);
-        CHECK(cbor::item_size(prefix).error_or(error{}) == error::too_little_data);
+        CHECK(cbor::decode(prefix) == std::unexpected(error::too_little_data));
+        CHECK(cbor::item_size(prefix) == std::unexpected(error::too_little_data));
     }
 }
 
@@ -341,7 +341,7 @@ TEST_CASE("qcbor SimpleArrayTest: a simple array encodes, decodes back, and each
 
     for (std::size_t n = encoded->size() - 1; n != 0; --n) {
         CAPTURE(n);
-        CHECK(cbor::decode(encoded->substr(0, n)).error_or(error{}) == error::too_little_data);
+        CHECK(cbor::decode(encoded->substr(0, n)) == std::unexpected(error::too_little_data));
     }
 }
 
@@ -381,7 +381,7 @@ TEST_CASE("qcbor EmptyMapsAndArraysTest: the indefinite-length form is well-form
 {
     std::string const empties = as_string({0x9f, 0x00, 0x9f, 0xff, 0x9f, 0x9f, 0xff, 0x9f, 0x00, 0xff, 0xbf, 0xff, 0xbf,
                                            0x01, 0xbf, 0xff, 0x02, 0xbf, 0xff, 0x03, 0x9f, 0xff, 0xff, 0xff, 0xff});
-    CHECK(cbor::decode(empties).error_or(error{}) == error::indefinite_length);
+    CHECK(cbor::decode(empties) == std::unexpected(error::indefinite_length));
     CHECK((cbor::diagnostic_notation(empties) ==
           std::string("[_ 0, [_ ], [_ [_ ], [_ 0], {_ }, {_ 1: {_ }, 2: {_ }, 3: [_ ]}]]")));
 }
@@ -421,7 +421,7 @@ TEST_CASE("qcbor ParseDeepArrayTest: seven nested arrays decode")
 TEST_CASE("qcbor ParseTooDeepArrayTest: nested arrays are within the limit of mbedded-cbor")
 {
     std::string const open(test::levels_main_thread_reads, static_cast<char>(0x81));
-    CHECK(cbor::decode(open).error_or(error{}) == error::too_little_data);
+    CHECK(cbor::decode(open) == std::unexpected(error::too_little_data));
     CHECK(cbor::decode(open + static_cast<char>(0x80)).has_value());
 }
 
@@ -475,7 +475,7 @@ TEST_CASE("qcbor ParseMapTest: a map with nested array and map decodes")
 // indefinite length"). RFC 8949 3.2.2 makes the input well-formed, and cbor::diagnostic_notation reads it.
 TEST_CASE("qcbor ParseMapTest: the indefinite-length map is well-formed and decode refuses it")
 {
-    CHECK(cbor::decode(valid_map_indefinite_encoded).error_or(error{}) == error::indefinite_length);
+    CHECK(cbor::decode(valid_map_indefinite_encoded) == std::unexpected(error::indefinite_length));
     CHECK((cbor::diagnostic_notation(valid_map_indefinite_encoded) ==
           std::string("{_ \"first integer\": 42, \"an array of two strings\": [_ \"string1\", \"string2\"], "
                       "\"map in a map\": {_ \"bytes 1\": h'78787878', \"bytes 2\": h'79797979', \"another int\": 98, "
@@ -493,7 +493,7 @@ TEST_CASE("qcbor ParseMapTest: a large count with no elements gives too_little_d
                              as_string({0xba, 0x00, 0x00, 0x80, 0x00})}) {
         CAPTURE(head.size());
         CHECK((count_pieces(lazy_of(head)) == std::unexpected(error::too_little_data)));
-        CHECK(cbor::decode(head).error_or(error{}) == error::too_little_data);
+        CHECK(cbor::decode(head) == std::unexpected(error::too_little_data));
     }
 }
 
@@ -505,8 +505,8 @@ TEST_CASE("qcbor ParseMapTest: a large count with no elements gives too_little_d
 TEST_CASE("qcbor SimpleValueDecodeTests: simple values decode, and the reserved two-byte forms fail")
 {
     auto simple_of = [](std::string const &in) {
-        return cbor::decode(in).and_then(
-            [](cbor::owning<cbor::item> const &t) { return t->get<cbor::simple_value>(); });
+        auto const tree = cbor::decode(in);
+        return tree.and_then([](cbor::owning<cbor::item> const &t) { return t->get<cbor::simple_value>(); });
     };
     auto const f = cbor::decode(as_string({0xf4}));
     REQUIRE(f.has_value());
@@ -520,18 +520,18 @@ TEST_CASE("qcbor SimpleValueDecodeTests: simple values decode, and the reserved 
     auto const u = cbor::decode(as_string({0xf7}));
     REQUIRE(u.has_value());
     CHECK((**u).type() == cbor::type::undefined);
-    CHECK(cbor::decode(as_string({0xff})).error_or(error{}) == error::syntax_error);
+    CHECK(cbor::decode(as_string({0xff})) == std::unexpected(error::syntax_error));
     CHECK((simple_of(as_string({0xe0})) == cbor::simple_value{0}));
     CHECK((simple_of(as_string({0xf3})) == cbor::simple_value{19}));
-    CHECK(cbor::decode(as_string({0xf8, 0x00})).error_or(error{}) == error::syntax_error);
-    CHECK(cbor::decode(as_string({0xf8, 0x13})).error_or(error{}) == error::syntax_error);
-    CHECK(cbor::decode(as_string({0xf8, 0x1f})).error_or(error{}) == error::syntax_error);
+    CHECK(cbor::decode(as_string({0xf8, 0x00})) == std::unexpected(error::syntax_error));
+    CHECK(cbor::decode(as_string({0xf8, 0x13})) == std::unexpected(error::syntax_error));
+    CHECK(cbor::decode(as_string({0xf8, 0x1f})) == std::unexpected(error::syntax_error));
     CHECK((simple_of(as_string({0xf8, 0x20})) == cbor::simple_value{32}));
     CHECK((simple_of(as_string({0xf8, 0xff})) == cbor::simple_value{255}));
 
     std::string const all = as_string(
         {0x8a, 0xf4, 0xf5, 0xf6, 0xf7, 0xff, 0xe0, 0xf3, 0xf8, 0x00, 0xf8, 0x13, 0xf8, 0x1f, 0xf8, 0x20, 0xf8, 0xff});
-    CHECK(cbor::decode(all).error_or(error{}) == error::syntax_error);
+    CHECK(cbor::decode(all) == std::unexpected(error::syntax_error));
 }
 
 // SimpleValueDecodeTests, spGoodSimpleValues: the map {1: false, 2: true, 3: null, 4: undefined, 5: simple(0),
@@ -786,7 +786,7 @@ TEST_CASE("qcbor DecodeFailureTests: a text string of SIZE_MAX bytes with no byt
     std::string head = as_string({0x7b});
     for (int i = 0; i != 8; ++i)
         head.push_back(static_cast<char>(0xff));
-    CHECK(cbor::decode(head).error_or(error{}) == error::too_little_data);
+    CHECK(cbor::decode(head) == std::unexpected(error::too_little_data));
 }
 
 // DecodeFailureTests, the invalid rows: tag 0 on an integer, tag 1 on a byte string, tag 1 on tag 0, and tag 2 on an
@@ -1088,8 +1088,8 @@ TEST_CASE("qcbor IntegerConvertTest: numbers read as int64_t, uint64_t and doubl
 // an array or a map has an indefinite length"); RFC 8949 3.4.3 and 3.2.3 make the input valid.
 TEST_CASE("qcbor IntegerConvertTest: a bignum in an indefinite-length string is refused")
 {
-    CHECK(cbor::decode(as_string({0xc2, 0x5f, 0x42, 0x01, 0x02, 0x41, 0x03, 0x41, 0x04, 0xff})).error_or(error{}) ==
-          error::indefinite_length);
+    CHECK(cbor::decode(as_string({0xc2, 0x5f, 0x42, 0x01, 0x02, 0x41, 0x03, 0x41, 0x04, 0xff})) ==
+          std::unexpected(error::indefinite_length));
 }
 
 // CBORSequenceDecodeTests: "1985-04-12", 0, 1400000000, "hi" is a CBOR sequence (RFC 8742) of four items with the
@@ -1136,7 +1136,7 @@ TEST_CASE("qcbor IndefiniteLengthArrayMapTest: indefinite-length arrays and thei
 {
     std::string const good = as_string({0x9f, 0x01, 0x82, 0x02, 0x03, 0xff});
     CHECK((cbor::diagnostic_notation(good) == std::string("[_ 1, [2, 3]]")));
-    CHECK(cbor::decode(good).error_or(error{}) == error::indefinite_length);
+    CHECK(cbor::decode(good) == std::unexpected(error::indefinite_length));
     CHECK(cbor::diagnostic_notation(as_string({0x9f})).error_or(error{}) == error::too_little_data);
     CHECK(cbor::diagnostic_notation(as_string({0x9f, 0x9f, 0x02, 0xff})).error_or(error{}) ==
           error::too_little_data);
@@ -1154,7 +1154,7 @@ TEST_CASE("qcbor IndefiniteLengthNestTest: nested indefinite-length arrays are w
         std::string const nested =
             std::string(depth, static_cast<char>(0x9f)) + std::string(depth, static_cast<char>(0xff));
         CHECK(cbor::diagnostic_notation(nested).has_value());
-        CHECK(cbor::decode(nested).error_or(error{}) == error::indefinite_length);
+        CHECK(cbor::decode(nested) == std::unexpected(error::indefinite_length));
     }
 }
 
@@ -1168,7 +1168,7 @@ TEST_CASE("qcbor IndefiniteLengthStringTest: indefinite-length strings and their
     std::string const good =
         as_string({0x81, 0x7f, 0x65, 0x73, 0x74, 0x72, 0x65, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x67, 0xff});
     CHECK((cbor::diagnostic_notation(good) == std::string("[(_ \"strea\", \"ming\")]")));
-    CHECK(cbor::decode(good).error_or(error{}) == error::indefinite_length);
+    CHECK(cbor::decode(good) == std::unexpected(error::indefinite_length));
     CHECK(cbor::diagnostic_notation(
               as_string({0x81, 0x7f, 0x65, 0x73, 0x74, 0x72, 0x65, 0x61, 0x44, 0x6d, 0x69, 0x6e, 0x67, 0xff}))
               .error_or(error{}) == error::syntax_error);
@@ -1192,7 +1192,7 @@ TEST_CASE("qcbor IndefiniteLengthStringTest: indefinite-length strings and their
     }
     big.push_back(static_cast<char>(0xff));
     CHECK(cbor::diagnostic_notation(big).has_value());
-    CHECK(cbor::decode(big).error_or(error{}) == error::indefinite_length);
+    CHECK(cbor::decode(big) == std::unexpected(error::indefinite_length));
 }
 
 // ParseMapAsArrayTest, pPerverseLabels: a map of 14 pairs whose keys are true, null, simple(255), floats, a map, an
@@ -1210,7 +1210,7 @@ TEST_CASE("qcbor ParseMapAsArrayTest: a map with keys of every kind is well-form
         0x7f, 0x61, 0x4a, 0x61, 0x4b, 0xff, 0x00, 0xf4, 0xd7, 0x80, 0xff, 0x61, 0x6e,
     });
     CHECK(cbor::diagnostic_notation(perverse).has_value());
-    CHECK(cbor::decode(perverse).error_or(error{}) == error::indefinite_length);
+    CHECK(cbor::decode(perverse) == std::unexpected(error::indefinite_length));
 }
 
 // OptTagParseTest, spEncodedLargeTag and spLotsOfTags: the tag number 10489608748473423768 needs all 8 bytes of its

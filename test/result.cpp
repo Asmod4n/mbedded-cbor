@@ -3,11 +3,13 @@
 #include <cbor/structs.hpp>
 #include <doctest/doctest.h>
 
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <map>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 
@@ -76,6 +78,25 @@ concept or_else_takes = requires(R r, F f) { std::forward<R>(r).or_else(f); };
 
 template <class R, class F>
 concept transform_error_takes = requires(R r, F f) { std::forward<R>(r).transform_error(f); };
+
+template <class R>
+concept deref_of_named = requires(R const &r) { *r; };
+
+template <class R>
+concept loop_over_named = requires(R const &r) {
+    { *r } -> std::same_as<typename R::value_type const &>;
+    r->size();
+};
+
+using tree_result = decltype(cbor::decode(std::declval<std::string_view>()));
+
+using elements_result = decltype(std::declval<cbor::item const &>().elements());
+
+constexpr auto elements_of_tree = [](cbor::owning<cbor::item> const &t) { return t->elements(); };
+
+constexpr auto type_of_tree = [](cbor::owning<cbor::item> const &t) { return t->type(); };
+
+constexpr auto decode_empty = [](error const &) { return cbor::decode(std::string_view{}); };
 
 } // namespace
 
@@ -268,4 +289,62 @@ TEST_CASE("result: a program cannot make a result")
     CHECK(std::is_move_constructible_v<number_result>);
     CHECK(std::is_copy_assignable_v<number_result>);
     CHECK(std::is_move_assignable_v<number_result>);
+}
+
+// cbor::decode and cbor::item::elements give a result too, so the same rules hold for them: a reader or a monadic
+// form of a temporary result does not compile, and the same call on a named result does. The range of the elements
+// is the case that a loop reads.
+TEST_CASE("result: a temporary result of cbor::decode or cbor::item::elements cannot be read")
+{
+    CHECK(deref_of_named<tree_result>);
+    CHECK_FALSE(deref_of_call<tree_result>);
+    CHECK_FALSE(value_of_call<tree_result>);
+    CHECK_FALSE(error_of_call<tree_result>);
+    CHECK_FALSE(deref_of_moved<tree_result>);
+    CHECK(loop_over_named<elements_result>);
+    CHECK_FALSE(loop_over_call<elements_result>);
+    CHECK_FALSE(arrow_of_call<elements_result>);
+    CHECK_FALSE(value_of_call<elements_result>);
+    CHECK_FALSE(deref_of_moved<elements_result>);
+    using after = decltype(elements_of_tree);
+    using kind = decltype(type_of_tree);
+    using again = decltype(decode_empty);
+    using code = decltype(code_of);
+    CHECK((and_then_takes<tree_result const &, after>));
+    CHECK_FALSE((and_then_takes<tree_result &&, after>));
+    CHECK((transform_takes<tree_result const &, kind>));
+    CHECK_FALSE((transform_takes<tree_result &&, kind>));
+    CHECK((or_else_takes<tree_result const &, again>));
+    CHECK_FALSE((or_else_takes<tree_result &&, again>));
+    CHECK((transform_error_takes<tree_result const &, code>));
+    CHECK_FALSE((transform_error_takes<tree_result &&, code>));
+    CHECK_FALSE((std::is_convertible_v<tree_result, std::expected<cbor::owning<cbor::item>, error>>));
+    CHECK_FALSE((std::is_constructible_v<tree_result, cbor::owning<cbor::item>>));
+    CHECK_FALSE((std::is_constructible_v<tree_result, std::unexpect_t, error>));
+}
+
+// A named result of each function of the group gives its value or its error.
+TEST_CASE("result: cbor::decode, cbor::item_size and the reads of cbor::item give a result")
+{
+    auto encoded = cbor::encode<std::map<std::string, std::int64_t>>({{"a", 7}});
+    REQUIRE(encoded.has_value());
+    std::string_view const bytes = *encoded;
+    auto const tree = cbor::decode(bytes);
+    REQUIRE(tree.has_value());
+    auto const pairs = (*tree)->pairs();
+    REQUIRE(pairs.has_value());
+    CHECK_EQ(pairs->size(), 1u);
+    auto const value = pairs->front().second.get<std::int64_t>();
+    CHECK_EQ(*value, 7);
+    auto const elements = (*tree)->elements();
+    CHECK_EQ(elements.error(), error::incorrect_type);
+    auto const kind = tree.transform(type_of_tree);
+    CHECK_EQ(*kind, cbor::type::map);
+    auto const size = cbor::item_size(bytes);
+    CHECK_EQ(*size, bytes.size());
+    auto const cut = cbor::item_size(bytes.substr(0, 1));
+    CHECK_EQ(cut.error(), error::too_little_data);
+    auto const empty = cbor::decode_cycles(std::string_view{});
+    auto const fallback = empty.or_else(decode_empty);
+    CHECK_EQ(fallback.error(), error::too_little_data);
 }

@@ -320,11 +320,15 @@ Where the value is itself a handle, such as `cbor::owning<cbor::item>` or
 
 ```cpp
 // bytes: a std::string with {"sensor": "t1", "value": 21.5}
-auto const tree = cbor::decode(bytes).value();
+auto const decoded = cbor::decode(bytes);
+auto const tree = decoded.value();
 
-auto const pairs = tree->pairs().value();
-for (auto const [key, value] : pairs)
-    std::println("{}", *key.get<std::string_view>());              // sensor, value
+auto const read = tree->pairs();
+auto const pairs = read.value();
+for (auto const [key, value] : pairs) {
+    auto const text = key.get<std::string_view>();
+    std::println("{}", *text);                                      // sensor, value
+}
 
 std::string out;
 cbor::encode(out, *tree);                                           // out == bytes

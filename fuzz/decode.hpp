@@ -95,18 +95,23 @@ inline std::vector<cbor::item> nodes_of(cbor::owning<cbor::item> const &tree)
     std::vector<cbor::item> nodes{*tree};
     for (std::size_t i = 0; i < nodes.size(); ++i) {
         cbor::item const n = nodes[i];
-        if (n.type() == cbor::type::tag && n.get<std::pair<std::uint64_t, cbor::item>>()->first == 24)
-            if (auto const embedded = cbor::encoded_cbor_data_item(tree, n))
-                nodes.push_back(*embedded);
+        if (n.type() == cbor::type::tag) {
+            auto const tagged = n.get<std::pair<std::uint64_t, cbor::item>>();
+            if (tagged->first == 24)
+                if (auto const embedded = cbor::encoded_cbor_data_item(tree, n))
+                    nodes.push_back(*embedded);
+        }
         switch (n.type()) {
         case cbor::type::array: {
-            auto const elements = *n.elements();
+            auto const read = n.elements();
+            auto const elements = *read;
             for (cbor::item const c : elements)
                 nodes.push_back(c);
             break;
         }
         case cbor::type::map: {
-            auto const pairs = *n.pairs();
+            auto const read = n.pairs();
+            auto const pairs = *read;
             for (auto const [key, value] : pairs) {
                 nodes.push_back(key);
                 nodes.push_back(value);
@@ -115,9 +120,11 @@ inline std::vector<cbor::item> nodes_of(cbor::owning<cbor::item> const &tree)
         }
         case cbor::type::tag:
         case cbor::type::unsigned_bignum:
-        case cbor::type::negative_bignum:
-            nodes.push_back(n.get<std::pair<std::uint64_t, cbor::item>>()->second);
+        case cbor::type::negative_bignum: {
+            auto const tagged = n.get<std::pair<std::uint64_t, cbor::item>>();
+            nodes.push_back(tagged->second);
             break;
+        }
         default:
             break;
         }
@@ -148,7 +155,8 @@ inline void resolving_decode(std::string_view const input)
     for (cbor::item const n : nodes)
         if (n.type() == cbor::type::shared_reference) {
             shared = true;
-            require(std::ranges::find(nodes, n.get<std::pair<std::uint64_t, cbor::item>>()->second) != nodes.end());
+            auto const reference = n.get<std::pair<std::uint64_t, cbor::item>>();
+            require(std::ranges::find(nodes, reference->second) != nodes.end());
         }
     if (shared) {
         std::array<char, 1 << 16> bounded;

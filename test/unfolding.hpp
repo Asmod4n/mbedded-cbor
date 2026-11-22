@@ -25,8 +25,10 @@ class bisimilarity
 
     static cbor::item resolved(cbor::item const i)
     {
-        if (i.type() == cbor::type::shared_reference)
-            return i.get<std::pair<std::uint64_t, cbor::item>>()->second;
+        if (i.type() == cbor::type::shared_reference) {
+            auto const reference = i.get<std::pair<std::uint64_t, cbor::item>>();
+            return reference->second;
+        }
         return i;
     }
 
@@ -50,8 +52,10 @@ class bisimilarity
 
     bool tags_hold(cbor::item const a, cbor::item const b)
     {
-        auto const l = a.get<std::pair<std::uint64_t, cbor::item>>().value();
-        auto const r = b.get<std::pair<std::uint64_t, cbor::item>>().value();
+        auto const a_tagged = a.get<std::pair<std::uint64_t, cbor::item>>();
+        auto const l = a_tagged.value();
+        auto const b_tagged = b.get<std::pair<std::uint64_t, cbor::item>>();
+        auto const r = b_tagged.value();
         return l.first == r.first && holds(l.second, r.second);
     }
 
@@ -76,10 +80,16 @@ public:
         if (a.type() != b.type() || a.additional_information() != b.additional_information())
             return false;
         switch (a.type()) {
-        case cbor::type::array:
-            return all_hold(a.elements().value(), b.elements().value());
-        case cbor::type::map:
-            return all_pairs_hold(a.pairs().value(), b.pairs().value());
+        case cbor::type::array: {
+            auto const a_elements = a.elements();
+            auto const b_elements = b.elements();
+            return all_hold(a_elements.value(), b_elements.value());
+        }
+        case cbor::type::map: {
+            auto const a_pairs = a.pairs();
+            auto const b_pairs = b.pairs();
+            return all_pairs_hold(a_pairs.value(), b_pairs.value());
+        }
         case cbor::type::tag:
             return tags_hold(a, b);
         default:

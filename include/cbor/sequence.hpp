@@ -119,7 +119,7 @@ public:
                 return *this;
             }
             bytes = detail::validity::subspan(bytes, detail::validity::offset{*size});
-            size = item_size(bytes);
+            size = detail::well_formedness::item_size_or_error(bytes);
             return *this;
         }
 
@@ -145,7 +145,7 @@ public:
      */
     iterator begin() const
     {
-        return iterator{encoded, item_size(encoded)};
+        return iterator{encoded, detail::well_formedness::item_size_or_error(encoded)};
     }
 
     /** @brief Gives the sentinel that an iterator reaches after the last item of the sequence. */

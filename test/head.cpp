@@ -157,8 +157,10 @@ TEST_CASE("head: every initial byte gives the result that RFC 8949 gives it")
     REQUIRE_EQ(not_well_formed.size(), 60u);
     for (std::string const &bytes : not_well_formed) {
         CAPTURE(bytes);
-        CHECK_EQ(cbor::item_size(bytes).error(), cbor::error::syntax_error);
-        CHECK_EQ(cbor::decode(bytes).error(), cbor::error::syntax_error);
+        auto const length = cbor::item_size(bytes);
+        CHECK_EQ(length.error(), cbor::error::syntax_error);
+        auto const decoded = cbor::decode(bytes);
+        CHECK_EQ(decoded.error(), cbor::error::syntax_error);
         CHECK_EQ(cbor::diagnostic_notation(bytes).error(), cbor::error::syntax_error);
         CHECK_EQ((cbor::at_path<"$", int>(bytes)).error(), cbor::error::syntax_error);
         CHECK_EQ((cbor::at_path<"$", cbor::simple_value>(bytes)).error(), cbor::error::syntax_error);
@@ -188,7 +190,8 @@ TEST_CASE("head: every initial byte gives the result that RFC 8949 gives it")
         std::string const bytes =
             std::string(1, static_cast<char>(major << test::rfc8949::additional_information_bits | test::rfc8949::indefinite_length)) + after;
         CAPTURE(bytes);
-        CHECK_EQ(cbor::decode(bytes).error(), cbor::error::indefinite_length);
+        auto const tree = cbor::decode(bytes);
+        CHECK_EQ(tree.error(), cbor::error::indefinite_length);
         CHECK_EQ(lazy_error(bytes), cbor::error::indefinite_length);
     }
     int others = 0;

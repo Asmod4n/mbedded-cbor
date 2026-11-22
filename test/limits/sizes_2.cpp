@@ -112,8 +112,10 @@ TEST_CASE("limits sizes 2: a head that claims 2^64 - 1 is refused at the head")
 {
     std::string const text = "\x7b\xff\xff\xff\xff\xff\xff\xff\xff"s;
     std::string const array = "\x9b\xff\xff\xff\xff\xff\xff\xff\xff"s;
-    CHECK_EQ(cbor::item_size(text).error(), error::string_length_exceeded);
-    CHECK_EQ(cbor::item_size(array).error(), error::container_elements_exceeded);
+    auto const length = cbor::item_size(text);
+    CHECK_EQ(length.error(), error::string_length_exceeded);
+    auto const size = cbor::item_size(array);
+    CHECK_EQ(size.error(), error::container_elements_exceeded);
     CHECK_EQ(cbor::diagnostic_notation(text).error(), error::string_length_exceeded);
     CHECK_EQ(cbor::diagnostic_notation(array).error(), error::container_elements_exceeded);
 }
@@ -199,7 +201,8 @@ TEST_CASE(
     CHECK_EQ(at_1->get<int>(), 5);
     CHECK_EQ(l.at_path<"$[0][1]", int>().error(), error::container_elements_exceeded);
     CHECK_EQ(l.at_path<"$[0][0]", std::int64_t>().error(), error::string_length_exceeded);
-    CHECK_EQ(cbor::item_size(two).error(), error::string_length_exceeded);
+    auto const size = cbor::item_size(two);
+    CHECK_EQ(size.error(), error::string_length_exceeded);
 }
 
 // The former basics guide, section "Limits": the list names
@@ -239,7 +242,8 @@ TEST_CASE("doc advanced basics: a skip does not count")
     auto const read = a->get<std::string_view>();
     CHECK_EQ(read.error(),
              error::string_length_exceeded);
-    CHECK_EQ(cbor::item_size(bytes).error(), error::string_length_exceeded);
+    auto const size = cbor::item_size(bytes);
+    CHECK_EQ(size.error(), error::string_length_exceeded);
     CHECK_EQ(test::make_value_from_item(*test::make_lazy_from_copy(bytes)).error(), error::string_length_exceeded);
 }
 

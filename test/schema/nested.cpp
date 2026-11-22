@@ -205,7 +205,8 @@ struct packed_unpacker {
             auto const v = text(*value++);
             if (!v)
                 return v;
-            out += (out.size() > 1 ? ", " : "") + key.to_edn().value() + ": " + *v;
+            auto const edn = key.to_edn();
+            out += (out.size() > 1 ? ", " : "") + edn.value() + ": " + *v;
         }
         return out + "}";
     }
@@ -223,16 +224,22 @@ struct packed_unpacker {
                 return entry(std::to_underlying(*n));
         }
         if (x.type() == cbor::type::tag) {
-            auto const [number, content] = *x.get<std::pair<std::uint64_t, cbor::item>>();
-            if (number == reference && content.type() == cbor::type::unsigned_integer)
-                return entry(shared_first + 2 * *content.get<std::uint64_t>());
-            if (number == reference && content.type() == cbor::type::negative_integer)
-                return entry(shared_first - 2 * static_cast<std::uint64_t>(*content.get<std::int64_t>()) - 1);
+            auto const tagged = x.get<std::pair<std::uint64_t, cbor::item>>();
+            auto const [number, content] = *tagged;
+            if (number == reference && content.type() == cbor::type::unsigned_integer) {
+                auto const positive = content.get<std::uint64_t>();
+                return entry(shared_first + 2 * *positive);
+            }
+            if (number == reference && content.type() == cbor::type::negative_integer) {
+                auto const negative = content.get<std::int64_t>();
+                return entry(shared_first - 2 * static_cast<std::uint64_t>(*negative) - 1);
+            }
             if (number == reference && content.type() == cbor::type::array) {
                 auto const pair = content.elements();
                 if (!pair || pair->size() != 2)
                     return std::unexpected(cbor::error::incorrect_type);
-                return record(argument_first + *pair->front().get<std::uint64_t>(), *std::next(pair->begin()));
+                auto const argument = pair->front().get<std::uint64_t>();
+                return record(argument_first + *argument, *std::next(pair->begin()));
             }
             if (number >= straight_first && number <= straight_last)
                 return record(number - straight_first, content);
@@ -243,7 +250,8 @@ struct packed_unpacker {
         }
         if (x.type() == cbor::type::array) {
             std::string out = "[";
-            auto const elements = *x.elements();
+            auto const x_elements = x.elements();
+            auto const elements = *x_elements;
             for (cbor::item const e : elements) {
                 auto const v = text(e);
                 if (!v)
@@ -254,7 +262,8 @@ struct packed_unpacker {
         }
         if (x.type() == cbor::type::map) {
             std::string out = "{";
-            auto const pairs = *x.pairs();
+            auto const x_pairs = x.pairs();
+            auto const pairs = *x_pairs;
             for (auto const &[k, v] : pairs) {
                 auto const key = text(k);
                 auto const value = text(v);
@@ -264,7 +273,10 @@ struct packed_unpacker {
             }
             return out + "}";
         }
-        return x.to_edn();
+        auto const edn = x.to_edn();
+        if (!edn)
+            return std::unexpected(edn.error());
+        return *edn;
     }
 };
 
@@ -273,12 +285,15 @@ std::expected<std::string, cbor::error> unpack(std::string const &message)
 {
     auto const tree = cbor::decode(message);
     REQUIRE(tree.has_value());
-    auto const [number, content] = *(*tree)->get<std::pair<std::uint64_t, cbor::item>>();
+    auto const tagged = (*tree)->get<std::pair<std::uint64_t, cbor::item>>();
+    auto const [number, content] = *tagged;
     constexpr std::uint64_t basic_packed = 113;
     REQUIRE_EQ(number, basic_packed);
-    auto const parts = *content.elements();
+    auto const content_elements = content.elements();
+    auto const parts = *content_elements;
     packed_unpacker u;
-    auto const table = *parts.front().elements();
+    auto const parts_elements = parts.front().elements();
+    auto const table = *parts_elements;
     for (cbor::item const e : table)
         u.table.push_back(e);
     return u.text(*std::next(parts.begin()));

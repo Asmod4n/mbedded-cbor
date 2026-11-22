@@ -19,6 +19,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 
 #if __has_include(<stdfloat>)
@@ -78,6 +79,18 @@ concept integer = (std::integral<T> && !std::same_as<T, bool>)
 
 }
 
+template <class T>
+concept scalar_result = detail::integer<T> || std::is_same_v<T, double> ||
+                        std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>
+#ifdef __STDCPP_FLOAT128_T__
+                        || std::is_same_v<T, std::float128_t>
+#endif
+    ;
+
+template <class T>
+concept view_result =
+    std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>;
+
 struct lazy;
 struct item;
 struct lazy_elements;
@@ -91,16 +104,16 @@ class structs;
 template <class>
 class owning;
 
-namespace detail
-{
+template <class T, class E = error>
+class result;
 
-}
+result<owning<item>> decode(std::string_view encoded);
 
-std::expected<owning<item>, error> decode(std::string_view encoded);
+result<owning<item>> decode_cycles(std::string_view encoded);
 
-std::expected<owning<item>, error> decode_cycles(std::string_view encoded);
+result<std::size_t> item_size(std::string_view encoded);
 
-std::expected<std::size_t, error> item_size(std::string_view encoded);
+std::expected<owning<item>, error> parse_edn(std::string_view text);
 
 std::expected<std::string, error> diagnostic_notation(std::string_view encoded);
 
@@ -780,9 +793,11 @@ class heads
 
     friend struct cbor::lazy;
 
-    friend std::expected<owning<item>, error> cbor::decode(std::string_view encoded);
+    friend result<owning<item>> cbor::decode(std::string_view encoded);
 
-    friend std::expected<owning<item>, error> cbor::decode_cycles(std::string_view encoded);
+    friend result<owning<item>> cbor::decode_cycles(std::string_view encoded);
+
+    friend std::expected<owning<item>, error> cbor::parse_edn(std::string_view text);
 
     friend struct cbor::item;
 
@@ -791,8 +806,6 @@ class heads
     friend struct cbor::lazy_elements;
 
     friend struct cbor::lazy_entries;
-
-    friend std::expected<std::size_t, error> cbor::item_size(std::string_view encoded);
 
     friend std::expected<std::string, error> cbor::diagnostic_notation(std::string_view encoded);
 

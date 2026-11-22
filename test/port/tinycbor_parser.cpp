@@ -431,7 +431,7 @@ TEST_CASE("tinycbor parser: integers")
         else if (r.raw <= static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
             CHECK_EQ(node.get<std::int64_t>().value_or(0), -1 - static_cast<std::int64_t>(r.raw));
         else
-            CHECK_EQ(node.get<std::int64_t>().error(), error::number_out_of_range);
+            CHECK_EQ(node.get<std::int64_t>(), std::unexpected(error::number_out_of_range));
         auto const as_int64 = cbor::at_path<"$", std::int64_t>(r.data);
         auto const as_int = cbor::at_path<"$", int>(r.data);
         bool const in_int = r.in_int64 && r.value >= std::numeric_limits<int>::min() &&
@@ -890,10 +890,13 @@ TEST_CASE("tinycbor parser: string length")
         }
         REQUIRE_EQ(make_outcome_text(tree), make_error_text(no_error));
         cbor::item const node = **tree;
-        if (node.type() == cbor::type::text_string)
-            CHECK_EQ(node.get<std::string_view>()->size(), r.expected);
-        else
-            CHECK_EQ(node.get<std::span<std::byte const>>()->size(), r.expected);
+        if (node.type() == cbor::type::text_string) {
+            auto const text = node.get<std::string_view>();
+            CHECK_EQ(text->size(), r.expected);
+        } else {
+            auto const bytes = node.get<std::span<std::byte const>>();
+            CHECK_EQ(bytes->size(), r.expected);
+        }
     }
 }
 
@@ -1066,7 +1069,9 @@ TEST_CASE("tinycbor parser: find a key in a map")
         CHECK_EQ(value->type().value_or(cbor::type::null), cbor::type::tag);
         auto const tree = value->to_item();
         REQUIRE_EQ(make_outcome_text(tree), make_error_text(no_error));
-        CHECK_EQ((*tree)->get<std::pair<std::uint64_t, cbor::item>>().transform([](std::pair<std::uint64_t, cbor::item> const t) { return t.first; }).value_or(0u), 42u);
+        auto const tagged = (*tree)->get<std::pair<std::uint64_t, cbor::item>>();
+        auto const number = tagged.transform([](std::pair<std::uint64_t, cbor::item> const t) { return t.first; });
+        CHECK_EQ(number.value_or(0u), 42u);
         auto const text = value->get<std::string_view>();
         REQUIRE_EQ(make_outcome_text(text), make_error_text(no_error));
         CHECK_EQ(**text, "haystack"sv);

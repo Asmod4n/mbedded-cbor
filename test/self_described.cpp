@@ -215,7 +215,9 @@ TEST_CASE("self-described CBOR: a tag 55799 in the content of a bignum or a type
         auto const at_0_2 = t->at(0);
         CHECK_EQ(at_0.error(), at_0_2.error());
         CHECK_EQ((cbor::at_path<"$[0]", std::int64_t>(typed)).error(), (cbor::at_path<"$[0]", std::int64_t>(typed_text)).error());
-        CHECK_EQ(cbor::decode(typed).error(), cbor::decode(typed_text).error());
+        auto const typed_tree = cbor::decode(typed);
+        auto const text_tree = cbor::decode(typed_text);
+        CHECK_EQ(typed_tree.error(), text_tree.error());
         CHECK_EQ(l->to_item().error(), t->to_item().error());
     }
 }
@@ -275,7 +277,8 @@ TEST_CASE("RFC 9277: the header of CBOR-Labeled Non-CBOR Data ends after 12 byte
 {
     std::string const header = "\xd9\xd9\xf9\xda\x63\x74\x01\x01\x43\x42\x4f\x52"s;
     std::string const file = header + "text/plain"s;
-    CHECK_EQ(cbor::item_size(file).value(), 12u);
+    auto const size = cbor::item_size(file);
+    CHECK_EQ(size.value(), 12u);
     auto const v = decode_wire_into_value(file);
     REQUIRE(v.has_value());
     CHECK(*v == tag(55801, tag(1668546817, {bytes{"BOR"}})));

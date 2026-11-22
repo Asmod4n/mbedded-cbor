@@ -240,7 +240,8 @@ TEST_CASE("bignum: tag 28 around a bignum that fits is a tag over the integer")
     auto const mark = elements[0].get<std::pair<std::uint64_t, cbor::item>>();
     REQUIRE(mark.has_value());
     CHECK_EQ(mark->second.get<std::uint64_t>(), 1u);
-    CHECK_EQ(elements[1].get<std::pair<std::uint64_t, cbor::item>>().value().first, 29u);
+    auto const tagged = elements[1].get<std::pair<std::uint64_t, cbor::item>>();
+    CHECK_EQ(tagged.value().first, 29u);
     auto const at_1 = l->at(1);
     auto const kind = at_1->type();
     CHECK_EQ(*kind, cbor::type::tag);

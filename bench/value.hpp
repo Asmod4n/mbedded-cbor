@@ -353,34 +353,40 @@ inline value tag_value(std::uint64_t const number, cbor::item const content)
 inline value value_of(cbor::item const it)
 {
     switch (it.type()) {
-    case cbor::type::text_string:
-        return text_value(it.get<std::string_view>().value());
+    case cbor::type::text_string: {
+        auto const text = it.get<std::string_view>();
+        return text_value(text.value());
+    }
     case cbor::type::byte_string: {
-        std::span<std::byte const> const b = it.get<std::span<std::byte const>>().value();
+        auto const read = it.get<std::span<std::byte const>>();
+        std::span<std::byte const> const b = read.value();
         return {bytes{std::string(reinterpret_cast<char const *>(b.data()), b.size())}};
     }
     case cbor::type::half_float:
-        return {it.get<double>().value()};
     case cbor::type::single_float:
-        return {it.get<double>().value()};
-    case cbor::type::double_float:
-        return {it.get<double>().value()};
+    case cbor::type::double_float: {
+        auto const real = it.get<double>();
+        return {real.value()};
+    }
     case cbor::type::false_value:
-        return {simple{std::to_underlying(it.get<cbor::simple_value>().value())}};
     case cbor::type::true_value:
-        return {simple{std::to_underlying(it.get<cbor::simple_value>().value())}};
     case cbor::type::null:
-        return {simple{std::to_underlying(it.get<cbor::simple_value>().value())}};
     case cbor::type::undefined:
-        return {simple{std::to_underlying(it.get<cbor::simple_value>().value())}};
-    case cbor::type::simple_value:
-        return {simple{std::to_underlying(it.get<cbor::simple_value>().value())}};
-    case cbor::type::unsigned_integer:
-        return {it.get<std::uint64_t>().value()};
-    case cbor::type::negative_integer:
-        return {negative{static_cast<std::uint64_t>(-1 - it.get<cbor::int128>().value())}};
+    case cbor::type::simple_value: {
+        auto const simple_read = it.get<cbor::simple_value>();
+        return {simple{std::to_underlying(simple_read.value())}};
+    }
+    case cbor::type::unsigned_integer: {
+        auto const number = it.get<std::uint64_t>();
+        return {number.value()};
+    }
+    case cbor::type::negative_integer: {
+        auto const number = it.get<cbor::int128>();
+        return {negative{static_cast<std::uint64_t>(-1 - number.value())}};
+    }
     case cbor::type::array: {
-        auto const children = it.elements().value();
+        auto const elements = it.elements();
+        auto const children = elements.value();
         array a;
         a.reserve(children.size());
         for (cbor::item const child : children)
@@ -388,7 +394,8 @@ inline value value_of(cbor::item const it)
         return {std::move(a)};
     }
     case cbor::type::map: {
-        auto const pairs = it.pairs().value();
+        auto const read = it.pairs();
+        auto const pairs = read.value();
         map m;
         m.reserve(pairs.size());
         for (auto const pair : pairs)
@@ -398,16 +405,19 @@ inline value value_of(cbor::item const it)
     case cbor::type::tag:
     case cbor::type::unsigned_bignum:
     case cbor::type::negative_bignum: {
-        auto const [number, content] = it.get<std::pair<std::uint64_t, cbor::item>>().value();
+        auto const read = it.get<std::pair<std::uint64_t, cbor::item>>();
+        auto const [number, content] = read.value();
         return tag_value(number, content);
     }
     case cbor::type::typed_array: {
-        cbor::typed_array const t = it.get<cbor::typed_array>().value();
+        auto const read = it.get<cbor::typed_array>();
+        cbor::typed_array const t = read.value();
         return {tagged{t.tag, value{bytes{std::string(reinterpret_cast<char const *>(t.bytes.data()), t.bytes.size())}}}};
     }
-    case cbor::type::shared_reference:
-        return {tagged{std::uint64_t{29},
-                       value{it.get<std::pair<std::uint64_t, cbor::item>>().value().first}}};
+    case cbor::type::shared_reference: {
+        auto const reference = it.get<std::pair<std::uint64_t, cbor::item>>();
+        return {tagged{std::uint64_t{29}, value{reference.value().first}}};
+    }
     }
     std::unreachable();
 }

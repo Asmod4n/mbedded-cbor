@@ -187,13 +187,16 @@ TEST_CASE("doc advanced runtime: clone and decode")
     auto const tree = cbor::lazy::view(owner)->to_item();
     REQUIRE(tree.has_value());
     CHECK_EQ((*tree)->type(), cbor::type::array);
-    CHECK_EQ((*tree)->elements()->size(), 2u);
-    CHECK_EQ((*tree)->pairs().error(), error::incorrect_type);
-    auto const second = (*tree)->elements()->next();
+    auto const elements = (*tree)->elements();
+    CHECK_EQ(elements->size(), 2u);
+    auto const tree_pairs = (*tree)->pairs();
+    CHECK_EQ(tree_pairs.error(), error::incorrect_type);
+    auto const second = elements->next();
     cbor::item const pairs = second.front();
-    CHECK_EQ(pairs.pairs()->size(), 1u);
-    CHECK_EQ(std::get<0>(pairs.pairs()->front()).get<std::string_view>(), "a"sv);
-    CHECK_EQ(std::get<1>(pairs.pairs()->front()).get<std::uint64_t>(), 2u);
+    auto const entries = pairs.pairs();
+    CHECK_EQ(entries->size(), 1u);
+    CHECK_EQ(std::get<0>(entries->front()).get<std::string_view>(), "a"sv);
+    CHECK_EQ(std::get<1>(entries->front()).get<std::uint64_t>(), 2u);
     auto const cut = std::make_shared<std::string const>("\x82\x01"s);
     CHECK_EQ(cbor::lazy::view(cut)->to_item().error(), error::too_little_data);
     CHECK_EQ(test::make_lazy_from_copy("\x9b\x80\x00\x00\x00\x00\x00\x00\x00\x01"s)->to_item().error(), error::too_little_data);
@@ -216,10 +219,11 @@ TEST_CASE("doc advanced runtime: the tree copies its strings")
     std::string input = "\x82\x63" "abc\xc2\x49\x01\x00\x00\x00\x00\x00\x00\x00\x00"s;
     auto const tree = cbor::decode(input);
     REQUIRE(tree.has_value());
-    auto const text = (*tree)->elements()->front().get<std::string_view>();
+    auto const elements = (*tree)->elements();
+    auto const text = elements->front().get<std::string_view>();
     REQUIRE(text.has_value());
     CHECK_NE(static_cast<void const *>(text->data()), static_cast<void const *>(std::span(input).subspan(2).data()));
-    auto const big = (*tree)->elements()->next().front().get<std::pair<std::uint64_t, cbor::item>>();
+    auto const big = elements->next().front().get<std::pair<std::uint64_t, cbor::item>>();
     REQUIRE(big.has_value());
     auto const magnitude = big->second.get<std::span<std::byte const>>();
     REQUIRE(magnitude.has_value());
@@ -254,10 +258,13 @@ TEST_CASE("doc advanced runtime: encode")
     CHECK_EQ(w.encoded, "\x82\x01\x02"s);
     std::string const cycle = "\xd8\x1c\xc6\xd8\x1d\x00"s;
     auto const tagged = *test::make_lazy_from_copy(cycle)->to_item();
-    cbor::item const six = tagged->get<std::pair<std::uint64_t, cbor::item>>().value().second;
+    auto const tagged_tagged = tagged->get<std::pair<std::uint64_t, cbor::item>>();
+    cbor::item const six = tagged_tagged.value().second;
     CHECK_EQ(read_argument_of_item(six), 6u);
-    cbor::item const reference = six.get<std::pair<std::uint64_t, cbor::item>>().value().second;
-    CHECK_EQ(reference.get<std::pair<std::uint64_t, cbor::item>>().value().first, 29u);
+    auto const six_tagged = six.get<std::pair<std::uint64_t, cbor::item>>();
+    cbor::item const reference = six_tagged.value().second;
+    auto const reference_tagged = reference.get<std::pair<std::uint64_t, cbor::item>>();
+    CHECK_EQ(reference_tagged.value().first, 29u);
     std::string const wire = "\x82\xd8\x1c\x19\x00\x01\xd8\x1d\x00"s;
     std::string const own = wire;
     std::string again;
@@ -324,7 +331,8 @@ TEST_CASE("doc advanced runtime: diagnostic_notation")
 TEST_CASE("doc advanced runtime: item_size")
 {
     CHECK_EQ(cbor::item_size("\x01\x02"sv), 1u);
-    CHECK_EQ(cbor::item_size("\x82\x01"sv).error(), error::too_little_data);
+    auto const size = cbor::item_size("\x82\x01"sv);
+    CHECK_EQ(size.error(), error::too_little_data);
 }
 
 // The section "Tags 28 and 29" shows that a lazy, clone and diagnostic notation read both as plain tags. That
@@ -334,12 +342,15 @@ TEST_CASE("doc advanced runtime: tags 28 and 29")
 {
     auto const tree = cbor::decode_cycles("\xd8\x1c\x82\x01\xd8\x1d\x00"sv);
     REQUIRE(tree.has_value());
-    auto const elements = (*tree)->elements().value();
+    auto const tree_elements = (*tree)->elements();
+    auto const elements = tree_elements.value();
     CHECK_EQ(elements.next().front().type(), cbor::type::shared_reference);
-    CHECK(elements.next().front().get<std::pair<std::uint64_t, cbor::item>>().value().second == **tree);
-    CHECK_EQ(cbor::decode_cycles("\x82\xd8\x1c\x01\xd8\x1d\x00"sv).error(), error::sharedref_not_cyclic);
-    CHECK_EQ(cbor::decode_cycles("\x81\xd8\x1d\x00"sv).error(), error::sharedref_index_not_marked);
-    CHECK_EQ(cbor::decode_cycles("\xd8\x1c\xd8\x1d\x00"sv).error(), error::sharedref_not_defined);
+    auto const elements_tagged = elements.next().front().get<std::pair<std::uint64_t, cbor::item>>();
+    CHECK(elements_tagged.value().second == **tree);
+    CHECK_EQ(cbor::decode_cycles("\x82\xd8\x1c\x01\xd8\x1d\x00"sv), std::unexpected(error::sharedref_not_cyclic));
+    CHECK_EQ(cbor::decode_cycles("\x81\xd8\x1d\x00"sv), std::unexpected(error::sharedref_index_not_marked));
+    auto const decoded = cbor::decode_cycles("\xd8\x1c\xd8\x1d\x00"sv);
+    CHECK_EQ(decoded.error(), error::sharedref_not_defined);
     std::string out;
     CHECK_EQ(cbor::encode(out, **tree), 7u);
     CHECK_EQ(out, cbor::diag2cbor("28([1, 29(0)])").value());
@@ -357,7 +368,9 @@ TEST_CASE("doc advanced runtime: tags 28 and 29")
     CHECK_EQ(cbor::diagnostic_notation("\x82\xd8\x1c\x01\xd8\x1d\x00"sv), "[28(1), 29(0)]");
     auto const forward = test::make_lazy_from_copy("\x82\xd8\x1d\x00\xd8\x1c\x05"s)->to_item();
     REQUIRE(forward.has_value());
-    CHECK_EQ((*forward)->elements().value().front().get<std::pair<std::uint64_t, cbor::item>>().value().first, 29u);
+    auto const forward_elements = (*forward)->elements();
+    auto const tagged = forward_elements.value().front().get<std::pair<std::uint64_t, cbor::item>>();
+    CHECK_EQ(tagged.value().first, 29u);
     CHECK(test::make_lazy_from_copy("\xd8\x1c\x81\xd8\x1d\x00"s)->to_item().has_value());
     auto const at_0 = test::make_lazy_from_copy("\xd8\x1c\xd8\x1d\x00"s)->at(0);
     CHECK_EQ(at_0.error(), error::not_indexable);

@@ -32,26 +32,32 @@ static std::uint64_t item_tree_sum(cbor::item const it);
 
 static std::uint64_t item_tree_sum(cbor::item const it)
 {
-    if (it.type() == cbor::type::shared_reference)
-        return it.get<std::pair<std::uint64_t, cbor::item>>().value().first;
+    if (it.type() == cbor::type::shared_reference) {
+        auto const reference = it.get<std::pair<std::uint64_t, cbor::item>>();
+        return reference.value().first;
+    }
     switch (it.type()) {
     case cbor::type::text_string: {
-        auto const v = it.get<std::string_view>().value();
+        auto const text = it.get<std::string_view>();
+        auto const v = text.value();
         return v.size() + bytes_sum(v);
     }
     case cbor::type::byte_string: {
-        auto const v = it.get<std::span<std::byte const>>().value();
+        auto const byte_string = it.get<std::span<std::byte const>>();
+        auto const v = byte_string.value();
         return v.size() + bytes_sum(std::string_view(reinterpret_cast<char const *>(v.data()), v.size()));
     }
     case cbor::type::array: {
-        auto const v = *it.elements();
+        auto const elements = it.elements();
+        auto const v = *elements;
         std::uint64_t s = v.size();
         for (cbor::item const child : v)
             s += item_tree_sum(child);
         return s;
     }
     case cbor::type::map: {
-        auto const v = *it.pairs();
+        auto const pairs = it.pairs();
+        auto const v = *pairs;
         std::uint64_t s = v.size();
         for (auto const [key, value] : v)
             s += item_tree_sum(key) + item_tree_sum(value);
@@ -60,30 +66,42 @@ static std::uint64_t item_tree_sum(cbor::item const it)
     case cbor::type::tag:
     case cbor::type::unsigned_bignum:
     case cbor::type::negative_bignum: {
-        auto const v = it.get<std::pair<std::uint64_t, cbor::item>>().value();
+        auto const tagged = it.get<std::pair<std::uint64_t, cbor::item>>();
+        auto const v = tagged.value();
         return v.first + item_tree_sum(v.second);
     }
     case cbor::type::typed_array: {
-        auto const v = it.get<cbor::typed_array>().value();
+        auto const typed = it.get<cbor::typed_array>();
+        auto const v = typed.value();
         return v.tag + v.bytes.size() +
                bytes_sum(std::string_view(reinterpret_cast<char const *>(v.bytes.data()), v.bytes.size()));
     }
     case cbor::type::half_float:
     case cbor::type::single_float:
-    case cbor::type::double_float:
-        return std::bit_cast<std::uint64_t>(it.get<double>().value());
+    case cbor::type::double_float: {
+        auto const real = it.get<double>();
+        return std::bit_cast<std::uint64_t>(real.value());
+    }
     case cbor::type::false_value:
-    case cbor::type::true_value:
-        return it.get<bool>().value() ? 21 : 20;
+    case cbor::type::true_value: {
+        auto const boolean = it.get<bool>();
+        return boolean.value() ? 21 : 20;
+    }
     case cbor::type::null:
         return 22;
     case cbor::type::undefined:
-    case cbor::type::simple_value:
-        return std::to_underlying(it.get<cbor::simple_value>().value());
-    case cbor::type::negative_integer:
-        return static_cast<std::uint64_t>(-1 - it.get<cbor::int128>().value());
-    case cbor::type::unsigned_integer:
-        return it.get<std::uint64_t>().value();
+    case cbor::type::simple_value: {
+        auto const simple = it.get<cbor::simple_value>();
+        return std::to_underlying(simple.value());
+    }
+    case cbor::type::negative_integer: {
+        auto const negative = it.get<cbor::int128>();
+        return static_cast<std::uint64_t>(-1 - negative.value());
+    }
+    case cbor::type::unsigned_integer: {
+        auto const number = it.get<std::uint64_t>();
+        return number.value();
+    }
     default:
         return 0;
     }
@@ -974,7 +992,8 @@ static vg_out vo;
 static void setup()
 {
 #if defined(ARM_MB_TREE_ENCODE)
-    decoded.emplace(*cbor::decode(doc));
+    auto const tree = cbor::decode(doc);
+    decoded.emplace(*tree);
 #endif
 #if defined(ARM_MB_VARIANT_ENCODE) || defined(ARM_MB_VARIANT_DECODE) || defined(ARM_MB_VARIANT_AT_PATH)
     variant_message = *cbor::schema<bench_variant::home>::encode(variant_sample);

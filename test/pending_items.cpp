@@ -43,8 +43,10 @@ TEST_CASE("pending items: every reader refuses a container that claims more item
     std::string const map = encode_edn("{1: 2, 3: 4}").substr(0, 3);
     for (std::string const &cut : {array, map}) {
         CAPTURE(cut);
-        CHECK_EQ(cbor::item_size(cut).error(), error::too_little_data);
-        CHECK_EQ(cbor::decode(cut).error(), error::too_little_data);
+        auto const length = cbor::item_size(cut);
+        CHECK_EQ(length.error(), error::too_little_data);
+        auto const tree = cbor::decode(cut);
+        CHECK_EQ(tree.error(), error::too_little_data);
         auto const doc = test::make_lazy_from_copy(cut);
         REQUIRE(doc.has_value());
         auto const count = doc->size();
@@ -90,7 +92,8 @@ TEST_CASE("pending items: item_size refuses the count when 9 bytes are left")
          {"[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]", "{1: 2, 3: 4, 5: 6, 7: 8, 9: 10, 11: 12}"}) {
         CAPTURE(edn);
         std::string const cut = encode_edn(edn).substr(0, 9);
-        CHECK_EQ(cbor::item_size(cut).error(), error::too_little_data);
+        auto const size = cbor::item_size(cut);
+        CHECK_EQ(size.error(), error::too_little_data);
     }
 }
 
@@ -104,8 +107,9 @@ TEST_CASE("pending items: a container that holds every item it claims is read wh
     CHECK_EQ(count.value(), 3u);
     auto const count_2 = test::make_lazy_from_copy(map)->size();
     CHECK_EQ(count_2.value(), 2u);
-    CHECK_EQ(cbor::item_size(array).value(), array.size());
-    CHECK_EQ(cbor::item_size(map).value(), map.size());
+    CHECK_EQ(cbor::item_size(array), array.size());
+    auto const length = cbor::item_size(map);
+    CHECK_EQ(length.value(), map.size());
 }
 
 // structs skips a map key that names no member. An array, a map and a tag key enclose items, and the skip reads them
@@ -130,6 +134,7 @@ TEST_CASE("pending items: decode refuses a count that overflows")
     for (std::string_view const wire : {"\xbb\x80\x00\x00\x00\x00\x00\x00\x00\x00"sv,
                                         "\x81\x9b\xff\xff\xff\xff\xff\xff\xff\xff"sv}) {
         CAPTURE(wire);
-        CHECK_EQ(cbor::decode(wire).error(), error::too_little_data);
+        auto const tree = cbor::decode(wire);
+        CHECK_EQ(tree.error(), error::too_little_data);
     }
 }

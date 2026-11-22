@@ -171,9 +171,16 @@ TEST_CASE("recursion limit: to_edn")
     auto const held_tree = cbor::decode(*cbor::diag2cbor(std::string(held, '[') + "0" + std::string(held, ']')));
     REQUIRE(held_tree.has_value());
     CHECK(cbor::to_edn(*held_tree).has_value());
-    auto const deep = cbor::diag2cbor(std::string(test::levels_main_thread_holds, '[') + "0" +
-                                      std::string(test::levels_main_thread_holds, ']'))
-                          .and_then([](std::string const &bytes) { return cbor::decode(bytes); });
+    auto const deep_bytes = cbor::diag2cbor(std::string(test::levels_main_thread_holds, '[') + "0" +
+                                            std::string(test::levels_main_thread_holds, ']'));
+    if constexpr (!test::main_thread_holds_deep_input) {
+        if (!deep_bytes) {
+            CHECK_EQ(deep_bytes.error(), error::nesting_depth_exceeded);
+            return;
+        }
+    }
+    REQUIRE(deep_bytes.has_value());
+    auto const deep = cbor::decode(*deep_bytes);
     if constexpr (!test::main_thread_holds_deep_input) {
         if (!deep) {
             CHECK_EQ(deep.error(), error::nesting_depth_exceeded);

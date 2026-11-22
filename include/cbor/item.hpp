@@ -28,6 +28,7 @@
 #include "error.hpp"
 #include "head.hpp"
 #include "padded_string.hpp"
+#include "result.hpp"
 #include "rfc8746.hpp"
 #include "rfc8949.hpp"
 #include "validity.hpp"
@@ -59,18 +60,6 @@ class reader;
 struct item;
 
 std::expected<std::string, error> to_edn(item root);
-
-template <class T>
-concept scalar_result = detail::integer<T> || std::is_same_v<T, double> ||
-                        std::is_same_v<T, bool> || std::is_same_v<T, std::nullptr_t> || std::is_same_v<T, simple_value>
-#ifdef __STDCPP_FLOAT128_T__
-                        || std::is_same_v<T, std::float128_t>
-#endif
-    ;
-
-template <class T>
-concept view_result =
-    std::is_same_v<T, std::string_view> || std::is_same_v<T, std::span<std::byte const>> || std::is_same_v<T, typed_array>;
 
 namespace detail
 {
@@ -279,7 +268,9 @@ struct value_block {
  * result: cbor::type::array
  * call: (*tree)->additional_information()
  * result: 2
- * call: (*tree)->elements()->size()
+ * call: auto const elements = (*tree)->elements()
+ * result: 2 elements: 1, {"a": 2}
+ * call: elements->size()
  * result: 2
  * @endcode
  *
@@ -312,7 +303,9 @@ public:
      * result: owning item of [2(h'010000000000000000'), 1]
      * call: (*tree)->type()
      * result: cbor::type::array
-     * call: (*tree)->elements()->front().type()
+     * call: auto const elements = (*tree)->elements()
+     * result: 2 elements: 2(h'010000000000000000'), 1
+     * call: elements->front().type()
      * result: cbor::type::unsigned_bignum
      * @endcode
      *
@@ -353,7 +346,7 @@ public:
      * thread holds
      * @see cbor::parse_edn()
      */
-    std::expected<std::string, error> to_edn() const;
+    result<std::string> to_edn() const;
 
     /**
      * @brief Tells whether two items are views of the same node of the same tree. It does not compare the values.
@@ -385,7 +378,9 @@ public:
      * message: {"a": -500}
      * call: auto const tree = cbor::decode(bytes)
      * result: owning item of {"a": -500}
-     * call: auto const entry = (*tree)->pairs()->front()
+     * call: auto const pairs = (*tree)->pairs()
+     * result: 1 pair: "a": -500
+     * call: auto const entry = pairs->front()
      * result: pair of "a" and -500
      * call: entry.first.get<std::string_view>()
      * result: "a"
@@ -413,7 +408,7 @@ public:
                   ) ||
                  view_result<T> ||
                  std::same_as<T, std::pair<std::uint64_t, item>>)
-    std::expected<T, error> get() const;
+    result<T> get() const;
 
     /**
      * @brief Gives the elements of an array, in their order (RFC 8949 3.1, major type 4).
@@ -425,11 +420,11 @@ public:
      * message: [1, "a"]
      * call: auto const tree = cbor::decode(bytes)
      * result: owning item of [1, "a"]
-     * call: auto const elements = *(*tree)->elements()
+     * call: auto const elements = (*tree)->elements()
      * result: 2 elements: 1, "a"
-     * call: elements.size()
+     * call: elements->size()
      * result: 2
-     * call: elements.front().get<int>()
+     * call: elements->front().get<int>()
      * result: 1
      * @endcode
      *
@@ -450,11 +445,11 @@ public:
      * message: {"a": 1}
      * call: auto const tree = cbor::decode(bytes)
      * result: owning item of {"a": 1}
-     * call: auto const pairs = *(*tree)->pairs()
+     * call: auto const pairs = (*tree)->pairs()
      * result: 1 pair: "a": 1
-     * call: pairs.size()
+     * call: pairs->size()
      * result: 1
-     * call: pairs.front().first.get<std::string_view>()
+     * call: pairs->front().first.get<std::string_view>()
      * result: "a"
      * @endcode
      *
@@ -465,6 +460,22 @@ public:
     auto pairs() const;
 
 private:
+    std::expected<std::string, error> to_edn_or_error() const;
+
+    template <class T>
+        requires((scalar_result<T>
+#ifdef __STDCPP_FLOAT128_T__
+                  && !std::is_same_v<T, std::float128_t>
+#endif
+                  ) ||
+                 view_result<T> ||
+                 std::same_as<T, std::pair<std::uint64_t, item>>)
+    std::expected<T, error> get_or_error() const;
+
+    auto elements_or_error() const;
+
+    auto pairs_or_error() const;
+
     detail::dom::node const &node() const;
 
     std::unexpected<error> reject_as_number() const
@@ -679,7 +690,7 @@ inline item::map_iterator &item::map_iterator::operator++()
     return *this;
 }
 
-inline auto item::elements() const
+inline auto item::elements_or_error() const
 {
     using range = std::ranges::subrange<array_iterator, array_iterator, std::ranges::subrange_kind::sized>;
     item const at = skip_passed_tags();
@@ -689,7 +700,7 @@ inline auto item::elements() const
         range(array_iterator(at.owner, at.index + 1), array_iterator(at.owner, at.next()), at.length()));
 }
 
-inline auto item::pairs() const
+inline auto item::pairs_or_error() const
 {
     using range = std::ranges::subrange<map_iterator, map_iterator, std::ranges::subrange_kind::sized>;
     item const at = skip_passed_tags();
@@ -698,6 +709,18 @@ inline auto item::pairs() const
     std::size_t const last = at.next();
     return std::expected<range, error>(
         range(map_iterator(at.owner, at.index + 1, last), map_iterator(at.owner, last, last), at.length()));
+}
+
+inline auto item::elements() const
+{
+    auto found = elements_or_error();
+    return result<decltype(found)::value_type>(std::move(found));
+}
+
+inline auto item::pairs() const
+{
+    auto found = pairs_or_error();
+    return result<decltype(found)::value_type>(std::move(found));
 }
 
 static_assert(std::ranges::forward_range<decltype(std::declval<item const &>().elements())::value_type> &&
@@ -715,7 +738,20 @@ template <class T>
               ) ||
              view_result<T> ||
              std::same_as<T, std::pair<std::uint64_t, item>>)
-std::expected<T, error> item::get() const
+result<T> item::get() const
+{
+    return result<T>(get_or_error<T>());
+}
+
+template <class T>
+    requires((scalar_result<T>
+#ifdef __STDCPP_FLOAT128_T__
+              && !std::is_same_v<T, std::float128_t>
+#endif
+              ) ||
+             view_result<T> ||
+             std::same_as<T, std::pair<std::uint64_t, item>>)
+std::expected<T, error> item::get_or_error() const
 {
     item const at = std::same_as<T, std::pair<std::uint64_t, item>> ? *this : skip_passed_tags();
     detail::dom::node const &x = at.node();

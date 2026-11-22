@@ -39,8 +39,10 @@ auto pieces(cbor::item const tree)
 void encode_value_sharing(benchmark::State &state)
 {
     std::vector<cbor::owning<cbor::item>> trees;
-    for (std::size_t total = 0; total < cold_bytes(); total += message.size())
-        trees.push_back(*cbor::decode_cycles(message));
+    for (std::size_t total = 0; total < cold_bytes(); total += message.size()) {
+        auto const decoded = cbor::decode_cycles(message);
+        trees.push_back(*decoded);
+    }
     std::string out;
     if (!written(*trees.front(), out) || out != message) {
         state.SkipWithError("the encode does not give the message back");
@@ -59,8 +61,10 @@ void encode_value_sharing(benchmark::State &state)
 void encode_iov_value_sharing(benchmark::State &state)
 {
     std::vector<cbor::owning<cbor::item>> trees;
-    for (std::size_t total = 0; total < cold_bytes(); total += message.size())
-        trees.push_back(*cbor::decode_cycles(message));
+    for (std::size_t total = 0; total < cold_bytes(); total += message.size()) {
+        auto const decoded = cbor::decode_cycles(message);
+        trees.push_back(*decoded);
+    }
     for (auto _ : state) {
         for (auto const &tree : trees) {
             auto r = pieces(*tree);

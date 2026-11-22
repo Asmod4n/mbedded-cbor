@@ -154,11 +154,11 @@ TEST_CASE("cbor2 decoder: test_integer")
         REQUIRE(tree.has_value());
         CHECK_EQ((*tree)->type(), r.type);
         if (r.type == cbor::type::unsigned_integer)
-            CHECK_EQ((*tree)->get<std::uint64_t>().value(), r.argument);
+            CHECK_EQ((*tree)->get<std::uint64_t>(), r.argument);
         else if (r.argument <= static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
-            CHECK_EQ((*tree)->get<std::int64_t>().value(), -1 - static_cast<std::int64_t>(r.argument));
+            CHECK_EQ((*tree)->get<std::int64_t>(), -1 - static_cast<std::int64_t>(r.argument));
         else
-            CHECK_EQ((*tree)->get<std::int64_t>().error(), cbor::error::number_out_of_range);
+            CHECK_EQ((*tree)->get<std::int64_t>(), std::unexpected(cbor::error::number_out_of_range));
     }
 
     // 18446744073709551616 and -18446744073709551617: tag 2 and tag 3 over the byte string 01 00 00 00 00 00 00 00 00
@@ -270,9 +270,8 @@ TEST_CASE("cbor2 decoder: test_float")
         auto const tree = cbor::decode(unhexlify(r.payload));
         REQUIRE(tree.has_value());
         REQUIRE_EQ((*tree)->type(), r.type);
-        double const got = r.type == cbor::type::half_float     ? (*tree)->get<double>().value()
-                           : r.type == cbor::type::single_float ? (*tree)->get<double>().value()
-                                                                : (*tree)->get<double>().value();
+        auto const real = (*tree)->get<double>();
+        double const got = real.value();
         CHECK_EQ(std::bit_cast<std::uint64_t>(got), std::bit_cast<std::uint64_t>(r.expected));
     }
 }
@@ -357,7 +356,8 @@ TEST_CASE("cbor2 decoder: test_string_invalid_utf8")
         INFO("payload: ", hexlify(payload.substr(0, 16)));
         auto const tree = cbor::decode(payload);
         REQUIRE(tree.has_value());
-        CHECK_EQ((*tree)->get<std::string_view>()->size(), length);
+        auto const text = (*tree)->get<std::string_view>();
+        CHECK_EQ(text->size(), length);
     }
     // The indefinite string 7f6198ff: decode.hpp: "@retval indefinite_length a string, an array or a map has an
     // indefinite length". The error comes before the content is read; RFC 8949 3.2.3 lets a decoder refuse
@@ -523,7 +523,8 @@ TEST_CASE("cbor2 decoder: test_simple_value")
         auto const tree = cbor::decode(unhexlify(r.payload));
         REQUIRE(tree.has_value());
         CHECK_EQ((*tree)->type(), cbor::type::simple_value);
-        CHECK_EQ((*tree)->get<cbor::simple_value>().value(), cbor::simple_value{r.value});
+        auto const tree_simple = (*tree)->get<cbor::simple_value>();
+        CHECK_EQ(tree_simple.value(), cbor::simple_value{r.value});
     }
     check_decoded({{"A1F86301", M(test::simple{99}, 1)}});
 }
@@ -704,7 +705,8 @@ TEST_CASE("cbor2 decoder: test_fraction, test_bigfloat")
     auto const pair = tag->second.elements();
     REQUIRE(pair.has_value());
     REQUIRE_EQ(pair->size(), 2u);
-    CHECK_EQ(pair->front().get<std::int64_t>().value(), -78);
+    auto const number = pair->front().get<std::int64_t>();
+    CHECK_EQ(number.value(), -78);
     auto const mantissa = pair->next(1).front().get<std::pair<std::uint64_t, cbor::item>>();
     REQUIRE(mantissa.has_value());
     CHECK_EQ(mantissa->first, 2u);
@@ -845,7 +847,9 @@ TEST_CASE("cbor2 decoder: TestSharedReference read by cbor::decode_cycles")
     // A tag 29 gives the node of its mark: in 28([29(0)]) the element names the array itself.
     auto const cyclic = cbor::decode_cycles(unhexlify("d81c81d81d00"));
     REQUIRE(cyclic.has_value());
-    CHECK((*cyclic)->elements().value().front().get<std::pair<std::uint64_t, cbor::item>>().value().second ==
+    auto const cyclic_elements = (*cyclic)->elements();
+    auto const tagged = cyclic_elements.value().front().get<std::pair<std::uint64_t, cbor::item>>();
+    CHECK(tagged.value().second ==
           **cyclic);
 }
 

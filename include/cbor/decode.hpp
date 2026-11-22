@@ -33,6 +33,7 @@
 #include "item.hpp"
 #include "padded_string.hpp"
 #include "ref.hpp"
+#include "result.hpp"
 #include "shared.hpp"
 #include "rfc8949.hpp"
 #include "validity.hpp"
@@ -556,7 +557,7 @@ std::expected<owning<item>, error> decode_tree(std::string_view const encoded)
  *
  * @ingroup decode
  */
-inline std::expected<item, error> encoded_cbor_data_item(owning<item> const &tree, item const tagged)
+inline result<item> encoded_cbor_data_item(owning<item> const &tree, item const tagged)
 {
     constexpr char const *what = "cbor::encoded_cbor_data_item: the item is not a tag 24 of this decoded tree";
     detail::tree const &decoded = detail::tree_owner::tree_found(tree, what);
@@ -567,8 +568,8 @@ inline std::expected<item, error> encoded_cbor_data_item(owning<item> const &tre
                                                found == decoded.encoded_cbor_data_items.end() || found->tagged != at,
                                            what);
     if (found->embedded == detail::tree::no_item) [[unlikely]]
-        return std::unexpected(error::incorrect_type);
-    return detail::tree_owner::item_at(decoded, found->embedded);
+        return result<item>(std::unexpect, error::incorrect_type);
+    return result<item>(std::in_place, detail::tree_owner::item_at(decoded, found->embedded));
 }
 
 /**
@@ -589,7 +590,9 @@ inline std::expected<item, error> encoded_cbor_data_item(owning<item> const &tre
  * message: ["hi", 1]
  * call: auto const tree = cbor::decode(bytes)
  * result: owning item of ["hi", 1]
- * call: (*tree)->elements()->size()
+ * call: auto const elements = (*tree)->elements()
+ * result: 2 elements: "hi", 1
+ * call: elements->size()
  * result: 2
  * @endcode
  * @code{.example}
@@ -618,9 +621,9 @@ inline std::expected<item, error> encoded_cbor_data_item(owning<item> const &tre
  *
  * @ingroup decode
  */
-inline std::expected<owning<item>, error> decode(std::string_view const encoded)
+inline result<owning<item>> decode(std::string_view const encoded)
 {
-    return detail::decode_tree<false>(detail::heads::self_described_cbor_content(encoded));
+    return result<owning<item>>(detail::decode_tree<false>(detail::heads::self_described_cbor_content(encoded)));
 }
 
 /**
@@ -629,7 +632,7 @@ inline std::expected<owning<item>, error> decode(std::string_view const encoded)
  */
 template <borrowed_range_of_bytes Encoded>
     requires(!std::is_array_v<std::remove_cvref_t<Encoded>>)
-std::expected<owning<item>, error> decode(Encoded &&encoded)
+result<owning<item>> decode(Encoded &&encoded)
 {
     return decode(detail::chars_of(encoded));
 }
@@ -648,7 +651,9 @@ std::expected<owning<item>, error> decode(Encoded &&encoded)
  * bytes: d8 1c 81 d8 1d 00
  * call: auto const tree = cbor::decode_cycles(bytes)
  * result: owning item of 28([29(0)])
- * call: (*tree)->elements()->front().type()
+ * call: auto const elements = (*tree)->elements()
+ * result: 1 element: 29(0)
+ * call: elements->front().type()
  * result: cbor::type::shared_reference
  * @endcode
  *
@@ -666,9 +671,9 @@ std::expected<owning<item>, error> decode(Encoded &&encoded)
  *
  * @ingroup decode
  */
-inline std::expected<owning<item>, error> decode_cycles(std::string_view const encoded)
+inline result<owning<item>> decode_cycles(std::string_view const encoded)
 {
-    return detail::decode_tree<true>(detail::heads::self_described_cbor_content(encoded));
+    return result<owning<item>>(detail::decode_tree<true>(detail::heads::self_described_cbor_content(encoded)));
 }
 
 /**
@@ -677,7 +682,7 @@ inline std::expected<owning<item>, error> decode_cycles(std::string_view const e
  */
 template <borrowed_range_of_bytes Encoded>
     requires(!std::is_array_v<std::remove_cvref_t<Encoded>>)
-std::expected<owning<item>, error> decode_cycles(Encoded &&encoded)
+result<owning<item>> decode_cycles(Encoded &&encoded)
 {
     return decode_cycles(detail::chars_of(encoded));
 }

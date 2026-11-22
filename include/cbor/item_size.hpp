@@ -18,6 +18,7 @@
 #include "validity.hpp"
 #include "head.hpp"
 #include "ref.hpp"
+#include "result.hpp"
 
 namespace cbor
 {
@@ -32,6 +33,8 @@ class reflection;
 }
 
 struct lazy;
+
+class sequence;
 
 struct lazy_elements;
 
@@ -108,7 +111,17 @@ class well_formedness
         return {};
     }
 
-    friend std::expected<std::size_t, error> cbor::item_size(std::string_view encoded);
+    static std::expected<std::size_t, error> item_size_or_error(std::string_view const encoded)
+    {
+        detail::heads::decoder<true> d{encoded};
+        if (auto const r = skip_item(d); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        return std::to_underlying(detail::validity::distance(encoded, d.encoded));
+    }
+
+    friend result<std::size_t> cbor::item_size(std::string_view encoded);
+
+    friend class cbor::sequence;
 
     friend class detail::validity;
 
@@ -154,12 +167,9 @@ class well_formedness
  *
  * @ingroup tools
  */
-inline std::expected<std::size_t, error> item_size(std::string_view const encoded)
+inline result<std::size_t> item_size(std::string_view const encoded)
 {
-    detail::heads::decoder<true> d{encoded};
-    if (auto const r = detail::well_formedness::skip_item(d); !r) [[unlikely]]
-        return std::unexpected(r.error());
-    return std::to_underlying(detail::validity::distance(encoded, d.encoded));
+    return result<std::size_t>(detail::well_formedness::item_size_or_error(encoded));
 }
 
 /**
@@ -168,7 +178,7 @@ inline std::expected<std::size_t, error> item_size(std::string_view const encode
  */
 template <borrowed_range_of_bytes Encoded>
     requires(!std::is_array_v<std::remove_cvref_t<Encoded>>)
-std::expected<std::size_t, error> item_size(Encoded &&encoded)
+result<std::size_t> item_size(Encoded &&encoded)
 {
     return item_size(detail::chars_of(encoded));
 }

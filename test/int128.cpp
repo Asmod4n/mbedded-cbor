@@ -35,13 +35,15 @@ TEST_CASE("int128: item get reads -2^64 and 2^64 - 1")
     auto const elements = (*tree)->elements();
     REQUIRE(elements.has_value());
     auto it = elements->begin();
-    CHECK((*it).get<cbor::int128>().value() == smallest_negative);
+    CHECK((*it).get<cbor::int128>() == smallest_negative);
     ++it;
-    CHECK((*it).get<cbor::int128>().value() == cbor::int128{largest_unsigned});
-    CHECK((*it).get<cbor::uint128>().value() == largest_unsigned);
+    CHECK((*it).get<cbor::int128>() == cbor::int128{largest_unsigned});
+    CHECK((*it).get<cbor::uint128>() == largest_unsigned);
     ++it;
-    CHECK((*it).get<cbor::int128>().value() == -1);
-    CHECK_EQ((*it).get<cbor::uint128>().error(), cbor::error::number_out_of_range);
+    auto const it_number = (*it).get<cbor::int128>();
+    CHECK(it_number.value() == -1);
+    auto const number = (*it).get<cbor::uint128>();
+    CHECK_EQ(number.error(), cbor::error::number_out_of_range);
 }
 
 TEST_CASE("int128: lazy get reads -2^64 and 2^64 - 1")
@@ -66,7 +68,9 @@ TEST_CASE("int128: a bignum above 64 bits is out of range, one of at most 64 bit
     std::string_view const edn = "[2(h'010000000000000000'), 2(h'01')]";
     auto const tree = cbor::parse_edn(edn);
     REQUIRE(tree.has_value());
-    CHECK_EQ((*tree)->elements()->front().get<cbor::int128>().error(), cbor::error::number_out_of_range);
+    auto const tree_elements = (*tree)->elements();
+    auto const number = tree_elements->front().get<cbor::int128>();
+    CHECK_EQ(number.error(), cbor::error::number_out_of_range);
     auto const doc = cbor::lazy::adopt(bytes_of(edn));
     REQUIRE(doc.has_value());
     auto const at_0 = doc->at(0);

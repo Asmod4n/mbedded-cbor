@@ -160,7 +160,8 @@ TEST_CASE("doc path: a path does not read past its value")
     std::string const cut = "\x82\x01"s;
     CHECK_EQ(cbor::at_path<"$[0]", int>(cut).error(), error::too_little_data);
     CHECK_EQ(cbor::at_path<"$[0]", int>("\x82\x01\xff"s), 1);
-    CHECK_EQ(cbor::item_size(cut).error(), error::too_little_data);
+    auto const length = cbor::item_size(cut);
+    CHECK_EQ(length.error(), error::too_little_data);
     std::string const whole = encode_in_preferred_form(A(1, 2));
     CHECK_EQ(cbor::item_size(whole), whole.size());
 }

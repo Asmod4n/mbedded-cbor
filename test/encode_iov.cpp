@@ -262,7 +262,8 @@ TEST_CASE("encode_iov: the overload for a decoded tree with a shared_reference r
         auto const referred = cbor::encode_iov(*tree);
         REQUIRE(referred.has_value());
         CHECK_EQ(join_pieces_into_bytes(*referred), encoded);
-        auto const text = (**tree).elements().value().front().get<std::string_view>();
+        auto const tree_elements = (**tree).elements();
+        auto const text = tree_elements.value().front().get<std::string_view>();
         REQUIRE(text.has_value());
         CHECK_EQ(points_into(*referred, text->data()), size > copybreak && size > 0);
     }

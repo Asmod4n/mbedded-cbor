@@ -70,7 +70,8 @@ TEST_CASE("doc reference item: item")
     // bytes: a std::string with [1, {"a": 2}]
     auto const tree = cbor::decode(bytes);
     auto const kind = (*tree)->type();                              // cbor::type::array
-    auto const count = (*tree)->elements()->size();  // 2
+    auto const elements = (*tree)->elements();                      // 1, {"a": 2}
+    auto const count = elements->size();                            // 2
     // [item]
     REQUIRE(tree);
     CHECK_EQ(kind, cbor::type::array);
@@ -86,14 +87,14 @@ TEST_CASE("doc reference item: item::get")
     // [get]
     // bytes: a std::string with {"a": -3}
     auto const tree = cbor::decode(bytes);
-    auto const pairs = *(*tree)->pairs();
-    auto const [k, v] = pairs.front();
+    auto const pairs = (*tree)->pairs();              // "a": -3
+    auto const [k, v] = pairs->front();
     auto const key = k.get<std::string_view>();       // "a"
     auto const value = v.get<std::int64_t>();         // -3
     auto const other = v.get<std::uint64_t>();        // number_out_of_range
     // [get]
     REQUIRE(tree);
-    REQUIRE_EQ(pairs.size(), 1u);
+    REQUIRE_EQ(pairs->size(), 1u);
     CHECK_EQ(key.value(), "a"sv);
     CHECK_EQ(value.value(), -3);
     CHECK_EQ(other.error(), cbor::error::number_out_of_range);
@@ -107,7 +108,8 @@ TEST_CASE("doc reference item: the example of the group decode")
     // [decode group]
     std::string const bytes = "\x82\x18\x01\x61\x61"s;  // [1, "a"], the 1 with a one-byte argument
     auto const tree = cbor::decode(bytes);
-    auto const second = (*tree)->elements()->next().front().get<std::string_view>();  // "a"
+    auto const elements = (*tree)->elements();  // 1, "a"
+    auto const second = elements->next().front().get<std::string_view>();  // "a"
     std::string out;
     auto const size = cbor::encode(out, **tree);  // 5; out == bytes
     // [decode group]
@@ -125,7 +127,8 @@ TEST_CASE("doc reference item: decode")
     // [decode]
     // bytes: a std::string with ["hi", 1]
     auto const tree = cbor::decode(bytes);
-    auto const count = (*tree)->elements()->size();  // 2
+    auto const elements = (*tree)->elements();                       // "hi", 1
+    auto const count = elements->size();                             // 2
     auto const first = cbor::decode("\x01\x02"s);                    // the item 1; the byte 02 is not read
     // [decode]
     REQUIRE(tree);
@@ -135,18 +138,23 @@ TEST_CASE("doc reference item: decode")
     CHECK_EQ((*self_described)->type(), cbor::type::unsigned_integer);
     auto const second = cbor::decode("\xd9\xd9\xf7\xd9\xd9\xf7\x01"s);
     REQUIRE(second);
-    CHECK_EQ((*second)->get<std::pair<std::uint64_t, cbor::item>>()->first, 55799u);
+    auto const tagged = (*second)->get<std::pair<std::uint64_t, cbor::item>>();
+    CHECK_EQ(tagged->first, 55799u);
     auto const inside = cbor::decode("\x81\xd9\xd9\xf7\x01"s);
     REQUIRE(inside);
-    CHECK_EQ((*inside)->elements().value().front().type(), cbor::type::tag);
-    CHECK_EQ(cbor::decode("\x9f\xff"s).error(), cbor::error::indefinite_length);
-    CHECK_EQ(cbor::decode("\x82\x01"s).error(), cbor::error::too_little_data);
+    auto const inside_elements = (*inside)->elements();
+    CHECK_EQ(inside_elements.value().front().type(), cbor::type::tag);
+    CHECK_EQ(cbor::decode("\x9f\xff"s), std::unexpected(cbor::error::indefinite_length));
+    auto const decoded = cbor::decode("\x82\x01"s);
+    CHECK_EQ(decoded.error(), cbor::error::too_little_data);
 
     auto input = std::make_unique<std::string>(bytes);
     auto const copy = cbor::decode(*input);
     input.reset();
     REQUIRE(copy);
-    CHECK_EQ((*copy)->elements().value().front().get<std::string_view>().value(), "hi"sv);
+    auto const copy_elements = (*copy)->elements();
+    auto const text = copy_elements.value().front().get<std::string_view>();
+    CHECK_EQ(text.value(), "hi"sv);
 }
 
 // decode.hpp, snippet encoded_cbor_data_item: the content of a tag 24, a content that is no byte string, and a wrong
@@ -166,11 +174,13 @@ TEST_CASE("doc reference item: encoded_cbor_data_item")
 
     auto const no_bytes = cbor::decode("\xd8\x18\x01"s);
     REQUIRE(no_bytes);
-    CHECK_EQ(cbor::encoded_cbor_data_item(*no_bytes, **no_bytes).error(), cbor::error::incorrect_type);
+    auto const embedded = cbor::encoded_cbor_data_item(*no_bytes, **no_bytes);
+    CHECK_EQ(embedded.error(), cbor::error::incorrect_type);
 
     auto const array = cbor::decode("\x81\x01"s);
     REQUIRE(array);
-    CHECK_THROWS_AS((void)cbor::encoded_cbor_data_item(*array, (*array)->elements().value().front()),
+    auto const elements = (*array)->elements();
+    CHECK_THROWS_AS((void)cbor::encoded_cbor_data_item(*array, elements.value().front()),
                     std::logic_error);
 }
 

@@ -157,7 +157,8 @@ template <class P>
 place content(P const &tagged)
 {
     place const t = target(tagged);
-    return target(place{t.t, t->get<std::pair<std::uint64_t, cbor::item>>().value().second});
+    auto const t_tagged = t->get<std::pair<std::uint64_t, cbor::item>>();
+    return target(place{t.t, t_tagged.value().second});
 }
 
 // A resolved tag 29 gives a tree of its own, so two places are compared by the encoded form of their targets.
@@ -507,15 +508,19 @@ TEST_CASE("decode_cycles: lazy, at_path, decode and diagnostic notation read tag
             types.push_back(*kind);
         }
         CHECK(types == std::vector<cbor::type>(3, cbor::type::tag));
-        for (auto const &tree : {l.to_item(), cbor::decode(doc)}) {
-            REQUIRE(tree.has_value());
+        auto const lazy_tree = l.to_item();
+        REQUIRE(lazy_tree.has_value());
+        auto const decoded = cbor::decode(doc);
+        REQUIRE(decoded.has_value());
+        for (cbor::owning<cbor::item> const *const tree : {&*lazy_tree, &*decoded}) {
             auto const elements = list_children_of_item(**tree);
             REQUIRE_EQ(elements.size(), 3u);
             for (auto const &[element, number, index] : {std::tuple{elements[0], 28u, 5u},
                                                         std::tuple{elements[1], 29u, 0u},
                                                         std::tuple{elements[2], 29u, 7u}}) {
+                auto const tagged = element.get<std::pair<std::uint64_t, cbor::item>>();
                 std::pair<std::uint64_t, cbor::item> const t =
-                    element.get<std::pair<std::uint64_t, cbor::item>>().value();
+                    tagged.value();
                 CHECK_EQ(t.first, number);
                 CHECK_EQ(t.second.get<std::uint64_t>(), index);
             }
@@ -573,8 +578,8 @@ TEST_CASE("decode_cycles: cbor::decode_cycles reads each case of the model")
     using shared_test::elements_of;
     using shared_test::target_of;
     // [28([]), 29(0), []]: the reference names an array whose decode has ended, so it closes no cycle (owner decision).
-    CHECK_EQ(cbor::decode_cycles("\x83\xd8\x1c\x80\xd8\x1d\x00\x80"sv).error(), error::sharedref_not_cyclic);
-    CHECK_EQ(cbor::decode_cycles("\x82\xd8\x1c\x01\xd8\x1d\x00"sv).error(), error::sharedref_not_cyclic);
+    CHECK_EQ(cbor::decode_cycles("\x83\xd8\x1c\x80\xd8\x1d\x00\x80"sv), std::unexpected(error::sharedref_not_cyclic));
+    CHECK_EQ(cbor::decode_cycles("\x82\xd8\x1c\x01\xd8\x1d\x00"sv), std::unexpected(error::sharedref_not_cyclic));
     // 28([29(0)]): an array that holds itself.
     auto const cyclic = cbor::decode_cycles("\xd8\x1c\x81\xd8\x1d\x00"sv);
     REQUIRE(cyclic.has_value());
@@ -582,13 +587,14 @@ TEST_CASE("decode_cycles: cbor::decode_cycles reads each case of the model")
     // 28(1234([29(0)])): a cycle through a tag that is not 28.
     auto const through_tag = cbor::decode_cycles("\xd8\x1c\xd9\x04\xd2\x81\xd8\x1d\x00"sv);
     REQUIRE(through_tag.has_value());
-    auto const content = (*through_tag)->get<std::pair<std::uint64_t, cbor::item>>().value().second;
+    auto const tagged = (*through_tag)->get<std::pair<std::uint64_t, cbor::item>>();
+    auto const content = tagged.value().second;
     CHECK(target_of(elements_of(content)[0]) == **through_tag);
     // A mark whose content is only marks and a reference to one of them names no value.
     for (std::string_view const own : {"\xd8\x1c\xd8\x1d\x00"sv, "\xd8\x1c\xd8\x1c\xd8\x1d\x00"sv,
                                        "\xd8\x1c\xd8\x1c\xd8\x1d\x01"sv}) {
         CAPTURE(own.size());
-        CHECK_EQ(cbor::decode_cycles(own).error(), error::sharedref_not_defined);
+        CHECK_EQ(cbor::decode_cycles(own), std::unexpected(error::sharedref_not_defined));
     }
     // 28([28(29(0)), 29(1)]): a mark of a reference marks the value that the reference names. That value is the open
     // root, so the second reference closes a cycle too, though the mark that it names was set after the root.
@@ -598,8 +604,8 @@ TEST_CASE("decode_cycles: cbor::decode_cycles reads each case of the model")
     CHECK(target_of(m[0]) == **mark_of_reference);
     CHECK(target_of(m[1]) == **mark_of_reference);
     // [28(1), 28(29(0)), 29(1)]: the mark of the reference names the integer, whose decode has ended.
-    CHECK_EQ(cbor::decode_cycles("\x83\xd8\x1c\x01\xd8\x1c\xd8\x1d\x00\xd8\x1d\x01"sv).error(),
-             error::sharedref_not_cyclic);
+    CHECK_EQ(cbor::decode_cycles("\x83\xd8\x1c\x01\xd8\x1c\xd8\x1d\x00\xd8\x1d\x01"sv),
+             std::unexpected(error::sharedref_not_cyclic));
     // 28(28([29(0), 29(1)])): two marks of one value.
     auto const two_marks = cbor::decode_cycles("\xd8\x1c\xd8\x1c\x82\xd8\x1d\x00\xd8\x1d\x01"sv);
     REQUIRE(two_marks.has_value());
@@ -607,17 +613,20 @@ TEST_CASE("decode_cycles: cbor::decode_cycles reads each case of the model")
     CHECK(target_of(t[0]) == **two_marks);
     CHECK(target_of(t[1]) == **two_marks);
     // A reference before any mark, and a reference to a mark that comes later.
-    CHECK_EQ(cbor::decode_cycles("\x81\xd8\x1d\x00"sv).error(), error::sharedref_index_not_marked);
-    CHECK_EQ(cbor::decode_cycles("\x82\xd8\x1d\x00\xd8\x1c\x01"sv).error(), error::sharedref_index_not_marked);
+    CHECK_EQ(cbor::decode_cycles("\x81\xd8\x1d\x00"sv), std::unexpected(error::sharedref_index_not_marked));
+    CHECK_EQ(cbor::decode_cycles("\x82\xd8\x1d\x00\xd8\x1c\x01"sv), std::unexpected(error::sharedref_index_not_marked));
     // The registration: the content of tag 29 is an unsigned integer. A text and a bignum are not.
-    CHECK_EQ(cbor::decode_cycles("\xd8\x1d\x61x"sv).error(), error::inadmissible_type_for_tag_content);
-    CHECK_EQ(cbor::decode_cycles("\x82\xd8\x1c\x01\xd8\x1d\xc2\x41\x00"sv).error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(cbor::decode_cycles("\xd8\x1d\x61x"sv), std::unexpected(error::inadmissible_type_for_tag_content));
+    auto const decoded = cbor::decode_cycles("\x82\xd8\x1c\x01\xd8\x1d\xc2\x41\x00"sv);
+    CHECK_EQ(decoded.error(), error::inadmissible_type_for_tag_content);
     // {28("a"): 29(0)}: a value refers to its own key, whose decode has ended.
-    CHECK_EQ(cbor::decode_cycles("\xa1\xd8\x1c\x61\x61\xd8\x1d\x00"sv).error(), error::sharedref_not_cyclic);
+    auto const tree = cbor::decode_cycles("\xa1\xd8\x1c\x61\x61\xd8\x1d\x00"sv);
+    CHECK_EQ(tree.error(), error::sharedref_not_cyclic);
     // 28({29(0): 1}): a map that holds itself as its key.
     auto const own_key = cbor::decode_cycles("\xd8\x1c\xa1\xd8\x1d\x00\x01"sv);
     REQUIRE(own_key.has_value());
-    CHECK(target_of(std::get<0>((*own_key)->pairs().value().front())) == **own_key);
+    auto const own_key_pairs = (*own_key)->pairs();
+    CHECK(target_of(std::get<0>(own_key_pairs.value().front())) == **own_key);
 }
 
 // A tag 29 may name any marked value whose read has not ended: the value itself or one above it. A tag 28 over a tag
@@ -636,7 +645,8 @@ TEST_CASE("decode_cycles: cbor::decode_cycles takes a tag 29 to each open value 
     // array after its end. 29(0) names the first array after its end.
     for (std::string_view const edn : {"28([28([28(29(1))]), 29(2)])", "28([28([1]), 29(1)])", "[28([29(0)]), 29(0)]"}) {
         CAPTURE(edn);
-        CHECK_EQ(cbor::decode_cycles(cbor::diag2cbor(edn).value()).error(), error::sharedref_not_cyclic);
+        auto const tree = cbor::decode_cycles(cbor::diag2cbor(edn).value());
+        CHECK_EQ(tree.error(), error::sharedref_not_cyclic);
     }
 }
 
@@ -651,7 +661,8 @@ TEST_CASE("decode_cycles: cbor::decode_cycles reads a tag 29 and its index in ea
         REQUIRE(tree.has_value());
         CHECK(shared_test::target_of(shared_test::elements_of(**tree)[0]) == **tree);
     }
-    CHECK_EQ(cbor::decode_cycles("\xd8\x1c\x81\xd8\x1d\x1b\xff\xff\xff\xff\xff\xff\xff\xff"sv).error(),
+    auto const decoded = cbor::decode_cycles("\xd8\x1c\x81\xd8\x1d\x1b\xff\xff\xff\xff\xff\xff\xff\xff"sv);
+    CHECK_EQ(decoded.error(),
              error::sharedref_index_not_marked);
 }
 
@@ -667,8 +678,10 @@ TEST_CASE("decode_cycles: cbor::decode_cycles reads a long chain of marks and a 
     chain += '\x01';
     auto const one = cbor::decode_cycles(chain);
     REQUIRE(one.has_value());
-    CHECK_EQ((*one)->get<std::uint64_t>().value(), 1u);
-    CHECK_EQ(cbor::decode_cycles("\x82\xd8\x1c\x01\xd8\x18\x43\xd8\x1d\x00"sv).error(), error::sharedref_index_not_marked);
+    auto const number = (*one)->get<std::uint64_t>();
+    CHECK_EQ(number.value(), 1u);
+    auto const tree = cbor::decode_cycles("\x82\xd8\x1c\x01\xd8\x18\x43\xd8\x1d\x00"sv);
+    CHECK_EQ(tree.error(), error::sharedref_index_not_marked);
 }
 
 // lazy::to_item, paths, cbor::decode and diagnostic_notation pass tags 28 and 29 as plain tags (owner decision); only
@@ -679,7 +692,8 @@ TEST_CASE("decode_cycles: lazy::to_item keeps tags 28 and 29")
     REQUIRE(top_level.has_value());
     auto const tree = top_level->to_item();
     REQUIRE(tree.has_value());
-    CHECK_EQ((*tree)->get<std::pair<std::uint64_t, cbor::item>>().value().first, 28u);
+    auto const tagged = (*tree)->get<std::pair<std::uint64_t, cbor::item>>();
+    CHECK_EQ(tagged.value().first, 28u);
 }
 
 // The marks of the model reach every kind of node: a bignum that decode reads as an integer, a tag 24 and a typed array.
@@ -695,16 +709,18 @@ TEST_CASE("decode_cycles: cbor::decode marks every kind of node and resolves ins
     for (std::string_view const wire : {"\x82\xd8\x1c\xc2\x41\x01\xd8\x1d\x00"sv, "\x82\xd8\x1c\xd8\x18\x41\x01\xd8\x1d\x00"sv,
                                         "\x82\xd8\x1c\xd8\x40\x42\x01\x02\xd8\x1d\x00"sv}) {
         CAPTURE(wire.size());
-        CHECK_EQ(cbor::decode_cycles(wire).error(), error::sharedref_not_cyclic);
+        CHECK_EQ(cbor::decode_cycles(wire), std::unexpected(error::sharedref_not_cyclic));
     }
     auto const outer = cbor::decode_cycles("\xd8\x18\x46\xd8\x1c\x81\xd8\x1d\x00"sv);
     REQUIRE(outer.has_value());
     auto const embedded = cbor::encoded_cbor_data_item(*outer, **outer);
     REQUIRE(embedded.has_value());
     CHECK(target_of(elements_of(*embedded)[0]) == *embedded);
-    CHECK_EQ(cbor::decode_cycles("\xd8\x1c\xd8\x1c\xd8\x1d\x02"sv).error(), error::sharedref_index_not_marked);
-    CHECK_EQ(cbor::decode_cycles("\xd8\x1d"sv).error(), error::too_little_data);
-    CHECK_EQ(cbor::decode_cycles("\xd8\x1c"sv).error(), error::too_little_data);
+    CHECK_EQ(cbor::decode_cycles("\xd8\x1c\xd8\x1c\xd8\x1d\x02"sv), std::unexpected(error::sharedref_index_not_marked));
+    auto const decoded = cbor::decode_cycles("\xd8\x1d"sv);
+    CHECK_EQ(decoded.error(), error::too_little_data);
+    auto const tree = cbor::decode_cycles("\xd8\x1c"sv);
+    CHECK_EQ(tree.error(), error::too_little_data);
 }
 
 // clone of a lazy inside the top-level item keeps tags 28 and 29 and a tag 55799 as tag nodes. Only cbor::decode

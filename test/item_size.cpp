@@ -17,12 +17,12 @@ TEST_CASE("item_size: the end of the first top-level item")
 {
     std::string const first = "\x1b\x00\x00\x00\x00\x00\x00\x00\x2a"s;
     std::string const second = "\x65hello"s;
-    CHECK_EQ(cbor::item_size(first + second).value(), first.size());
-    CHECK_EQ(cbor::item_size(""sv).error(), error::too_little_data);
-    CHECK_EQ(cbor::item_size("\x1b"sv).error(), error::too_little_data);
+    CHECK_EQ(cbor::item_size(first + second), first.size());
+    CHECK_EQ(cbor::item_size(""sv), std::unexpected(error::too_little_data));
+    CHECK_EQ(cbor::item_size("\x1b"sv), std::unexpected(error::too_little_data));
     std::string const skip = "\x64skip"s;
     std::string const both = skip + "\x1b\x00\x00\x00\x00\x00\x00\x00\x63"s;
-    CHECK_EQ(cbor::item_size(std::string_view(both).substr(skip.size())).value(),
+    CHECK_EQ(cbor::item_size(std::string_view(both).substr(skip.size())),
              both.size() - skip.size());
 }
 
@@ -32,33 +32,33 @@ TEST_CASE("item_size: every kind, complete and one byte short")
     for (std::string_view const doc :
          {"\x00"sv, "\x38\x18"sv, "\x43\x01\x02\x03"sv, "\x62hi"sv, "\x82\x01\x82\x02\x03"sv,
           "\xa1\x61k\x01"sv, "\xc1\x1a\x51\x4b\x67\xb0"sv, "\xf9\x3c\x00"sv, "\xf8\x20"sv}) {
-        CHECK_EQ(cbor::item_size(doc).value(), doc.size());
-        CHECK_EQ(cbor::item_size(doc.substr(0, doc.size() - 1)).error(), error::too_little_data);
+        CHECK_EQ(cbor::item_size(doc), doc.size());
+        CHECK_EQ(cbor::item_size(doc.substr(0, doc.size() - 1)), std::unexpected(error::too_little_data));
     }
 }
 
 // The same errors as decode, so a stream stops at the same place.
 TEST_CASE("item_size: malformed, and deep without an error")
 {
-    CHECK_EQ(cbor::item_size("\x9f\x01\xff"sv).error(), error::indefinite_length);
-    CHECK_EQ(cbor::item_size("\x1c"sv).error(), error::syntax_error);
-    CHECK_EQ(cbor::item_size("\xf8\x1f"sv).error(), error::syntax_error);
-    CHECK_EQ(cbor::item_size(std::string(17, '\x81') + '\x00').value(), 18u);
+    CHECK_EQ(cbor::item_size("\x9f\x01\xff"sv), std::unexpected(error::indefinite_length));
+    CHECK_EQ(cbor::item_size("\x1c"sv), std::unexpected(error::syntax_error));
+    CHECK_EQ(cbor::item_size("\xf8\x1f"sv), std::unexpected(error::syntax_error));
+    CHECK_EQ(cbor::item_size(std::string(17, '\x81') + '\x00'), 18u);
 }
 
 // The skip keeps one count of the items still to read and no stack, so item_size reads any nesting depth. Each item
 // takes at least one byte, so a count larger than the bytes left is too_little_data at once.
 TEST_CASE("item_size: the nesting depth is not bounded, and the count of items is bounded by the bytes")
 {
-    CHECK_EQ(cbor::item_size(std::string(1025, '\x81') + '\x00').value(), 1026u);
-    CHECK_EQ(cbor::item_size(std::string(100000, '\x81') + '\x00').value(), 100001u);
-    CHECK_EQ(cbor::item_size(std::string(100000, '\xc1') + '\x00').value(), 100001u);
-    CHECK_EQ(cbor::item_size("\x83\x00\x00"sv).error(), error::too_little_data);
-    CHECK_EQ(cbor::item_size("\x9b\xff\xff\xff\xff\xff\xff\xff\xff\x00"sv).error(), error::too_little_data);
-    CHECK_EQ(cbor::item_size("\xbb\x80\x00\x00\x00\x00\x00\x00\x00\x00"sv).error(), error::too_little_data);
-    CHECK_EQ(cbor::item_size("\xbb\x7f\xff\xff\xff\xff\xff\xff\xff\x00"sv).error(), error::too_little_data);
-    CHECK_EQ(cbor::item_size("\x82\x00\x00"sv).value(), 3u);
-    CHECK_EQ(cbor::item_size("\xa1\x00\x00"sv).value(), 3u);
+    CHECK_EQ(cbor::item_size(std::string(1025, '\x81') + '\x00'), 1026u);
+    CHECK_EQ(cbor::item_size(std::string(100000, '\x81') + '\x00'), 100001u);
+    CHECK_EQ(cbor::item_size(std::string(100000, '\xc1') + '\x00'), 100001u);
+    CHECK_EQ(cbor::item_size("\x83\x00\x00"sv), std::unexpected(error::too_little_data));
+    CHECK_EQ(cbor::item_size("\x9b\xff\xff\xff\xff\xff\xff\xff\xff\x00"sv), std::unexpected(error::too_little_data));
+    CHECK_EQ(cbor::item_size("\xbb\x80\x00\x00\x00\x00\x00\x00\x00\x00"sv), std::unexpected(error::too_little_data));
+    CHECK_EQ(cbor::item_size("\xbb\x7f\xff\xff\xff\xff\xff\xff\xff\x00"sv), std::unexpected(error::too_little_data));
+    CHECK_EQ(cbor::item_size("\x82\x00\x00"sv), 3u);
+    CHECK_EQ(cbor::item_size("\xa1\x00\x00"sv), 3u);
 }
 
 // RFC 8949 3: each data item has at least its initial byte. By owner decision, item_size refuses a count larger than the
@@ -68,7 +68,7 @@ TEST_CASE("item_size: a count larger than the bytes left is too_little_data befo
     for (std::string_view const wire : {"\x8c\xff"sv, "\x95\xf8\x04"sv, "\x95\xbf"sv, "\x88\x00\x7f"sv,
                                         "\x87\xd8\x1c\x1f"sv, "\x85\xd8\x1c\xd8\x1c"sv, "\xa2\xff\x00\x00"sv}) {
         CAPTURE(wire);
-        CHECK_EQ(cbor::item_size(wire).error(), error::too_little_data);
+        CHECK_EQ(cbor::item_size(wire), std::unexpected(error::too_little_data));
     }
 }
 
@@ -78,11 +78,11 @@ TEST_CASE("item_size: a count larger than the bytes left is too_little_data befo
 TEST_CASE("item_size: a cut item inside tag 24 is framed, and decode refuses it")
 {
     std::string_view const wire = "\xd8\x1c\xd8\x18\x41\x83"sv;
-    CHECK_EQ(cbor::item_size(wire).value(), wire.size());
+    CHECK_EQ(cbor::item_size(wire), wire.size());
     auto const top_level = test::make_lazy_from_copy(wire);
     REQUIRE(top_level.has_value());
     CHECK_EQ(top_level->to_item().error(), error::too_little_data);
-    CHECK_EQ(cbor::item_size("\xd8\x1c\xd8\x18\x41"sv).error(), error::too_little_data);
+    CHECK_EQ(cbor::item_size("\xd8\x1c\xd8\x18\x41"sv), std::unexpected(error::too_little_data));
 }
 
 // item_size takes one pass for each data item. A form that read an item
@@ -90,14 +90,14 @@ TEST_CASE("item_size: a cut item inside tag 24 is framed, and decode refuses it"
 TEST_CASE("item_size: an array and a map of 100000 data items are read in one pass each")
 {
     std::string const array = "\x9a\x00\x01\x86\xa0"s + std::string(100000, '\x00');
-    CHECK_EQ(cbor::item_size(array).value(), array.size());
+    CHECK_EQ(cbor::item_size(array), array.size());
     std::string const map = "\xba\x00\x00\xc3\x50"s + std::string(100000, '\x00');
-    CHECK_EQ(cbor::item_size(map).value(), map.size());
+    CHECK_EQ(cbor::item_size(map), map.size());
 }
 
 // item_size counts the bytes of an item in memory. Such a count is a std::size_t, as std::string_view::size gives it.
 // The expectation comes from that decision, not from the header.
 TEST_CASE("item_size: the size of an item is a std::size_t")
 {
-    CHECK((std::is_same_v<decltype(cbor::item_size(""sv)), std::expected<std::size_t, error>>));
+    CHECK((std::is_same_v<decltype(cbor::item_size(""sv)), cbor::result<std::size_t>>));
 }

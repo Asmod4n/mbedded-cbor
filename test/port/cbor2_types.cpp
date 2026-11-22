@@ -58,7 +58,9 @@ TEST_CASE("cbor2 types: TestCBORTag self-referential payload")
     CHECK(*decoded == test::value{test::tagged{999, test::value{test::tagged{29, V(0)}}}});
     auto const tree = cbor::decode_cycles(unhexlify("d81cd903e7d81d00"));
     REQUIRE(tree.has_value());
-    CHECK((*tree)->get<std::pair<std::uint64_t, cbor::item>>().value().second.get<std::pair<std::uint64_t, cbor::item>>().value().second ==
+    auto const tree_tagged = (*tree)->get<std::pair<std::uint64_t, cbor::item>>();
+    auto const tree_tagged_tagged = tree_tagged.value().second.get<std::pair<std::uint64_t, cbor::item>>();
+    CHECK(tree_tagged_tagged.value().second ==
           **tree);
 }
 

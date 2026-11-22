@@ -542,23 +542,37 @@ static double item_sum(cbor::item const tagged)
 {
     cbor::item const i = untagged(tagged);
     switch (i.type()) {
-    case cbor::type::text_string: return bytes_sum(*i.get<std::string_view>());
-    case cbor::type::unsigned_integer: return double(*i.get<std::uint64_t>());
-    case cbor::type::negative_integer: return double(*i.get<std::int64_t>());
-    case cbor::type::half_float: return *i.get<double>();
-    case cbor::type::single_float: return *i.get<double>();
-    case cbor::type::double_float: return *i.get<double>();
+    case cbor::type::text_string: {
+        auto const text = i.get<std::string_view>();
+        return bytes_sum(*text);
+    }
+    case cbor::type::unsigned_integer: {
+        auto const number = i.get<std::uint64_t>();
+        return double(*number);
+    }
+    case cbor::type::negative_integer: {
+        auto const number = i.get<std::int64_t>();
+        return double(*number);
+    }
+    case cbor::type::half_float:
+    case cbor::type::single_float:
+    case cbor::type::double_float: {
+        auto const real = i.get<double>();
+        return *real;
+    }
     case cbor::type::false_value: return 0;
     case cbor::type::true_value: return 1;
     case cbor::type::array: {
         double s = 0;
-        auto const elements = *i.elements();
+        auto const read = i.elements();
+        auto const elements = *read;
         for (auto const x : elements) s += item_sum(x);
         return s;
     }
     case cbor::type::map: {
         double s = 0;
-        auto const pairs = *i.pairs();
+        auto const read = i.pairs();
+        auto const pairs = *read;
         for (auto const pair : pairs) s += item_sum(std::get<1>(pair));
         return s;
     }
@@ -575,7 +589,8 @@ static double item_field()
     if (!tree) [[unlikely]] std::abort();
     auto const cars = member(**tree, "cars").elements();
     if (!cars) [[unlikely]] std::abort();
-    return double(*member(member(cars->next(500).front(), "engine"), "cc").get<std::uint64_t>());
+    auto const cc = member(member(cars->next(500).front(), "engine"), "cc").get<std::uint64_t>();
+    return double(*cc);
 }
 #endif
 
@@ -1513,7 +1528,8 @@ int main(int argc, char **argv)
     benchmark::AddCustomContext("check_field", std::to_string(data.cars[500].engine.cc));
 #endif
 #if defined(OP_ITEM_ENCODE)
-    item_source.emplace(*cbor::decode(*plain));
+    auto const tree = cbor::decode(*plain);
+    item_source.emplace(*tree);
 #endif
 #if defined(OP_JC_ITEM_ENCODE)
     jc_item_source = jc_decode();

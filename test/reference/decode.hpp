@@ -65,7 +65,8 @@ inline std::uint64_t argument_of_negative_integer(cbor::item const it)
 
 inline std::expected<value, error> make_value_from_tag_item(cbor::item const it)
 {
-    std::pair<std::uint64_t, cbor::item> const tag = it.get<std::pair<std::uint64_t, cbor::item>>().value();
+    auto const read = it.get<std::pair<std::uint64_t, cbor::item>>();
+    std::pair<std::uint64_t, cbor::item> const tag = read.value();
     std::uint64_t const number = tag.first;
     cbor::item const inner = tag.second;
     auto const magnitude = inner.get<std::span<std::byte const>>();
@@ -93,35 +94,39 @@ inline std::expected<value, error> make_value_from_tag_item(cbor::item const it)
 inline std::expected<value, error> make_value_from_item(cbor::item const it)
 {
     switch (it.type()) {
-    case cbor::type::text_string:
-        return value{std::string(it.get<std::string_view>().value())};
+    case cbor::type::text_string: {
+        auto const text = it.get<std::string_view>();
+        return value{std::string(text.value())};
+    }
     case cbor::type::byte_string: {
-        std::span<std::byte const> const b = it.get<std::span<std::byte const>>().value();
+        auto const read = it.get<std::span<std::byte const>>();
+        std::span<std::byte const> const b = read.value();
         return value{bytes{std::string(reinterpret_cast<char const *>(b.data()), b.size())}};
     }
     case cbor::type::half_float:
-        return value{it.get<double>().value()};
     case cbor::type::single_float:
-        return value{it.get<double>().value()};
-    case cbor::type::double_float:
-        return value{it.get<double>().value()};
+    case cbor::type::double_float: {
+        auto const real = it.get<double>();
+        return value{real.value()};
+    }
     case cbor::type::false_value:
-        return value{simple{std::to_underlying(it.get<cbor::simple_value>().value())}};
     case cbor::type::true_value:
-        return value{simple{std::to_underlying(it.get<cbor::simple_value>().value())}};
     case cbor::type::null:
-        return value{simple{std::to_underlying(it.get<cbor::simple_value>().value())}};
     case cbor::type::undefined:
-        return value{simple{std::to_underlying(it.get<cbor::simple_value>().value())}};
-    case cbor::type::simple_value:
-        return value{simple{std::to_underlying(it.get<cbor::simple_value>().value())}};
-    case cbor::type::unsigned_integer:
-        return value{it.get<std::uint64_t>().value()};
+    case cbor::type::simple_value: {
+        auto const simple_read = it.get<cbor::simple_value>();
+        return value{simple{std::to_underlying(simple_read.value())}};
+    }
+    case cbor::type::unsigned_integer: {
+        auto const number = it.get<std::uint64_t>();
+        return value{number.value()};
+    }
     case cbor::type::negative_integer:
         return value{negative{argument_of_negative_integer(it)}};
     case cbor::type::array: {
         array a;
-        auto const children = it.elements().value();
+        auto const elements = it.elements();
+        auto const children = elements.value();
         for (cbor::item const child : children) {
             auto e = make_value_from_item(child);
             if (!e)
@@ -132,7 +137,8 @@ inline std::expected<value, error> make_value_from_item(cbor::item const it)
     }
     case cbor::type::map: {
         map m;
-        auto const pairs = it.pairs().value();
+        auto const read = it.pairs();
+        auto const pairs = read.value();
         for (auto const pair : pairs) {
             auto k = make_value_from_item(std::get<0>(pair));
             if (!k)
@@ -149,12 +155,14 @@ inline std::expected<value, error> make_value_from_item(cbor::item const it)
     case cbor::type::negative_bignum:
         return make_value_from_tag_item(it);
     case cbor::type::typed_array: {
-        cbor::typed_array const t = it.get<cbor::typed_array>().value();
+        auto const read = it.get<cbor::typed_array>();
+        cbor::typed_array const t = read.value();
         return value{tagged{t.tag, value{bytes{std::string(reinterpret_cast<char const *>(t.bytes.data()), t.bytes.size())}}}};
     }
-    case cbor::type::shared_reference:
-        return value{tagged{std::uint64_t{29},
-                            value{it.get<std::pair<std::uint64_t, cbor::item>>().value().first}}};
+    case cbor::type::shared_reference: {
+        auto const reference = it.get<std::pair<std::uint64_t, cbor::item>>();
+        return value{tagged{std::uint64_t{29}, value{reference.value().first}}};
+    }
     }
     std::unreachable();
 }

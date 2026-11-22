@@ -62,7 +62,8 @@ std::string bytes_of(cbor::item const vector)
 {
     auto const hex = member_of(vector, "hex");
     REQUIRE(hex.has_value());
-    return bytes_of_hex(*hex->get<std::string_view>());
+    auto const text = hex->get<std::string_view>();
+    return bytes_of_hex(*text);
 }
 
 bool round_trips(cbor::item const vector)
@@ -85,7 +86,8 @@ TEST_CASE("parse_edn: the diagnostic notation of RFC 8949 Appendix A gives the b
         auto const diagnostic = member_of(vector, "diagnostic");
         if (!diagnostic || !round_trips(vector))
             continue;
-        std::string const text(*diagnostic->get<std::string_view>());
+        auto const diagnostic_text = diagnostic->get<std::string_view>();
+        std::string const text(*diagnostic_text);
         CAPTURE(text);
         auto const tree = cbor::parse_edn(text);
         REQUIRE(tree.has_value());
@@ -107,7 +109,8 @@ TEST_CASE("parse_edn: the JSON values of RFC 8949 Appendix A give the bytes of t
         auto const decoded = member_of(vector, "decoded");
         if (!decoded || !round_trips(vector))
             continue;
-        CAPTURE(*member_of(vector, "hex")->get<std::string_view>());
+        auto const text = member_of(vector, "hex")->get<std::string_view>();
+        CAPTURE(*text);
         CHECK_EQ(encoded(*decoded), bytes_of(vector));
         ++checked;
     }
@@ -209,7 +212,8 @@ TEST_CASE("parse_edn: a JSON number with a long fraction gives the double of std
             auto const elements = root.elements();
             auto const members = root.pairs();
             cbor::item const value = elements ? elements->front() : members ? members->front().second : root;
-            CHECK_EQ(value.get<double>().value(), expected);
+            auto const real = value.get<double>();
+            CHECK_EQ(real.value(), expected);
         }
     }
 }
@@ -251,7 +255,8 @@ TEST_CASE("diag2cbor: the diagnostic notation of RFC 8949 Appendix A gives the b
         auto const diagnostic = member_of(vector, "diagnostic");
         if (!diagnostic || !round_trips(vector))
             continue;
-        std::string_view const text = *diagnostic->get<std::string_view>();
+        auto const diagnostic_text = diagnostic->get<std::string_view>();
+        std::string_view const text = *diagnostic_text;
         CAPTURE(text);
         auto const bytes = cbor::diag2cbor(text);
         REQUIRE(bytes.has_value());
@@ -335,7 +340,8 @@ cbor::item element_of(cbor::item const array, std::size_t const index)
 cbor::item target_of_reference(cbor::item const reference)
 {
     REQUIRE_EQ(reference.type(), cbor::type::shared_reference);
-    return reference.get<std::pair<std::uint64_t, cbor::item>>().value().second;
+    auto const tagged = reference.get<std::pair<std::uint64_t, cbor::item>>();
+    return tagged.value().second;
 }
 
 } // namespace

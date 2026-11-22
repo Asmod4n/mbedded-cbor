@@ -71,7 +71,9 @@ std::expected<ref<std::span<iovec const>>, error> encode_iov(item const root);
  *
  * @code{.output}
  * bytes: 82 01 61 61
- * call: auto const pieces = cbor::encode_iov(*cbor::decode(bytes))
+ * call: auto const tree = cbor::decode(bytes)
+ * result: owning item of [1, "a"]
+ * call: auto const pieces = cbor::encode_iov(*tree)
  * (*pieces)->size(): 1
  * sent with writev: [1, "a"]
  * @endcode
@@ -576,14 +578,14 @@ std::expected<void, error> detail::encoding::for_each_child(item const node, F &
 {
     switch (node.type()) {
     case cbor::type::array: {
-        auto const elements = *node.elements();
+        auto const elements = *node.elements_or_error();
         for (item const child : elements)
             if (auto const r = f(child); !r) [[unlikely]]
                 return r;
         return {};
     }
     case cbor::type::map: {
-        auto const pairs = *node.pairs();
+        auto const pairs = *node.pairs_or_error();
         for (auto const [key, value] : pairs) {
             if (auto const r = f(key); !r) [[unlikely]]
                 return r;

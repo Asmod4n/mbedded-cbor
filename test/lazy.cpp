@@ -1183,10 +1183,15 @@ TEST_CASE("lazy: the content of each tag for every major type")
                 if (!value_read)
                     read = std::unexpected(value_read.error());
             } else if (tag == 29) {
-                read = cbor::decode_cycles("\xd8\x1c\x81"s + tagged).transform([](auto const &) {});
+                auto const cycles = cbor::decode_cycles("\xd8\x1c\x81"s + tagged);
+                if (!cycles)
+                    read = std::unexpected(cycles.error());
                 CHECK(cbor::decode("\x82\xd8\x1c\x00"s + tagged).has_value());
-            } else
-                read = cbor::decode("\x82\xd8\x1c\x00"s + tagged).transform([](auto const &) {});
+            } else {
+                auto const tree = cbor::decode("\x82\xd8\x1c\x00"s + tagged);
+                if (!tree)
+                    read = std::unexpected(tree.error());
+            }
             if (admitted)
                 CHECK(read.has_value());
             else
@@ -2348,7 +2353,8 @@ TEST_CASE("lazy: the clone of empty input gives the error of decode")
     auto const empty = test::make_lazy_from_copy(""s);
     REQUIRE(empty.has_value());
     CHECK_EQ(empty->to_item().error(), error::too_little_data);
-    CHECK_EQ(empty->to_item().error(), cbor::decode(std::string_view{}).error());
+    auto const tree = cbor::decode(std::string_view{});
+    CHECK_EQ(empty->to_item().error(), tree.error());
 }
 
 // RFC 8746 2.1 (refs/rfc8746.txt:143): the content of a typed array tag is a byte string. A typed array tag whose
@@ -2399,7 +2405,8 @@ TEST_CASE("lazy: a read through a temporary lazy keeps the bytes alive")
     CHECK_EQ(types, std::vector{cbor::type::text_string, cbor::type::array});
     auto const copy = cbor::lazy::adopt(message())->to_item();
     REQUIRE(copy.has_value());
-    CHECK_EQ((*copy)->elements()->size(), 2u);
+    auto const copy_elements = (*copy)->elements();
+    CHECK_EQ(copy_elements->size(), 2u);
 }
 
 // A map or an array whose count claims more items than its bytes can hold gives too_little_data before any item is read.

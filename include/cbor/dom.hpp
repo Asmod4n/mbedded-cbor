@@ -1287,7 +1287,10 @@ inline std::expected<owning<item>, error> parse_edn(std::string_view const text)
 {
     if (auto read = detail::dom::reader::read(text)) [[likely]]
         return detail::tree_owner::tree_owned(std::move(*read));
-    return diag2cbor(text).and_then([](std::string const &bytes) { return decode(std::string_view(bytes)); });
+    auto const bytes = diag2cbor(text);
+    if (!bytes) [[unlikely]]
+        return std::unexpected(bytes.error());
+    return detail::decode_tree<false>(detail::heads::self_described_cbor_content(*bytes));
 }
 
 }

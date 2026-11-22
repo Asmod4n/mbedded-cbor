@@ -1801,12 +1801,12 @@ inline std::expected<owning<item>, error> lazy::to_item() const
             return std::unexpected(h.error());
         std::string encoded;
         detail::heads::append_head(encoded, h->major, h->info, h->argument);
-        return cbor::decode(encoded);
+        return detail::decode_tree<false>(detail::heads::self_described_cbor_content(encoded));
     }
     if (offset == 0)
         return detail::decode_tree<false>(top_level.encoded);
     std::string_view const rest = detail::validity::subspan(top_level.encoded, detail::validity::offset{offset});
-    auto const size = item_size(rest);
+    auto const size = detail::well_formedness::item_size_or_error(rest);
     if (!size) [[unlikely]]
         return std::unexpected(size.error());
     auto const item = detail::validity::substr(rest, detail::validity::offset{0}, *size);

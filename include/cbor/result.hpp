@@ -5,21 +5,21 @@
  */
 #pragma once
 
+#include <cstddef>
 #include <expected>
 #include <functional>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 
 #include "error.hpp"
+#include "head.hpp"
 #include "validity.hpp"
 
 namespace cbor
 {
 
-struct lazy;
-
-template <class T, class E = error>
-class result;
+result<item> encoded_cbor_data_item(owning<item> const &tree, item tagged);
 
 /**
  * @brief The value of a read, or its error, as `std::expected<T, E>` holds them.
@@ -66,6 +66,16 @@ private:
     friend class result;
 
     friend struct lazy;
+
+    friend struct item;
+
+    friend result<owning<item>> decode(std::string_view encoded);
+
+    friend result<owning<item>> decode_cycles(std::string_view encoded);
+
+    friend result<item> encoded_cbor_data_item(owning<item> const &tree, item tagged);
+
+    friend result<std::size_t> item_size(std::string_view encoded);
 
 public:
     constexpr result(result const &) = default;

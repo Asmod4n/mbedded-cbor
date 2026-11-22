@@ -38,6 +38,7 @@
 #include "validity.hpp"
 #include "head.hpp"
 #include "path.hpp"
+#include "result.hpp"
 #include "rfc2781.hpp"
 #include "rfc3629.hpp"
 #include "rfc4648.hpp"
@@ -2944,7 +2945,7 @@ class extended_diagnostic_notation
 
     friend constexpr std::expected<std::string, error> cbor::diag2cbor(std::string_view text);
 
-    friend std::expected<std::string, error> item::to_edn() const;
+    friend std::expected<std::string, error> item::to_edn_or_error() const;
 
     friend std::expected<owning<item>, error> cbor::parse_edn(std::string_view text);
 
@@ -3306,7 +3307,12 @@ consteval auto operator""_edn()
  */
 inline std::expected<owning<item>, error> parse_edn(std::string_view text);
 
-inline std::expected<std::string, error> item::to_edn() const
+inline result<std::string> item::to_edn() const
+{
+    return result<std::string>(to_edn_or_error());
+}
+
+inline std::expected<std::string, error> item::to_edn_or_error() const
 {
     std::string bytes;
     if (auto const r = encode(bytes, *this); !r) [[unlikely]]
@@ -3344,7 +3350,7 @@ inline std::expected<std::string, error> item::to_edn() const
 inline std::expected<std::string, error> to_edn(item const root)
 {
     if (root.holds_shared_reference()) [[unlikely]]
-        return root.to_edn();
+        return root.to_edn_or_error();
     std::string out;
     if (auto const r = detail::extended_diagnostic_notation::write_item(out, root); !r) [[unlikely]]
         return std::unexpected(r.error());

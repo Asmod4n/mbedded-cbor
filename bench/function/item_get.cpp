@@ -165,22 +165,30 @@ std::uint64_t scalars_sum(Item const &it)
     } else {
         switch (it.type()) {
         case cbor::type::unsigned_integer:
-        case cbor::type::negative_integer:
-            return static_cast<std::uint64_t>(it.template get<std::int64_t>().value());
-        case cbor::type::double_float:
-            return std::bit_cast<std::uint64_t>(it.template get<double>().value());
-        case cbor::type::text_string:
-            return bytes_sum(it.template get<std::string_view>().value());
+        case cbor::type::negative_integer: {
+            auto const number = it.template get<std::int64_t>();
+            return static_cast<std::uint64_t>(number.value());
+        }
+        case cbor::type::double_float: {
+            auto const real = it.template get<double>();
+            return std::bit_cast<std::uint64_t>(real.value());
+        }
+        case cbor::type::text_string: {
+            auto const text = it.template get<std::string_view>();
+            return bytes_sum(text.value());
+        }
         case cbor::type::array: {
             std::uint64_t s = 0;
-            auto const elements = it.elements().value();
+            auto const it_elements = it.elements();
+            auto const elements = it_elements.value();
             for (Item const &child : elements)
                 s += scalars_sum(child);
             return s;
         }
         case cbor::type::map: {
             std::uint64_t s = 0;
-            auto const pairs = it.pairs().value();
+            auto const it_pairs = it.pairs();
+            auto const pairs = it_pairs.value();
             for (auto const pair : pairs)
                 s += scalars_sum(std::get<0>(pair)) + scalars_sum(std::get<1>(pair));
             return s;
@@ -260,36 +268,52 @@ std::uint64_t tree_sum(Item const &it)
         std::unreachable();
     } else {
         switch (it.type()) {
-        case cbor::type::unsigned_integer:
-            return it.template get<std::uint64_t>().value();
-        case cbor::type::negative_integer:
-            return static_cast<std::uint64_t>(it.template get<cbor::int128>().value());
+        case cbor::type::unsigned_integer: {
+            auto const it_number = it.template get<std::uint64_t>();
+            return it_number.value();
+        }
+        case cbor::type::negative_integer: {
+            auto const number = it.template get<cbor::int128>();
+            return static_cast<std::uint64_t>(number.value());
+        }
         case cbor::type::false_value:
-        case cbor::type::true_value:
-            return it.template get<bool>().value() ? 21 : 20;
+        case cbor::type::true_value: {
+            auto const boolean = it.template get<bool>();
+            return boolean.value() ? 21 : 20;
+        }
         case cbor::type::null:
             return 22;
         case cbor::type::undefined:
-        case cbor::type::simple_value:
-            return std::to_underlying(it.template get<cbor::simple_value>().value());
+        case cbor::type::simple_value: {
+            auto const simple = it.template get<cbor::simple_value>();
+            return std::to_underlying(simple.value());
+        }
         case cbor::type::half_float:
         case cbor::type::single_float:
-        case cbor::type::double_float:
-            return std::bit_cast<std::uint64_t>(it.template get<double>().value());
-        case cbor::type::text_string:
-            return bytes_sum(it.template get<std::string_view>().value());
-        case cbor::type::byte_string:
-            return it.template get<std::span<std::byte const>>().value().size();
+        case cbor::type::double_float: {
+            auto const real = it.template get<double>();
+            return std::bit_cast<std::uint64_t>(real.value());
+        }
+        case cbor::type::text_string: {
+            auto const text = it.template get<std::string_view>();
+            return bytes_sum(text.value());
+        }
+        case cbor::type::byte_string: {
+            auto const bytes = it.template get<std::span<std::byte const>>();
+            return bytes.value().size();
+        }
         case cbor::type::array: {
             std::uint64_t s = 0;
-            auto const elements = *it.elements();
+            auto const it_elements = it.elements();
+            auto const elements = *it_elements;
             for (Item const &child : elements)
                 s += tree_sum(child);
             return s;
         }
         case cbor::type::map: {
             std::uint64_t s = 0;
-            auto const pairs = *it.pairs();
+            auto const it_pairs = it.pairs();
+            auto const pairs = *it_pairs;
             for (auto const [key, value] : pairs)
                 s += tree_sum(key) + tree_sum(value);
             return s;
@@ -297,11 +321,14 @@ std::uint64_t tree_sum(Item const &it)
         case cbor::type::tag:
         case cbor::type::unsigned_bignum:
         case cbor::type::negative_bignum: {
-            auto const tag = it.template get<std::pair<std::uint64_t, Item>>().value();
+            auto const tagged = it.template get<std::pair<std::uint64_t, Item>>();
+            auto const tag = tagged.value();
             return tag.first + tree_sum(tag.second);
         }
-        case cbor::type::typed_array:
-            return it.template get<cbor::typed_array>().value().tag;
+        case cbor::type::typed_array: {
+            auto const typed = it.template get<cbor::typed_array>();
+            return typed.value().tag;
+        }
         case cbor::type::shared_reference:
             return 0;
         }

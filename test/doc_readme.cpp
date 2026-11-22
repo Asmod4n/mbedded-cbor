@@ -40,12 +40,16 @@ TEST_CASE("doc readme: read a message")
 TEST_CASE("doc readme: decode a tree and write it back")
 {
     std::string const bytes = test::encode_in_preferred_form(test::M("sensor"s, "t1"s, "value"s, 21.5));
-    auto const tree = cbor::decode(bytes).value();
+    auto const decoded = cbor::decode(bytes);
+    auto const tree = decoded.value();
 
     std::vector<std::string_view> keys;
-    auto const pairs = tree->pairs().value();
-    for (auto const [key, value] : pairs)
-        keys.push_back(*key.get<std::string_view>());
+    auto const read = tree->pairs();
+    auto const pairs = read.value();
+    for (auto const [key, value] : pairs) {
+        auto const text = key.get<std::string_view>();
+        keys.push_back(*text);
+    }
 
     std::string out;
     REQUIRE(cbor::encode(out, *tree).has_value());

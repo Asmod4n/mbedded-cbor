@@ -36,8 +36,9 @@ TEST_CASE("limits: with no size limit a head of 2^64 - 1 finds too little data")
 {
     std::string const text = "\x7b\xff\xff\xff\xff\xff\xff\xff\xff"s;
     std::string const array = "\x9b\xff\xff\xff\xff\xff\xff\xff\xff"s;
-    CHECK_EQ(cbor::item_size(text).error(), error::too_little_data);
-    CHECK_EQ(cbor::item_size(array).error(), error::too_little_data);
+    CHECK_EQ(cbor::item_size(text), std::unexpected(error::too_little_data));
+    auto const length = cbor::item_size(array);
+    CHECK_EQ(length.error(), error::too_little_data);
     CHECK_EQ(cbor::diagnostic_notation(text).error(), error::too_little_data);
     CHECK_EQ(cbor::diagnostic_notation(array).error(), error::too_little_data);
 }
