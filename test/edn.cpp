@@ -226,7 +226,10 @@ TEST_CASE("parse_edn: a JSON number with a long fraction gives the double of std
 // the string. h'01' is a byte string head and one byte (RFC 8949 3.1).
 TEST_CASE("diag2cbor: the reader runs in a constant expression")
 {
-    constexpr std::size_t size = cbor::diag2cbor("h'01'").value().size();
+    constexpr std::size_t size = [] {
+        auto const bytes = cbor::diag2cbor("h'01'");
+        return bytes.value().size();
+    }();
     CHECK_EQ(size, 2u);
 }
 
@@ -291,8 +294,8 @@ TEST_CASE("diag2cbor: bytes that are not valid stay as written")
         CHECK_EQ(*bytes, bytes_of_hex(hex));
         CHECK_EQ(cbor::item_size(*bytes), bytes->size());
     }
-    CHECK_EQ(cbor::parse_edn("64(1)").error(), cbor::error::inadmissible_type_for_tag_content);
-    CHECK_EQ(cbor::parse_edn("24(<<1, 2>>)").error(), cbor::error::syntax_error);
+    CHECK_EQ(cbor::parse_edn("64(1)"), std::unexpected(cbor::error::inadmissible_type_for_tag_content));
+    CHECK_EQ(cbor::parse_edn("24(<<1, 2>>)"), std::unexpected(cbor::error::syntax_error));
 }
 
 // RFC 8746 reserves tag 76 (the little-endian sint8 form "MUST NOT be used"), so it is no typed array: its content
@@ -407,7 +410,8 @@ TEST_CASE("cbor::to_edn: the text of a shared tree reads back to the same tree")
     cbor::item const inner = element_of(*back, 1);
     CHECK(target_of_reference(element_of(inner, 1)) == inner);
     CHECK(target_of_reference(element_of(inner, 2)) == *back);
-    auto const cycle = shared_from_edn(*cbor::to_edn(shared_from_edn("28([29(0)])")));
+    auto const edn_text = cbor::to_edn(shared_from_edn("28([29(0)])"));
+    auto const cycle = shared_from_edn(*edn_text);
     CHECK(target_of_reference(element_of(*cycle, 0)) == *cycle);
 }
 

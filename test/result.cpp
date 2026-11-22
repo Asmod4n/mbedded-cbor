@@ -1,3 +1,4 @@
+#include <cbor/diagnostic_notation.hpp>
 #include <cbor/lazy.hpp>
 #include <cbor/result.hpp>
 #include <cbor/structs.hpp>
@@ -110,6 +111,16 @@ constexpr auto size_of_text = [](std::string const &s) { return cbor::item_size(
 constexpr auto length_of_text = [](std::string const &s) { return s.size(); };
 
 constexpr auto encode_zero = [](error const &) { return cbor::encode<int>(0); };
+
+using edn_result = decltype(cbor::diag2cbor(std::declval<std::string_view>()));
+
+using text_result = decltype(cbor::to_edn(std::declval<cbor::item>()));
+
+using parsed_result = decltype(cbor::parse_edn(std::declval<std::string_view>()));
+
+constexpr auto parse_text = [](std::string const &text) { return cbor::parse_edn(text); };
+
+constexpr auto read_empty = [](error const &) { return cbor::diag2cbor(std::string_view{}); };
 
 } // namespace
 
@@ -441,4 +452,88 @@ TEST_CASE("result: cbor::encode, cbor::encode_iov and cbor::structs give a resul
     CHECK_EQ(cut.error(), error::too_little_data);
     auto const length = struct_bytes.transform(length_of_text);
     CHECK_EQ(*length, struct_out.size());
+}
+
+// cbor::diag2cbor, cbor::diagnostic_notation, cbor::to_edn and cbor::parse_edn give a result too, so the same rules
+// hold for them: a reader or a monadic form of a temporary result does not compile, and the same call on a named
+// result does. The bytes of diag2cbor are the case that a loop reads.
+TEST_CASE("result: a temporary result of cbor::diag2cbor, cbor::to_edn or cbor::parse_edn cannot be read")
+{
+    CHECK(deref_of_named<edn_result>);
+    CHECK(loop_over_named<edn_result>);
+    CHECK_FALSE(deref_of_call<edn_result>);
+    CHECK_FALSE(loop_over_call<edn_result>);
+    CHECK_FALSE(arrow_of_call<edn_result>);
+    CHECK_FALSE(value_of_call<edn_result>);
+    CHECK_FALSE(error_of_call<edn_result>);
+    CHECK_FALSE(deref_of_moved<edn_result>);
+    CHECK_FALSE(deref_of_call<text_result>);
+    CHECK_FALSE(value_of_call<text_result>);
+    CHECK_FALSE(error_of_call<text_result>);
+    CHECK_FALSE(deref_of_call<parsed_result>);
+    CHECK_FALSE(value_of_call<parsed_result>);
+    CHECK_FALSE(error_of_call<parsed_result>);
+    CHECK_FALSE(deref_of_moved<parsed_result>);
+    using parse = decltype(parse_text);
+    using length = decltype(length_of_text);
+    using again = decltype(read_empty);
+    using code = decltype(code_of);
+    CHECK((and_then_takes<edn_result const &, parse>));
+    CHECK_FALSE((and_then_takes<edn_result &&, parse>));
+    CHECK((transform_takes<edn_result const &, length>));
+    CHECK_FALSE((transform_takes<edn_result &&, length>));
+    CHECK((or_else_takes<edn_result const &, again>));
+    CHECK_FALSE((or_else_takes<edn_result &&, again>));
+    CHECK((transform_error_takes<edn_result const &, code>));
+    CHECK_FALSE((transform_error_takes<edn_result &&, code>));
+    CHECK_FALSE((std::is_convertible_v<edn_result, std::expected<std::string, error>>));
+    CHECK_FALSE((std::is_convertible_v<parsed_result, std::expected<cbor::owning<cbor::item>, error>>));
+    CHECK_FALSE((std::is_constructible_v<edn_result, std::string>));
+    CHECK_FALSE((std::is_constructible_v<text_result, std::unexpect_t, error>));
+}
+
+// A named result of each function of the group gives its value or its error. Each overload of diag2cbor,
+// diagnostic_notation, to_edn and parse_edn is called once here.
+TEST_CASE("result: cbor::diag2cbor, cbor::diagnostic_notation, cbor::to_edn and cbor::parse_edn give a result")
+{
+    auto const bytes = cbor::diag2cbor("[1, 2_1]");
+    REQUIRE(bytes.has_value());
+    CHECK_EQ(bytes->size(), 5u);
+    auto const text = cbor::diagnostic_notation(std::string_view(*bytes));
+    CHECK_EQ(*text, "[1, 2_1]");
+    auto const of_range = cbor::diagnostic_notation(std::span<char const>(*bytes));
+    CHECK_EQ(of_range, *text);
+    auto const tree = cbor::parse_edn(*text);
+    REQUIRE(tree.has_value());
+    auto const of_root = cbor::to_edn(**tree);
+    CHECK_EQ(*of_root, "[1, 2_1]");
+    auto const of_tree = cbor::to_edn(*tree);
+    CHECK_EQ(of_tree, *of_root);
+    auto const of_value = cbor::to_edn<std::map<std::string, std::int64_t>>({{"a", 7}});
+    CHECK_EQ(*of_value, R"({"a": 7})");
+    auto const parsed = text.and_then(parse_text);
+    REQUIRE(parsed.has_value());
+    auto const refused = cbor::diag2cbor("[1,");
+    CHECK_EQ(refused.error(), error::syntax_error);
+    auto const cut = cbor::diagnostic_notation(std::string_view("\x82\x01"));
+    CHECK_EQ(cut.error(), error::too_little_data);
+    auto const unread = cbor::parse_edn("[1,");
+    CHECK_EQ(unread.error(), error::syntax_error);
+}
+
+// cbor::diag2cbor is constexpr, and a program calls it at compile time to make a constant. So its result is made,
+// copied and read in a constant expression.
+TEST_CASE("result: cbor::diag2cbor gives its result in a constant expression")
+{
+    constexpr std::size_t size = [] {
+        auto const encoded = cbor::diag2cbor("[1, 2_1]");
+        auto const copied = encoded;
+        return copied.has_value() ? copied->size() : 0;
+    }();
+    CHECK_EQ(size, 5u);
+    constexpr bool refused = [] {
+        auto const encoded = cbor::diag2cbor("[1,");
+        return encoded.error() == error::syntax_error;
+    }();
+    CHECK(refused);
 }

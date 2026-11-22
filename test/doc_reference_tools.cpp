@@ -32,7 +32,8 @@ TEST_CASE("doc reference tools: the example of the group tools")
     std::size_t covered = 0;
     for (auto const item : cbor::sequence(owner))
         if (item) {
-            text.push_back(cbor::diagnostic_notation(*item).value());   // "[1, 2]", then "7"
+            auto const edn_text = cbor::diagnostic_notation(*item);
+            text.push_back(edn_text.value());   // "[1, 2]", then "7"
             covered += item->size();                                    // 3, then 1
         }
     // [tools group]
@@ -142,5 +143,5 @@ TEST_CASE("doc reference tools: diagnostic_notation")
     // [diagnostic_notation]
     CHECK_EQ(text, "{\"a\": [1, 2.5, h'01']}"s);
     CHECK_EQ(cbor::diagnostic_notation("\x9f\x01\xff"sv), "[_ 1]"s);
-    CHECK_EQ(cbor::diagnostic_notation("\x01\x02"sv).error(), cbor::error::syntax_error);
+    CHECK_EQ(cbor::diagnostic_notation("\x01\x02"sv), std::unexpected(cbor::error::syntax_error));
 }

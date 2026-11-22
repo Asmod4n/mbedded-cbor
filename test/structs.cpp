@@ -229,14 +229,19 @@ struct outer_m {
 // read, so it is no duplicate. The key 1 in one byte and the key 1 in two bytes are the same key (RFC 8949 5.6).
 TEST_CASE("structs: a repeated key is duplicate_key")
 {
-    CHECK_EQ(cbor::structs<pair_ab>::decode(cbor::diag2cbor(R"({"a": 1, "a": 2, "b": 71(h'')})").value()),
+    auto edn_bytes = cbor::diag2cbor(R"({"a": 1, "a": 2, "b": 71(h'')})");
+    CHECK_EQ(cbor::structs<pair_ab>::decode(std::move(edn_bytes.value())),
              std::unexpected(error::duplicate_key));
-    CHECK_EQ(cbor::structs<outer_m>::decode(cbor::diag2cbor(R"({"m": {"a": 1, "b": 2}, "m": {"a": 3}})").value()),
+    auto edn_bytes_2 = cbor::diag2cbor(R"({"m": {"a": 1, "b": 2}, "m": {"a": 3}})");
+    CHECK_EQ(cbor::structs<outer_m>::decode(std::move(edn_bytes_2.value())),
              std::unexpected(error::duplicate_key));
-    CHECK_EQ(cbor::structs<std::map<std::string, std::string>>::decode(cbor::diag2cbor(R"({"a": "A", "a": "B"})").value()),
+    auto edn_bytes_3 = cbor::diag2cbor(R"({"a": "A", "a": "B"})");
+    CHECK_EQ(cbor::structs<std::map<std::string, std::string>>::decode(std::move(edn_bytes_3.value())),
              std::unexpected(error::duplicate_key));
-    CHECK(cbor::structs<pair_ab>::decode(cbor::diag2cbor(R"({"a": 1, "b": 71(h''), "x": 1, "x": 2})").value()).has_value());
-    CHECK_EQ(cbor::structs<std::map<std::uint64_t, std::uint64_t>>::decode(cbor::diag2cbor("{1: 0, 1_0: 5}").value()),
+    auto edn_bytes_4 = cbor::diag2cbor(R"({"a": 1, "b": 71(h''), "x": 1, "x": 2})");
+    CHECK(cbor::structs<pair_ab>::decode(std::move(edn_bytes_4.value())).has_value());
+    auto edn_bytes_5 = cbor::diag2cbor("{1: 0, 1_0: 5}");
+    CHECK_EQ(cbor::structs<std::map<std::uint64_t, std::uint64_t>>::decode(std::move(edn_bytes_5.value())),
              std::unexpected(error::duplicate_key));
 }
 
@@ -490,10 +495,12 @@ TEST_CASE("structs: a value under tag 28 or tag 29 is invalid_tag")
     for (std::string const width : {"_0", "_1", "_2", "_3"}) {
         CAPTURE(width);
         auto const bytes = [&width](std::string const &before, std::string const &after) {
-            return cbor::diag2cbor(before + "28" + width + after).value();
+            auto const edn_bytes = cbor::diag2cbor(before + "28" + width + after);
+            return edn_bytes.value();
         };
         auto const reference = [&width](std::string const &before, std::string const &after) {
-            return cbor::diag2cbor(before + "29" + width + after).value();
+            auto const edn_bytes_2 = cbor::diag2cbor(before + "29" + width + after);
+            return edn_bytes_2.value();
         };
         CHECK_EQ(cbor::structs<value_kinds>::decode(bytes(R"({"a": )", R"((1), "b": []})")),
                  std::unexpected(error::invalid_tag));
@@ -535,7 +542,8 @@ TEST_CASE("structs: a tag 28 or tag 29 in a skipped entry is skipped")
         std::string const edn = "{28" + width + R"(("a"): 28)" + width + "(1), 29" + width + "(0): 29" +
                                 width + R"((0), "x": [28)" + width + "(1), 29" + width +
                                 R"((0)], "a": 2, "b": [3]})";
-        auto const read = cbor::structs<value_kinds>::decode(cbor::diag2cbor(edn).value());
+        auto edn_bytes = cbor::diag2cbor(edn);
+        auto const read = cbor::structs<value_kinds>::decode(std::move(edn_bytes.value()));
         REQUIRE(read.has_value());
         CHECK(**read == value_kinds{2, {3}});
     }
@@ -547,7 +555,8 @@ TEST_CASE("structs: a tag 28 or tag 29 in a skipped entry is skipped")
 // std::chrono::sys_seconds.
 TEST_CASE("structs: a tag 28 inside the content of tag 1 keeps the error of tag 1")
 {
-    std::string const bytes = cbor::diag2cbor(R"({"a": 1(28(5))})").value();
+    auto const edn_bytes = cbor::diag2cbor(R"({"a": 1(28(5))})");
+    std::string const bytes = edn_bytes.value();
     CHECK_EQ(cbor::structs<value_kinds>::decode(std::string(bytes)), std::unexpected(error::incorrect_type));
     CHECK_EQ(cbor::structs<seconds_member>::decode(std::string(bytes)),
              std::unexpected(error::inadmissible_type_for_tag_content));
@@ -632,11 +641,14 @@ TEST_CASE("structs: a double that a float cannot hold is number_out_of_range")
 template <class M>
 void map_keys_check()
 {
-    CHECK_EQ(cbor::structs<M>::decode(cbor::diag2cbor("{1: 5, 2: 6, 1: 7}").value()), std::unexpected(error::duplicate_key));
-    CHECK_EQ(cbor::structs<M>::decode(cbor::diag2cbor("{2: 6, 2: 6}").value()), std::unexpected(error::duplicate_key));
+    auto edn_bytes = cbor::diag2cbor("{1: 5, 2: 6, 1: 7}");
+    CHECK_EQ(cbor::structs<M>::decode(std::move(edn_bytes.value())), std::unexpected(error::duplicate_key));
+    auto edn_bytes_2 = cbor::diag2cbor("{2: 6, 2: 6}");
+    CHECK_EQ(cbor::structs<M>::decode(std::move(edn_bytes_2.value())), std::unexpected(error::duplicate_key));
     for (std::string_view const edn : {"{1: 5, 2: 6, 3: 7}", "{3: 7, 1: 5, 2: 6}", "{2: 6, 3: 7, 1: 5}",
                                        "{1: 5, 3: 7, 2: 6}", "{2: 6, 1: 5, 3: 7}", "{3: 7, 2: 6, 1: 5}"}) {
-        auto const read = cbor::structs<M>::decode(cbor::diag2cbor(edn).value());
+        auto edn_bytes_3 = cbor::diag2cbor(edn);
+        auto const read = cbor::structs<M>::decode(std::move(edn_bytes_3.value()));
         REQUIRE(read.has_value());
         CHECK_EQ((*read)->size(), 3u);
         CHECK_EQ((*read)->at(1), 5);
@@ -708,24 +720,32 @@ TEST_CASE("structs: every standard container that encode writes decodes")
 template <class M>
 void multimap_check()
 {
-    round_trip(cbor::diag2cbor("{}").value(), M{});
-    round_trip(cbor::diag2cbor("{1: [2]}").value(), M{{1, 2}});
-    auto const back = cbor::structs<M>::decode(cbor::diag2cbor("{1: [2, 3], 2: [4]}").value());
+    auto const edn_bytes = cbor::diag2cbor("{}");
+    round_trip(edn_bytes.value(), M{});
+    auto const edn_bytes_2 = cbor::diag2cbor("{1: [2]}");
+    round_trip(edn_bytes_2.value(), M{{1, 2}});
+    auto edn_bytes_3 = cbor::diag2cbor("{1: [2, 3], 2: [4]}");
+    auto const back = cbor::structs<M>::decode(std::move(edn_bytes_3.value()));
     REQUIRE(back.has_value());
     CHECK_EQ((**back), M{{1, 2}, {1, 3}, {2, 4}});
     auto const again = cbor::encode<M>(M{{1, 2}, {1, 3}});
     REQUIRE(again.has_value());
-    CHECK((*again == cbor::diag2cbor("{1: [2, 3]}").value() || *again == cbor::diag2cbor("{1: [3, 2]}").value()));
+    CHECK((*again == cbor::diag2cbor("{1: [2, 3]}") || *again == cbor::diag2cbor("{1: [3, 2]}")));
     if constexpr (requires(M const &m) { m.lower_bound(1); }) {
-        CHECK_EQ(cbor::structs<M>::decode(cbor::diag2cbor("{1: [2], 1: [3]}").value()), std::unexpected(error::duplicate_key));
+        auto edn_bytes_4 = cbor::diag2cbor("{1: [2], 1: [3]}");
+        CHECK_EQ(cbor::structs<M>::decode(std::move(edn_bytes_4.value())), std::unexpected(error::duplicate_key));
     } else {
-        auto const appended = cbor::structs<M>::decode(cbor::diag2cbor("{1: [2], 1: [3]}").value());
+        auto edn_bytes_5 = cbor::diag2cbor("{1: [2], 1: [3]}");
+        auto const appended = cbor::structs<M>::decode(std::move(edn_bytes_5.value()));
         REQUIRE(appended.has_value());
         CHECK_EQ(**appended, M{{1, 2}, {1, 3}});
     }
-    CHECK_EQ(cbor::structs<M>::decode(cbor::diag2cbor("{1: 2}").value()), std::unexpected(error::incorrect_type));
-    CHECK_EQ(cbor::structs<M>::decode(cbor::diag2cbor("{1: []}").value()), std::unexpected(error::incorrect_type));
-    CHECK_EQ(cbor::structs<M>::decode(cbor::diag2cbor("[[1, 2]]").value()), std::unexpected(error::incorrect_type));
+    auto edn_bytes_6 = cbor::diag2cbor("{1: 2}");
+    CHECK_EQ(cbor::structs<M>::decode(std::move(edn_bytes_6.value())), std::unexpected(error::incorrect_type));
+    auto edn_bytes_7 = cbor::diag2cbor("{1: []}");
+    CHECK_EQ(cbor::structs<M>::decode(std::move(edn_bytes_7.value())), std::unexpected(error::incorrect_type));
+    auto edn_bytes_8 = cbor::diag2cbor("[[1, 2]]");
+    CHECK_EQ(cbor::structs<M>::decode(std::move(edn_bytes_8.value())), std::unexpected(error::incorrect_type));
 }
 
 // RFC 8949 5.6 refuses two equal keys in a map, so a std::multimap goes as one key with the array of its values. The
@@ -795,9 +815,11 @@ TEST_CASE("structs: decode reserves the elements that the bytes left can hold")
     for (std::size_t i = 1; i < claimed; ++i)
         claim += ", null";
     claim += "]}";
-    std::string const full = cbor::diag2cbor(claim).value();
+    auto const edn_bytes = cbor::diag2cbor(claim);
+    std::string const full = edn_bytes.value();
     std::string message = full.substr(0, full.size() - claimed);
-    message.append(nulls, cbor::diag2cbor("null").value().front());
+    auto const edn_bytes_2 = cbor::diag2cbor("null");
+    message.append(nulls, edn_bytes_2.value().front());
     REQUIRE_EQ(message.size(), full.size() - claimed + nulls);
     CHECK_THROWS_AS(static_cast<void>(cbor::structs<large_elements>::decode(std::move(message))), std::bad_alloc);
 }
@@ -910,11 +932,13 @@ TEST_CASE("structs: an array head reserves no more elements than the bytes left 
     for (std::size_t i = 1; i < claimed; ++i)
         all_zeros += ", 0";
     all_zeros += "]";
-    std::string const claim = cbor::diag2cbor(all_zeros).value();
+    auto const edn_bytes = cbor::diag2cbor(all_zeros);
+    std::string const claim = edn_bytes.value();
     std::string const head_of_claim = claim.substr(0, claim.size() - claimed);
     std::string input = head_of_claim;
+    auto const point = cbor::diag2cbor(R"({"x": 0, "y": 0})");
     for (std::size_t i = 0; i < present; ++i)
-        input += cbor::diag2cbor(R"({"x": 0, "y": 0})").value();
+        input += point.value();
     REQUIRE_EQ(input.size() - head_of_claim.size(), claimed);
     largest_allocation_resource resource;
     std::pmr::vector<point_xy> target(&resource);
@@ -935,8 +959,9 @@ struct tree_node {
 // succeeds gives the same tree. A tree whose last byte is cut gives too_little_data.
 TEST_CASE("structs: a recursive type decodes and a cut tree gives too_little_data")
 {
-    std::string const bytes = cbor::diag2cbor(
-        R"({"children": [{"children": []}, {"children": [{"children": []}, {"children": []}]}]})").value();
+    auto const edn_bytes = cbor::diag2cbor(
+        R"({"children": [{"children": []}, {"children": [{"children": []}, {"children": []}]}]})");
+    std::string const bytes = edn_bytes.value();
     tree_node const expected{{tree_node{}, tree_node{{tree_node{}, tree_node{}}}}};
     auto const read = cbor::structs<tree_node>::decode(std::string(bytes));
     REQUIRE(read.has_value());
@@ -1024,7 +1049,8 @@ TEST_CASE("structs: an integer key written as a bignum that fits")
 // place, so the same key written in EDN must name the member of 24.
 TEST_CASE("structs: the bignum key 2(h'18') names the member of 24")
 {
-    auto const back = cbor::structs<integer_order>::decode(cbor::diag2cbor("{2(h'18'): 10, -1: 20, 1: 30}").value());
+    auto edn_bytes = cbor::diag2cbor("{2(h'18'): 10, -1: 20, 1: 30}");
+    auto const back = cbor::structs<integer_order>::decode(std::move(edn_bytes.value()));
     REQUIRE(back.has_value());
     CHECK(**back == integer_order{10, 20, 30});
 }
@@ -1043,11 +1069,13 @@ struct wide_member {
 // bits, and 2^128 is the first value past 128 bits.
 TEST_CASE("structs: a member of 128 bits reads a bignum up to 16 significant bytes")
 {
-    auto const fits = cbor::structs<wide_member>::decode(cbor::diag2cbor(R"({"v": 2(h'010000000000000000')})").value());
+    auto edn_bytes = cbor::diag2cbor(R"({"v": 2(h'010000000000000000')})");
+    auto const fits = cbor::structs<wide_member>::decode(std::move(edn_bytes.value()));
     REQUIRE(fits.has_value());
     CHECK((**fits).v == static_cast<cbor::uint128>(1) << 64);
+    auto edn_bytes_2 = cbor::diag2cbor(R"({"v": 2(h'0100000000000000000000000000000000')})");
     CHECK_EQ(cbor::structs<wide_member>::decode(
-                 cbor::diag2cbor(R"({"v": 2(h'0100000000000000000000000000000000')})").value()),
+                 std::move(edn_bytes_2.value())),
              std::unexpected(error::number_out_of_range));
 }
 #endif
@@ -1163,7 +1191,10 @@ TEST_CASE("structs: sys_seconds is tag 1 and year_month_day is tag 100")
 TEST_CASE("structs: tag 1 with a fraction of a second")
 {
     using namespace std::chrono;
-    auto const tag1 = [](std::string_view const diag) { return cbor::diag2cbor(diag).value(); };
+    auto const tag1 = [](std::string_view const diag) {
+        auto const bytes = cbor::diag2cbor(diag);
+        return bytes.value();
+    };
     auto const ms = cbor::structs<sys_time<milliseconds>>::decode(tag1("1(1.5)"));
     REQUIRE(ms.has_value());
     CHECK_EQ((*ms)->time_since_epoch().count(), 1500);
@@ -1189,7 +1220,10 @@ TEST_CASE("structs: tag 1 with a fraction of a second")
 TEST_CASE("structs: sys_time of each precision round trips through tag 1 and tag 1001")
 {
     using namespace std::chrono;
-    auto const item = [](std::string_view const diag) { return cbor::diag2cbor(diag).value(); };
+    auto const item = [](std::string_view const diag) {
+        auto const bytes = cbor::diag2cbor(diag);
+        return bytes.value();
+    };
     round_trip(item("1(1700000000)"), sys_seconds{seconds{1700000000}});
     round_trip(item("1001({1: 1, -3: 500})"), sys_time<milliseconds>{milliseconds{1500}});
     round_trip(item("1001({1: 1, -3: 1})"), sys_time<milliseconds>{milliseconds{1001}});
@@ -1215,7 +1249,7 @@ TEST_CASE("structs: sys_time with a period that tag 1001 cannot carry gives numb
     CHECK_EQ(cbor::encode<sys_time<thirds>>(sys_time<thirds>{thirds{1}}), std::unexpected(error::number_out_of_range));
     auto const whole = cbor::encode<sys_time<thirds>>(sys_time<thirds>{thirds{3}});
     REQUIRE(whole.has_value());
-    CHECK_EQ(*whole, cbor::diag2cbor("1(1)").value());
+    CHECK_EQ(*whole, cbor::diag2cbor("1(1)"));
 }
 
 // RFC 9581 3 (refs/rfc9581.txt:180-247): key 1 is the base time, a fraction key adds to it, and a fraction of 10^3k or
@@ -1225,7 +1259,8 @@ TEST_CASE("structs: tag 1001 into sys_time")
 {
     using namespace std::chrono;
     auto const decode_ms = [](std::string_view const diag) {
-        return cbor::structs<sys_time<milliseconds>>::decode(cbor::diag2cbor(diag).value());
+        auto edn_bytes = cbor::diag2cbor(diag);
+        return cbor::structs<sys_time<milliseconds>>::decode(std::move(edn_bytes.value()));
     };
     auto const carried = decode_ms("1001({1: 1, -3: 1500})");
     REQUIRE(carried.has_value());
@@ -1237,15 +1272,18 @@ TEST_CASE("structs: tag 1001 into sys_time")
         REQUIRE(r.has_value());
         CHECK_EQ((*r)->time_since_epoch().count(), 1000);
     }
-    auto const fine = cbor::structs<sys_time<nanoseconds>>::decode(cbor::diag2cbor("1001({1: 1, -3: 5})").value());
+    auto edn_bytes_2 = cbor::diag2cbor("1001({1: 1, -3: 5})");
+    auto const fine = cbor::structs<sys_time<nanoseconds>>::decode(std::move(edn_bytes_2.value()));
     REQUIRE(fine.has_value());
     CHECK_EQ((*fine)->time_since_epoch().count(), 1005000000);
+    auto edn_bytes_3 = cbor::diag2cbor("1001({1: 1.5})");
     auto const fractional =
-        cbor::structs<sys_time<duration<double>>>::decode(cbor::diag2cbor("1001({1: 1.5})").value());
+        cbor::structs<sys_time<duration<double>>>::decode(std::move(edn_bytes_3.value()));
     REQUIRE(fractional.has_value());
     CHECK_EQ((*fractional)->time_since_epoch().count(), 1.5);
     CHECK_EQ(decode_ms("1001({1: 1, -6: 1})"), std::unexpected(error::number_out_of_range));
-    CHECK_EQ(cbor::structs<sys_seconds>::decode(cbor::diag2cbor("1001({1: 1, -3: 1})").value()),
+    auto edn_bytes_4 = cbor::diag2cbor("1001({1: 1, -3: 1})");
+    CHECK_EQ(cbor::structs<sys_seconds>::decode(std::move(edn_bytes_4.value())),
              std::unexpected(error::number_out_of_range));
     CHECK_EQ(decode_ms("1001({1: 9223372036854775807, -3: 1000})"), std::unexpected(error::number_out_of_range));
 }
@@ -1260,7 +1298,8 @@ TEST_CASE("structs: tag 1001 that the library cannot read gives inadmissible_typ
 #if !(__cpp_lib_chrono >= 201907L && defined(__cpp_lib_spanstream))
     for (std::string_view const diag : {"1001({1: 1, 13: 1})", "1001({1: 1, -1: 1})"}) {
         CAPTURE(diag);
-        CHECK_EQ(cbor::structs<sys_time<milliseconds>>::decode(cbor::diag2cbor(diag).value()),
+        auto edn_bytes = cbor::diag2cbor(diag);
+        CHECK_EQ(cbor::structs<sys_time<milliseconds>>::decode(std::move(edn_bytes.value())),
                  std::unexpected(error::inadmissible_type_for_tag_content));
     }
 #endif
@@ -1271,7 +1310,8 @@ TEST_CASE("structs: tag 1001 that the library cannot read gives inadmissible_typ
           "1001({1: 1, 1: 2})", "1001({1: 1, 13: 0, -1: 0})", "1001({1: 1, -3: -1})", "1001([1])",
           "1001({1: \"1\"})", "1001({h'01': 1, 1: 1})"}) {
         CAPTURE(diag);
-        CHECK_EQ(cbor::structs<sys_time<milliseconds>>::decode(cbor::diag2cbor(diag).value()),
+        auto edn_bytes = cbor::diag2cbor(diag);
+        CHECK_EQ(cbor::structs<sys_time<milliseconds>>::decode(std::move(edn_bytes.value())),
                  std::unexpected(error::inadmissible_type_for_tag_content));
     }
 }
@@ -1283,7 +1323,10 @@ TEST_CASE("structs: tag 1001 that the library cannot read gives inadmissible_typ
 TEST_CASE("structs: tai_time and gps_time are tag 1001 with timescale 1")
 {
     using namespace std::chrono;
-    auto const item = [](std::string_view const diag) { return cbor::diag2cbor(diag).value(); };
+    auto const item = [](std::string_view const diag) {
+        auto const bytes = cbor::diag2cbor(diag);
+        return bytes.value();
+    };
     round_trip(item("1001({1: 0, 13: 1})"), tai_seconds{seconds{378691200}});
     round_trip(item("1001({1: 0, -3: 500, 13: 1})"), tai_time<milliseconds>{milliseconds{378691200500}});
     round_trip(item("1001({1: -378691200, 13: 1})"), tai_seconds{seconds{0}});
@@ -1304,7 +1347,10 @@ TEST_CASE("structs: tai_time and gps_time are tag 1001 with timescale 1")
 TEST_CASE("structs: timescale 1 into sys_time and UTC forms into tai_time convert with the leap seconds")
 {
     using namespace std::chrono;
-    auto const item = [](std::string_view const diag) { return cbor::diag2cbor(diag).value(); };
+    auto const item = [](std::string_view const diag) {
+        auto const bytes = cbor::diag2cbor(diag);
+        return bytes.value();
+    };
     auto const utc = cbor::structs<sys_seconds>::decode(item("1001({1: 1500000000, 13: 1})"));
     REQUIRE(utc.has_value());
     CHECK_EQ((*utc)->time_since_epoch().count(), 1499999963);
@@ -1329,7 +1375,10 @@ TEST_CASE("structs: timescale 1 into sys_time and UTC forms into tai_time conver
 TEST_CASE("structs: utc_time is TAI and keeps a leap second")
 {
     using namespace std::chrono;
-    auto const item = [](std::string_view const diag) { return cbor::diag2cbor(diag).value(); };
+    auto const item = [](std::string_view const diag) {
+        auto const bytes = cbor::diag2cbor(diag);
+        return bytes.value();
+    };
     auto const before = clock_cast<utc_clock>(sys_seconds{seconds{1483228799}});
     utc_seconds const leap = before + seconds{1};
     CHECK(get_leap_second_info(leap).is_leap_second);
@@ -1348,7 +1397,10 @@ TEST_CASE("structs: utc_time is TAI and keeps a leap second")
 TEST_CASE("structs: file_time is written as its sys_time")
 {
     using namespace std::chrono;
-    auto const item = [](std::string_view const diag) { return cbor::diag2cbor(diag).value(); };
+    auto const item = [](std::string_view const diag) {
+        auto const bytes = cbor::diag2cbor(diag);
+        return bytes.value();
+    };
     round_trip(item("1(1700000000)"), clock_cast<file_clock>(sys_seconds{seconds{1700000000}}));
     round_trip(item("1001({1: 1700000000, -3: 500})"),
                clock_cast<file_clock>(sys_time<milliseconds>{milliseconds{1700000000500}}));
@@ -1361,7 +1413,10 @@ TEST_CASE("structs: zoned_time is tag 1001 with a time zone hint")
 {
     using namespace std::chrono;
     using zoned = zoned_time<seconds>;
-    auto const item = [](std::string_view const diag) { return cbor::diag2cbor(diag).value(); };
+    auto const item = [](std::string_view const diag) {
+        auto const bytes = cbor::diag2cbor(diag);
+        return bytes.value();
+    };
     zoned const berlin{locate_zone("Europe/Berlin"), sys_seconds{seconds{1700000000}}};
     round_trip(item(R"(1001({1: 1700000000, -10: "Europe/Berlin"}))"), berlin);
     round_trip(item(R"(1001({1: 1700000000, -3: 5, -10: "Europe/Berlin"}))"),
@@ -1393,17 +1448,22 @@ TEST_CASE("structs: zoned_time is tag 1001 with a time zone hint")
 TEST_CASE("structs: tag 100 into sys_time")
 {
     using namespace std::chrono;
-    auto const days_in = cbor::structs<sys_days>::decode(cbor::diag2cbor("100(-3)").value());
+    auto edn_bytes = cbor::diag2cbor("100(-3)");
+    auto const days_in = cbor::structs<sys_days>::decode(std::move(edn_bytes.value()));
     REQUIRE(days_in.has_value());
     CHECK_EQ((*days_in)->time_since_epoch().count(), -3);
-    auto const seconds_in = cbor::structs<sys_seconds>::decode(cbor::diag2cbor("100(2)").value());
+    auto edn_bytes_2 = cbor::diag2cbor("100(2)");
+    auto const seconds_in = cbor::structs<sys_seconds>::decode(std::move(edn_bytes_2.value()));
     REQUIRE(seconds_in.has_value());
     CHECK_EQ((*seconds_in)->time_since_epoch().count(), 172800);
-    CHECK_EQ(cbor::structs<sys_seconds>::decode(cbor::diag2cbor("100(9223372036854775807)").value()),
+    auto edn_bytes_3 = cbor::diag2cbor("100(9223372036854775807)");
+    CHECK_EQ(cbor::structs<sys_seconds>::decode(std::move(edn_bytes_3.value())),
              std::unexpected(error::number_out_of_range));
-    CHECK_EQ(cbor::structs<sys_seconds>::decode(cbor::diag2cbor("100(-106751991167301)").value()),
+    auto edn_bytes_4 = cbor::diag2cbor("100(-106751991167301)");
+    CHECK_EQ(cbor::structs<sys_seconds>::decode(std::move(edn_bytes_4.value())),
              std::unexpected(error::number_out_of_range));
-    CHECK_EQ(cbor::structs<sys_days>::decode(cbor::diag2cbor("1(86401)").value()), std::unexpected(error::number_out_of_range));
+    auto edn_bytes_5 = cbor::diag2cbor("1(86401)");
+    CHECK_EQ(cbor::structs<sys_days>::decode(std::move(edn_bytes_5.value())), std::unexpected(error::number_out_of_range));
 }
 
 struct duration_member {
@@ -1419,7 +1479,10 @@ CBOR_DEFINE_TYPE_MEMBERS(duration_member, cbor::untagged, a);
 TEST_CASE("structs: std::chrono::duration is tag 1002")
 {
     using namespace std::chrono;
-    auto const item = [](std::string_view const diag) { return cbor::diag2cbor(diag).value(); };
+    auto const item = [](std::string_view const diag) {
+        auto const bytes = cbor::diag2cbor(diag);
+        return bytes.value();
+    };
     round_trip(item("1002({1: 5})"), seconds{5});
     round_trip(item("1002({1: 1, -3: 500})"), milliseconds{1500});
     round_trip(item("1002({1: -2, -3: 500})"), milliseconds{-1500});
@@ -1472,13 +1535,18 @@ TEST_CASE("structs: tag 1 with a float into sys_seconds")
 // any order. A repeated item makes the set not valid and gives duplicate_key, as a repeated key of a map does.
 TEST_CASE("structs: std::set is tag 258")
 {
-    round_trip(cbor::diag2cbor("258([-1, 1])").value(), std::set<int>{-1, 1});
-    round_trip(cbor::diag2cbor(R"(258(["aa", "b"]))").value(), std::set<std::string>{"aa", "b"});
-    auto const any_order = cbor::structs<std::set<int>>::decode(cbor::diag2cbor("258([2, 1])").value());
+    auto const edn_bytes = cbor::diag2cbor("258([-1, 1])");
+    round_trip(edn_bytes.value(), std::set<int>{-1, 1});
+    auto const edn_bytes_2 = cbor::diag2cbor(R"(258(["aa", "b"]))");
+    round_trip(edn_bytes_2.value(), std::set<std::string>{"aa", "b"});
+    auto edn_bytes_3 = cbor::diag2cbor("258([2, 1])");
+    auto const any_order = cbor::structs<std::set<int>>::decode(std::move(edn_bytes_3.value()));
     REQUIRE(any_order.has_value());
     CHECK(**any_order == std::set<int>{1, 2});
-    CHECK_EQ(cbor::structs<std::set<int>>::decode(cbor::diag2cbor("258([1, 1])").value()), std::unexpected(error::duplicate_key));
-    CHECK_EQ(cbor::structs<std::set<int>>::decode(cbor::diag2cbor("[1, 2]").value()), std::unexpected(error::incorrect_type));
+    auto edn_bytes_4 = cbor::diag2cbor("258([1, 1])");
+    CHECK_EQ(cbor::structs<std::set<int>>::decode(std::move(edn_bytes_4.value())), std::unexpected(error::duplicate_key));
+    auto edn_bytes_5 = cbor::diag2cbor("[1, 2]");
+    CHECK_EQ(cbor::structs<std::set<int>>::decode(std::move(edn_bytes_5.value())), std::unexpected(error::incorrect_type));
 }
 
 // RFC 8746 2.1: a typed array is its tag over a byte string of the elements, here little endian. The owner decided on
@@ -1735,10 +1803,10 @@ TEST_CASE("cbor::encode: a value of a type that is also a target is written as t
 {
     std::string out;
     CHECK_EQ(cbor::encode(out, std::string("ab")), 3u);
-    CHECK_EQ(out, cbor::diag2cbor("\"ab\"").value());
+    CHECK_EQ(out, cbor::diag2cbor("\"ab\""));
     std::string typed;
     CHECK_EQ(cbor::encode(typed, std::vector<std::byte>{std::byte{1}}), 4u);
-    CHECK_EQ(typed, cbor::diag2cbor("64(h'01')").value());
+    CHECK_EQ(typed, cbor::diag2cbor("64(h'01')"));
 }
 
 namespace
@@ -1997,7 +2065,7 @@ TEST_CASE("structs: a type described by its value is written as that value, for 
     REQUIRE(n.has_value());
     CHECK_EQ(*n, expected.size());
     CHECK_EQ(room, expected);
-    CHECK_EQ(cbor::to_edn(h).value(), R"({"a": 7, "b": ["x", -3]})");
+    CHECK_EQ(cbor::to_edn(h), R"({"a": 7, "b": ["x", -3]})");
 }
 
 // RFC 8949 3.1: the head of an array or a map holds the count, and a key is any data item. Empty containers,

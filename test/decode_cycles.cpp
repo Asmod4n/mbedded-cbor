@@ -541,9 +541,11 @@ TEST_CASE("decode_cycles: a struct decode refuses every form of a tag 28 and a t
     using marked_numbers = std::vector<std::optional<std::uint64_t>>;
     for (std::string const width : {"_0", "_1", "_2", "_3"}) {
         CAPTURE(width);
-        std::string const marked = cbor::diag2cbor("[28" + width + "(5)]").value();
+        auto const edn_bytes = cbor::diag2cbor("[28" + width + "(5)]");
+        std::string const marked = edn_bytes.value();
+        auto const edn_bytes_2 = cbor::diag2cbor("[28" + width + "(5), 29" + width + "(0" + width + ")]");
         std::string const named =
-            cbor::diag2cbor("[28" + width + "(5), 29" + width + "(0" + width + ")]").value();
+            edn_bytes_2.value();
         CHECK_EQ(cbor::structs<marked_numbers>::decode(std::string(marked)), std::unexpected(error::invalid_tag));
         CHECK_EQ(cbor::structs<marked_numbers>::decode(std::string(named)), std::unexpected(error::invalid_tag));
     }
@@ -639,13 +641,15 @@ TEST_CASE("decode_cycles: cbor::decode_cycles takes a tag 29 to each open value 
           "28(28([29(1), 29(0)]))", "[28([29(0)]), 28([29(1)])]", "28([28(29(0)), [29(1)]])",
           "28({\"kids\": [28({\"parent\": 29(0), \"self\": 29(1)})]})"}) {
         CAPTURE(edn);
-        CHECK(cbor::decode_cycles(cbor::diag2cbor(edn).value()).has_value());
+        auto const edn_bytes = cbor::diag2cbor(edn);
+        CHECK(cbor::decode_cycles(edn_bytes.value()).has_value());
     }
     // 29(2) names the mark of 28(29(1)), whose value is the inner array; that array has ended. 29(1) names the inner
     // array after its end. 29(0) names the first array after its end.
     for (std::string_view const edn : {"28([28([28(29(1))]), 29(2)])", "28([28([1]), 29(1)])", "[28([29(0)]), 29(0)]"}) {
         CAPTURE(edn);
-        auto const tree = cbor::decode_cycles(cbor::diag2cbor(edn).value());
+        auto const edn_bytes_2 = cbor::diag2cbor(edn);
+        auto const tree = cbor::decode_cycles(edn_bytes_2.value());
         CHECK_EQ(tree.error(), error::sharedref_not_cyclic);
     }
 }
@@ -787,7 +791,8 @@ std::string written_by_encode(cbor::item const node)
 // The bytes of cbor::encode for the tree that cbor::decode gives for the EDN text.
 std::string written_by_encode(std::string_view const edn)
 {
-    auto const decoded = cbor::decode_cycles(cbor::diag2cbor(edn).value());
+    auto const edn_bytes = cbor::diag2cbor(edn);
+    auto const decoded = cbor::decode_cycles(edn_bytes.value());
     REQUIRE(decoded.has_value());
     return written_by_encode(**decoded);
 }
@@ -810,7 +815,7 @@ TEST_CASE("decode_cycles: cbor::encode writes a reference under a map key or a t
     using shared_test::written_by_encode;
     for (std::string_view const edn : {"28([{29(0): 1}])", "28([1234(29(0))])", "28([2([29(0)])])", "28([3([29(0)])])"}) {
         CAPTURE(edn);
-        CHECK_EQ(written_by_encode(edn), cbor::diag2cbor(edn).value());
+        CHECK_EQ(written_by_encode(edn), cbor::diag2cbor(edn));
     }
 }
 
@@ -819,25 +824,28 @@ TEST_CASE("decode_cycles: cbor::encode writes a reference under a map key or a t
 TEST_CASE("decode_cycles: cbor::encode of a shared_reference node and of a marked root")
 {
     using shared_test::written_by_encode;
-    auto const tree = cbor::decode_cycles(cbor::diag2cbor("28([1, 29(0)])").value());
+    auto const edn_bytes = cbor::diag2cbor("28([1, 29(0)])");
+    auto const tree = cbor::decode_cycles(edn_bytes.value());
     REQUIRE(tree.has_value());
     auto const elements = shared_test::elements_of(*tree);
     CHECK_EQ(elements[1].type(), cbor::type::shared_reference);
-    CHECK_EQ(written_by_encode(elements[1]), cbor::diag2cbor("28([1, 29(0)])").value());
-    CHECK_EQ(written_by_encode(**tree), cbor::diag2cbor("28([1, 29(0)])").value());
-    CHECK_EQ(written_by_encode("28([29(0)])"), cbor::diag2cbor("28([29(0)])").value());
-    CHECK_EQ(written_by_encode("28([1])"), cbor::diag2cbor("[1]").value());
+    CHECK_EQ(written_by_encode(elements[1]), cbor::diag2cbor("28([1, 29(0)])"));
+    CHECK_EQ(written_by_encode(**tree), cbor::diag2cbor("28([1, 29(0)])"));
+    CHECK_EQ(written_by_encode("28([29(0)])"), cbor::diag2cbor("28([29(0)])"));
+    CHECK_EQ(written_by_encode("28([1])"), cbor::diag2cbor("[1]"));
 }
 
 // The content of a tag 24 is decoded with marks of its own. encode writes the tag 24 as its byte string. The root of
 // the content, from cbor::encoded_cbor_data_item, is written with its cycle.
 TEST_CASE("decode_cycles: cbor::encode of the content of a tag 24 writes its cycle")
 {
-    std::string const inner = cbor::diag2cbor("28([29(0)])").value();
+    auto const edn_bytes = cbor::diag2cbor("28([29(0)])");
+    std::string const inner = edn_bytes.value();
     std::string hex;
     for (char const c : inner)
         hex += std::format("{:02x}", static_cast<unsigned char>(c));
-    std::string const outer = cbor::diag2cbor("24(h'" + hex + "')").value();
+    auto const edn_bytes_2 = cbor::diag2cbor("24(h'" + hex + "')");
+    std::string const outer = edn_bytes_2.value();
     auto const tree = cbor::decode_cycles(outer);
     REQUIRE(tree.has_value());
     CHECK_EQ(shared_test::written_by_encode(**tree), outer);
@@ -850,10 +858,11 @@ TEST_CASE("decode_cycles: cbor::encode of the content of a tag 24 writes its cyc
 // reference is written in one walk, with the same bytes.
 TEST_CASE("decode_cycles: cbor::encode of a deep reference and of a sibling without one")
 {
-    auto const tree = cbor::decode_cycles(cbor::diag2cbor("[[1, [2]], {\"a\": 28([3, [[29(0)]]])}]").value());
+    auto const edn_bytes = cbor::diag2cbor("[[1, [2]], {\"a\": 28([3, [[29(0)]]])}]");
+    auto const tree = cbor::decode_cycles(edn_bytes.value());
     REQUIRE(tree.has_value());
-    CHECK_EQ(shared_test::written_by_encode(**tree), cbor::diag2cbor("[[1, [2]], {\"a\": 28([3, [[29(0)]]])}]").value());
-    CHECK_EQ(shared_test::written_by_encode(shared_test::elements_of(*tree)[0]), cbor::diag2cbor("[1, [2]]").value());
+    CHECK_EQ(shared_test::written_by_encode(**tree), cbor::diag2cbor("[[1, [2]], {\"a\": 28([3, [[29(0)]]])}]"));
+    CHECK_EQ(shared_test::written_by_encode(shared_test::elements_of(*tree)[0]), cbor::diag2cbor("[1, [2]]"));
 }
 
 // theories/Writer.v write: encode puts a tag 28 on a node that a back edge of the walk reaches. A

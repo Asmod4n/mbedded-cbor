@@ -46,10 +46,18 @@
 namespace cbor
 {
 
-std::expected<owning<item>, error> parse_edn(std::string_view text);
-constexpr std::expected<std::string, error> diag2cbor(std::string_view text);
-std::expected<std::string, error> to_edn(item root);
-std::expected<std::string, error> to_edn(owning<item> const &tree);
+result<owning<item>> parse_edn(std::string_view text);
+constexpr result<std::string> diag2cbor(std::string_view text);
+result<std::string> to_edn(item root);
+result<std::string> to_edn(owning<item> const &tree);
+
+inline namespace literals
+{
+
+template <fixed_string Text>
+consteval auto operator""_edn();
+
+}
 
 namespace detail
 {
@@ -2941,19 +2949,46 @@ class extended_diagnostic_notation
 
     friend class cbor::path;
 
-    friend std::expected<std::string, error> cbor::diagnostic_notation(std::string_view encoded);
+    static std::expected<std::string, error> diagnostic_notation_or_error(std::string_view const encoded)
+    {
+        heads::decoder<true> d{encoded};
+        std::string out;
+        if (auto const r = write_diagnostic(out, d); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        if (auto const one = validity::check_one_data_item(d.encoded); !one) [[unlikely]]
+            return std::unexpected(one.error());
+        return out;
+    }
 
-    friend constexpr std::expected<std::string, error> cbor::diag2cbor(std::string_view text);
+    static constexpr std::expected<std::string, error> diag2cbor_or_error(std::string_view const text)
+    {
+        auto const start = optional_space_end(text, 0);
+        if (!start) [[unlikely]]
+            return std::unexpected(error::syntax_error);
+        std::string bytes;
+        auto const next = parse_literal({text, *start}, bytes);
+        if (!next) [[unlikely]]
+            return std::unexpected(next.error() == error::invalid_path ? error::syntax_error : next.error());
+        auto const end = optional_space_end(text, *next);
+        if (!end || *end != text.size()) [[unlikely]]
+            return std::unexpected(error::syntax_error);
+        return bytes;
+    }
+
+    friend result<std::string> cbor::diagnostic_notation(std::string_view encoded);
+
+    friend constexpr result<std::string> cbor::diag2cbor(std::string_view text);
+
+    template <fixed_string Text>
+    friend consteval auto literals::operator""_edn();
 
     friend std::expected<std::string, error> item::to_edn_or_error() const;
 
-    friend std::expected<owning<item>, error> cbor::parse_edn(std::string_view text);
+    friend result<owning<item>> cbor::parse_edn(std::string_view text);
 
     friend class dom::reader;
 
-    friend std::expected<std::string, error> cbor::to_edn(item root);
-
-    friend std::expected<std::string, error> cbor::to_edn(owning<item> const &tree);
+    friend result<std::string> cbor::to_edn(item root);
 
     friend class detail::edn_text;
 };
@@ -3144,17 +3179,9 @@ public:
  *
  * @ingroup tools
  */
-inline std::expected<std::string, error> diagnostic_notation(std::string_view const encoded)
+inline result<std::string> diagnostic_notation(std::string_view const encoded)
 {
-    detail::heads::decoder<true> d{encoded};
-    std::string out;
-    if (auto const r =
-            detail::extended_diagnostic_notation::write_diagnostic(out, d);
-        !r) [[unlikely]]
-        return std::unexpected(r.error());
-    if (auto const one = detail::validity::check_one_data_item(d.encoded); !one) [[unlikely]]
-        return std::unexpected(one.error());
-    return out;
+    return result<std::string>(detail::extended_diagnostic_notation::diagnostic_notation_or_error(encoded));
 }
 
 /**
@@ -3163,7 +3190,7 @@ inline std::expected<std::string, error> diagnostic_notation(std::string_view co
  */
 template <borrowed_range_of_bytes Encoded>
     requires(!std::is_array_v<std::remove_cvref_t<Encoded>>)
-std::expected<std::string, error> diagnostic_notation(Encoded &&encoded)
+result<std::string> diagnostic_notation(Encoded &&encoded)
 {
     return diagnostic_notation(detail::chars_of(encoded));
 }
@@ -3191,32 +3218,13 @@ std::expected<std::string, error> diagnostic_notation(Encoded &&encoded)
  *
  * @ingroup tools
  */
-constexpr std::expected<std::string, error> diag2cbor(std::string_view const text)
+constexpr result<std::string> diag2cbor(std::string_view const text)
 {
-    using edn = detail::extended_diagnostic_notation;
-    auto const start = edn::optional_space_end(text, 0);
-    if (!start) [[unlikely]]
-        return std::unexpected(error::syntax_error);
-    std::string bytes;
-    auto const next = edn::parse_literal({text, *start}, bytes);
-    if (!next) [[unlikely]]
-        return std::unexpected(next.error() == error::invalid_path ? error::syntax_error : next.error());
-    auto const end = edn::optional_space_end(text, *next);
-    if (!end || *end != text.size()) [[unlikely]]
-        return std::unexpected(error::syntax_error);
-    return bytes;
+    return result<std::string>(detail::extended_diagnostic_notation::diag2cbor_or_error(text));
 }
 
 template <std::size_t N>
 class edn_literal;
-
-inline namespace literals
-{
-
-template <fixed_string Text>
-consteval auto operator""_edn();
-
-}
 
 /**
  * @brief Holds the CBOR bytes of one item that the literal `"..."_edn` read from its EDN text at compile time.
@@ -3273,11 +3281,13 @@ inline namespace literals
 template <fixed_string Text>
 consteval auto operator""_edn()
 {
-    constexpr std::size_t size =
-        diag2cbor(Text.view()).transform([](std::string const &bytes) { return bytes.size(); }).value_or(0);
+    using edn = detail::extended_diagnostic_notation;
+    constexpr std::size_t size = edn::diag2cbor_or_error(Text.view())
+                                     .transform([](std::string const &bytes) { return bytes.size(); })
+                                     .value_or(0);
     static_assert(size != 0, "cbor::literals::operator\"\"_edn: the text is not one item of EDN");
     std::array<char, size> bytes{};
-    if (auto const written = diag2cbor(Text.view()))
+    if (auto const written = edn::diag2cbor_or_error(Text.view()))
         std::ranges::copy(*written, bytes.begin());
     return edn_literal<size>(bytes);
 }
@@ -3305,7 +3315,7 @@ consteval auto operator""_edn()
  *
  * @ingroup tools
  */
-inline std::expected<owning<item>, error> parse_edn(std::string_view text);
+inline result<owning<item>> parse_edn(std::string_view text);
 
 inline result<std::string> item::to_edn() const
 {
@@ -3317,7 +3327,7 @@ inline std::expected<std::string, error> item::to_edn_or_error() const
     std::string bytes;
     if (auto const r = detail::encoding::encode_into(bytes, *this); !r) [[unlikely]]
         return std::unexpected(r.error());
-    return diagnostic_notation(bytes);
+    return detail::extended_diagnostic_notation::diagnostic_notation_or_error(bytes);
 }
 
 /**
@@ -3347,14 +3357,14 @@ inline std::expected<std::string, error> item::to_edn_or_error() const
  *
  * @ingroup tools
  */
-inline std::expected<std::string, error> to_edn(item const root)
+inline result<std::string> to_edn(item const root)
 {
     if (root.holds_shared_reference()) [[unlikely]]
-        return root.to_edn_or_error();
+        return result<std::string>(root.to_edn_or_error());
     std::string out;
     if (auto const r = detail::extended_diagnostic_notation::write_item(out, root); !r) [[unlikely]]
-        return std::unexpected(r.error());
-    return out;
+        return result<std::string>(std::unexpected(r.error()));
+    return result<std::string>(std::move(out));
 }
 
 /**
@@ -3377,7 +3387,7 @@ inline std::expected<std::string, error> to_edn(item const root)
  *
  * @ingroup tools
  */
-inline std::expected<std::string, error> to_edn(owning<item> const &tree)
+inline result<std::string> to_edn(owning<item> const &tree)
 {
     std::ignore = detail::tree_owner::tree_found(tree, "cbor::to_edn: the owning item holds no decoded tree");
     return to_edn(*tree);

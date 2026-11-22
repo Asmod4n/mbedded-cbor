@@ -677,7 +677,8 @@ TEST_CASE("describe: a key that no entry has is skipped")
 // encoded by the library.
 TEST_CASE("describe: a repeated key of a member is duplicate_key")
 {
-    std::string bytes = cbor::diag2cbor(R"(160001({"count": 4, "count": 5}))").value();
+    auto const edn_bytes = cbor::diag2cbor(R"(160001({"count": 4, "count": 5}))");
+    std::string bytes = edn_bytes.value();
     CHECK_EQ(cbor::structs<describe_test::doors>::decode(std::move(bytes)), std::unexpected(cbor::error::duplicate_key));
 }
 
@@ -696,7 +697,8 @@ TEST_CASE("describe: a description with no entry and a description through a typ
 // writes such an aggregate only through a description (owner, 2026-11-19).
 TEST_CASE("describe: an aggregate with no description is read the same on every build")
 {
-    auto const read = cbor::structs<describe_test::plain>::decode(cbor::diag2cbor(R"({"b": 1, "aa": "x"})").value());
+    auto edn_bytes = cbor::diag2cbor(R"({"b": 1, "aa": "x"})");
+    auto const read = cbor::structs<describe_test::plain>::decode(std::move(edn_bytes.value()));
     REQUIRE(read.has_value());
     CHECK_EQ((*read)->b, 1u);
     CHECK_EQ((*read)->aa, "x");

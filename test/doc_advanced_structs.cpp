@@ -235,7 +235,8 @@ TEST_CASE("doc advanced structs: unknown, repeated and missing keys")
     auto const extra = cbor::structs<person>::decode(encode_in_preferred_form(M("name"s, "x"s, "age"s, 1, "z"s, 2)));
     REQUIRE(extra.has_value());
     CHECK_EQ((*extra)->name, "x");
-    std::string repeated = cbor::diag2cbor(R"({"name": "x", "age": 1, "age": 2})").value();
+    auto const edn_bytes = cbor::diag2cbor(R"({"name": "x", "age": 1, "age": 2})");
+    std::string repeated = edn_bytes.value();
     CHECK_EQ(cbor::structs<person>::decode(std::move(repeated)), std::unexpected(error::duplicate_key));
     CHECK_EQ(cbor::structs<person>::decode(encode_in_preferred_form(M("name"s, "x"s))), std::unexpected(error::key_not_found));
     for (value const &key : {A(), M(), value{tagged{1000, V(1)}}, A(1, M("a"s, A())), value{tagged{28, V(1)}}}) {
@@ -282,14 +283,17 @@ TEST_CASE("doc advanced structs: a variant takes the first alternative that acce
 // skips them in an entry whose key no member has.
 TEST_CASE("doc advanced structs: a value under tag 28 or tag 29 is invalid_tag")
 {
+    auto edn_bytes = cbor::diag2cbor(R"([28("x"), "y"])");
     CHECK_EQ(cbor::structs<std::vector<std::string>>::decode(
-                 cbor::diag2cbor(R"([28("x"), "y"])").value()),
+                 std::move(edn_bytes.value())),
              std::unexpected(error::invalid_tag));
+    auto edn_bytes_2 = cbor::diag2cbor(R"(["x", 29(0)])");
     CHECK_EQ(cbor::structs<std::vector<std::string>>::decode(
-                 cbor::diag2cbor(R"(["x", 29(0)])").value()),
+                 std::move(edn_bytes_2.value())),
              std::unexpected(error::invalid_tag));
+    auto edn_bytes_3 = cbor::diag2cbor(R"({"z": 28(1), "name": "ann", "age": 30})");
     auto const skipped = cbor::structs<person>::decode(
-        cbor::diag2cbor(R"({"z": 28(1), "name": "ann", "age": 30})").value());
+        std::move(edn_bytes_3.value()));
     REQUIRE(skipped.has_value());
     CHECK_EQ((*skipped)->name, "ann");
 }

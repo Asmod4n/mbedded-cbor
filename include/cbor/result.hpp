@@ -101,6 +101,18 @@ private:
                  !std::same_as<V, owning<item>>)
     friend result<std::size_t> encode(Target &&out, V const &value);
 
+    friend result<owning<item>> parse_edn(std::string_view text);
+
+    friend result<std::string> to_edn(item root);
+
+    template <class V>
+        requires(!std::same_as<V, item> && !std::same_as<V, owning<item>>)
+    friend result<std::string> to_edn(V const &value);
+
+    friend constexpr result<std::string> diag2cbor(std::string_view text);
+
+    friend result<std::string> diagnostic_notation(std::string_view encoded);
+
 #if __has_include(<sys/uio.h>)
     friend result<ref<std::span<iovec const>>> encode_iov(item root);
 

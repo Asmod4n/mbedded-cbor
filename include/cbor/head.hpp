@@ -130,9 +130,9 @@ result<owning<item>> decode_cycles(std::string_view encoded);
 
 result<std::size_t> item_size(std::string_view encoded);
 
-std::expected<owning<item>, error> parse_edn(std::string_view text);
+result<owning<item>> parse_edn(std::string_view text);
 
-std::expected<std::string, error> diagnostic_notation(std::string_view encoded);
+result<std::string> diagnostic_notation(std::string_view encoded);
 
 namespace detail
 {
@@ -814,7 +814,7 @@ class heads
 
     friend result<owning<item>> cbor::decode_cycles(std::string_view encoded);
 
-    friend std::expected<owning<item>, error> cbor::parse_edn(std::string_view text);
+    friend result<owning<item>> cbor::parse_edn(std::string_view text);
 
     friend struct cbor::item;
 
@@ -824,7 +824,7 @@ class heads
 
     friend struct cbor::lazy_entries;
 
-    friend std::expected<std::string, error> cbor::diagnostic_notation(std::string_view encoded);
+    friend result<std::string> cbor::diagnostic_notation(std::string_view encoded);
 
     friend class detail::reflection;
 

@@ -1154,7 +1154,8 @@ TEST_CASE("path: tag 55799 is read through on both sides of a key compare")
 {
     for (std::string_view const edn : {R"({1.5: "x"})", R"({55799(1.5): "x"})"}) {
         CAPTURE(edn);
-        auto const l = *test::make_lazy_from_copy(cbor::diag2cbor(edn).value());
+        auto const edn_bytes = cbor::diag2cbor(edn);
+        auto const l = *test::make_lazy_from_copy(edn_bytes.value());
         auto const text_of = [](std::expected<cbor::lazy, error> const &node) {
             REQUIRE(node.has_value());
             auto const text = node->get<std::string_view>();

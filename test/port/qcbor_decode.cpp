@@ -746,7 +746,7 @@ TEST_CASE("qcbor NotWellFormedTests: each not-well-formed input gives its Append
     for (auto const &c : not_well_formed_inputs) {
         std::string const description = c.description;
         CAPTURE(description);
-        CHECK(cbor::diagnostic_notation(as_string(c.input)).error_or(error{}) == c.expected);
+        CHECK(cbor::diagnostic_notation(as_string(c.input)) == std::unexpected(c.expected));
     }
 }
 
@@ -1137,12 +1137,11 @@ TEST_CASE("qcbor IndefiniteLengthArrayMapTest: indefinite-length arrays and thei
     std::string const good = as_string({0x9f, 0x01, 0x82, 0x02, 0x03, 0xff});
     CHECK((cbor::diagnostic_notation(good) == std::string("[_ 1, [2, 3]]")));
     CHECK(cbor::decode(good) == std::unexpected(error::indefinite_length));
-    CHECK(cbor::diagnostic_notation(as_string({0x9f})).error_or(error{}) == error::too_little_data);
-    CHECK(cbor::diagnostic_notation(as_string({0x9f, 0x9f, 0x02, 0xff})).error_or(error{}) ==
-          error::too_little_data);
-    CHECK(cbor::diagnostic_notation(as_string({0x9f, 0x02, 0xff, 0xff})).error_or(error{}) == error::syntax_error);
-    CHECK(cbor::diagnostic_notation(as_string({0x81, 0x9f})).error_or(error{}) == error::too_little_data);
-    CHECK(cbor::diagnostic_notation(as_string({0x9f, 0xd1, 0xff})).error_or(error{}) == error::syntax_error);
+    CHECK(cbor::diagnostic_notation(as_string({0x9f})) == std::unexpected(error::too_little_data));
+    CHECK(cbor::diagnostic_notation(as_string({0x9f, 0x9f, 0x02, 0xff})) == std::unexpected(error::too_little_data));
+    CHECK(cbor::diagnostic_notation(as_string({0x9f, 0x02, 0xff, 0xff})) == std::unexpected(error::syntax_error));
+    CHECK(cbor::diagnostic_notation(as_string({0x81, 0x9f})) == std::unexpected(error::too_little_data));
+    CHECK(cbor::diagnostic_notation(as_string({0x9f, 0xd1, 0xff})) == std::unexpected(error::syntax_error));
 }
 
 // IndefiniteLengthNestTest: arrays of indefinite length nested 1 to test::levels_every_stack_holds deep (the depth
@@ -1170,13 +1169,10 @@ TEST_CASE("qcbor IndefiniteLengthStringTest: indefinite-length strings and their
     CHECK((cbor::diagnostic_notation(good) == std::string("[(_ \"strea\", \"ming\")]")));
     CHECK(cbor::decode(good) == std::unexpected(error::indefinite_length));
     CHECK(cbor::diagnostic_notation(
-              as_string({0x81, 0x7f, 0x65, 0x73, 0x74, 0x72, 0x65, 0x61, 0x44, 0x6d, 0x69, 0x6e, 0x67, 0xff}))
-              .error_or(error{}) == error::syntax_error);
-    CHECK(cbor::diagnostic_notation(as_string({0x81, 0x7f, 0x01, 0x02, 0xff})).error_or(error{}) ==
-          error::syntax_error);
+              as_string({0x81, 0x7f, 0x65, 0x73, 0x74, 0x72, 0x65, 0x61, 0x44, 0x6d, 0x69, 0x6e, 0x67, 0xff})) == std::unexpected(error::syntax_error));
+    CHECK(cbor::diagnostic_notation(as_string({0x81, 0x7f, 0x01, 0x02, 0xff})) == std::unexpected(error::syntax_error));
     CHECK(cbor::diagnostic_notation(
-              as_string({0x81, 0x7f, 0x65, 0x73, 0x74, 0x72, 0x65, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x67}))
-              .error_or(error{}) == error::too_little_data);
+              as_string({0x81, 0x7f, 0x65, 0x73, 0x74, 0x72, 0x65, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x67})) == std::unexpected(error::too_little_data));
     CHECK((cbor::diagnostic_notation(
               as_string({0xa1, 0x7f, 0x65, 0x73, 0x74, 0x72, 0x75, 0x75, 0x64, 0x6d, 0x69, 0x6e, 0x67, 0xff, 0x01})) ==
           std::string("{(_ \"struu\", \"ming\"): 1}")));

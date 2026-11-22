@@ -59,7 +59,7 @@ class reader;
 
 struct item;
 
-std::expected<std::string, error> to_edn(item root);
+result<std::string> to_edn(item root);
 
 namespace detail
 {
@@ -621,7 +621,7 @@ private:
 
     friend struct detail::tree_owner;
 
-    friend std::expected<std::string, error> cbor::to_edn(item root);
+    friend result<std::string> cbor::to_edn(item root);
 };
 
 static_assert(sizeof(item) == sizeof(detail::tree const *) + sizeof(std::size_t));

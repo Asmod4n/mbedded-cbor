@@ -957,7 +957,8 @@ TEST_CASE("cbor2 decoder: TestAllowDuplicateKeys")
 {
     check_decoded({{"a2616101616102", M("a", 1, "a", 2)}});
 
-    std::string repeated = cbor::diag2cbor(R"({"a": 1, "a": 2})").value();
+    auto const edn_bytes = cbor::diag2cbor(R"({"a": 1, "a": 2})");
+    std::string repeated = edn_bytes.value();
     CHECK_EQ(cbor::structs<std::map<std::string, int>>::decode(std::move(repeated)), std::unexpected(error::duplicate_key));
 
     // test_raises_on_duplicate[indefinite]: structs.hpp: "@retval indefinite_length a head uses indefinite length".

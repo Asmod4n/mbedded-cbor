@@ -469,12 +469,14 @@ struct long_code {
 std::string message_with_part_replaced(std::string const &bytes, std::string_view const part,
                                        std::string_view const replacement)
 {
-    std::string edn = cbor::diagnostic_notation(bytes).value();
+    auto const edn_text = cbor::diagnostic_notation(bytes);
+    std::string edn = edn_text.value();
     std::size_t const at = edn.find(part);
     REQUIRE_NE(at, std::string::npos);
     REQUIRE_EQ(edn.find(part, at + 1), std::string::npos);
     edn.replace(at, part.size(), replacement);
-    std::string out = cbor::diag2cbor(edn).value();
+    auto const edn_bytes = cbor::diag2cbor(edn);
+    std::string out = edn_bytes.value();
     REQUIRE_EQ(out.size(), bytes.size());
     return out;
 }

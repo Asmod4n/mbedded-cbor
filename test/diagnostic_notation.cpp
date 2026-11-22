@@ -222,15 +222,15 @@ TEST_CASE("diagnostic_notation: U+0000 to U+0020 and U+007F are written as the E
 // An item that is not well-formed has no diagnostic notation: the error comes back.
 TEST_CASE("diagnostic_notation: an item that is not well-formed is an error")
 {
-    CHECK_EQ(cbor::diagnostic_notation(""sv).error(), error::too_little_data);
-    CHECK_EQ(cbor::diagnostic_notation("\xff"sv).error(), error::syntax_error);
-    CHECK_EQ(cbor::diagnostic_notation("\xf8\x18"sv).error(), error::syntax_error);
-    CHECK_EQ(cbor::diagnostic_notation("\xf8\x10"sv).error(), error::syntax_error);
-    CHECK_EQ(cbor::diagnostic_notation("\x1c"sv).error(), error::syntax_error);
-    CHECK_EQ(cbor::diagnostic_notation("\x1f"sv).error(), error::syntax_error);
-    CHECK_EQ(cbor::diagnostic_notation("\x62\x61"sv).error(), error::too_little_data);
-    CHECK_EQ(cbor::diagnostic_notation("\x9f\x01"sv).error(), error::too_little_data);
-    CHECK_EQ(cbor::diagnostic_notation("\x00\x00"sv).error(), error::syntax_error);
+    CHECK_EQ(cbor::diagnostic_notation(""sv), std::unexpected(error::too_little_data));
+    CHECK_EQ(cbor::diagnostic_notation("\xff"sv), std::unexpected(error::syntax_error));
+    CHECK_EQ(cbor::diagnostic_notation("\xf8\x18"sv), std::unexpected(error::syntax_error));
+    CHECK_EQ(cbor::diagnostic_notation("\xf8\x10"sv), std::unexpected(error::syntax_error));
+    CHECK_EQ(cbor::diagnostic_notation("\x1c"sv), std::unexpected(error::syntax_error));
+    CHECK_EQ(cbor::diagnostic_notation("\x1f"sv), std::unexpected(error::syntax_error));
+    CHECK_EQ(cbor::diagnostic_notation("\x62\x61"sv), std::unexpected(error::too_little_data));
+    CHECK_EQ(cbor::diagnostic_notation("\x9f\x01"sv), std::unexpected(error::too_little_data));
+    CHECK_EQ(cbor::diagnostic_notation("\x00\x00"sv), std::unexpected(error::syntax_error));
     CHECK(cbor::diagnostic_notation(test::repeat("\x81"sv, test::levels_every_stack_holds) + '\x00').has_value());
     std::string const deep = test::repeat("\x81"sv, test::levels_beyond_small_stack) + '\x00';
     CHECK_EQ(test::error_on_small_stack([&deep] { return cbor::diagnostic_notation(deep); }),
@@ -278,11 +278,11 @@ TEST_CASE("diagnostic_notation: the chunk of an indefinite-length string for eve
 // no byte or too few bytes are left, and each must give too_little_data.
 TEST_CASE("diagnostic_notation: a chunk or a tag content with too few bytes is too_little_data")
 {
-    CHECK_EQ(cbor::diagnostic_notation("\x5f"sv).error(), error::too_little_data);
-    CHECK_EQ(cbor::diagnostic_notation("\x7f"sv).error(), error::too_little_data);
-    CHECK_EQ(cbor::diagnostic_notation("\x5f\x41\x61"sv).error(), error::too_little_data);
-    CHECK_EQ(cbor::diagnostic_notation("\xc1\x18"sv).error(), error::too_little_data);
-    CHECK_EQ(cbor::diagnostic_notation("\xc1\x19\x01"sv).error(), error::too_little_data);
+    CHECK_EQ(cbor::diagnostic_notation("\x5f"sv), std::unexpected(error::too_little_data));
+    CHECK_EQ(cbor::diagnostic_notation("\x7f"sv), std::unexpected(error::too_little_data));
+    CHECK_EQ(cbor::diagnostic_notation("\x5f\x41\x61"sv), std::unexpected(error::too_little_data));
+    CHECK_EQ(cbor::diagnostic_notation("\xc1\x18"sv), std::unexpected(error::too_little_data));
+    CHECK_EQ(cbor::diagnostic_notation("\xc1\x19\x01"sv), std::unexpected(error::too_little_data));
 }
 
 // The owner decided that diagnostic notation interprets no tag. It prints 28(...) and 29(n) as plain tags. It checks no
@@ -339,6 +339,6 @@ TEST_CASE("diagnostic_notation: a count larger than the bytes left is too_little
     for (std::string_view const wire : {"\x8c\xff"sv, "\x95\xf8\x04"sv, "\x95\xbf"sv, "\x88\x00\x7f"sv,
                                         "\x87\xd8\x1c\x1f"sv, "\x85\xd8\x1c\xd8\x1c"sv, "\xa2\xff\x00\x00"sv}) {
         CAPTURE(wire);
-        CHECK_EQ(cbor::diagnostic_notation(wire).error(), error::too_little_data);
+        CHECK_EQ(cbor::diagnostic_notation(wire), std::unexpected(error::too_little_data));
     }
 }

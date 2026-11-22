@@ -118,7 +118,8 @@ TEST_CASE("an item owns no memory, is a view of its node and takes 16 bytes")
     CHECK(std::is_trivially_copyable_v<cbor::item>);
     CHECK_FALSE(std::is_aggregate_v<cbor::item>);
     CHECK_EQ(sizeof(cbor::item), 16u);
-    auto const tree = cbor::decode(cbor::diag2cbor("[1, 2]").value());
+    auto const edn_bytes = cbor::diag2cbor("[1, 2]");
+    auto const tree = cbor::decode(edn_bytes.value());
     REQUIRE(tree.has_value());
     cbor::item const root = **tree;
     cbor::item const copy = root;
@@ -186,18 +187,21 @@ TEST_CASE("item pairs: the range steps over keys and values that hold further it
     REQUIRE(wide.has_value());
     CHECK_EQ(wide->size(), 3u);
     std::vector<std::string> pairs;
-    for (auto const [key, value] : *wide)
-        pairs.push_back(cbor::to_edn(key).value() + ": " + cbor::to_edn(value).value());
+    for (auto const [key, value] : *wide) {
+        auto const key_text = cbor::to_edn(key);
+        auto const value_text = cbor::to_edn(value);
+        pairs.push_back(key_text.value() + ": " + value_text.value());
+    }
     CHECK_EQ(pairs, std::vector<std::string>{"[1, 2]: {\"x\": 1}", "\"k\": [3]", "1([4, 5]): 100(h'01')"});
 
     auto first = wide->begin();
     auto copy = first;
     auto const before = first++;
     CHECK(before == wide->begin());
-    CHECK_EQ(cbor::to_edn((*first).first).value(), "\"k\"");
+    CHECK_EQ(cbor::to_edn((*first).first), "\"k\"");
     ++copy;
     CHECK(copy == first);
-    CHECK_EQ(cbor::to_edn((*copy).second).value(), "[3]");
+    CHECK_EQ(cbor::to_edn((*copy).second), "[3]");
 
     auto const empty = (*std::ranges::next(maps->begin())).pairs();
     REQUIRE(empty.has_value());
@@ -1846,8 +1850,8 @@ TEST_CASE("decode, item_size, diagnostic_notation: a range of bytes reads as the
     auto const b = std::as_bytes(std::span(*encoded));
     auto const text = cbor::diagnostic_notation(*encoded);
     REQUIRE(text.has_value());
-    CHECK_EQ(cbor::diagnostic_notation(u).value(), *text);
-    CHECK_EQ(cbor::diagnostic_notation(b).value(), *text);
+    CHECK_EQ(cbor::diagnostic_notation(u), *text);
+    CHECK_EQ(cbor::diagnostic_notation(b), *text);
     CHECK_EQ(cbor::item_size(u), encoded->size());
     auto const length = cbor::item_size(b);
     CHECK_EQ(length.value(), encoded->size());

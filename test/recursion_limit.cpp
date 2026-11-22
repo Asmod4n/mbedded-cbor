@@ -168,7 +168,8 @@ TEST_CASE("recursion limit: encode")
 // thread; its text on the small stack stops where that stack ends.
 TEST_CASE("recursion limit: to_edn")
 {
-    auto const held_tree = cbor::decode(*cbor::diag2cbor(std::string(held, '[') + "0" + std::string(held, ']')));
+    auto const edn_bytes = cbor::diag2cbor(std::string(held, '[') + "0" + std::string(held, ']'));
+    auto const held_tree = cbor::decode(*edn_bytes);
     REQUIRE(held_tree.has_value());
     CHECK(cbor::to_edn(*held_tree).has_value());
     auto const deep_bytes = cbor::diag2cbor(std::string(test::levels_main_thread_holds, '[') + "0" +

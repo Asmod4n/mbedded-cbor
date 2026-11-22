@@ -63,7 +63,7 @@ TEST_CASE("doc reference console: all values of a path")
 // Show the message as text: the diagnostic notation of RFC 8949 section 8.
 TEST_CASE("doc reference console: the message as text")
 {
-    CHECK_EQ(cbor::diagnostic_notation(user_message()).value(), "{\"user\": {\"id\": 42, \"name\": \"ann\"}}"s);
+    CHECK_EQ(cbor::diagnostic_notation(user_message()), "{\"user\": {\"id\": 42, \"name\": \"ann\"}}"s);
 }
 
 // Read a value with the wrong type: the error is a value, not an exception.

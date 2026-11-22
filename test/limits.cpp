@@ -39,8 +39,8 @@ TEST_CASE("limits: with no size limit a head of 2^64 - 1 finds too little data")
     CHECK_EQ(cbor::item_size(text), std::unexpected(error::too_little_data));
     auto const length = cbor::item_size(array);
     CHECK_EQ(length.error(), error::too_little_data);
-    CHECK_EQ(cbor::diagnostic_notation(text).error(), error::too_little_data);
-    CHECK_EQ(cbor::diagnostic_notation(array).error(), error::too_little_data);
+    CHECK_EQ(cbor::diagnostic_notation(text), std::unexpected(error::too_little_data));
+    CHECK_EQ(cbor::diagnostic_notation(array), std::unexpected(error::too_little_data));
 }
 
 

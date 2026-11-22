@@ -162,9 +162,9 @@ TEST_CASE("doc runtime: size and keys")
 TEST_CASE("doc runtime: print CBOR as text")
 {
     std::string const bytes = encode_in_preferred_form(M("cars"s, A(M("hp"s, 5), M("hp"s, 7))));
-    std::expected<std::string, error> const text = cbor::diagnostic_notation(bytes);
+    cbor::result<std::string> const text = cbor::diagnostic_notation(bytes);
     CHECK_EQ(text, R"({"cars": [{"hp": 5}, {"hp": 7}]})");
-    CHECK_EQ(cbor::diagnostic_notation("\xff"sv).error(), error::syntax_error);
+    CHECK_EQ(cbor::diagnostic_notation("\xff"sv), std::unexpected(error::syntax_error));
 }
 
 // The section "Read items from a socket": the bytes of [1, 2] and of "abc" arrive in three pieces. Each piece ends in
@@ -173,7 +173,8 @@ TEST_CASE("doc runtime: read items from a socket")
 {
     std::vector<std::string> handled;
     auto const handle = [&handled](cbor::lazy const &item) {
-        handled.push_back(cbor::diagnostic_notation(item.encoded()).value());
+        auto const edn_text = cbor::diagnostic_notation(item.encoded());
+        handled.push_back(edn_text.value());
     };
     cbor::sequence_reader r;
     for (std::string chunk : {"\x82\x01"s, "\x02\x63"

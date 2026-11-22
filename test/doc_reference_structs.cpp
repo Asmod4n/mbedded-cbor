@@ -162,7 +162,8 @@ TEST_CASE("doc reference structs: decode errors")
     CHECK_EQ(cbor::structs<int>::decode(test::encode_in_preferred_form(test::V("x"s))), std::unexpected(cbor::error::incorrect_type));
     CHECK_EQ(cbor::structs<std::uint8_t>::decode(test::encode_in_preferred_form(test::V(256))),
              std::unexpected(cbor::error::number_out_of_range));
-    std::string repeated = cbor::diag2cbor(R"({"age": 1, "age": 2, "name": "a"})").value();
+    auto const edn_bytes = cbor::diag2cbor(R"({"age": 1, "age": 2, "name": "a"})");
+    std::string repeated = edn_bytes.value();
     CHECK_EQ(cbor::structs<person>::decode(std::move(repeated)), std::unexpected(cbor::error::duplicate_key));
 }
 

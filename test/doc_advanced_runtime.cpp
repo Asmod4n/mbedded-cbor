@@ -324,7 +324,7 @@ TEST_CASE("doc advanced runtime: diagnostic_notation")
 {
     CHECK_EQ(cbor::diagnostic_notation("\x82\x01\x02"sv), "[1, 2]");
     CHECK_EQ(cbor::diagnostic_notation("\x19\x00\x01"sv), "1_1");
-    CHECK_EQ(cbor::diagnostic_notation("\x82\x01"sv).error(), error::too_little_data);
+    CHECK_EQ(cbor::diagnostic_notation("\x82\x01"sv), std::unexpected(error::too_little_data));
 }
 
 // The section "item_size" shows the size of the first item and the error of a cut item.
@@ -353,8 +353,9 @@ TEST_CASE("doc advanced runtime: tags 28 and 29")
     CHECK_EQ(decoded.error(), error::sharedref_not_defined);
     std::string out;
     CHECK_EQ(cbor::encode(out, **tree), 7u);
-    CHECK_EQ(out, cbor::diag2cbor("28([1, 29(0)])").value());
-    std::string const cycle_written = cbor::diag2cbor("28([29(0)])").value();
+    CHECK_EQ(out, cbor::diag2cbor("28([1, 29(0)])"));
+    auto const edn_bytes = cbor::diag2cbor("28([29(0)])");
+    std::string const cycle_written = edn_bytes.value();
     auto const cyclic = cbor::decode_cycles(cycle_written);
     REQUIRE(cyclic.has_value());
     std::string cycle;

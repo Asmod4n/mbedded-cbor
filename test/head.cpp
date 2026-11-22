@@ -161,7 +161,7 @@ TEST_CASE("head: every initial byte gives the result that RFC 8949 gives it")
         CHECK_EQ(length.error(), cbor::error::syntax_error);
         auto const decoded = cbor::decode(bytes);
         CHECK_EQ(decoded.error(), cbor::error::syntax_error);
-        CHECK_EQ(cbor::diagnostic_notation(bytes).error(), cbor::error::syntax_error);
+        CHECK_EQ(cbor::diagnostic_notation(bytes), std::unexpected(cbor::error::syntax_error));
         CHECK_EQ((cbor::at_path<"$", int>(bytes)).error(), cbor::error::syntax_error);
         CHECK_EQ((cbor::at_path<"$", cbor::simple_value>(bytes)).error(), cbor::error::syntax_error);
         auto const l = cbor::lazy::adopt(std::string(bytes));

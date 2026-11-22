@@ -1283,14 +1283,14 @@ public:
 
 }
 
-inline std::expected<owning<item>, error> parse_edn(std::string_view const text)
+inline result<owning<item>> parse_edn(std::string_view const text)
 {
     if (auto read = detail::dom::reader::read(text)) [[likely]]
-        return detail::tree_owner::tree_owned(std::move(*read));
-    auto const bytes = diag2cbor(text);
+        return result<owning<item>>(detail::tree_owner::tree_owned(std::move(*read)));
+    auto const bytes = detail::extended_diagnostic_notation::diag2cbor_or_error(text);
     if (!bytes) [[unlikely]]
-        return std::unexpected(bytes.error());
-    return detail::decode_tree<false>(detail::heads::self_described_cbor_content(*bytes));
+        return result<owning<item>>(std::unexpected(bytes.error()));
+    return result<owning<item>>(detail::decode_tree<false>(detail::heads::self_described_cbor_content(*bytes)));
 }
 
 }

@@ -116,8 +116,8 @@ TEST_CASE("limits sizes 2: a head that claims 2^64 - 1 is refused at the head")
     CHECK_EQ(length.error(), error::string_length_exceeded);
     auto const size = cbor::item_size(array);
     CHECK_EQ(size.error(), error::container_elements_exceeded);
-    CHECK_EQ(cbor::diagnostic_notation(text).error(), error::string_length_exceeded);
-    CHECK_EQ(cbor::diagnostic_notation(array).error(), error::container_elements_exceeded);
+    CHECK_EQ(cbor::diagnostic_notation(text), std::unexpected(error::string_length_exceeded));
+    CHECK_EQ(cbor::diagnostic_notation(array), std::unexpected(error::container_elements_exceeded));
 }
 
 // The stack is checked in the form of the code that checks the size limits too. Take n tags 100(...) around 0. They hold

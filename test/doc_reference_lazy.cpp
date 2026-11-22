@@ -167,7 +167,8 @@ TEST_CASE("doc reference lazy: at")
 // lazy.hpp, snippet at_edn: a byte string key, an array key and a float key behind tag 55799, each as an EDN literal.
 TEST_CASE("doc reference lazy: at with an EDN literal")
 {
-    std::string bytes = cbor::diag2cbor(R"({h'01': "bytes", [1, 2]: "pair", 1.5: "float"})").value();
+    auto const edn_bytes = cbor::diag2cbor(R"({h'01': "bytes", [1, 2]: "pair", 1.5: "float"})");
+    std::string bytes = edn_bytes.value();
     // [at_edn]
     // bytes: a std::string with {h'01': "bytes", [1, 2]: "pair", 1.5: "float"}
     using namespace cbor::literals;

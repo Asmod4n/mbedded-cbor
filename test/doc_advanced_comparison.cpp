@@ -52,8 +52,9 @@ TEST_CASE("doc advanced comparison: iterate an array")
 // refuses a value under tag 28 or tag 29.
 TEST_CASE("doc advanced comparison: shared values")
 {
+    auto const edn_bytes = cbor::diag2cbor(R"([28("x"), 29(0)])");
     auto const owner =
-        std::make_shared<std::string const>(cbor::diag2cbor(R"([28("x"), 29(0)])").value());
+        std::make_shared<std::string const>(edn_bytes.value());
     // begin shared
     auto const second = cbor::lazy::view(owner)->at(1);
     // second->type() is cbor::type::tag, and second->get<std::uint64_t>() is 0

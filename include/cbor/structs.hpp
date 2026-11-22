@@ -1981,9 +1981,9 @@ CBOR_ALWAYS_INLINE inline result<std::size_t> encode(Target &&out, T const &valu
  */
 template <class T>
     requires(!std::same_as<T, item> && !std::same_as<T, owning<item>>)
-inline std::expected<std::string, error> to_edn(T const &value)
+inline result<std::string> to_edn(T const &value)
 {
-    return detail::generic::edn_of(value);
+    return result<std::string>(detail::generic::edn_of(value));
 }
 
 /**
