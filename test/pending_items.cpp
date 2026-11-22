@@ -123,7 +123,7 @@ TEST_CASE("pending items: structs skips the enclosed items of a key that names n
         CHECK_EQ((**r).a, 1);
     }
     std::string const cut = encode_edn(R"({[1, 2, 3]: 0, "a": 1})").substr(0, 3);
-    CHECK_EQ(cbor::structs<one_int>::decode(std::string(cut)).error(), error::too_little_data);
+    CHECK_EQ(cbor::structs<one_int>::decode(std::string(cut)), std::unexpected(error::too_little_data));
 }
 
 // The counts 2^63 for a map and 2^64 - 1 for an array overflow when the decoder doubles the map count or adds the

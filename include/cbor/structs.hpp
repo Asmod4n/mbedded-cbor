@@ -60,6 +60,7 @@
 #include "validity.hpp"
 #include "head.hpp"
 #include "ref.hpp"
+#include "result.hpp"
 #include "schema.hpp"
 
 namespace cbor
@@ -1928,9 +1929,9 @@ using generic = basic_generic<false>;
  */
 template <class T>
     requires(!std::same_as<T, item> && !std::same_as<T, owning<item>>)
-CBOR_ALWAYS_INLINE inline std::expected<std::string, error> encode(T const &value)
+CBOR_ALWAYS_INLINE inline result<std::string> encode(T const &value)
 {
-    return detail::generic::encode_to_string(value);
+    return result<std::string>(detail::generic::encode_to_string(value));
 }
 
 /**
@@ -1953,9 +1954,9 @@ CBOR_ALWAYS_INLINE inline std::expected<std::string, error> encode(T const &valu
 template <class T, class Target>
     requires(detail::is_target_v<std::remove_reference_t<Target>> && !std::same_as<T, item> &&
              !std::same_as<T, owning<item>>)
-CBOR_ALWAYS_INLINE inline std::expected<std::size_t, error> encode(Target &&out, T const &value)
+CBOR_ALWAYS_INLINE inline result<std::size_t> encode(Target &&out, T const &value)
 {
-    return detail::generic::encode_into(std::forward<Target>(out), value);
+    return result<std::size_t>(detail::generic::encode_into(std::forward<Target>(out), value));
 }
 
 /**
@@ -2095,7 +2096,7 @@ public:
      * @see cbor::ref
      */
     template <owning_range_of_bytes Encoded>
-    static std::expected<ref<T>, error> decode(Encoded &&encoded)
+    static result<ref<T>> decode(Encoded &&encoded)
     {
         return decode(std::make_shared<Encoded const>(std::move(encoded)));
     }
@@ -2105,7 +2106,7 @@ public:
      * @throws std::logic_error @p encoded is null
      */
     template <owning_range_of_bytes Encoded>
-    static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded)
+    static result<ref<T>> decode(std::shared_ptr<Encoded const> encoded)
     {
         detail::pfr::check_default_constructible<T>();
         return decode(std::move(encoded), T{});
@@ -2117,7 +2118,7 @@ public:
      * @throws std::logic_error @p encoded is null
      */
     template <owning_range_of_bytes Encoded>
-    static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded, T &&target)
+    static result<ref<T>> decode(std::shared_ptr<Encoded const> encoded, T &&target)
     {
         detail::validity::throw_logic_error_if_null(encoded,
                                                     "cbor::structs::decode: the encoded data item is null");
@@ -2130,7 +2131,7 @@ public:
      * @throws std::logic_error @p owner is empty
      */
     template <borrowed_range_of_bytes Encoded>
-    static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded)
+    static result<ref<T>> decode(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
         detail::pfr::check_default_constructible<T>();
         return decode(std::move(owner), encoded, T{});
@@ -2142,11 +2143,9 @@ public:
      * @throws std::logic_error @p owner is empty
      */
     template <borrowed_range_of_bytes Encoded>
-    static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded,
-                                               T &&target)
+    static result<ref<T>> decode(std::shared_ptr<void const> owner, Encoded const &encoded, T &&target)
     {
-        return decode_with_owner(std::move(owner), detail::chars_of(encoded),
-                            std::move(target));
+        return result<ref<T>>(decode_with_owner(std::move(owner), detail::chars_of(encoded), std::move(target)));
     }
 
     /**
@@ -2171,9 +2170,9 @@ public:
      * @snippet doc_reference_structs.cpp encode
      * @see cbor::structs::decode()
      */
-    CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode(T const &value)
+    CBOR_ALWAYS_INLINE static result<std::string> encode(T const &value)
     {
-        return detail::basic_generic<true>::encode_to_string(value);
+        return result<std::string>(detail::basic_generic<true>::encode_to_string(value));
     }
 
     /**
@@ -2189,9 +2188,9 @@ public:
     template <class Target>
         requires(detail::is_target_v<std::remove_reference_t<Target>> &&
                  !detail::is_target_v<T>)
-    CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(Target &&out, T const &value)
+    CBOR_ALWAYS_INLINE static result<std::size_t> encode(Target &&out, T const &value)
     {
-        return detail::basic_generic<true>::encode_into(std::forward<Target>(out), value);
+        return result<std::size_t>(detail::basic_generic<true>::encode_into(std::forward<Target>(out), value));
     }
 
 private:

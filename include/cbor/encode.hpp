@@ -38,6 +38,7 @@
 #include "head.hpp"
 #include "item.hpp"
 #include "ref.hpp"
+#include "result.hpp"
 
 namespace cbor
 {
@@ -60,7 +61,7 @@ namespace cbor
  *
  * @ingroup decode
  */
-std::expected<ref<std::span<iovec const>>, error> encode_iov(item const root);
+result<ref<std::span<iovec const>>> encode_iov(item const root);
 
 /**
  * @brief Writes the tree that `root` owns into a list of `struct iovec` pieces, and refers to its long strings.
@@ -83,7 +84,7 @@ std::expected<ref<std::span<iovec const>>, error> encode_iov(item const root);
  *
  * @ingroup decode
  */
-std::expected<ref<std::span<iovec const>>, error> encode_iov(owning<item> const &root);
+result<ref<std::span<iovec const>>> encode_iov(owning<item> const &root);
 
 #endif
 
@@ -142,23 +143,6 @@ struct span_message {
         return {};
     }
 };
-
-template <class C>
-constexpr bool byte_container = requires(C &c) {
-    c.resize(std::size_t{});
-    requires sizeof(std::ranges::range_value_t<C>) == 1;
-    requires std::ranges::contiguous_range<C>;
-};
-
-template <class Target>
-constexpr bool is_target_v =
-    requires(Target &target) {
-        std::span(target);
-        requires std::same_as<typename Target::element_type, char> ||
-                     std::same_as<typename Target::element_type, std::byte>;
-        requires !requires { target.resize(std::size_t{}); };
-    } || byte_container<Target> ||
-    requires(Target &target, std::size_t const hint) { target.allocate(hint).done(hint); };
 
 template <class Target>
     requires is_target_v<std::remove_reference_t<Target>>
@@ -229,8 +213,8 @@ private:
 #endif
 
 #if __has_include(<sys/uio.h>)
-    friend std::expected<ref<std::span<iovec const>>, error> cbor::encode_iov(item const root);
-    friend std::expected<ref<std::span<iovec const>>, error> cbor::encode_iov(owning<item> const &root);
+    friend result<ref<std::span<iovec const>>> cbor::encode_iov(item const root);
+    friend result<ref<std::span<iovec const>>> cbor::encode_iov(owning<item> const &root);
 #endif
 };
 
@@ -292,7 +276,7 @@ private:
  */
 template <class Target>
     requires detail::is_target_v<std::remove_reference_t<Target>>
-std::expected<std::size_t, error> encode(Target &&out, item const root);
+result<std::size_t> encode(Target &&out, item const root);
 
 template <class Writer>
 struct detail::encoding::binary_writer {
@@ -862,9 +846,9 @@ std::expected<std::size_t, error> detail::encoding::encode_into(Target &&target,
 
 template <class Target>
     requires detail::is_target_v<std::remove_reference_t<Target>>
-std::expected<std::size_t, error> encode(Target &&out, item const root)
+result<std::size_t> encode(Target &&out, item const root)
 {
-    return detail::encoding::encode_into(std::forward<Target>(out), root);
+    return result<std::size_t>(detail::encoding::encode_into(std::forward<Target>(out), root));
 }
 
 #if __has_include(<sys/uio.h>)
@@ -887,14 +871,14 @@ inline std::expected<ref<std::span<iovec const>>, error> detail::encoding::encod
     return out.release();
 }
 
-inline std::expected<ref<std::span<iovec const>>, error> encode_iov(item const root)
+inline result<ref<std::span<iovec const>>> encode_iov(item const root)
 {
-    return detail::encoding::encode_iov_of(root);
+    return result<ref<std::span<iovec const>>>(detail::encoding::encode_iov_of(root));
 }
 
-inline std::expected<ref<std::span<iovec const>>, error> encode_iov(owning<item> const &root)
+inline result<ref<std::span<iovec const>>> encode_iov(owning<item> const &root)
 {
-    return detail::encoding::encode_iov_of(root);
+    return result<ref<std::span<iovec const>>>(detail::encoding::encode_iov_of(root));
 }
 
 #endif

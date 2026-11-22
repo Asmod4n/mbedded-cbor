@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <expected>
 #include <map>
+#include <span>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -97,6 +98,18 @@ constexpr auto elements_of_tree = [](cbor::owning<cbor::item> const &t) { return
 constexpr auto type_of_tree = [](cbor::owning<cbor::item> const &t) { return t->type(); };
 
 constexpr auto decode_empty = [](error const &) { return cbor::decode(std::string_view{}); };
+
+using encoded_result = decltype(cbor::encode<int>(0));
+
+using written_result = decltype(cbor::encode(std::declval<std::string &>(), std::declval<cbor::item>()));
+
+using struct_result = decltype(cbor::structs<int>::decode(std::string()));
+
+constexpr auto size_of_text = [](std::string const &s) { return cbor::item_size(s); };
+
+constexpr auto length_of_text = [](std::string const &s) { return s.size(); };
+
+constexpr auto encode_zero = [](error const &) { return cbor::encode<int>(0); };
 
 } // namespace
 
@@ -347,4 +360,85 @@ TEST_CASE("result: cbor::decode, cbor::item_size and the reads of cbor::item giv
     auto const empty = cbor::decode_cycles(std::string_view{});
     auto const fallback = empty.or_else(decode_empty);
     CHECK_EQ(fallback.error(), error::too_little_data);
+}
+
+// cbor::encode, cbor::encode_iov and cbor::structs give a result too, so the same rules hold for them: a reader or a
+// monadic form of a temporary result does not compile, and the same call on a named result does. The bytes of encode
+// are the case that a loop reads.
+TEST_CASE("result: a temporary result of cbor::encode or cbor::structs cannot be read")
+{
+    CHECK(deref_of_named<encoded_result>);
+    CHECK(loop_over_named<encoded_result>);
+    CHECK_FALSE(deref_of_call<encoded_result>);
+    CHECK_FALSE(loop_over_call<encoded_result>);
+    CHECK_FALSE(arrow_of_call<encoded_result>);
+    CHECK_FALSE(value_of_call<encoded_result>);
+    CHECK_FALSE(error_of_call<encoded_result>);
+    CHECK_FALSE(deref_of_moved<encoded_result>);
+    CHECK_FALSE(deref_of_call<written_result>);
+    CHECK_FALSE(value_of_call<written_result>);
+    CHECK_FALSE(error_of_call<written_result>);
+    CHECK_FALSE(deref_of_call<struct_result>);
+    CHECK_FALSE(value_of_call<struct_result>);
+    CHECK_FALSE(error_of_call<struct_result>);
+    CHECK_FALSE(deref_of_moved<struct_result>);
+    using after = decltype(size_of_text);
+    using length = decltype(length_of_text);
+    using again = decltype(encode_zero);
+    using code = decltype(code_of);
+    CHECK((and_then_takes<encoded_result const &, after>));
+    CHECK_FALSE((and_then_takes<encoded_result &&, after>));
+    CHECK((transform_takes<encoded_result const &, length>));
+    CHECK_FALSE((transform_takes<encoded_result &&, length>));
+    CHECK((or_else_takes<encoded_result const &, again>));
+    CHECK_FALSE((or_else_takes<encoded_result &&, again>));
+    CHECK((transform_error_takes<encoded_result const &, code>));
+    CHECK_FALSE((transform_error_takes<encoded_result &&, code>));
+    CHECK_FALSE((std::is_convertible_v<encoded_result, std::expected<std::string, error>>));
+    CHECK_FALSE((std::is_convertible_v<written_result, std::expected<std::size_t, error>>));
+    CHECK_FALSE((std::is_convertible_v<struct_result, std::expected<cbor::ref<int>, error>>));
+    CHECK_FALSE((std::is_constructible_v<encoded_result, std::string>));
+    CHECK_FALSE((std::is_constructible_v<written_result, std::size_t>));
+    CHECK_FALSE((std::is_constructible_v<struct_result, std::unexpect_t, error>));
+}
+
+// A named result of each function of the group gives its value or its error. Each overload of encode and
+// encode_iov is called once here.
+TEST_CASE("result: cbor::encode, cbor::encode_iov and cbor::structs give a result")
+{
+    auto encoded = cbor::encode<std::map<std::string, std::int64_t>>({{"a", 7}});
+    REQUIRE(encoded.has_value());
+    std::string out;
+    auto const appended = cbor::encode<std::map<std::string, std::int64_t>>(out, {{"a", 7}});
+    CHECK_EQ(*appended, encoded->size());
+    CHECK_EQ(out, *encoded);
+    auto const tree = cbor::decode(*encoded);
+    REQUIRE(tree.has_value());
+    std::string again;
+    auto const written = cbor::encode(again, **tree);
+    CHECK_EQ(*written, encoded->size());
+    CHECK_EQ(again, *encoded);
+    std::string room(encoded->size() - 1, '\0');
+    auto const refused = cbor::encode(std::span<char>(room), **tree);
+    CHECK_EQ(refused.error(), error::no_buffer_space);
+#if __has_include(<sys/uio.h>)
+    auto const copied = cbor::encode_iov(**tree);
+    REQUIRE(copied.has_value());
+    CHECK_FALSE((*copied)->empty());
+    auto const referred = cbor::encode_iov(*tree);
+    REQUIRE(referred.has_value());
+    CHECK_FALSE((*referred)->empty());
+#endif
+    auto const back = cbor::structs<std::map<std::string, std::int64_t>>::decode(std::move(*encoded));
+    REQUIRE(back.has_value());
+    CHECK_EQ((*back)->at("a"), 7);
+    auto const struct_bytes = cbor::structs<std::map<std::string, std::int64_t>>::encode(**back);
+    REQUIRE(struct_bytes.has_value());
+    std::string struct_out;
+    auto const struct_count = cbor::structs<std::map<std::string, std::int64_t>>::encode(struct_out, **back);
+    CHECK_EQ(*struct_count, struct_bytes->size());
+    auto const cut = cbor::structs<std::map<std::string, std::int64_t>>::decode(struct_bytes->substr(0, 1));
+    CHECK_EQ(cut.error(), error::too_little_data);
+    auto const length = struct_bytes.transform(length_of_text);
+    CHECK_EQ(*length, struct_out.size());
 }

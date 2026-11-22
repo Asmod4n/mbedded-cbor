@@ -143,7 +143,7 @@ void reads(R const &r, outcome const expected)
 // The test shrinks the stack of the reader, not of whoever ends the value. The caller moves the values out.
 struct read_values {
     std::optional<std::expected<cbor::ref<holder>, error>> decoded;
-    std::optional<std::expected<cbor::ref<node>, error>> nodes;
+    std::optional<cbor::result<cbor::ref<node>>> nodes;
 };
 
 read_values every_reader(std::size_t const levels, holder const &chain, outcome const expected,

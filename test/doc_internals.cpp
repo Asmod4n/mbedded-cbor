@@ -124,14 +124,21 @@ TEST_CASE("doc internals: an item keeps the bits of a NaN")
 // significand of a shorter NaN with zeros on the right, so a NaN reads back with the bits that were written.
 TEST_CASE("doc internals: a NaN takes the shortest width that keeps its bits")
 {
-    auto const of_double = [](std::uint64_t const bits) { return cbor::encode<double>(std::bit_cast<double>(bits))->size(); };
-    auto const of_float = [](std::uint32_t const bits) { return cbor::encode<float>(std::bit_cast<float>(bits))->size(); };
+    auto const of_double = [](std::uint64_t const bits) {
+        auto const encoded = cbor::encode<double>(std::bit_cast<double>(bits));
+        return encoded->size();
+    };
+    auto const of_float = [](std::uint32_t const bits) {
+        auto const encoded = cbor::encode<float>(std::bit_cast<float>(bits));
+        return encoded->size();
+    };
     CHECK_EQ(of_double(0x7ff8'0400'0000'0000), 3u);
     CHECK_EQ(of_double(0x7ff8'0000'2000'0000), 5u);
     CHECK_EQ(of_double(0x7ff8'0000'0000'0001), 9u);
     CHECK_EQ(of_float(0x7fc0'2000), 3u);
     CHECK_EQ(of_float(0x7fc0'0001), 5u);
-    auto const back = cbor::structs<float>::decode(*cbor::encode<float>(std::bit_cast<float>(std::uint32_t{0x7fc0'0001})));
+    auto encoded = cbor::encode<float>(std::bit_cast<float>(std::uint32_t{0x7fc0'0001}));
+    auto const back = cbor::structs<float>::decode(std::move(*encoded));
     REQUIRE(back.has_value());
     CHECK_EQ(std::bit_cast<std::uint32_t>(**back), 0x7fc0'0001u);
 }

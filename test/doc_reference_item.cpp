@@ -199,12 +199,12 @@ TEST_CASE("doc reference item: encode")
     CHECK_EQ(out, bytes);
 
     std::array<char, 2> small{};
-    CHECK_EQ(cbor::encode(std::span<char>(small), **tree).error(), cbor::error::no_buffer_space);
+    CHECK_EQ(cbor::encode(std::span<char>(small), **tree), std::unexpected(cbor::error::no_buffer_space));
 
     std::string written;
-    CHECK_EQ(cbor::encode(writer_target{&written, false}, **tree).value(), 4u);
+    CHECK_EQ(cbor::encode(writer_target{&written, false}, **tree), 4u);
     CHECK_EQ(written, bytes);
-    CHECK_EQ(cbor::encode(writer_target{&written, true}, **tree).error(), cbor::error::io_error);
+    CHECK_EQ(cbor::encode(writer_target{&written, true}, **tree), std::unexpected(cbor::error::io_error));
 }
 
 // The iov forms exist where the platform has <sys/uio.h>, as in the library (encode.hpp); Windows has none.

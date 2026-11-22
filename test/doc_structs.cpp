@@ -105,7 +105,8 @@ TEST_CASE("doc structs: types")
     REQUIRE(back.has_value());
     CHECK_EQ((*back)->c, color::green);
     CHECK_EQ((*back)->m.at("a"), 1);
-    CHECK_EQ(cbor::diagnostic_notation(*cbor::encode<std::optional<int>>(std::nullopt)), "null");
+    auto const empty = cbor::encode<std::optional<int>>(std::nullopt);
+    CHECK_EQ(cbor::diagnostic_notation(*empty), "null");
 }
 
 // The section "Keys" shows a key that a description gives, the tag that the description writes, and that an
@@ -115,8 +116,8 @@ TEST_CASE("doc structs: keys")
     auto const bytes = cbor::encode<header>(header{"text/plain"});
     REQUIRE(bytes.has_value());
     CHECK_EQ(cbor::diagnostic_notation(*bytes), R"(160060({"content-type": "text/plain"}))");
-    CHECK_EQ(cbor::structs<header>::decode(encode_in_preferred_form(M("content-type"s, "text/plain"s))).error(),
-             error::incorrect_type);
+    CHECK_EQ(cbor::structs<header>::decode(encode_in_preferred_form(M("content-type"s, "text/plain"s))),
+             std::unexpected(error::incorrect_type));
     auto const none = cbor::encode<person>(person{"bob", 40, {}, std::nullopt});
     REQUIRE(none.has_value());
     CHECK_EQ(cbor::diagnostic_notation(*none), R"({"age": 40, "name": "bob", "tags": []})");
@@ -134,24 +135,24 @@ TEST_CASE("doc structs: input from other programs")
     CHECK_EQ((*other)->name, "ann");
     CHECK_EQ((*other)->age, 30);
     CHECK_FALSE((*other)->home.has_value());
-    CHECK_EQ(cbor::structs<person>::decode(encode_in_preferred_form(M("name"s, "ann"s))).error(), error::key_not_found);
-    CHECK_EQ(cbor::structs<int>::decode(encode_in_preferred_form(V("a"s))).error(), error::incorrect_type);
-    CHECK_EQ(cbor::structs<std::uint8_t>::decode(encode_in_preferred_form(V(256))).error(), error::number_out_of_range);
-    CHECK_EQ((cbor::structs<std::array<int, 2>>::decode(encode_in_preferred_form(A(1))).error()), error::incorrect_type);
+    CHECK_EQ(cbor::structs<person>::decode(encode_in_preferred_form(M("name"s, "ann"s))), std::unexpected(error::key_not_found));
+    CHECK_EQ(cbor::structs<int>::decode(encode_in_preferred_form(V("a"s))), std::unexpected(error::incorrect_type));
+    CHECK_EQ(cbor::structs<std::uint8_t>::decode(encode_in_preferred_form(V(256))), std::unexpected(error::number_out_of_range));
+    CHECK_EQ((cbor::structs<std::array<int, 2>>::decode(encode_in_preferred_form(A(1)))), std::unexpected(error::incorrect_type));
     // The row "bytes after the value" states that decode does not read past the first value.
     auto const first = cbor::structs<int>::decode(encode_in_preferred_form(V(1)) + encode_in_preferred_form(V(2)));
     REQUIRE(first.has_value());
     CHECK_EQ(**first, 1);
     std::string const cut = encode_in_preferred_form(V("abc"s));
-    CHECK_EQ(cbor::structs<std::string>::decode(cut.substr(0, cut.size() - 1)).error(), error::too_little_data);
+    CHECK_EQ(cbor::structs<std::string>::decode(cut.substr(0, cut.size() - 1)), std::unexpected(error::too_little_data));
 }
 
 // A user expected that a std::vector of a number type reads a plain array. The section "Types" and the table of the
 // section "Input from other programs" state that it reads only its typed array.
 TEST_CASE("doc structs: a vector of numbers reads only a typed array")
 {
-    CHECK_EQ(cbor::structs<std::vector<int>>::decode(encode_in_preferred_form(A(1, 2))).error(), error::incorrect_type);
-    CHECK_EQ((cbor::structs<std::array<std::uint16_t, 2>>::decode(encode_in_preferred_form(A(1, 2))).error()), error::incorrect_type);
+    CHECK_EQ(cbor::structs<std::vector<int>>::decode(encode_in_preferred_form(A(1, 2))), std::unexpected(error::incorrect_type));
+    CHECK_EQ((cbor::structs<std::array<std::uint16_t, 2>>::decode(encode_in_preferred_form(A(1, 2)))), std::unexpected(error::incorrect_type));
 }
 
 } // namespace doc_structs

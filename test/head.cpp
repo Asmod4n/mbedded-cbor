@@ -122,7 +122,7 @@ TEST_CASE("head: encode returns the error of the Writer")
         {std::errc::permission_denied, error::io_error},
     };
     for (auto const &c : cases)
-        CHECK_EQ(cbor::encode(refusing_writer{c.refusal}, **tree).error(), c.expected);
+        CHECK_EQ(cbor::encode(refusing_writer{c.refusal}, **tree), std::unexpected(c.expected));
 }
 
 struct one_simple_value {
@@ -176,8 +176,8 @@ TEST_CASE("head: every initial byte gives the result that RFC 8949 gives it")
         cbor::sequence_reader r;
         r.feed(std::string_view{bytes});
         CHECK_EQ(r.next().error(), cbor::error::syntax_error);
-        CHECK_EQ(cbor::structs<one_simple_value>::decode("\xa1\x61v" + bytes).error(), cbor::error::syntax_error);
-        CHECK_EQ(cbor::structs<one_simple_value>::decode("\xa1" + bytes + '\0').error(), cbor::error::syntax_error);
+        CHECK_EQ(cbor::structs<one_simple_value>::decode("\xa1\x61v" + bytes), std::unexpected(cbor::error::syntax_error));
+        CHECK_EQ(cbor::structs<one_simple_value>::decode("\xa1" + bytes + '\0'), std::unexpected(cbor::error::syntax_error));
     }
     auto const lazy_error = [](std::string const &bytes) {
         auto const l = cbor::lazy::adopt(std::string(bytes));

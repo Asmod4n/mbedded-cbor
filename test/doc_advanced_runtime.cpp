@@ -252,7 +252,7 @@ TEST_CASE("doc advanced runtime: encode")
     REQUIRE(cbor::encode(std::span<char>(fixed), **decoded).has_value());
     CHECK_EQ(std::string(fixed.data(), fixed.size()), "\x82\x01\x02"s);
     std::array<char, 2> small{};
-    CHECK_EQ(cbor::encode(std::span<char>(small), **decoded).error(), error::no_buffer_space);
+    CHECK_EQ(cbor::encode(std::span<char>(small), **decoded), std::unexpected(error::no_buffer_space));
     string_writer w;
     REQUIRE(cbor::encode(w, **decoded).has_value());
     CHECK_EQ(w.encoded, "\x82\x01\x02"s);

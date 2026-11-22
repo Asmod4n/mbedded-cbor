@@ -169,15 +169,16 @@ TEST_CASE("doc advanced structs: the item of each type")
     REQUIRE(back.has_value());
     CHECK(**back == r);
 
-    CHECK_EQ(cbor::diagnostic_notation(*cbor::encode<std::set<std::uint8_t>>({3, 1})), "258([1, 3])");
-    CHECK_EQ(cbor::diagnostic_notation(*cbor::encode<std::array<std::byte, 2>>({std::byte{1}, std::byte{2}})),
-             "64(h'0102')");
-    CHECK_EQ(cbor::diagnostic_notation(*cbor::encode<std::chrono::sys_seconds>(
-                 std::chrono::sys_seconds{std::chrono::seconds{1700000000}})),
-             "1(1700000000)");
-    CHECK_EQ(cbor::structs<float>::decode("\xfb\x3f\xb9\x99\x99\x99\x99\x99\x9a"s).error(), error::number_out_of_range);
-    CHECK_EQ(cbor::structs<std::vector<std::uint16_t>>::decode(encode_in_preferred_form(A(1, 2))).error(), error::incorrect_type);
-    CHECK_EQ((cbor::structs<std::array<double, 2>>::decode(encode_in_preferred_form(A(1.5, 2.5))).error()), error::incorrect_type);
+    auto const set = cbor::encode<std::set<std::uint8_t>>({3, 1});
+    CHECK_EQ(cbor::diagnostic_notation(*set), "258([1, 3])");
+    auto const typed = cbor::encode<std::array<std::byte, 2>>({std::byte{1}, std::byte{2}});
+    CHECK_EQ(cbor::diagnostic_notation(*typed), "64(h'0102')");
+    auto const time =
+        cbor::encode<std::chrono::sys_seconds>(std::chrono::sys_seconds{std::chrono::seconds{1700000000}});
+    CHECK_EQ(cbor::diagnostic_notation(*time), "1(1700000000)");
+    CHECK_EQ(cbor::structs<float>::decode("\xfb\x3f\xb9\x99\x99\x99\x99\x99\x9a"s), std::unexpected(error::number_out_of_range));
+    CHECK_EQ(cbor::structs<std::vector<std::uint16_t>>::decode(encode_in_preferred_form(A(1, 2))), std::unexpected(error::incorrect_type));
+    CHECK_EQ((cbor::structs<std::array<double, 2>>::decode(encode_in_preferred_form(A(1.5, 2.5)))), std::unexpected(error::incorrect_type));
 }
 
 // The section "Every type" says that encode throws for a date that does not exist. The value is a wrong use. No CBOR
@@ -187,8 +188,8 @@ TEST_CASE("doc advanced structs: encode of an invalid date throws")
     using namespace std::chrono;
     CHECK_THROWS_AS((void)cbor::encode<year_month_day>(year_month_day{year{2026}, month{2}, day{30}}),
                     std::logic_error);
-    CHECK_EQ(cbor::diagnostic_notation(*cbor::encode<year_month_day>(year_month_day{year{1970}, month{1}, day{2}})),
-             "100(1)");
+    auto const date = cbor::encode<year_month_day>(year_month_day{year{1970}, month{1}, day{2}});
+    CHECK_EQ(cbor::diagnostic_notation(*date), "100(1)");
 }
 
 // The section "Every type" states the width of each NaN that encode writes and that decode keeps its bits. A NaN
@@ -196,33 +197,35 @@ TEST_CASE("doc advanced structs: encode of an invalid date throws")
 TEST_CASE("doc advanced structs: a NaN keeps its bits")
 {
     auto const bits_of = [](double const d) { return std::bit_cast<std::uint64_t>(d); };
-    CHECK_EQ(*cbor::encode<double>(std::bit_cast<double>(std::uint64_t{0x7ff8000000000000})), "\xf9\x7e\x00"s);
-    CHECK_EQ(*cbor::encode<double>(std::bit_cast<double>(std::uint64_t{0x7ff8000020000000})),
+    CHECK_EQ(cbor::encode<double>(std::bit_cast<double>(std::uint64_t{0x7ff8000000000000})), "\xf9\x7e\x00"s);
+    CHECK_EQ(cbor::encode<double>(std::bit_cast<double>(std::uint64_t{0x7ff8000020000000})),
              "\xfa\x7f\xc0\x00\x01"s);
-    CHECK_EQ(*cbor::encode<double>(std::bit_cast<double>(std::uint64_t{0x7ff8000000000001})),
+    CHECK_EQ(cbor::encode<double>(std::bit_cast<double>(std::uint64_t{0x7ff8000000000001})),
              "\xfb\x7f\xf8\x00\x00\x00\x00\x00\x01"s);
-    CHECK_EQ(*cbor::encode<float>(std::bit_cast<float>(std::uint32_t{0x7fc00001})), "\xfa\x7f\xc0\x00\x01"s);
-    CHECK_EQ(*cbor::encode<float>(std::bit_cast<float>(std::uint32_t{0x7fc00000})), "\xf9\x7e\x00"s);
+    CHECK_EQ(cbor::encode<float>(std::bit_cast<float>(std::uint32_t{0x7fc00001})), "\xfa\x7f\xc0\x00\x01"s);
+    CHECK_EQ(cbor::encode<float>(std::bit_cast<float>(std::uint32_t{0x7fc00000})), "\xf9\x7e\x00"s);
     for (std::uint64_t const nan : {std::uint64_t{0x7ff8000000000000}, std::uint64_t{0x7ff8000020000000},
                                     std::uint64_t{0x7ff8000000000001}}) {
-        auto const back = cbor::structs<double>::decode(*cbor::encode<double>(std::bit_cast<double>(nan)));
+        auto encoded = cbor::encode<double>(std::bit_cast<double>(nan));
+        auto const back = cbor::structs<double>::decode(std::move(*encoded));
         REQUIRE(back.has_value());
         CHECK_EQ(bits_of(**back), nan);
     }
     auto const single = cbor::structs<float>::decode("\xfa\x7f\xc0\x00\x01"s);
     REQUIRE(single.has_value());
     CHECK_EQ(std::bit_cast<std::uint32_t>(**single), 0x7fc00001u);
-    CHECK_EQ(cbor::structs<float>::decode("\xfb\x7f\xf8\x00\x00\x00\x00\x00\x01"s).error(),
-             error::number_out_of_range);
+    CHECK_EQ(cbor::structs<float>::decode("\xfb\x7f\xf8\x00\x00\x00\x00\x00\x01"s),
+             std::unexpected(error::number_out_of_range));
 }
 
 // The section "Structs and keys" shows a description of a class with a private member and an integer key. A description
 // with cbor::untagged that gives integer keys and no tag.
 TEST_CASE("doc advanced structs: the key of a member")
 {
-    CHECK_EQ(cbor::diagnostic_notation(*cbor::encode<account>(account{"ann", 2, "secret"})),
-             R"(160061({1: 2, "user": "ann"}))");
-    CHECK_EQ(cbor::diagnostic_notation(*cbor::encode<senml>(senml{"t", 1.5})), R"({0: "t", 2: 1.5})");
+    auto const by_name = cbor::encode<account>(account{"ann", 2, "secret"});
+    CHECK_EQ(cbor::diagnostic_notation(*by_name), R"(160061({1: 2, "user": "ann"}))");
+    auto const by_number = cbor::encode<senml>(senml{"t", 1.5});
+    CHECK_EQ(cbor::diagnostic_notation(*by_number), R"({0: "t", 2: 1.5})");
 }
 
 // The section "Structs and keys" says what decode does in four cases. The cases are an unknown key, a repeated key and a
@@ -233,8 +236,8 @@ TEST_CASE("doc advanced structs: unknown, repeated and missing keys")
     REQUIRE(extra.has_value());
     CHECK_EQ((*extra)->name, "x");
     std::string repeated = cbor::diag2cbor(R"({"name": "x", "age": 1, "age": 2})").value();
-    CHECK_EQ(cbor::structs<person>::decode(std::move(repeated)).error(), error::duplicate_key);
-    CHECK_EQ(cbor::structs<person>::decode(encode_in_preferred_form(M("name"s, "x"s))).error(), error::key_not_found);
+    CHECK_EQ(cbor::structs<person>::decode(std::move(repeated)), std::unexpected(error::duplicate_key));
+    CHECK_EQ(cbor::structs<person>::decode(encode_in_preferred_form(M("name"s, "x"s))), std::unexpected(error::key_not_found));
     for (value const &key : {A(), M(), value{tagged{1000, V(1)}}, A(1, M("a"s, A())), value{tagged{28, V(1)}}}) {
         auto const skipped = cbor::structs<person>::decode(encode_in_preferred_form(M("name"s, "x"s, key, 0, "age"s, 1)));
         REQUIRE(skipped.has_value());
@@ -251,7 +254,7 @@ TEST_CASE("doc advanced structs: the tag of a struct")
                                                         std::span<std::byte const>, std::span<std::byte const>>>;
     auto const sign1 = cbor::structs<cose_sign1>::decode("\xd2\x84\x40\xa0\x40\x40"s);
     REQUIRE(sign1.has_value());
-    CHECK_EQ(*cbor::encode<cose_sign1>(**sign1), "\xd2\x84\x40\xa0\x40\x40"s);
+    CHECK_EQ(cbor::encode<cose_sign1>(**sign1), "\xd2\x84\x40\xa0\x40\x40"s);
     auto const bytes = cbor::encode<tagged_person>({"ann", 30});
     REQUIRE(bytes.has_value());
     CHECK_EQ(cbor::diagnostic_notation(*bytes), R"(1800({"age": 30, "name": "ann"}))");
@@ -269,7 +272,7 @@ TEST_CASE("doc advanced structs: a variant takes the first alternative that acce
     CHECK_EQ(index("\x20"s), 1u);
     CHECK_EQ(index(encode_in_preferred_form(V(256))), 1u);
     CHECK_EQ(index(encode_in_preferred_form(V("x"s))), 2u);
-    CHECK_EQ(cbor::structs<id>::decode(encode_in_preferred_form(V(simple{21}))).error(), error::incorrect_type);
+    CHECK_EQ(cbor::structs<id>::decode(encode_in_preferred_form(V(simple{21}))), std::unexpected(error::incorrect_type));
     auto const back = cbor::structs<id>::decode(encode_in_preferred_form(V(42)));
     REQUIRE(back.has_value());
     CHECK_EQ(std::get<std::uint8_t>(**back), 42u);
@@ -280,13 +283,11 @@ TEST_CASE("doc advanced structs: a variant takes the first alternative that acce
 TEST_CASE("doc advanced structs: a value under tag 28 or tag 29 is invalid_tag")
 {
     CHECK_EQ(cbor::structs<std::vector<std::string>>::decode(
-                 cbor::diag2cbor(R"([28("x"), "y"])").value())
-                 .error(),
-             error::invalid_tag);
+                 cbor::diag2cbor(R"([28("x"), "y"])").value()),
+             std::unexpected(error::invalid_tag));
     CHECK_EQ(cbor::structs<std::vector<std::string>>::decode(
-                 cbor::diag2cbor(R"(["x", 29(0)])").value())
-                 .error(),
-             error::invalid_tag);
+                 cbor::diag2cbor(R"(["x", 29(0)])").value()),
+             std::unexpected(error::invalid_tag));
     auto const skipped = cbor::structs<person>::decode(
         cbor::diag2cbor(R"({"z": 28(1), "name": "ann", "age": 30})").value());
     REQUIRE(skipped.has_value());
@@ -297,8 +298,8 @@ TEST_CASE("doc advanced structs: a value under tag 28 or tag 29 is invalid_tag")
 TEST_CASE("doc advanced structs: a std::pmr target")
 {
     using texts = std::pmr::vector<std::pmr::string>;
-    auto const owner = std::make_shared<std::string const>(
-        *cbor::encode<std::vector<std::string>>({std::string(40, 'a'), std::string(40, 'b')}));
+    auto const encoded = cbor::encode<std::vector<std::string>>({std::string(40, 'a'), std::string(40, 'b')});
+    auto const owner = std::make_shared<std::string const>(*encoded);
     std::array<std::byte, 64> small{};
     std::pmr::monotonic_buffer_resource budget(small.data(), small.size(), std::pmr::null_memory_resource());
     CHECK_THROWS_AS(static_cast<void>(cbor::structs<texts>::decode(owner, texts(&budget))), std::bad_alloc);
@@ -313,11 +314,11 @@ TEST_CASE("doc advanced structs: a std::pmr target")
 // The section "Errors" gives one input for each error that structs gives.
 TEST_CASE("doc advanced structs: errors")
 {
-    CHECK_EQ(cbor::structs<std::uint8_t>::decode(encode_in_preferred_form(V(256))).error(), error::number_out_of_range);
-    CHECK_EQ(cbor::structs<std::string>::decode(encode_in_preferred_form(V(1))).error(), error::incorrect_type);
-    CHECK_EQ((cbor::structs<std::tuple<int, int>>::decode(encode_in_preferred_form(A(1))).error()), error::incorrect_type);
-    CHECK_EQ(cbor::structs<std::variant<int, std::string>>::decode(encode_in_preferred_form(A())).error(), error::incorrect_type);
-    CHECK_EQ(cbor::structs<std::string>::decode("\x63" "ab"s).error(), error::too_little_data);
+    CHECK_EQ(cbor::structs<std::uint8_t>::decode(encode_in_preferred_form(V(256))), std::unexpected(error::number_out_of_range));
+    CHECK_EQ(cbor::structs<std::string>::decode(encode_in_preferred_form(V(1))), std::unexpected(error::incorrect_type));
+    CHECK_EQ((cbor::structs<std::tuple<int, int>>::decode(encode_in_preferred_form(A(1)))), std::unexpected(error::incorrect_type));
+    CHECK_EQ(cbor::structs<std::variant<int, std::string>>::decode(encode_in_preferred_form(A())), std::unexpected(error::incorrect_type));
+    CHECK_EQ(cbor::structs<std::string>::decode("\x63" "ab"s), std::unexpected(error::too_little_data));
     auto const first = cbor::structs<std::uint8_t>::decode("\x01\x02"s);
     REQUIRE(first.has_value());
     CHECK_EQ(**first, 1u);

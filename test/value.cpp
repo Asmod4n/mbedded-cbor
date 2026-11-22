@@ -142,7 +142,7 @@ TEST_CASE("encode: a span of exact size holds the top-level item, one byte less 
         CHECK(cbor::encode(std::span<char>(exact), **tree).has_value());
         CHECK_EQ(std::string_view(exact.data(), exact.size()), wire);
         std::vector<char> short_by_one(wire.size() - 1);
-        CHECK_EQ(cbor::encode(std::span<char>(short_by_one), **tree).error(), cbor::error{cbor::error::no_buffer_space});
+        CHECK_EQ(cbor::encode(std::span<char>(short_by_one), **tree), std::unexpected(cbor::error{cbor::error::no_buffer_space}));
     }
 }
 

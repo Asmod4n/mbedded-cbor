@@ -48,8 +48,9 @@ void case_print(std::string_view const name, std::string_view const section, std
     std::cout << name << '\t' << section << '\t' << written << '\t' << expected << '\n';
 }
 
-void result_print(std::string_view const name, std::string_view const section,
-                  std::expected<std::string, cbor::error> const &written, std::string_view const expected)
+template <class R>
+void result_print(std::string_view const name, std::string_view const section, R const &written,
+                  std::string_view const expected)
 {
     case_print(name, section, written ? test::hexlify(*written) : message_of(written.error()), expected);
 }
@@ -140,7 +141,7 @@ void corpora(std::filesystem::path const &dir)
 }
 
 template <class T>
-std::expected<std::string, cbor::error> one_item(T const value)
+cbor::result<std::string> one_item(T const value)
 {
     return cbor::encode<T>(value);
 }

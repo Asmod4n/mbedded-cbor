@@ -255,9 +255,9 @@ struct tree_owner;
  *
  * @code{.example}
  * message: {"name": "ann", "age": 30}
- * call: auto const p = cbor::structs<person>::decode(std::move(bytes)).value()
+ * call: auto const decoded = cbor::structs<person>::decode(std::move(bytes))
  * result: ref to person{"ann", 30}
- * call: auto const own = p.clone()
+ * call: auto const own = decoded->clone()
  * result: owning of person{"ann", 30}
  * call: own->name
  * result: "ann"

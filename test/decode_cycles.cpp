@@ -544,8 +544,8 @@ TEST_CASE("decode_cycles: a struct decode refuses every form of a tag 28 and a t
         std::string const marked = cbor::diag2cbor("[28" + width + "(5)]").value();
         std::string const named =
             cbor::diag2cbor("[28" + width + "(5), 29" + width + "(0" + width + ")]").value();
-        CHECK_EQ(cbor::structs<marked_numbers>::decode(std::string(marked)).error(), error::invalid_tag);
-        CHECK_EQ(cbor::structs<marked_numbers>::decode(std::string(named)).error(), error::invalid_tag);
+        CHECK_EQ(cbor::structs<marked_numbers>::decode(std::string(marked)), std::unexpected(error::invalid_tag));
+        CHECK_EQ(cbor::structs<marked_numbers>::decode(std::string(named)), std::unexpected(error::invalid_tag));
     }
 }
 

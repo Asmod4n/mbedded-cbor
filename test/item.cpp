@@ -1766,7 +1766,7 @@ TEST_CASE("item get<T> and lazy get<T> agree")
 TEST_CASE("encode: the count of bytes written is a std::size_t")
 {
     CHECK((std::is_same_v<decltype(cbor::encode(std::declval<std::string &>(), std::declval<cbor::item const >())),
-                          std::expected<std::size_t, cbor::error>>));
+                          cbor::result<std::size_t>>));
 }
 
 // The declaration of elements() and pairs() is auto: the doc comment states the element types, and this test holds

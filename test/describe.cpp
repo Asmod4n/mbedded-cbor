@@ -487,7 +487,7 @@ void round_trip(std::string const &bytes, T const &value)
     CHECK_EQ(*written, bytes);
     auto const read = cbor::structs<T>::decode(std::string(bytes));
     REQUIRE(read.has_value());
-    CHECK_EQ(*cbor::encode<T>(**read), bytes);
+    CHECK_EQ(cbor::encode<T>(**read), bytes);
 }
 
 template <class T>
@@ -562,7 +562,7 @@ TEST_CASE("describe: a type with no default constructor decodes into an object o
     using namespace describe_test;
     std::string const bytes = "\xda\x00\x02\x71\x14\xa1\x61"
                               "a\x07"s;
-    CHECK_EQ(*cbor::encode<no_default>(no_default(7)), bytes);
+    CHECK_EQ(cbor::encode<no_default>(no_default(7)), bytes);
     auto const read =
         cbor::structs<no_default>::decode(std::make_shared<std::string const>(bytes), no_default(0));
     REQUIRE(read.has_value());
@@ -649,15 +649,13 @@ TEST_CASE("describe: decode of an unknown key, a missing key, a wrong tag and no
                                                       "count\x04\x61x\xf5"s);
     REQUIRE(unknown.has_value());
     CHECK_EQ((*unknown)->count, 4u);
-    CHECK_EQ(cbor::structs<doors>::decode("\xda\x00\x02\x71\x01\xa0"s).error(), cbor::error::key_not_found);
+    CHECK_EQ(cbor::structs<doors>::decode("\xda\x00\x02\x71\x01\xa0"s), std::unexpected(cbor::error::key_not_found));
     CHECK_EQ(cbor::structs<doors>::decode("\xda\x00\x02\x71\x03\xa1\x65"
-                                          "count\x04"s)
-                 .error(),
-             cbor::error::incorrect_type);
+                                          "count\x04"s),
+             std::unexpected(cbor::error::incorrect_type));
     CHECK_EQ(cbor::structs<doors>::decode("\xa1\x65"
-                                          "count\x04"s)
-                 .error(),
-             cbor::error::incorrect_type);
+                                          "count\x04"s),
+             std::unexpected(cbor::error::incorrect_type));
 }
 
 // RFC 8392 3: "all claims that are not understood by implementations MUST be ignored", and mruby-cbor reads only the
@@ -680,7 +678,7 @@ TEST_CASE("describe: a key that no entry has is skipped")
 TEST_CASE("describe: a repeated key of a member is duplicate_key")
 {
     std::string bytes = cbor::diag2cbor(R"(160001({"count": 4, "count": 5}))").value();
-    CHECK_EQ(cbor::structs<describe_test::doors>::decode(std::move(bytes)).error(), cbor::error::duplicate_key);
+    CHECK_EQ(cbor::structs<describe_test::doors>::decode(std::move(bytes)), std::unexpected(cbor::error::duplicate_key));
 }
 
 // A description with no entry is a tag over an empty map. A type alias names a type whose name holds a comma,
@@ -717,9 +715,8 @@ TEST_CASE("describe: cbor::untagged writes and reads a map with no tag")
     REQUIRE(read.has_value());
     CHECK_EQ((*read)->n, "t");
     CHECK_EQ((*read)->v, 5);
-    CHECK_EQ(cbor::structs<describe_test::senml_value>::decode("\xda\x00\x02\x71\x0a\xa2\x00\x61t\x02\x05"s)
-                 .error(),
-             cbor::error::incorrect_type);
+    CHECK_EQ(cbor::structs<describe_test::senml_value>::decode("\xda\x00\x02\x71\x0a\xa2\x00\x61t\x02\x05"s),
+             std::unexpected(cbor::error::incorrect_type));
 }
 
 namespace define_type_test

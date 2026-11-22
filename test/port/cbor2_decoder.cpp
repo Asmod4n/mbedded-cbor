@@ -570,8 +570,8 @@ TEST_CASE("cbor2 decoder: test_date_epoch_out_of_range")
     check_decoded({{"d8641a7fffffff", tag_of(100, V(2147483647))}});
     // 2147483647 days lie after the last day that std::chrono::year_month_day holds, and the structs guide gives
     // number_out_of_range for it (RFC 8943 2).
-    CHECK_EQ(cbor::structs<std::chrono::year_month_day>::decode(unhexlify("d8641a7fffffff")).error_or(error{}),
-             error::number_out_of_range);
+    CHECK_EQ(cbor::structs<std::chrono::year_month_day>::decode(unhexlify("d8641a7fffffff")),
+             std::unexpected(error::number_out_of_range));
 }
 
 // Upstream: test_datetime, test_datetime_secfrac, test_datetime_secfrac_overflow, test_datetime_timezone,
@@ -639,8 +639,8 @@ TEST_CASE("cbor2 decoder: test_datetime as std::chrono::sys_seconds")
 TEST_CASE("cbor2 decoder: test_datetime_overflow")
 {
     check_decoded({{"c11b9b9b9b0000000000", tag_of(1, test::value{std::uint64_t{0x9b9b9b0000000000}})}});
-    CHECK_EQ(cbor::structs<std::chrono::sys_seconds>::decode(unhexlify("c11b9b9b9b0000000000")).error_or(error{}),
-             error::number_out_of_range);
+    CHECK_EQ(cbor::structs<std::chrono::sys_seconds>::decode(unhexlify("c11b9b9b9b0000000000")),
+             std::unexpected(error::number_out_of_range));
 }
 
 // Upstream: test_datetime_value_too_large. cbor2 raises an error because the year is past the range of a Python
@@ -860,13 +860,13 @@ TEST_CASE("cbor2 decoder: TestSharedReference read by cbor::decode_cycles")
 TEST_CASE("cbor2 decoder: TestSharedReference read by cbor::structs")
 {
     // TestDecoderReuse.test_decoder_reuse_resets_shared_refs.
-    CHECK_EQ(cbor::structs<std::string>::decode(unhexlify("d81c6b66697273745f76616c7565")).error_or(error{}),
-             error::invalid_tag);
-    CHECK_EQ(cbor::structs<std::uint64_t>::decode(unhexlify("d81d00")).error_or(error{}), error::invalid_tag);
+    CHECK_EQ(cbor::structs<std::string>::decode(unhexlify("d81c6b66697273745f76616c7565")),
+             std::unexpected(error::invalid_tag));
+    CHECK_EQ(cbor::structs<std::uint64_t>::decode(unhexlify("d81d00")), std::unexpected(error::invalid_tag));
 
     // TestSharedReference.test_bad_reference.
     auto const bad = cbor::structs<std::uint64_t>::decode(unhexlify("d81d05"));
-    CHECK_EQ(bad.error_or(error{}), error::invalid_tag);
+    CHECK_EQ(bad, std::unexpected(error::invalid_tag));
 }
 
 // Upstream: TestStringReference. Tags 25 and 256 are the string references of the IANA registry. cbor::decode
@@ -958,7 +958,7 @@ TEST_CASE("cbor2 decoder: TestAllowDuplicateKeys")
     check_decoded({{"a2616101616102", M("a", 1, "a", 2)}});
 
     std::string repeated = cbor::diag2cbor(R"({"a": 1, "a": 2})").value();
-    CHECK_EQ(cbor::structs<std::map<std::string, int>>::decode(std::move(repeated)).error(), error::duplicate_key);
+    CHECK_EQ(cbor::structs<std::map<std::string, int>>::decode(std::move(repeated)), std::unexpected(error::duplicate_key));
 
     // test_raises_on_duplicate[indefinite]: structs.hpp: "@retval indefinite_length a head uses indefinite length".
     auto const indefinite = cbor::structs<std::map<std::string, int>>::decode(unhexlify("bf616101616102ff"));

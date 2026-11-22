@@ -240,7 +240,7 @@ std::vector<std::uint8_t> const bytes = nlohmann::json::to_cbor(person{"ann", 30
 person const back = nlohmann::json::from_cbor(bytes).get<person>();
 ```
 
-`encode` and `decode` return a `std::expected`, and `*` takes the value
+`encode` and `decode` return a `cbor::result`, and `*` takes the value
 (`mbedded-cbor-structs(3)`).
 
 ### Broken input
@@ -349,9 +349,9 @@ struct reading {
 };
 CBOR_DEFINE_TYPE_MEMBERS(reading, cbor::untagged, sensor, value, samples);
 
-auto const bytes = cbor::encode(reading{"t1", 21.5, {3, 4, 5}}).value();
-auto const back = cbor::structs<reading>::decode(std::string(bytes)).value();
-back->sensor;                                                       // "t1"
+auto const bytes = cbor::encode(reading{"t1", 21.5, {3, 4, 5}});
+auto const back = cbor::structs<reading>::decode(std::string(*bytes));
+(*back)->sensor;                                                    // "t1"
 
 cbor::encode(42);                                                   // 18 2a
 cbor::encode(std::map<std::string, int>{{"a", 1}});                 // {"a": 1}
@@ -362,8 +362,8 @@ A decoded struct can point into the bytes, for example with a
 `std::shared_ptr` that keeps them alive:
 
 ```cpp
-auto const owner = std::make_shared<std::string const>(bytes);
-auto const r = cbor::structs<reading>::decode(owner).value();
+auto const owner = std::make_shared<std::string const>(*bytes);
+auto const r = cbor::structs<reading>::decode(owner);
 ```
 
 ### Read a message

@@ -77,6 +77,23 @@ concept integer = (std::integral<T> && !std::same_as<T, bool>)
 #endif
     ;
 
+template <class C>
+constexpr bool byte_container = requires(C &c) {
+    c.resize(std::size_t{});
+    requires sizeof(std::ranges::range_value_t<C>) == 1;
+    requires std::ranges::contiguous_range<C>;
+};
+
+template <class Target>
+constexpr bool is_target_v =
+    requires(Target &target) {
+        std::span(target);
+        requires std::same_as<typename Target::element_type, char> ||
+                     std::same_as<typename Target::element_type, std::byte>;
+        requires !requires { target.resize(std::size_t{}); };
+    } || byte_container<Target> ||
+    requires(Target &target, std::size_t const hint) { target.allocate(hint).done(hint); };
+
 }
 
 template <class T>

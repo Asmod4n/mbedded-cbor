@@ -5,15 +5,23 @@
  */
 #pragma once
 
+#include <concepts>
 #include <cstddef>
 #include <expected>
 #include <functional>
+#include <span>
+#include <string>
 #include <string_view>
 #include <type_traits>
 #include <utility>
 
+#if __has_include(<sys/uio.h>)
+#include <sys/uio.h>
+#endif
+
 #include "error.hpp"
 #include "head.hpp"
+#include "ref.hpp"
 #include "validity.hpp"
 
 namespace cbor
@@ -76,6 +84,28 @@ private:
     friend result<item> encoded_cbor_data_item(owning<item> const &tree, item tagged);
 
     friend result<std::size_t> item_size(std::string_view encoded);
+
+    template <class>
+    friend class structs;
+
+    template <class Target>
+        requires detail::is_target_v<std::remove_reference_t<Target>>
+    friend result<std::size_t> encode(Target &&out, item root);
+
+    template <class V>
+        requires(!std::same_as<V, item> && !std::same_as<V, owning<item>>)
+    friend result<std::string> encode(V const &value);
+
+    template <class V, class Target>
+        requires(detail::is_target_v<std::remove_reference_t<Target>> && !std::same_as<V, item> &&
+                 !std::same_as<V, owning<item>>)
+    friend result<std::size_t> encode(Target &&out, V const &value);
+
+#if __has_include(<sys/uio.h>)
+    friend result<ref<std::span<iovec const>>> encode_iov(item root);
+
+    friend result<ref<std::span<iovec const>>> encode_iov(owning<item> const &root);
+#endif
 
 public:
     constexpr result(result const &) = default;

@@ -146,24 +146,24 @@ TEST_CASE("doc reference structs: decode with an owner")
     REQUIRE(into.has_value());
     CHECK_EQ(**into, std::vector<std::string>{"a", "b"});
 
-    CHECK_EQ(cbor::structs<std::vector<int>>::decode(test::encode_in_preferred_form(test::A(1, 2))).error(),
-             cbor::error::incorrect_type);
+    CHECK_EQ(cbor::structs<std::vector<int>>::decode(test::encode_in_preferred_form(test::A(1, 2))),
+             std::unexpected(cbor::error::incorrect_type));
 }
 
 // structs.hpp, the comment of decode: a missing key, bytes after the item, and an input that ends early.
 TEST_CASE("doc reference structs: decode errors")
 {
-    CHECK_EQ(cbor::structs<person>::decode(test::encode_in_preferred_form(test::M("name"s, "ann"s))).error(),
-             cbor::error::key_not_found);
+    CHECK_EQ(cbor::structs<person>::decode(test::encode_in_preferred_form(test::M("name"s, "ann"s))),
+             std::unexpected(cbor::error::key_not_found));
     auto const first = cbor::structs<int>::decode(test::encode_in_preferred_form(test::V(1)) + "\x01"s);
     REQUIRE(first.has_value());
     CHECK_EQ(**first, 1);
-    CHECK_EQ(cbor::structs<std::string>::decode("\x63" "ab"s).error(), cbor::error::too_little_data);
-    CHECK_EQ(cbor::structs<int>::decode(test::encode_in_preferred_form(test::V("x"s))).error(), cbor::error::incorrect_type);
-    CHECK_EQ(cbor::structs<std::uint8_t>::decode(test::encode_in_preferred_form(test::V(256))).error(),
-             cbor::error::number_out_of_range);
+    CHECK_EQ(cbor::structs<std::string>::decode("\x63" "ab"s), std::unexpected(cbor::error::too_little_data));
+    CHECK_EQ(cbor::structs<int>::decode(test::encode_in_preferred_form(test::V("x"s))), std::unexpected(cbor::error::incorrect_type));
+    CHECK_EQ(cbor::structs<std::uint8_t>::decode(test::encode_in_preferred_form(test::V(256))),
+             std::unexpected(cbor::error::number_out_of_range));
     std::string repeated = cbor::diag2cbor(R"({"age": 1, "age": 2, "name": "a"})").value();
-    CHECK_EQ(cbor::structs<person>::decode(std::move(repeated)).error(), cbor::error::duplicate_key);
+    CHECK_EQ(cbor::structs<person>::decode(std::move(repeated)), std::unexpected(cbor::error::duplicate_key));
 }
 
 // structs.hpp, the comment of decode: an empty owner is a wrong use and throws std::logic_error.
@@ -182,8 +182,8 @@ TEST_CASE("doc reference structs: cbor::describe_members")
     // [describe_members use]
     REQUIRE(bytes.has_value());
     CHECK_EQ(*bytes, test::encode_in_preferred_form(test::value{test::tagged{160060, test::M("content-type"s, "text/plain"s)}}));
-    CHECK_EQ(cbor::structs<header>::decode(test::encode_in_preferred_form(test::M("content-type"s, "x"s))).error(),
-             cbor::error::incorrect_type);
+    CHECK_EQ(cbor::structs<header>::decode(test::encode_in_preferred_form(test::M("content-type"s, "x"s))),
+             std::unexpected(cbor::error::incorrect_type));
 }
 
 // describe.hpp, the comment of member: cbor::member takes an integer key; cbor::untagged gives a map with no tag.
@@ -228,13 +228,13 @@ TEST_CASE("doc reference structs: member types")
     // [structs]
     CHECK_EQ(*one, test::encode_in_preferred_form(test::M("id"s, 4)));
     CHECK_EQ(*set, test::encode_in_preferred_form(test::value{test::tagged{258, test::A(1, 3)}}));
-    CHECK_EQ(*cbor::encode<std::set<std::uint8_t>>({3, 1}),
+    CHECK_EQ(cbor::encode<std::set<std::uint8_t>>({3, 1}),
              test::encode_in_preferred_form(test::value{test::tagged{258, test::A(1, 3)}}));
-    CHECK_EQ(*cbor::encode<std::array<std::byte, 2>>({std::byte{1}, std::byte{2}}),
+    CHECK_EQ(cbor::encode<std::array<std::byte, 2>>({std::byte{1}, std::byte{2}}),
              test::encode_in_preferred_form(test::value{test::tagged{64, test::value{test::bytes{"\x01\x02"s}}}}));
-    CHECK_EQ(*cbor::encode<std::chrono::sys_seconds>(std::chrono::sys_seconds{std::chrono::seconds{1700000000}}),
+    CHECK_EQ(cbor::encode<std::chrono::sys_seconds>(std::chrono::sys_seconds{std::chrono::seconds{1700000000}}),
              test::encode_in_preferred_form(test::value{test::tagged{1, test::value{std::uint64_t{1700000000}}}}));
-    CHECK_EQ(*cbor::encode<reading>(reading{4, std::nullopt}), test::encode_in_preferred_form(test::M("id"s, 4)));
+    CHECK_EQ(cbor::encode<reading>(reading{4, std::nullopt}), test::encode_in_preferred_form(test::M("id"s, 4)));
     auto const back = cbor::structs<reading>::decode(test::encode_in_preferred_form(test::M("id"s, 4)));
     REQUIRE(back.has_value());
     CHECK_FALSE((*back)->unit.has_value());

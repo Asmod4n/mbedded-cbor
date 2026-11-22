@@ -35,7 +35,7 @@ struct tagged_reading {
 };
 
 template <class T>
-std::expected<cbor::ref<T>, error> decode_edn_with_structs(std::string_view const edn)
+cbor::result<cbor::ref<T>> decode_edn_with_structs(std::string_view const edn)
 {
     auto bytes = cbor::diag2cbor(edn);
     REQUIRE(bytes.has_value());

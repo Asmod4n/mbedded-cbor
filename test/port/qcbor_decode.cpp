@@ -807,11 +807,11 @@ TEST_CASE("qcbor DecodeFailureTests: a tag with an inadmissible content type")
     CHECK(type_of(as_string({0xc1, 0x41, 0x33})) == cbor::type::tag);
     CHECK(type_of(as_string({0xc1, 0xc0, 0x00})) == cbor::type::tag);
     CHECK(type_of(as_string({0xc2, 0x00})) == cbor::type::unsigned_bignum);
-    CHECK(cbor::structs<std::uint64_t>::decode(as_string({0xc2, 0x00})).error_or(error{}) == error::incorrect_type);
-    CHECK(cbor::structs<std::chrono::sys_seconds>::decode(as_string({0xc1, 0x41, 0x33})).error_or(error{}) ==
-          error::inadmissible_type_for_tag_content);
-    CHECK(cbor::structs<std::chrono::sys_seconds>::decode(as_string({0xc1, 0xc0, 0x00})).error_or(error{}) ==
-          error::inadmissible_type_for_tag_content);
+    CHECK(cbor::structs<std::uint64_t>::decode(as_string({0xc2, 0x00})) == std::unexpected(error::incorrect_type));
+    CHECK(cbor::structs<std::chrono::sys_seconds>::decode(as_string({0xc1, 0x41, 0x33})) ==
+          std::unexpected(error::inadmissible_type_for_tag_content));
+    CHECK(cbor::structs<std::chrono::sys_seconds>::decode(as_string({0xc1, 0xc0, 0x00})) ==
+          std::unexpected(error::inadmissible_type_for_tag_content));
 }
 
 // ComprehensiveInputTest: every input of one and of two bytes goes through each reader. Upstream checks only that
@@ -859,7 +859,7 @@ TEST_CASE("qcbor DateParseTest: an epoch date on an integer reads into sys_secon
 
     // Row 6: 1b f0f0f0f0f0f0f0f0 does not fit int64_t. Upstream gives QCBOR_ERR_DATE_OVERFLOW.
     CHECK(structs<sys_seconds>::decode(as_string({0xc1, 0x1b, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0}))
-              .error_or(error{}) == error::number_out_of_range);
+              == std::unexpected(error::number_out_of_range));
 
     // Row 1: tag 0 on "1985-04-12". Upstream gives QCBOR_TYPE_DATE_STRING. mbedded-cbor has no type for tag 0, so
     // the tree keeps the tag (item.hpp: "`tag` ... the tag number and the content"; RFC 8949 5.2 asks a generic
@@ -905,7 +905,7 @@ TEST_CASE("qcbor DateParseTest: an epoch date on a float reads into sys_seconds 
              as_string({0xc1, 0xf9, 0xfc, 0x00}),
          }) {
         CAPTURE(in.size());
-        CHECK(structs<sys_seconds>::decode(std::string(in)).error_or(error{}) == error::number_out_of_range);
+        CHECK(structs<sys_seconds>::decode(std::string(in)) == std::unexpected(error::number_out_of_range));
     }
     auto const largest = structs<sys_seconds>::decode(as_string({0xc1, 0xfb, 0x43, 0xdf, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe}));
     REQUIRE(largest.has_value());

@@ -3315,7 +3315,7 @@ inline result<std::string> item::to_edn() const
 inline std::expected<std::string, error> item::to_edn_or_error() const
 {
     std::string bytes;
-    if (auto const r = encode(bytes, *this); !r) [[unlikely]]
+    if (auto const r = detail::encoding::encode_into(bytes, *this); !r) [[unlikely]]
         return std::unexpected(r.error());
     return diagnostic_notation(bytes);
 }
