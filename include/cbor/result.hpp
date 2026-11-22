@@ -182,11 +182,13 @@ public:
      */
     constexpr T const &operator*() const & CBOR_LIFETIMEBOUND
     {
+        detail::validity::throw_logic_error_if(!held.has_value(), "cbor::result: operator* of a result that holds an error");
         return *held;
     }
 
     constexpr T &operator*() & CBOR_LIFETIMEBOUND
     {
+        detail::validity::throw_logic_error_if(!held.has_value(), "cbor::result: operator* of a result that holds an error");
         return *held;
     }
 
@@ -198,11 +200,13 @@ public:
      */
     constexpr T const *operator->() const & CBOR_LIFETIMEBOUND
     {
+        detail::validity::throw_logic_error_if(!held.has_value(), "cbor::result: operator-> of a result that holds an error");
         return held.operator->();
     }
 
     constexpr T *operator->() & CBOR_LIFETIMEBOUND
     {
+        detail::validity::throw_logic_error_if(!held.has_value(), "cbor::result: operator-> of a result that holds an error");
         return held.operator->();
     }
 

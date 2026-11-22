@@ -450,7 +450,7 @@ public:
         return 0;
     }
 
-    [[noreturn]] static void throw_logic_error(char const *const what)
+    [[noreturn, gnu::cold, gnu::noinline]] static void throw_logic_error(char const *const what)
     {
 #if defined(__cpp_exceptions)
         throw std::logic_error(what);
@@ -460,7 +460,7 @@ public:
 #endif
     }
 
-    CBOR_ALWAYS_INLINE static void throw_logic_error_if(bool const wrong, char const *const what)
+    CBOR_ALWAYS_INLINE static constexpr void throw_logic_error_if(bool const wrong, char const *const what)
     {
         if (wrong) [[unlikely]]
             throw_logic_error(what);

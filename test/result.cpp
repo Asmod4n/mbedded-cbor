@@ -16,6 +16,7 @@
 #include <memory>
 #include <ranges>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -1000,4 +1001,13 @@ TEST_CASE("result: cbor::lazy::view, adopt and to_item give a result")
     REQUIRE(cut.has_value());
     auto const broken = cut->to_item();
     CHECK_EQ(broken.error(), error::too_little_data);
+}
+
+// operator* and operator-> of a result that holds an error read no value: the wrong use throws std::logic_error.
+TEST_CASE("result: operator* and operator-> of a result that holds an error throw std::logic_error")
+{
+    auto const failed = cbor::decode(std::string_view{});
+    REQUIRE_FALSE(failed.has_value());
+    CHECK_THROWS_AS(static_cast<void>(*failed), std::logic_error);
+    CHECK_THROWS_AS(static_cast<void>(failed.operator->()), std::logic_error);
 }
