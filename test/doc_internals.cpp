@@ -92,7 +92,8 @@ TEST_CASE("doc internals: a text of the item tree is a copy")
 {
     std::string const bytes = encode_in_preferred_form(V(std::string(40, 'a')));
     auto const owner = std::make_shared<std::string const>(bytes);
-    auto const tree = cbor::lazy::view(owner)->to_item();
+    auto const viewed = cbor::lazy::view(owner);
+    auto const tree = viewed->to_item();
     REQUIRE(tree.has_value());
     auto const text = (*tree)->get<std::string_view>();
     REQUIRE(text.has_value());
@@ -160,12 +161,13 @@ CBOR_DEFINE_TYPE(doc_internals::reading, cbor::tag{1720}, CBOR_MEMBER(doc_intern
 // path, at_path and decode. The test exists because the root is read from the end, so a cut gives a wrong tag first.
 TEST_CASE("doc internals: a cut message gives too_little_data in a schema read")
 {
-    std::string const bytes = *cbor::schema<doc_internals::reading>::encode(doc_internals::reading{7, "t1"});
+    auto const encoded = cbor::schema<doc_internals::reading>::encode(doc_internals::reading{7, "t1"});
+    std::string const bytes = *encoded;
     for (std::size_t n = 1; n < bytes.size(); ++n) {
         std::string const cut = bytes.substr(0, n);
         CAPTURE(n);
-        CHECK_EQ(cbor::schema<doc_internals::reading>::at_path<"$.id">(cut).error(), error::too_little_data);
-        CHECK_EQ(cbor::schema<doc_internals::reading>::adopt(std::string(cut)).error(), error::too_little_data);
-        CHECK_EQ(cbor::schema<doc_internals::reading>::decode(std::string(cut)).error(), error::too_little_data);
+        CHECK_EQ(cbor::schema<doc_internals::reading>::at_path<"$.id">(cut), std::unexpected(error::too_little_data));
+        CHECK_EQ(cbor::schema<doc_internals::reading>::adopt(std::string(cut)), std::unexpected(error::too_little_data));
+        CHECK_EQ(cbor::schema<doc_internals::reading>::decode(std::string(cut)), std::unexpected(error::too_little_data));
     }
 }

@@ -35,8 +35,10 @@ auto const lane = cbor::schema<track>::adopt(std::move(*message));
 lane->at_path<"$.points[2].x">();                                   // 5: one jump to the field
 
 auto const points = lane->at_path<"$.points">();
-for (auto const p : *points | std::views::drop(1) | std::views::take(1))
-    use(*p.at_path<"@.y">());                                       // 4
+for (auto const p : *points | std::views::drop(1) | std::views::take(1)) {
+    auto const y = p.at_path<"@.y">();
+    use(*y);                                                        // 4
+}
 ```
 
 The reference with examples that run in the browser:
@@ -60,7 +62,7 @@ nlohmann::json, cbor2 and CBOR::XS.
 - **Raw arrays.** A list of numbers, and a list of structs whose fields
   all have a fixed width, is one block of little-endian bytes. The block
   is checked once.
-- **Errors as values.** Bad input gives a `std::expected` with a
+- **Errors as values.** Bad input gives a `cbor::result` with a
   `cbor::error`. A read gives every fault of the input as a value.
 - **One description, every compiler.** `cbor::schema` reads only
   `cbor::describe_members` and builds in C++23. With C++26 reflection it
@@ -198,7 +200,7 @@ details stand in [bench/comparison.md](bench/comparison.md).
 | Write a struct | `CBOR_DEFINE_TYPE_MEMBERS` names each member; the read needs no extra code (C++26 reflection, or Boost.PFR in C++23) | a macro that names each member | no mapping of a struct | a schema file and a code generator | a schema file and a code generator |
 | Cycles through tags 28 and 29 | read and written | not read | not read | one offset in two places | not checked |
 | A list of numbers with no copy | `cbor::schema` | copies | reads each number | direct | direct |
-| Broken input | a `std::expected` error | an exception, or a discarded value | an error code | the Verifier; without it, no check | an exception |
+| Broken input | a `cbor::result` error | an exception, or a discarded value | an error code | the Verifier; without it, no check | an exception |
 
 ### Read one field
 
@@ -309,8 +311,10 @@ FetchContent_MakeAvailable(mbedded-cbor)
 
 ## Usage
 
-Every call that can fail returns a `std::expected`. `*result` or
-`result.value()` gives the value, and `result->` reaches a member of it.
+Every call that can fail returns a `cbor::result`, which holds a value or
+a `cbor::error` as `std::expected` does. `*result` or `result.value()`
+gives the value, and `result->` reaches a member of it. These work on a
+named result only: each step is a variable.
 Where the value is itself a handle, such as `cbor::owning<cbor::item>` or
 `cbor::ref<T>`, a second `->` reaches the item or the struct.
 
@@ -373,7 +377,8 @@ through a `std::shared_ptr`. Both forms read the bytes where they are.
 
 ```cpp
 // bytes: a std::string with {"sensor": "t1", "value": 21.5, "samples": [3, 4, 5]}
-auto const doc = cbor::lazy::adopt(std::move(bytes)).value();
+auto const adopted = cbor::lazy::adopt(std::move(bytes));
+auto const doc = adopted.value();
 
 int sum = 0;
 if (auto const samples = doc.at("samples")) {
@@ -388,7 +393,8 @@ if (auto const samples = doc.at("samples")) {
 
 ```cpp
 // owner: a std::shared_ptr<std::string const> with {"user": {"id": 42, "name": "ann"}}
-auto const doc = cbor::lazy::view(owner).value();
+auto const viewed = cbor::lazy::view(owner);
+auto const doc = viewed.value();
 
 auto const id = doc.at_path<"$.user.id", std::int64_t>();          // 42
 auto const name = doc.at_path<"$.user.name", std::string_view>();  // "ann", a view into the message

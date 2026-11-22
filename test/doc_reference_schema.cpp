@@ -54,7 +54,8 @@ unsigned char byte_at(std::string_view const bytes, std::size_t const i)
 std::size_t root_offset(std::string_view const bytes)
 {
     auto const owner = std::make_shared<std::string const>(bytes);
-    auto const at_0 = cbor::lazy::view(owner)->at(0);
+    auto const viewed = cbor::lazy::view(owner);
+    auto const at_0 = viewed->at(0);
     auto const root = at_0->at(16);
     REQUIRE(root.has_value());
     return static_cast<std::size_t>(root->encoded().data() - owner->data());
@@ -100,7 +101,7 @@ TEST_CASE("doc reference schema: encode")
     CHECK_EQ(out.substr(1), *bytes);
 
     std::array<char, 4> small{};
-    CHECK_EQ(cbor::schema<tire>::encode(std::span<char>(small), tire{17, 2.5f}).error(), error::no_buffer_space);
+    CHECK_EQ(cbor::schema<tire>::encode(std::span<char>(small), tire{17, 2.5f}), std::unexpected(error::no_buffer_space));
 }
 
 // schema.hpp, snippet decode: a moved string gives the whole struct. A message of another struct gives incorrect_type, a
@@ -120,8 +121,8 @@ TEST_CASE("doc reference schema: decode")
     CHECK_EQ((*back)->tires.size(), 2u);
     CHECK_EQ(std::bit_cast<std::uint64_t>((*back)->track[2]), 0x4008000000000000u);
 
-    CHECK_EQ(cbor::schema<tire>::decode(sample_bytes()).error(), error::incorrect_type);
-    CHECK_EQ(cbor::schema<car>::decode(sample_bytes().substr(0, 3)).error(), error::too_little_data);
+    CHECK_EQ(cbor::schema<tire>::decode(sample_bytes()), std::unexpected(error::incorrect_type));
+    CHECK_EQ(cbor::schema<car>::decode(sample_bytes().substr(0, 3)), std::unexpected(error::too_little_data));
     CHECK_THROWS_AS(std::ignore = cbor::schema<car>::decode(std::shared_ptr<std::string const>()), std::logic_error);
 }
 
@@ -142,7 +143,7 @@ TEST_CASE("doc reference schema: path")
     REQUIRE(shared.has_value());
     CHECK_EQ(shared->at_path<"$.seats">(), 5);
 
-    CHECK_EQ(cbor::schema<tire>::decode(sample_bytes()).error(), error::incorrect_type);
+    CHECK_EQ(cbor::schema<tire>::decode(sample_bytes()), std::unexpected(error::incorrect_type));
     CHECK_THROWS_AS(std::ignore = cbor::schema<car>::view(std::shared_ptr<std::string const>()), std::logic_error);
 }
 
@@ -162,8 +163,8 @@ TEST_CASE("doc reference schema: static at_path")
     CHECK_EQ(past.error(), error::index_out_of_bounds);
     CHECK_EQ(cbor::schema<car>::at_path<"$.tires[].pressure">(bytes, 0uz), 2.5f);
     CHECK_EQ(cbor::schema<car>::at_path<"$.track[2]">(bytes), 3.0);
-    CHECK_EQ(cbor::schema<car>::at_path<"$.tires[].diameter">(bytes, 5uz).error(), error::index_out_of_bounds);
-    CHECK_EQ(cbor::schema<car>::at_path<"$.seats">(bytes.substr(0, 3)).error(), error::too_little_data);
+    CHECK_EQ(cbor::schema<car>::at_path<"$.tires[].diameter">(bytes, 5uz), std::unexpected(error::index_out_of_bounds));
+    CHECK_EQ(cbor::schema<car>::at_path<"$.seats">(bytes.substr(0, 3)), std::unexpected(error::too_little_data));
 }
 
 // schema.hpp, snippet unverified: the unverified forms give the values of the verified forms and still check an index
@@ -179,7 +180,7 @@ TEST_CASE("doc reference schema: unverified")
     // [unverified]
     CHECK_EQ(seats, 5);
     CHECK_EQ(diameter, 18);
-    CHECK_EQ(cbor::schema<car>::unverified_at_path<"$.tires[].diameter">(bytes, 5uz).error(), error::index_out_of_bounds);
+    CHECK_EQ(cbor::schema<car>::unverified_at_path<"$.tires[].diameter">(bytes, 5uz), std::unexpected(error::index_out_of_bounds));
 
     REQUIRE(lane.has_value());
     CHECK_EQ(lane->at_path<"$.tires[1].diameter">(), 18);
@@ -207,7 +208,8 @@ TEST_CASE("doc reference schema: description")
     CHECK_EQ((cbor::static_dictionary<car>::at_path<"$.seats">(*data)), 5);
     // The data form holds no description. So at_path with the description inside reads bytes that differ from that
     // description: the doc of schema::adopt gives incorrect_type for a message of another form.
-    auto const refused = cbor::schema<car>::at_path<"$.seats">(*data).error();
+    auto const schema_read = cbor::schema<car>::at_path<"$.seats">(*data);
+    auto const refused = schema_read.error();
     CHECK_EQ(refused, error::incorrect_type);
     auto const root = cbor::static_dictionary<car>::adopt(std::string(*data));
     REQUIRE(root.has_value());
@@ -270,8 +272,10 @@ TEST_CASE("doc reference schema: accessor")
     auto const count = tires->size();                       // 2
     auto const second = tires->at_path<"@[1].diameter">();  // 18
     auto const seats = tires->at_path<"$.seats">();         // 5
-    for (auto const t : *tires)
-        seen.push_back(*t.at_path<"@.diameter">());         // 17, then 18
+    for (auto const t : *tires) {
+        auto const found = t.at_path<"@.diameter">();
+        seen.push_back(*found);         // 17, then 18
+    }
     auto const track = root->view<"$.track">();             // 3 numbers
     // [accessor]
     REQUIRE(root.has_value());
@@ -283,7 +287,7 @@ TEST_CASE("doc reference schema: accessor")
     CHECK(std::ranges::random_access_range<cbor::schema<car>::accessor<std::vector<tire>> const &>);
     REQUIRE(track.has_value());
     CHECK_EQ(track->size(), 3u);
-    CHECK_EQ(tires->at_path<"@[]">(2uz).error(), error::index_out_of_bounds);
+    CHECK_EQ(tires->at_path<"@[]">(2uz), std::unexpected(error::index_out_of_bounds));
 }
 
 // schema.hpp, snippet accessor variant: the accessor of a variant member gives the index of the held alternative and
@@ -304,7 +308,8 @@ TEST_CASE("doc reference schema: accessor of a variant member")
     auto const doc = cbor::schema<home>::adopt(std::string(*bytes));
     auto const pet = doc->at_path<"$.pet">();
     auto const held = pet->index();                         // 0
-    auto const name = pet->get<dog>()->at_path<"@.name">();  // "rex"
+    auto const rex = pet->get<dog>();
+    auto const name = rex->at_path<"@.name">();          // "rex"
     auto const other = pet->get<cat>();                     // error::incorrect_type
     // [accessor variant]
     REQUIRE(doc.has_value());
@@ -312,9 +317,9 @@ TEST_CASE("doc reference schema: accessor of a variant member")
     CHECK_EQ(held, 0u);
     CHECK_EQ(name, "rex"sv);
     CHECK_EQ(other.error(), error::incorrect_type);
-    CHECK_EQ(pet->get<dog>()->at_path<"@.name">(), "rex"sv);
-    CHECK_EQ(pet->get<dog>()->at_path<"@.bark">(), 3);
-    CHECK_EQ(pet->get<cat>().error(), error::incorrect_type);
+    CHECK_EQ(rex->at_path<"@.name">(), "rex"sv);
+    CHECK_EQ(rex->at_path<"@.bark">(), 3);
+    CHECK_EQ(pet->get<cat>(), std::unexpected(error::incorrect_type));
 }
 
 // schema.hpp, the comment of accessor: a variant member of values gives the index of the held value and the value
@@ -335,7 +340,7 @@ TEST_CASE("doc reference schema: accessor of a variant member of values")
     REQUIRE(value.has_value());
     CHECK_EQ(value->index(), 1u);
     CHECK_EQ(value->get<std::int64_t>(), 240);
-    CHECK_EQ(value->get<std::string>().error(), error::incorrect_type);
+    CHECK_EQ(value->get<std::string>(), std::unexpected(error::incorrect_type));
 }
 
 // schema.hpp, snippet fixed_element: an element of a vector of fixed-size structs reads its members with @ and the
@@ -385,10 +390,11 @@ TEST_CASE("doc reference schema: typed_array_view")
     CHECK_EQ(std::bit_cast<std::uint64_t>(track->front()), 0x3ff0000000000000u);
     CHECK_EQ(std::bit_cast<std::uint64_t>(track->back()), 0x4008000000000000u);
     CHECK_EQ(std::bit_cast<std::uint64_t>(*track->rbegin()), 0x4008000000000000u);
-    CHECK_EQ(track->at(3).error(), error::index_out_of_bounds);
+    CHECK_EQ(track->at(3), std::unexpected(error::index_out_of_bounds));
     CHECK_THROWS_AS(std::ignore = (*track)[3], std::logic_error);
-    CHECK_EQ(std::bit_cast<std::uint64_t>(track->last(2)->front()), 0x4000000000000000u);
-    CHECK_EQ(track->first(4).error(), error::index_out_of_bounds);
+    auto const back_part = track->last(2);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(back_part->front()), 0x4000000000000000u);
+    CHECK_EQ(track->first(4), std::unexpected(error::index_out_of_bounds));
 }
 
 // rfc8949.hpp, snippet tag: the class tag is the first item of the root; 1802 is 0x070a and takes the two-byte

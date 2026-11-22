@@ -1283,7 +1283,8 @@ TEST_CASE("lazy: copy, at and get as a chain")
         "\xa1\x68statuses\x82\xa1\x64user\xa1\x64name\x63" "ann"
         "\xa1\x64user\xa1\x64name\x63" "bob"s;
     std::span<char const> const data(bytes);
-    cbor::lazy const doc = *cbor::lazy::adopt(std::move(bytes));
+    auto const adopted = cbor::lazy::adopt(std::move(bytes));
+    cbor::lazy const doc = *adopted;
     auto const list = doc.at("statuses");
     auto const second = list.and_then([](cbor::lazy const &s) { return s.at(1); });
     auto const user = second.and_then([](cbor::lazy const &s) { return s.at("user"); });
@@ -1680,8 +1681,7 @@ TEST_CASE("lazy: two threads read one root lazy" * doctest::skip(!test::threads_
                 auto const index = l.at_path<"$[1]", std::uint64_t>();
                 auto const third = l.at(std::size_t{2});
                 auto const k = third.and_then([](cbor::lazy const &m) { return m.at("k"); });
-                auto const named =
-                    k ? k->to_item() : std::expected<cbor::owning<cbor::item>, error>(std::unexpect, k.error());
+                auto const named = k.and_then([](cbor::lazy const &m) { return m.to_item(); });
                 auto const elements = l.elements();
                 auto const count = elements.transform([](cbor::lazy_elements const &e) {
                     return std::ranges::distance(e.begin(), e.end());
@@ -1829,9 +1829,9 @@ std::string long_text()
     return "\x78\x64"s + std::string(100, 'a');
 }
 
-char const *text_data(std::expected<cbor::lazy, error> const &l)
+char const *text_data(cbor::lazy const &l)
 {
-    auto const text = l->get<std::string_view>();
+    auto const text = l.get<std::string_view>();
     std::string_view const view = **text;
     return view.data();
 }
@@ -1845,7 +1845,7 @@ TEST_CASE("lazy::copy: an lvalue std::string is copied")
     std::string const bytes = two_forms::long_text();
     auto const l = test::make_lazy_from_copy(bytes);
     REQUIRE(l.has_value());
-    CHECK_NE(two_forms::text_data(l), std::span(bytes).subspan(2).data());
+    CHECK_NE(two_forms::text_data(*l), std::span(bytes).subspan(2).data());
     CHECK_EQ(bytes, two_forms::long_text());
 }
 
@@ -1856,7 +1856,7 @@ TEST_CASE("lazy::copy: an rvalue std::string is moved")
     std::span<char const> const data(bytes);
     auto const l = cbor::lazy::adopt(std::move(bytes));
     REQUIRE(l.has_value());
-    CHECK_EQ(two_forms::text_data(l), data.subspan(2).data());
+    CHECK_EQ(two_forms::text_data(*l), data.subspan(2).data());
 }
 
 // view copies nothing and keeps the owner alive after the caller drops it.
@@ -1866,7 +1866,7 @@ TEST_CASE("lazy::view: the lazy reads the bytes of the owner and keeps it")
     std::span<char const> const data(*owner);
     auto const l = cbor::lazy::view(owner);
     REQUIRE(l.has_value());
-    CHECK_EQ(two_forms::text_data(l), data.subspan(2).data());
+    CHECK_EQ(two_forms::text_data(*l), data.subspan(2).data());
     CHECK_GT(owner.use_count(), 1);
     owner.reset();
     auto const text = l->get<std::string_view>();
@@ -2082,7 +2082,7 @@ TEST_CASE("lazy: an element of a float128 typed array")
         for (std::size_t i = 0; i < elements; ++i) {
             auto const element = l.at(i);
             REQUIRE(element.has_value());
-            CHECK_EQ(element->to_item().error(), error::incorrect_type);
+            CHECK_EQ(element->to_item(), std::unexpected(error::incorrect_type));
             auto const read = element->get<double>();
             CHECK_EQ(read.error(), error::incorrect_type);
             auto const raw = element->get<std::span<std::byte const>>();
@@ -2380,8 +2380,8 @@ TEST_CASE("lazy: a decode checks a container count that does not fit 32 bits")
 {
     std::string const array_count = "\x82\x9b\x00\x00\x00\x01\x00\x00\x00\x00\x01"s;
     std::string const map_count = "\x82\xbb\x00\x00\x00\x00\x80\x00\x00\x00\x01"s;
-    CHECK_EQ(test::make_lazy_from_copy(array_count)->to_item().error(), error::too_little_data);
-    CHECK_EQ(test::make_lazy_from_copy(map_count)->to_item().error(), error::too_little_data);
+    CHECK_EQ(test::make_lazy_from_copy(array_count)->to_item(), std::unexpected(error::too_little_data));
+    CHECK_EQ(test::make_lazy_from_copy(map_count)->to_item(), std::unexpected(error::too_little_data));
 }
 
 // A lazy over empty input holds no data item. Its clone must give the error that cbor::decode gives for the same
@@ -2390,9 +2390,9 @@ TEST_CASE("lazy: the clone of empty input gives the error of decode")
 {
     auto const empty = test::make_lazy_from_copy(""s);
     REQUIRE(empty.has_value());
-    CHECK_EQ(empty->to_item().error(), error::too_little_data);
+    CHECK_EQ(empty->to_item(), std::unexpected(error::too_little_data));
     auto const tree = cbor::decode(std::string_view{});
-    CHECK_EQ(empty->to_item().error(), tree.error());
+    CHECK_EQ(empty->to_item(), std::unexpected(tree.error()));
 }
 
 // RFC 8746 2.1 (refs/rfc8746.txt:143): the content of a typed array tag is a byte string. A typed array tag whose
@@ -2423,17 +2423,20 @@ TEST_CASE("lazy: a typed array tag with content that is no byte string is refuse
 TEST_CASE("lazy: a read through a temporary lazy keeps the bytes alive")
 {
     auto const message = [] { return "\x82\x63" "abc\x81\x63" "xyz"s; };
-    auto const at_0 = cbor::lazy::adopt(message())->at(0);
+    auto const adopted = cbor::lazy::adopt(message());
+    auto const at_0 = adopted->at(0);
     auto const first = at_0->get<std::string_view>();
     REQUIRE(first.has_value());
     CHECK_EQ(**first, "abc"sv);
-    auto const inner = cbor::lazy::adopt(message())->at(1);
+    auto const adopted_2 = cbor::lazy::adopt(message());
+    auto const inner = adopted_2->at(1);
     REQUIRE(inner.has_value());
     auto const at_0_2 = inner->at(0);
     auto const second = at_0_2->get<std::string_view>();
     REQUIRE(second.has_value());
     CHECK_EQ(**second, "xyz"sv);
-    auto const elements = cbor::lazy::adopt(message())->elements();
+    auto const adopted_3 = cbor::lazy::adopt(message());
+    auto const elements = adopted_3->elements();
     REQUIRE(elements.has_value());
     std::vector<cbor::type> types;
     for (auto const &e : *elements) {
@@ -2441,7 +2444,8 @@ TEST_CASE("lazy: a read through a temporary lazy keeps the bytes alive")
         types.push_back(*kind);
     }
     CHECK_EQ(types, std::vector{cbor::type::text_string, cbor::type::array});
-    auto const copy = cbor::lazy::adopt(message())->to_item();
+    auto const adopted_4 = cbor::lazy::adopt(message());
+    auto const copy = adopted_4->to_item();
     REQUIRE(copy.has_value());
     auto const copy_elements = (*copy)->elements();
     CHECK_EQ(copy_elements->size(), 2u);

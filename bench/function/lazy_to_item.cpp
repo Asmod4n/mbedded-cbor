@@ -47,14 +47,15 @@ void run(benchmark::State &state, bool const inside)
     std::string const message = message_of();
     std::vector<cbor::lazy> lazies;
     for (std::size_t total = 0; total < cold_bytes(); total += message.size()) {
-        auto const top = *cbor::lazy::view(std::make_shared<std::string const>(message));
+        auto const viewed = cbor::lazy::view(std::make_shared<std::string const>(message));
+        auto const top = *viewed;
         if (!inside) {
             lazies.push_back(top);
             continue;
         }
         for (std::size_t i = 0; i < elements; ++i) {
-            auto const element = top.at(i);
-            lazies.push_back(*element);
+            auto const child = top.at(i);
+            lazies.push_back(*child);
         }
     }
     auto const sample = tree_of(lazies.front());

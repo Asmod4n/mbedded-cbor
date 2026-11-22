@@ -56,8 +56,8 @@ TEST_CASE("view: every typed array gives its elements back, and an index past th
         REQUIRE(x.has_value());
         CHECK_EQ(bits_of(*x), expected);
         CHECK_EQ(bits_of((*v)[0]), expected);
-        CHECK_EQ(v->at(1).error(), error::index_out_of_bounds);
-        CHECK_EQ(v->at(std::numeric_limits<std::size_t>::max()).error(), error::index_out_of_bounds);
+        CHECK_EQ(v->at(1), std::unexpected(error::index_out_of_bounds));
+        CHECK_EQ(v->at(std::numeric_limits<std::size_t>::max()), std::unexpected(error::index_out_of_bounds));
         CHECK_THROWS_AS((void)(*v)[1], std::logic_error);
         CHECK_THROWS_AS((void)(*v)[std::numeric_limits<std::size_t>::max()], std::logic_error);
     };
@@ -83,7 +83,7 @@ TEST_CASE("view: an empty typed array has no element")
     auto const v = root->view<"$.v">();
     REQUIRE(v.has_value());
     CHECK_EQ(v->size(), 0u);
-    CHECK_EQ(v->at(0).error(), error::index_out_of_bounds);
+    CHECK_EQ(v->at(0), std::unexpected(error::index_out_of_bounds));
     CHECK_THROWS_AS((void)(*v)[0], std::logic_error);
 }
 
@@ -133,7 +133,7 @@ TEST_CASE("view: the iterator and the view model the standard concepts")
     CHECK((std::same_as<decltype(std::declval<V const &>().rbegin()), std::reverse_iterator<I>>));
     CHECK((std::same_as<decltype(std::declval<V const &>().cbegin()), I>));
     CHECK((std::same_as<decltype(std::declval<V const &>()[0]), double>));
-    CHECK((std::same_as<decltype(std::declval<V const &>().at(0)), std::expected<double, cbor::error>>));
+    CHECK((std::same_as<decltype(std::declval<V const &>().at(0)), cbor::result<double>>));
     CHECK((std::same_as<decltype(std::declval<V const &>().front()), double>));
     CHECK((!std::ranges::borrowed_range<V>));
     CHECK((!std::ranges::contiguous_range<V>));
@@ -219,19 +219,23 @@ TEST_CASE("view: front, back, first and last")
     REQUIRE(head.has_value());
     REQUIRE_EQ(head->size(), 2u);
     CHECK_EQ(std::bit_cast<std::uint64_t>(head->back()), 0x4000000000000000u);
-    CHECK_EQ(head->at(2).error(), error::index_out_of_bounds);
+    CHECK_EQ(head->at(2), std::unexpected(error::index_out_of_bounds));
     auto const tail = v->last(2);
     REQUIRE(tail.has_value());
     REQUIRE_EQ(tail->size(), 2u);
     CHECK_EQ(std::bit_cast<std::uint64_t>(tail->front()), 0x4000000000000000u);
-    CHECK_EQ(v->first(3)->size(), 3u);
-    CHECK_EQ(v->last(3)->size(), 3u);
-    CHECK_EQ(v->first(0)->size(), 0u);
-    CHECK_EQ(v->last(0)->size(), 0u);
-    CHECK_EQ(v->first(4).error(), error::index_out_of_bounds);
-    CHECK_EQ(v->last(4).error(), error::index_out_of_bounds);
-    CHECK_EQ(v->first(std::numeric_limits<std::size_t>::max()).error(), error::index_out_of_bounds);
-    CHECK_EQ(v->last(std::numeric_limits<std::size_t>::max()).error(), error::index_out_of_bounds);
+    auto const front_part = v->first(3);
+    CHECK_EQ(front_part->size(), 3u);
+    auto const back_part = v->last(3);
+    CHECK_EQ(back_part->size(), 3u);
+    auto const front_part_2 = v->first(0);
+    CHECK_EQ(front_part_2->size(), 0u);
+    auto const back_part_2 = v->last(0);
+    CHECK_EQ(back_part_2->size(), 0u);
+    CHECK_EQ(v->first(4), std::unexpected(error::index_out_of_bounds));
+    CHECK_EQ(v->last(4), std::unexpected(error::index_out_of_bounds));
+    CHECK_EQ(v->first(std::numeric_limits<std::size_t>::max()), std::unexpected(error::index_out_of_bounds));
+    CHECK_EQ(v->last(std::numeric_limits<std::size_t>::max()), std::unexpected(error::index_out_of_bounds));
 }
 
 // The requirements of a reversible container in the C++ standard ([container.rev.reqmts]) say: a.rend() is
@@ -278,10 +282,12 @@ TEST_CASE("view: an empty view has no front, no back and no element")
     CHECK(v->rbegin() == v->rend());
     CHECK(v->begin() == v->end());
     CHECK_EQ(std::bit_cast<std::uint64_t>(std::ranges::fold_left(*v, 0.0, std::plus<>{})), 0x0000000000000000u);
-    CHECK(v->first(0)->empty());
-    CHECK(v->last(0)->empty());
-    CHECK_EQ(v->first(1).error(), error::index_out_of_bounds);
-    CHECK_EQ(v->last(1).error(), error::index_out_of_bounds);
+    auto const front_part = v->first(0);
+    CHECK(front_part->empty());
+    auto const back_part = v->last(0);
+    CHECK(back_part->empty());
+    CHECK_EQ(v->first(1), std::unexpected(error::index_out_of_bounds));
+    CHECK_EQ(v->last(1), std::unexpected(error::index_out_of_bounds));
 }
 
 // A count of a schema comes from memory that is mapped: whole elements of a fixed width in the bytes of the message,
@@ -292,7 +298,7 @@ TEST_CASE("view: each count of mapped bytes is a std::size_t")
     CHECK((std::is_same_v<decltype(std::declval<cbor::typed_array_view<double> const &>().size()), std::size_t>));
     CHECK((std::is_same_v<decltype(form<numbers>::fixed_size()), std::size_t>));
     CHECK((std::is_same_v<decltype(form<numbers>::encode(std::declval<std::string &>(), std::declval<numbers const &>())),
-                          std::expected<std::size_t, error>>));
+                          cbor::result<std::size_t>>));
     auto const root = form<everything>::adopt(encode_with_schema(sample_everything));
     REQUIRE(root.has_value());
     auto const owners = root->at_path<"$.owners">();

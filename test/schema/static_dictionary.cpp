@@ -63,16 +63,21 @@ TEST_CASE("description apart: each read form reads the data form")
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.text">(), "text"sv);
     CHECK_EQ(root->at_path<"$.names[1]">(), "bc"sv);
-    CHECK_EQ(root->view<"$.track">()->at(1), 2.0);
-    CHECK_EQ(root->at_path<"$.owners">()->size(), 2u);
+    auto const viewed = root->view<"$.track">();
+    CHECK_EQ(viewed->at(1), 2.0);
+    auto const found = root->at_path<"$.owners">();
+    CHECK_EQ(found->size(), 2u);
     auto const inner = root->at_path<"$.inner">();
     REQUIRE(inner.has_value());
     REQUIRE(inner->has_value());
     CHECK_EQ((*inner)->at_path<"@.y">(), 2);
     std::vector<int> xs;
-    auto const gauges = *root->at_path<"$.gauges">();
-    for (auto const g : gauges)
-        xs.push_back(*g.at_path<"@.at.x">());
+    auto const found_2 = root->at_path<"$.gauges">();
+    auto const gauges = *found_2;
+    for (auto const g : gauges) {
+        auto const x = g.at_path<"@.at.x">();
+        xs.push_back(*x);
+    }
     CHECK_EQ(xs, (std::vector<int>{3, -6}));
     CHECK_EQ(root->at_path<"$.tires[1].diameter">(), 18u);
     auto const unverified = cbor::static_dictionary<everything>::unverified_adopt(std::string(data));
@@ -113,16 +118,15 @@ TEST_CASE("description apart: one form read as the other is refused")
     }
     std::string const inside = encode_with_schema(sample_everything);
     std::string const data = encode_data_apart(sample_everything);
-    CHECK_EQ(cbor::static_dictionary<everything>::adopt(std::string(inside)).error(), error::incorrect_type);
-    CHECK_EQ(cbor::static_dictionary<everything>::decode(std::string(inside)).error(), error::incorrect_type);
-    CHECK_EQ((cbor::static_dictionary<everything>::at_path<"$.big">(inside)).error(), error::incorrect_type);
+    CHECK_EQ(cbor::static_dictionary<everything>::adopt(std::string(inside)), std::unexpected(error::incorrect_type));
+    CHECK_EQ(cbor::static_dictionary<everything>::decode(std::string(inside)), std::unexpected(error::incorrect_type));
+    CHECK_EQ((cbor::static_dictionary<everything>::at_path<"$.big">(inside)), std::unexpected(error::incorrect_type));
     // The data form holds no description. Read as the form with the description inside, its bytes differ from that
     // description: the doc of schema::adopt gives incorrect_type for that.
-    for (auto const e : {form<everything>::adopt(std::string(data)).error(),
-                         form<everything>::decode(std::string(data)).error()})
-        CHECK_EQ(e, error::incorrect_type);
+    CHECK_EQ(form<everything>::adopt(std::string(data)), std::unexpected(error::incorrect_type));
+    CHECK_EQ(form<everything>::decode(std::string(data)), std::unexpected(error::incorrect_type));
     std::string const small = encode_data_apart(empty{});
-    CHECK_EQ(form<empty>::adopt(std::string(small)).error(), error::incorrect_type);
+    CHECK_EQ(form<empty>::adopt(std::string(small)), std::unexpected(error::incorrect_type));
 }
 
 // The data form keeps every check of the message. A cut gives too_little_data. A forged directory entry and a forged
@@ -147,7 +151,7 @@ TEST_CASE("description apart: the checks of the message hold for the data form")
     std::string filler = data;
     filler[prefix] = '\xf6';
     CHECK(cbor::static_dictionary<everything>::adopt(std::string(filler)).has_value());
-    CHECK_EQ(cbor::static_dictionary<everything>::decode(std::string(filler)).error(), error::incorrect_type);
+    CHECK_EQ(cbor::static_dictionary<everything>::decode(std::string(filler)), std::unexpected(error::incorrect_type));
 }
 
 // The unverified forms read the data form inside its bounds: every changed byte and every cut. A message read as the

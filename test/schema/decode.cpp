@@ -159,7 +159,7 @@ TEST_CASE("decode and at_path: every typed array gives its elements back")
     REQUIRE(list.has_value());
     CHECK_EQ(list->size(), 1u);
     CHECK_EQ(list->at_path<"@[0]">(), 0x01020304u);
-    CHECK_EQ(list->at_path<"@[]">(1uz).error(), error::index_out_of_bounds);
+    CHECK_EQ(list->at_path<"@[]">(1uz), std::unexpected(error::index_out_of_bounds));
 }
 
 // A list of doubles may not carry tag 86. Its byte string may not be a multiple of eight bytes. In both cases decode and
@@ -173,16 +173,16 @@ TEST_CASE("decode and at_path: a typed array with a wrong tag or a wrong length 
     for (char const tag : {'\x52', '\x55'}) {
         std::string wrong = bytes;
         wrong[at + 1] = tag;
-        CHECK_EQ(form<doubles>::decode(std::string(wrong)).error(), error::incorrect_type);
+        CHECK_EQ(form<doubles>::decode(std::string(wrong)), std::unexpected(error::incorrect_type));
         CHECK_EQ(read_leaf_with_copying_path<doubles, "$.v[0]">(wrong).error(), error::incorrect_type);
     }
     std::string odd = bytes;
     odd[at + 6] = '\x0f';
-    CHECK_EQ(form<doubles>::decode(std::string(odd)).error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(form<doubles>::decode(std::string(odd)), std::unexpected(error::inadmissible_type_for_tag_content));
     CHECK_EQ(read_leaf_with_copying_path<doubles, "$.v[0]">(odd).error(), error::inadmissible_type_for_tag_content);
     std::string longer = bytes;
     longer[at + 6] = '\x18';
-    CHECK_EQ(form<doubles>::decode(std::string(longer)).error(), error::too_little_data);
+    CHECK_EQ(form<doubles>::decode(std::string(longer)), std::unexpected(error::too_little_data));
     CHECK_EQ(read_leaf_with_copying_path<doubles, "$.v[0]">(longer).error(), error::too_little_data);
 }
 
@@ -217,7 +217,8 @@ TEST_CASE("decode: a plain struct in a std::pmr::vector takes the resource of th
 // Broken bytes give the error as a value, as with std::expected.
 TEST_CASE("decode: an error is read as a value")
 {
-    std::string const bytes = *form<vehicle>::encode(sample_vehicle);
+    auto const encoded = form<vehicle>::encode(sample_vehicle);
+    std::string const bytes = *encoded;
     std::string_view const cut = std::string_view(bytes).substr(0, 3);
     auto const r = form<vehicle>::decode(std::string(cut));
     REQUIRE_FALSE(r.has_value());
@@ -229,7 +230,7 @@ TEST_CASE("decode: an error is read as a value")
 // the caller would read freed memory, and the address sanitizer reports that read.
 TEST_CASE("decode: the views of the result outlive the bytes of the caller")
 {
-    std::expected<cbor::ref<ticket>, cbor::error> const t = form<ticket>::decode(build_ticket_message());
+    cbor::result<cbor::ref<ticket>> const t = form<ticket>::decode(build_ticket_message());
     REQUIRE(t.has_value());
     CHECK_EQ((*t)->holder, sample_ticket.holder);
     REQUIRE_EQ((*t)->seats.size(), 2u);
@@ -261,14 +262,14 @@ TEST_CASE("decode: the head of a fixed string and of a std::array is checked")
     std::string text_head = bytes;
     text_head[code] = '\x44';
     CHECK_EQ(read_leaf_with_copying_path<vehicle, "$.code">(text_head).error(), error::incorrect_type);
-    CHECK_EQ(form<vehicle>::decode(std::string(text_head)).error(), error::incorrect_type);
+    CHECK_EQ(form<vehicle>::decode(std::string(text_head)), std::unexpected(error::incorrect_type));
     std::string const spare = encode_with_schema(sample_everything);
     std::size_t const engines = spare.find("\x82\xd9\x05\xdd"s);
     REQUIRE_NE(engines, std::string::npos);
     std::string array_head = spare;
     array_head[engines] = '\x83';
     CHECK_EQ(read_leaf_with_copying_path<everything, "$.engines[1].cc">(array_head).error(), error::incorrect_type);
-    CHECK_EQ(form<everything>::decode(std::string(array_head)).error(), error::incorrect_type);
+    CHECK_EQ(form<everything>::decode(std::string(array_head)), std::unexpected(error::incorrect_type));
 }
 
 // A class with no default constructor is built by its constructor. The constructor takes the described members in the
@@ -345,26 +346,28 @@ TEST_CASE("decode: a class with a constructor in a std::pmr::vector takes the re
 TEST_CASE("a message cut at any length is too_little_data")
 {
     std::string const bytes = encode_with_schema(reading{7, "kg"});
-    std::string const encode_data_apart = *cbor::static_dictionary<byte_fields>::encode(make_byte_fields());
-    std::string const whole = *form<byte_fields>::encode(make_byte_fields());
+    auto const encoded = cbor::static_dictionary<byte_fields>::encode(make_byte_fields());
+    std::string const encode_data_apart = *encoded;
+    auto const encoded_2 = form<byte_fields>::encode(make_byte_fields());
+    std::string const whole = *encoded_2;
     for (std::size_t n = 0; n < whole.size(); ++n) {
         CAPTURE(n);
         std::string const cut = whole.substr(0, n);
-        CHECK_EQ(form<byte_fields>::decode(std::string(cut)).error(), error::too_little_data);
-        CHECK_EQ(form<byte_fields>::decode(std::make_shared<std::string const>(cut), byte_fields{}).error(), error::too_little_data);
-        CHECK_EQ(form<byte_fields>::adopt(std::string(cut)).error(), error::too_little_data);
-        CHECK_EQ(form<byte_fields>::at_path<"$.list[1]">(cut).error(), error::too_little_data);
-        CHECK_EQ(form<byte_fields>::at_path<"$.list[]">(cut, 1uz).error(), error::too_little_data);
+        CHECK_EQ(form<byte_fields>::decode(std::string(cut)), std::unexpected(error::too_little_data));
+        CHECK_EQ(form<byte_fields>::decode(std::make_shared<std::string const>(cut), byte_fields{}), std::unexpected(error::too_little_data));
+        CHECK_EQ(form<byte_fields>::adopt(std::string(cut)), std::unexpected(error::too_little_data));
+        CHECK_EQ(form<byte_fields>::at_path<"$.list[1]">(cut), std::unexpected(error::too_little_data));
+        CHECK_EQ(form<byte_fields>::at_path<"$.list[]">(cut, 1uz), std::unexpected(error::too_little_data));
     }
     for (std::size_t n = 0; n < bytes.size(); ++n) {
         CAPTURE(n);
-        CHECK_EQ(form<reading>::decode(bytes.substr(0, n)).error(), error::too_little_data);
+        CHECK_EQ(form<reading>::decode(bytes.substr(0, n)), std::unexpected(error::too_little_data));
     }
     for (std::size_t n = 0; n < encode_data_apart.size(); ++n) {
         CAPTURE(n);
         std::string const cut = encode_data_apart.substr(0, n);
-        CHECK_EQ(cbor::static_dictionary<byte_fields>::decode(std::string(cut)).error(), error::too_little_data);
-        CHECK_EQ(cbor::static_dictionary<byte_fields>::at_path<"$.list[1]">(cut).error(), error::too_little_data);
+        CHECK_EQ(cbor::static_dictionary<byte_fields>::decode(std::string(cut)), std::unexpected(error::too_little_data));
+        CHECK_EQ(cbor::static_dictionary<byte_fields>::at_path<"$.list[1]">(cut), std::unexpected(error::too_little_data));
     }
 }
 
@@ -372,24 +375,27 @@ TEST_CASE("a message cut at any length is too_little_data")
 // keeps its error. A byte after a message is the next item of a CBOR sequence, and the message reads.
 TEST_CASE("a whole message of another type keeps its error")
 {
-    std::string const whole = *form<byte_fields>::encode(make_byte_fields());
-    CHECK_EQ(form<reading>::decode(std::string(whole)).error(), error::incorrect_type);
+    auto const encoded = form<byte_fields>::encode(make_byte_fields());
+    std::string const whole = *encoded;
+    CHECK_EQ(form<reading>::decode(std::string(whole)), std::unexpected(error::incorrect_type));
     CHECK(form<byte_fields>::decode(whole + "\x01").has_value());
     std::string const text(whole.size(), '{');
-    CHECK_EQ(form<byte_fields>::decode(std::string(text)).error(), error::incorrect_type);
+    CHECK_EQ(form<byte_fields>::decode(std::string(text)), std::unexpected(error::incorrect_type));
 }
 
 // The tag of the record chooses the alternative of a variant member. Each alternative comes back with the
 // values of its own members and of its base class.
 TEST_CASE("decode: a variant member holds the alternative that the tag of its record names")
 {
-    auto const with_dog = form<home>::decode(*form<home>::encode(make_home_with_dog()));
+    auto encoded = form<home>::encode(make_home_with_dog());
+    auto const with_dog = form<home>::decode(std::move(*encoded));
     REQUIRE(with_dog);
     REQUIRE(std::holds_alternative<dog>((*with_dog)->pet));
     CHECK_EQ(std::get<dog>((*with_dog)->pet).name, "rex");
     CHECK_EQ(std::get<dog>((*with_dog)->pet).bark, 3);
     CHECK_EQ((*with_dog)->street, "elm");
-    auto const with_cat = form<home>::decode(*form<home>::encode(make_home_with_cat()));
+    auto encoded_2 = form<home>::encode(make_home_with_cat());
+    auto const with_cat = form<home>::decode(std::move(*encoded_2));
     REQUIRE(with_cat);
     REQUIRE(std::holds_alternative<cat>((*with_cat)->pet));
     CHECK_EQ(std::get<cat>((*with_cat)->pet).name, "tom");
@@ -413,7 +419,8 @@ TEST_CASE("decode: an alternative with no default constructor is built through i
 // decode with a target replaces the alternative that the target holds with the one of the message.
 TEST_CASE("decode: a target that holds another alternative gets the alternative of the message")
 {
-    auto const bytes = std::make_shared<std::string const>(*form<home>::encode(make_home_with_cat()));
+    auto const encoded = form<home>::encode(make_home_with_cat());
+    auto const bytes = std::make_shared<std::string const>(*encoded);
     auto const back = form<home>::decode(bytes, make_home_with_dog());
     REQUIRE(back);
     REQUIRE(std::holds_alternative<cat>((*back)->pet));
@@ -425,7 +432,8 @@ TEST_CASE("decode: a target that holds another alternative gets the alternative 
 TEST_CASE("decode: value, text and class alternatives of a variant member")
 {
     for (setting const &s : make_sample_settings()) {
-        auto const bytes = *form<setting>::encode(s);
+        auto const encoded = form<setting>::encode(s);
+        auto const bytes = *encoded;
         for (auto const &back : {form<setting>::decode(std::string(bytes)), form<setting>::unverified_decode(std::string(bytes))}) {
             REQUIRE(back.has_value());
             CHECK_EQ((*back)->name, s.name);
@@ -433,7 +441,8 @@ TEST_CASE("decode: value, text and class alternatives of a variant member")
         }
     }
     for (shelter const &s : {shelter{dog{{"rex"}, 3}, "a"}, shelter{std::int64_t{-7}, "b"}, shelter{std::string("cat"), "c"}}) {
-        auto const back = form<shelter>::decode(*form<shelter>::encode(s));
+        auto encoded_2 = form<shelter>::encode(s);
+        auto const back = form<shelter>::decode(std::move(*encoded_2));
         REQUIRE(back.has_value());
         REQUIRE_EQ((*back)->pet.index(), s.pet.index());
         CHECK_EQ((*back)->note, s.note);
@@ -450,7 +459,8 @@ TEST_CASE("decode: a text item before the record of a class alternative")
 {
     std::vector<shelter> const all{shelter{std::string("first"), "x"}, shelter{dog{{"rex"}, 3}, "y"}};
     for (shelter const &s : all) {
-        auto const back = form<shelter>::decode(*form<shelter>::encode(s));
+        auto encoded = form<shelter>::encode(s);
+        auto const back = form<shelter>::decode(std::move(*encoded));
         REQUIRE(back.has_value());
         CHECK_EQ((*back)->note, s.note);
     }
@@ -499,36 +509,36 @@ TEST_CASE("decode and at_path: a tag 28 in the place of a head is invalid_tag")
         return message_with_part_replaced(bytes, part, replacement);
     };
     std::string const prefix = with("113(", "28_0(");
-    CHECK_EQ(form<everything>::decode(std::string(prefix)).error(), error::invalid_tag);
+    CHECK_EQ(form<everything>::decode(std::string(prefix)), std::unexpected(error::invalid_tag));
     CHECK_EQ(read_leaf_with_copying_path<everything, "$.flag">(prefix), true);
     std::string const root = with("1660(", "28_1(");
-    CHECK_EQ(form<everything>::decode(std::string(root)).error(), error::invalid_tag);
+    CHECK_EQ(form<everything>::decode(std::string(root)), std::unexpected(error::invalid_tag));
     CHECK_EQ(read_leaf_with_copying_path<everything, "$.flag">(root), true);
     CHECK_EQ(form<everything>::at_path<"$.flag">(root), true);
     std::string const member = with("[1501(132([_2 1800_2", "[28_1(132([_2 1800_2");
-    CHECK_EQ(form<everything>::decode(std::string(member)).error(), error::invalid_tag);
+    CHECK_EQ(form<everything>::decode(std::string(member)), std::unexpected(error::invalid_tag));
     CHECK_EQ(read_leaf_with_copying_path<everything, "$.engines[0].cc">(member), 1800u);
     std::string const number = with("1800_2", "28_0(1800_1)");
-    CHECK_EQ(form<everything>::decode(std::string(number)).error(), error::invalid_tag);
+    CHECK_EQ(form<everything>::decode(std::string(number)), std::unexpected(error::invalid_tag));
     CHECK_EQ(read_leaf_with_copying_path<everything, "$.engines[0].cc">(number).error(), error::invalid_tag);
     std::string const reference = with("6(1_2)", "28_1(1_1)");
-    CHECK_EQ(form<everything>::decode(std::string(reference)).error(), error::invalid_tag);
+    CHECK_EQ(form<everything>::decode(std::string(reference)), std::unexpected(error::invalid_tag));
     CHECK_EQ(read_leaf_with_copying_path<everything, "$.text">(reference).error(), error::invalid_tag);
     std::string const text = with(R"("text"_2)", R"(28_0("text"_1))");
-    CHECK_EQ(form<everything>::decode(std::string(text)).error(), error::invalid_tag);
+    CHECK_EQ(form<everything>::decode(std::string(text)), std::unexpected(error::invalid_tag));
     CHECK_EQ(read_leaf_with_copying_path<everything, "$.text">(text).error(), error::invalid_tag);
     std::string const typed_array = with("86(", "28_0(");
-    CHECK_EQ(form<everything>::decode(std::string(typed_array)).error(), error::invalid_tag);
+    CHECK_EQ(form<everything>::decode(std::string(typed_array)), std::unexpected(error::invalid_tag));
     CHECK_EQ(read_leaf_with_copying_path<everything, "$.track[0]">(typed_array).error(), error::invalid_tag);
     std::string const fixed_array = with("32873([simple(5)", "28_1([simple(5)");
-    CHECK_EQ(form<everything>::decode(std::string(fixed_array)).error(), error::invalid_tag);
+    CHECK_EQ(form<everything>::decode(std::string(fixed_array)), std::unexpected(error::invalid_tag));
     CHECK_EQ(read_leaf_with_copying_path<everything, "$.tires[0].diameter">(fixed_array).error(),
              error::invalid_tag);
     long_code code{};
     std::ranges::fill(code.code, 'a');
     std::string const tagged_text = message_with_part_replaced(
         encode_with_schema(code), '"' + std::string(24, 'a') + '"', "28_0(\"" + std::string(23, 'a') + "\")");
-    CHECK_EQ(form<long_code>::decode(std::string(tagged_text)).error(), error::invalid_tag);
+    CHECK_EQ(form<long_code>::decode(std::string(tagged_text)), std::unexpected(error::invalid_tag));
     CHECK_EQ(read_leaf_with_copying_path<long_code, "$.code">(tagged_text).error(), error::invalid_tag);
 }
 
@@ -540,7 +550,7 @@ TEST_CASE("decode and at_path: the first byte of a tag 28 head in a one-byte fie
 {
     std::string const bytes =
         message_with_part_replaced(encode_with_schema(sample_everything), "true, 6(1_2)", "28_0(0_1), 0_0");
-    CHECK_EQ(form<everything>::decode(std::string(bytes)).error(), error::incorrect_type);
+    CHECK_EQ(form<everything>::decode(std::string(bytes)), std::unexpected(error::incorrect_type));
     CHECK_EQ(read_leaf_with_copying_path<everything, "$.flag">(bytes).error(), error::incorrect_type);
 }
 
@@ -549,14 +559,15 @@ TEST_CASE("decode and at_path: the first byte of a tag 28 head in a one-byte fie
 // verified and in the unverified forms.
 TEST_CASE("decode and unverified_decode: a tag 28 in the place of the tag of a variant item is invalid_tag")
 {
+    auto const encoded = form<home>::encode(make_home_with_cat());
     std::string const bytes =
-        message_with_part_replaced(*form<home>::encode(make_home_with_cat()), "1741(", "28_1(");
-    CHECK_EQ(form<home>::decode(std::string(bytes)).error(), error::invalid_tag);
-    CHECK_EQ(form<home>::unverified_decode(std::string(bytes)).error(), error::invalid_tag);
+        message_with_part_replaced(*encoded, "1741(", "28_1(");
+    CHECK_EQ(form<home>::decode(std::string(bytes)), std::unexpected(error::invalid_tag));
+    CHECK_EQ(form<home>::unverified_decode(std::string(bytes)), std::unexpected(error::invalid_tag));
     CHECK_EQ(read_leaf_with_copying_path<home, "$.pet">(bytes).error(), error::invalid_tag);
     auto const doc = form<home>::unverified_adopt(std::string(bytes));
     REQUIRE(doc.has_value());
-    CHECK_EQ(doc->at_path<"$.pet">().error(), error::invalid_tag);
+    CHECK_EQ(doc->at_path<"$.pet">(), std::unexpected(error::invalid_tag));
 }
 
 #if defined(__STDCPP_FLOAT128_T__)
@@ -575,11 +586,12 @@ CBOR_DEFINE_TYPE_MEMBERS(quad, cbor::tag{1750}, value);
 // head, so another tag of one byte, here 100 (d8 64), is incorrect_type and not a value.
 TEST_CASE("decode: a binary128 field with another tag head is incorrect_type")
 {
-    std::string bytes = *form<quad>::encode(quad{0.5f128});
+    auto const encoded = form<quad>::encode(quad{0.5f128});
+    std::string bytes = *encoded;
     std::size_t const at = bytes.find("\xd8\x53\x50"sv);
     REQUIRE_NE(at, std::string::npos);
     bytes[at + 1] = '\x64';
-    CHECK_EQ(form<quad>::decode(std::string(bytes)).error(), error::incorrect_type);
-    CHECK_EQ(form<quad>::at_path<"$.value">(bytes).error(), error::incorrect_type);
+    CHECK_EQ(form<quad>::decode(std::string(bytes)), std::unexpected(error::incorrect_type));
+    CHECK_EQ(form<quad>::at_path<"$.value">(bytes), std::unexpected(error::incorrect_type));
 }
 #endif

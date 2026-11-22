@@ -1208,7 +1208,7 @@ private:
     static result<T> apply_query(query<T> const &e, std::shared_ptr<void const> owner,
                                  std::string_view const encoded)
     {
-        auto const root = lazy::view(std::move(owner), encoded);
+        auto const root = lazy::view_or_error(std::move(owner), encoded);
         if (!root) [[unlikely]]
             return result<T>(std::unexpect, root.error());
         return result<T>(apply_query_or_error(e, *root));

@@ -23,7 +23,8 @@ using namespace std::string_literals;
 TEST_CASE("doc readme: read a message")
 {
     std::string bytes = test::encode_in_preferred_form(test::M("sensor"s, "t1"s, "value"s, 21.5, "samples"s, test::A(3, 4, 5)));
-    auto const doc = cbor::lazy::adopt(std::move(bytes)).value();
+    auto const adopted = cbor::lazy::adopt(std::move(bytes));
+    auto const doc = adopted.value();
 
     int sum = 0;
     if (auto const samples = doc.at("samples")) {
@@ -63,7 +64,8 @@ TEST_CASE("doc readme: read one value by its path")
 {
     auto const owner =
         std::make_shared<std::string const>(test::encode_in_preferred_form(test::M("user"s, test::M("id"s, 42, "name"s, "ann"s))));
-    auto const doc = cbor::lazy::view(owner).value();
+    auto const viewed = cbor::lazy::view(owner);
+    auto const doc = viewed.value();
 
     auto const id = doc.at_path<"$.user.id", std::int64_t>();
     auto const name = doc.at_path<"$.user.name", std::string_view>();
@@ -102,8 +104,10 @@ TEST_CASE("doc readme: write structs, read one field")
     auto const points = lane->at_path<"$.points">();
     REQUIRE(points.has_value());
     std::vector<float> seen;
-    for (auto const p : *points | std::views::drop(1) | std::views::take(1))
-        seen.push_back(*p.at_path<"@.y">());
+    for (auto const p : *points | std::views::drop(1) | std::views::take(1)) {
+        auto const found = p.at_path<"@.y">();
+        seen.push_back(*found);
+    }
     CHECK_EQ(seen, (std::vector<float>{4}));
 }
 

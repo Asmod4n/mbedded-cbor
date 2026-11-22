@@ -310,7 +310,7 @@ inline std::string encode_with_schema(auto const &value)
 template <class T, cbor::fixed_string Path, class... Index>
 auto read_leaf_with_copying_path(std::string_view const bytes, Index const... indexes)
 {
-    using X = std::remove_cvref_t<decltype(*std::declval<typename form<T>::template accessor<> const &>().template at_path<Path>(indexes...))>;
+    using X = typename decltype(std::declval<typename form<T>::template accessor<> const &>().template at_path<Path>(indexes...))::value_type;
     using Y = std::conditional_t<std::same_as<X, std::string_view>, std::string,
                                  std::conditional_t<std::same_as<X, std::optional<std::string_view>>, std::optional<std::string>, X>>;
     auto const root = form<T>::adopt(std::string(bytes));
@@ -328,12 +328,16 @@ auto read_leaf_with_copying_path(std::string_view const bytes, Index const... in
 // The view form: the caller keeps the owner alive, so a text stays a view into the message.
 template <class T, cbor::fixed_string Path, class... Index>
 auto read_leaf_with_copying_path(std::shared_ptr<std::string const> const &owner, Index const... indexes)
-    -> decltype(std::declval<typename form<T>::template accessor<> const &>().template at_path<Path>(indexes...))
+    -> std::expected<typename decltype(std::declval<typename form<T>::template accessor<> const &>().template at_path<Path>(indexes...))::value_type,
+                     cbor::error>
 {
     auto const root = form<T>::view(owner);
     if (!root)
         return std::unexpected(root.error());
-    return root->template at_path<Path>(indexes...);
+    auto const x = root->template at_path<Path>(indexes...);
+    if (!x)
+        return std::unexpected(x.error());
+    return *x;
 }
 
 // The schema encoding is one CBOR item, tag 113 over the table and the two parts. Every byte is well-formed, so
@@ -1112,7 +1116,8 @@ ticket const sample_ticket{"a holder name longer than the small string buffer", 
 template <class = void>
 std::string build_ticket_message()
 {
-    return *form<ticket>::encode(sample_ticket);
+    auto const encoded = form<ticket>::encode(sample_ticket);
+    return *encoded;
 }
 
 
@@ -1846,7 +1851,8 @@ constexpr std::size_t rump_size = 2;
 inline std::size_t root_offset(std::string_view const message, std::size_t const index = 16)
 {
     auto const owner = std::make_shared<std::string const>(message);
-    auto const table = cbor::lazy::view(owner)->at(0);
+    auto const viewed = cbor::lazy::view(owner);
+    auto const table = viewed->at(0);
     auto const root = table->at(index);
     REQUIRE(root.has_value());
     return static_cast<std::size_t>(root->encoded().data() - owner->data());

@@ -97,12 +97,17 @@ std::uint64_t result_packed(std::string text)
 void js_value_built(cbor::item const &i)
 {
     switch (i.type()) {
-    case cbor::type::unsigned_integer:
-        return value_number(static_cast<double>(i.get<std::uint64_t>().value()));
-    case cbor::type::negative_integer:
-        return value_number(static_cast<double>(i.get<cbor::int128>().value()));
+    case cbor::type::unsigned_integer: {
+        auto const read = i.get<std::uint64_t>();
+        return value_number(static_cast<double>(read.value()));
+    }
+    case cbor::type::negative_integer: {
+        auto const read_2 = i.get<cbor::int128>();
+        return value_number(static_cast<double>(read_2.value()));
+    }
     case cbor::type::text_string: {
-        std::string_view const s = i.get<std::string_view>().value();
+        auto const read_3 = i.get<std::string_view>();
+        std::string_view const s = read_3.value();
         return value_string(s.data(), s.size());
     }
     case cbor::type::array: {
@@ -118,12 +123,15 @@ void js_value_built(cbor::item const &i)
         for (auto const pair : pairs) {
             cbor::item const &key = pair[0];
             if (key.type() == cbor::type::text_string) {
-                std::string_view const s = *key.get<std::string_view>();
+                auto const read_4 = key.get<std::string_view>();
+                std::string_view const s = *read_4;
                 key_string(s.data(), s.size());
             } else if (key.type() == cbor::type::unsigned_integer) {
-                key_number(static_cast<double>(*key.get<std::uint64_t>()));
+                auto const read_5 = key.get<std::uint64_t>();
+                key_number(static_cast<double>(*read_5));
             } else {
-                key_number(static_cast<double>(key.get<cbor::int128>().value()));
+                auto const read_6 = key.get<cbor::int128>();
+                key_number(static_cast<double>(read_6.value()));
             }
             js_value_built(pair[1]);
         }
@@ -135,12 +143,18 @@ void js_value_built(cbor::item const &i)
         return value_bool(0);
     case cbor::type::true_value:
         return value_bool(1);
-    case cbor::type::half_float:
-        return value_number(i.get<double>().value());
-    case cbor::type::single_float:
-        return value_number(i.get<double>().value());
-    case cbor::type::double_float:
-        return value_number(i.get<double>().value());
+    case cbor::type::half_float: {
+        auto const read_7 = i.get<double>();
+        return value_number(read_7.value());
+    }
+    case cbor::type::single_float: {
+        auto const read_8 = i.get<double>();
+        return value_number(read_8.value());
+    }
+    case cbor::type::double_float: {
+        auto const read_9 = i.get<double>();
+        return value_number(read_9.value());
+    }
     default:
         return value_null();
     }

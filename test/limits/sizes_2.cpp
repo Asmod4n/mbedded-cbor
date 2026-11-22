@@ -303,14 +303,16 @@ struct cbor::describe_members<names> {
 // array (RFC 8746), a tag over a byte string of 4 bytes for each element.
 TEST_CASE("limits sizes 2: the string and container limits of packed")
 {
-    CHECK(cbor::schema<note>::decode(*cbor::schema<note>::encode(note{"ab", {}})).has_value());
-    CHECK_EQ(cbor::schema<note>::decode(*cbor::schema<note>::encode(note{"abc", {}})).error(),
-             error::string_length_exceeded);
-    CHECK_EQ(cbor::schema<note>::decode(*cbor::schema<note>::encode(note{"ab", {1}})).error(),
-             error::string_length_exceeded);
-    CHECK(cbor::schema<names>::decode(*cbor::schema<names>::encode(names{{"a", "b"}})).has_value());
-    CHECK_EQ(cbor::schema<names>::decode(*cbor::schema<names>::encode(names{{"a", "b", "c"}})).error(),
-             error::container_elements_exceeded);
+    auto encoded = cbor::schema<note>::encode(note{"ab", {}});
+    CHECK(cbor::schema<note>::decode(std::move(*encoded)).has_value());
+    auto encoded_2 = cbor::schema<note>::encode(note{"abc", {}});
+    CHECK_EQ(cbor::schema<note>::decode(std::move(*encoded_2)), std::unexpected(error::string_length_exceeded));
+    auto encoded_3 = cbor::schema<note>::encode(note{"ab", {1}});
+    CHECK_EQ(cbor::schema<note>::decode(std::move(*encoded_3)), std::unexpected(error::string_length_exceeded));
+    auto encoded_4 = cbor::schema<names>::encode(names{{"a", "b"}});
+    CHECK(cbor::schema<names>::decode(std::move(*encoded_4)).has_value());
+    auto encoded_5 = cbor::schema<names>::encode(names{{"a", "b", "c"}});
+    CHECK_EQ(cbor::schema<names>::decode(std::move(*encoded_5)), std::unexpected(error::container_elements_exceeded));
 }
 
 #endif
@@ -356,6 +358,7 @@ TEST_CASE("limits sizes 2: string_length on a text alternative of a variant memb
     auto const fits = cbor::schema<labelled>::encode(labelled{std::string(limit, 'a')});
     CHECK(cbor::schema<labelled>::decode(std::string(*fits)).has_value());
     auto const above = cbor::schema<labelled>::encode(labelled{std::string(limit + 1, 'a')});
-    CHECK_EQ(cbor::schema<labelled>::decode(std::string(*above)).error(), error::string_length_exceeded);
-    CHECK_EQ(cbor::schema<labelled>::adopt(std::string(*above))->at_path<"$.label">().error(), error::string_length_exceeded);
+    CHECK_EQ(cbor::schema<labelled>::decode(std::string(*above)), std::unexpected(error::string_length_exceeded));
+    auto const adopted = cbor::schema<labelled>::adopt(std::string(*above));
+    CHECK_EQ(adopted->at_path<"$.label">(), std::unexpected(error::string_length_exceeded));
 }

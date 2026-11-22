@@ -18,7 +18,10 @@ int main()
         auto t0 = std::chrono::steady_clock::now();
         auto const root = cbor::lazy::view(doc);
         auto const elements = root->elements();
-        for (auto const e : *elements) sum += *e->get<std::int64_t>();
+        for (auto const e : *elements) {
+            auto const number = e->get<std::int64_t>();
+            sum += *number;
+        }
         double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
         if (ms < best) best = ms;
     }

@@ -94,28 +94,30 @@ TEST_CASE("nested: a list of lists, an optional and a variant of structs read ba
 
     auto const root = form<field_grid>::adopt(std::string(bytes));
     REQUIRE(root.has_value());
-    CHECK_EQ(root->at_path<"$.rows[0][0].tags[1]">().value(), "a1"sv);
-    CHECK_EQ(root->at_path<"$.rows[2][0].name">().value(), "c"sv);
-    CHECK_EQ(root->at_path<"$.rows[][].tags[]">(2uz, 0uz, 0uz).value(), "c0"sv);
-    CHECK_EQ(root->at_path<"$.rows[0][1].tags">()->size(), 0u);
-    CHECK_EQ(root->at_path<"$.rows[1]">()->size(), 0u);
-    CHECK_EQ(root->at_path<"$.rows[0][2].name">().error(), error::index_out_of_bounds);
-    CHECK_EQ(root->at_path<"$.title">().value(), "grid"sv);
+    CHECK_EQ((root->at_path<"$.rows[0][0].tags[1]">()), "a1"sv);
+    CHECK_EQ((root->at_path<"$.rows[2][0].name">()), "c"sv);
+    CHECK_EQ((root->at_path<"$.rows[][].tags[]">(2uz, 0uz, 0uz)), "c0"sv);
+    auto const found = root->at_path<"$.rows[0][1].tags">();
+    CHECK_EQ(found->size(), 0u);
+    auto const found_2 = root->at_path<"$.rows[1]">();
+    CHECK_EQ(found_2->size(), 0u);
+    CHECK_EQ(root->at_path<"$.rows[0][2].name">(), std::unexpected(error::index_out_of_bounds));
+    CHECK_EQ((root->at_path<"$.title">()), "grid"sv);
     auto const extra = root->at_path<"$.extra">();
     REQUIRE(extra.has_value());
     REQUIRE(extra->has_value());
-    CHECK_EQ((*extra)->at_path<"@.tags[0]">().value(), "x0"sv);
+    CHECK_EQ(((*extra)->at_path<"@.tags[0]">()), "x0"sv);
     auto const pick = root->at_path<"$.pick">();
     REQUIRE(pick.has_value());
     auto const held = pick->get<sprout>();
     REQUIRE(held.has_value());
-    CHECK_EQ(held->at_path<"@.tags[2]">().value(), "p2"sv);
-    CHECK_EQ(held->at_path<"@.name">().value(), "p"sv);
+    CHECK_EQ((held->at_path<"@.tags[2]">()), "p2"sv);
+    CHECK_EQ((held->at_path<"@.name">()), "p"sv);
 
     auto const lane = form<field_grid>::unverified_adopt(std::string(bytes));
     REQUIRE(lane.has_value());
-    CHECK_EQ(lane->at_path<"$.rows[0][0].tags[1]">().value(), "a1"sv);
-    CHECK_EQ(lane->at_path<"$.title">().value(), "grid"sv);
+    CHECK_EQ((lane->at_path<"$.rows[0][0].tags[1]">()), "a1"sv);
+    CHECK_EQ((lane->at_path<"$.title">()), "grid"sv);
 }
 
 // An absent optional struct keeps one item for each of its references: an undefined value, f7 (RFC 8949 3.3). The
@@ -135,8 +137,10 @@ TEST_CASE("nested: an absent optional struct keeps the places of the members beh
     auto const extra = root->at_path<"$.extra">();
     REQUIRE(extra.has_value());
     CHECK_FALSE(extra->has_value());
-    CHECK_EQ(root->at_path<"$.pick">()->get<std::string>().value(), "text"sv);
-    CHECK_EQ(form<field_grid>::unverified_adopt(std::string(bytes))->at_path<"$.title">().value(), "grid"sv);
+    auto const found = root->at_path<"$.pick">();
+    CHECK_EQ((found->get<std::string>()), "text"sv);
+    auto const adopted = form<field_grid>::unverified_adopt(std::string(bytes));
+    CHECK_EQ((adopted->at_path<"$.title">()), "grid"sv);
 }
 
 // The verified forms read f7 in the place of each reference of an absent optional struct and a real item in the place
@@ -151,12 +155,12 @@ TEST_CASE("nested: an undefined item stands only for an absent optional struct")
     REQUIRE_NE(flag, std::string::npos);
     std::string present = bytes;
     present[flag + 1] = '\xf5';
-    CHECK_EQ(form<field_grid>::decode(std::string(present)).error(), error::incorrect_type);
+    CHECK_EQ(form<field_grid>::decode(std::string(present)), std::unexpected(error::incorrect_type));
     std::size_t const undefined = bytes.find('\xf7', root_offset(bytes) + form<field_grid>::fixed_size());
     REQUIRE_NE(undefined, std::string::npos);
     std::string defined = bytes;
     defined[undefined] = '\xf6';
-    CHECK_EQ(form<field_grid>::decode(std::string(defined)).error(), error::incorrect_type);
+    CHECK_EQ(form<field_grid>::decode(std::string(defined)), std::unexpected(error::incorrect_type));
     CHECK(form<field_grid>::unverified_decode(std::string(defined)).has_value());
 
     std::string const full = encode_with_schema(make_sample_grid());
@@ -164,10 +168,11 @@ TEST_CASE("nested: an undefined item stands only for an absent optional struct")
     REQUIRE_NE(name, std::string::npos);
     std::string undefined_name = full;
     undefined_name[name] = '\xf7';
-    CHECK_EQ(form<field_grid>::decode(std::string(undefined_name)).error(), error::incorrect_type);
+    CHECK_EQ(form<field_grid>::decode(std::string(undefined_name)), std::unexpected(error::incorrect_type));
     auto const root = form<field_grid>::adopt(std::string(undefined_name));
     REQUIRE(root.has_value());
-    CHECK_EQ((*root->at_path<"$.extra">())->at_path<"@.name">().error(), error::incorrect_type);
+    auto const found = root->at_path<"$.extra">();
+    CHECK_EQ((*found)->at_path<"@.name">(), std::unexpected(error::incorrect_type));
 }
 
 namespace schema_types
@@ -306,12 +311,14 @@ std::expected<std::string, cbor::error> unpack(std::string const &message)
 // undefined entry. The present struct unpacks to its keys and values.
 TEST_CASE("nested: a generic unpacker reads a message with an absent and a present optional struct")
 {
-    auto const absent = unpack(*form<passkey_login>::encode(passkey_login{{std::byte{1}}, std::nullopt, std::nullopt}));
+    auto const encoded = form<passkey_login>::encode(passkey_login{{std::byte{1}}, std::nullopt, std::nullopt});
+    auto const absent = unpack(*encoded);
     REQUIRE(absent.has_value());
     CHECK_EQ(absent->find("6("), std::string::npos);
     CHECK_NE(absent->find("\"user\": [false, h'000000"), std::string::npos);
     CHECK_NE(absent->find("\"signature\": h'01'"), std::string::npos);
-    auto const present = unpack(*form<passkey_login>::encode(passkey_login{{std::byte{1}}, passkey_user{{std::byte{9}}, "alice"}, "hi"}));
+    auto const encoded_2 = form<passkey_login>::encode(passkey_login{{std::byte{1}}, passkey_user{{std::byte{9}}, "alice"}, "hi"});
+    auto const present = unpack(*encoded_2);
     REQUIRE(present.has_value());
     CHECK_NE(present->find("\"user\": [true, 1516({\"id\": h'09'"), std::string::npos);
     CHECK_NE(present->find("\"name\": \"alice\""), std::string::npos);
@@ -337,16 +344,20 @@ TEST_CASE("nested: a message followed by a second message reads as alone")
     auto const fast = form<field_grid>::unverified_decode(std::string(both));
     REQUIRE(fast.has_value());
     check_grid(**fast, first);
-    CHECK_EQ(form<field_grid>::adopt(std::string(both))->at_path<"$.title">().value(), "grid"sv);
-    CHECK_EQ(form<field_grid>::unverified_adopt(std::string(both))->at_path<"$.title">().value(), "grid"sv);
-    CHECK_EQ(form<field_grid>::adopt(std::string(both))->at_path<"$.rows[2][0].name">().value(), "c"sv);
+    auto const adopted = form<field_grid>::adopt(std::string(both));
+    CHECK_EQ((adopted->at_path<"$.title">()), "grid"sv);
+    auto const adopted_2 = form<field_grid>::unverified_adopt(std::string(both));
+    CHECK_EQ((adopted_2->at_path<"$.title">()), "grid"sv);
+    auto const adopted_3 = form<field_grid>::adopt(std::string(both));
+    CHECK_EQ((adopted_3->at_path<"$.rows[2][0].name">()), "c"sv);
     auto const end = cbor::item_size(both);
     REQUIRE(end.has_value());
     CHECK_EQ(*end, one.size());
     auto const next = form<field_grid>::decode(both.substr(*end));
     REQUIRE(next.has_value());
     check_grid(**next, second);
-    CHECK_EQ(form<field_grid>::adopt(both.substr(*end))->at_path<"$.title">().value(), "next"sv);
+    auto const adopted_4 = form<field_grid>::adopt(both.substr(*end));
+    CHECK_EQ((adopted_4->at_path<"$.title">()), "next"sv);
 }
 
 // A struct with no reference member has no item. Its directory holds the one entry 0: the start of the rump, which is
@@ -367,15 +378,16 @@ TEST_CASE("nested: a struct with no reference member reads, and each cut of it i
     auto const fast = form<tire>::unverified_decode(std::string(bytes));
     REQUIRE(fast.has_value());
     CHECK_EQ((*fast)->diameter, 17u);
-    CHECK_EQ(form<tire>::adopt(std::string(bytes))->at_path<"$.airPressure">(), 2.5f);
+    auto const adopted = form<tire>::adopt(std::string(bytes));
+    CHECK_EQ(adopted->at_path<"$.airPressure">(), 2.5f);
     for (std::size_t size = 0; size < bytes.size(); ++size) {
         CAPTURE(size);
         std::string const cut = bytes.substr(0, size);
-        CHECK_EQ(form<tire>::at_path<"$.diameter">(cut).error(), error::too_little_data);
-        CHECK_EQ(form<tire>::unverified_at_path<"$.diameter">(cut).error(), error::too_little_data);
-        CHECK_EQ(form<tire>::decode(std::string(cut)).error(), error::too_little_data);
-        CHECK_EQ(form<tire>::unverified_decode(std::string(cut)).error(), error::too_little_data);
-        CHECK_EQ(form<tire>::adopt(std::string(cut)).error(), error::too_little_data);
+        CHECK_EQ(form<tire>::at_path<"$.diameter">(cut), std::unexpected(error::too_little_data));
+        CHECK_EQ(form<tire>::unverified_at_path<"$.diameter">(cut), std::unexpected(error::too_little_data));
+        CHECK_EQ(form<tire>::decode(std::string(cut)), std::unexpected(error::too_little_data));
+        CHECK_EQ(form<tire>::unverified_decode(std::string(cut)), std::unexpected(error::too_little_data));
+        CHECK_EQ(form<tire>::adopt(std::string(cut)), std::unexpected(error::too_little_data));
     }
 }
 

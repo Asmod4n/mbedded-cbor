@@ -81,7 +81,7 @@ TEST_CASE("item_size: a cut item inside tag 24 is framed, and decode refuses it"
     CHECK_EQ(cbor::item_size(wire), wire.size());
     auto const top_level = test::make_lazy_from_copy(wire);
     REQUIRE(top_level.has_value());
-    CHECK_EQ(top_level->to_item().error(), error::too_little_data);
+    CHECK_EQ(top_level->to_item(), std::unexpected(error::too_little_data));
     CHECK_EQ(cbor::item_size("\xd8\x1c\xd8\x18\x41"sv), std::unexpected(error::too_little_data));
 }
 

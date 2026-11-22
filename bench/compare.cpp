@@ -450,7 +450,8 @@ static double lazy_sum(cbor::lazy const &l)
 #if defined(OP_LAZY_FIELD)
 static double lazy_field()
 {
-    auto const v = cbor::lazy::view(plain)
+    auto const document = cbor::lazy::view(plain);
+    auto const v = document
                        .and_then([](cbor::lazy const &l) { return l.at("cars"); })
                        .and_then([](cbor::lazy const &l) { return l.at(std::size_t{500}); })
                        .and_then([](cbor::lazy const &l) { return l.at("engine"); })
@@ -1136,7 +1137,7 @@ struct cbor::describe_members<Records> {
 using T = Records;
 using S = cbor::schema<T>;
 
-template <class V> static V must(std::expected<V, cbor::error> const &r)
+template <class V> static V must(cbor::result<V> const &r)
 {
     if (!r) [[unlikely]] std::abort();
     return *r;

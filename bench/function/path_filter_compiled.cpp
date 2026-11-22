@@ -38,15 +38,17 @@ std::size_t cold_bytes()
 
 void path_filter_compiled(benchmark::State &state)
 {
-    auto const sample = cbor::lazy::view(std::make_shared<std::string const>(message))
-                            ->at_path<"$[?@ == 1.5 || @ < 1.2]", cbor::nodelist>();
+    auto const document = cbor::lazy::view(std::make_shared<std::string const>(message));
+    auto const sample = document->at_path<"$[?@ == 1.5 || @ < 1.2]", cbor::nodelist>();
     if (!sample || sample->size() != 4) {
         state.SkipWithError("the filter does not select 1.5, 1.5, 1 and 1.1 of [1.5, 1.5, 1, 1.1]");
         return;
     }
     std::vector<cbor::lazy> lazies;
-    for (std::size_t total = 0; total < cold_bytes(); total += message.size())
-        lazies.push_back(*cbor::lazy::view(std::make_shared<std::string const>(message)));
+    for (std::size_t total = 0; total < cold_bytes(); total += message.size()) {
+        auto const viewed = cbor::lazy::view(std::make_shared<std::string const>(message));
+        lazies.push_back(*viewed);
+    }
     for (auto _ : state) {
         for (cbor::lazy const &each : lazies) {
             auto r = each.at_path<"$[?@ == 1.5 || @ < 1.2]", cbor::nodelist>();
@@ -61,8 +63,10 @@ void path_filter_compiled(benchmark::State &state)
 void path_descendant_compiled(benchmark::State &state)
 {
     std::vector<cbor::lazy> lazies;
-    for (std::size_t total = 0; total < cold_bytes(); total += message.size())
-        lazies.push_back(*cbor::lazy::view(std::make_shared<std::string const>(message)));
+    for (std::size_t total = 0; total < cold_bytes(); total += message.size()) {
+        auto const viewed = cbor::lazy::view(std::make_shared<std::string const>(message));
+        lazies.push_back(*viewed);
+    }
     for (auto _ : state) {
         for (cbor::lazy const &each : lazies) {
             auto r = each.at_path<"$..[1:3]", cbor::nodelist>();
@@ -75,14 +79,17 @@ void path_descendant_compiled(benchmark::State &state)
 template <cbor::fixed_string Path>
 void path_nested_compiled(benchmark::State &state, std::size_t const selected)
 {
-    auto const sample = cbor::lazy::view(std::make_shared<std::string const>(nested))->at_path<Path, cbor::nodelist>();
+    auto const document = cbor::lazy::view(std::make_shared<std::string const>(nested));
+    auto const sample = document->at_path<Path, cbor::nodelist>();
     if (!sample || sample->size() != selected) {
         state.SkipWithError("the path does not select the nodes of [[1, 2], [3], {\"a\": 1, \"b\": 2}, 4] that RFC 9535 gives");
         return;
     }
     std::vector<cbor::lazy> lazies;
-    for (std::size_t total = 0; total < cold_bytes(); total += nested.size())
-        lazies.push_back(*cbor::lazy::view(std::make_shared<std::string const>(nested)));
+    for (std::size_t total = 0; total < cold_bytes(); total += nested.size()) {
+        auto const viewed = cbor::lazy::view(std::make_shared<std::string const>(nested));
+        lazies.push_back(*viewed);
+    }
     for (auto _ : state) {
         for (cbor::lazy const &each : lazies) {
             auto r = each.at_path<Path, cbor::nodelist>();
@@ -147,15 +154,18 @@ std::string maps_message()
 void path_map_equal_compiled(benchmark::State &state)
 {
     std::string const maps = maps_message();
+    auto const document = cbor::lazy::view(std::make_shared<std::string const>(maps));
     auto const sample =
-        cbor::lazy::view(std::make_shared<std::string const>(maps))->at_path<"$[?@ == $[0]]", cbor::nodelist>();
+        document->at_path<"$[?@ == $[0]]", cbor::nodelist>();
     if (!sample || sample->size() != 4) {
         state.SkipWithError("the filter does not select the 4 maps equal to the first");
         return;
     }
     std::vector<cbor::lazy> lazies;
-    for (std::size_t total = 0; total < cold_bytes(); total += maps.size())
-        lazies.push_back(*cbor::lazy::view(std::make_shared<std::string const>(maps)));
+    for (std::size_t total = 0; total < cold_bytes(); total += maps.size()) {
+        auto const viewed = cbor::lazy::view(std::make_shared<std::string const>(maps));
+        lazies.push_back(*viewed);
+    }
     for (auto _ : state) {
         for (cbor::lazy const &each : lazies) {
             auto r = each.at_path<"$[?@ == $[0]]", cbor::nodelist>();
@@ -181,15 +191,17 @@ std::string map_keys_message()
 void path_map_key_compiled(benchmark::State &state)
 {
     std::string const keyed = map_keys_message();
-    auto const sample = cbor::lazy::view(std::make_shared<std::string const>(keyed))
-                            ->at_path<"$[{\"a\": 7, \"b\": 0}]", std::uint64_t>();
+    auto const document = cbor::lazy::view(std::make_shared<std::string const>(keyed));
+    auto const sample = document->at_path<"$[{\"a\": 7, \"b\": 0}]", std::uint64_t>();
     if (!sample || *sample != 7) {
         state.SkipWithError("the path does not find the value 7 of the key {\"a\": 7, \"b\": 0}");
         return;
     }
     std::vector<cbor::lazy> lazies;
-    for (std::size_t total = 0; total < cold_bytes(); total += keyed.size())
-        lazies.push_back(*cbor::lazy::view(std::make_shared<std::string const>(keyed)));
+    for (std::size_t total = 0; total < cold_bytes(); total += keyed.size()) {
+        auto const viewed = cbor::lazy::view(std::make_shared<std::string const>(keyed));
+        lazies.push_back(*viewed);
+    }
     for (auto _ : state) {
         for (cbor::lazy const &each : lazies) {
             auto r = each.at_path<"$[{\"a\": 7, \"b\": 0}]", std::uint64_t>();

@@ -31,8 +31,10 @@ TEST_CASE("encode and decode: the key order holds in an inner struct")
 // went in with, the lists, the map and the optional included.
 TEST_CASE("encode and decode: a struct goes in and comes back whole")
 {
-    std::string const bytes = *form<garage>::encode(sample_garage);
-    auto const decoded_back = *form<garage>::decode(std::string(bytes));
+    auto const encoded_2 = form<garage>::encode(sample_garage);
+    std::string const bytes = *encoded_2;
+    auto const decoded = form<garage>::decode(std::string(bytes));
+    auto const decoded_back = *decoded;
     garage const &back = *decoded_back;
     REQUIRE_EQ(back.tires.size(), 3u);
     CHECK_EQ(back.tires.at(2).diameter, 19u);
@@ -41,8 +43,10 @@ TEST_CASE("encode and decode: a struct goes in and comes back whole")
     CHECK_EQ(back.rows, sample_garage.rows);
     CHECK_EQ(back.owners, sample_garage.owners);
 
-    std::string const encoded = *form<vehicle>::encode(sample_vehicle);
-    auto const decoded_v = *form<vehicle>::decode(std::string(encoded));
+    auto const encoded_3 = form<vehicle>::encode(sample_vehicle);
+    std::string const encoded = *encoded_3;
+    auto const decoded_2 = form<vehicle>::decode(std::string(encoded));
+    auto const decoded_v = *decoded_2;
     vehicle const &v = *decoded_v;
     CHECK_EQ(v.make, "Tesla");
     CHECK_EQ(v.balance, -7);

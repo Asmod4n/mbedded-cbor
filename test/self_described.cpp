@@ -139,13 +139,15 @@ TEST_CASE("self-described CBOR: type() of a second tag 55799 and of a tag 55799 
         CHECK_EQ(read_2.value(), 1);
         CHECK_EQ((cbor::at_path<"$[0]", std::int64_t>("\x81" + head + "\x01")), 1);
         std::string const map = "\xa1" + head + "\x61k\x01";
-        auto const found = cbor::lazy::adopt(std::string(map))->at("k"sv);
+        auto const adopted = cbor::lazy::adopt(std::string(map));
+        auto const found = adopted->at("k"sv);
         auto const read_3 = found->get<std::int64_t>();
         CHECK_EQ(read_3.value(), 1);
         CHECK_EQ((cbor::at_path<"$.k", std::int64_t>(map)), 1);
         std::string const embedded = "\xa1\x61\x61\xd8\x18" + std::string(1, static_cast<char>(0x40 + head.size() + 3)) +
                                      head + "\x82\x01\x02";
-        auto const found_2 = cbor::lazy::adopt(std::string(embedded))->at("a"sv);
+        auto const adopted_2 = cbor::lazy::adopt(std::string(embedded));
+        auto const found_2 = adopted_2->at("a"sv);
         auto const at_1 = found_2->at(1);
         auto const read_4 = at_1->get<std::int64_t>();
         CHECK_EQ(read_4.value(), 2);
@@ -194,8 +196,10 @@ TEST_CASE("self-described CBOR: a tag 55799 in the content of a bignum or a type
                 check_both_give_the_same((cbor::at_path<"$[-2]", std::int64_t>(map_tagged)), (cbor::at_path<"$[-2]", std::int64_t>(map_text)));
             std::string const array_tagged = "\x81" + tagged;
             std::string const array_text = "\x81" + text;
-            auto const fa = cbor::lazy::adopt(std::string(array_tagged))->at_path<"$[?@ == 1]", cbor::nodelist>();
-            auto const fb = cbor::lazy::adopt(std::string(array_text))->at_path<"$[?@ == 1]", cbor::nodelist>();
+            auto const adopted = cbor::lazy::adopt(std::string(array_tagged));
+            auto const fa = adopted->at_path<"$[?@ == 1]", cbor::nodelist>();
+            auto const adopted_2 = cbor::lazy::adopt(std::string(array_text));
+            auto const fb = adopted_2->at_path<"$[?@ == 1]", cbor::nodelist>();
             REQUIRE_EQ(fa.has_value(), fb.has_value());
             if (fa.has_value())
                 CHECK_EQ(fa->size(), fb->size());
@@ -218,7 +222,8 @@ TEST_CASE("self-described CBOR: a tag 55799 in the content of a bignum or a type
         auto const typed_tree = cbor::decode(typed);
         auto const text_tree = cbor::decode(typed_text);
         CHECK_EQ(typed_tree.error(), text_tree.error());
-        CHECK_EQ(l->to_item().error(), t->to_item().error());
+        auto const tree_2 = t->to_item();
+        CHECK_EQ(l->to_item(), std::unexpected(tree_2.error()));
     }
 }
 

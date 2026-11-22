@@ -33,7 +33,8 @@ TEST_CASE("doc reference path: the example of the group path")
     //                                               {"title": "C", "price": 9}], "bicycle": {"price": 20}}}
     auto const bicycle = cbor::at_path<"$.store.bicycle.price", int>(bytes);  // 20
     auto const missing = cbor::at_path<"$.store.bicycle.color", int>(bytes);  // key_not_found
-    auto const doc = cbor::lazy::adopt(std::move(bytes)).value();
+    auto const adopted = cbor::lazy::adopt(std::move(bytes));
+    auto const doc = adopted.value();
     auto const prices = doc.at_path<"$.store.book[*].price", cbor::nodelist>();  // 3 nodes: 8, 12, 9
     auto const every = doc.at_path<"$..price", cbor::nodelist>();                // 4 nodes: every price
     auto const cheap = doc.at_path<"$.store.book[?@.price < 10].title", cbor::nodelist>();  // 2 nodes: "A", "C"
@@ -148,7 +149,8 @@ TEST_CASE("doc reference path: nodelist")
     std::string bytes = test::encode_in_preferred_form(test::M("a"s, test::A(1, 2, 3)));
     // [nodelist]
     // bytes: a std::string with {"a": [1, 2, 3]}
-    auto const doc = cbor::lazy::adopt(std::move(bytes)).value();
+    auto const adopted = cbor::lazy::adopt(std::move(bytes));
+    auto const doc = adopted.value();
     auto const nodes = doc.at_path<"$.a[*]", cbor::nodelist>();  // 3 nodes
     auto const third = (*nodes)[2].get<int>();                   // 3
     auto const none = doc.at_path<"$.b", cbor::nodelist>();      // an empty nodelist

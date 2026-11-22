@@ -52,6 +52,7 @@
 #include "head.hpp"
 #include "item_size.hpp"
 #include "ref.hpp"
+#include "result.hpp"
 #include "rfc8746.hpp"
 #include "rfc8943.hpp"
 #include "rfc9581.hpp"
@@ -3671,9 +3672,13 @@ class reflection
  * result: 2
  * call: track->at(2)
  * result: 3
- * call: track->last(2)->front()
+ * call: auto const tail = track->last(2)
+ * result: typed_array_view<double> of 2 elements: 2, 3
+ * call: tail->front()
  * result: 2
- * call: track->first(2)->size()
+ * call: auto const head = track->first(2)
+ * result: typed_array_view<double> of 2 elements: 1, 2
+ * call: head->size()
  * result: 2
  * call: (*track)[2]
  * result: 3
@@ -3805,41 +3810,43 @@ public:
         return *element;
     }
 
-    CBOR_ALWAYS_INLINE std::expected<typed_array_view, error> first(std::size_t const n) const &
+    CBOR_ALWAYS_INLINE result<typed_array_view> first(std::size_t const n) const &
     {
         if (error const c = detail::validity::check_count(n, size()).error_or(error{}); c != error{})
             [[unlikely]]
-            return std::unexpected(c);
-        return typed_array_view(owner, bytes.first(n * sizeof(E)));
+            return result<typed_array_view>(std::unexpect, c);
+        return result<typed_array_view>(typed_array_view(owner, bytes.first(n * sizeof(E))));
     }
 
-    CBOR_ALWAYS_INLINE std::expected<typed_array_view, error> first(std::size_t const n) &&
+    CBOR_ALWAYS_INLINE result<typed_array_view> first(std::size_t const n) &&
     {
         if (error const c = detail::validity::check_count(n, size()).error_or(error{}); c != error{})
             [[unlikely]]
-            return std::unexpected(c);
-        return typed_array_view(std::move(owner), std::exchange(bytes, std::span<char const>()).first(n * sizeof(E)));
+            return result<typed_array_view>(std::unexpect, c);
+        return result<typed_array_view>(
+            typed_array_view(std::move(owner), std::exchange(bytes, std::span<char const>()).first(n * sizeof(E))));
     }
 
-    CBOR_ALWAYS_INLINE std::expected<typed_array_view, error> last(std::size_t const n) const &
+    CBOR_ALWAYS_INLINE result<typed_array_view> last(std::size_t const n) const &
     {
         if (error const c = detail::validity::check_count(n, size()).error_or(error{}); c != error{})
             [[unlikely]]
-            return std::unexpected(c);
-        return typed_array_view(owner, bytes.last(n * sizeof(E)));
+            return result<typed_array_view>(std::unexpect, c);
+        return result<typed_array_view>(typed_array_view(owner, bytes.last(n * sizeof(E))));
     }
 
-    CBOR_ALWAYS_INLINE std::expected<typed_array_view, error> last(std::size_t const n) &&
+    CBOR_ALWAYS_INLINE result<typed_array_view> last(std::size_t const n) &&
     {
         if (error const c = detail::validity::check_count(n, size()).error_or(error{}); c != error{})
             [[unlikely]]
-            return std::unexpected(c);
-        return typed_array_view(std::move(owner), std::exchange(bytes, std::span<char const>()).last(n * sizeof(E)));
+            return result<typed_array_view>(std::unexpect, c);
+        return result<typed_array_view>(
+            typed_array_view(std::move(owner), std::exchange(bytes, std::span<char const>()).last(n * sizeof(E))));
     }
 
-    CBOR_ALWAYS_INLINE std::expected<E, error> at(std::size_t const i) const
+    CBOR_ALWAYS_INLINE result<E> at(std::size_t const i) const
     {
-        return detail::reflection::typed_array_element_at<E>(bytes, size(), i);
+        return result<E>(detail::reflection::typed_array_element_at<E>(bytes, size(), i));
     }
 
     CBOR_ALWAYS_INLINE E operator[](std::size_t const i) const
@@ -4101,7 +4108,7 @@ public:
      *
      * A path that starts with `@` starts at `U`.
      * A path that starts with `$` starts at the root.
-     * The result is a `std::expected`: the value of a number, `bool` or enum; a `std::string_view` of a text; the
+     * The result is a cbor::result: the value of a number, `bool` or enum; a `std::string_view` of a text; the
      * accessor of a struct, a list or a map.
      * Every result holds the owner of the bytes.
      * The accessor of a `std::variant<A...>` member has `index()` and `get<A>()`.
@@ -4148,7 +4155,9 @@ public:
      * result: accessor of a tire in a std::vector<tire>
      * call: u.at_path<"@.diameter">()
      * result: 18
-     * call: root->view<"$.track">()->size()
+     * call: auto const track = root->view<"$.track">()
+     * result: typed_array_view<double> of 3 elements: 1, 2, 3
+     * call: track->size()
      * result: 3
      * call: tires->at_path<"@[]">(0u)
      * result: accessor of a tire in a std::vector<tire>
@@ -4161,9 +4170,11 @@ public:
      * result: accessor of a std::variant<dog, cat> that holds a dog
      * call: pet->index()
      * result: 0
-     * call: pet->get<dog>()->at_path<"@.name">()
+     * call: auto const rex = pet->get<dog>()
+     * result: accessor of a dog
+     * call: rex->at_path<"@.name">()
      * result: "rex"
-     * call: pet->get<dog>()->at_path<"@.bark">()
+     * call: rex->at_path<"@.bark">()
      * result: 3
      * call: pet->get<cat>()
      * result: unexpected cbor::error::incorrect_type
@@ -4310,6 +4321,21 @@ public:
             }
         }
 
+        template <fixed_string Path, std::convertible_to<std::size_t>... Index>
+        CBOR_ALWAYS_INLINE auto at_path_or_error(Index const... indexes) const
+        {
+            detail::validity::throw_logic_error_if_empty(owner,
+                                                         "cbor::schema::accessor::at_path: the accessor was moved from");
+            auto read = walk<Path>(indexes...);
+            if constexpr (requires { read->owner; })
+                if (read)
+                    read->owner = owner;
+            if constexpr (requires { (*read)->owner; })
+                if (read && *read)
+                    (*read)->owner = owner;
+            return read;
+        }
+
         friend class schema;
 
         friend class detail::reflection;
@@ -4349,16 +4375,8 @@ public:
                      sizeof...(Index) == detail::reflection::index_arguments<Path>() && std::is_lvalue_reference_v<Self>)
         CBOR_ALWAYS_INLINE auto at_path(this Self &&self, Index const... indexes)
         {
-            detail::validity::throw_logic_error_if_empty(
-                self.owner, "cbor::schema::accessor::at_path: the accessor was moved from");
-            auto result = self.template walk<Path>(indexes...);
-            if constexpr (requires { result->owner; })
-                if (result)
-                    result->owner = self.owner;
-            if constexpr (requires { (*result)->owner; })
-                if (result && *result)
-                    (*result)->owner = self.owner;
-            return result;
+            auto read = self.template at_path_or_error<Path>(indexes...);
+            return result<typename decltype(read)::value_type>(std::move(read));
         }
 
         template <fixed_string Path, class Self, std::convertible_to<std::size_t>... Index>
@@ -4371,10 +4389,10 @@ public:
                 static_assert(detail::reflection::is_typed_array<V>, "cbor::schema::accessor::view: the path does not end at a typed array");
                 return std::type_identity<std::remove_cv_t<std::ranges::range_value_t<V>>>{};
             }(std::type_identity<X>{}))::type;
-            auto const list = self.template at_path<Path>(indexes...);
+            auto const list = self.template at_path_or_error<Path>(indexes...);
             if (!list) [[unlikely]]
-                return std::expected<typed_array_view<E>, error>(std::unexpect, list.error());
-            return std::expected<typed_array_view<E>, error>(
+                return result<typed_array_view<E>>(std::unexpect, list.error());
+            return result<typed_array_view<E>>(
                 typed_array_view<E>(std::forward_like<Self>(self.owner), detail::reflection::list_span(self.encoded, list->items, sizeof(E))));
         }
 
@@ -4532,6 +4550,21 @@ public:
                 return detail::reflection::walk_fixed<T, S, Path, 1, Verified>(encoded, element, dir, i);
         }
 
+        template <fixed_string Path, std::convertible_to<std::size_t>... Index>
+        CBOR_ALWAYS_INLINE auto at_path_or_error(Index const... indexes) const
+        {
+            detail::validity::throw_logic_error_if_empty(owner,
+                                                         "cbor::schema::accessor::at_path: the accessor was moved from");
+            auto read = walk<Path>(indexes...);
+            if constexpr (requires { read->owner; })
+                if (read)
+                    read->owner = owner;
+            if constexpr (requires { (*read)->owner; })
+                if (read && *read)
+                    (*read)->owner = owner;
+            return read;
+        }
+
         friend class schema;
 
         friend class detail::reflection;
@@ -4549,16 +4582,8 @@ public:
                      sizeof...(Index) == detail::reflection::index_arguments<Path>() && std::is_lvalue_reference_v<Self>)
         CBOR_ALWAYS_INLINE auto at_path(this Self &&self, Index const... indexes)
         {
-            detail::validity::throw_logic_error_if_empty(
-                self.owner, "cbor::schema::accessor::at_path: the accessor was moved from");
-            auto result = self.template walk<Path>(indexes...);
-            if constexpr (requires { result->owner; })
-                if (result)
-                    result->owner = self.owner;
-            if constexpr (requires { (*result)->owner; })
-                if (result && *result)
-                    (*result)->owner = self.owner;
-            return result;
+            auto read = self.template at_path_or_error<Path>(indexes...);
+            return result<typename decltype(read)::value_type>(std::move(read));
         }
     };
 
@@ -4618,19 +4643,23 @@ public:
             requires requires(accessor<U, Verified> const &a, Index const... i) { a.template walk<Path>(i...); }
         CBOR_ALWAYS_INLINE auto at_path(Index const... indexes) const
         {
-            auto result = held.template walk<Path>(indexes...);
-            if constexpr (iterable(std::type_identity<typename decltype(result)::value_type>{})) {
-                return std::move(result).transform([this]<class V>(accessor<V, Verified> &&list) {
-                    return borrowed_accessor<V, Verified>(std::move(list), owner);
-                });
+            auto read = held.template walk<Path>(indexes...);
+            if constexpr (iterable(std::type_identity<typename decltype(read)::value_type>{})) {
+                auto const borrow = [this, &read] {
+                    return std::move(read).transform([this]<class V>(accessor<V, Verified> &&list) {
+                        return borrowed_accessor<V, Verified>(std::move(list), owner);
+                    });
+                };
+                using X = typename std::invoke_result_t<decltype(borrow) const &>::value_type;
+                return result<X>(std::in_place_type<std::expected<X, error>>, borrow);
             } else {
-                if constexpr (requires { result->owner; })
-                    if (result)
-                        result->owner = *owner;
-                if constexpr (requires { (*result)->owner; })
-                    if (result && *result)
-                        (*result)->owner = *owner;
-                return result;
+                if constexpr (requires { read->owner; })
+                    if (read)
+                        read->owner = *owner;
+                if constexpr (requires { (*read)->owner; })
+                    if (read && *read)
+                        (*read)->owner = *owner;
+                return result<typename decltype(read)::value_type>(std::move(read));
             }
         }
 
@@ -4712,22 +4741,28 @@ public:
 
         template <class E, class Self>
             requires(std::is_lvalue_reference_v<Self> && (std::same_as<E, A> || ...))
-        std::expected<alternative_result<E>, error> get(this Self &&self)
+        result<alternative_result<E>> get(this Self &&self)
         {
-            detail::validity::throw_logic_error_if_empty(
-                self.owner, "cbor::schema::accessor::get: the accessor was moved from");
+            return result<alternative_result<E>>(self.template get_or_error<E>());
+        }
+
+    private:
+        template <class E>
+        std::expected<alternative_result<E>, error> get_or_error() const
+        {
+            detail::validity::throw_logic_error_if_empty(owner, "cbor::schema::accessor::get: the accessor was moved from");
             constexpr std::size_t k = detail::reflection::index_in<E>(std::tuple<std::type_identity<A>...>{});
-            if (self.held.index != k) [[unlikely]]
+            if (held.index != k) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
             if constexpr (detail::reflection::is_string_alternative<E>) {
-                return std::string_view(std::span(self.encoded).subspan(self.held.data, self.held.size));
+                return std::string_view(std::span(encoded).subspan(held.data, held.size));
             } else if constexpr (detail::reflection::is_value_alternative<E>) {
                 constexpr std::size_t n = detail::reflection::fixed_size<E, E>();
-                return detail::reflection::read_fixed_value<E>(std::span<char const>(self.encoded).subspan(self.held.data).template first<n>());
+                return detail::reflection::read_fixed_value<E>(std::span<char const>(encoded).subspan(held.data).template first<n>());
             } else {
                 constexpr std::size_t n = detail::reflection::fixed_size<E, T>();
-                return accessor<E, Verified>(self.owner, self.encoded,
-                                             std::span<char const>(self.encoded).subspan(self.held.data).template first<n>(), self.dir);
+                return accessor<E, Verified>(owner, encoded, std::span<char const>(encoded).subspan(held.data).template first<n>(),
+                                             dir);
             }
         }
     };
@@ -4766,9 +4801,9 @@ public:
      */
     template <owning_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> adopt(Encoded &&encoded)
+    CBOR_ALWAYS_INLINE static result<accessor<T, true>> adopt(Encoded &&encoded)
     {
-        return path_with_owner<true, detail::description_place::inside>(std::make_shared<Encoded const>(std::move(encoded)));
+        return result<accessor<T, true>>(path_with_owner<true, detail::description_place::inside>(std::make_shared<Encoded const>(std::move(encoded))));
     }
 
     /**
@@ -4776,9 +4811,9 @@ public:
      */
     template <owning_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> view(std::shared_ptr<Encoded const> encoded)
+    CBOR_ALWAYS_INLINE static result<accessor<T, true>> view(std::shared_ptr<Encoded const> encoded)
     {
-        return path_with_owner<true, detail::description_place::inside>(std::move(encoded));
+        return result<accessor<T, true>>(path_with_owner<true, detail::description_place::inside>(std::move(encoded)));
     }
 
     /**
@@ -4786,13 +4821,13 @@ public:
      */
     template <borrowed_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    CBOR_ALWAYS_INLINE static std::expected<accessor<T, true>, error> view(std::shared_ptr<void const> owner, Encoded const &encoded)
+    CBOR_ALWAYS_INLINE static result<accessor<T, true>> view(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
-        return path_with_owner<true, detail::description_place::inside>(std::move(owner), detail::chars_of(encoded));
+        return result<accessor<T, true>>(path_with_owner<true, detail::description_place::inside>(std::move(owner), detail::chars_of(encoded)));
     }
 
     /**
-     * @brief Reads one value at `Path` and returns a `std::expected` of it.
+     * @brief Reads one value at `Path` and returns a cbor::result of it.
      *
      * It makes the checks of cbor::schema::adopt() and of an accessor in one call and keeps nothing: it checks the
      * item that it reads and no part on the path to it.
@@ -4834,7 +4869,8 @@ public:
                  value_holds_no_view<typename decltype(detail::reflection::path_result<T, T, Path, 1>())::type>)
     CBOR_ALWAYS_INLINE static auto at_path(std::string_view const encoded, Index const... indexes)
     {
-        return at_path_with_directory<Path, true, detail::description_place::inside>(encoded, indexes...);
+        auto read = at_path_with_directory<Path, true, detail::description_place::inside>(encoded, indexes...);
+        return result<typename decltype(read)::value_type>(std::move(read));
     }
 
     /**
@@ -4879,9 +4915,9 @@ public:
      */
     template <owning_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    static std::expected<ref<T>, error> decode(Encoded &&encoded)
+    static result<ref<T>> decode(Encoded &&encoded)
     {
-        return decode_with_owner<true, detail::description_place::inside>(std::move(encoded));
+        return result<ref<T>>(decode_with_owner<true, detail::description_place::inside>(std::move(encoded)));
     }
 
     /**
@@ -4889,9 +4925,9 @@ public:
      */
     template <owning_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded)
+    static result<ref<T>> decode(std::shared_ptr<Encoded const> encoded)
     {
-        return decode_with_owner<true, detail::description_place::inside>(std::move(encoded));
+        return result<ref<T>>(decode_with_owner<true, detail::description_place::inside>(std::move(encoded)));
     }
 
     /**
@@ -4899,9 +4935,9 @@ public:
      */
     template <owning_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
-    static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded, T &&target)
+    static result<ref<T>> decode(std::shared_ptr<Encoded const> encoded, T &&target)
     {
-        return decode_with_owner<true, detail::description_place::inside>(std::move(encoded), std::move(target));
+        return result<ref<T>>(decode_with_owner<true, detail::description_place::inside>(std::move(encoded), std::move(target)));
     }
 
     /**
@@ -4909,9 +4945,9 @@ public:
      */
     template <borrowed_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded)
+    static result<ref<T>> decode(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
-        return decode_with_owner<true, detail::description_place::inside>(std::move(owner), detail::chars_of(encoded));
+        return result<ref<T>>(decode_with_owner<true, detail::description_place::inside>(std::move(owner), detail::chars_of(encoded)));
     }
 
     /**
@@ -4919,10 +4955,10 @@ public:
      */
     template <borrowed_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
-    static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded, T &&target)
+    static result<ref<T>> decode(std::shared_ptr<void const> owner, Encoded const &encoded, T &&target)
     {
-        return decode_with_owner<true, detail::description_place::inside>(std::move(owner), detail::chars_of(encoded),
-                                     std::move(target));
+        return result<ref<T>>(decode_with_owner<true, detail::description_place::inside>(std::move(owner), detail::chars_of(encoded),
+                                     std::move(target)));
     }
 
     /**
@@ -4963,7 +4999,9 @@ public:
      * result: unverified accessor of a car
      * call: lane->at_path<"$.tires[1].diameter">()
      * result: 18
-     * call: (*cbor::schema<car>::unverified_decode(std::string(bytes)))->make
+     * call: auto const copy = cbor::schema<car>::unverified_decode(std::string(bytes))
+     * result: ref to car{"Volvo", 5, {tire{17, 2.5f}, tire{18, 2.25f}}, {1, 2, 3}}
+     * call: (*copy)->make
      * result: "Volvo"
      * @endcode
      *
@@ -4981,9 +5019,9 @@ public:
      */
     template <owning_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_adopt(Encoded &&encoded)
+    CBOR_ALWAYS_INLINE static result<accessor<T, false>> unverified_adopt(Encoded &&encoded)
     {
-        return path_with_owner<false, detail::description_place::inside>(std::make_shared<Encoded const>(std::move(encoded)));
+        return result<accessor<T, false>>(path_with_owner<false, detail::description_place::inside>(std::make_shared<Encoded const>(std::move(encoded))));
     }
 
     /**
@@ -4991,9 +5029,9 @@ public:
      */
     template <owning_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_view(std::shared_ptr<Encoded const> encoded)
+    CBOR_ALWAYS_INLINE static result<accessor<T, false>> unverified_view(std::shared_ptr<Encoded const> encoded)
     {
-        return path_with_owner<false, detail::description_place::inside>(std::move(encoded));
+        return result<accessor<T, false>>(path_with_owner<false, detail::description_place::inside>(std::move(encoded)));
     }
 
     /**
@@ -5001,9 +5039,9 @@ public:
      */
     template <borrowed_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    CBOR_ALWAYS_INLINE static std::expected<accessor<T, false>, error> unverified_view(std::shared_ptr<void const> owner, Encoded const &encoded)
+    CBOR_ALWAYS_INLINE static result<accessor<T, false>> unverified_view(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
-        return path_with_owner<false, detail::description_place::inside>(std::move(owner), detail::chars_of(encoded));
+        return result<accessor<T, false>>(path_with_owner<false, detail::description_place::inside>(std::move(owner), detail::chars_of(encoded)));
     }
 
     /**
@@ -5029,7 +5067,8 @@ public:
                  value_holds_no_view<typename decltype(detail::reflection::path_result<T, T, Path, 1>())::type>)
     CBOR_ALWAYS_INLINE static auto unverified_at_path(std::string_view const encoded, Index const... indexes)
     {
-        return at_path_with_directory<Path, false, detail::description_place::inside>(encoded, indexes...);
+        auto read = at_path_with_directory<Path, false, detail::description_place::inside>(encoded, indexes...);
+        return result<typename decltype(read)::value_type>(std::move(read));
     }
 
     /**
@@ -5040,7 +5079,9 @@ public:
      *
      * @code{.example}
      * bytes: d8 71 82 9a 00 00 00 15 d8 72 84 64 6d 61 6b 65 65 73 65 61 74 73 65 74 69 72 65 73 65 74 72 61 63 6b d8 72 82 68 64 69 61 6d 65 74 65 72 68 70 72 65 73 73 75 72 65 82 19 07 08 82 82 68 64 69 61 6d 65 74 65 72 18 45 82 68 70 72 65 73 73 75 72 65 18 55 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 10 00 00 00 d3 00 00 00 94 00 00 00 9e 00 00 00 b4 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00
-     * call: (*cbor::schema<car>::unverified_decode(std::string(bytes)))->make
+     * call: auto const copy = cbor::schema<car>::unverified_decode(std::string(bytes))
+     * result: ref to car{"Volvo", 5, {tire{17, 2.5f}, tire{18, 2.25f}}, {1, 2, 3}}
+     * call: (*copy)->make
      * result: "Volvo"
      * @endcode
      *
@@ -5050,9 +5091,9 @@ public:
      */
     template <owning_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    static std::expected<ref<T>, error> unverified_decode(Encoded &&encoded)
+    static result<ref<T>> unverified_decode(Encoded &&encoded)
     {
-        return decode_with_owner<false, detail::description_place::inside>(std::move(encoded));
+        return result<ref<T>>(decode_with_owner<false, detail::description_place::inside>(std::move(encoded)));
     }
 
     /**
@@ -5060,9 +5101,9 @@ public:
      */
     template <owning_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<Encoded const> encoded)
+    static result<ref<T>> unverified_decode(std::shared_ptr<Encoded const> encoded)
     {
-        return decode_with_owner<false, detail::description_place::inside>(std::move(encoded));
+        return result<ref<T>>(decode_with_owner<false, detail::description_place::inside>(std::move(encoded)));
     }
 
     /**
@@ -5070,9 +5111,9 @@ public:
      */
     template <owning_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
-    static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<Encoded const> encoded, T &&target)
+    static result<ref<T>> unverified_decode(std::shared_ptr<Encoded const> encoded, T &&target)
     {
-        return decode_with_owner<false, detail::description_place::inside>(std::move(encoded), std::move(target));
+        return result<ref<T>>(decode_with_owner<false, detail::description_place::inside>(std::move(encoded), std::move(target)));
     }
 
     /**
@@ -5080,9 +5121,9 @@ public:
      */
     template <borrowed_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded)
+    static result<ref<T>> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
-        return decode_with_owner<false, detail::description_place::inside>(std::move(owner), detail::chars_of(encoded));
+        return result<ref<T>>(decode_with_owner<false, detail::description_place::inside>(std::move(owner), detail::chars_of(encoded)));
     }
 
     /**
@@ -5090,10 +5131,10 @@ public:
      */
     template <borrowed_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
-    static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded, T &&target)
+    static result<ref<T>> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded, T &&target)
     {
-        return decode_with_owner<false, detail::description_place::inside>(std::move(owner), detail::chars_of(encoded),
-                                     std::move(target));
+        return result<ref<T>>(decode_with_owner<false, detail::description_place::inside>(std::move(owner), detail::chars_of(encoded),
+                                     std::move(target)));
     }
 
     /**
@@ -5127,10 +5168,10 @@ public:
      * @see cbor::schema::%decode()
      * @see cbor::tag
      */
-    CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode(T const &value)
+    CBOR_ALWAYS_INLINE static result<std::string> encode(T const &value)
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     {
-        return encode<detail::description_place::inside>(value);
+        return result<std::string>(encode<detail::description_place::inside>(value));
     }
 
     /**
@@ -5139,9 +5180,9 @@ public:
     template <class Target>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() &&
                  detail::is_target_v<std::remove_reference_t<Target>>)
-    CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(Target &&out, T const &value)
+    CBOR_ALWAYS_INLINE static result<std::size_t> encode(Target &&out, T const &value)
     {
-        return encode<detail::description_place::inside>(std::forward<Target>(out), value);
+        return result<std::size_t>(encode<detail::description_place::inside>(std::forward<Target>(out), value));
     }
 
 private:
@@ -5390,10 +5431,10 @@ public:
      */
     template <owning_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    CBOR_ALWAYS_INLINE static std::expected<typename schema<T>::template accessor<T, true>, error> adopt(Encoded &&encoded)
+    CBOR_ALWAYS_INLINE static result<typename schema<T>::template accessor<T, true>> adopt(Encoded &&encoded)
     {
-        return schema<T>::template path_with_owner<true, detail::description_place::apart>(
-            std::make_shared<Encoded const>(std::move(encoded)));
+        return result<typename schema<T>::template accessor<T, true>>(schema<T>::template path_with_owner<true, detail::description_place::apart>(
+            std::make_shared<Encoded const>(std::move(encoded))));
     }
 
     /**
@@ -5401,9 +5442,9 @@ public:
      */
     template <owning_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    CBOR_ALWAYS_INLINE static std::expected<typename schema<T>::template accessor<T, true>, error> view(std::shared_ptr<Encoded const> encoded)
+    CBOR_ALWAYS_INLINE static result<typename schema<T>::template accessor<T, true>> view(std::shared_ptr<Encoded const> encoded)
     {
-        return schema<T>::template path_with_owner<true, detail::description_place::apart>(std::move(encoded));
+        return result<typename schema<T>::template accessor<T, true>>(schema<T>::template path_with_owner<true, detail::description_place::apart>(std::move(encoded)));
     }
 
     /**
@@ -5412,10 +5453,10 @@ public:
      */
     template <borrowed_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    CBOR_ALWAYS_INLINE static std::expected<typename schema<T>::template accessor<T, true>, error> view(std::shared_ptr<void const> owner, Encoded const &encoded)
+    CBOR_ALWAYS_INLINE static result<typename schema<T>::template accessor<T, true>> view(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
-        return schema<T>::template path_with_owner<true, detail::description_place::apart>(
-            std::move(owner), detail::chars_of(encoded));
+        return result<typename schema<T>::template accessor<T, true>>(schema<T>::template path_with_owner<true, detail::description_place::apart>(
+            std::move(owner), detail::chars_of(encoded)));
     }
 
     /**
@@ -5427,7 +5468,8 @@ public:
                  schema<T>::template value_holds_no_view<typename decltype(detail::reflection::path_result<T, T, Path, 1>())::type>)
     CBOR_ALWAYS_INLINE static auto at_path(std::string_view const encoded, Index const... indexes)
     {
-        return schema<T>::template at_path_with_directory<Path, true, detail::description_place::apart>(encoded, indexes...);
+        auto read = schema<T>::template at_path_with_directory<Path, true, detail::description_place::apart>(encoded, indexes...);
+        return result<typename decltype(read)::value_type>(std::move(read));
     }
 
     /**
@@ -5435,9 +5477,9 @@ public:
      */
     template <owning_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    static std::expected<ref<T>, error> decode(Encoded &&encoded)
+    static result<ref<T>> decode(Encoded &&encoded)
     {
-        return schema<T>::template decode_with_owner<true, detail::description_place::apart>(std::move(encoded));
+        return result<ref<T>>(schema<T>::template decode_with_owner<true, detail::description_place::apart>(std::move(encoded)));
     }
 
     /**
@@ -5445,9 +5487,9 @@ public:
      */
     template <owning_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded)
+    static result<ref<T>> decode(std::shared_ptr<Encoded const> encoded)
     {
-        return schema<T>::template decode_with_owner<true, detail::description_place::apart>(std::move(encoded));
+        return result<ref<T>>(schema<T>::template decode_with_owner<true, detail::description_place::apart>(std::move(encoded)));
     }
 
     /**
@@ -5455,9 +5497,9 @@ public:
      */
     template <owning_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
-    static std::expected<ref<T>, error> decode(std::shared_ptr<Encoded const> encoded, T &&target)
+    static result<ref<T>> decode(std::shared_ptr<Encoded const> encoded, T &&target)
     {
-        return schema<T>::template decode_with_owner<true, detail::description_place::apart>(std::move(encoded), std::move(target));
+        return result<ref<T>>(schema<T>::template decode_with_owner<true, detail::description_place::apart>(std::move(encoded), std::move(target)));
     }
 
     /**
@@ -5465,10 +5507,10 @@ public:
      */
     template <borrowed_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded)
+    static result<ref<T>> decode(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
-        return schema<T>::template decode_with_owner<true, detail::description_place::apart>(
-            std::move(owner), detail::chars_of(encoded));
+        return result<ref<T>>(schema<T>::template decode_with_owner<true, detail::description_place::apart>(
+            std::move(owner), detail::chars_of(encoded)));
     }
 
     /**
@@ -5476,10 +5518,10 @@ public:
      */
     template <borrowed_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
-    static std::expected<ref<T>, error> decode(std::shared_ptr<void const> owner, Encoded const &encoded, T &&target)
+    static result<ref<T>> decode(std::shared_ptr<void const> owner, Encoded const &encoded, T &&target)
     {
-        return schema<T>::template decode_with_owner<true, detail::description_place::apart>(
-            std::move(owner), detail::chars_of(encoded), std::move(target));
+        return result<ref<T>>(schema<T>::template decode_with_owner<true, detail::description_place::apart>(
+            std::move(owner), detail::chars_of(encoded), std::move(target)));
     }
 
     /**
@@ -5487,10 +5529,10 @@ public:
      */
     template <owning_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    CBOR_ALWAYS_INLINE static std::expected<typename schema<T>::template accessor<T, false>, error> unverified_adopt(Encoded &&encoded)
+    CBOR_ALWAYS_INLINE static result<typename schema<T>::template accessor<T, false>> unverified_adopt(Encoded &&encoded)
     {
-        return schema<T>::template path_with_owner<false, detail::description_place::apart>(
-            std::make_shared<Encoded const>(std::move(encoded)));
+        return result<typename schema<T>::template accessor<T, false>>(schema<T>::template path_with_owner<false, detail::description_place::apart>(
+            std::make_shared<Encoded const>(std::move(encoded))));
     }
 
     /**
@@ -5498,9 +5540,9 @@ public:
      */
     template <owning_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    CBOR_ALWAYS_INLINE static std::expected<typename schema<T>::template accessor<T, false>, error> unverified_view(std::shared_ptr<Encoded const> encoded)
+    CBOR_ALWAYS_INLINE static result<typename schema<T>::template accessor<T, false>> unverified_view(std::shared_ptr<Encoded const> encoded)
     {
-        return schema<T>::template path_with_owner<false, detail::description_place::apart>(std::move(encoded));
+        return result<typename schema<T>::template accessor<T, false>>(schema<T>::template path_with_owner<false, detail::description_place::apart>(std::move(encoded)));
     }
 
     /**
@@ -5509,10 +5551,10 @@ public:
      */
     template <borrowed_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    CBOR_ALWAYS_INLINE static std::expected<typename schema<T>::template accessor<T, false>, error> unverified_view(std::shared_ptr<void const> owner, Encoded const &encoded)
+    CBOR_ALWAYS_INLINE static result<typename schema<T>::template accessor<T, false>> unverified_view(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
-        return schema<T>::template path_with_owner<false, detail::description_place::apart>(
-            std::move(owner), detail::chars_of(encoded));
+        return result<typename schema<T>::template accessor<T, false>>(schema<T>::template path_with_owner<false, detail::description_place::apart>(
+            std::move(owner), detail::chars_of(encoded)));
     }
 
     /**
@@ -5525,7 +5567,8 @@ public:
                  schema<T>::template value_holds_no_view<typename decltype(detail::reflection::path_result<T, T, Path, 1>())::type>)
     CBOR_ALWAYS_INLINE static auto unverified_at_path(std::string_view const encoded, Index const... indexes)
     {
-        return schema<T>::template at_path_with_directory<Path, false, detail::description_place::apart>(encoded, indexes...);
+        auto read = schema<T>::template at_path_with_directory<Path, false, detail::description_place::apart>(encoded, indexes...);
+        return result<typename decltype(read)::value_type>(std::move(read));
     }
 
     /**
@@ -5533,9 +5576,9 @@ public:
      */
     template <owning_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    static std::expected<ref<T>, error> unverified_decode(Encoded &&encoded)
+    static result<ref<T>> unverified_decode(Encoded &&encoded)
     {
-        return schema<T>::template decode_with_owner<false, detail::description_place::apart>(std::move(encoded));
+        return result<ref<T>>(schema<T>::template decode_with_owner<false, detail::description_place::apart>(std::move(encoded)));
     }
 
     /**
@@ -5543,9 +5586,9 @@ public:
      */
     template <owning_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<Encoded const> encoded)
+    static result<ref<T>> unverified_decode(std::shared_ptr<Encoded const> encoded)
     {
-        return schema<T>::template decode_with_owner<false, detail::description_place::apart>(std::move(encoded));
+        return result<ref<T>>(schema<T>::template decode_with_owner<false, detail::description_place::apart>(std::move(encoded)));
     }
 
     /**
@@ -5554,9 +5597,9 @@ public:
      */
     template <owning_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
-    static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<Encoded const> encoded, T &&target)
+    static result<ref<T>> unverified_decode(std::shared_ptr<Encoded const> encoded, T &&target)
     {
-        return schema<T>::template decode_with_owner<false, detail::description_place::apart>(std::move(encoded), std::move(target));
+        return result<ref<T>>(schema<T>::template decode_with_owner<false, detail::description_place::apart>(std::move(encoded), std::move(target)));
     }
 
     /**
@@ -5565,10 +5608,10 @@ public:
      */
     template <borrowed_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
-    static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded)
+    static result<ref<T>> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
-        return schema<T>::template decode_with_owner<false, detail::description_place::apart>(
-            std::move(owner), detail::chars_of(encoded));
+        return result<ref<T>>(schema<T>::template decode_with_owner<false, detail::description_place::apart>(
+            std::move(owner), detail::chars_of(encoded)));
     }
 
     /**
@@ -5577,20 +5620,20 @@ public:
      */
     template <borrowed_range_of_bytes Encoded>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() && std::is_default_constructible_v<T>)
-    static std::expected<ref<T>, error> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded, T &&target)
+    static result<ref<T>> unverified_decode(std::shared_ptr<void const> owner, Encoded const &encoded, T &&target)
     {
-        return schema<T>::template decode_with_owner<false, detail::description_place::apart>(
-            std::move(owner), detail::chars_of(encoded), std::move(target));
+        return result<ref<T>>(schema<T>::template decode_with_owner<false, detail::description_place::apart>(
+            std::move(owner), detail::chars_of(encoded), std::move(target)));
     }
 
     /**
      * @brief Writes `value` as one Packed CBOR message without cbor::schema::description(), as cbor::schema::encode()
      * writes a message.
      */
-    CBOR_ALWAYS_INLINE static std::expected<std::string, error> encode(T const &value)
+    CBOR_ALWAYS_INLINE static result<std::string> encode(T const &value)
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>())
     {
-        return schema<T>::template encode<detail::description_place::apart>(value);
+        return result<std::string>(schema<T>::template encode<detail::description_place::apart>(value));
     }
 
     /**
@@ -5600,9 +5643,9 @@ public:
     template <class Target>
         requires(has_describe_members<std::remove_cv_t<T>> && tags_registered<T>() &&
                  detail::is_target_v<std::remove_reference_t<Target>>)
-    CBOR_ALWAYS_INLINE static std::expected<std::size_t, error> encode(Target &&out, T const &value)
+    CBOR_ALWAYS_INLINE static result<std::size_t> encode(Target &&out, T const &value)
     {
-        return schema<T>::template encode<detail::description_place::apart>(std::forward<Target>(out), value);
+        return result<std::size_t>(schema<T>::template encode<detail::description_place::apart>(std::forward<Target>(out), value));
     }
 };
 

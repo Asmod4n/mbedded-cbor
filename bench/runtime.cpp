@@ -27,7 +27,7 @@
                                  [](char const c) { return std::uint64_t(std::uint8_t(c)); });
 }
 
-#if defined(ARM_READ) || defined(ARM_MB_TREE) || defined(ARM_MB_DECODE) || defined(ARM_MB_PATH_ALL)
+#if defined(ARM_READ) || defined(ARM_MB_TREE)
 static std::uint64_t item_tree_sum(cbor::item const it);
 
 static std::uint64_t item_tree_sum(cbor::item const it)
@@ -696,24 +696,33 @@ static std::uint64_t item_sum(cbor_item_t const *i)
 static std::uint64_t mb_path()
 {
     auto const l = cbor::lazy::view(*held);
+    if (!l) [[unlikely]] std::abort();
 #if defined(DOC_twitter)
-    auto const v = l.and_then([](cbor::lazy const &d) { return d.at_key("statuses"); })
-                       .and_then([](cbor::lazy const &s) { return s.at(50); })
-                       .and_then([](cbor::lazy const &s) { return s.at_key("user"); })
-                       .and_then([](cbor::lazy const &u) { return u.at_key("screen_name"); })
-                       .and_then([](cbor::lazy const &n) { return n.get<std::string_view>(); });
+    auto const statuses = l->at("statuses");
+    if (!statuses) [[unlikely]] std::abort();
+    auto const status = statuses->at(50);
+    if (!status) [[unlikely]] std::abort();
+    auto const user = status->at("user");
+    if (!user) [[unlikely]] std::abort();
+    auto const name = user->at("screen_name");
+    if (!name) [[unlikely]] std::abort();
+    auto const v = name->get<std::string_view>();
     if (!v) [[unlikely]] std::abort();
     return bytes_sum(**v);
 #elif defined(DOC_floats)
-    auto const v = l.and_then([](cbor::lazy const &d) { return d.at(30000); })
-                       .and_then([](cbor::lazy const &x) { return x.get<double>(); });
+    auto const number = l->at(30000);
+    if (!number) [[unlikely]] std::abort();
+    auto const v = number->get<double>();
     if (!v) [[unlikely]] std::abort();
     return std::bit_cast<std::uint64_t>(*v);
 #elif defined(DOC_records)
-    auto const v = l.and_then([](cbor::lazy const &d) { return d.at(1000); })
-                       .and_then([](cbor::lazy const &r) { return r.at_key("user"); })
-                       .and_then([](cbor::lazy const &u) { return u.at_key("name"); })
-                       .and_then([](cbor::lazy const &n) { return n.get<std::string_view>(); });
+    auto const record = l->at(1000);
+    if (!record) [[unlikely]] std::abort();
+    auto const user = record->at("user");
+    if (!user) [[unlikely]] std::abort();
+    auto const name = user->at("name");
+    if (!name) [[unlikely]] std::abort();
+    auto const v = name->get<std::string_view>();
     if (!v) [[unlikely]] std::abort();
     return bytes_sum(**v);
 #endif
@@ -785,7 +794,11 @@ static std::uint64_t mb_variant()
 #else
     auto const root = cbor::schema<bench_variant::home>::view(*held);
     if (!root) [[unlikely]] std::abort();
-    auto const name = root->at_path<"$.pet">()->get<bench_variant::cat>()->at_path<"@.name">();
+    auto const pet = root->at_path<"$.pet">();
+    if (!pet) [[unlikely]] std::abort();
+    auto const kitten = pet->get<bench_variant::cat>();
+    if (!kitten) [[unlikely]] std::abort();
+    auto const name = kitten->at_path<"@.name">();
     if (!name) [[unlikely]] std::abort();
     return name->size();
 #endif
@@ -996,7 +1009,9 @@ static void setup()
     decoded.emplace(*tree);
 #endif
 #if defined(ARM_MB_VARIANT_ENCODE) || defined(ARM_MB_VARIANT_DECODE) || defined(ARM_MB_VARIANT_AT_PATH)
-    variant_message = *cbor::schema<bench_variant::home>::encode(variant_sample);
+    auto const variant_encoded = cbor::schema<bench_variant::home>::encode(variant_sample);
+    if (!variant_encoded) [[unlikely]] std::abort();
+    variant_message = *variant_encoded;
     bytes = &variant_message;
 #endif
 #if defined(ARM_TC_WRITE) || defined(ARM_VG_RAW) || defined(ARM_MP) || defined(ARM_FB)
@@ -1058,7 +1073,10 @@ static std::uint64_t op()
         std::abort();
     return item_tree_sum(**r);
 #elif defined(ARM_READ)
-    auto const r = cbor::lazy::view(*held)->to_item();
+    auto const viewed = cbor::lazy::view(*held);
+    if (!viewed)
+        std::abort();
+    auto const r = viewed->to_item();
     if (!r)
         std::abort();
     return item_tree_sum(**r);
@@ -1073,7 +1091,10 @@ static std::uint64_t op()
         std::abort();
     return lazy_tree_sum(*l);
 #elif defined(ARM_MB_DECODE)
-    auto r = bench::value_of(*cbor::lazy::view(*held));
+    auto const viewed = cbor::lazy::view(*held);
+    if (!viewed) [[unlikely]]
+        std::abort();
+    auto r = bench::value_of(*viewed);
     if (!r) [[unlikely]]
         std::abort();
     benchmark::DoNotOptimize(&*r);
@@ -1098,7 +1119,10 @@ static std::uint64_t op()
 #elif defined(ARM_MB_STRUCT)
     return mb_struct();
 #elif defined(ARM_MB_PATH_ALL)
-    auto const r = cbor::lazy::view(*held)->at_path<"$..*", cbor::nodelist>();
+    auto const viewed = cbor::lazy::view(*held);
+    if (!viewed) [[unlikely]]
+        std::abort();
+    auto const r = viewed->template at_path<"$..*", cbor::nodelist>();
     if (!r) [[unlikely]]
         std::abort();
     return r->size();

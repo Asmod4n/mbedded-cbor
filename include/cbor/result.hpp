@@ -66,6 +66,12 @@ private:
     {
     }
 
+    template <class F>
+        requires std::same_as<std::invoke_result_t<F>, std::expected<T, E>>
+    constexpr result(std::in_place_type_t<std::expected<T, E>>, F &&make) : held(std::forward<F>(make)())
+    {
+    }
+
     template <class R>
     static constexpr bool is_result = false;
 
@@ -78,6 +84,15 @@ private:
     friend struct lazy;
 
     friend struct item;
+
+    template <class>
+    friend class schema;
+
+    template <class>
+    friend class static_dictionary;
+
+    template <class>
+    friend class typed_array_view;
 
     friend result<owning<item>> decode(std::string_view encoded);
 

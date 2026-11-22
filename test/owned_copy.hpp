@@ -14,7 +14,10 @@ namespace test
 // that the lazy then owns. So the test needs no owner of its own.
 inline std::expected<cbor::lazy, cbor::error> make_lazy_from_copy(std::string_view const encoded)
 {
-    return cbor::lazy::adopt(std::string(encoded));
+    auto const adopted = cbor::lazy::adopt(std::string(encoded));
+    if (!adopted)
+        return std::unexpected(adopted.error());
+    return *adopted;
 }
 
 }

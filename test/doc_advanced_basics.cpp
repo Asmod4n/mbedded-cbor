@@ -69,22 +69,28 @@ TEST_CASE("doc advanced basics: the error values")
     auto const owner_of = [](std::string bytes) { return std::make_shared<std::string const>(std::move(bytes)); };
     std::string const pair = encode_in_preferred_form(A(1, 2));
     auto owner = owner_of(pair.substr(0, pair.size() - 1));
-    auto const at_1 = cbor::lazy::view(owner)->at(1);
+    auto const viewed = cbor::lazy::view(owner);
+    auto const at_1 = viewed->at(1);
     CHECK_EQ(at_1.error(), error::too_little_data);
     owner = owner_of("\x9f\x01\xff"s);
-    auto const at_0 = cbor::lazy::view(owner)->at(0);
+    auto const viewed_2 = cbor::lazy::view(owner);
+    auto const at_0 = viewed_2->at(0);
     CHECK_EQ(at_0.error(), error::indefinite_length);
     owner = owner_of(encode_in_preferred_form(M("a"s, 1)));
-    auto const b = cbor::lazy::view(owner)->at("b");
+    auto const viewed_3 = cbor::lazy::view(owner);
+    auto const b = viewed_3->at("b");
     CHECK_EQ(b.error(), error::key_not_found);
     owner = owner_of(encode_in_preferred_form(V(1)));
-    auto const at_0_2 = cbor::lazy::view(owner)->at(0);
+    auto const viewed_4 = cbor::lazy::view(owner);
+    auto const at_0_2 = viewed_4->at(0);
     CHECK_EQ(at_0_2.error(), error::not_indexable);
     owner = owner_of(encode_in_preferred_form(V("a"s)));
-    auto const read = cbor::lazy::view(owner)->get<std::int64_t>();
+    auto const viewed_5 = cbor::lazy::view(owner);
+    auto const read = viewed_5->get<std::int64_t>();
     CHECK_EQ(read.error(), error::incorrect_type);
     owner = owner_of(encode_in_preferred_form(V(256)));
-    auto const read_2 = cbor::lazy::view(owner)->get<std::uint8_t>();
+    auto const viewed_6 = cbor::lazy::view(owner);
+    auto const read_2 = viewed_6->get<std::uint8_t>();
     CHECK_EQ(read_2.error(), error::number_out_of_range);
 }
 
@@ -107,9 +113,9 @@ TEST_CASE("doc advanced basics: a cut schema message is too_little_data")
     auto const bytes = schema::encode(doc_advanced_basics::gauge{3});
     REQUIRE(bytes.has_value());
     std::string const cut = bytes->substr(0, bytes->size() - 1);
-    CHECK_EQ(schema::at_path<"$.level">(cut).error(), error::too_little_data);
-    CHECK_EQ(schema::decode(std::string(cut)).error(), error::too_little_data);
-    CHECK_EQ(schema::adopt(std::string(cut)).error(), error::too_little_data);
+    CHECK_EQ(schema::at_path<"$.level">(cut), std::unexpected(error::too_little_data));
+    CHECK_EQ(schema::decode(std::string(cut)), std::unexpected(error::too_little_data));
+    CHECK_EQ(schema::adopt(std::string(cut)), std::unexpected(error::too_little_data));
 }
 
 // The row not_singular_query of the section "Every error value" names the call that gives it.
@@ -229,7 +235,8 @@ TEST_CASE("doc advanced basics: a lazy holds the owner")
     std::optional<cbor::lazy> keep;
     {
         std::string bytes = message();
-        auto const tags = cbor::lazy::adopt(std::move(bytes))->at("tags");
+        auto const adopted = cbor::lazy::adopt(std::move(bytes));
+        auto const tags = adopted->at("tags");
         keep = *tags;
     }
     auto const at_1 = keep->at(1);
@@ -265,11 +272,13 @@ TEST_CASE("doc advanced basics: owners")
     auto const message = [] { return encode_in_preferred_form(V("xyz"s)); };
     auto const p = std::make_shared<page const>(message());
     std::shared_ptr<std::string const> const owner(p, &p->bytes);
-    auto const aliased = cbor::lazy::view(owner)->get<std::string_view>();
+    auto const viewed = cbor::lazy::view(owner);
+    auto const aliased = viewed->get<std::string_view>();
     REQUIRE(aliased.has_value());
     CHECK_EQ(**aliased, "xyz"sv);
     CHECK_EQ((**aliased).data(), std::span(p->bytes).subspan(1).data());
-    auto const view = cbor::lazy::view(p, std::string_view(p->bytes))->get<std::string_view>();
+    auto const viewed_2 = cbor::lazy::view(p, std::string_view(p->bytes));
+    auto const view = viewed_2->get<std::string_view>();
     REQUIRE(view.has_value());
     CHECK_EQ(**view, "xyz"sv);
     CHECK_EQ((**view).data(), std::span(p->bytes).subspan(1).data());
@@ -297,14 +306,16 @@ TEST_CASE("doc advanced basics: no form copies the bytes")
     CHECK_FALSE(([]<class S>(S const &s) { return requires { cbor::lazy::view(s); }; }(std::string_view())));
 
     auto const shared = std::make_shared<std::string const>(message());
-    auto const a = cbor::lazy::view(shared).value();
+    auto const viewed = cbor::lazy::view(shared);
+    auto const a = viewed.value();
     auto const read = a.get<std::string_view>();
     auto const va = read.value();
     CHECK_EQ((*va).data(), std::span(*shared).subspan(1).data());
 
     std::string bytes = encode_in_preferred_form(V(std::string(40, 'x')));
     std::span<char const> const data(bytes);
-    auto const b = cbor::lazy::adopt(std::move(bytes)).value();
+    auto const adopted = cbor::lazy::adopt(std::move(bytes));
+    auto const b = adopted.value();
     auto const read_2 = b.get<std::string_view>();
     auto const vb = read_2.value();
     CHECK_EQ((*vb).data(), data.subspan(2).data());

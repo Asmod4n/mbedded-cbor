@@ -361,7 +361,7 @@ private:
                         piece_drop();
                 }
                 reset_item_state();
-                return lazy::view(std::move(owner), item);
+                return lazy::view_or_error(std::move(owner), item);
             }
             if (r.error() != error::too_little_data) [[unlikely]] {
                 failure_keep(r.error());

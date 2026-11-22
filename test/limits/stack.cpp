@@ -145,7 +145,7 @@ void reads(R const &r, outcome const expected)
 // Every value that decode makes stays alive outside the reader: the destructor of a chain recurses through its links.
 // The test shrinks the stack of the reader, not of whoever ends the value. The caller moves the values out.
 struct read_values {
-    std::optional<std::expected<cbor::ref<holder>, error>> decoded;
+    std::optional<cbor::result<cbor::ref<holder>>> decoded;
     std::optional<cbor::result<cbor::ref<node>>> nodes;
 };
 

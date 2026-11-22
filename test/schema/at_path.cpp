@@ -127,7 +127,7 @@ TEST_CASE("at_path: an accessor of a fixed-size vector and of one element")
     REQUIRE(g.has_value());
     CHECK_EQ(g->size(), 2u);
     CHECK_EQ(g->at_path<"@[1].at.x">(), -6);
-    CHECK_EQ(g->at_path<"@[]">(2uz).error(), error::index_out_of_bounds);
+    CHECK_EQ(g->at_path<"@[]">(2uz), std::unexpected(error::index_out_of_bounds));
     auto const second = g->at_path<"@[]">(1uz);
     REQUIRE(second.has_value());
     CHECK(std::same_as<std::remove_cvref_t<decltype(*second)>, form<gauges>::accessor<cbor::fixed_element<gauge>>>);
@@ -149,19 +149,19 @@ TEST_CASE("at_path and decode: a broken fixed-size vector is an error")
     std::string reference = bytes;
     reference[head + 4] = '\xe3';
     CHECK_EQ(read_leaf_with_copying_path<cloud, "$.points[0].x">(reference).error(), error::incorrect_type);
-    CHECK_EQ(form<cloud>::decode(std::string(reference)).error(), error::incorrect_type);
+    CHECK_EQ(form<cloud>::decode(std::string(reference)), std::unexpected(error::incorrect_type));
     std::string description = bytes;
     description[description.find("\x18\x55"s) + 1] = '\x56';
     CHECK_EQ(read_leaf_with_copying_path<cloud, "$.points[1].x">(description), 2.0f);
-    CHECK_EQ(form<cloud>::decode(std::string(description)).error(), error::incorrect_type);
+    CHECK_EQ(form<cloud>::decode(std::string(description)), std::unexpected(error::incorrect_type));
     std::string partial = bytes;
     partial[head + 9] = '\x0f';
     CHECK_EQ(read_leaf_with_copying_path<cloud, "$.points[0].x">(partial).error(), error::inadmissible_type_for_tag_content);
-    CHECK_EQ(form<cloud>::decode(std::string(partial)).error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(form<cloud>::decode(std::string(partial)), std::unexpected(error::inadmissible_type_for_tag_content));
     std::string longer = bytes;
     longer[head + 9] = '\x18';
     CHECK_EQ(read_leaf_with_copying_path<cloud, "$.points[0].x">(longer).error(), error::too_little_data);
-    CHECK_EQ(form<cloud>::decode(std::string(longer)).error(), error::too_little_data);
+    CHECK_EQ(form<cloud>::decode(std::string(longer)), std::unexpected(error::too_little_data));
     std::string const flags = encode_with_schema(gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}}});
     std::size_t const element = flags.find("\x03\xfe\x01\x01\x00"s);
     REQUIRE_NE(element, std::string::npos);
@@ -169,7 +169,7 @@ TEST_CASE("at_path and decode: a broken fixed-size vector is an error")
     two[element + 2] = '\x02';
     CHECK_EQ(read_leaf_with_copying_path<gauges, "$.g[0].on">(two).error(), error::incorrect_type);
     CHECK_EQ(read_leaf_with_copying_path<gauges, "$.g[0].shade">(two), color::white);
-    CHECK_EQ(form<gauges>::decode(std::string(two)).error(), error::incorrect_type);
+    CHECK_EQ(form<gauges>::decode(std::string(two)), std::unexpected(error::incorrect_type));
 }
 
 // The accessor of a fixed-size vector is a random access range of element accessors. So a loop, a page through
@@ -185,8 +185,10 @@ TEST_CASE("at_path: a fixed-size vector is a range of its elements")
     CHECK(std::ranges::random_access_range<decltype(*g)>);
     CHECK(std::ranges::sized_range<decltype(*g)>);
     std::vector<int> xs;
-    for (auto const e : *g)
-        xs.push_back(*e.at_path<"@.at.x">());
+    for (auto const e : *g) {
+        auto const found = e.at_path<"@.at.x">();
+        xs.push_back(*found);
+    }
     CHECK_EQ(xs, (std::vector<int>{3, -6, 9}));
     CHECK_EQ(std::ranges::size(*g), 3u);
     auto page = *g | std::views::drop(1) | std::views::take(1);
@@ -207,7 +209,8 @@ TEST_CASE("at_path: a fixed-size vector is a range of its elements")
 // the message: inline in the root for a fixed size, a part for a vector. The byte is the end of the path.
 TEST_CASE("at_path: [n] reads one byte of a byte string")
 {
-    std::string const bytes = *form<byte_fields>::encode(make_byte_fields());
+    auto const encoded = form<byte_fields>::encode(make_byte_fields());
+    std::string const bytes = *encoded;
     CHECK_EQ(form<byte_fields>::at_path<"$.fixed[2]">(bytes), std::uint8_t{3});
     CHECK_EQ(form<byte_fields>::at_path<"$.plain[1]">(bytes), std::uint8_t{5});
     CHECK_EQ(form<byte_fields>::at_path<"$.bytes[1]">(bytes), std::byte{7});
@@ -215,16 +218,17 @@ TEST_CASE("at_path: [n] reads one byte of a byte string")
     CHECK_EQ(form<byte_fields>::at_path<"$.byte_list[0]">(bytes), std::byte{10});
     CHECK_EQ(form<byte_fields>::at_path<"$.fixed[]">(bytes, 1uz), std::uint8_t{2});
     CHECK_EQ(form<byte_fields>::at_path<"$.list[]">(bytes, 0uz), std::uint8_t{8});
-    CHECK_EQ(form<byte_fields>::at_path<"$.fixed[]">(bytes, 3uz).error(), error::index_out_of_bounds);
-    CHECK_EQ(form<byte_fields>::at_path<"$.list[]">(bytes, 2uz).error(), error::index_out_of_bounds);
-    CHECK_EQ(form<byte_fields>::at_path<"$.none[]">(bytes, 0uz).error(), error::index_out_of_bounds);
+    CHECK_EQ(form<byte_fields>::at_path<"$.fixed[]">(bytes, 3uz), std::unexpected(error::index_out_of_bounds));
+    CHECK_EQ(form<byte_fields>::at_path<"$.list[]">(bytes, 2uz), std::unexpected(error::index_out_of_bounds));
+    CHECK_EQ(form<byte_fields>::at_path<"$.none[]">(bytes, 0uz), std::unexpected(error::index_out_of_bounds));
     CHECK_EQ(form<byte_fields>::unverified_at_path<"$.fixed[2]">(bytes), std::uint8_t{3});
     CHECK_EQ(form<byte_fields>::unverified_at_path<"$.list[1]">(bytes), std::uint8_t{9});
     auto const root = form<byte_fields>::adopt(std::string(bytes));
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.fixed[0]">(), std::uint8_t{1});
     CHECK_EQ(root->at_path<"$.list[0]">(), std::uint8_t{8});
-    std::string const lists = *form<byte_lists>::encode(byte_lists{{{"x", {1, 2, 3, 4}}, {"y", {5, 6, 7, 8}}}, {{9, 10, 11, 12}}});
+    auto const encoded_2 = form<byte_lists>::encode(byte_lists{{{"x", {1, 2, 3, 4}}, {"y", {5, 6, 7, 8}}}, {{9, 10, 11, 12}}});
+    std::string const lists = *encoded_2;
     CHECK_EQ(form<byte_lists>::at_path<"$.records[1].code[2]">(lists), std::uint8_t{7});
     CHECK_EQ(form<byte_lists>::at_path<"$.codes[0][3]">(lists), std::uint8_t{12});
     auto const records = form<byte_lists>::adopt(std::string(lists));
@@ -248,11 +252,12 @@ TEST_CASE("at_path: [n] into a byte string does not compile past its end or into
 // A verified read checks the head of a byte string before it reads a byte of it.
 TEST_CASE("at_path: [n] into a byte string with a wrong head is incorrect_type")
 {
-    std::string bytes = *form<byte_fields>::encode(make_byte_fields());
+    auto const encoded = form<byte_fields>::encode(make_byte_fields());
+    std::string bytes = *encoded;
     std::size_t const head = bytes.find("\x43\x01\x02\x03"sv);
     REQUIRE_NE(head, std::string::npos);
     bytes[head] = '\x63';
-    CHECK_EQ(form<byte_fields>::at_path<"$.fixed[2]">(bytes).error(), error::incorrect_type);
+    CHECK_EQ(form<byte_fields>::at_path<"$.fixed[2]">(bytes), std::unexpected(error::incorrect_type));
 }
 
 template <class T, cbor::fixed_string Path>
@@ -263,17 +268,18 @@ concept accessor_path_reads = requires(typename form<T>::template accessor<> con
 // has no single type.
 TEST_CASE("at_path: a variant member gives its index and an accessor of the held alternative")
 {
-    auto const doc = form<home>::adopt(*form<home>::encode(make_home_with_dog()));
+    auto encoded = form<home>::encode(make_home_with_dog());
+    auto const doc = form<home>::adopt(std::move(*encoded));
     REQUIRE(doc);
     auto const pet = doc->at_path<"$.pet">();
     REQUIRE(pet);
     CHECK_EQ(pet->index(), 0u);
     auto const d = pet->get<dog>();
     REQUIRE(d);
-    CHECK_EQ(d->at_path<"@.name">().value(), "rex"sv);
-    CHECK_EQ(d->at_path<"@.bark">().value(), 3);
-    CHECK_EQ(d->at_path<"$.street">().value(), "elm"sv);
-    CHECK_EQ(pet->get<cat>().error(), error::incorrect_type);
+    CHECK_EQ((d->at_path<"@.name">()), "rex"sv);
+    CHECK_EQ((d->at_path<"@.bark">()), 3);
+    CHECK_EQ((d->at_path<"$.street">()), "elm"sv);
+    CHECK_EQ(pet->get<cat>(), std::unexpected(error::incorrect_type));
     CHECK(accessor_path_reads<home, "$.pet">);
     CHECK_FALSE(accessor_path_reads<home, "$.pet.name">);
     CHECK_FALSE(accessor_path_reads<home, "$.pet[0]">);
@@ -284,11 +290,14 @@ TEST_CASE("at_path: a variant member gives its index and an accessor of the held
 TEST_CASE("at_path: a variant accessor owns the message and refuses a use after a move")
 {
     auto pet = [] {
-        auto const doc = form<home>::adopt(*form<home>::encode(make_home_with_cat()));
-        return *doc->at_path<"$.pet">();
+        auto encoded = form<home>::encode(make_home_with_cat());
+        auto const doc = form<home>::adopt(std::move(*encoded));
+        auto const found = doc->at_path<"$.pet">();
+        return *found;
     }();
     CHECK_EQ(pet.index(), 1u);
-    CHECK_EQ(pet.get<cat>()->at_path<"@.name">().value(), "tom"sv);
+    auto const tom = pet.get<cat>();
+    CHECK_EQ(tom->at_path<"@.name">(), "tom"sv);
     auto moved = std::move(pet);
     CHECK_EQ(moved.index(), 1u);
     CHECK_THROWS_AS((void)pet.index(), std::logic_error);
@@ -300,27 +309,29 @@ TEST_CASE("at_path: a variant accessor owns the message and refuses a use after 
 TEST_CASE("at_path: get of a value, a text and a byte string alternative")
 {
     for (setting const &s : make_sample_settings()) {
-        auto const doc = form<setting>::adopt(*form<setting>::encode(s));
+        auto encoded = form<setting>::encode(s);
+        auto const doc = form<setting>::adopt(std::move(*encoded));
         REQUIRE(doc.has_value());
         auto const v = doc->at_path<"$.value">();
         REQUIRE(v.has_value());
         CHECK_EQ(v->index(), s.value.index());
         if (auto const *b = std::get_if<bool>(&s.value))
-            CHECK_EQ(v->get<bool>().value(), *b);
+            CHECK_EQ((v->get<bool>()), *b);
         if (auto const *n = std::get_if<std::int32_t>(&s.value))
-            CHECK_EQ(v->get<std::int32_t>().value(), *n);
+            CHECK_EQ((v->get<std::int32_t>()), *n);
         if (auto const *d = std::get_if<double>(&s.value))
-            CHECK_EQ(v->get<double>().value(), *d);
+            CHECK_EQ((v->get<double>()), *d);
         if (auto const *t = std::get_if<std::string>(&s.value))
-            CHECK_EQ(v->get<std::string>().value(), *t);
+            CHECK_EQ((v->get<std::string>()), *t);
         if (std::holds_alternative<std::vector<std::byte>>(s.value))
-            CHECK_EQ(v->get<std::vector<std::byte>>().value(), "\x01\x02"sv);
+            CHECK_EQ((v->get<std::vector<std::byte>>()), "\x01\x02"sv);
         if (s.value.index() != 0)
-            CHECK_EQ(v->get<bool>().error(), error::incorrect_type);
+            CHECK_EQ(v->get<bool>(), std::unexpected(error::incorrect_type));
     }
-    auto const doc = form<shelter>::adopt(*form<shelter>::encode(shelter{std::int64_t{-7}, "n"}));
+    auto encoded_2 = form<shelter>::encode(shelter{std::int64_t{-7}, "n"});
+    auto const doc = form<shelter>::adopt(std::move(*encoded_2));
     auto const pet = doc->at_path<"$.pet">();
-    CHECK_EQ(pet->get<std::int64_t>().value(), -7);
-    CHECK_EQ(pet->get<dog>().error(), error::incorrect_type);
+    CHECK_EQ((pet->get<std::int64_t>()), -7);
+    CHECK_EQ(pet->get<dog>(), std::unexpected(error::incorrect_type));
     CHECK_FALSE(accessor_path_reads<setting, "$.value.name">);
 }

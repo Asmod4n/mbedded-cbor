@@ -77,7 +77,7 @@ TEST_CASE("view: a moved-from view and a moved-from accessor read no bytes")
     CHECK(view->begin() == view->end());
     CHECK_THROWS_AS((void)(*view)[0], std::logic_error);
     CHECK_THROWS_AS((void)view->front(), std::logic_error);
-    CHECK_EQ(view->at(0).error(), error::index_out_of_bounds);
+    CHECK_EQ(view->at(0), std::unexpected(error::index_out_of_bounds));
 
     std::optional<V> sliced;
     {
@@ -97,12 +97,14 @@ TEST_CASE("view: a moved-from view and a moved-from accessor read no bytes")
 
     V assigned = [] {
         auto const root = form<doubles>::adopt(encode_with_schema(doubles{{4.0}}));
-        return *root->view<"$.v">();
+        auto const viewed = root->view<"$.v">();
+        return *viewed;
     }();
     {
         V target = [] {
             auto const root = form<doubles>::adopt(encode_with_schema(doubles{{8.0}}));
-            return *root->view<"$.v">();
+            auto const viewed_2 = root->view<"$.v">();
+            return *viewed_2;
         }();
         target = std::move(assigned);
         CHECK_EQ(std::bit_cast<std::uint64_t>(target.front()), 0x4010000000000000u);
@@ -114,7 +116,8 @@ TEST_CASE("view: a moved-from view and a moved-from accessor read no bytes")
     REQUIRE(root.has_value());
     {
         auto const taken = std::move(*root);
-        CHECK_EQ(std::bit_cast<std::uint64_t>(*taken.at_path<"$.v[0]">()), 0x3ff0000000000000u);
+        auto const found = taken.at_path<"$.v[0]">();
+        CHECK_EQ(std::bit_cast<std::uint64_t>(*found), 0x3ff0000000000000u);
     }
     CHECK_THROWS_AS((void)root->at_path<"$.v[0]">(), std::logic_error);
     CHECK_THROWS_AS((void)root->view<"$.v">(), std::logic_error);
@@ -123,10 +126,11 @@ TEST_CASE("view: a moved-from view and a moved-from accessor read no bytes")
     REQUIRE(list_root.has_value());
     auto list = list_root->at_path<"$.v">();
     REQUIRE(list.has_value());
-    list_root = std::unexpected(error::incorrect_type);
+    list_root = form<doubles>::adopt(std::string());
     {
         auto const taken = std::move(*list);
-        CHECK_EQ(std::bit_cast<std::uint64_t>(*taken.at_path<"@[1]">()), 0x4000000000000000u);
+        auto const found_2 = taken.at_path<"@[1]">();
+        CHECK_EQ(std::bit_cast<std::uint64_t>(*found_2), 0x4000000000000000u);
     }
     CHECK_THROWS_AS((void)list->at_path<"@[1]">(), std::logic_error);
 }
@@ -139,7 +143,8 @@ TEST_CASE("view: borrowed alternatives of a variant point into a message that th
     std::vector<borrowed_value> const all{{std::string_view("view")}, {std::span<std::byte const>(raw)}, {std::int8_t{-3}}};
     for (borrowed_value const &b : all) {
         auto back = [&] {
-            std::string bytes = *form<borrowed_value>::encode(b);
+            auto const encoded = form<borrowed_value>::encode(b);
+            std::string bytes = *encoded;
             return form<borrowed_value>::decode(std::move(bytes));
         }();
         REQUIRE(back.has_value());
@@ -150,7 +155,8 @@ TEST_CASE("view: borrowed alternatives of a variant point into a message that th
             CHECK(std::ranges::equal(*s, raw));
     }
     auto const u8 = [] {
-        std::string bytes = *form<one_value<std::u8string>>::encode(one_value<std::u8string>{std::u8string(u8"u8")});
+        auto const encoded_2 = form<one_value<std::u8string>>::encode(one_value<std::u8string>{std::u8string(u8"u8")});
+        std::string bytes = *encoded_2;
         return form<one_value<std::u8string>>::decode(std::move(bytes));
     }();
     REQUIRE(u8.has_value());

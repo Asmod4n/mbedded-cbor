@@ -82,7 +82,8 @@ __attribute__((export_name("server_encode"))) std::uint64_t server_encode(std::u
                                std::string(authors[i % std::size(authors)]),
                                "Summary of post " + std::to_string(i + 1) + ": " + std::string(120, 'x'),
                                1700000000u + i * 86400u});
-    encoded = *cbor::schema<feed>::encode(f);
+    auto const encoded_2 = cbor::schema<feed>::encode(f);
+    encoded = *encoded_2;
     return packed(encoded);
 }
 
@@ -97,32 +98,38 @@ __attribute__((export_name("feed_load"))) std::int32_t feed_load(char const *con
 
 __attribute__((export_name("post_count"))) std::uint32_t post_count()
 {
-    return static_cast<std::uint32_t>((*root->at_path<"$.posts">()).size());
+    auto const found = root->at_path<"$.posts">();
+    return static_cast<std::uint32_t>((*found).size());
 }
 
 __attribute__((export_name("post_id"))) std::uint32_t post_id(std::uint32_t const i)
 {
-    return *root->at_path<"$.posts[].id">(i);
+    auto const found = root->at_path<"$.posts[].id">(i);
+    return *found;
 }
 
 __attribute__((export_name("post_published"))) std::uint32_t post_published(std::uint32_t const i)
 {
-    return *root->at_path<"$.posts[].published">(i);
+    auto const found = root->at_path<"$.posts[].published">(i);
+    return *found;
 }
 
 __attribute__((export_name("post_title"))) std::uint64_t post_title(std::uint32_t const i)
 {
-    return packed(*root->at_path<"$.posts[].title">(i));
+    auto const found = root->at_path<"$.posts[].title">(i);
+    return packed(*found);
 }
 
 __attribute__((export_name("post_author"))) std::uint64_t post_author(std::uint32_t const i)
 {
-    return packed(*root->at_path<"$.posts[].author">(i));
+    auto const found = root->at_path<"$.posts[].author">(i);
+    return packed(*found);
 }
 
 __attribute__((export_name("post_summary"))) std::uint64_t post_summary(std::uint32_t const i)
 {
-    return packed(*root->at_path<"$.posts[].summary">(i));
+    auto const found = root->at_path<"$.posts[].summary">(i);
+    return packed(*found);
 }
 
 __attribute__((export_name("page_html"))) std::uint64_t page_html(std::uint32_t const page, std::uint32_t const per_page)
@@ -131,15 +138,20 @@ __attribute__((export_name("page_html"))) std::uint64_t page_html(std::uint32_t 
     std::uint32_t const count = post_count();
     for (std::uint32_t i = page * per_page; i < count && i < (page + 1) * per_page; ++i) {
         html += "<article data-id=\"";
-        html += std::to_string(*root->at_path<"$.posts[].id">(i));
+        auto const found = root->at_path<"$.posts[].id">(i);
+        html += std::to_string(*found);
         html += "\"><h2>";
-        escaped_append(html, *root->at_path<"$.posts[].title">(i));
+        auto const found_2 = root->at_path<"$.posts[].title">(i);
+        escaped_append(html, *found_2);
         html += "</h2><p class=\"by\">";
-        escaped_append(html, *root->at_path<"$.posts[].author">(i));
+        auto const found_3 = root->at_path<"$.posts[].author">(i);
+        escaped_append(html, *found_3);
         html += " ";
-        html += std::to_string(*root->at_path<"$.posts[].published">(i));
+        auto const found_4 = root->at_path<"$.posts[].published">(i);
+        html += std::to_string(*found_4);
         html += "</p><p>";
-        escaped_append(html, *root->at_path<"$.posts[].summary">(i));
+        auto const found_5 = root->at_path<"$.posts[].summary">(i);
+        escaped_append(html, *found_5);
         html += "</p></article>";
     }
     return packed(html);

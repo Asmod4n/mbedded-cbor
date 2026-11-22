@@ -60,8 +60,10 @@ void schema_at_path(benchmark::State &state)
     for (auto _ : state) {
         std::size_t sum = 0;
         for (auto const &each : accessors) {
-            sum += each->at_path<"$.make">()->size();
-            sum += *each->at_path<"$.tires[1].diameter">();
+            auto const found = each->at_path<"$.make">();
+            sum += found->size();
+            auto const found_2 = each->at_path<"$.tires[1].diameter">();
+            sum += *found_2;
         }
         benchmark::DoNotOptimize(sum);
     }

@@ -228,7 +228,7 @@ TEST_CASE("cbor::item::additional_information gives the low 5 bits of the initia
     CHECK_EQ((*tree)->additional_information(), 25);
 }
 
-cbor::owning<cbor::item> item_of(std::expected<cbor::owning<cbor::item>, cbor::error> const &r)
+cbor::owning<cbor::item> item_of(cbor::result<cbor::owning<cbor::item>> const &r)
 {
     REQUIRE(r.has_value());
     return *r;

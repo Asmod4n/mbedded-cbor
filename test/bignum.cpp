@@ -222,7 +222,7 @@ TEST_CASE("bignum: a wrong content is a tag in decode and in type()")
         CAPTURE(f.wire);
         auto const l = test::make_lazy_from_copy(std::string(f.wire));
         REQUIRE(l.has_value());
-        CHECK_EQ(l->to_item().error(), f.expected);
+        CHECK_EQ(l->to_item(), std::unexpected(f.expected));
     }
 }
 

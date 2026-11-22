@@ -299,7 +299,8 @@ TEST_CASE("doc reference lazy: elements")
     // sum: 6
     // [elements]
     CHECK_EQ(sum, 6);
-    CHECK_EQ(cbor::lazy::adopt("\x9f\x01\xff"s)->elements(), std::unexpected(cbor::error::indefinite_length));
+    auto const adopted = cbor::lazy::adopt("\x9f\x01\xff"s);
+    CHECK_EQ(adopted->elements(), std::unexpected(cbor::error::indefinite_length));
     auto const at_0 = array->at(0);
     CHECK_EQ(at_0->elements(), std::unexpected(cbor::error::not_indexable));
 }
@@ -370,7 +371,8 @@ TEST_CASE("doc reference lazy: lazy_elements")
     CHECK_EQ(view->size(), 3u);
     CHECK_EQ(older, 2);
 
-    auto const broken = cbor::lazy::adopt("\x83\x1c\x00\x00"s)->elements();
+    auto const adopted = cbor::lazy::adopt("\x83\x1c\x00\x00"s);
+    auto const broken = adopted->elements();
     REQUIRE(broken);
     std::vector<bool> read;
     for (auto const element : *broken)

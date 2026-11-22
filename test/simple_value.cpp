@@ -116,7 +116,7 @@ TEST_CASE("simple value: lazy::to_item gives every simple value 0 to 255 as its 
         auto const top_level = test::make_lazy_from_copy(wire_of(v));
         if (reserved(v)) {
             if (top_level.has_value())
-                CHECK_EQ(top_level->to_item().error(), error::syntax_error);
+                CHECK_EQ(top_level->to_item(), std::unexpected(error::syntax_error));
             else
                 CHECK_EQ(top_level.error(), error::syntax_error);
             continue;

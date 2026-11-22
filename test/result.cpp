@@ -2,6 +2,7 @@
 #include <cbor/lazy.hpp>
 #include <cbor/query.hpp>
 #include <cbor/result.hpp>
+#include <cbor/schema.hpp>
 #include <cbor/sequence.hpp>
 #include <cbor/sequence_reader.hpp>
 #include <cbor/structs.hpp>
@@ -19,6 +20,8 @@
 #include <string_view>
 #include <type_traits>
 #include <utility>
+#include <variant>
+#include <vector>
 
 using cbor::error;
 using namespace std::literals;
@@ -143,6 +146,54 @@ constexpr auto compile_root = [](cbor::nodelist const &) { return cbor::path::co
 constexpr auto count_of_nodes = [](cbor::nodelist const &n) { return n.size(); };
 
 constexpr auto nodes_of_document = [](error const &) { return make_document().at_path<"$.a", cbor::nodelist>(); };
+
+struct route_point {
+    std::int32_t x;
+    std::int32_t y;
+};
+
+struct route_stop {
+    std::string name;
+    std::vector<route_point> points;
+};
+
+struct route {
+    std::vector<route_stop> stops;
+    std::vector<route_point> points;
+    std::vector<double> track;
+    std::variant<std::int64_t, std::string> label;
+    std::uint16_t number;
+};
+
+route make_route()
+{
+    return route{{route_stop{"a", {{1, 2}}}, route_stop{"b", {{3, 4}, {5, 6}}}}, {{7, 8}, {9, 10}}, {1.0, 2.0, 3.0}, std::int64_t{12}, 5};
+}
+
+} // namespace
+
+CBOR_DEFINE_TYPE_MEMBERS(route_point, cbor::tag{1811}, x, y);
+CBOR_DEFINE_TYPE_MEMBERS(route_stop, cbor::tag{1812}, name, points);
+CBOR_DEFINE_TYPE_MEMBERS(route, cbor::tag{1813}, stops, points, track, label, number);
+
+namespace
+{
+
+using route_root = decltype(cbor::schema<route>::adopt(std::string()));
+
+using route_number = decltype(cbor::schema<route>::at_path<"$.number">(std::string_view()));
+
+using route_message = decltype(cbor::schema<route>::encode(std::declval<route const &>()));
+
+using route_tree = decltype(std::declval<cbor::lazy const &>().to_item());
+
+using adopted_lazy = decltype(cbor::lazy::adopt(std::string()));
+
+using track_view = decltype(std::declval<route_root::value_type const &>().view<"$.track">());
+
+using track_part = decltype(std::declval<track_view::value_type const &>().first(1));
+
+constexpr auto points_of_root = [](route_root::value_type const &r) { return r.at_path<"$.points">(); };
 
 } // namespace
 
@@ -752,4 +803,183 @@ TEST_CASE("result: cbor::sequence and cbor::sequence_reader::next give a result"
     auto const two = r.next();
     CHECK_EQ(two->get<std::int64_t>(), 2);
     CHECK(r.empty());
+}
+
+// A temporary result of the group cannot be read: the opening of a message, a read of one value, a write, a view of
+// a typed array and its parts, the tree of a lazy and the opening of a lazy.
+TEST_CASE("result: a temporary result of schema, static_dictionary, typed_array_view or lazy::adopt cannot be read")
+{
+    CHECK(deref_of_named<route_root>);
+    CHECK_FALSE(deref_of_call<route_root>);
+    CHECK_FALSE(value_of_call<route_root>);
+    CHECK_FALSE(error_of_call<route_root>);
+    CHECK_FALSE(deref_of_moved<route_root>);
+    CHECK_FALSE(deref_of_call<route_number>);
+    CHECK_FALSE(value_of_call<route_message>);
+    CHECK_FALSE(arrow_of_call<route_message>);
+    CHECK_FALSE(arrow_of_call<track_view>);
+    CHECK_FALSE(loop_over_call<track_view>);
+    CHECK(loop_over_named<track_view>);
+    CHECK_FALSE(arrow_of_call<track_part>);
+    CHECK_FALSE(deref_of_call<route_tree>);
+    CHECK_FALSE(arrow_of_call<adopted_lazy>);
+    CHECK_FALSE(error_of_call<adopted_lazy>);
+    using points = decltype(points_of_root);
+    CHECK((transform_takes<route_root const &, points>));
+    CHECK_FALSE((transform_takes<route_root &&, points>));
+    CHECK_FALSE((std::is_convertible_v<route_root, std::expected<route_root::value_type, error>>));
+    CHECK_FALSE((std::is_constructible_v<route_message, std::string>));
+    CHECK_FALSE((std::is_constructible_v<track_part, std::unexpect_t, error>));
+}
+
+// Each public member of cbor::schema, cbor::static_dictionary and their accessors that gives a result is called here,
+// for a value and for an error. These classes and cbor::typed_array_view are the friends of the group.
+TEST_CASE("result: cbor::schema and its accessors give a result")
+{
+    using form = cbor::schema<route>;
+    auto encoded = form::encode(make_route());
+    REQUIRE(encoded.has_value());
+    std::string const bytes = *encoded;
+    std::string appended;
+    auto const written = form::encode(appended, make_route());
+    CHECK_EQ(written, bytes.size());
+    auto const owner = std::make_shared<std::string const>(bytes);
+
+    auto const adopted = form::adopt(std::move(*encoded));
+    REQUIRE(adopted.has_value());
+    auto const viewed = form::view(owner);
+    REQUIRE(viewed.has_value());
+    auto const borrowed = form::view(std::shared_ptr<void const>(owner), std::string_view(*owner));
+    REQUIRE(borrowed.has_value());
+    auto const cut = form::adopt(std::string(bytes, 0, 4));
+    CHECK_EQ(cut.error(), error::too_little_data);
+    auto const number = form::at_path<"$.number">(bytes);
+    CHECK_EQ(*number, 5u);
+    auto const decoded = form::decode(std::string(bytes));
+    REQUIRE(decoded.has_value());
+    CHECK_EQ((*decoded)->number, 5u);
+    CHECK(form::decode(owner).has_value());
+    CHECK(form::decode(owner, route{}).has_value());
+    CHECK(form::decode(std::shared_ptr<void const>(owner), std::string_view(*owner)).has_value());
+    CHECK(form::decode(std::shared_ptr<void const>(owner), std::string_view(*owner), route{}).has_value());
+    auto const loose = form::unverified_adopt(std::string(bytes));
+    REQUIRE(loose.has_value());
+    CHECK(form::unverified_view(owner).has_value());
+    CHECK(form::unverified_view(std::shared_ptr<void const>(owner), std::string_view(*owner)).has_value());
+    auto const loose_number = form::unverified_at_path<"$.number">(bytes);
+    CHECK_EQ(*loose_number, 5u);
+    CHECK(form::unverified_decode(std::string(bytes)).has_value());
+    CHECK(form::unverified_decode(owner).has_value());
+    CHECK(form::unverified_decode(owner, route{}).has_value());
+    CHECK(form::unverified_decode(std::shared_ptr<void const>(owner), std::string_view(*owner)).has_value());
+    CHECK(form::unverified_decode(std::shared_ptr<void const>(owner), std::string_view(*owner), route{}).has_value());
+
+    auto const points = adopted->at_path<"$.points">();
+    REQUIRE(points.has_value());
+    auto const second = points->at_path<"@[]">(1u);
+    REQUIRE(second.has_value());
+    auto const x = second->at_path<"@.x">();
+    CHECK_EQ(*x, 9);
+    auto const outside = points->at_path<"@[]">(2u);
+    CHECK_EQ(outside.error(), error::index_out_of_bounds);
+    auto const label = adopted->at_path<"$.label">();
+    REQUIRE(label.has_value());
+    auto const twelve = label->get<std::int64_t>();
+    CHECK_EQ(*twelve, 12);
+    auto const text = label->get<std::string>();
+    CHECK_EQ(text.error(), error::incorrect_type);
+    auto const stops = adopted->at_path<"$.stops">();
+    REQUIRE(stops.has_value());
+    std::vector<std::string_view> names;
+    std::vector<std::size_t> counts;
+    stops->for_each([&](auto const &stop) {
+        auto const name = stop.template at_path<"@.name">();
+        names.push_back(*name);
+        auto const stop_points = stop.template at_path<"@.points">();
+        counts.push_back(stop_points->size());
+    });
+    CHECK_EQ(names, (std::vector<std::string_view>{"a", "b"}));
+    CHECK_EQ(counts, (std::vector<std::size_t>{1, 2}));
+
+    auto const track = adopted->view<"$.track">();
+    REQUIRE(track.has_value());
+    auto const head = track->first(2);
+    CHECK_EQ(head->size(), 2u);
+    auto const tail = track->last(1);
+    CHECK_EQ(tail->front(), 3.0);
+    auto const too_many = track->first(4);
+    CHECK_EQ(too_many.error(), error::index_out_of_bounds);
+    auto const element = track->at(1);
+    CHECK_EQ(*element, 2.0);
+    auto const past = track->at(3);
+    CHECK_EQ(past.error(), error::index_out_of_bounds);
+    auto taken = track->at(0);
+    CHECK_EQ(taken, 1.0);
+    auto moved = *track;
+    auto const moved_head = std::move(moved).first(1);
+    CHECK_EQ(moved_head->size(), 1u);
+    auto moved_again = *track;
+    auto const moved_tail = std::move(moved_again).last(2);
+    CHECK_EQ(moved_tail->size(), 2u);
+}
+
+// Each public member of cbor::static_dictionary gives a result, as the form of cbor::schema with the same name does.
+TEST_CASE("result: cbor::static_dictionary gives a result")
+{
+    using form = cbor::static_dictionary<route>;
+    auto encoded = form::encode(make_route());
+    REQUIRE(encoded.has_value());
+    std::string const bytes = *encoded;
+    std::string appended;
+    auto const written = form::encode(appended, make_route());
+    CHECK_EQ(written, bytes.size());
+    auto const owner = std::make_shared<std::string const>(bytes);
+    auto const adopted = form::adopt(std::move(*encoded));
+    REQUIRE(adopted.has_value());
+    auto const number = adopted->at_path<"$.number">();
+    CHECK_EQ(*number, 5u);
+    CHECK(form::view(owner).has_value());
+    CHECK(form::view(std::shared_ptr<void const>(owner), std::string_view(*owner)).has_value());
+    auto const read = form::at_path<"$.number">(bytes);
+    CHECK_EQ(*read, 5u);
+    CHECK(form::decode(std::string(bytes)).has_value());
+    CHECK(form::decode(owner).has_value());
+    CHECK(form::decode(owner, route{}).has_value());
+    CHECK(form::decode(std::shared_ptr<void const>(owner), std::string_view(*owner)).has_value());
+    CHECK(form::decode(std::shared_ptr<void const>(owner), std::string_view(*owner), route{}).has_value());
+    CHECK(form::unverified_adopt(std::string(bytes)).has_value());
+    CHECK(form::unverified_view(owner).has_value());
+    CHECK(form::unverified_view(std::shared_ptr<void const>(owner), std::string_view(*owner)).has_value());
+    auto const loose = form::unverified_at_path<"$.number">(bytes);
+    CHECK_EQ(*loose, 5u);
+    CHECK(form::unverified_decode(std::string(bytes)).has_value());
+    CHECK(form::unverified_decode(owner).has_value());
+    CHECK(form::unverified_decode(owner, route{}).has_value());
+    CHECK(form::unverified_decode(std::shared_ptr<void const>(owner), std::string_view(*owner)).has_value());
+    CHECK(form::unverified_decode(std::shared_ptr<void const>(owner), std::string_view(*owner), route{}).has_value());
+    auto const with_description = cbor::schema<route>::encode(make_route());
+    REQUIRE(with_description.has_value());
+    auto const refused = form::adopt(std::string(*with_description));
+    CHECK_EQ(refused.error(), error::incorrect_type);
+}
+
+// cbor::lazy::view, cbor::lazy::adopt and cbor::lazy::to_item give a result.
+TEST_CASE("result: cbor::lazy::view, adopt and to_item give a result")
+{
+    auto encoded = cbor::encode<std::vector<std::string>>({"a", "b"});
+    REQUIRE(encoded.has_value());
+    auto const owner = std::make_shared<std::string const>(*encoded);
+    auto const viewed = cbor::lazy::view(owner);
+    REQUIRE(viewed.has_value());
+    auto const borrowed = cbor::lazy::view(std::shared_ptr<void const>(owner), std::string_view(*owner));
+    REQUIRE(borrowed.has_value());
+    auto const adopted = cbor::lazy::adopt(std::move(*encoded));
+    REQUIRE(adopted.has_value());
+    auto const tree = adopted->to_item();
+    REQUIRE(tree.has_value());
+    CHECK_EQ((*tree)->type(), cbor::type::array);
+    auto const cut = cbor::lazy::adopt(std::string(*owner, 0, owner->size() - 1));
+    REQUIRE(cut.has_value());
+    auto const broken = cut->to_item();
+    CHECK_EQ(broken.error(), error::too_little_data);
 }

@@ -55,7 +55,8 @@ CBOR_DEFINE_TYPE(doc_advanced_path::frame, cbor::tag{1760}, CBOR_MEMBER(doc_adva
 TEST_CASE("doc advanced path: an index on a byte string")
 {
     using doc_advanced_path::frame;
-    std::string const message = *cbor::schema<frame>::encode(frame{{7, 9}});
+    auto const encoded = cbor::schema<frame>::encode(frame{{7, 9}});
+    std::string const message = *encoded;
     CHECK_EQ(cbor::schema<frame>::at_path<"$.mac[1]">(message), std::uint8_t{9});
     CHECK_EQ(cbor::at_path<"$.mac[1]", int>(encode_in_preferred_form(M("mac"s, test::bytes{"\x07\x09"}))),
              std::unexpected(error::not_indexable));

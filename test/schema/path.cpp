@@ -8,7 +8,7 @@ template <class T, cbor::fixed_string Path, class I>
 concept path_reads_at = requires(typename form<T>::template accessor<> const &a, I const i) { a.template at_path<Path>(i); };
 
 template <class = void>
-std::string text_of(std::expected<std::string_view, cbor::error> const &r)
+std::string text_of(cbor::result<std::string_view> const &r)
 {
     return r ? std::string(*r) : "(error)"s;
 }
@@ -25,7 +25,8 @@ void lot_car_matches(form<parking_lot>::accessor<> const &lot, parking_lot const
     CHECK_EQ(lot.at_path<"$.cars[].seats">(i), c.seats);
     CHECK_EQ(lot.at_path<"$.cars[].engine.cc">(i), c.engine.cc);
     CHECK_EQ(lot.at_path<"$.cars[].engine.horsepower">(i), c.engine.horsepower);
-    auto const note = *lot.at_path<"$.cars[].note">(i);
+    auto const found_note = lot.at_path<"$.cars[].note">(i);
+    auto const note = *found_note;
     CHECK_EQ(note.has_value(), c.note.has_value());
     if (note && c.note)
         CHECK_EQ(*note, *c.note);
@@ -34,12 +35,13 @@ void lot_car_matches(form<parking_lot>::accessor<> const &lot, parking_lot const
     auto const &car = *opened;
     CHECK_EQ(text_of(car.at_path<"@.make">()), c.make);
     CHECK_EQ(car.at_path<"@.engine.cc">(), c.engine.cc);
-    CHECK_EQ(car.at_path<"@.wheels">()->size(), c.wheels.size());
+    auto const wheels = car.at_path<"@.wheels">();
+    CHECK_EQ(wheels->size(), c.wheels.size());
     CHECK_EQ(text_of(lot.at_path<"$.cars[].code">(i)), std::string_view(c.code, 2));
     for (std::size_t k = c.wheels.size() + 1; k-- > 0;) {
         CAPTURE(k);
         if (k == c.wheels.size()) {
-            CHECK_EQ(lot.at_path<"$.cars[].wheels[].diameter">(i, k).error(), error::index_out_of_bounds);
+            CHECK_EQ(lot.at_path<"$.cars[].wheels[].diameter">(i, k), std::unexpected(error::index_out_of_bounds));
             continue;
         }
         CHECK_EQ(lot.at_path<"$.cars[].wheels[].diameter">(i, k), c.wheels[k].diameter);
@@ -73,7 +75,7 @@ TEST_CASE("path: a message shorter than the least size is too_little_data, a for
     CHECK_EQ(read_leaf_with_copying_path<login, "$.id">(std::string_view(bytes).substr(0, 20)).error(), error::too_little_data);
     std::string other = bytes;
     other.replace(8, 2, "ID");
-    CHECK_EQ(form<login>::decode(std::string(other)).error(), error::incorrect_type);
+    CHECK_EQ(form<login>::decode(std::string(other)), std::unexpected(error::incorrect_type));
     CHECK_EQ(read_leaf_with_copying_path<login, "$.id">(other), 5u);
 }
 
@@ -107,10 +109,10 @@ TEST_CASE("path: a path compiles where it names a part of the type")
     CHECK_FALSE(path_reads<garage, "tires">);
     CHECK(path_reads<garage, "@.tires">);
     using A = form<garage>::accessor<>;
-    CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.names[0]">()), std::expected<std::string_view, cbor::error>>);
-    CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.tires[]">(0uz)), std::expected<form<garage>::accessor<cbor::fixed_element<tire>>, cbor::error>>);
+    CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.names[0]">()), cbor::result<std::string_view>>);
+    CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.tires[]">(0uz)), cbor::result<form<garage>::accessor<cbor::fixed_element<tire>>>>);
     CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.tires">()),
-                       std::expected<form<garage>::accessor<std::vector<tire>>, cbor::error>>);
+                       cbor::result<form<garage>::accessor<std::vector<tire>>>>);
 }
 
 // An accessor of a list gives its size and its elements; an accessor of a struct gives its fields. A leaf through
@@ -128,7 +130,7 @@ TEST_CASE("path: an accessor reads relative to the part it names")
     REQUIRE(second.has_value());
     CHECK_EQ(second->at_path<"@.diameter">(), 18u);
     CHECK_EQ(second->at_path<"@.airPressure">(), root.at_path<"$.tires[].airPressure">(1uz));
-    CHECK_EQ(tires->at_path<"@[]">(3uz).error(), error::index_out_of_bounds);
+    CHECK_EQ(tires->at_path<"@[]">(3uz), std::unexpected(error::index_out_of_bounds));
     auto const rows = root.at_path<"$.rows">();
     REQUIRE(rows.has_value());
     CHECK_EQ(rows->size(), 3u);
@@ -177,9 +179,11 @@ TEST_CASE("path: the root keeps the owner after the caller releases it")
 TEST_CASE("path: an accessor gives the values of decode in every order")
 {
     std::string const bytes = encode_with_schema(make_sample_lot());
-    auto const decoded = *form<parking_lot>::decode(std::string(bytes));
-    parking_lot const &back = *decoded;
-    auto lot = *form<parking_lot>::adopt(std::string(bytes));
+    auto const decoded = form<parking_lot>::decode(std::string(bytes));
+    auto const decoded_2 = *decoded;
+    parking_lot const &back = *decoded_2;
+    auto const adopted = form<parking_lot>::adopt(std::string(bytes));
+    auto lot = *adopted;
     std::vector<std::size_t> order(back.cars.size());
     std::iota(order.begin(), order.end(), 0uz);
     for (std::size_t const i : order)
@@ -189,12 +193,12 @@ TEST_CASE("path: an accessor gives the values of decode in every order")
     std::ranges::shuffle(order, std::mt19937(5));
     for (std::size_t const i : order)
         lot_car_matches(lot, back, i);
-    CHECK_EQ(lot.at_path<"$.cars[].seats">(back.cars.size()).error(), error::index_out_of_bounds);
+    CHECK_EQ(lot.at_path<"$.cars[].seats">(back.cars.size()), std::unexpected(error::index_out_of_bounds));
     CHECK_EQ(text_of(lot.at_path<"$.notes[]">(2uz)), "third"sv);
     CHECK_EQ(text_of(lot.at_path<"$.notes[]">(0uz)), "first"sv);
     CHECK_EQ(lot.at_path<"$.rows[][]">(2uz, 0uz), 3u);
     CHECK_EQ(lot.at_path<"$.rows[][]">(0uz, 1uz), 2u);
-    CHECK_EQ(lot.at_path<"$.rows[][]">(1uz, 0uz).error(), error::index_out_of_bounds);
+    CHECK_EQ(lot.at_path<"$.rows[][]">(1uz, 0uz), std::unexpected(error::index_out_of_bounds));
     CHECK_EQ(read_leaf_with_copying_path<parking_lot, "$.cars[].wheels[].diameter">(bytes, 3uz, 0uz), back.cars[3].wheels[0].diameter);
     CHECK_EQ(read_leaf_with_copying_path<parking_lot, "$.cars[].model">(bytes, 3uz), "mmm"s);
 }
@@ -218,9 +222,12 @@ TEST_CASE("path: an accessor is not read through a temporary")
 TEST_CASE("path: the copying form keeps its copy after the caller frees the message")
 {
     auto bytes = std::make_unique<std::string>(encode_with_schema(make_sample_lot()));
-    auto lot = *form<parking_lot>::adopt(std::string(*bytes));
-    auto const make = *lot.at_path<"$.cars[].make">(3uz);
-    auto const car = *lot.at_path<"$.cars[]">(4uz);
+    auto const adopted = form<parking_lot>::adopt(std::string(*bytes));
+    auto lot = *adopted;
+    auto const found = lot.at_path<"$.cars[].make">(3uz);
+    auto const make = *found;
+    auto const found_2 = lot.at_path<"$.cars[]">(4uz);
+    auto const car = *found_2;
     bytes.reset();
     CHECK_EQ(make, "make3"sv);
     CHECK_EQ(car.at_path<"@.make">(), "make4"sv);
@@ -277,6 +284,6 @@ TEST_CASE("decode and path: an rvalue string is moved, everything else is copied
     decode_buffer.reset();
     REQUIRE(decoded.has_value());
     CHECK_EQ((*decoded)->name, name);
-    CHECK_EQ(form<login>::decode(std::string()).error(), error::too_little_data);
-    CHECK_EQ(form<login>::adopt(std::string()).error(), error::too_little_data);
+    CHECK_EQ(form<login>::decode(std::string()), std::unexpected(error::too_little_data));
+    CHECK_EQ(form<login>::adopt(std::string()), std::unexpected(error::too_little_data));
 }

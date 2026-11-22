@@ -14,7 +14,8 @@ std::shared_ptr<std::string const> loaded;
 
 cbor::lazy root()
 {
-    return *cbor::lazy::view(loaded);
+    auto const viewed = cbor::lazy::view(loaded);
+    return *viewed;
 }
 
 }
@@ -60,8 +61,10 @@ __attribute__((export_name("canada_sum"))) double canada_sum()
     auto const v = root().at_path<"$.features[0].geometry.coordinates[*][*][0]", cbor::nodelist>();
     double sum = 0;
     if (v)
-        for (auto const &n : *v)
-            sum += *n.get<double>();
+        for (auto const &n : *v) {
+            auto const number = n.get<double>();
+            sum += *number;
+        }
     return sum;
 }
 

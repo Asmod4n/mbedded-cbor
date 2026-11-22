@@ -143,12 +143,16 @@ void render_children(std::span<cbor::item const> const children, std::string &ou
 void render(cbor::item const &i, std::string &out)
 {
     switch (i.type()) {
-    case cbor::type::text_string:
-        escaped_append(out, *i.get<std::string_view>());
+    case cbor::type::text_string: {
+        auto const read = i.get<std::string_view>();
+        escaped_append(out, *read);
         return;
-    case cbor::type::unsigned_integer:
-        out += std::to_string(*i.get<std::uint64_t>());
+    }
+    case cbor::type::unsigned_integer: {
+        auto const read_2 = i.get<std::uint64_t>();
+        out += std::to_string(*read_2);
         return;
+    }
     case cbor::type::array:
         render_children(*i.get<std::span<cbor::item const>>(), out);
         return;
@@ -257,7 +261,8 @@ __attribute__((export_name("schema_encode"))) std::uint64_t schema_encode(std::u
                                   moment{1700000000u + r * 86400u}});
     for (std::uint32_t f = 0; f < form_fields; ++f)
         s.entry.fields.push_back(field{"field" + std::to_string(f), "Field " + std::to_string(f), f % 2 ? "number" : "text"});
-    schema_wire = *cbor::schema<screen>::encode(s);
+    auto const encoded = cbor::schema<screen>::encode(s);
+    schema_wire = *encoded;
     return packed(schema_wire);
 }
 
@@ -269,7 +274,8 @@ __attribute__((export_name("schema_apart_encode"))) std::uint64_t schema_apart_e
                                   moment{1700000000u + r * 86400u}});
     for (std::uint32_t f = 0; f < form_fields; ++f)
         s.entry.fields.push_back(field{"field" + std::to_string(f), "Field " + std::to_string(f), f % 2 ? "number" : "text"});
-    schema_wire = *cbor::static_dictionary<screen>::encode(s);
+    auto const encoded = cbor::static_dictionary<screen>::encode(s);
+    schema_wire = *encoded;
     return packed(schema_wire);
 }
 
@@ -300,33 +306,44 @@ __attribute__((export_name("schema_html"))) std::uint64_t schema_html()
 {
     html.clear();
     html += "<table><thead><tr>";
-    std::size_t const heads = (*root->at_path<"$.list.head">()).size();
+    auto const found = root->at_path<"$.list.head">();
+    std::size_t const heads = (*found).size();
     for (std::size_t i = 0; i < heads; ++i) {
         html += "<th>";
-        escaped_append(html, *root->at_path<"$.list.head[]">(i));
+        auto const found_2 = root->at_path<"$.list.head[]">(i);
+        escaped_append(html, *found_2);
         html += "</th>";
     }
     html += "</tr></thead><tbody>";
-    std::size_t const rows = (*root->at_path<"$.list.rows">()).size();
+    auto const found_3 = root->at_path<"$.list.rows">();
+    std::size_t const rows = (*found_3).size();
     for (std::size_t i = 0; i < rows; ++i) {
         html += "<tr><td>";
-        escaped_append(html, *root->at_path<"$.list.rows[].name">(i));
+        auto const found_4 = root->at_path<"$.list.rows[].name">(i);
+        escaped_append(html, *found_4);
         html += "</td><td>";
-        html += std::to_string(*root->at_path<"$.list.rows[].amount">(i));
-        std::string const d = date_of(*root->at_path<"$.list.rows[].time.epoch">(i));
+        auto const found_5 = root->at_path<"$.list.rows[].amount">(i);
+        html += std::to_string(*found_5);
+        auto const found_6 = root->at_path<"$.list.rows[].time.epoch">(i);
+        std::string const d = date_of(*found_6);
         html += "</td><td><time datetime=\"" + d + "\">" + d + "</time></td></tr>";
     }
     html += "</tbody></table><form action=\"";
-    escaped_append(html, *root->at_path<"$.entry.action">());
+    auto const found_7 = root->at_path<"$.entry.action">();
+    escaped_append(html, *found_7);
     html += "\">";
-    std::size_t const fields = (*root->at_path<"$.entry.fields">()).size();
+    auto const found_8 = root->at_path<"$.entry.fields">();
+    std::size_t const fields = (*found_8).size();
     for (std::size_t i = 0; i < fields; ++i) {
         html += "<label>";
-        escaped_append(html, *root->at_path<"$.entry.fields[].label">(i));
+        auto const found_9 = root->at_path<"$.entry.fields[].label">(i);
+        escaped_append(html, *found_9);
         html += " <input name=\"";
-        escaped_append(html, *root->at_path<"$.entry.fields[].name">(i));
+        auto const found_10 = root->at_path<"$.entry.fields[].name">(i);
+        escaped_append(html, *found_10);
         html += "\" type=\"";
-        escaped_append(html, *root->at_path<"$.entry.fields[].input">(i));
+        auto const found_11 = root->at_path<"$.entry.fields[].input">(i);
+        escaped_append(html, *found_11);
         html += "\"></label>";
     }
     html += "<button>Send</button></form>";

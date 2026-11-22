@@ -32,8 +32,10 @@ std::size_t cold_bytes()
 std::vector<cbor::lazy> lazies_of(std::string_view const bytes_of_one, std::size_t const bytes)
 {
     std::vector<cbor::lazy> lazies;
-    for (std::size_t total = 0; total < bytes; total += bytes_of_one.size())
-        lazies.push_back(*cbor::lazy::view(std::make_shared<std::string const>(bytes_of_one)));
+    for (std::size_t total = 0; total < bytes; total += bytes_of_one.size()) {
+        auto const viewed = cbor::lazy::view(std::make_shared<std::string const>(bytes_of_one));
+        lazies.push_back(*viewed);
+    }
     return lazies;
 }
 

@@ -20,28 +20,37 @@ TEST_CASE("at_path: a fixed-size vector reads each element as at_path does")
     CHECK_EQ(g->end() - g->begin(), 3);
     std::size_t i = 0;
     for (auto const e : *g) {
-        CHECK_EQ(*e.at_path<"@.at.x">(), *root->at_path<"$.g[].at.x">(i));
-        CHECK_EQ(*e.at_path<"@.shade">(), *root->at_path<"$.g[].shade">(i));
+        auto const found = e.at_path<"@.at.x">();
+        auto const found_2 = root->at_path<"$.g[].at.x">(i);
+        CHECK_EQ(*found, *found_2);
+        auto const found_3 = e.at_path<"@.shade">();
+        auto const found_4 = root->at_path<"$.g[].shade">(i);
+        CHECK_EQ(*found_3, *found_4);
         ++i;
     }
     CHECK_EQ(i, 3u);
     auto const second = g->begin()[1];
-    CHECK_EQ(*second.at_path<"@.range[0]">(), 7u);
+    CHECK_EQ((second.at_path<"@.range[0]">()), 7u);
     auto const last = *(g->end() - 1);
-    CHECK_EQ(*last.at_path<"@.at.x">(), 9);
+    CHECK_EQ((last.at_path<"@.at.x">()), 9);
     std::vector<int> backwards;
     for (auto r = g->rbegin(); r != g->rend(); ++r) {
         auto const e = *r;
-        backwards.push_back(*e.at_path<"@.at.x">());
+        auto const found_5 = e.at_path<"@.at.x">();
+        backwards.push_back(*found_5);
     }
     CHECK(backwards == std::vector<int>{9, -6, 3});
     std::vector<int> reversed;
-    for (auto const e : *g | std::views::reverse)
-        reversed.push_back(*e.at_path<"@.at.x">());
+    for (auto const e : *g | std::views::reverse) {
+        auto const found_5 = e.at_path<"@.at.x">();
+        reversed.push_back(*found_5);
+    }
     CHECK(reversed == backwards);
     std::vector<int> page;
-    for (auto const e : *g | std::views::drop(1) | std::views::take(1))
-        page.push_back(*e.at_path<"@.at.x">());
+    for (auto const e : *g | std::views::drop(1) | std::views::take(1)) {
+        auto const found_5 = e.at_path<"@.at.x">();
+        page.push_back(*found_5);
+    }
     CHECK(page == std::vector<int>{-6});
     check_positions_outside(*g);
     auto const loose = form<gauges>::unverified_view(owner);
@@ -49,8 +58,10 @@ TEST_CASE("at_path: a fixed-size vector reads each element as at_path does")
     auto const h = loose->at_path<"$.g">();
     REQUIRE(h.has_value());
     std::vector<int> unverified;
-    for (auto const e : *h)
-        unverified.push_back(*e.at_path<"@.at.x">());
+    for (auto const e : *h) {
+        auto const found_5 = e.at_path<"@.at.x">();
+        unverified.push_back(*found_5);
+    }
     CHECK(unverified == std::vector<int>{3, -6, 9});
     check_positions_outside(*h);
     auto const none = form<gauges>::adopt(encode_with_schema(gauges{}));
@@ -74,9 +85,10 @@ TEST_CASE("at_path: a wrong element in a fixed-size vector gives the error of at
     auto const g = root->at_path<"$.g">();
     REQUIRE(g.has_value());
     auto const first = *g->begin();
-    CHECK_EQ(root->at_path<"$.g[].on">(0).error(), error::incorrect_type);
-    CHECK_EQ(first.at_path<"@.on">().error(), root->at_path<"$.g[].on">(0).error());
-    CHECK_EQ(*first.at_path<"@.shade">(), color::white);
+    CHECK_EQ(root->at_path<"$.g[].on">(0), std::unexpected(error::incorrect_type));
+    auto const found = root->at_path<"$.g[].on">(0);
+    CHECK_EQ(first.at_path<"@.on">(), std::unexpected(found.error()));
+    CHECK_EQ((first.at_path<"@.shade">()), color::white);
 }
 
 // An iterator of a fixed-size vector holds the owner, and a move empties the source. The test exists for the same
@@ -84,7 +96,7 @@ TEST_CASE("at_path: a wrong element in a fixed-size vector gives the error of at
 // The target and a move into itself read.
 TEST_CASE("at_path: a fixed-size vector keeps its bytes in the iterator and moves its list")
 {
-    using A = std::remove_cvref_t<decltype(*std::declval<form<gauges>::accessor<> const &>().at_path<"$.g">())>;
+    using A = typename decltype(std::declval<form<gauges>::accessor<> const &>().at_path<"$.g">())::value_type;
     A::iterator kept;
     std::optional<A> target;
     {
@@ -92,7 +104,8 @@ TEST_CASE("at_path: a fixed-size vector keeps its bytes in the iterator and move
             gauges{{{true, color::white, {-2, 3}, {1, 0x0203}}, {false, color::black, {5, -6}, {7, 8}}}}));
         auto const root = form<gauges>::view(owner);
         REQUIRE(root.has_value());
-        std::optional<A> source(*root->at_path<"$.g">());
+        auto const found_2 = root->at_path<"$.g">();
+        std::optional<A> source(*found_2);
         kept = source->begin() + 1;
         target.emplace(std::move(*source));
         CHECK_EQ(source->size(), 0u);
@@ -102,14 +115,14 @@ TEST_CASE("at_path: a fixed-size vector keeps its bytes in the iterator and move
         owner.reset();
     }
     auto const e = *kept;
-    CHECK_EQ(*e.at_path<"@.at.x">(), -6);
+    CHECK_EQ((e.at_path<"@.at.x">()), -6);
     auto const first = *target->begin();
-    CHECK_EQ(*first.at_path<"@.at.x">(), 3);
+    CHECK_EQ((first.at_path<"@.at.x">()), 3);
     auto &same = *target;
     *target = std::move(same);
     REQUIRE_EQ(target->size(), 2u);
     auto const again = target->begin()[1];
-    CHECK_EQ(*again.at_path<"@.range[1]">(), 8u);
+    CHECK_EQ((again.at_path<"@.range[1]">()), 8u);
 }
 
 // The iterator of a typed array view refuses each position outside of the view, as the iterators of the lists do.
@@ -136,7 +149,8 @@ TEST_CASE("view: a moved view has begin equal to end")
 {
     auto const root = form<doubles>::adopt(encode_with_schema(doubles{{1.0, 2.0, 4.0}}));
     REQUIRE(root.has_value());
-    auto source = *root->view<"$.v">();
+    auto const viewed = root->view<"$.v">();
+    auto source = *viewed;
     auto const kept = source.begin() + 2;
     auto const target = std::move(source);
     CHECK(source.begin() == source.end());
@@ -159,8 +173,10 @@ TEST_CASE("for_each: every element of a vector, in order")
     std::vector<std::string_view> makes;
     std::vector<std::uint8_t> seats;
     cars->for_each([&](auto const &car) {
-        makes.push_back(*car.template at_path<"@.make">());
-        seats.push_back(*car.template at_path<"@.seats">());
+        auto const make = car.template at_path<"@.make">();
+        auto const seat_count = car.template at_path<"@.seats">();
+        makes.push_back(*make);
+        seats.push_back(*seat_count);
     });
     std::vector<std::string_view> expected_makes;
     std::vector<std::uint8_t> expected_seats;
@@ -177,7 +193,10 @@ TEST_CASE("for_each: every element of a vector, in order")
     auto const g = loose->at_path<"$.g">();
     REQUIRE(g.has_value());
     std::vector<int> xs;
-    g->for_each([&xs](auto const &e) { xs.push_back(*e.template at_path<"@.at.x">()); });
+    g->for_each([&xs](auto const &e) {
+        auto const x = e.template at_path<"@.at.x">();
+        xs.push_back(*x);
+    });
     CHECK(xs == std::vector<int>{3, -6, 9});
 }
 
@@ -212,11 +231,14 @@ TEST_CASE("for_each: a nested for_each reads the vector of each element")
         CHECK(std::same_as<std::remove_cvref_t<decltype(car)>, form<parking_lot>::borrowed_accessor<lot_car, true>>);
         CHECK(std::same_as<std::remove_cvref_t<decltype(*wheels)>,
                            form<parking_lot>::borrowed_accessor<std::vector<lot_wheel>, true>>);
-        CHECK(std::same_as<std::remove_cvref_t<decltype(*car.template at_path<"@.engine">())>,
+        CHECK(std::same_as<typename decltype(car.template at_path<"@.engine">())::value_type,
                            form<parking_lot>::accessor<lot_engine, true>>);
         sizes.push_back(wheels->size());
         diameters.emplace_back();
-        wheels->for_each([&](auto const &wheel) { diameters.back().push_back(*wheel.template at_path<"@.diameter">()); });
+        wheels->for_each([&](auto const &wheel) {
+            auto const diameter = wheel.template at_path<"@.diameter">();
+            diameters.back().push_back(*diameter);
+        });
     });
     std::vector<std::vector<std::uint16_t>> expected;
     std::vector<std::size_t> expected_sizes;

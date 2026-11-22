@@ -23,7 +23,7 @@ namespace cbor
 {
 
 /**
- * @brief Names the fault that a call returns in its `std::expected<T, cbor::error>`.
+ * @brief Names the fault that a call returns in its `cbor::result<T>`.
  *
  * Bad input never throws.
  * The first value is 1, so a `std::error_code` from a `cbor::error` is always true as a `bool`.

@@ -59,14 +59,18 @@ TEST_CASE("at_path: a list of records is a range of its elements")
     CHECK_EQ(cars->end() - cars->begin(), 5);
     std::size_t i = 0;
     for (auto const car : *cars) {
-        CHECK_EQ(*car.at_path<"@.make">(), *root->at_path<"$.cars[].make">(i));
-        CHECK_EQ(*car.at_path<"@.seats">(), *root->at_path<"$.cars[].seats">(i));
+        auto const found = car.at_path<"@.make">();
+        auto const found_2 = root->at_path<"$.cars[].make">(i);
+        CHECK_EQ(*found, *found_2);
+        auto const found_3 = car.at_path<"@.seats">();
+        auto const found_4 = root->at_path<"$.cars[].seats">(i);
+        CHECK_EQ(*found_3, *found_4);
         ++i;
     }
     CHECK_EQ(i, 5u);
     auto const fourth = cars->begin()[3];
     CHECK_EQ(make_of(fourth), "make3");
-    CHECK_EQ(*fourth.at_path<"@.seats">(), std::uint8_t{5});
+    CHECK_EQ((fourth.at_path<"@.seats">()), std::uint8_t{5});
     auto const last = *(cars->end() - 1);
     CHECK_EQ(make_of(last), "make4");
     check_positions_outside(*cars);
@@ -124,8 +128,12 @@ TEST_CASE("unverified_adopt: a list of records is a range of its elements")
     REQUIRE(cars.has_value());
     std::size_t i = 0;
     for (auto const car : *cars) {
-        CHECK_EQ(*car.at_path<"@.make">(), *root->at_path<"$.cars[].make">(i));
-        CHECK_EQ(*car.at_path<"@.seats">(), *root->at_path<"$.cars[].seats">(i));
+        auto const found = car.at_path<"@.make">();
+        auto const found_2 = root->at_path<"$.cars[].make">(i);
+        CHECK_EQ(*found, *found_2);
+        auto const found_3 = car.at_path<"@.seats">();
+        auto const found_4 = root->at_path<"$.cars[].seats">(i);
+        CHECK_EQ(*found_3, *found_4);
         ++i;
     }
     CHECK_EQ(i, 5u);
@@ -146,8 +154,12 @@ TEST_CASE("at_path: a list inside a record from the iterator is a range")
     REQUIRE_EQ(wheels->size(), 3u);
     std::size_t k = 0;
     for (auto const wheel : *wheels) {
-        CHECK_EQ(*wheel.at_path<"@.diameter">(), *root->at_path<"$.cars[].wheels[].diameter">(3, k));
-        CHECK_EQ(*wheel.at_path<"@.snowTires">(), *root->at_path<"$.cars[].wheels[].snowTires">(3, k));
+        auto const found = wheel.at_path<"@.diameter">();
+        auto const found_2 = root->at_path<"$.cars[].wheels[].diameter">(3, k);
+        CHECK_EQ(*found, *found_2);
+        auto const found_3 = wheel.at_path<"@.snowTires">();
+        auto const found_4 = root->at_path<"$.cars[].wheels[].snowTires">(3, k);
+        CHECK_EQ(*found_3, *found_4);
         ++k;
     }
     CHECK_EQ(k, 3u);
@@ -163,8 +175,10 @@ TEST_CASE("at_path: a list of const elements is a range of its elements")
     auto const people = root->at_path<"$.people">();
     REQUIRE(people.has_value());
     std::vector<std::string> names;
-    for (auto const person : *people)
-        names.emplace_back(*person.at_path<"@.n">());
+    for (auto const person : *people) {
+        auto const found = person.at_path<"@.n">();
+        names.emplace_back(*found);
+    }
     CHECK(names == std::vector<std::string>{"a", "bc", "def"});
     std::vector<point> const points{{1.0f, 2.0f}, {3.0f, 4.0f}};
     auto const cloud_root = form<cloud_view>::adopt(encode_with_schema(cloud_view{points}));
@@ -172,8 +186,10 @@ TEST_CASE("at_path: a list of const elements is a range of its elements")
     auto const list = cloud_root->at_path<"$.points">();
     REQUIRE(list.has_value());
     std::vector<std::uint32_t> ys;
-    for (auto const p : *list)
-        ys.push_back(std::bit_cast<std::uint32_t>(*p.at_path<"@.y">()));
+    for (auto const p : *list) {
+        auto const found = p.at_path<"@.y">();
+        ys.push_back(std::bit_cast<std::uint32_t>(*found));
+    }
     CHECK(ys == std::vector<std::uint32_t>{std::bit_cast<std::uint32_t>(2.0f), std::bit_cast<std::uint32_t>(4.0f)});
 }
 
@@ -193,7 +209,7 @@ TEST_CASE("at_path: a record with a wrong tag in a list gives the result of at_p
     auto const first = *cars->begin();
     CHECK_EQ(root->at_path<"$.cars[].make">(0), "make0"sv);
     CHECK_EQ(first.at_path<"@.make">(), root->at_path<"$.cars[].make">(0));
-    CHECK_EQ(form<parking_lot>::decode(std::string(bytes)).error(), error::incorrect_type);
+    CHECK_EQ(form<parking_lot>::decode(std::string(bytes)), std::unexpected(error::incorrect_type));
     auto const second = cars->begin()[1];
     CHECK_EQ(make_of(second), "make1");
 }
@@ -202,7 +218,7 @@ TEST_CASE("at_path: a record with a wrong tag in a list gives the result of at_p
 // record after its accessor is gone. The root accessor and the first std::shared_ptr are gone too.
 TEST_CASE("at_path: an iterator of a list of records outlives its accessor")
 {
-    using A = std::remove_cvref_t<decltype(*std::declval<form<parking_lot>::accessor<> const &>().at_path<"$.cars">())>;
+    using A = typename decltype(std::declval<form<parking_lot>::accessor<> const &>().at_path<"$.cars">())::value_type;
     A::iterator kept;
     {
         auto owner = std::make_shared<std::string const>(encode_with_schema(make_sample_lot()));
@@ -214,7 +230,7 @@ TEST_CASE("at_path: an iterator of a list of records outlives its accessor")
         owner.reset();
     }
     auto const car = *kept;
-    CHECK_EQ(*car.at_path<"@.make">(), "make2"sv);
+    CHECK_EQ((car.at_path<"@.make">()), "make2"sv);
 }
 
 // A move gives the owner, the bytes and the length to the target. The test exists because the source keeps no list:
@@ -222,12 +238,13 @@ TEST_CASE("at_path: an iterator of a list of records outlives its accessor")
 // into itself keeps the accessor.
 TEST_CASE("at_path: a moved list of records keeps no list in the source")
 {
-    using A = std::remove_cvref_t<decltype(*std::declval<form<parking_lot>::accessor<> const &>().at_path<"$.cars">())>;
+    using A = typename decltype(std::declval<form<parking_lot>::accessor<> const &>().at_path<"$.cars">())::value_type;
     std::optional<A> target;
     {
         auto const root = form<parking_lot>::adopt(encode_with_schema(make_sample_lot()));
         REQUIRE(root.has_value());
-        std::optional<A> source(*root->at_path<"$.cars">());
+        auto const found_2 = root->at_path<"$.cars">();
+        std::optional<A> source(*found_2);
         target.emplace(std::move(*source));
         CHECK_EQ(source->size(), 0u);
         CHECK(std::ranges::empty(*source));

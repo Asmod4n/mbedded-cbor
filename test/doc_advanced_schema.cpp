@@ -172,7 +172,8 @@ TEST_CASE("doc advanced schema: encode and decode")
 TEST_CASE("doc advanced schema: the description apart")
 {
     CHECK_GT(sizeof(tire), sizeof(std::uint16_t) + sizeof(float));
-    std::string const bytes = *cbor::schema<car>::encode(sample);
+    auto const encoded = cbor::schema<car>::encode(sample);
+    std::string const bytes = *encoded;
     auto const data = cbor::static_dictionary<car>::encode(sample);
     REQUIRE(data.has_value());
     auto const back = cbor::static_dictionary<car>::decode(std::string(*data));
@@ -185,12 +186,13 @@ TEST_CASE("doc advanced schema: the description apart")
 // The section "One value with no accessor" shows schema<T>::at_path for a value that holds no view.
 TEST_CASE("doc advanced schema: one value with no accessor")
 {
-    std::string const bytes = *cbor::schema<car>::encode(sample);
+    auto const encoded = cbor::schema<car>::encode(sample);
+    std::string const bytes = *encoded;
     CHECK_EQ(cbor::schema<car>::at_path<"$.seats">(bytes), 5u);
     CHECK_EQ(cbor::schema<car>::at_path<"$.tires[1].diameter">(bytes), 18u);
     CHECK_EQ(cbor::schema<car>::at_path<"$.tires[].pressure">(bytes, 0uz), 2.5f);
     CHECK_EQ(cbor::schema<car>::at_path<"$.track[2]">(bytes), 3.0);
-    CHECK_EQ(cbor::schema<car>::at_path<"$.tires[].diameter">(bytes, 5uz).error(), error::index_out_of_bounds);
+    CHECK_EQ(cbor::schema<car>::at_path<"$.tires[].diameter">(bytes, 5uz), std::unexpected(error::index_out_of_bounds));
 }
 
 // The section "One value with no accessor" says that [n] on a byte string reads one byte.
@@ -200,7 +202,7 @@ TEST_CASE("doc advanced schema: one byte of a byte string")
     REQUIRE(packet.has_value());
     CHECK_EQ(cbor::schema<frame>::at_path<"$.code[2]">(*packet), std::uint8_t{3});
     CHECK_EQ(cbor::schema<frame>::at_path<"$.payload[1]">(*packet), std::byte{8});
-    CHECK_EQ(cbor::schema<frame>::at_path<"$.payload[]">(*packet, 2uz).error(), error::index_out_of_bounds);
+    CHECK_EQ(cbor::schema<frame>::at_path<"$.payload[]">(*packet, 2uz), std::unexpected(error::index_out_of_bounds));
 }
 
 // The section "One value with no accessor" lists paths that do not compile. They are a path to a view and a path to a
@@ -221,7 +223,8 @@ TEST_CASE("doc advanced schema: a wrong path does not compile")
 // The section "The accessor" shows path, the root accessor, and relative paths that start with @.
 TEST_CASE("doc advanced schema: the accessor")
 {
-    std::string const bytes = *cbor::schema<car>::encode(sample);
+    auto const encoded = cbor::schema<car>::encode(sample);
+    std::string const bytes = *encoded;
     auto const root = cbor::schema<car>::adopt(std::string(bytes));
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.make">(), "Volvo"sv);
@@ -237,8 +240,10 @@ TEST_CASE("doc advanced schema: the accessor")
     CHECK_FALSE(note->has_value());
     CHECK((std::ranges::random_access_range<decltype(*tires)>));
     std::vector<float> seen;
-    for (auto const t : *tires | std::views::drop(1))
-        seen.push_back(*t.at_path<"@.pressure">());
+    for (auto const t : *tires | std::views::drop(1)) {
+        auto const found = t.at_path<"@.pressure">();
+        seen.push_back(*found);
+    }
     REQUIRE_EQ(seen.size(), 1u);
     CHECK_EQ(std::bit_cast<std::uint32_t>(seen[0]), 0x40100000u);
 }
@@ -247,18 +252,21 @@ TEST_CASE("doc advanced schema: the accessor")
 // bytes. A caller who wants a copy makes it with std::string. An empty owner throws. A temporary accessor reads nothing.
 TEST_CASE("doc advanced schema: the accessor holds the owner")
 {
-    auto owner = std::make_shared<std::string const>(*cbor::schema<car>::encode(sample));
+    auto const encoded = cbor::schema<car>::encode(sample);
+    auto owner = std::make_shared<std::string const>(*encoded);
     auto const root = cbor::schema<car>::view(owner);
     owner.reset();
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.make">(), "Volvo"sv);
-    std::string temp = *cbor::schema<car>::encode(sample);
+    auto const encoded_2 = cbor::schema<car>::encode(sample);
+    std::string temp = *encoded_2;
     auto const copied = cbor::schema<car>::adopt(std::string(temp));
     temp.assign(temp.size(), '\0');
     REQUIRE(copied.has_value());
-    CHECK_EQ(*copied->at_path<"$.make">(), "Volvo"sv);
+    CHECK_EQ((copied->at_path<"$.make">()), "Volvo"sv);
     CHECK_THROWS_AS((void)cbor::schema<car>::view(std::shared_ptr<std::string const>{}), std::logic_error);
-    auto const held = std::make_shared<std::string const>(*cbor::schema<car>::encode(sample));
+    auto const encoded_3 = cbor::schema<car>::encode(sample);
+    auto const held = std::make_shared<std::string const>(*encoded_3);
     auto const beside = cbor::schema<car>::view(held, std::string_view(*held));
     REQUIRE(beside.has_value());
     CHECK_EQ(beside->at_path<"$.seats">(), 5u);
@@ -276,11 +284,13 @@ TEST_CASE("doc advanced schema: the accessor holds the owner")
 // bytes. The section "The accessor" states that every accessor holds the owner.
 TEST_CASE("doc advanced schema: a list accessor keeps the bytes alive")
 {
-    std::string const bytes = *cbor::schema<car>::encode(sample);
-    auto const tires = cbor::schema<car>::adopt(std::string(bytes))->at_path<"$.tires">();
+    auto const encoded = cbor::schema<car>::encode(sample);
+    std::string const bytes = *encoded;
+    auto const adopted = cbor::schema<car>::adopt(std::string(bytes));
+    auto const tires = adopted->at_path<"$.tires">();
     REQUIRE(tires.has_value());
     CHECK_EQ(tires->size(), 2u);
-    CHECK_EQ(*tires->at_path<"@[1].diameter">(), 18u);
+    CHECK_EQ((tires->at_path<"@[1].diameter">()), 18u);
 }
 
 // The section "Typed arrays" shows view, which gives a typed_array_view of a list of a fixed-width number.
@@ -288,19 +298,20 @@ TEST_CASE("doc advanced schema: a typed array view")
 {
     CHECK((std::ranges::random_access_range<cbor::typed_array_view<double>>));
     CHECK((std::ranges::sized_range<cbor::typed_array_view<double>>));
-    auto const root = cbor::schema<car>::adopt(*cbor::schema<car>::encode(sample));
+    auto encoded = cbor::schema<car>::encode(sample);
+    auto const root = cbor::schema<car>::adopt(std::move(*encoded));
     REQUIRE(root.has_value());
     auto const track = root->view<"$.track">();
     REQUIRE(track.has_value());
     CHECK_EQ(track->size(), 3u);
     CHECK_EQ(std::bit_cast<std::uint64_t>(std::accumulate(track->begin(), track->end(), 0.0)), 0x4018000000000000u);
     CHECK_EQ(std::bit_cast<std::uint64_t>((*track)[1]), 0x4000000000000000u);
-    CHECK_EQ(track->at(3).error(), error::index_out_of_bounds);
+    CHECK_EQ(track->at(3), std::unexpected(error::index_out_of_bounds));
     CHECK_THROWS_AS((*track)[3], std::logic_error);
     auto const tail = track->last(2);
     REQUIRE(tail.has_value());
     CHECK_EQ(std::bit_cast<std::uint64_t>(tail->front()), 0x4000000000000000u);
-    CHECK_EQ(track->first(4).error(), error::index_out_of_bounds);
+    CHECK_EQ(track->first(4), std::unexpected(error::index_out_of_bounds));
     CHECK_EQ(std::bit_cast<std::uint64_t>(std::ranges::fold_left(*track, 0.0, std::plus<>{})), 0x4018000000000000u);
 }
 
@@ -310,20 +321,22 @@ TEST_CASE("doc advanced schema: a typed array view")
 // description of the struct that reads it.
 TEST_CASE("doc advanced schema: errors")
 {
-    std::string const bytes = *cbor::schema<car>::encode(sample);
-    CHECK_EQ(cbor::schema<car>::decode(bytes.substr(0, 3)).error(), error::too_little_data);
+    auto const encoded = cbor::schema<car>::encode(sample);
+    std::string const bytes = *encoded;
+    CHECK_EQ(cbor::schema<car>::decode(bytes.substr(0, 3)), std::unexpected(error::too_little_data));
     std::string_view const view = bytes;
-    CHECK_EQ(cbor::schema<car>::at_path<"$.seats">(view.substr(0, view.size() - 1)).error(), error::too_little_data);
-    CHECK_EQ(cbor::schema<car>::adopt(bytes.substr(0, bytes.size() / 2)).error(), error::too_little_data);
-    std::string const small = *cbor::schema<tire>::encode(tire{1, 1.0f});
-    CHECK_EQ(cbor::schema<car>::decode(std::string(small)).error(), error::incorrect_type);
-    CHECK_EQ(cbor::schema<tire>::decode(std::string(bytes)).error(), error::incorrect_type);
-    CHECK_EQ(cbor::schema<tire>::adopt(std::string(bytes)).error(), error::incorrect_type);
+    CHECK_EQ(cbor::schema<car>::at_path<"$.seats">(view.substr(0, view.size() - 1)), std::unexpected(error::too_little_data));
+    CHECK_EQ(cbor::schema<car>::adopt(bytes.substr(0, bytes.size() / 2)), std::unexpected(error::too_little_data));
+    auto const encoded_2 = cbor::schema<tire>::encode(tire{1, 1.0f});
+    std::string const small = *encoded_2;
+    CHECK_EQ(cbor::schema<car>::decode(std::string(small)), std::unexpected(error::incorrect_type));
+    CHECK_EQ(cbor::schema<tire>::decode(std::string(bytes)), std::unexpected(error::incorrect_type));
+    CHECK_EQ(cbor::schema<tire>::adopt(std::string(bytes)), std::unexpected(error::incorrect_type));
     std::size_t const seats = bytes.find("\x18\x05"sv);
     REQUIRE_NE(seats, std::string::npos);
     std::string forged = bytes;
     forged[seats] = '\x58';
-    CHECK_EQ(cbor::schema<car>::at_path<"$.seats">(forged).error(), error::incorrect_type);
+    CHECK_EQ(cbor::schema<car>::at_path<"$.seats">(forged), std::unexpected(error::incorrect_type));
 }
 
 } // namespace doc_advanced_schema

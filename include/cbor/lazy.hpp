@@ -172,7 +172,9 @@ public:
      * message: {"id": 42}
      * call: auto const owner = std::make_shared<std::string const>(bytes)
      * result: shared_ptr to 6 bytes: a1 62 69 64 18 2a
-     * call: auto const id = cbor::lazy::view(owner)->at("id")
+     * call: auto const doc2 = cbor::lazy::view(owner)
+     * result: lazy of {"id": 42}
+     * call: auto const id = doc2->at("id")
      * result: lazy of 42
      * call: id->get<std::int64_t>()
      * result: 42
@@ -184,13 +186,13 @@ public:
      * @see cbor::lazy::at()
      */
     template <borrowed_range_of_bytes Encoded>
-    static std::expected<lazy, error> view(std::shared_ptr<void const> owner, Encoded const &encoded);
+    static result<lazy> view(std::shared_ptr<void const> owner, Encoded const &encoded);
     /**
      * @brief Makes the lazy of the top-level item in `*owner`, in place.
      * @throws std::logic_error a null `owner`
      */
     template <owning_range_of_bytes Encoded>
-    static std::expected<lazy, error> view(std::shared_ptr<Encoded const> owner);
+    static result<lazy> view(std::shared_ptr<Encoded const> owner);
     /**
      * @brief Makes the lazy of the top-level item in @p encoded, and moves the bytes into a new owner.
      *
@@ -218,7 +220,7 @@ public:
      * @see cbor::lazy::at()
      */
     template <owning_range_of_bytes Encoded>
-    static std::expected<lazy, error> adopt(Encoded &&encoded);
+    static result<lazy> adopt(Encoded &&encoded);
 
     /**
      * @brief Gives the lazy of the value of a text key of a map.
@@ -597,9 +599,17 @@ public:
      * @see cbor::decode()
      * @see cbor::lazy::get()
      */
-    std::expected<owning<item>, error> to_item() const;
+    result<owning<item>> to_item() const;
 
 private:
+    template <borrowed_range_of_bytes Encoded>
+    static std::expected<lazy, error> view_or_error(std::shared_ptr<void const> owner, Encoded const &encoded);
+
+    template <owning_range_of_bytes Encoded>
+    static std::expected<lazy, error> view_or_error(std::shared_ptr<Encoded const> owner);
+
+    std::expected<owning<item>, error> to_item_or_error() const;
+
     std::expected<lazy, error> at_or_error(std::string_view key) const;
 
     template <class Integer>
@@ -678,6 +688,8 @@ private:
     friend struct lazy_entries;
 
     friend class path;
+
+    friend class sequence_reader;
 
     friend class detail::canonical_ids;
 };
@@ -1425,7 +1437,26 @@ inline void lazy::throw_logic_error_if_no_top_level(char const *const message) c
 }
 
 template <borrowed_range_of_bytes Encoded>
-CBOR_ALWAYS_INLINE inline std::expected<lazy, error> lazy::view(std::shared_ptr<void const> owner, Encoded const &encoded)
+CBOR_ALWAYS_INLINE inline result<lazy> lazy::view(std::shared_ptr<void const> owner, Encoded const &encoded)
+{
+    return result<lazy>(view_or_error(std::move(owner), encoded));
+}
+
+template <owning_range_of_bytes Encoded>
+CBOR_ALWAYS_INLINE inline result<lazy> lazy::view(std::shared_ptr<Encoded const> owner)
+{
+    return result<lazy>(view_or_error(std::move(owner)));
+}
+
+template <owning_range_of_bytes Encoded>
+result<lazy> lazy::adopt(Encoded &&encoded)
+{
+    return result<lazy>(view_or_error(std::make_shared<Encoded const>(std::move(encoded))));
+}
+
+template <borrowed_range_of_bytes Encoded>
+CBOR_ALWAYS_INLINE inline std::expected<lazy, error> lazy::view_or_error(std::shared_ptr<void const> owner,
+                                                                         Encoded const &encoded)
 {
     detail::validity::throw_logic_error_if_empty(
         owner, "cbor::lazy::view: the owner of the encoded data item is empty");
@@ -1435,17 +1466,11 @@ CBOR_ALWAYS_INLINE inline std::expected<lazy, error> lazy::view(std::shared_ptr<
 }
 
 template <owning_range_of_bytes Encoded>
-CBOR_ALWAYS_INLINE inline std::expected<lazy, error> lazy::view(std::shared_ptr<Encoded const> owner)
+CBOR_ALWAYS_INLINE inline std::expected<lazy, error> lazy::view_or_error(std::shared_ptr<Encoded const> owner)
 {
     detail::validity::throw_logic_error_if_null(owner, "cbor::lazy::view: the encoded data item is null");
     std::string_view const bytes = detail::chars_of(*owner);
-    return view(std::shared_ptr<void const>(std::move(owner)), bytes);
-}
-
-template <owning_range_of_bytes Encoded>
-std::expected<lazy, error> lazy::adopt(Encoded &&encoded)
-{
-    return view(std::make_shared<Encoded const>(std::move(encoded)));
+    return view_or_error(std::shared_ptr<void const>(std::move(owner)), bytes);
 }
 
 template <class Key, class Entries>
@@ -1825,7 +1850,12 @@ inline std::expected<lazy_entries, error> lazy::entries_or_error() const
     return lazy_entries(source, detail::validity::distance(source.encoded, d.encoded), h.argument);
 }
 
-inline std::expected<owning<item>, error> lazy::to_item() const
+inline result<owning<item>> lazy::to_item() const
+{
+    return result<owning<item>>(to_item_or_error());
+}
+
+inline std::expected<owning<item>, error> lazy::to_item_or_error() const
 {
     throw_logic_error_if_no_top_level("cbor::lazy::to_item: the lazy holds no top-level item");
     if (typed_array_tag != 0) [[unlikely]] {

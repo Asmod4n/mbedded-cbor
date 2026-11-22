@@ -50,7 +50,8 @@ std::string_view bytes_of(std::uint32_t const doc)
 
 cbor::lazy lazy_at(std::uint32_t const doc, std::uint32_t const offset)
 {
-    return *cbor::lazy::view(documents[doc].bytes, std::string_view(*documents[doc].bytes).substr(offset));
+    auto const viewed = cbor::lazy::view(documents[doc].bytes, std::string_view(*documents[doc].bytes).substr(offset));
+    return *viewed;
 }
 
 std::uint32_t handle_new(std::uint32_t const doc, std::uint32_t const offset)
@@ -114,12 +115,14 @@ __attribute__((export_name("arr_first"))) std::uint32_t arr_first(std::uint32_t 
 
 __attribute__((export_name("arr_next"))) std::uint32_t arr_next(std::uint32_t const doc, std::uint32_t const offset)
 {
-    return offset + static_cast<std::uint32_t>(*cbor::item_size(bytes_of(doc).substr(offset)));
+    auto const item_size_read = cbor::item_size(bytes_of(doc).substr(offset));
+    return offset + static_cast<std::uint32_t>(*item_size_read);
 }
 
 __attribute__((export_name("get_int"))) std::int64_t get_int(std::uint32_t const doc, std::uint32_t const offset)
 {
-    return *lazy_at(doc, offset).get<std::int64_t>();
+    auto const read = lazy_at(doc, offset).get<std::int64_t>();
+    return *read;
 }
 
 __attribute__((export_name("get_text"))) std::uint64_t get_text(std::uint32_t const doc, std::uint32_t const offset)
@@ -133,8 +136,10 @@ __attribute__((export_name("ints_fill"))) std::uint32_t ints_fill(std::uint32_t 
 {
     std::string_view const bytes = bytes_of(doc);
     for (std::uint32_t i = 0; i < n; ++i) {
-        out[i] = static_cast<std::int32_t>(*lazy_at(doc, offset).get<std::int64_t>());
-        offset += static_cast<std::uint32_t>(*cbor::item_size(bytes.substr(offset)));
+        auto const read = lazy_at(doc, offset).get<std::int64_t>();
+        out[i] = static_cast<std::int32_t>(*read);
+        auto const item_size_read = cbor::item_size(bytes.substr(offset));
+        offset += static_cast<std::uint32_t>(*item_size_read);
     }
     return offset;
 }
@@ -144,8 +149,10 @@ __attribute__((export_name("ints_iterate"))) std::uint32_t ints_iterate(std::uin
     auto const root = cbor::lazy::view(documents[doc].bytes);
     std::uint32_t i = 0;
     auto const elements = root->elements();
-    for (auto const e : *elements)
-        out[i++] = static_cast<std::int32_t>(*e->get<std::int64_t>());
+    for (auto const e : *elements) {
+        auto const number = e->get<std::int64_t>();
+        out[i++] = static_cast<std::int32_t>(*number);
+    }
     return i;
 }
 
@@ -164,7 +171,8 @@ __attribute__((export_name("series_make"))) std::uint32_t series_make(std::uint3
 
 __attribute__((export_name("schema_id"))) std::int32_t schema_id(std::uint32_t const doc)
 {
-    return static_cast<std::int32_t>(*cbor::schema<series>::at_path<"$.id">(bytes_of(doc)));
+    auto const schema_read = cbor::schema<series>::at_path<"$.id">(bytes_of(doc));
+    return static_cast<std::int32_t>(*schema_read);
 }
 
 __attribute__((export_name("lazy_id"))) std::int32_t lazy_id(std::uint32_t const doc)
