@@ -1021,12 +1021,12 @@ TEST_CASE("tag 24 with bytes after its data item is refused by decode and not se
     CHECK_EQ(tree.error(), cbor::error::syntax_error);
     auto const read = top_level->get<int>();
     CHECK_EQ(*read, 1);
-    CHECK_EQ(*cbor::at_path<"$", int>(std::string_view(wire)), 1);
+    CHECK_EQ(cbor::at_path<"$", int>(std::string_view(wire)), 1);
     std::string const in_array = "\xd8\x18\x43\x81\x01\x02"s;
     auto const at_0 = test::make_lazy_from_copy(in_array)->at(0);
     auto const read_2 = at_0->get<int>();
     CHECK_EQ(*read_2, 1);
-    CHECK_EQ(*cbor::at_path<"$[0]", int>(std::string_view(in_array)), 1);
+    CHECK_EQ(cbor::at_path<"$[0]", int>(std::string_view(in_array)), 1);
 }
 
 }

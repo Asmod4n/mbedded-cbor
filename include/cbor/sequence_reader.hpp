@@ -25,6 +25,7 @@
 #include "head.hpp"
 #include "lazy.hpp"
 #include "ref.hpp"
+#include "result.hpp"
 #include "validity.hpp"
 
 namespace cbor
@@ -62,9 +63,13 @@ namespace cbor
  * result: 2 bytes: 02 03
  * call: r.feed(std::move(second))
  * result: void
- * call: r.next()->size()
+ * call: auto const array = r.next()
+ * result: lazy of [1, 2]
+ * call: array->size()
  * result: 2
- * call: r.next()->get<std::int64_t>()
+ * call: auto const number = r.next()
+ * result: lazy of 3
+ * call: number->get<std::int64_t>()
  * result: 3
  * call: r.empty()
  * result: true
@@ -326,7 +331,13 @@ public:
     }
 
     /** @brief Gives the next item when all of its bytes are there. */
-    std::expected<lazy, error> next()
+    result<lazy> next()
+    {
+        return result<lazy>(next_or_error());
+    }
+
+private:
+    std::expected<lazy, error> next_or_error()
     {
         throw_logic_error_if_moved_from();
         if (failure != error{}) [[unlikely]]

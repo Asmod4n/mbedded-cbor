@@ -29,12 +29,12 @@ void refuses(char const tag, error const expected)
 {
     auto const l = test::make_lazy_from_copy(typed_array_claiming_more(tag));
     REQUIRE(l.has_value());
-    CHECK_EQ(l->elements().error(), expected);
+    CHECK_EQ(l->elements(), std::unexpected(expected));
     auto const found = l->at(std::size_t{0});
     CHECK_EQ(found.error(), expected);
     auto const q = cbor::path::compile<cbor::lazy>("$[0]");
     REQUIRE(q.has_value());
-    CHECK_EQ(l->at_path(*q).error(), expected);
+    CHECK_EQ(l->at_path(*q), std::unexpected(expected));
 }
 
 // RFC 8746 2.1, Tables 1 and 2: the number of bytes of one element of each typed array tag from 64 to 87. Tag

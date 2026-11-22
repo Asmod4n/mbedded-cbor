@@ -41,7 +41,7 @@ TEST_CASE("doc path: read one value")
     CHECK_EQ(used, 42);
     CHECK_EQ(cbor::at_path<"$.user.score", double>(bytes), 2.5);
     CHECK_EQ(cbor::at_path<"$.user.admin", bool>(bytes), true);
-    CHECK_EQ(cbor::at_path<"$.user.age", std::int64_t>(bytes).error(), error::key_not_found);
+    CHECK_EQ(cbor::at_path<"$.user.age", std::int64_t>(bytes), std::unexpected(error::key_not_found));
     CHECK_EQ(cbor::at_path<"$.user.id", std::int64_t>(std::string_view{bytes}), 42);
 }
 
@@ -49,8 +49,8 @@ TEST_CASE("doc path: read one value")
 TEST_CASE("doc path: the types of a number")
 {
     CHECK_EQ(cbor::at_path<"$", double>(encode_in_preferred_form(V(1))), 1.0);
-    CHECK_EQ(cbor::at_path<"$", std::int64_t>(encode_in_preferred_form(V("a"s))).error(), error::incorrect_type);
-    CHECK_EQ(cbor::at_path<"$", std::uint8_t>(encode_in_preferred_form(V(256))).error(), error::number_out_of_range);
+    CHECK_EQ(cbor::at_path<"$", std::int64_t>(encode_in_preferred_form(V("a"s))), std::unexpected(error::incorrect_type));
+    CHECK_EQ(cbor::at_path<"$", std::uint8_t>(encode_in_preferred_form(V(256))), std::unexpected(error::number_out_of_range));
     CHECK_FALSE((doc_path_compiles<"$", float>));
     CHECK((doc_path_compiles<"$", std::string>));
     CHECK_FALSE((doc_path_compiles<"$.a[", int>));
@@ -62,7 +62,7 @@ TEST_CASE("doc path: std::string as T copies the text")
     std::string const bytes = encode_in_preferred_form(M("user"s, M("name"s, "ann"s)));
     auto const name = cbor::at_path<"$.user.name", std::string>(bytes);
     CHECK_EQ(name, "ann"s);
-    CHECK(std::is_same_v<decltype(name), std::expected<std::string, error> const>);
+    CHECK(std::is_same_v<decltype(name), cbor::result<std::string> const>);
 }
 
 // The section "Read a text" shows that a text needs an owner, and that the view points into the bytes of that
@@ -114,8 +114,10 @@ TEST_CASE("doc path: path syntax")
     CHECK_EQ(cbor::at_path<"$.store.bicycle.price", int>(bytes), 20);
     CHECK_EQ(cbor::at_path<"$['store']['bicycle']['price']", int>(bytes), 20);
     auto const owner = std::make_shared<std::string const>(bytes);
-    CHECK(*cbor::at_path<"$.store.book[0].title", std::string_view>(owner) == "A"sv);
-    CHECK(*cbor::at_path<"$.store.book[-1].title", std::string_view>(owner) == "C"sv);
+    auto const first_title = cbor::at_path<"$.store.book[0].title", std::string_view>(owner);
+    CHECK(*first_title == "A"sv);
+    auto const last_title = cbor::at_path<"$.store.book[-1].title", std::string_view>(owner);
+    CHECK(*last_title == "C"sv);
     CHECK(*test::query("$.store.book[*].price", l) == A(8, 12, 9));
     CHECK(*test::query("$..price", l) == A(8, 12, 9, 20));
     CHECK(*test::query("$.store.book[?@.price < 10].title", l) == A("A"s, "C"s));
@@ -158,7 +160,7 @@ TEST_CASE("doc path: tell a missing field from broken input")
 TEST_CASE("doc path: a path does not read past its value")
 {
     std::string const cut = "\x82\x01"s;
-    CHECK_EQ(cbor::at_path<"$[0]", int>(cut).error(), error::too_little_data);
+    CHECK_EQ(cbor::at_path<"$[0]", int>(cut), std::unexpected(error::too_little_data));
     CHECK_EQ(cbor::at_path<"$[0]", int>("\x82\x01\xff"s), 1);
     auto const length = cbor::item_size(cut);
     CHECK_EQ(length.error(), error::too_little_data);

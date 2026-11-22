@@ -137,19 +137,19 @@ TEST_CASE("self-described CBOR: type() of a second tag 55799 and of a tag 55799 
         CHECK_EQ(kind_3.value(), cbor::type::tag);
         auto const read_2 = element->get<std::int64_t>();
         CHECK_EQ(read_2.value(), 1);
-        CHECK_EQ((cbor::at_path<"$[0]", std::int64_t>("\x81" + head + "\x01")).value(), 1);
+        CHECK_EQ((cbor::at_path<"$[0]", std::int64_t>("\x81" + head + "\x01")), 1);
         std::string const map = "\xa1" + head + "\x61k\x01";
         auto const found = cbor::lazy::adopt(std::string(map))->at("k"sv);
         auto const read_3 = found->get<std::int64_t>();
         CHECK_EQ(read_3.value(), 1);
-        CHECK_EQ((cbor::at_path<"$.k", std::int64_t>(map)).value(), 1);
+        CHECK_EQ((cbor::at_path<"$.k", std::int64_t>(map)), 1);
         std::string const embedded = "\xa1\x61\x61\xd8\x18" + std::string(1, static_cast<char>(0x40 + head.size() + 3)) +
                                      head + "\x82\x01\x02";
         auto const found_2 = cbor::lazy::adopt(std::string(embedded))->at("a"sv);
         auto const at_1 = found_2->at(1);
         auto const read_4 = at_1->get<std::int64_t>();
         CHECK_EQ(read_4.value(), 2);
-        CHECK_EQ((cbor::at_path<"$.a[1]", std::int64_t>(embedded)).value(), 2);
+        CHECK_EQ((cbor::at_path<"$.a[1]", std::int64_t>(embedded)), 2);
     }
 }
 
@@ -214,7 +214,7 @@ TEST_CASE("self-described CBOR: a tag 55799 in the content of a bignum or a type
         auto const at_0 = l->at(0);
         auto const at_0_2 = t->at(0);
         CHECK_EQ(at_0.error(), at_0_2.error());
-        CHECK_EQ((cbor::at_path<"$[0]", std::int64_t>(typed)).error(), (cbor::at_path<"$[0]", std::int64_t>(typed_text)).error());
+        CHECK_EQ(cbor::at_path<"$[0]", std::int64_t>(typed), cbor::at_path<"$[0]", std::int64_t>(typed_text));
         auto const typed_tree = cbor::decode(typed);
         auto const text_tree = cbor::decode(typed_text);
         CHECK_EQ(typed_tree.error(), text_tree.error());
@@ -227,7 +227,7 @@ TEST_CASE("self-described CBOR: a tag 55799 in the content of a bignum or a type
 TEST_CASE("self-described CBOR: at_path reads through a leading tag 55799")
 {
     std::string const document = "\xd9\xd9\xf7\xa1\x61\x61\x82\x05\x06"s;
-    CHECK_EQ(cbor::at_path<"$.a[1]", std::uint64_t>(document).value(), 6u);
+    CHECK_EQ(cbor::at_path<"$.a[1]", std::uint64_t>(document), 6u);
     auto const owner = std::make_shared<std::string const>("\xd9\xd9\xf7\xa1\x61\x61\x62\x68\x69"s);
     auto const text = cbor::at_path<"$.a", std::string_view>(owner);
     REQUIRE(text.has_value());

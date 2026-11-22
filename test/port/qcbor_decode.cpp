@@ -770,7 +770,7 @@ TEST_CASE("qcbor NotWellFormedTests: decode and item_size refuse each not-well-f
         CHECK_FALSE(cbor::decode(in).has_value());
         CHECK_FALSE(cbor::item_size(in).has_value());
     }
-    std::vector<std::expected<std::string_view, error>> items;
+    std::vector<cbor::result<std::string_view>> items;
     for (auto const e : cbor::sequence{std::make_shared<std::string const>(bare_break_after_array)})
         items.push_back(e);
     REQUIRE_EQ(items.size(), 2u);
@@ -1097,7 +1097,7 @@ TEST_CASE("qcbor IntegerConvertTest: a bignum in an indefinite-length string is 
 TEST_CASE("qcbor CBORSequenceDecodeTests: a sequence splits into its items")
 {
     auto items_of = [](std::string const &in) {
-        std::vector<std::expected<std::string_view, error>> out;
+        std::vector<cbor::result<std::string_view>> out;
         for (auto const e : cbor::sequence{std::make_shared<std::string const>(in)})
             out.push_back(e);
         return out;
@@ -1120,7 +1120,7 @@ TEST_CASE("qcbor CBORSequenceDecodeTests: a sequence splits into its items")
 TEST_CASE("qcbor CBORSequenceDecodeTests: an indefinite-length item in a sequence is refused")
 {
     for (auto const &in : {as_string({0x01, 0x9f, 0x02}), as_string({0x01, 0x9f, 0xff})}) {
-        std::vector<std::expected<std::string_view, error>> items;
+        std::vector<cbor::result<std::string_view>> items;
         for (auto const e : cbor::sequence{std::make_shared<std::string const>(in)})
             items.push_back(e);
         REQUIRE_EQ(items.size(), 2u);

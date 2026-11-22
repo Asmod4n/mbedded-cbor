@@ -185,11 +185,11 @@ TEST_CASE("bignum: at_path as double reads a bignum in every form")
         }
         return bytes;
     };
-    CHECK_EQ(*read("\xa1\x61\x61\xc3\x41\x05"s), -6.0);
-    CHECK_EQ(*read("\xa1\x61\x61\xc2\x41\x05"s), 5.0);
-    CHECK_EQ(read("\xa1\x61\x61\xc3\x49"s + std::string(9, '\x01')).error(), error::number_out_of_range);
-    CHECK_EQ(read("\xa1\x61\x61\xc3\x61x"s).error(), error::inadmissible_type_for_tag_content);
-    CHECK_EQ(read("\xa1\x61\x61\xc3\x42\x05"s).error(), error::too_little_data);
+    CHECK_EQ(read("\xa1\x61\x61\xc3\x41\x05"s), -6.0);
+    CHECK_EQ(read("\xa1\x61\x61\xc2\x41\x05"s), 5.0);
+    CHECK_EQ(read("\xa1\x61\x61\xc3\x49"s + std::string(9, '\x01')), std::unexpected(error::number_out_of_range));
+    CHECK_EQ(read("\xa1\x61\x61\xc3\x61x"s), std::unexpected(error::inadmissible_type_for_tag_content));
+    CHECK_EQ(read("\xa1\x61\x61\xc3\x42\x05"s), std::unexpected(error::too_little_data));
 }
 
 // RFC 8949 3.4.3 admits only a byte string as the content of tag 2 or 3. The owner decided that decode and type()

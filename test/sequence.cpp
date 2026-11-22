@@ -29,9 +29,9 @@ std::shared_ptr<std::string const> held(std::string_view const encoded)
     return std::make_shared<std::string const>(encoded);
 }
 
-std::vector<std::expected<std::string_view, error>> elements_of(std::shared_ptr<std::string const> const &encoded)
+std::vector<cbor::result<std::string_view>> elements_of(std::shared_ptr<std::string const> const &encoded)
 {
-    std::vector<std::expected<std::string_view, error>> out;
+    std::vector<cbor::result<std::string_view>> out;
     for (auto const e : cbor::sequence{encoded})
         out.push_back(e);
     return out;
@@ -81,10 +81,10 @@ TEST_CASE("sequence: a partial last item gives too_little_data and keeps its byt
     cbor::sequence const s{held("\x01\x19\x01"sv)};
     auto it = s.begin();
     REQUIRE(it != s.end());
-    CHECK_EQ((*it).value(), "\x01"sv);
+    CHECK_EQ((*it), "\x01"sv);
     ++it;
     REQUIRE(it != s.end());
-    CHECK_EQ((*it).error(), error::too_little_data);
+    CHECK_EQ((*it), std::unexpected(error::too_little_data));
     CHECK_EQ(it.encoded(), "\x19\x01"sv);
     ++it;
     CHECK(it == s.end());
@@ -95,14 +95,14 @@ TEST_CASE("sequence: a partial last item gives too_little_data and keeps its byt
 // so a deep item is no error there.
 TEST_CASE("sequence: an error ends the sequence")
 {
-    std::vector<std::expected<std::string_view, error>> const reserved = elements_of(held("\x01\x1c\x01"sv));
+    std::vector<cbor::result<std::string_view>> const reserved = elements_of(held("\x01\x1c\x01"sv));
     REQUIRE_EQ(reserved.size(), 2u);
     CHECK_EQ(reserved[1].error(), error::syntax_error);
-    std::vector<std::expected<std::string_view, error>> const indefinite = elements_of(held("\x9f\x01\xff\x01"sv));
+    std::vector<cbor::result<std::string_view>> const indefinite = elements_of(held("\x9f\x01\xff\x01"sv));
     REQUIRE_EQ(indefinite.size(), 1u);
     CHECK_EQ(indefinite[0].error(), error::indefinite_length);
     auto const deep = held("\x01"s + std::string(20, '\x81') + "\x01"s);
-    std::vector<std::expected<std::string_view, error>> const nested = elements_of(deep);
+    std::vector<cbor::result<std::string_view>> const nested = elements_of(deep);
     REQUIRE_EQ(nested.size(), 2u);
     CHECK_EQ(nested[1].value().size(), 21u);
 }
@@ -138,7 +138,7 @@ TEST_CASE("sequence: lazy, path and decode read each element")
     REQUIRE(path.has_value());
     CHECK_EQ(**path, "xyz"sv);
     CHECK(inside(*owner, (*path)->data()));
-    CHECK_EQ(cbor::at_path<"$[0]", std::uint64_t>(views[1]).value(), 1u);
+    CHECK_EQ(cbor::at_path<"$[0]", std::uint64_t>(views[1]), 1u);
 
     auto const decoded = test::make_value_from_item(items[1]);
     REQUIRE(decoded.has_value());

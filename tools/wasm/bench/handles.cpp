@@ -107,7 +107,8 @@ __attribute__((export_name("doc_release"))) void doc_release(std::uint32_t const
 __attribute__((export_name("arr_first"))) std::uint32_t arr_first(std::uint32_t const doc)
 {
     auto const root = cbor::lazy::view(documents[doc].bytes);
-    auto const first = *root->elements()->begin();
+    auto const elements = root->elements();
+    auto const first = *elements->begin();
     return static_cast<std::uint32_t>(root->encoded().size() - first->encoded().size());
 }
 
@@ -142,8 +143,8 @@ __attribute__((export_name("ints_iterate"))) std::uint32_t ints_iterate(std::uin
 {
     auto const root = cbor::lazy::view(documents[doc].bytes);
     std::uint32_t i = 0;
-    auto const elements = *root->elements();
-    for (auto const e : elements)
+    auto const elements = root->elements();
+    for (auto const e : *elements)
         out[i++] = static_cast<std::int32_t>(*e->get<std::int64_t>());
     return i;
 }
@@ -169,7 +170,8 @@ __attribute__((export_name("schema_id"))) std::int32_t schema_id(std::uint32_t c
 __attribute__((export_name("lazy_id"))) std::int32_t lazy_id(std::uint32_t const doc)
 {
     auto const root = cbor::lazy::view(documents[doc].bytes);
-    return static_cast<std::int32_t>(*root->at_path<"$.id", std::int64_t>());
+    auto const id = root->at_path<"$.id", std::int64_t>();
+    return static_cast<std::int32_t>(*id);
 }
 
 __attribute__((export_name("lazy_values"))) std::uint64_t lazy_values(std::uint32_t const doc)

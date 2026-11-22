@@ -162,8 +162,8 @@ TEST_CASE("head: every initial byte gives the result that RFC 8949 gives it")
         auto const decoded = cbor::decode(bytes);
         CHECK_EQ(decoded.error(), cbor::error::syntax_error);
         CHECK_EQ(cbor::diagnostic_notation(bytes), std::unexpected(cbor::error::syntax_error));
-        CHECK_EQ((cbor::at_path<"$", int>(bytes)).error(), cbor::error::syntax_error);
-        CHECK_EQ((cbor::at_path<"$", cbor::simple_value>(bytes)).error(), cbor::error::syntax_error);
+        CHECK_EQ((cbor::at_path<"$", int>(bytes)), std::unexpected(cbor::error::syntax_error));
+        CHECK_EQ((cbor::at_path<"$", cbor::simple_value>(bytes)), std::unexpected(cbor::error::syntax_error));
         auto const l = cbor::lazy::adopt(std::string(bytes));
         if (l) {
             auto const kind = l->type();
@@ -175,7 +175,7 @@ TEST_CASE("head: every initial byte gives the result that RFC 8949 gives it")
         }
         cbor::sequence_reader r;
         r.feed(std::string_view{bytes});
-        CHECK_EQ(r.next().error(), cbor::error::syntax_error);
+        CHECK_EQ(r.next(), std::unexpected(cbor::error::syntax_error));
         CHECK_EQ(cbor::structs<one_simple_value>::decode("\xa1\x61v" + bytes), std::unexpected(cbor::error::syntax_error));
         CHECK_EQ(cbor::structs<one_simple_value>::decode("\xa1" + bytes + '\0'), std::unexpected(cbor::error::syntax_error));
     }

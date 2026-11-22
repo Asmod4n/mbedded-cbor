@@ -502,8 +502,8 @@ TEST_CASE("decode_cycles: lazy, at_path, decode and diagnostic notation read tag
         CHECK_EQ(l.at_path<"$[1]", std::uint64_t>(), 0u);
         CHECK_EQ(cbor::at_path<"$[2]", std::uint64_t>(doc), 7u);
         std::vector<cbor::type> types;
-        auto const range = *l.elements();
-        for (auto const e : range) {
+        auto const range = l.elements();
+        for (auto const e : *range) {
             auto const kind = e->type();
             types.push_back(*kind);
         }

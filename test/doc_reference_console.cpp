@@ -48,7 +48,8 @@ TEST_CASE("doc reference console: an element by its index")
 TEST_CASE("doc reference console: one value by its path")
 {
     auto const doc = cbor::lazy::adopt(user_message());
-    auto const read = doc->at_path<"$.user.id">()->get<int>();
+    auto const user_id = doc->at_path<"$.user.id">();
+    auto const read = user_id->get<int>();
     CHECK_EQ(read.value(), 42);
 }
 
@@ -57,7 +58,8 @@ TEST_CASE("doc reference console: all values of a path")
 {
     auto const doc = cbor::lazy::adopt(
         test::encode_in_preferred_form(test::M("users"s, test::A(test::M("name"s, "ann"s), test::M("name"s, "bob"s)))));
-    CHECK_EQ(doc->at_path<"$.users[*].name", cbor::nodelist>()->size(), 2u);
+    auto const names = doc->at_path<"$.users[*].name", cbor::nodelist>();
+    CHECK_EQ(names->size(), 2u);
 }
 
 // Show the message as text: the diagnostic notation of RFC 8949 section 8.

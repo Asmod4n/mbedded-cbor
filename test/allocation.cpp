@@ -486,7 +486,8 @@ TEST_CASE("sequence_reader: an rvalue std::string is taken without a copy")
     r.feed(std::move(bytes));
     std::size_t const after = allocated_bytes;
     CHECK_LT(after - before, size / share_of_size);
-    auto const read = r.next()->get<std::uint64_t>();
+    auto const item = r.next();
+    auto const read = item->get<std::uint64_t>();
     CHECK_EQ(read.value(), 1u);
 }
 
@@ -502,10 +503,10 @@ TEST_CASE("sequence_reader: a claimed count of 2^64 - 1 reserves nothing")
     cbor::sequence_reader r;
     std::size_t const before = allocated_bytes;
     r.feed("\x9b\xff\xff\xff\xff\xff\xff\xff\xff"sv);
-    bool waited = r.next().error() == error::too_little_data;
+    bool waited = r.next() == std::unexpected(error::too_little_data);
     for (std::size_t i = 0; i < pieces; ++i) {
         r.feed(std::string_view(zeros));
-        waited = waited && r.next().error() == error::too_little_data;
+        waited = waited && r.next() == std::unexpected(error::too_little_data);
     }
     std::size_t const after = allocated_bytes;
     CHECK(waited);
@@ -518,7 +519,7 @@ TEST_CASE("sequence_reader: after an error feed keeps nothing")
 {
     cbor::sequence_reader r;
     r.feed("\x1c"sv);
-    REQUIRE_EQ(r.next().error(), error::syntax_error);
+    REQUIRE_EQ(r.next(), std::unexpected(error::syntax_error));
     constexpr std::size_t size = 1 << 16;
     std::string const big(size, '\x01');
     auto const shared = std::make_shared<std::string const>(big);

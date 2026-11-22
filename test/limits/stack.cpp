@@ -121,7 +121,10 @@ std::expected<std::vector<cbor::lazy>, error> query(std::string const &message, 
     CHECK(q.has_value());
     if (!l || !q)
         return std::unexpected(error::syntax_error);
-    return l->at_path(*q);
+    auto const nodes = l->at_path(*q);
+    if (!nodes)
+        return std::unexpected(nodes.error());
+    return *nodes;
 }
 
 // What a read of the given depth gives: its value, or nesting_depth_exceeded where the stack of the thread ends.

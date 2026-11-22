@@ -459,9 +459,9 @@ TEST_CASE("lazy: negative indices and misses")
     CHECK(value_at(at(l, static_cast<std::size_t>(*count - 1))) == V(50));
     auto const count_2 = l.size();
     CHECK(value_at(at(l, static_cast<std::size_t>(*count_2 - 5))) == V(10));
-    CHECK_EQ(cbor::at_path<"$[-1]", std::uint64_t>(a).value(), 50u);
-    CHECK_EQ(cbor::at_path<"$[-5]", std::uint64_t>(a).value(), 10u);
-    CHECK_EQ(cbor::at_path<"$[-99]", std::uint64_t>(a).error(), error::index_out_of_bounds);
+    CHECK_EQ(cbor::at_path<"$[-1]", std::uint64_t>(a), 50u);
+    CHECK_EQ(cbor::at_path<"$[-5]", std::uint64_t>(a), 10u);
+    CHECK_EQ(cbor::at_path<"$[-99]", std::uint64_t>(a), std::unexpected(error::index_out_of_bounds));
 }
 
 // RFC 9535 2.3.3.2: an index i selects the element Normalize(i, len). Only an index in 0 to len - 1 after the
@@ -675,9 +675,9 @@ TEST_CASE("lazy: the entries of a map")
 // Only an array has elements and only a map has entries.
 TEST_CASE("lazy: elements and entries of the wrong kind")
 {
-    CHECK_EQ(lazy_of("\xa1\x61" "a\x1b\x00\x00\x00\x00\x00\x00\x00\x01"s).elements().error(), error::not_indexable);
-    CHECK_EQ(lazy_of("\x81\x1b\x00\x00\x00\x00\x00\x00\x00\x01"s).entries().error(), error::not_indexable);
-    CHECK_EQ(lazy_of("\x1b\x00\x00\x00\x00\x00\x00\x00\x01"s).elements().error(), error::not_indexable);
+    CHECK_EQ(lazy_of("\xa1\x61" "a\x1b\x00\x00\x00\x00\x00\x00\x00\x01"s).elements(), std::unexpected(error::not_indexable));
+    CHECK_EQ(lazy_of("\x81\x1b\x00\x00\x00\x00\x00\x00\x00\x01"s).entries(), std::unexpected(error::not_indexable));
+    CHECK_EQ(lazy_of("\x1b\x00\x00\x00\x00\x00\x00\x00\x01"s).elements(), std::unexpected(error::not_indexable));
 }
 
 // The standard algorithms and views take entries and elements as they take any standard view. Each concept that the two
@@ -755,12 +755,14 @@ TEST_CASE("lazy: std::views::take, std::views::drop and find_if over entries and
             "\xa3\x61" "a\x1b\x00\x00\x00\x00\x00\x00\x00\x01"
             "\x61" "b\x1b\x00\x00\x00\x00\x00\x00\x00\x02\x61" "c"
             "\x1b\x00\x00\x00\x00\x00\x00\x00\x03"s);
-        found = std::ranges::find_if(*map.entries(), [](auto const &entry) {
+        auto const entries = map.entries();
+        found = std::ranges::find_if(*entries, [](auto const &entry) {
             return entry.has_value() && value_at(entry->second) == V(2);
         });
     }
     REQUIRE(found != std::default_sentinel);
-    CHECK(value_at((*found)->first) == V("b"s));
+    auto const b = *found;
+    CHECK(value_at(b->first) == V("b"s));
     std::vector<value> rest;
     for (auto const entry : std::ranges::subrange(found, std::default_sentinel) | std::views::drop(1))
         rest.push_back(value_at(entry->first));
@@ -781,8 +783,10 @@ TEST_CASE("lazy: a copy of an entries iterator walks the same pairs")
     auto const before = first++;
     CHECK(before == copy);
     CHECK(first != copy);
-    CHECK(value_at((*first)->first) == V("b"s));
-    CHECK(value_at((*copy)->first) == V("a"s));
+    auto const at_first = *first;
+    CHECK(value_at(at_first->first) == V("b"s));
+    auto const at_copy = *copy;
+    CHECK(value_at(at_copy->first) == V("a"s));
     CHECK(cbor::lazy_entries::iterator{} == cbor::lazy_entries::iterator{});
 }
 
@@ -798,7 +802,8 @@ TEST_CASE("lazy: std::ranges algorithms over entries and elements")
         return entry.has_value() && value_at(entry->first) == V(2);
     });
     REQUIRE(found != entries->end());
-    CHECK(value_at((*found)->second) == V("b"s));
+    auto const pair = *found;
+    CHECK(value_at(pair->second) == V("b"s));
     CHECK_EQ(std::ranges::count_if(*entries, [](auto const &entry) {
                  return entry.has_value() && entry->first.template get<std::string_view>().has_value();
              }),
@@ -813,7 +818,8 @@ TEST_CASE("lazy: std::ranges algorithms over entries and elements")
     auto const two = std::ranges::find_if(*elements, [](auto const &element) { return value_at(*element) == V(2); });
     REQUIRE(two != elements->end());
     auto const next = std::ranges::next(two);
-    CHECK(value_at(**next) == V(3));
+    auto const three = *next;
+    CHECK(value_at(*three) == V(3));
 }
 
 // at gives the value of the pair with the key, for a text key and for an integer key of either sign.
@@ -867,12 +873,15 @@ TEST_CASE("lazy: an element iterator steps on and searches back with std::ranges
     REQUIRE(elements.has_value());
     auto const two = std::ranges::next(elements->begin(), 1, std::default_sentinel);
     auto const four = std::ranges::next(two, 2, std::default_sentinel);
-    CHECK(value_at(**two) == V(2));
-    CHECK(value_at(**four) == V(4));
+    auto const at_two = *two;
+    CHECK(value_at(*at_two) == V(2));
+    auto const at_four = *four;
+    CHECK(value_at(*at_four) == V(4));
     CHECK(std::ranges::next(four, 5, std::default_sentinel) == std::default_sentinel);
     auto const one = std::ranges::find_if(elements->begin(), four, [](auto const &e) { return value_at(*e) == V(1); });
     REQUIRE(one != four);
-    CHECK(value_at(**one) == V(1));
+    auto const at_one = *one;
+    CHECK(value_at(*at_one) == V(1));
     auto const missing = std::ranges::find_if(elements->begin(), two, [](auto const &e) { return value_at(*e) == V(3); });
     CHECK(missing == two);
 }
@@ -889,11 +898,13 @@ TEST_CASE("lazy: an entry iterator outlives the lazy that gave it")
             "\x1b\x00\x00\x00\x00\x00\x00\x00\x03"s;
         auto const l = cbor::lazy::adopt(std::move(message));
         REQUIRE(l.has_value());
-        kept = l->entries()->begin();
+        auto const entries = l->entries();
+        kept = entries->begin();
     }
     auto const c = std::ranges::next(*kept, 2, std::default_sentinel);
     REQUIRE(c != std::default_sentinel);
-    CHECK(value_at((*c)->second) == V(3));
+    auto const pair = *c;
+    CHECK(value_at(pair->second) == V(3));
 }
 
 // decode reads nothing ahead, so a step finds a truncated element. The step gives the error once and
@@ -902,7 +913,7 @@ TEST_CASE("lazy: a truncated element ends the walk with its error")
 {
     auto const elements = lazy_of("\x83\x01\x62\x61"s).elements();
     REQUIRE(elements.has_value());
-    std::vector<std::expected<cbor::lazy, error>> steps;
+    std::vector<cbor::result<cbor::lazy>> steps;
     for (auto const step : *elements)
         steps.push_back(step);
     REQUIRE(steps.size() == 3);
@@ -1530,7 +1541,7 @@ TEST_CASE("lazy: a repeated key at depth 3 is read with no error")
     CHECK_EQ(*read, 2u);
     auto const a_2 = lazy_of(outer).at("a");
     CHECK(a_2->at("b").has_value());
-    CHECK_EQ(*(cbor::at_path<"$.a.b.d", int>(inner)), 2);
+    CHECK_EQ((cbor::at_path<"$.a.b.d", int>(inner)), 2);
     CHECK(test::query("$..*", lazy_of(inner)).has_value());
     CHECK(test::read_value_at_path("$.a.b.d", lazy_of(inner)).has_value());
     auto const a_3 = lazy_of(inner).at("a");
@@ -1552,7 +1563,7 @@ TEST_CASE("lazy: an array of the same map many times is read with no error")
     CHECK(test::make_value_from_item(lazy_of(doc)).has_value());
     CHECK(test::query("$..*", lazy_of(doc)).has_value());
     CHECK(test::query("$[*].a", lazy_of(doc)).has_value());
-    CHECK_EQ(*(cbor::at_path<"$[63].b", int>(doc)), 2);
+    CHECK_EQ((cbor::at_path<"$[63].b", int>(doc)), 2);
     auto const at_63 = lazy_of(doc).at(63);
     auto const a = at_63->at("a");
     auto const read = a->get<std::uint64_t>();
@@ -1594,36 +1605,36 @@ TEST_CASE("lazy: size and empty")
 // so ranges::distance and the loop disagreed with size().
 TEST_CASE("lazy: a cut-off array or map yields exactly size() values")
 {
-    CHECK_EQ(lazy_of("\x82\x01"s).elements().error(), error::too_little_data);
-    auto const one = *lazy_of("\xa1\x61\x61\x61"s).entries();
-    CHECK_EQ(std::ranges::distance(one.begin(), one.end()), 1);
-    auto const e = *lazy_of("\x83\x01\x19\x00"s).elements();
+    CHECK_EQ(lazy_of("\x82\x01"s).elements(), std::unexpected(error::too_little_data));
+    auto const one = lazy_of("\xa1\x61\x61\x61"s).entries();
+    CHECK_EQ(std::ranges::distance(one->begin(), one->end()), 1);
+    auto const e = lazy_of("\x83\x01\x19\x00"s).elements();
     std::uint64_t n = 0, with_value = 0;
-    for (auto const x : e) {
+    for (auto const x : *e) {
         ++n;
         with_value += x.has_value();
     }
-    CHECK_EQ(n, e.size());
+    CHECK_EQ(n, e->size());
     CHECK_EQ(with_value, 2u);
-    CHECK_EQ(static_cast<std::uint64_t>(std::ranges::distance(e)), e.size());
-    auto const m = *lazy_of("\xa2\x61" "a\x01\x61"s).entries();
+    CHECK_EQ(static_cast<std::uint64_t>(std::ranges::distance(*e)), e->size());
+    auto const m = lazy_of("\xa2\x61" "a\x01\x61"s).entries();
     n = 0;
     with_value = 0;
-    for (auto const x : m) {
+    for (auto const x : *m) {
         ++n;
         with_value += x.has_value();
     }
-    CHECK_EQ(n, m.size());
+    CHECK_EQ(n, m->size());
     CHECK_EQ(with_value, 1u);
-    CHECK_EQ(static_cast<std::uint64_t>(std::ranges::distance(m)), m.size());
+    CHECK_EQ(static_cast<std::uint64_t>(std::ranges::distance(*m)), m->size());
 }
 
 // Fault p09: a head that claims 2^64-1 elements gave ssize -1 and
 // distance -1, because size() came from the head with no check.
 TEST_CASE("lazy: a head that claims more items than bytes is too little data")
 {
-    CHECK_EQ(lazy_of("\x9b\xff\xff\xff\xff\xff\xff\xff\xff"s).elements().error(), error::too_little_data);
-    CHECK_EQ(lazy_of("\xbb\xff\xff\xff\xff\xff\xff\xff\xff"s).entries().error(), error::too_little_data);
+    CHECK_EQ(lazy_of("\x9b\xff\xff\xff\xff\xff\xff\xff\xff"s).elements(), std::unexpected(error::too_little_data));
+    CHECK_EQ(lazy_of("\xbb\xff\xff\xff\xff\xff\xff\xff\xff"s).entries(), std::unexpected(error::too_little_data));
     auto const a = lazy_of("\xbb\xff\xff\xff\xff\xff\xff\xff\xff\x61" "a\x01"s).at("a");
     CHECK_EQ(a.error(),
              error::too_little_data);
@@ -1634,18 +1645,20 @@ TEST_CASE("lazy: a head that claims more items than bytes is too little data")
 TEST_CASE("lazy: iterators into a map inside tag 24 compare equal at the same pair")
 {
     auto const l = lazy_of("\xd8\x18\x47\xa2\x61" "a\x01\x61" "b\x02"s);
-    auto const f1 = std::ranges::next(l.entries()->begin());
-    auto const f2 = std::ranges::next(l.entries()->begin());
+    auto const first_walk = l.entries();
+    auto const second_walk = l.entries();
+    auto const f1 = std::ranges::next(first_walk->begin());
+    auto const f2 = std::ranges::next(second_walk->begin());
     CHECK(f1 == f2);
-    CHECK(f1 != l.entries()->begin());
+    CHECK(f1 != first_walk->begin());
 }
 
 // The count check of elements() and entries() reads the argument of the
 // head, and an indefinite length has no count, so it is refused first.
 TEST_CASE("lazy: elements and entries refuse indefinite length")
 {
-    CHECK_EQ(lazy_of("\x9f\x01\xff"s).elements().error(), error::indefinite_length);
-    CHECK_EQ(lazy_of("\xbf\x61" "a\x01\xff"s).entries().error(), error::indefinite_length);
+    CHECK_EQ(lazy_of("\x9f\x01\xff"s).elements(), std::unexpected(error::indefinite_length));
+    CHECK_EQ(lazy_of("\xbf\x61" "a\x01\xff"s).entries(), std::unexpected(error::indefinite_length));
 }
 
 // The owner decided on 2026-10-13 that a lazy holds only its bytes and its offset, so several threads read one lazy at
@@ -1669,14 +1682,14 @@ TEST_CASE("lazy: two threads read one root lazy" * doctest::skip(!test::threads_
                 auto const k = third.and_then([](cbor::lazy const &m) { return m.at("k"); });
                 auto const named =
                     k ? k->to_item() : std::expected<cbor::owning<cbor::item>, error>(std::unexpect, k.error());
-                auto const count = l.elements().transform([](cbor::lazy_elements const &e) {
+                auto const elements = l.elements();
+                auto const count = elements.transform([](cbor::lazy_elements const &e) {
                     return std::ranges::distance(e.begin(), e.end());
                 });
-                auto const entries =
-                    third ? third->entries() : std::expected<cbor::lazy_entries, error>(std::unexpect, third.error());
-                auto const pairs = entries.transform([](cbor::lazy_entries const &e) {
-                    return std::ranges::distance(e.begin(), e.end());
-                });
+                std::optional<std::ptrdiff_t> pairs;
+                if (third)
+                    if (auto const entries = third->entries())
+                        pairs = std::ranges::distance(entries->begin(), entries->end());
                 auto const element = l.at_path<"$[3][1]", std::uint64_t>();
                 bool const reference = [&] {
                     if (!named)
@@ -1782,7 +1795,7 @@ TEST_CASE("lazy size refuses a count that the bytes cannot hold")
 TEST_CASE("lazy: a step over a tag with no content gives too_little_data")
 {
     std::string const doc = "\xd0"s;
-    CHECK_EQ(cbor::at_path<"$[0]", int>(doc).error(), error::too_little_data);
+    CHECK_EQ(cbor::at_path<"$[0]", int>(doc), std::unexpected(error::too_little_data));
     auto const at_0 = lazy_of(doc).at(0);
     CHECK_EQ(at_0.error(), error::too_little_data);
     auto const a = lazy_of(doc).at("a");
@@ -1791,8 +1804,8 @@ TEST_CASE("lazy: a step over a tag with no content gives too_little_data")
     CHECK_EQ(at_0_2.error(), error::too_little_data);
     auto const count = lazy_of(doc).size();
     CHECK_EQ(count.error(), error::too_little_data);
-    CHECK_EQ(lazy_of(doc).elements().error(), error::too_little_data);
-    CHECK_EQ(lazy_of(doc).entries().error(), error::too_little_data);
+    CHECK_EQ(lazy_of(doc).elements(), std::unexpected(error::too_little_data));
+    CHECK_EQ(lazy_of(doc).entries(), std::unexpected(error::too_little_data));
 }
 
 // The same rule on a well-formed item: tag 1000 over [1, 2] is passed by a step as by the typed read.
@@ -1889,13 +1902,13 @@ TEST_CASE("lazy: a count larger than the bytes left is too_little_data before th
         CHECK_EQ(count.error(), error::too_little_data);
         auto const at_0 = lazy_of(wire).at(0);
         CHECK_EQ(at_0.error(), error::too_little_data);
-        CHECK_EQ(lazy_of(wire).elements().error(), error::too_little_data);
+        CHECK_EQ(lazy_of(wire).elements(), std::unexpected(error::too_little_data));
     }
     auto const a = lazy_of("\xa2\xff\x00\x00"s).at("a");
     CHECK_EQ(a.error(), error::too_little_data);
     auto const found = lazy_of("\xa2\xff\x00\x00"s).at(std::int64_t{0});
     CHECK_EQ(found.error(), error::too_little_data);
-    CHECK_EQ(lazy_of("\xa2\xff\x00\x00"s).entries().error(), error::too_little_data);
+    CHECK_EQ(lazy_of("\xa2\xff\x00\x00"s).entries(), std::unexpected(error::too_little_data));
 }
 
 namespace typed_array_index
@@ -1954,8 +1967,10 @@ TEST_CASE("lazy: an index reads an element of each typed array")
         CHECK_EQ(*read_2, second);
         auto const at_2 = l.at(2);
         CHECK_EQ(at_2.error(), error::index_out_of_bounds);
-        CHECK_EQ(std::ranges::distance(*l.elements()), 2);
-        auto const read_3 = (*std::ranges::next(l.elements()->begin()))->get<std::int64_t>();
+        auto const elements = l.elements();
+        CHECK_EQ(std::ranges::distance(*elements), 2);
+        auto const element_1 = *std::ranges::next(elements->begin());
+        auto const read_3 = element_1->get<std::int64_t>();
         CHECK_EQ(*read_3, second);
     }
     struct float_row {
@@ -2115,15 +2130,15 @@ TEST_CASE("path: at_path reads an element of a float128 typed array")
     for (auto const &[tag, bytes] : {std::pair{std::uint64_t{83}, one + minus_two}, std::pair{std::uint64_t{87}, little_endian}}) {
         CAPTURE(tag);
         std::string const encoded = typed_array_of(tag, bytes);
-        CHECK_EQ(*cbor::at_path<"$[0]", std::float128_t>(std::string_view(encoded)), std::float128_t{1});
-        CHECK_EQ(*cbor::at_path<"$[1]", std::float128_t>(std::string_view(encoded)), std::float128_t{-2});
-        CHECK_EQ(*lazy_of(encoded).at_path<"$[1]", std::float128_t>(), std::float128_t{-2});
-        CHECK_EQ(cbor::at_path<"$[2]", std::float128_t>(std::string_view(encoded)).error(),
-                 error::index_out_of_bounds);
+        CHECK_EQ(cbor::at_path<"$[0]", std::float128_t>(std::string_view(encoded)), std::float128_t{1});
+        CHECK_EQ(cbor::at_path<"$[1]", std::float128_t>(std::string_view(encoded)), std::float128_t{-2});
+        CHECK_EQ(lazy_of(encoded).at_path<"$[1]", std::float128_t>(), std::float128_t{-2});
+        CHECK_EQ(cbor::at_path<"$[2]", std::float128_t>(std::string_view(encoded)),
+                 std::unexpected(error::index_out_of_bounds));
     }
     std::string const float64 = typed_array_of(82, std::string(8, '\0'));
-    CHECK_EQ(cbor::at_path<"$[0]", std::float128_t>(std::string_view(float64)).error(), error::incorrect_type);
-    CHECK_EQ(cbor::at_path<"$", std::float128_t>("\xf9\x3c\x00"sv).error(), error::incorrect_type);
+    CHECK_EQ(cbor::at_path<"$[0]", std::float128_t>(std::string_view(float64)), std::unexpected(error::incorrect_type));
+    CHECK_EQ(cbor::at_path<"$", std::float128_t>("\xf9\x3c\x00"sv), std::unexpected(error::incorrect_type));
 #endif
 }
 
@@ -2136,7 +2151,7 @@ TEST_CASE("lazy: a cut typed array is too_little_data")
     CHECK_EQ(at_0.error(), error::too_little_data);
     auto const count = cut.size();
     CHECK_EQ(count.error(), error::too_little_data);
-    CHECK_EQ(cut.elements().error(), error::too_little_data);
+    CHECK_EQ(cut.elements(), std::unexpected(error::too_little_data));
     auto const at_0_2 = lazy_of("\xd8\x41\x43\x00\x01\x02"s).at(0);
     CHECK_EQ(at_0_2.error(), error::inadmissible_type_for_tag_content);
 }
@@ -2168,7 +2183,9 @@ TEST_CASE("lazy: a repeated key gives the first pair")
     cbor::lazy const twice = lazy_of("\xa3\x61" "a\x01\x61" "b\x02\x61" "a\x03"s);
     auto const a = twice.at("a");
     CHECK(value_at(*a) == V(1));
-    CHECK(value_at(*twice.at_path(*cbor::path::compile<cbor::lazy>("$.a"))) == V(1));
+    auto const query_a = cbor::path::compile<cbor::lazy>("$.a");
+    auto const through_query = twice.at_path(*query_a);
+    CHECK(value_at(*through_query) == V(1));
     CHECK_EQ(twice.at_path<"$.a", int>(), 1);
     cbor::lazy const numbers = lazy_of("\xa3\x01\x01\x01\x02\x01\x03"s);
     auto const at_1 = numbers.at(1);
@@ -2180,8 +2197,8 @@ TEST_CASE("lazy: a repeated key gives the first pair")
 TEST_CASE("lazy: compile refuses a query that is not singular for a single result")
 {
     auto const each = []<class T>() {
-        CHECK_EQ(cbor::path::compile<T>("$.a[*]").error(), error::not_singular_query);
-        CHECK_EQ(cbor::path::compile<T>("$..a").error(), error::not_singular_query);
+        CHECK_EQ(cbor::path::compile<T>("$.a[*]"), std::unexpected(error::not_singular_query));
+        CHECK_EQ(cbor::path::compile<T>("$..a"), std::unexpected(error::not_singular_query));
         CHECK(cbor::path::compile<T>("$.a[0]").has_value());
     };
     each.template operator()<int>();
@@ -2202,8 +2219,8 @@ TEST_CASE("lazy: compile refuses a query that is not singular for a single resul
 TEST_CASE("lazy: compile gives invalid_path for a text that is not a query")
 {
     for (std::string_view const text : {""sv, "$["sv, "a"sv, "$.a["sv}) {
-        CHECK_EQ(cbor::path::compile<cbor::nodelist>(text).error(), error::invalid_path);
-        CHECK_EQ(cbor::path::compile<cbor::lazy>(text).error(), error::invalid_path);
+        CHECK_EQ(cbor::path::compile<cbor::nodelist>(text), std::unexpected(error::invalid_path));
+        CHECK_EQ(cbor::path::compile<cbor::lazy>(text), std::unexpected(error::invalid_path));
     }
 }
 
@@ -2240,25 +2257,35 @@ TEST_CASE("lazy: one query applies to many documents")
     std::string const two =
         "\xa1\x61" "a\x83\x1b\x00\x00\x00\x00\x00\x00\x00\x03"
         "\x1b\x00\x00\x00\x00\x00\x00\x00\x04\x1b\x00\x00\x00\x00\x00\x00\x00\x05"s;
-    auto const all = *cbor::path::compile<cbor::nodelist>("$.a[*]");
-    auto const first = *cbor::path::compile<int>("$.a[0]");
+    auto const compiled_all = cbor::path::compile<cbor::nodelist>("$.a[*]");
+    auto const compiled_first = cbor::path::compile<int>("$.a[0]");
+    auto const &all = *compiled_all;
+    auto const &first = *compiled_first;
     cbor::lazy const l1 = *test::make_lazy_from_copy(one);
     cbor::lazy const l2 = *test::make_lazy_from_copy(two);
-    CHECK_EQ(l1.at_path(all)->size(), 2u);
-    CHECK_EQ(l2.at_path(all)->size(), 3u);
-    CHECK(*test::make_values_from_nodelist(l1.at_path(all)) == *test::make_values_from_nodelist(l1.at_path(all)));
-    CHECK(*test::make_values_from_nodelist(l1.at_path(all)) == *test::make_values_from_nodelist(l1.at_path<"$.a[*]", cbor::nodelist>()));
-    CHECK_EQ(*l1.at_path(first), 1);
-    CHECK_EQ(*l2.at_path(first), 3);
-    CHECK_EQ(*cbor::at_path(one, first), 1);
-    CHECK_EQ(*cbor::at_path(two, first), 3);
+    auto const nodes_1 = l1.at_path(all);
+    CHECK_EQ(nodes_1->size(), 2u);
+    auto const nodes_2 = l2.at_path(all);
+    CHECK_EQ(nodes_2->size(), 3u);
+    auto const again = l1.at_path(all);
+    CHECK(*test::make_values_from_nodelist(nodes_1) == *test::make_values_from_nodelist(again));
+    auto const fixed = l1.at_path<"$.a[*]", cbor::nodelist>();
+    CHECK(*test::make_values_from_nodelist(nodes_1) == *test::make_values_from_nodelist(fixed));
+    CHECK_EQ(l1.at_path(first), 1);
+    CHECK_EQ(l2.at_path(first), 3);
+    CHECK_EQ(cbor::at_path(one, first), 1);
+    CHECK_EQ(cbor::at_path(two, first), 3);
     auto const shared = std::make_shared<std::string const>(two);
-    CHECK_EQ(cbor::at_path(shared, all)->size(), 3u);
-    CHECK_EQ(cbor::at_path(std::string(two), all)->size(), 3u);
-    auto const node = cbor::at_path(shared, *cbor::path::compile<cbor::lazy>("$.a[2]"));
+    auto const shared_nodes = cbor::at_path(shared, all);
+    CHECK_EQ(shared_nodes->size(), 3u);
+    auto const moved_nodes = cbor::at_path(std::string(two), all);
+    CHECK_EQ(moved_nodes->size(), 3u);
+    auto const compiled_node = cbor::path::compile<cbor::lazy>("$.a[2]");
+    auto const node = cbor::at_path(shared, *compiled_node);
     CHECK((test::make_value_from_item(node) == V(5)));
     std::string const text = "\xa1\x61s\x61x"s;
-    auto const s = *cbor::path::compile<std::string_view>("$.s");
+    auto const compiled_s = cbor::path::compile<std::string_view>("$.s");
+    auto const &s = *compiled_s;
     auto const from_view = cbor::at_path(std::string(text), s);
     CHECK_EQ(**from_view, "x"sv);
     auto const from_string = cbor::at_path(std::string(text), s);
@@ -2272,10 +2299,11 @@ TEST_CASE("lazy: one query applies to many documents")
 TEST_CASE("lazy: a copy of a query outlives the original")
 {
     std::string const doc = "\xa1\x61k\x81\x1b\x00\x00\x00\x00\x00\x00\x00\x07"s;
-    std::optional<cbor::path::query<int>> original = *cbor::path::compile<int>("$['k'][0]");
+    auto const compiled = cbor::path::compile<int>("$['k'][0]");
+    std::optional<cbor::path::query<int>> original = *compiled;
     cbor::path::query<int> const copy = *original;
     original.reset();
-    CHECK_EQ(*cbor::at_path(doc, copy), 7);
+    CHECK_EQ(cbor::at_path(doc, copy), 7);
 }
 
 // A moved-from query holds no parsed path. Each apply sees that state and throws std::logic_error, as for any
@@ -2284,21 +2312,26 @@ TEST_CASE("lazy: a moved-from query is a wrong use")
 {
     std::string const doc = "\xa1\x61" "a\x61x"s;
     cbor::lazy const l = *test::make_lazy_from_copy(doc);
-    auto number = *cbor::path::compile<int>("$.a");
+    auto const compiled_number = cbor::path::compile<int>("$.a");
+    auto number = *compiled_number;
     auto const moved_number = std::move(number);
     CHECK_THROWS_AS((void)cbor::at_path(doc, number), std::logic_error);
     CHECK_THROWS_AS((void)l.at_path(number), std::logic_error);
-    CHECK_EQ(cbor::at_path(doc, moved_number).error(), error::incorrect_type);
-    auto text = *cbor::path::compile<std::string_view>("$.a");
-    auto other = *cbor::path::compile<std::string_view>("$.b");
+    CHECK_EQ(cbor::at_path(doc, moved_number), std::unexpected(error::incorrect_type));
+    auto const compiled_text = cbor::path::compile<std::string_view>("$.a");
+    auto const compiled_other = cbor::path::compile<std::string_view>("$.b");
+    auto text = *compiled_text;
+    auto other = *compiled_other;
     other = std::move(text);
     CHECK_THROWS_AS((void)cbor::at_path(std::string(doc), text), std::logic_error);
     auto const read = cbor::at_path(std::string(doc), other);
     CHECK_EQ(**read, "x"sv);
-    auto nodes = *cbor::path::compile<cbor::nodelist>("$.*");
+    auto const compiled_nodes = cbor::path::compile<cbor::nodelist>("$.*");
+    auto nodes = *compiled_nodes;
     auto const moved_nodes = std::move(nodes);
     CHECK_THROWS_AS((void)l.at_path(nodes), std::logic_error);
-    CHECK_EQ(l.at_path(moved_nodes)->size(), 1u);
+    auto const read_nodes = l.at_path(moved_nodes);
+    CHECK_EQ(read_nodes->size(), 1u);
 }
 
 // The parse of a query recurses into each filter. So a query with one filter in another does not compile on a thread
@@ -2311,8 +2344,9 @@ TEST_CASE("lazy: the compile of a query stops where the stack of the thread ends
     std::string const deep = "$" + test::repeat("[?@", depth) + ".a" + std::string(depth, ']');
     CHECK_EQ(test::error_on_small_stack([&deep] { return cbor::path::compile<cbor::nodelist>(deep); }),
              error::nesting_depth_exceeded);
-    auto const e = *cbor::path::compile<cbor::nodelist>("$[?@.a]");
-    CHECK(l.at_path(e)->empty());
+    auto const e = cbor::path::compile<cbor::nodelist>("$[?@.a]");
+    auto const nodes = l.at_path(*e);
+    CHECK(nodes->empty());
 }
 
 // A query has no mutable member, so threads apply one const query at once. The run under the thread
@@ -2323,12 +2357,16 @@ TEST_CASE("lazy: threads apply one query at once" * doctest::skip(!test::threads
         "\xa1\x61" "a\x83\x1b\x00\x00\x00\x00\x00\x00\x00\x01"
         "\x1b\x00\x00\x00\x00\x00\x00\x00\x02\x1b\x00\x00\x00\x00\x00\x00\x00\x03"s;
     cbor::lazy const l = *test::make_lazy_from_copy(doc);
-    auto const e = *cbor::path::compile<cbor::nodelist>("$.a[?@ > 1]");
+    auto const compiled = cbor::path::compile<cbor::nodelist>("$.a[?@ > 1]");
+    auto const &e = *compiled;
     std::array<std::size_t, 4> found{};
     {
         std::array<std::thread, 4> threads;
         for (std::size_t i = 0; i < threads.size(); ++i)
-            threads[i] = std::thread([&l, &e, &found, i] { found[i] = l.at_path(e)->size(); });
+            threads[i] = std::thread([&l, &e, &found, i] {
+                auto const nodes = l.at_path(e);
+                found[i] = nodes->size();
+            });
         for (std::thread &t : threads)
             t.join();
     }
@@ -2424,12 +2462,13 @@ TEST_CASE("lazy: a count longer than the bytes is too_little_data before the fir
     auto const elements = array->elements();
     REQUIRE(elements);
     auto it = elements->begin();
-    REQUIRE(*it);
-    auto const read = (*it)->get<int>();
+    auto const element = *it;
+    REQUIRE(element);
+    auto const read = element->get<int>();
     CHECK_EQ(read.value(), 100);
     ++it;
     REQUIRE(it != elements->end());
-    CHECK_EQ((*it).error(), error::too_little_data);
+    CHECK_EQ((*it), std::unexpected(error::too_little_data));
 }
 
 // The type of a count follows its source. The count of an array or a map is the argument of its head, and RFC 8949
@@ -2450,7 +2489,7 @@ TEST_CASE("lazy: a head that claims 2^32 elements over no bytes is too_little_da
     auto const doc = lazy_of("\x9b\x00\x00\x00\x01\x00\x00\x00\x00"s);
     auto const count = doc.size();
     CHECK_EQ(count.error(), error::too_little_data);
-    CHECK_EQ(doc.elements().error(), error::too_little_data);
+    CHECK_EQ(doc.elements(), std::unexpected(error::too_little_data));
 }
 
 // RFC 8746 section 2: the head of a typed array holds the count of its bytes, not of its elements. Tag 70 is uint32 in

@@ -29,7 +29,7 @@ TEST_CASE("doc advanced comparison: read one field by path")
 {
     std::string const bytes = encode_in_preferred_form(M("user"s, M("id"s, 42)));
     // begin path
-    std::expected<std::int64_t, cbor::error> const id = cbor::at_path<"$.user.id", std::int64_t>(bytes);
+    cbor::result<std::int64_t> const id = cbor::at_path<"$.user.id", std::int64_t>(bytes);
     // end path
     CHECK_EQ(id, 42);
 }
@@ -41,8 +41,8 @@ TEST_CASE("doc advanced comparison: iterate an array")
     // begin iterate
     auto const doc = cbor::lazy::adopt(std::move(bytes)); // [1, 2, 3]
     std::int64_t sum = 0;
-    auto const elements = *doc->elements();
-    for (auto const e : elements)
+    auto const elements = doc->elements();
+    for (auto const e : *elements)
         sum += e->get<std::int64_t>().value_or(0);
     // end iterate
     CHECK_EQ(sum, 6);

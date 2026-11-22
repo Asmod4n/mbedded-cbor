@@ -139,9 +139,10 @@ inline void lazy_forms(std::string_view const input)
         std::uint64_t count = 0;
         auto it = elements->begin();
         for (; it != elements->end() && count <= input.size(); it++) {
-            if (!*it)
+            auto const element = *it;
+            if (!element)
                 break;
-            node_reads_compare(**it, **it);
+            node_reads_compare(*element, *element);
             ++count;
         }
         if (it == elements->end())

@@ -200,12 +200,13 @@ TEST_CASE("doc reference lazy: at_path")
     CHECK_EQ(id.value(), 42);
     CHECK_EQ(**last, "b"sv);
     CHECK_EQ(tags->size(), 2u);
-    auto const read = doc->at_path<"$.user.id">()->get<int>();
+    auto const user_id = doc->at_path<"$.user.id">();
+    auto const read = user_id->get<int>();
     CHECK_EQ(read.value(), 42);
     auto const query = cbor::path::compile<std::int64_t>("$.user.id");
     REQUIRE(query);
-    CHECK_EQ(doc->at_path(*query).value(), 42);
-    CHECK_EQ(doc->at_path<"$.user.age", int>().error(), cbor::error::key_not_found);
+    CHECK_EQ(doc->at_path(*query), 42);
+    CHECK_EQ(doc->at_path<"$.user.age", int>(), std::unexpected(cbor::error::key_not_found));
 }
 
 // lazy.hpp, snippet size: the count of the pairs of a map; a value that is not a container has no size.
@@ -291,16 +292,16 @@ TEST_CASE("doc reference lazy: elements")
     // bytes: a std::string with [1, 2, 3]
     auto const array = cbor::lazy::adopt(std::move(bytes));
     int sum = 0;
-    auto const elements = *array->elements();
-    for (auto const element : elements)
+    auto const elements = array->elements();
+    for (auto const element : *elements)
         if (element)
             sum += element->get<int>().value_or(0);
     // sum: 6
     // [elements]
     CHECK_EQ(sum, 6);
-    CHECK_EQ(cbor::lazy::adopt("\x9f\x01\xff"s)->elements().error(), cbor::error::indefinite_length);
+    CHECK_EQ(cbor::lazy::adopt("\x9f\x01\xff"s)->elements(), std::unexpected(cbor::error::indefinite_length));
     auto const at_0 = array->at(0);
-    CHECK_EQ(at_0->elements().error(), cbor::error::not_indexable);
+    CHECK_EQ(at_0->elements(), std::unexpected(cbor::error::not_indexable));
 }
 
 // lazy.hpp, snippet entries: the pairs of a map in the order of the bytes.
@@ -312,8 +313,8 @@ TEST_CASE("doc reference lazy: entries")
     // [entries]
     // bytes: a std::string with {"a": 1, "b": 2}
     auto const map = cbor::lazy::adopt(std::move(bytes));
-    auto const entries = *map->entries();
-    for (auto const pair : entries) {
+    auto const entries = map->entries();
+    for (auto const pair : *entries) {
         if (!pair)
             break;
         auto const key = pair->first.get<std::string_view>();  // "a", then "b"
@@ -358,15 +359,15 @@ TEST_CASE("doc reference lazy: lazy_elements")
     // [lazy_elements]
     // bytes: a std::string with [{"age": 31}, {"age": 20}, {"age": 40}]
     auto const people = cbor::lazy::adopt(std::move(bytes));
-    auto const view = *people->elements();  // 3 elements
-    auto const older = std::ranges::count_if(view, [](std::expected<cbor::lazy, cbor::error> const &e) {
+    auto const view = people->elements();  // 3 elements
+    auto const older = std::ranges::count_if(*view, [](cbor::result<cbor::lazy> const &e) {
         if (!e)
             return false;
         auto const age = e->at("age");
         return age->get<int>().value_or(0) > 30;
     });  // 2
     // [lazy_elements]
-    CHECK_EQ(view.size(), 3u);
+    CHECK_EQ(view->size(), 3u);
     CHECK_EQ(older, 2);
 
     auto const broken = cbor::lazy::adopt("\x83\x1c\x00\x00"s)->elements();
@@ -388,9 +389,9 @@ TEST_CASE("doc reference lazy: lazy_entries")
     // [lazy_entries]
     // bytes: a std::string with {"a": 1, "b": 2, "c": 3}
     auto const map = cbor::lazy::adopt(std::move(bytes));
-    auto const view = *map->entries();                                // 3 pairs
-    auto const rest = std::ranges::distance(view | std::views::drop(1));  // 2
+    auto const view = map->entries();                                  // 3 pairs
+    auto const rest = std::ranges::distance(*view | std::views::drop(1));  // 2
     // [lazy_entries]
-    CHECK_EQ(view.size(), 3u);
+    CHECK_EQ(view->size(), 3u);
     CHECK_EQ(rest, 2);
 }

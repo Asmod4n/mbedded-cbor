@@ -140,8 +140,8 @@ TEST_CASE("doc runtime: loop over an array or a map")
     auto const use = [&seen](cbor::result<cbor::ref<std::string_view>> const &k,
                              cbor::result<std::int64_t> const &v) { seen.emplace_back(std::string{**k}, *v); };
     auto const map = test::make_lazy_from_copy(bytes);
-    auto const entries = *map->entries();
-    for (auto const pair : entries)
+    auto const entries = map->entries();
+    for (auto const pair : *entries)
         if (pair)
             use(pair->first.get<std::string_view>(), pair->second.get<std::int64_t>());
     CHECK(seen == std::vector<std::pair<std::string, std::int64_t>>{{"a", 1}, {"b", 2}});
@@ -183,7 +183,7 @@ TEST_CASE("doc runtime: read items from a socket")
         r.feed(std::move(chunk));
         while (auto item = r.next())
             handle(*item);
-        CHECK_EQ(r.next().error(), cbor::error::too_little_data);
+        CHECK_EQ(r.next(), std::unexpected(cbor::error::too_little_data));
     }
     CHECK_EQ(handled, std::vector<std::string>{"[1, 2]", "\"abc\""});
     CHECK(r.empty());
@@ -195,7 +195,7 @@ TEST_CASE("doc runtime: a reader after bytes that are not CBOR")
     cbor::sequence_reader r;
     r.feed("\x01\x1c"s);
     CHECK(r.next().has_value());
-    CHECK_EQ(r.next().error(), cbor::error::syntax_error);
+    CHECK_EQ(r.next(), std::unexpected(cbor::error::syntax_error));
     r.feed("\x02"s);
-    CHECK_EQ(r.next().error(), cbor::error::syntax_error);
+    CHECK_EQ(r.next(), std::unexpected(cbor::error::syntax_error));
 }

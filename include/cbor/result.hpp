@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <expected>
 #include <functional>
+#include <memory>
 #include <span>
 #include <string>
 #include <string_view>
@@ -21,6 +22,7 @@
 
 #include "error.hpp"
 #include "head.hpp"
+#include "path.hpp"
 #include "ref.hpp"
 #include "validity.hpp"
 
@@ -112,6 +114,28 @@ private:
     friend constexpr result<std::string> diag2cbor(std::string_view text);
 
     friend result<std::string> diagnostic_notation(std::string_view encoded);
+
+    friend class path;
+
+    friend struct lazy_elements;
+
+    friend struct lazy_entries;
+
+    friend class sequence;
+
+    friend class sequence_reader;
+
+    template <fixed_string Path, class V>
+        requires(is_singular_query_v<Path> && scalar_result<V>)
+    friend result<V> at_path(std::string_view encoded);
+
+    template <fixed_string Path, class V, borrowed_range_of_bytes Encoded>
+        requires(is_singular_query_v<Path> && view_result<V>)
+    friend result<ref<V>> at_path(std::shared_ptr<void const> owner, Encoded const &encoded);
+
+    template <fixed_string Path, copied_value V>
+        requires is_singular_query_v<Path>
+    friend result<V> at_path(std::basic_string_view<char> encoded);
 
 #if __has_include(<sys/uio.h>)
     friend result<ref<std::span<iovec const>>> encode_iov(item root);

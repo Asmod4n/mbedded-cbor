@@ -54,20 +54,20 @@ TEST_CASE("pending items: every reader refuses a container that claims more item
     }
     auto const a = test::make_lazy_from_copy(array);
     REQUIRE(a.has_value());
-    CHECK_EQ(a->elements().error(), error::too_little_data);
+    CHECK_EQ(a->elements(), std::unexpected(error::too_little_data));
     auto const at_0 = a->at(0);
     CHECK_EQ(at_0.error(), error::too_little_data);
     auto const m = test::make_lazy_from_copy(map);
     REQUIRE(m.has_value());
-    CHECK_EQ(m->entries().error(), error::too_little_data);
+    CHECK_EQ(m->entries(), std::unexpected(error::too_little_data));
     auto const at_1 = m->at(1);
     CHECK_EQ(at_1.error(), error::too_little_data);
     auto const first = cbor::path::compile<std::int64_t>("$[0]");
     REQUIRE(first.has_value());
-    CHECK_EQ(cbor::at_path(std::string_view(array), *first).error(), error::too_little_data);
+    CHECK_EQ(cbor::at_path(std::string_view(array), *first), std::unexpected(error::too_little_data));
     auto const second = cbor::path::compile<std::int64_t>("$[1]");
     REQUIRE(second.has_value());
-    CHECK_EQ(cbor::at_path(std::string_view(map), *second).error(), error::too_little_data);
+    CHECK_EQ(cbor::at_path(std::string_view(map), *second), std::unexpected(error::too_little_data));
 }
 
 // RFC 8742 2: a reader of a sequence waits until the bytes of an item are there. A head that claims more items than
@@ -77,7 +77,7 @@ TEST_CASE("pending items: a sequence reader waits for the items that a head clai
     std::string const whole = encode_edn("[1, 2, 3]");
     cbor::sequence_reader r;
     r.feed(whole.substr(0, 2));
-    CHECK_EQ(r.next().error(), error::too_little_data);
+    CHECK_EQ(r.next(), std::unexpected(error::too_little_data));
     r.feed(whole.substr(2));
     auto const item = r.next();
     REQUIRE(item.has_value());

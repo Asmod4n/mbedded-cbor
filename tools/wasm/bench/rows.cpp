@@ -43,8 +43,8 @@ __attribute__((export_name("rows_load"))) std::uint32_t rows_load(char const *co
     loaded = std::make_shared<std::string const>(ptr, len);
     auto const root = cbor::lazy::view(loaded);
     row_offsets.clear();
-    auto const elements = *root->elements();
-    for (auto const r : elements)
+    auto const elements = root->elements();
+    for (auto const r : *elements)
         row_offsets.push_back(static_cast<std::uint32_t>(r->offset));
     return static_cast<std::uint32_t>(row_offsets.size());
 }

@@ -97,7 +97,7 @@ std::vector<ojson> documents_of(bool const plain)
     return documents;
 }
 
-ojson nodes_of(std::expected<cbor::nodelist, cbor::error> const &r)
+ojson nodes_of(cbor::result<cbor::nodelist> const &r)
 {
     if (!r)
         return ojson("error " + std::error_code{r.error()}.message());

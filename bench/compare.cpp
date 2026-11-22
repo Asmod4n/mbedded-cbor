@@ -482,14 +482,18 @@ template <class V> static double lazy_text(V const &v)
 
 static double path_read()
 {
-    auto const cars = cbor::lazy::view(plain).and_then([](cbor::lazy const &l) { return l.at_path<"$.cars">(); });
+    auto const root = cbor::lazy::view(plain);
+    if (!root) [[unlikely]] std::abort();
+    auto const cars = root->at_path<"$.cars">();
     if (!cars) [[unlikely]] std::abort();
     auto const all = cars->elements();
     if (!all) [[unlikely]] std::abort();
     double s = 0;
     for (auto const car : *all) {
         if (!car) [[unlikely]] std::abort();
-        auto const wheels = car->at_path<"$.wheels">().and_then([](cbor::lazy const &l) { return l.elements(); });
+        auto const wheel_list = car->at_path<"$.wheels">();
+        if (!wheel_list) [[unlikely]] std::abort();
+        auto const wheels = wheel_list->elements();
         if (!wheels) [[unlikely]] std::abort();
         double w = 0;
         for (auto const x : *wheels) {

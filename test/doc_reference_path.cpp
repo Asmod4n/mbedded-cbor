@@ -83,14 +83,15 @@ TEST_CASE("doc reference path: at_path")
     CHECK_EQ(**name, "ann");
     CHECK_EQ(run_time, 42);
     REQUIRE(q.has_value());
-    CHECK_EQ(cbor::at_path<"$.user.age", std::int64_t>(*owner).error(), cbor::error::key_not_found);
+    CHECK_EQ(cbor::at_path<"$.user.age", std::int64_t>(*owner), std::unexpected(cbor::error::key_not_found));
 }
 
 // query.hpp, the comment of at_path: a moved-from query is a wrong use and throws std::logic_error.
 TEST_CASE("doc reference path: at_path with a moved-from query throws")
 {
     std::string const bytes = test::encode_in_preferred_form(test::M("id"s, 42));
-    auto q = cbor::path::compile<std::int64_t>("$.id").value();
+    auto compiled = cbor::path::compile<std::int64_t>("$.id");
+    auto q = compiled.value();
     auto const kept = std::move(q);
     CHECK_THROWS_AS((void)cbor::at_path(bytes, q), std::logic_error);
     CHECK_EQ(cbor::at_path(bytes, kept), 42);
@@ -112,7 +113,8 @@ TEST_CASE("doc reference path: compile")
     // owner: a std::shared_ptr<std::string const> with {"a": [1, 2, 3]}
     auto const q = cbor::path::compile<cbor::nodelist>("$.a[?@ > 1]");
     if (q)
-        found = cbor::at_path(owner, *q)->size();                    // 2
+        if (auto const nodes = cbor::at_path(owner, *q))
+            found = nodes->size();                                    // 2
     auto const many = cbor::path::compile<int>("$.a[*]");         // not_singular_query
     auto const broken = cbor::path::compile<cbor::lazy>("$.a[");  // invalid_path
     // [compile]
@@ -129,9 +131,9 @@ TEST_CASE("doc reference path: query")
     std::string const second = test::encode_in_preferred_form(test::M("id"s, 2, "x"s, 0));
     // [query]
     // first: {"id": 1}, second: {"id": 2, "x": 0}
-    auto const q = cbor::path::compile<std::int64_t>("$.id").value();
-    auto const one = cbor::at_path(first, q);   // 1
-    auto const two = cbor::at_path(second, q);  // 2
+    auto const q = cbor::path::compile<std::int64_t>("$.id");
+    auto const one = cbor::at_path(first, *q);   // 1
+    auto const two = cbor::at_path(second, *q);  // 2
     // [query]
     CHECK_EQ(one, 1);
     CHECK_EQ(two, 2);
@@ -216,16 +218,20 @@ TEST_CASE("doc reference path: is_singular_query_v")
 TEST_CASE("doc reference path: CBOR beyond JSON")
 {
     auto const keys = cbor::lazy::adopt("\xa2\x01\x61\x78\x41\x01\x61\x7a"s);
-    auto const x = keys->at_path<"$[1]">()->get<std::string_view>();
+    auto const at_1 = keys->at_path<"$[1]">();
+    auto const x = at_1->get<std::string_view>();
     REQUIRE(x);
     CHECK_EQ(**x, "x"sv);
-    auto const z = keys->at_path<"$[h'01']">()->get<std::string_view>();
+    auto const at_h01 = keys->at_path<"$[h'01']">();
+    auto const z = at_h01->get<std::string_view>();
     REQUIRE(z);
     CHECK_EQ(**z, "z"sv);
     auto const embedded = cbor::lazy::adopt("\xa1\x61\x61\xd8\x18\x43\x82\x01\x02"s);
-    auto const read = embedded->at_path<"$.a[1]">()->get<int>();
+    auto const node = embedded->at_path<"$.a[1]">();
+    auto const read = node->get<int>();
     CHECK_EQ(read.value(), 2);
     auto const typed = cbor::lazy::adopt("\xa1\x61\x76\xd8\x45\x44\x07\x00\x08\x00"s);
-    auto const read_2 = typed->at_path<"$.v[1]">()->get<int>();
+    auto const element = typed->at_path<"$.v[1]">();
+    auto const read_2 = element->get<int>();
     CHECK_EQ(read_2.value(), 8);
 }

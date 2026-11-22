@@ -102,9 +102,9 @@ TEST_CASE("simple value: at_path gives every simple value 0 to 255")
         REQUIRE(r.has_value());
         CHECK_EQ(std::to_underlying(*r), v);
     }
-    CHECK_EQ((cbor::at_path<"$[0]", cbor::simple_value>("\x81\xf9\x3c\x00"sv)).error(),
-             error::incorrect_type);
-    CHECK_EQ((cbor::at_path<"$[0]", cbor::simple_value>("\x81\x01"sv)).error(), error::incorrect_type);
+    CHECK_EQ((cbor::at_path<"$[0]", cbor::simple_value>("\x81\xf9\x3c\x00"sv)),
+             std::unexpected(error::incorrect_type));
+    CHECK_EQ((cbor::at_path<"$[0]", cbor::simple_value>("\x81\x01"sv)), std::unexpected(error::incorrect_type));
 }
 
 // lazy::to_item gives an item whose content is the simple value, beside the head fields of the wire.

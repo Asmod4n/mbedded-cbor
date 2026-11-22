@@ -95,7 +95,7 @@ TEST_CASE("recursion limit: a key literal of a path")
     REQUIRE(q.has_value());
     auto const l = document(held);
     REQUIRE(l.has_value());
-    CHECK_EQ(l->at_path(*q).error(), error::key_not_found);
+    CHECK_EQ(l->at_path(*q), std::unexpected(error::key_not_found));
     auto const deep_query = compiled(test::levels_main_thread_holds);
     if constexpr (!test::main_thread_holds_deep_input) {
         if (!deep_query) {

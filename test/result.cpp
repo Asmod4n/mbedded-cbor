@@ -1,6 +1,9 @@
 #include <cbor/diagnostic_notation.hpp>
 #include <cbor/lazy.hpp>
+#include <cbor/query.hpp>
 #include <cbor/result.hpp>
+#include <cbor/sequence.hpp>
+#include <cbor/sequence_reader.hpp>
 #include <cbor/structs.hpp>
 #include <doctest/doctest.h>
 
@@ -9,6 +12,8 @@
 #include <cstdint>
 #include <expected>
 #include <map>
+#include <memory>
+#include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
@@ -16,6 +21,7 @@
 #include <utility>
 
 using cbor::error;
+using namespace std::literals;
 
 namespace
 {
@@ -121,6 +127,22 @@ using parsed_result = decltype(cbor::parse_edn(std::declval<std::string_view>())
 constexpr auto parse_text = [](std::string const &text) { return cbor::parse_edn(text); };
 
 constexpr auto read_empty = [](error const &) { return cbor::diag2cbor(std::string_view{}); };
+
+using nodes_result = decltype(std::declval<cbor::lazy const &>().at_path<"$.a", cbor::nodelist>());
+
+using view_of_elements = decltype(std::declval<cbor::lazy const &>().elements());
+
+using view_of_entries = decltype(std::declval<cbor::lazy const &>().entries());
+
+using query_result = decltype(cbor::path::compile<cbor::nodelist>(std::declval<std::string_view>()));
+
+using next_result = decltype(std::declval<cbor::sequence_reader &>().next());
+
+constexpr auto compile_root = [](cbor::nodelist const &) { return cbor::path::compile<cbor::lazy>("$"); };
+
+constexpr auto count_of_nodes = [](cbor::nodelist const &n) { return n.size(); };
+
+constexpr auto nodes_of_document = [](error const &) { return make_document().at_path<"$.a", cbor::nodelist>(); };
 
 } // namespace
 
@@ -536,4 +558,198 @@ TEST_CASE("result: cbor::diag2cbor gives its result in a constant expression")
         return encoded.error() == error::syntax_error;
     }();
     CHECK(refused);
+}
+
+// cbor::at_path, cbor::path::compile, cbor::lazy::at_path, cbor::lazy::elements, cbor::lazy::entries, the elements of
+// a cbor::sequence and cbor::sequence_reader::next give a result. The view of elements is the case that a loop over a
+// temporary would leave dangling, so neither a reader nor a monadic form of a temporary result compiles, and the same
+// call on a named result does.
+TEST_CASE("result: a temporary result of at_path, elements, compile or next cannot be read")
+{
+    CHECK(deref_of_named<nodes_result>);
+    CHECK(loop_over_named<nodes_result>);
+    CHECK_FALSE(deref_of_call<nodes_result>);
+    CHECK_FALSE(loop_over_call<nodes_result>);
+    CHECK_FALSE(arrow_of_call<nodes_result>);
+    CHECK_FALSE(value_of_call<nodes_result>);
+    CHECK_FALSE(error_of_call<nodes_result>);
+    CHECK_FALSE(deref_of_moved<nodes_result>);
+    CHECK(loop_over_named<view_of_elements>);
+    CHECK_FALSE(deref_of_call<view_of_elements>);
+    CHECK_FALSE(loop_over_call<view_of_elements>);
+    CHECK_FALSE(arrow_of_call<view_of_elements>);
+    CHECK_FALSE(value_of_call<view_of_elements>);
+    CHECK(loop_over_named<view_of_entries>);
+    CHECK_FALSE(loop_over_call<view_of_entries>);
+    CHECK_FALSE(arrow_of_call<view_of_entries>);
+    CHECK_FALSE(deref_of_call<query_result>);
+    CHECK_FALSE(value_of_call<query_result>);
+    CHECK_FALSE(error_of_call<query_result>);
+    CHECK_FALSE(deref_of_call<next_result>);
+    CHECK_FALSE(error_of_call<next_result>);
+    CHECK_FALSE(deref_of_call<cbor::sequence::iterator::value_type>);
+    CHECK_FALSE(arrow_of_call<cbor::sequence::iterator::value_type>);
+    CHECK_FALSE(deref_of_call<cbor::lazy_elements::iterator::value_type>);
+    CHECK_FALSE(deref_of_call<cbor::lazy_entries::iterator::value_type>);
+    using compile = decltype(compile_root);
+    using count = decltype(count_of_nodes);
+    using again = decltype(nodes_of_document);
+    using code = decltype(code_of);
+    CHECK((and_then_takes<nodes_result const &, compile>));
+    CHECK_FALSE((and_then_takes<nodes_result &&, compile>));
+    CHECK((transform_takes<nodes_result const &, count>));
+    CHECK_FALSE((transform_takes<nodes_result &&, count>));
+    CHECK((or_else_takes<nodes_result const &, again>));
+    CHECK_FALSE((or_else_takes<nodes_result &&, again>));
+    CHECK((transform_error_takes<nodes_result const &, code>));
+    CHECK_FALSE((transform_error_takes<nodes_result &&, code>));
+    CHECK_FALSE((std::is_convertible_v<nodes_result, std::expected<cbor::nodelist, error>>));
+    CHECK_FALSE((std::is_convertible_v<next_result, std::expected<cbor::lazy, error>>));
+    CHECK_FALSE((std::is_constructible_v<nodes_result, cbor::nodelist>));
+    CHECK_FALSE((std::is_constructible_v<next_result, std::unexpect_t, error>));
+    CHECK_FALSE((std::is_constructible_v<view_of_elements, std::in_place_t>));
+    CHECK((std::is_same_v<cbor::lazy_elements::iterator::value_type, cbor::result<cbor::lazy>>));
+    CHECK((std::is_same_v<cbor::lazy_entries::iterator::value_type, cbor::result<std::pair<cbor::lazy, cbor::lazy>>>));
+    CHECK((std::is_same_v<cbor::sequence::iterator::value_type, cbor::result<std::string_view>>));
+    CHECK(std::ranges::forward_range<cbor::lazy_elements>);
+    CHECK(std::ranges::forward_range<cbor::lazy_entries>);
+    CHECK(std::ranges::input_range<cbor::sequence>);
+}
+
+// A named result of each function of the group gives its value or its error. Each friend overload of at_path is
+// called here: the scalar form over a std::string_view, the view form with an owner and a range, and the copied form.
+// The forms that return the result of another public form are called too, and so are the forms with a query.
+TEST_CASE("result: cbor::at_path and cbor::path::compile give a result")
+{
+    auto encoded = cbor::encode<std::map<std::string, std::string>>({{"t", "x"}});
+    REQUIRE(encoded.has_value());
+    auto const owner = std::make_shared<std::string const>(*encoded);
+    std::string_view const bytes(*owner);
+    auto const number = cbor::encode<std::map<std::string, std::int64_t>>({{"a", 7}});
+    REQUIRE(number.has_value());
+    std::string_view const number_bytes(*number);
+
+    auto const scalar = cbor::at_path<"$.a", std::int64_t>(number_bytes);
+    CHECK_EQ(*scalar, 7);
+    auto const of_range = cbor::at_path<"$.a", std::int64_t>(std::span<char const>(*number));
+    CHECK_EQ(of_range, 7);
+    auto const view = cbor::at_path<"$.t", std::string_view>(owner, bytes);
+    REQUIRE(view.has_value());
+    CHECK_EQ(**view, "x");
+    auto const of_owner = cbor::at_path<"$.t", std::string_view>(owner);
+    REQUIRE(of_owner.has_value());
+    CHECK_EQ(**of_owner, "x");
+    auto const moved_in = cbor::at_path<"$.t", std::string_view>(std::string(*owner));
+    REQUIRE(moved_in.has_value());
+    CHECK_EQ(**moved_in, "x");
+    auto const copied = cbor::at_path<"$.t", std::string>(bytes);
+    CHECK_EQ(*copied, "x");
+    auto const missing = cbor::at_path<"$.b", std::int64_t>(number_bytes);
+    CHECK_EQ(missing.error(), error::key_not_found);
+
+    auto const a = cbor::path::compile<std::int64_t>("$.a");
+    REQUIRE(a.has_value());
+    auto const t = cbor::path::compile<std::string_view>("$.t");
+    REQUIRE(t.has_value());
+    auto const node = cbor::path::compile<cbor::lazy>("$.t");
+    REQUIRE(node.has_value());
+    auto const all = cbor::path::compile<cbor::nodelist>("$.*");
+    REQUIRE(all.has_value());
+    auto const broken = cbor::path::compile<cbor::lazy>("$.a[");
+    CHECK_EQ(broken.error(), error::invalid_path);
+    auto const many = cbor::path::compile<std::int64_t>("$.*");
+    CHECK_EQ(many.error(), error::not_singular_query);
+    auto const by_query = cbor::at_path(number_bytes, *a);
+    CHECK_EQ(*by_query, 7);
+    auto const by_query_of_range = cbor::at_path(std::span<char const>(*number), *a);
+    CHECK_EQ(by_query_of_range, 7);
+    auto const view_by_query = cbor::at_path(owner, bytes, *t);
+    REQUIRE(view_by_query.has_value());
+    CHECK_EQ(**view_by_query, "x");
+    auto const node_by_query = cbor::at_path(owner, bytes, *node);
+    REQUIRE(node_by_query.has_value());
+    auto const text = node_by_query->get<std::string_view>();
+    CHECK_EQ(**text, "x");
+    auto const nodes_by_query = cbor::at_path(owner, bytes, *all);
+    REQUIRE(nodes_by_query.has_value());
+    CHECK_EQ(nodes_by_query->size(), 1u);
+    auto const of_owner_by_query = cbor::at_path(owner, *t);
+    REQUIRE(of_owner_by_query.has_value());
+    CHECK_EQ(**of_owner_by_query, "x");
+    auto const moved_by_query = cbor::at_path(std::string(*owner), *all);
+    CHECK_EQ(moved_by_query->size(), 1u);
+    auto const t_as_number = cbor::path::compile<std::int64_t>("$.t");
+    auto const wrong_type = cbor::at_path(bytes, *t_as_number);
+    CHECK_EQ(wrong_type.error(), error::incorrect_type);
+}
+
+// cbor::lazy::at_path, elements and entries give a result, and so does each element of their views. Each form of
+// lazy::at_path is called here.
+TEST_CASE("result: cbor::lazy::at_path, elements and entries give a result")
+{
+    auto const doc = make_document();
+    auto const node = doc.at_path<"$.a">();
+    CHECK_EQ(node->get<std::int64_t>(), 7);
+    auto const scalar = doc.at_path<"$.a", std::int64_t>();
+    CHECK_EQ(*scalar, 7);
+    auto const nodes = doc.at_path<"$.*", cbor::nodelist>();
+    CHECK_EQ(nodes->size(), 1u);
+    auto const missing = doc.at_path<"$.b", std::int64_t>();
+    CHECK_EQ(missing.error(), error::key_not_found);
+    auto const query = cbor::path::compile<std::int64_t>("$.a");
+    auto const by_query = doc.at_path(*query);
+    CHECK_EQ(*by_query, 7);
+    auto encoded = cbor::encode<std::map<std::string, std::string>>({{"t", "x"}});
+    REQUIRE(encoded.has_value());
+    auto const text_doc = cbor::lazy::adopt(std::move(*encoded));
+    REQUIRE(text_doc.has_value());
+    auto const text = text_doc->at_path<"$.t", std::string_view>();
+    CHECK_EQ(**text, "x");
+
+    auto const entries = doc.entries();
+    REQUIRE(entries.has_value());
+    CHECK_EQ(entries->size(), 1u);
+    auto const pair = *entries->begin();
+    REQUIRE(pair.has_value());
+    CHECK_EQ(pair->second.get<std::int64_t>(), 7);
+    auto const not_array = doc.elements();
+    CHECK_EQ(not_array.error(), error::not_indexable);
+    auto array = cbor::encode<std::vector<std::int64_t>>({1, 2});
+    REQUIRE(array.has_value());
+    auto const list = cbor::lazy::adopt(std::move(*array));
+    REQUIRE(list.has_value());
+    auto const elements = list->elements();
+    REQUIRE(elements.has_value());
+    std::int64_t sum = 0;
+    for (auto const &element : *elements)
+        sum += element->get<std::int64_t>().value_or(0);
+    CHECK_EQ(sum, 3);
+    auto const not_map = list->entries();
+    CHECK_EQ(not_map.error(), error::not_indexable);
+}
+
+// A cbor::sequence gives each item as a result, and cbor::sequence_reader::next gives each item, or the error, as a
+// result.
+TEST_CASE("result: cbor::sequence and cbor::sequence_reader::next give a result")
+{
+    auto const owner = std::make_shared<std::string const>("\x01\x02\x19"s);
+    cbor::sequence const s(owner);
+    auto it = s.begin();
+    auto const first = *it;
+    CHECK_EQ(*first, "\x01"sv);
+    ++it;
+    ++it;
+    auto const cut = *it;
+    CHECK_EQ(cut.error(), error::too_little_data);
+
+    cbor::sequence_reader r;
+    auto const waiting = r.next();
+    CHECK_EQ(waiting.error(), error::too_little_data);
+    r.feed(std::string("\x01\x02"));
+    auto const one = r.next();
+    REQUIRE(one.has_value());
+    CHECK_EQ(one->get<std::int64_t>(), 1);
+    auto const two = r.next();
+    CHECK_EQ(two->get<std::int64_t>(), 2);
+    CHECK(r.empty());
 }

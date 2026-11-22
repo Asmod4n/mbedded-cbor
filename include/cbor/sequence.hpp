@@ -15,6 +15,7 @@
 #include "error.hpp"
 #include "item_size.hpp"
 #include "ref.hpp"
+#include "result.hpp"
 #include "validity.hpp"
 
 namespace cbor
@@ -36,7 +37,9 @@ namespace cbor
  * result: sequence of 3 items: 1, 2, 3
  * call: s.empty()
  * result: false
- * call: cbor::at_path<"$", std::int64_t>(**s.begin())
+ * call: auto const first = *s.begin()
+ * result: 1 byte: 01
+ * call: cbor::at_path<"$", std::int64_t>(*first)
  * result: 1
  * @endcode
  *
@@ -90,7 +93,7 @@ public:
 
     public:
         /** @brief The bytes of one item, or the error of that item. */
-        using value_type = std::expected<std::string_view, error>;
+        using value_type = result<std::string_view>;
         /** @brief The type of the distance between two iterators. */
         using difference_type = std::ptrdiff_t;
 
@@ -107,8 +110,8 @@ public:
         value_type operator*() const
         {
             if (!size) [[unlikely]]
-                return std::unexpected(size.error());
-            return detail::validity::substr(bytes, detail::validity::offset{0}, *size);
+                return value_type(std::unexpect, size.error());
+            return value_type(detail::validity::substr(bytes, detail::validity::offset{0}, *size));
         }
 
         /** @brief Goes to the next item, or to the end after an item with an error. */

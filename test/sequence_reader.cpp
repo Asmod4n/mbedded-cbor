@@ -47,25 +47,25 @@ bool view_of(cbor::lazy const &item, std::string const &piece)
 TEST_CASE("sequence_reader: hands out each item when its last byte arrives")
 {
     cbor::sequence_reader r;
-    CHECK_EQ(r.next().error(), error::too_little_data);
+    CHECK_EQ(r.next(), std::unexpected(error::too_little_data));
     r.feed("\x01\x82\x01"sv);
     auto const first = r.next();
     REQUIRE(first.has_value());
     auto const read = first->get<std::uint64_t>();
     CHECK_EQ(read.value(), 1u);
-    CHECK_EQ(r.next().error(), error::too_little_data);
+    CHECK_EQ(r.next(), std::unexpected(error::too_little_data));
     r.feed("\x02\x63"sv);
     auto const second = r.next();
     REQUIRE(second.has_value());
     auto const count = second->size();
     CHECK_EQ(count.value(), 2u);
-    CHECK_EQ(r.next().error(), error::too_little_data);
+    CHECK_EQ(r.next(), std::unexpected(error::too_little_data));
     r.feed("abc"sv);
     auto const third = r.next();
     REQUIRE(third.has_value());
     auto const read_2 = third->get<std::string_view>();
     CHECK_EQ(read_2.value(), "abc"sv);
-    CHECK_EQ(r.next().error(), error::too_little_data);
+    CHECK_EQ(r.next(), std::unexpected(error::too_little_data));
 }
 
 // A new user feeds what a socket gives first. The forms are a literal through std::string_view, a std::string by name, a
@@ -114,12 +114,12 @@ TEST_CASE("sequence_reader: an empty sequence and empty pieces")
         CAPTURE(static_cast<int>(form));
         cbor::sequence_reader r;
         CHECK(r.empty());
-        CHECK_EQ(r.next().error(), error::too_little_data);
+        CHECK_EQ(r.next(), std::unexpected(error::too_little_data));
         r = test::feed_piece_to_reader(std::move(r), ""sv, form, 0);
         r = test::feed_piece_to_reader(std::move(r), ""sv, form, 1);
         r = test::feed_piece_to_reader(std::move(r), ""sv, form, 2);
         CHECK(r.empty());
-        CHECK_EQ(r.next().error(), error::too_little_data);
+        CHECK_EQ(r.next(), std::unexpected(error::too_little_data));
         r = test::feed_piece_to_reader(std::move(r), "\x82"sv, form, 0);
         r = test::feed_piece_to_reader(std::move(r), ""sv, form, 1);
         r = test::feed_piece_to_reader(std::move(r), "\x01\x02"sv, form, 2);
@@ -137,17 +137,17 @@ TEST_CASE("sequence_reader: an empty sequence and empty pieces")
 TEST_CASE("sequence_reader: next() with no piece left")
 {
     cbor::sequence_reader r;
-    CHECK_EQ(r.next().error(), error::too_little_data);
+    CHECK_EQ(r.next(), std::unexpected(error::too_little_data));
     r.feed(std::make_shared<std::string const>("\x01"s));
     REQUIRE(r.next().has_value());
-    CHECK_EQ(r.next().error(), error::too_little_data);
+    CHECK_EQ(r.next(), std::unexpected(error::too_little_data));
     CHECK(r.empty());
     r.feed(std::make_shared<std::string const>("\x82"s));
-    CHECK_EQ(r.next().error(), error::too_little_data);
-    CHECK_EQ(r.next().error(), error::too_little_data);
+    CHECK_EQ(r.next(), std::unexpected(error::too_little_data));
+    CHECK_EQ(r.next(), std::unexpected(error::too_little_data));
     r.feed(std::make_shared<std::string const>("\x01\x02"s));
     REQUIRE(r.next().has_value());
-    CHECK_EQ(r.next().error(), error::too_little_data);
+    CHECK_EQ(r.next(), std::unexpected(error::too_little_data));
     CHECK(r.empty());
 }
 
@@ -305,7 +305,8 @@ TEST_CASE("sequence_reader: an item stays valid after the caller releases the pi
     REQUIRE(item.has_value());
     auto const read = item->get<std::string_view>();
     CHECK_EQ(read.value(), "abc"sv);
-    auto const read_2 = r.next()->get<std::uint64_t>();
+    auto const second = r.next();
+    auto const read_2 = second->get<std::uint64_t>();
     CHECK_EQ(read_2.value(), 1u);
 }
 
@@ -357,13 +358,13 @@ TEST_CASE("sequence_reader: after an error every call gives the error and feed k
         cbor::sequence_reader r;
         r = test::feed_piece_to_reader(std::move(r), "\x01\x1c\x01"sv, form, 0);
         CHECK(r.next().has_value());
-        CHECK_EQ(r.next().error(), error::syntax_error);
+        CHECK_EQ(r.next(), std::unexpected(error::syntax_error));
         CHECK(r.empty());
         r = test::feed_piece_to_reader(std::move(r), "\x02"sv, form, 1);
         r = test::feed_piece_to_reader(std::move(r), "\x03"sv, form, 2);
         CHECK(r.empty());
-        CHECK_EQ(r.next().error(), error::syntax_error);
-        CHECK_EQ(r.next().error(), error::syntax_error);
+        CHECK_EQ(r.next(), std::unexpected(error::syntax_error));
+        CHECK_EQ(r.next(), std::unexpected(error::syntax_error));
     }
 }
 
@@ -431,7 +432,7 @@ TEST_CASE("sequence_reader: empty() is true when no unread byte is held")
         r = test::feed_piece_to_reader(std::move(r), "\x01\x82"sv, form, 0);
         CHECK_FALSE(r.empty());
         CHECK(r.next().has_value());
-        CHECK_EQ(r.next().error(), error::too_little_data);
+        CHECK_EQ(r.next(), std::unexpected(error::too_little_data));
         CHECK_FALSE(r.empty());
         r = test::feed_piece_to_reader(std::move(r), "\x01\x02"sv, form, 1);
         CHECK(r.next().has_value());

@@ -183,6 +183,14 @@ inline std::expected<value, error> make_value_from_item(std::expected<cbor::lazy
     return make_value_from_item(*l);
 }
 
+template <class E>
+inline std::expected<value, error> make_value_from_item(cbor::result<cbor::lazy, E> const &l)
+{
+    if (!l)
+        return std::unexpected(l.error());
+    return make_value_from_item(*l);
+}
+
 inline std::expected<value, error> decode_wire_into_value(std::string_view const wire)
 {
     auto const l = test::make_lazy_from_copy(wire);

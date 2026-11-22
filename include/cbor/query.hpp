@@ -92,7 +92,7 @@ struct lazy;
  */
 template <fixed_string Path, class T>
     requires(is_singular_query_v<Path> && scalar_result<T>)
-std::expected<T, error> at_path(std::string_view encoded);
+result<T> at_path(std::string_view encoded);
 
 /**
  * @brief Reads a scalar at a path in a range of bytes.
@@ -100,7 +100,7 @@ std::expected<T, error> at_path(std::string_view encoded);
  */
 template <fixed_string Path, class T, borrowed_range_of_bytes Encoded>
     requires(is_singular_query_v<Path> && scalar_result<T> && !std::is_array_v<std::remove_cvref_t<Encoded>>)
-std::expected<T, error> at_path(Encoded &&encoded)
+result<T> at_path(Encoded &&encoded)
 {
     return at_path<Path, T>(detail::chars_of(encoded));
 }
@@ -111,7 +111,7 @@ std::expected<T, error> at_path(Encoded &&encoded)
  */
 template <fixed_string Path, class T, borrowed_range_of_bytes Encoded>
     requires(is_singular_query_v<Path> && view_result<T>)
-std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded);
+result<ref<T>> at_path(std::shared_ptr<void const> owner, Encoded const &encoded);
 
 /**
  * @brief Reads a view at a path in the bytes of `*owner`.
@@ -119,7 +119,7 @@ std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded 
  */
 template <fixed_string Path, class T, owning_range_of_bytes Encoded>
     requires(is_singular_query_v<Path> && view_result<T>)
-std::expected<ref<T>, error> at_path(std::shared_ptr<Encoded const> owner);
+result<ref<T>> at_path(std::shared_ptr<Encoded const> owner);
 
 /**
  * @brief Reads a view at a path, and moves the bytes into a new owner.
@@ -128,7 +128,7 @@ std::expected<ref<T>, error> at_path(std::shared_ptr<Encoded const> owner);
  */
 template <fixed_string Path, class T, owning_range_of_bytes Encoded>
     requires(is_singular_query_v<Path> && view_result<T>)
-std::expected<ref<T>, error> at_path(Encoded &&encoded);
+result<ref<T>> at_path(Encoded &&encoded);
 
 /**
  * @brief Copies the text or the bytes at a path out of `encoded`.
@@ -136,7 +136,7 @@ std::expected<ref<T>, error> at_path(Encoded &&encoded);
  */
 template <fixed_string Path, copied_value T>
     requires is_singular_query_v<Path>
-std::expected<T, error> at_path(std::basic_string_view<char> encoded);
+result<T> at_path(std::basic_string_view<char> encoded);
 
 /** @ingroup path */
 class path
@@ -1001,18 +1001,18 @@ class path
     /// @cond
     template <fixed_string Path, copied_value T>
         requires is_singular_query_v<Path>
-    friend std::expected<T, error> at_path(std::string_view encoded);
+    friend result<T> at_path(std::basic_string_view<char> encoded);
 
     template <fixed_string>
     friend class is_singular_query;
 
     template <fixed_string Path, class T>
         requires(is_singular_query_v<Path> && scalar_result<T>)
-    friend std::expected<T, error> at_path(std::string_view encoded);
+    friend result<T> at_path(std::string_view encoded);
 
     template <fixed_string Path, class T, borrowed_range_of_bytes Encoded>
         requires(is_singular_query_v<Path> && view_result<T>)
-    friend std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded);
+    friend result<ref<T>> at_path(std::shared_ptr<void const> owner, Encoded const &encoded);
 
     template <fixed_string>
     friend class is_valid_path;
@@ -1035,16 +1035,16 @@ public:
      *
      * @code{.example}
      * message: {"id": 1}
-     * call: auto const q = cbor::path::compile<std::int64_t>("$.id").value()
+     * call: auto const q = cbor::path::compile<std::int64_t>("$.id")
      * result: cbor::path::query<long long>
-     * call: cbor::at_path(bytes, q)
+     * call: cbor::at_path(bytes, *q)
      * result: 1
      * @endcode
      * @code{.example}
      * message: {"id": 2, "x": 0}
-     * call: auto const q = cbor::path::compile<std::int64_t>("$.id").value()
+     * call: auto const q = cbor::path::compile<std::int64_t>("$.id")
      * result: cbor::path::query<long long>
-     * call: cbor::at_path(bytes, q)
+     * call: cbor::at_path(bytes, *q)
      * result: 2
      * @endcode
      *
@@ -1113,9 +1113,15 @@ public:
      * result: shared_ptr to 7 bytes: a1 61 61 83 01 02 03
      * call: auto const q = cbor::path::compile<cbor::nodelist>("$.a[?@ > 1]")
      * result: cbor::path::query<cbor::nodelist>
-     * call: cbor::at_path(owner, *q)->size()
+     * call: auto const nodes = cbor::at_path(owner, *q)
+     * result: nodelist of 2 nodes: 2, 3
+     * call: nodes->size()
      * result: 2
-     * call: cbor::at_path(owner, *cbor::path::compile<cbor::nodelist>("$.a[0]"))->size()
+     * call: auto const first = cbor::path::compile<cbor::nodelist>("$.a[0]")
+     * result: cbor::path::query<cbor::nodelist>
+     * call: auto const one = cbor::at_path(owner, *first)
+     * result: nodelist of 1 node: 1
+     * call: one->size()
      * result: 1
      * call: cbor::path::compile<cbor::lazy>("$.a[1]").has_value()
      * result: true
@@ -1130,26 +1136,26 @@ public:
      */
     template <class T>
         requires path_result<T>
-    static std::expected<query<T>, error> compile(std::string_view const path)
+    static result<query<T>> compile(std::string_view const path)
     {
         auto q = parse_query(path);
         if (!q) [[unlikely]]
-            return std::unexpected(q.error());
+            return result<query<T>>(std::unexpect, q.error());
         if (!std::is_same_v<T, nodelist> && !q->top.singular) [[unlikely]]
-            return std::unexpected(error::not_singular_query);
+            return result<query<T>>(std::unexpect, error::not_singular_query);
         query<T> e;
         e.segments = std::move(q->segments);
         e.selectors = std::move(q->selectors);
         e.filters = std::move(q->expressions);
         e.keys = std::move(q->keys);
         e.top = q->top;
-        return e;
+        return result<query<T>>(std::move(e));
     }
 
 private:
     template <class T>
-    static std::expected<typename query<T>::result_type, error> apply_query(query<T> const &e,
-                                                                            lazy const &root)
+    static std::expected<typename query<T>::result_type, error> apply_query_or_error(query<T> const &e,
+                                                                                     lazy const &root)
     {
         throw_logic_error_if_query_empty(e);
         query_view const v{e.segments, e.selectors, e.filters, e.keys, {}};
@@ -1168,21 +1174,44 @@ private:
     }
 
     template <class T>
-    static std::expected<T, error> apply_query(query<T> const &e, std::string_view const encoded)
+    static std::expected<T, error> apply_query_or_error(query<T> const &e, std::string_view const encoded)
     {
         throw_logic_error_if_query_empty(e);
         return walk_bytes<T>({e.segments, e.selectors, e.filters, e.keys, {}}, e.top,
                              encoded);
     }
 
-    template <view_result T>
-    static std::expected<ref<T>, error> apply_query(query<T> const &e, std::shared_ptr<void const> owner,
-                                                    std::string_view const encoded)
+    template <class T>
+    static result<typename query<T>::result_type> apply_query(query<T> const &e, lazy const &root)
     {
-        auto const r = apply_query(e, encoded);
+        return result<typename query<T>::result_type>(apply_query_or_error(e, root));
+    }
+
+    template <scalar_result T>
+    static result<T> apply_query(query<T> const &e, std::string_view const encoded)
+    {
+        return result<T>(apply_query_or_error(e, encoded));
+    }
+
+    template <view_result T>
+    static result<ref<T>> apply_query(query<T> const &e, std::shared_ptr<void const> owner,
+                                      std::string_view const encoded)
+    {
+        auto const r = apply_query_or_error(e, encoded);
         if (!r) [[unlikely]]
-            return std::unexpected(r.error());
-        return ref<T>(std::move(owner), *r);
+            return result<ref<T>>(std::unexpect, r.error());
+        return result<ref<T>>(ref<T>(std::move(owner), *r));
+    }
+
+    template <class T>
+        requires(std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
+    static result<T> apply_query(query<T> const &e, std::shared_ptr<void const> owner,
+                                 std::string_view const encoded)
+    {
+        auto const root = lazy::view(std::move(owner), encoded);
+        if (!root) [[unlikely]]
+            return result<T>(std::unexpect, root.error());
+        return result<T>(apply_query_or_error(e, *root));
     }
 
     template <class T>
@@ -1194,11 +1223,15 @@ private:
 
     /// @cond
     template <scalar_result T>
-    friend std::expected<T, error> at_path(std::string_view encoded, query<T> const &e);
+    friend result<T> at_path(std::string_view encoded, query<T> const &e);
 
     template <view_result T, borrowed_range_of_bytes Encoded>
-    friend std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded,
-                                                       query<T> const &e);
+    friend result<ref<T>> at_path(std::shared_ptr<void const> owner, Encoded const &encoded, query<T> const &e);
+
+    template <class T, borrowed_range_of_bytes Encoded>
+        requires(std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
+    friend result<T> at_path(std::shared_ptr<void const> owner, Encoded const &encoded,
+                             typename path::query<T> const &e);
     /// @endcond
 };
 
@@ -1210,7 +1243,7 @@ inline constexpr bool is_path_query_v<path::query<T>> = true;
  * @ingroup path
  */
 template <scalar_result T>
-std::expected<T, error> at_path(std::string_view const encoded, path::query<T> const &e)
+result<T> at_path(std::string_view const encoded, path::query<T> const &e)
 {
     return path::apply_query(e, encoded);
 }
@@ -1221,7 +1254,7 @@ std::expected<T, error> at_path(std::string_view const encoded, path::query<T> c
  */
 template <scalar_result T, borrowed_range_of_bytes Encoded>
     requires(!std::is_array_v<std::remove_cvref_t<Encoded>>)
-std::expected<T, error> at_path(Encoded &&encoded, path::query<T> const &e)
+result<T> at_path(Encoded &&encoded, path::query<T> const &e)
 {
     return at_path(detail::chars_of(encoded), e);
 }
@@ -1231,8 +1264,7 @@ std::expected<T, error> at_path(Encoded &&encoded, path::query<T> const &e)
  * @ingroup path
  */
 template <view_result T, borrowed_range_of_bytes Encoded>
-std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded,
-                                            path::query<T> const &e)
+result<ref<T>> at_path(std::shared_ptr<void const> owner, Encoded const &encoded, path::query<T> const &e)
 {
     detail::validity::throw_logic_error_if_empty(
         owner, "cbor::at_path: the owner of the encoded data item is empty");
@@ -1246,10 +1278,9 @@ std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded 
  */
 template <class T, borrowed_range_of_bytes Encoded>
     requires(std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
-std::expected<T, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded,
-                                typename path::query<T> const &e)
+result<T> at_path(std::shared_ptr<void const> owner, Encoded const &encoded, typename path::query<T> const &e)
 {
-    return lazy::view(std::move(owner), encoded).and_then([&e](lazy const &root) { return root.at_path(e); });
+    return path::apply_query(e, std::move(owner), detail::chars_of(encoded));
 }
 
 /**
@@ -1258,8 +1289,8 @@ std::expected<T, error> at_path(std::shared_ptr<void const> owner, Encoded const
  */
 template <class T, owning_range_of_bytes Encoded>
     requires(view_result<T> || std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
-std::expected<typename path::query<T>::result_type, error> at_path(std::shared_ptr<Encoded const> owner,
-                                                                       path::query<T> const &e)
+result<typename path::query<T>::result_type> at_path(std::shared_ptr<Encoded const> owner,
+                                                    path::query<T> const &e)
 {
     detail::validity::throw_logic_error_if_null(owner, "cbor::at_path: the encoded data item is null");
     std::string_view const bytes = detail::chars_of(*owner);
@@ -1273,8 +1304,7 @@ std::expected<typename path::query<T>::result_type, error> at_path(std::shared_p
  */
 template <class T, owning_range_of_bytes Encoded>
     requires(view_result<T> || std::is_same_v<T, lazy> || std::is_same_v<T, nodelist>)
-std::expected<typename path::query<T>::result_type, error> at_path(Encoded &&encoded,
-                                                                       path::query<T> const &e)
+result<typename path::query<T>::result_type> at_path(Encoded &&encoded, path::query<T> const &e)
 {
     return at_path(std::make_shared<Encoded const>(std::move(encoded)), e);
 }
@@ -1559,15 +1589,16 @@ inline std::expected<bool, error> path::value_equal(lazy const &a, lazy const &b
             case major_type::array: {
                 if (h.argument != k.argument)
                     return false;
-                auto const left = a.elements();
+                auto const left = a.elements_or_error();
                 if (!left) [[unlikely]]
                     return std::unexpected(left.error());
-                auto const right = b.elements();
+                auto const right = b.elements_or_error();
                 if (!right) [[unlikely]]
                     return std::unexpected(right.error());
                 auto j = right->begin();
-                for (auto const element : *left) {
-                    auto const other = *j;
+                for (auto i = left->begin(); i != left->end(); ++i) {
+                    auto const element = i.element_or_error();
+                    auto const other = j.element_or_error();
                     if (!element) [[unlikely]]
                         return std::unexpected(element.error());
                     if (!other) [[unlikely]]
@@ -1997,20 +2028,22 @@ std::expected<bool, error> path::for_each_child(lazy const &node, F const &f)
         return std::unexpected(found.error());
     lazy const content{found->source, std::to_underlying(found->item_at), {}};
     if (found->h.major == major_type::array || detail::heads::is_typed_array(found->h)) {
-        auto const elements = content.elements();
+        auto const elements = content.elements_or_error();
         if (!elements) [[unlikely]]
             return std::unexpected(elements.error());
-        for (auto const element : *elements) {
+        for (auto i = elements->begin(); i != elements->end(); ++i) {
+            auto const element = i.element_or_error();
             if (!element) [[unlikely]]
                 return std::unexpected(element.error());
             if (auto const r = f(*element); !r || !*r)
                 return r;
         }
     } else if (found->h.major == major_type::map) {
-        auto const entries = content.entries();
+        auto const entries = content.entries_or_error();
         if (!entries) [[unlikely]]
             return std::unexpected(entries.error());
-        for (auto const entry : *entries) {
+        for (auto i = entries->begin(); i != entries->end(); ++i) {
+            auto const entry = i.entry_or_error();
             if (!entry) [[unlikely]]
                 return std::unexpected(entry.error());
             if (auto const r = f(entry->second); !r || !*r)
@@ -2030,7 +2063,7 @@ std::expected<bool, error> path::for_each_sliced(lazy const &node, selector cons
     if (s.step == 0 || (found->h.major != major_type::array && !detail::heads::is_typed_array(found->h)))
         return true;
     lazy const content{found->source, std::to_underlying(found->item_at), {}};
-    auto const elements = content.elements();
+    auto const elements = content.elements_or_error();
     if (!elements) [[unlikely]]
         return std::unexpected(elements.error());
     auto const len = static_cast<std::int64_t>(elements->size());
@@ -2041,7 +2074,8 @@ std::expected<bool, error> path::for_each_sliced(lazy const &node, selector cons
         std::int64_t const lower = std::min(std::max(start, std::int64_t{0}), len);
         std::int64_t const upper = std::min(std::max(end, std::int64_t{0}), len);
         std::int64_t i = 0;
-        for (auto const element : *elements) {
+        for (auto at = elements->begin(); at != elements->end(); ++at) {
+            auto const element = at.element_or_error();
             if (!element) [[unlikely]]
                 return std::unexpected(element.error());
             if (lower <= i && i < upper && (i - lower) % s.step == 0)
@@ -2052,7 +2086,8 @@ std::expected<bool, error> path::for_each_sliced(lazy const &node, selector cons
         return true;
     }
     std::vector<lazy> children;
-    for (auto const element : *elements) {
+    for (auto at = elements->begin(); at != elements->end(); ++at) {
+        auto const element = at.element_or_error();
         if (!element) [[unlikely]]
             return std::unexpected(element.error());
         children.push_back(*element);
@@ -2327,24 +2362,23 @@ class is_singular_query
 
 template <fixed_string Path, class T>
     requires(is_singular_query_v<Path> && scalar_result<T>)
-std::expected<T, error> at_path(std::string_view const encoded)
+result<T> at_path(std::string_view const encoded)
 {
-    return path::walk_query<Path, T>(encoded);
+    return result<T>(path::walk_query<Path, T>(encoded));
 }
 
 template <fixed_string Path, class T, borrowed_range_of_bytes Encoded>
     requires(is_singular_query_v<Path> && view_result<T>)
-std::expected<ref<T>, error> at_path(std::shared_ptr<void const> owner, Encoded const &encoded)
+result<ref<T>> at_path(std::shared_ptr<void const> owner, Encoded const &encoded)
 {
     detail::validity::throw_logic_error_if_empty(
         owner, "cbor::at_path: the owner of the encoded data item is empty");
-    return path::walk_query<Path, T>(std::move(owner),
-                                         detail::chars_of(encoded));
+    return result<ref<T>>(path::walk_query<Path, T>(std::move(owner), detail::chars_of(encoded)));
 }
 
 template <fixed_string Path, class T, owning_range_of_bytes Encoded>
     requires(is_singular_query_v<Path> && view_result<T>)
-std::expected<ref<T>, error> at_path(std::shared_ptr<Encoded const> owner)
+result<ref<T>> at_path(std::shared_ptr<Encoded const> owner)
 {
     detail::validity::throw_logic_error_if_null(owner, "cbor::at_path: the encoded data item is null");
     std::string_view const bytes = detail::chars_of(*owner);
@@ -2353,56 +2387,59 @@ std::expected<ref<T>, error> at_path(std::shared_ptr<Encoded const> owner)
 
 template <fixed_string Path, class T, owning_range_of_bytes Encoded>
     requires(is_singular_query_v<Path> && view_result<T>)
-std::expected<ref<T>, error> at_path(Encoded &&encoded)
+result<ref<T>> at_path(Encoded &&encoded)
 {
     return at_path<Path, T>(std::make_shared<Encoded const>(std::move(encoded)));
 }
 
 template <fixed_string Path, copied_value T>
     requires is_singular_query_v<Path>
-std::expected<T, error> at_path(std::string_view const encoded)
+result<T> at_path(std::basic_string_view<char> const encoded)
 {
     using view = std::conditional_t<std::same_as<T, std::string>, std::string_view, std::span<std::byte const>>;
-    return path::walk_query<Path, view>(encoded).transform([](view const v) { return T(v.begin(), v.end()); });
+    auto const found = path::walk_query<Path, view>(encoded);
+    if (!found) [[unlikely]]
+        return result<T>(std::unexpect, found.error());
+    return result<T>(std::in_place, found->begin(), found->end());
 }
 
 template <fixed_string Path>
     requires is_valid_path_v<Path>
-std::expected<lazy, error> lazy::at_path() const
+result<lazy> lazy::at_path() const
 {
     static_assert(path::parse_query(Path.view())->top.singular,
                   "cbor::lazy::at_path: the path is not a singular query (RFC 9535 2.3.5.1); cbor::nodelist "
                   "as the result type reads its nodelist");
-    return path::apply_compiled<Path>(
+    return result<lazy>(path::apply_compiled<Path>(
         [this](path::query_view const v, path::parsed_query const &top) {
             return path::walk_singular_query(v, top, *this);
-        });
+        }));
 }
 
 template <fixed_string Path, std::same_as<nodelist> T>
     requires is_valid_path_v<Path>
-std::expected<nodelist, error> lazy::at_path() const
+result<nodelist> lazy::at_path() const
 {
-    return path::generated_walk<Path>(*this);
+    return result<nodelist>(path::generated_walk<Path>(*this));
 }
 
 template <fixed_string Path, class T>
     requires(is_singular_query_v<Path> && scalar_result<T>)
-std::expected<T, error> lazy::at_path() const
+result<T> lazy::at_path() const
 {
-    return path::walk_query<Path, T>(*this);
+    return result<T>(path::walk_query<Path, T>(*this));
 }
 
 template <fixed_string Path, class T>
     requires(is_singular_query_v<Path> && view_result<T>)
-std::expected<ref<T>, error> lazy::at_path() const
+result<ref<T>> lazy::at_path() const
 {
-    return path::walk_owned_query<Path, T>(*this);
+    return result<ref<T>>(path::walk_owned_query<Path, T>(*this));
 }
 
 template <class E>
     requires is_path_query_v<E>
-std::expected<typename E::result_type, error> lazy::at_path(E const &e) const
+result<typename E::result_type> lazy::at_path(E const &e) const
 {
     return path::apply_query(e, *this);
 }

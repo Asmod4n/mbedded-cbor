@@ -416,7 +416,7 @@ TEST_CASE("path: every form gives the first entry of a repeated key")
     CHECK_EQ((cbor::at_path<"$[1]", int>(numbers)), 1);
     CHECK(compiled_at<"$[1]">(numbers).has_value());
     std::string const shared = "\xa2\xd8\x1c\x61\x61\x01\xd8\x1d\x00\x02"s;
-    CHECK_EQ((cbor::at_path<"$.a", int>(shared)).error(), error::key_not_found);
+    CHECK_EQ((cbor::at_path<"$.a", int>(shared)), std::unexpected(error::key_not_found));
     std::string const deep = "\xa1\x61\x62\xa2\x61\x61\x01\x61\x61\x02"s;
     CHECK_EQ((cbor::at_path<"$.b.a", int>(deep)), 1);
     CHECK(compiled_at<"$.b.a">(deep).has_value());
@@ -732,7 +732,8 @@ TEST_CASE("path: a moved ref keeps no view")
 {
     auto const read = [] {
         auto const owner = std::make_shared<std::string const>("\xa1\x61\x61\x63xyz"s);
-        return *cbor::at_path<"$.a", std::string_view>(owner);
+        auto const found = cbor::at_path<"$.a", std::string_view>(owner);
+        return *found;
     };
     std::optional<cbor::ref<std::string_view>> source(read());
     {
@@ -773,8 +774,10 @@ concept lvalue_reaches_member = requires(R const &r) { r.operator->(); };
 TEST_CASE("path: ref compares and reaches its value as std::optional does")
 {
     auto const owner = std::make_shared<std::string const>("\xa2\x61\x61\x63xyz\x61\x62\x63xyz"s);
-    auto const a = *cbor::at_path<"$.a", std::string_view>(owner);
-    auto const b = *cbor::at_path<"$.b", std::string_view>(owner);
+    auto const found_a = cbor::at_path<"$.a", std::string_view>(owner);
+    auto const found_b = cbor::at_path<"$.b", std::string_view>(owner);
+    auto const a = *found_a;
+    auto const b = *found_b;
     CHECK(a == "xyz"sv);
     CHECK("xyz"sv == a);
     CHECK(a != "xy"sv);
@@ -1156,7 +1159,7 @@ TEST_CASE("path: tag 55799 is read through on both sides of a key compare")
         CAPTURE(edn);
         auto const edn_bytes = cbor::diag2cbor(edn);
         auto const l = *test::make_lazy_from_copy(edn_bytes.value());
-        auto const text_of = [](std::expected<cbor::lazy, error> const &node) {
+        auto const text_of = [](cbor::result<cbor::lazy> const &node) {
             REQUIRE(node.has_value());
             auto const text = node->get<std::string_view>();
             REQUIRE(text.has_value());
@@ -1164,8 +1167,10 @@ TEST_CASE("path: tag 55799 is read through on both sides of a key compare")
         };
         CHECK_EQ(text_of(l.at_path<"$[55799(1.5)]">()), "x");
         CHECK_EQ(text_of(l.at_path<"$[1.5]">()), "x");
-        CHECK_EQ(text_of(l.at_path(*cbor::path::compile<cbor::lazy>("$[55799(1.5)]"))), "x");
-        CHECK_EQ(text_of(l.at_path(*cbor::path::compile<cbor::lazy>("$[1.5]"))), "x");
+        auto const self_described = cbor::path::compile<cbor::lazy>("$[55799(1.5)]");
+        CHECK_EQ(text_of(l.at_path(*self_described)), "x");
+        auto const plain = cbor::path::compile<cbor::lazy>("$[1.5]");
+        CHECK_EQ(text_of(l.at_path(*plain)), "x");
     }
 }
 
@@ -1214,13 +1219,13 @@ TEST_CASE("path: a tag that the path does not know is passed to its content")
     CHECK_EQ(l.at_path<"$.m.k", int>(), 7);
     CHECK_EQ(cbor::at_path<"$[0][1]", int>(shared), 2);
     CHECK_EQ(test::make_lazy_from_copy(shared)->at_path<"$[0][1]", int>(), 2);
-    CHECK_EQ(cbor::at_path<"$[1][1]", int>(shared).error(), error::not_indexable);
+    CHECK_EQ(cbor::at_path<"$[1][1]", int>(shared), std::unexpected(error::not_indexable));
     CHECK_EQ(cbor::at_path<"$", int>("\xd9\x03\xe8\x05"s), 5);
     CHECK_EQ(test::make_lazy_from_copy("\xd9\x03\xe8\x05"s)->at_path<"$", int>(), 5);
     CHECK_EQ(test::make_lazy_from_copy("\xd9\x03\xe8\x05"s)->get<int>(), 5);
     CHECK_EQ(cbor::at_path<"$", std::int64_t>("\xc1\x1a\x5f\x5e\x10\x00"s), 1600000000);
-    CHECK_EQ(cbor::at_path<"$[0]", int>("\xc2\x41\x01"s).error(), error::not_indexable);
-    CHECK_EQ(cbor::at_path<"$.k", int>("\xa1\xd9\x03\xe8\x61""k\x07"s).error(), error::key_not_found);
+    CHECK_EQ(cbor::at_path<"$[0]", int>("\xc2\x41\x01"s), std::unexpected(error::not_indexable));
+    CHECK_EQ(cbor::at_path<"$.k", int>("\xa1\xd9\x03\xe8\x61""k\x07"s), std::unexpected(error::key_not_found));
     CHECK(found(test::read_value_at_path("$.v[1]", l)) == V(2));
     CHECK(found(test::read_value_at_path("$.m.k", l)) == V(7));
     CHECK(found(test::query("$.v[*]", l)) == A(1, 2));
@@ -1240,14 +1245,14 @@ TEST_CASE("path: an index reads one element of a typed array")
     CHECK_EQ(cbor::at_path<"$.v[0]", int>(uint16_le), 7);
     CHECK_EQ(cbor::at_path<"$.v[1]", int>(uint16_le), 0x108);
     CHECK_EQ(cbor::at_path<"$.v[-1]", int>(uint16_le), 0x108);
-    CHECK_EQ(cbor::at_path<"$.v[2]", int>(uint16_le).error(), error::index_out_of_bounds);
-    CHECK_EQ(cbor::at_path<"$.v[-3]", int>(uint16_le).error(), error::index_out_of_bounds);
-    CHECK_EQ(cbor::at_path<"$.v[0][0]", int>(uint16_le).error(), error::not_indexable);
-    CHECK_EQ(cbor::at_path<"$.v.a", int>(uint16_le).error(), error::not_indexable);
+    CHECK_EQ(cbor::at_path<"$.v[2]", int>(uint16_le), std::unexpected(error::index_out_of_bounds));
+    CHECK_EQ(cbor::at_path<"$.v[-3]", int>(uint16_le), std::unexpected(error::index_out_of_bounds));
+    CHECK_EQ(cbor::at_path<"$.v[0][0]", int>(uint16_le), std::unexpected(error::not_indexable));
+    CHECK_EQ(cbor::at_path<"$.v.a", int>(uint16_le), std::unexpected(error::not_indexable));
     CHECK_EQ(cbor::at_path<"$.v[0]", std::uint8_t>(uint16_le), std::uint8_t{7});
-    CHECK_EQ(cbor::at_path<"$.v[1]", std::uint8_t>(uint16_le).error(), error::number_out_of_range);
+    CHECK_EQ(cbor::at_path<"$.v[1]", std::uint8_t>(uint16_le), std::unexpected(error::number_out_of_range));
     CHECK_EQ(cbor::at_path<"$.v[1]", double>(uint16_le), 264.0);
-    CHECK_EQ(cbor::at_path<"$.v[1]", bool>(uint16_le).error(), error::incorrect_type);
+    CHECK_EQ(cbor::at_path<"$.v[1]", bool>(uint16_le), std::unexpected(error::incorrect_type));
     CHECK_EQ(cbor::at_path<"$.v[1]", int>(in("\xd8\x41\x44\x07\x00\x01\x08"s)), 0x108);
     CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd8\x48\x42\xff\x05"s)), -1);
     CHECK_EQ(cbor::at_path<"$.v[1]", int>(in("\xd8\x48\x42\xff\x05"s)), 5);
@@ -1257,23 +1262,23 @@ TEST_CASE("path: an index reads one element of a typed array")
     CHECK_EQ(cbor::at_path<"$.v[0]", std::int64_t>(in("\xd8\x4f\x48\xfe\xff\xff\xff\xff\xff\xff\xff"s)), -2);
     CHECK_EQ(cbor::at_path<"$.v[0]", std::uint64_t>(in("\xd8\x43\x48\xff\xff\xff\xff\xff\xff\xff\xff"s)),
              std::numeric_limits<std::uint64_t>::max());
-    CHECK_EQ(cbor::at_path<"$.v[0]", double>(in("\xd8\x43\x48\xff\xff\xff\xff\xff\xff\xff\xff"s)).error(),
-             error::number_out_of_range);
+    CHECK_EQ(cbor::at_path<"$.v[0]", double>(in("\xd8\x43\x48\xff\xff\xff\xff\xff\xff\xff\xff"s)),
+             std::unexpected(error::number_out_of_range));
     CHECK_EQ(cbor::at_path<"$.v[1]", double>(in("\xd8\x50\x44\x00\x00\x3c\x00"s)), 1.0);
     CHECK_EQ(cbor::at_path<"$.v[0]", double>(in("\xd8\x51\x44\x3f\xc0\x00\x00"s)), 1.5);
     CHECK_EQ(cbor::at_path<"$.v[0]", double>(in("\xd8\x56\x48\x9a\x99\x99\x99\x99\x99\xf1\x3f"s)), 1.1);
-    CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd8\x51\x44\x3f\xc0\x00\x00"s)).error(), error::incorrect_type);
-    CHECK_EQ(cbor::at_path<"$.v[0]", double>(in("\xd8\x53\x50"s + std::string(16, '\0'))).error(), error::incorrect_type);
-    CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd8\x45\x43\x07\x00\x08"s)).error(), error::inadmissible_type_for_tag_content);
-    CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd8\x45\xd8\x1c\x42\x07\x00"s)).error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd8\x51\x44\x3f\xc0\x00\x00"s)), std::unexpected(error::incorrect_type));
+    CHECK_EQ(cbor::at_path<"$.v[0]", double>(in("\xd8\x53\x50"s + std::string(16, '\0'))), std::unexpected(error::incorrect_type));
+    CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd8\x45\x43\x07\x00\x08"s)), std::unexpected(error::inadmissible_type_for_tag_content));
+    CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd8\x45\xd8\x1c\x42\x07\x00"s)), std::unexpected(error::inadmissible_type_for_tag_content));
     CHECK_EQ(cbor::at_path<"$.v[0]", int>(in("\xd9\x03\xe8\xd8\x45\x42\x07\x00"s)), 7);
     auto const l = *test::make_lazy_from_copy(uint16_le);
     CHECK_EQ(l.at_path<"$.v[1]", int>(), 0x108);
     std::string const shared = "\x82\xd8\x1c\xd8\x45\x44\x07\x00\x08\x01\xd8\x1d\x00"s;
     CHECK_EQ(cbor::at_path<"$[0][1]", int>(shared), 0x108);
     CHECK_EQ(test::make_lazy_from_copy(shared)->at_path<"$[0][-2]", double>(), 7.0);
-    CHECK_EQ(cbor::at_path<"$[0][2]", int>(shared).error(), error::index_out_of_bounds);
-    CHECK_EQ(cbor::at_path<"$[0][0][0]", int>(shared).error(), error::not_indexable);
+    CHECK_EQ(cbor::at_path<"$[0][2]", int>(shared), std::unexpected(error::index_out_of_bounds));
+    CHECK_EQ(cbor::at_path<"$[0][0][0]", int>(shared), std::unexpected(error::not_indexable));
     CHECK(found(test::read_value_at_path("$.v[1]", l)) == V(0x108));
     CHECK(found(test::read_value_at_path("$[0][0]", *test::make_lazy_from_copy(shared))) == V(7));
     CHECK(found(test::query("$.v[*]", l)) == A(7, 0x108));
@@ -1308,12 +1313,12 @@ TEST_CASE("at_path: a path from a held lazy")
     std::string const s("\xa2\x63pad\x82\x01\x02\x64" "cars\x82\xa1\x62hp\x05\xa1\x62hp\x07", 24);
     auto const cars = test::make_lazy_from_copy(s)->at("cars");
     REQUIRE(cars.has_value());
-    CHECK_EQ(*cars->at_path<"$[1].hp", std::int64_t>(), 7);
-    CHECK_EQ(cars->at_path<"$[2].hp", std::int64_t>().error(), cbor::error::index_out_of_bounds);
+    CHECK_EQ(cars->at_path<"$[1].hp", std::int64_t>(), 7);
+    CHECK_EQ(cars->at_path<"$[2].hp", std::int64_t>(), std::unexpected(cbor::error::index_out_of_bounds));
     std::string const shared("\x82\xd8\x1c\xa1\x62hp\x05\xd8\x1d\x00", 11);
     auto const first = test::make_lazy_from_copy(shared)->at(std::size_t{0});
     REQUIRE(first.has_value());
-    CHECK_EQ(*first->at_path<"$.hp", std::int64_t>(), 5);
+    CHECK_EQ(first->at_path<"$.hp", std::int64_t>(), 5);
     std::string const text("\xa1\x61k\x62ok", 6);
     auto const word = test::make_lazy_from_copy(text)->at_path<"$.k", std::string_view>();
     REQUIRE(word.has_value());
@@ -1386,19 +1391,27 @@ TEST_CASE("path: the member at_path starts at the item of the lazy")
         "\xa1\x61" "a\xa1\x61" "b\x83\x1b\x00\x00\x00\x00\x00\x00\x00\x01"
         "\x1b\x00\x00\x00\x00\x00\x00\x00\x02\x61x"s;
     cbor::lazy const l = *test::make_lazy_from_copy(doc);
-    CHECK(*test::read_value_at_path("$", *l.at_path(*cbor::path::compile<cbor::lazy>("$.a.b[1]"))) == V(2));
-    CHECK_EQ(cbor::path::compile<cbor::lazy>("$.a.b[").error(), error::invalid_path);
-    CHECK_EQ(cbor::path::compile<cbor::lazy>("$..b").error(), error::not_singular_query);
-    CHECK_EQ(l.at_path(*cbor::path::compile<cbor::lazy>("$.a.c")).error(), error::key_not_found);
+    auto const b_1 = cbor::path::compile<cbor::lazy>("$.a.b[1]");
+    auto const at_b_1 = l.at_path(*b_1);
+    CHECK(*test::read_value_at_path("$", *at_b_1) == V(2));
+    CHECK_EQ(cbor::path::compile<cbor::lazy>("$.a.b["), std::unexpected(error::invalid_path));
+    CHECK_EQ(cbor::path::compile<cbor::lazy>("$..b"), std::unexpected(error::not_singular_query));
+    auto const a_c = cbor::path::compile<cbor::lazy>("$.a.c");
+    CHECK_EQ(l.at_path(*a_c), std::unexpected(error::key_not_found));
     auto const a = l.at("a");
     cbor::lazy const inner = *a;
     CHECK_EQ(inner.at_path<"$.b[0]", int>(), 1);
     auto const text = inner.at_path<"$.b[2]", std::string_view>();
     CHECK_EQ(**text, "x"sv);
-    CHECK(*test::read_value_at_path("$", *inner.at_path<"$.b">()) == A(1, 2, "x"s));
-    CHECK(*test::read_value_at_path("$", *member_at_path<"$.b[1]">(inner)) == V(2));
-    CHECK_EQ(inner.at_path(*cbor::path::compile<cbor::nodelist>("$.b[*]"))->size(), 3u);
-    CHECK_EQ((inner.at_path<"$..*", cbor::nodelist>()->size()), 4u);
+    auto const b = inner.at_path<"$.b">();
+    CHECK(*test::read_value_at_path("$", *b) == A(1, 2, "x"s));
+    auto const member = member_at_path<"$.b[1]">(inner);
+    CHECK(*test::read_value_at_path("$", *member) == V(2));
+    auto const all_b = cbor::path::compile<cbor::nodelist>("$.b[*]");
+    auto const nodes_b = inner.at_path(*all_b);
+    CHECK_EQ(nodes_b->size(), 3u);
+    auto const descendants = inner.at_path<"$..*", cbor::nodelist>();
+    CHECK_EQ(descendants->size(), 4u);
 }
 
 // A typed at_path needs one node, so a path that is not singular (RFC 9535 2.3.5.1) does not compile. A concept
@@ -1442,10 +1455,11 @@ TEST_CASE("path: a std::string or a byte vector is a copy of that value only")
     CHECK_EQ(*text, "xyz"s);
     REQUIRE(blob.has_value());
     CHECK_EQ(*blob, std::vector<std::byte>{std::byte{1}, std::byte{2}});
-    CHECK_EQ(cbor::at_path<"$.b", std::string>("\xa1\x61\x62\x42\x01\x02"sv).error(), error::incorrect_type);
-    CHECK_EQ(cbor::at_path<"$.c", std::string>("\xa1\x61\x62\x42\x01\x02"sv).error(), error::key_not_found);
+    CHECK_EQ(cbor::at_path<"$.b", std::string>("\xa1\x61\x62\x42\x01\x02"sv), std::unexpected(error::incorrect_type));
+    CHECK_EQ(cbor::at_path<"$.c", std::string>("\xa1\x61\x62\x42\x01\x02"sv), std::unexpected(error::key_not_found));
     auto const owner = std::make_shared<std::string const>("\xa1\x61\x61\x63xyz"s);
-    std::string copied = cbor::at_path<"$.a", std::string_view>(owner)->clone();
+    auto const found = cbor::at_path<"$.a", std::string_view>(owner);
+    std::string copied = found->clone();
     CHECK_EQ(copied, "xyz"s);
     CHECK_FALSE(inside(*owner, copied.data()));
 }
@@ -1469,10 +1483,10 @@ TEST_CASE("path: a NaN element of a typed array keeps its bits")
 TEST_CASE("path: a tag 24 over a text inside an embedded item is inadmissible")
 {
     std::string const bytes = "\xd8\x18\x44\xd8\x18\x61\x68"s;
-    CHECK_EQ(cbor::at_path<"$[0]", int>(bytes).error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(cbor::at_path<"$[0]", int>(bytes), std::unexpected(error::inadmissible_type_for_tag_content));
     auto const doc = cbor::lazy::adopt(std::string(bytes));
     REQUIRE(doc);
-    CHECK_EQ(doc->at_path<"$[*]", cbor::nodelist>().error(), error::inadmissible_type_for_tag_content);
+    CHECK_EQ(doc->at_path<"$[*]", cbor::nodelist>(), std::unexpected(error::inadmissible_type_for_tag_content));
 }
 
 namespace
@@ -1625,10 +1639,10 @@ TEST_CASE("at_path: a range of bytes reads as the std::string of the same bytes"
     auto const b = std::as_bytes(std::span(*encoded));
     auto const expected = cbor::at_path<"$.b[1]", int>(*encoded);
     REQUIRE(expected.has_value());
-    CHECK_EQ((cbor::at_path<"$.b[1]", int>(u)).value(), *expected);
-    CHECK_EQ((cbor::at_path<"$.b[1]", int>(b)).value(), *expected);
+    CHECK_EQ((cbor::at_path<"$.b[1]", int>(u)), *expected);
+    CHECK_EQ((cbor::at_path<"$.b[1]", int>(b)), *expected);
     auto const q = cbor::path::compile<int>("$.b[1]");
     REQUIRE(q.has_value());
-    CHECK_EQ(cbor::at_path(u, *q).value(), *expected);
-    CHECK_EQ(cbor::at_path(b, *q).value(), *expected);
+    CHECK_EQ(cbor::at_path(u, *q), *expected);
+    CHECK_EQ(cbor::at_path(b, *q), *expected);
 }

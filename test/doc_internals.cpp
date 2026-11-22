@@ -71,7 +71,7 @@ TEST_CASE("doc internals: a skip keeps a count")
                                                                                   "b\x02"s;
     CHECK_EQ(cbor::at_path<"$.b", int>(deep), 2);
     CHECK_EQ(cbor::item_size(deep), deep.size());
-    CHECK_EQ(cbor::at_path<"$[1]", int>("\x82\x82\x01"s).error(), error::too_little_data);
+    CHECK_EQ(cbor::at_path<"$[1]", int>("\x82\x82\x01"s), std::unexpected(error::too_little_data));
 }
 
 // The section "Tags 28 and 29" states two facts. A lazy keeps no marks of tag 28. A lazy reads a tag 29 as a tag over

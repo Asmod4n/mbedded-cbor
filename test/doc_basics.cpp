@@ -49,15 +49,15 @@ TEST_CASE("doc basics: errors")
 // user who meets an error looks up its cause there.
 TEST_CASE("doc basics: the errors that a program meets most often")
 {
-    CHECK_EQ(cbor::at_path<"$.b", int>(encode_in_preferred_form(M("a"s, 1))).error(), error::key_not_found);
-    CHECK_EQ(cbor::at_path<"$[2]", int>(encode_in_preferred_form(A(1, 2))).error(), error::index_out_of_bounds);
-    CHECK_EQ(cbor::at_path<"$.a.b", int>(encode_in_preferred_form(M("a"s, 1))).error(), error::not_indexable);
-    CHECK_EQ(cbor::at_path<"$", int>(encode_in_preferred_form(V("a"s))).error(), error::incorrect_type);
-    CHECK_EQ(cbor::at_path<"$", std::uint8_t>(encode_in_preferred_form(V(256))).error(), error::number_out_of_range);
+    CHECK_EQ(cbor::at_path<"$.b", int>(encode_in_preferred_form(M("a"s, 1))), std::unexpected(error::key_not_found));
+    CHECK_EQ(cbor::at_path<"$[2]", int>(encode_in_preferred_form(A(1, 2))), std::unexpected(error::index_out_of_bounds));
+    CHECK_EQ(cbor::at_path<"$.a.b", int>(encode_in_preferred_form(M("a"s, 1))), std::unexpected(error::not_indexable));
+    CHECK_EQ(cbor::at_path<"$", int>(encode_in_preferred_form(V("a"s))), std::unexpected(error::incorrect_type));
+    CHECK_EQ(cbor::at_path<"$", std::uint8_t>(encode_in_preferred_form(V(256))), std::unexpected(error::number_out_of_range));
     std::string const pair = encode_in_preferred_form(A(1, 2));
-    CHECK_EQ(cbor::at_path<"$[1]", int>(pair.substr(0, pair.size() - 1)).error(), error::too_little_data);
-    CHECK_EQ(cbor::at_path<"$", int>("\xff"s).error(), error::syntax_error);
-    CHECK_EQ(cbor::at_path<"$[0]", int>("\x9f\x01\xff"s).error(), error::indefinite_length);
+    CHECK_EQ(cbor::at_path<"$[1]", int>(pair.substr(0, pair.size() - 1)), std::unexpected(error::too_little_data));
+    CHECK_EQ(cbor::at_path<"$", int>("\xff"s), std::unexpected(error::syntax_error));
+    CHECK_EQ(cbor::at_path<"$[0]", int>("\x9f\x01\xff"s), std::unexpected(error::indefinite_length));
     CHECK_EQ(test::read_value_at_path("$.a[", *test::make_lazy_from_copy(encode_in_preferred_form(M("a"s, 1)))).error(), error::invalid_path);
 }
 
@@ -114,7 +114,7 @@ TEST_CASE("doc basics: results that point into the bytes")
     std::string bytes = encode_in_preferred_form(M("name"s, "ann"s));
     std::string_view text;
     std::string copy;
-    std::optional<std::expected<cbor::ref<std::string_view>, cbor::error>> kept;
+    std::optional<cbor::result<cbor::ref<std::string_view>>> kept;
     {
         auto const owner = std::make_shared<std::string const>(std::move(bytes));
         auto const name = cbor::at_path<"$.name", std::string_view>(owner);
@@ -141,8 +141,8 @@ TEST_CASE("doc basics: threads" * doctest::skip(!test::threads_available))
     std::int64_t first_read = 0;
     std::int64_t second_read = 0;
     {
-        auto const use_first = [&first_read](std::expected<std::int64_t, error> const &v) { first_read = *v; };
-        auto const use_second = [&second_read](std::expected<std::int64_t, error> const &v) { second_read = *v; };
+        auto const use_first = [&first_read](cbor::result<std::int64_t> const &v) { first_read = *v; };
+        auto const use_second = [&second_read](cbor::result<std::int64_t> const &v) { second_read = *v; };
         std::thread first([&owner, &use_first] { use_first(cbor::at_path<"$.id", std::int64_t>(*owner)); });
         std::thread second([&owner, &use_second] {
             if (auto const doc = cbor::lazy::view(owner))

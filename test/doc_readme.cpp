@@ -27,10 +27,10 @@ TEST_CASE("doc readme: read a message")
 
     int sum = 0;
     if (auto const samples = doc.at("samples")) {
-        auto const elements = samples->elements().value();
-        for (auto const &x : elements)
-            if (x)
-                sum += x->get<int>().value_or(0);
+        if (auto const elements = samples->elements())
+            for (auto const &x : *elements)
+                if (x)
+                    sum += x->get<int>().value_or(0);
     }
     CHECK_EQ(sum, 12);
 }

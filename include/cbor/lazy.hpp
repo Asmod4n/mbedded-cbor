@@ -76,7 +76,9 @@ class edn_literal;
  * result: 3
  * call: (*nodes)[2].get<int>()
  * result: 3
- * call: doc->at_path<"$.b", cbor::nodelist>()->empty()
+ * call: auto const none = doc->at_path<"$.b", cbor::nodelist>()
+ * result: nodelist of 0 nodes
+ * call: none->empty()
  * result: true
  * @endcode
  *
@@ -376,23 +378,23 @@ public:
      */
     template <fixed_string Path>
         requires is_valid_path_v<Path>
-    std::expected<lazy, error> at_path() const;
+    result<lazy> at_path() const;
 
     template <fixed_string Path, class T>
         requires(is_singular_query_v<Path> && scalar_result<T>)
-    std::expected<T, error> at_path() const;
+    result<T> at_path() const;
 
     template <fixed_string Path, class T>
         requires(is_singular_query_v<Path> && view_result<T>)
-    std::expected<ref<T>, error> at_path() const;
+    result<ref<T>> at_path() const;
 
     template <fixed_string Path, std::same_as<nodelist> T>
         requires is_valid_path_v<Path>
-    std::expected<nodelist, error> at_path() const;
+    result<nodelist> at_path() const;
 
     template <class E>
         requires is_path_query_v<E>
-    std::expected<typename E::result_type, error> at_path(E const &e) const;
+    result<typename E::result_type> at_path(E const &e) const;
 
     /**
      * @brief Gives the count of the head of an array or a map, or the count of the elements of a typed array.
@@ -526,15 +528,15 @@ public:
     /**
      * @brief Gives the elements of an array, or of a typed array, as a view.
      *
-     * Each element of the view is a `std::expected<lazy, error>`.
+     * Each element of the view is a `cbor::result<lazy>`.
      * The call reads only the head.
      * The view reads one element at each step.
      *
      * @code{.example}
      * message: [1, 2, 3]
-     * call: doc->elements()
+     * call: auto const elements = doc->elements()
      * result: lazy_elements of 3 elements: 1, 2, 3
-     * call: doc->elements()->size()
+     * call: elements->size()
      * result: 3
      * @endcode
      *
@@ -546,13 +548,12 @@ public:
      * @see cbor::lazy::entries()
      * @see cbor::lazy::size()
      */
-    std::expected<lazy_elements, error> elements() const;
+    result<lazy_elements> elements() const;
 
     /**
      * @brief Gives the pairs of a map, in the order of the bytes, as a view.
      *
-     * Each element of the view is a `std::expected<std::pair<lazy, lazy>, error>`: the key in `first`, the value in
-     * `second`.
+     * Each element of the view is a `cbor::result<std::pair<lazy, lazy>>`: the key in `first`, the value in `second`.
      * A key that occurs twice occurs twice in the view.
      *
      * @code{.example}
@@ -569,7 +570,7 @@ public:
      * @see cbor::lazy::elements()
      * @see cbor::lazy::at()
      */
-    std::expected<lazy_entries, error> entries() const;
+    result<lazy_entries> entries() const;
 
     /**
      * @brief Decodes the whole item at the lazy into a tree of cbor::item, as cbor::decode() does, except that tags 28
@@ -615,6 +616,10 @@ private:
     std::expected<bool, error> empty_or_error() const;
 
     std::expected<cbor::type, error> type_or_error() const;
+
+    std::expected<lazy_elements, error> elements_or_error() const;
+
+    std::expected<lazy_entries, error> entries_or_error() const;
 
     template <class T>
         requires scalar_result<T> || view_result<T>
@@ -691,9 +696,9 @@ private:
  *
  * @code{.example}
  * message: [{"age": 31}, {"age": 20}, {"age": 40}]
- * call: auto const view = *doc->elements()
+ * call: auto const view = doc->elements()
  * result: lazy_elements of 3 elements: {"age": 31}, {"age": 20}, {"age": 40}
- * call: view.size()
+ * call: view->size()
  * result: 3
  * @endcode
  *
@@ -706,7 +711,7 @@ private:
 struct lazy_elements : std::ranges::view_interface<lazy_elements> {
     struct iterator {
         using iterator_concept = std::forward_iterator_tag;
-        using value_type = std::expected<lazy, error>;
+        using value_type = result<lazy>;
         using difference_type = std::ptrdiff_t;
 
         iterator() = default;
@@ -742,7 +747,11 @@ struct lazy_elements : std::ranges::view_interface<lazy_elements> {
         error failure{};
         std::uint64_t typed_array_tag{};
 
+        std::expected<lazy, error> element_or_error() const;
+
         friend struct lazy_elements;
+
+        friend class path;
     };
 
     iterator begin() const
@@ -796,9 +805,9 @@ private:
  *
  * @code{.example}
  * message: {"a": 1, "b": 2, "c": 3}
- * call: auto const view = *doc->entries()
+ * call: auto const view = doc->entries()
  * result: lazy_entries of 3 pairs: "a": 1, "b": 2, "c": 3
- * call: view.size()
+ * call: view->size()
  * result: 3
  * @endcode
  *
@@ -811,7 +820,7 @@ private:
 struct lazy_entries : std::ranges::view_interface<lazy_entries> {
     struct iterator {
         using iterator_concept = std::forward_iterator_tag;
-        using value_type = std::expected<std::pair<lazy, lazy>, error>;
+        using value_type = result<std::pair<lazy, lazy>>;
         using difference_type = std::ptrdiff_t;
 
         iterator() = default;
@@ -849,9 +858,13 @@ struct lazy_entries : std::ranges::view_interface<lazy_entries> {
         std::uint64_t left{};
         error failure{};
 
+        std::expected<std::pair<lazy, lazy>, error> entry_or_error() const;
+
         friend struct lazy_entries;
 
         friend struct lazy;
+
+        friend class path;
     };
 
     iterator begin() const
@@ -1309,11 +1322,16 @@ inline std::expected<lazy::tag_content, error> lazy::read_typed_array_bytes(reso
     return tag_content{offset, *bytes};
 }
 
-inline lazy_elements::iterator::value_type lazy_elements::iterator::operator*() const
+inline std::expected<lazy, error> lazy_elements::iterator::element_or_error() const
 {
     if (failure != error{}) [[unlikely]]
         return std::unexpected(failure);
     return lazy{top_level, std::to_underlying(offset), typed_array_tag};
+}
+
+inline lazy_elements::iterator::value_type lazy_elements::iterator::operator*() const
+{
+    return value_type(element_or_error());
 }
 
 inline bool lazy_elements::iterator::operator==(iterator const &other) const
@@ -1365,11 +1383,16 @@ inline void lazy_entries::iterator::find_value()
     value = detail::validity::distance(top_level.encoded, d.encoded);
 }
 
-inline lazy_entries::iterator::value_type lazy_entries::iterator::operator*() const
+inline std::expected<std::pair<lazy, lazy>, error> lazy_entries::iterator::entry_or_error() const
 {
     if (failure != error{}) [[unlikely]]
         return std::unexpected(failure);
     return std::pair{lazy{top_level, std::to_underlying(key), {}}, lazy{top_level, std::to_underlying(value), {}}};
+}
+
+inline lazy_entries::iterator::value_type lazy_entries::iterator::operator*() const
+{
+    return value_type(entry_or_error());
 }
 
 inline bool lazy_entries::iterator::operator==(iterator const &other) const
@@ -1758,7 +1781,12 @@ std::expected<std::conditional_t<view_result<T>, ref<T>, T>, error> lazy::get_or
 #endif
 }
 
-inline std::expected<lazy_elements, error> lazy::elements() const
+inline result<lazy_elements> lazy::elements() const
+{
+    return result<lazy_elements>(elements_or_error());
+}
+
+inline std::expected<lazy_elements, error> lazy::elements_or_error() const
 {
     throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
     auto const found = resolve(*this);
@@ -1780,7 +1808,12 @@ inline std::expected<lazy_elements, error> lazy::elements() const
                                  {});
 }
 
-inline std::expected<lazy_entries, error> lazy::entries() const
+inline result<lazy_entries> lazy::entries() const
+{
+    return result<lazy_entries>(entries_or_error());
+}
+
+inline std::expected<lazy_entries, error> lazy::entries_or_error() const
 {
     throw_logic_error_if_no_top_level("cbor::lazy: the lazy holds no top-level item");
     auto const found = resolve(*this);

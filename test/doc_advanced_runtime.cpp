@@ -100,26 +100,27 @@ TEST_CASE("doc advanced runtime: elements and entries")
 {
     auto const l = *test::make_lazy_from_copy(encode_in_preferred_form(A(1, "a"s, A(2))));
     std::vector<cbor::result<std::int64_t>> read;
-    auto const elements = *l.elements();
-    for (auto const e : elements)
+    auto const elements = l.elements();
+    for (auto const e : *elements)
         read.push_back(e->get<std::int64_t>());
     REQUIRE_EQ(read.size(), 3u);
     CHECK_EQ(read[0], 1);
     CHECK_EQ(read[1].error(), error::incorrect_type);
     CHECK_EQ(read[2].error(), error::incorrect_type);
-    CHECK_EQ(l.elements()->size(), 3u);
+    CHECK_EQ(elements->size(), 3u);
     auto const m = *test::make_lazy_from_copy(encode_in_preferred_form(M("a"s, 1, 2, "b"s)));
     std::vector<value> keys;
-    auto const entries = *m.entries();
-    for (auto const p : entries)
+    auto const entries = m.entries();
+    for (auto const p : *entries)
         keys.push_back(*test::make_value_from_item(p->first));
     CHECK(keys == std::vector<value>{V("a"s), V(2)});
-    CHECK_EQ(std::ranges::distance(*m.entries() | std::views::drop(1)), 1);
-    CHECK_EQ(m.elements().error(), error::not_indexable);
-    CHECK_EQ(l.entries().error(), error::not_indexable);
-    CHECK_EQ(test::make_lazy_from_copy("\x9f\x01\xff"s)->elements().error(), error::indefinite_length);
-    auto const it = l.elements()->begin();
-    CHECK_EQ((*it)->get<std::int64_t>(), 1);
+    CHECK_EQ(std::ranges::distance(*entries | std::views::drop(1)), 1);
+    CHECK_EQ(m.elements(), std::unexpected(error::not_indexable));
+    CHECK_EQ(l.entries(), std::unexpected(error::not_indexable));
+    CHECK_EQ(test::make_lazy_from_copy("\x9f\x01\xff"s)->elements(), std::unexpected(error::indefinite_length));
+    auto const it = elements->begin();
+    auto const first = *it;
+    CHECK_EQ(first->get<std::int64_t>(), 1);
 }
 
 // A user read that the iterator stands at the end after an error. It gives the error at each later position instead,
@@ -129,23 +130,24 @@ TEST_CASE("doc advanced runtime: an error repeats at each later position")
     auto const owner = std::make_shared<std::string const>("\x83\x1c\x00\x00"s);
     auto const bad = *cbor::lazy::view(owner);
     std::vector<bool> read;
-    auto const elements = *bad.elements();
-    for (auto const e : elements)
+    auto const elements = bad.elements();
+    for (auto const e : *elements)
         read.push_back(e.has_value());
     CHECK(read == std::vector<bool>{true, false, false});
-    auto const first = *bad.elements()->begin();
+    auto const first = *elements->begin();
     REQUIRE(first.has_value());
     CHECK_FALSE(first->get<std::int64_t>().has_value());
-    auto it = bad.elements()->begin();
+    auto it = elements->begin();
     ++it;
-    CHECK_EQ((*it).error(), error::syntax_error);
+    CHECK_EQ(*it, std::unexpected(error::syntax_error));
 }
 
 // A user did not know that an algorithm takes the view directly and that -> works on each element.
 TEST_CASE("doc advanced runtime: an algorithm over elements")
 {
     auto const people = *test::make_lazy_from_copy(encode_in_preferred_form(A(M("age"s, 31), M("age"s, 20), M("age"s, 40))));
-    CHECK_EQ(std::ranges::count_if(*people.elements(), [](std::expected<cbor::lazy, cbor::error> const &e) {
+    auto const elements = people.elements();
+    CHECK_EQ(std::ranges::count_if(*elements, [](cbor::result<cbor::lazy> const &e) {
                  auto const age = e->at("age");
                  return age && age->get<std::int64_t>().value_or(0) > 30;
              }),
@@ -305,7 +307,7 @@ TEST_CASE("doc advanced runtime: cbor::sequence")
     cbor::sequence const s{std::make_shared<std::string const>("\x01\x19\x01"s)};
     auto it = s.begin();
     ++it;
-    CHECK_EQ((*it).error(), error::too_little_data);
+    CHECK_EQ((*it), std::unexpected(error::too_little_data));
     CHECK_EQ(it.encoded(), "\x19\x01"sv);
     std::vector<std::int64_t> last;
     for (auto const e : cbor::sequence{owner})

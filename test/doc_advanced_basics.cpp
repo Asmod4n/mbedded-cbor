@@ -115,8 +115,8 @@ TEST_CASE("doc advanced basics: a cut schema message is too_little_data")
 // The row not_singular_query of the section "Every error value" names the call that gives it.
 TEST_CASE("doc advanced basics: not_singular_query")
 {
-    CHECK_EQ(cbor::path::compile<cbor::lazy>("$.a[*]").error(), error::not_singular_query);
-    CHECK_EQ(cbor::path::compile<std::int64_t>("$..a").error(), error::not_singular_query);
+    CHECK_EQ(cbor::path::compile<cbor::lazy>("$.a[*]"), std::unexpected(error::not_singular_query));
+    CHECK_EQ(cbor::path::compile<std::int64_t>("$..a"), std::unexpected(error::not_singular_query));
     CHECK(cbor::path::compile<cbor::nodelist>("$.a[*]").has_value());
 }
 

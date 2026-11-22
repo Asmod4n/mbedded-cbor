@@ -121,9 +121,9 @@ TEST_CASE("doc reference tools: sequence_reader errors")
 {
     cbor::sequence_reader r;
     r.feed("\x1c"s);
-    CHECK_EQ(r.next().error(), cbor::error::syntax_error);
+    CHECK_EQ(r.next(), std::unexpected(cbor::error::syntax_error));
     r.feed("\x01"s);
-    CHECK_EQ(r.next().error(), cbor::error::syntax_error);
+    CHECK_EQ(r.next(), std::unexpected(cbor::error::syntax_error));
     CHECK(r.empty());
     CHECK_THROWS_AS(r.feed(std::shared_ptr<std::string const>{}), std::logic_error);
     // The reader does not recurse, so no depth bounds it.

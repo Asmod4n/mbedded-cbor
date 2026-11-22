@@ -146,7 +146,7 @@ void js_value_built(cbor::item const &i)
     }
 }
 
-std::int32_t js_values_built(std::expected<cbor::nodelist, cbor::error> const &nodes)
+std::int32_t js_values_built(cbor::result<cbor::nodelist> const &nodes)
 {
     if (!nodes) [[unlikely]]
         return -static_cast<std::int32_t>(nodes.error());
@@ -165,7 +165,10 @@ std::expected<typename cbor::path::query<T>::result_type, cbor::error> leaf_foun
     auto const e = cbor::path::compile<T>(std::string_view{ptr, len});
     if (!e) [[unlikely]]
         return std::unexpected(e.error());
-    return state.root->at_path(*e);
+    auto const found = state.root->at_path(*e);
+    if (!found) [[unlikely]]
+        return std::unexpected(found.error());
+    return *found;
 }
 
 std::uint64_t view_packed(void const *const data, std::size_t const size)

@@ -151,20 +151,24 @@ TEST_CASE("limits sizes 2: the iterators of elements() and entries() skip withou
     auto const elements = l->elements();
     REQUIRE(elements.has_value());
     auto it = elements->begin();
-    auto const read = (*it)->get<std::string_view>();
+    auto const element_0 = *it;
+    auto const read = element_0->get<std::string_view>();
     CHECK_EQ(read.error(), error::string_length_exceeded);
     ++it;
     REQUIRE(it != std::default_sentinel);
-    CHECK_EQ((*it)->get<int>(), 1);
+    auto const element_1 = *it;
+    CHECK_EQ(element_1->get<int>(), 1);
     auto const entries = m->entries();
     REQUIRE(entries.has_value());
     auto pair = entries->begin();
-    REQUIRE((*pair).has_value());
-    auto const read_2 = (*pair)->first.get<std::string_view>();
+    auto const pair_0 = *pair;
+    REQUIRE(pair_0.has_value());
+    auto const read_2 = pair_0->first.get<std::string_view>();
     CHECK_EQ(read_2.error(), error::string_length_exceeded);
-    CHECK_EQ((*pair)->second.get<int>(), 1);
+    CHECK_EQ(pair_0->second.get<int>(), 1);
     ++pair;
-    CHECK_EQ((*pair)->second.get<int>(), 3);
+    auto const pair_1 = *pair;
+    CHECK_EQ(pair_1->second.get<int>(), 3);
 }
 
 // RFC 8949 does not bound what a decoder skips; the bytes bound it (check_bytes_left). The owner decided on 2026-10-10
@@ -188,8 +192,8 @@ TEST_CASE(
         CHECK_EQ(l.at_path<"$.n", int>(), 1);
         auto const n = l.at("n");
         CHECK_EQ(n->get<int>(), 1);
-        CHECK(test::read_value_at_path("$.n", l) == V(1));
-        CHECK(test::query("$.n", l) == A(1));
+        CHECK((test::read_value_at_path("$.n", l) == V(1)));
+        CHECK((test::query("$.n", l) == A(1)));
         CHECK_EQ(test::read_value_at_path("$.a", l).error(), wanted);
         auto const a = l.at("a");
         CHECK_EQ(test::make_value_from_item(*a).error(), wanted);
@@ -199,8 +203,8 @@ TEST_CASE(
     CHECK_EQ(l.at_path<"$[1]", int>(), 5);
     auto const at_1 = l.at(1);
     CHECK_EQ(at_1->get<int>(), 5);
-    CHECK_EQ(l.at_path<"$[0][1]", int>().error(), error::container_elements_exceeded);
-    CHECK_EQ(l.at_path<"$[0][0]", std::int64_t>().error(), error::string_length_exceeded);
+    CHECK_EQ(l.at_path<"$[0][1]", int>(), std::unexpected(error::container_elements_exceeded));
+    CHECK_EQ(l.at_path<"$[0][0]", std::int64_t>(), std::unexpected(error::string_length_exceeded));
     auto const size = cbor::item_size(two);
     CHECK_EQ(size.error(), error::string_length_exceeded);
 }
@@ -215,7 +219,7 @@ TEST_CASE("doc basics: the error of each size limit")
     std::string const three = encode_in_preferred_form(A(1, 2, 3));
     auto const count = test::make_lazy_from_copy(three)->size();
     CHECK_EQ(count.error(), error::container_elements_exceeded);
-    CHECK_EQ(cbor::at_path<"$[0]", int>(three).error(), error::container_elements_exceeded);
+    CHECK_EQ(cbor::at_path<"$[0]", int>(three), std::unexpected(error::container_elements_exceeded));
 }
 
 // This comes from the former advanced basics guide, section "Limits". A limit is checked by the step that reads the
@@ -253,13 +257,13 @@ TEST_CASE("doc advanced basics: a skip does not count")
 TEST_CASE("doc advanced path: the size limits")
 {
     std::string const bytes = encode_in_preferred_form(M("long"s, "xyz"s, "n"s, 1));
-    CHECK_EQ(cbor::at_path<"$.n", int>(bytes).error(), error::string_length_exceeded);
+    CHECK_EQ(cbor::at_path<"$.n", int>(bytes), std::unexpected(error::string_length_exceeded));
     std::string const skipped = encode_in_preferred_form(M("a"s, "xyz"s, "n"s, 1));
     CHECK_EQ(cbor::at_path<"$.n", int>(skipped), 1);
-    CHECK_EQ(cbor::at_path<"$.a", std::string_view>(std::string(skipped)).error(),
-             error::string_length_exceeded);
+    CHECK_EQ(cbor::at_path<"$.a", std::string_view>(std::string(skipped)),
+             std::unexpected(error::string_length_exceeded));
     std::string const three = encode_in_preferred_form(M("a"s, 1, "b"s, 2, "n"s, 3));
-    CHECK_EQ(cbor::at_path<"$.n", int>(three).error(), error::container_elements_exceeded);
+    CHECK_EQ(cbor::at_path<"$.n", int>(three), std::unexpected(error::container_elements_exceeded));
 }
 
 #ifdef __cpp_impl_reflection
