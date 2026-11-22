@@ -1,0 +1,546 @@
+{
+ "time": "2026-11-22-080658Z",
+ "block": "lazy_read",
+ "what": "each function of bench/function/lazy_read.cpp over a buffer of COLD_BYTES bytes of items; a = commit a, aa = commit a built again, b = commit b",
+ "commit_a": {
+  "given": "e23e5902",
+  "id": "e23e5902886329c0236b7fa76b077097766181cd"
+ },
+ "commit_b": {
+  "given": "0abb9dbc",
+  "id": "0abb9dbc1fa3331b3cc8a695debea5c5f9fdb36d"
+ },
+ "bench_sources_commit": "0abb9dbc1fa3331b3cc8a695debea5c5f9fdb36d",
+ "image": "compiler",
+ "flags": "-std=c++26 -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -DNDEBUG -pipe",
+ "warnings": {
+  "gxx": "-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -Wnull-dereference",
+  "clang": "-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -Wnull-dereference -Wunsafe-buffer-usage"
+ },
+ "link_flags": "-pie -fuse-ld=mold",
+ "gxx_binary": {
+  "binary": "a.gxx",
+  "comment": "String dump of section '.comment':\n  [     1]  GCC: (Debian 16.2.0-5) 16.2.0\n  [    1f]  mold 3.0.0 (compatible with GNU ld)",
+  "libraries": {
+   "libbenchmark.so.1.9.1": "/usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1",
+   "libstdc++.so.6": "/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.36",
+   "libc.so.6": "/usr/lib/x86_64-linux-gnu/libc.so.6",
+   "libm.so.6": "/usr/lib/x86_64-linux-gnu/libm.so.6"
+  }
+ },
+ "clang_binary": {
+  "binary": "a.clang",
+  "comment": "String dump of section '.comment':\n  [     1]  Debian clang version 23.1.6 (1)\n  [    21]  GCC: (Debian 16.2.0-5) 16.2.0\n  [    3f]  mold 3.0.0 (compatible with GNU ld)",
+  "libraries": {
+   "libbenchmark.so.1.9.1": "/usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1",
+   "libstdc++.so.6": "/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.36",
+   "libm.so.6": "/usr/lib/x86_64-linux-gnu/libm.so.6",
+   "libc.so.6": "/usr/lib/x86_64-linux-gnu/libc.so.6"
+  }
+ },
+ "rounds": 15,
+ "min_time": "0.05s",
+ "cold_bytes": 4194304,
+ "build": "build: 10.87 s for 6 binaries",
+ "resolved_march": "sapphirerapids",
+ "compilers": [
+  "g++-16 (Debian 16.2.0-5) 16.2.0",
+  "Debian clang version 23.1.6 (1)"
+ ],
+ "libc": "ldd (Debian GLIBC 2.43-7) 2.43",
+ "level_two_cache": "2048K",
+ "kernel": "6.18.44-fc-v726",
+ "scheduler": "no sched_ext state (kernel default)",
+ "virtualization": "docker ",
+ "host_in_container": "no",
+ "host_user": "root 0",
+ "container": "podman compiler, user 65534, network none",
+ "cpu": {
+  "model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "flags_sha256": "19139faa5b3c177a2d253ee9520b13713aee71074562456de06d1ba7833e7890",
+  "cpus": 4,
+  "l3": "266240K"
+ },
+ "uid": 65534,
+ "priority": "nice -10 granted",
+ "threads": 1,
+ "pinned": false,
+ "cpu_left_to_the_machine": "each bench process is single-threaded on 4 cpus",
+ "gate_before_build": [
+  "gate: vmstat 1 2",
+  "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+  " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+  " 0  0      0 14487228  87548 1381648    0    0   131  1700  774    1 46  3 50  1  0  0",
+  " 0  0      0 14493600  87548 1381744    0    0     0     0  195  169  0  0 100  0  0  0",
+  "gate: ps --sort=-pcpu (top 7)",
+  "  PID USER     %CPU  NI COMMAND",
+  "  102 root      1.9   0 claude",
+  "    1 root      0.0   0 process_api",
+  "   94 root      0.0   0 environment-man",
+  "   15 root      0.0   0 rcu_preempt",
+  "14786 root      0.0   0 kworker/1:0-mm_percpu_wq",
+  "30367 root      0.0   0 kworker/u16:1-ext4-rsv-conversion",
+  "27914 root      0.0   0 kworker/3:0-mm_percpu_wq",
+  "gate: busy 0.0% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough"
+ ],
+ "gate_before_runs": [
+  "gate: vmstat 1 2",
+  "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+  " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+  " 3  0      0 14004848  87556 1382736    0    0   130  1697  775    1 46  3 50  1  0  0",
+  " 0  0      0 14029292  87556 1382328    0    0     0     0  219  204  0  0 100  0  0  0",
+  "gate: ps --sort=-pcpu (top 7)",
+  "  PID USER     %CPU  NI COMMAND",
+  "  102 root      1.9   0 claude",
+  "18363 root      0.0   0 function.sh",
+  "    1 root      0.0   0 process_api",
+  "   94 root      0.0   0 environment-man",
+  "   15 root      0.0   0 rcu_preempt",
+  "14786 root      0.0   0 kworker/1:0-events",
+  "30367 root      0.0   0 kworker/u16:1-writeback",
+  "gate: busy 0.0% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough"
+ ],
+ "steal_limit_percent": 3,
+ "rounds_detail": [
+  {
+   "round": 1,
+   "attempt": 1,
+   "wall_s": 2.3700900077819824,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.3157894736842105
+  },
+  {
+   "round": 2,
+   "attempt": 2,
+   "wall_s": 2.2155261039733887,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.4479283314669653
+  },
+  {
+   "round": 3,
+   "attempt": 3,
+   "wall_s": 2.326627016067505,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.21321961620469082
+  },
+  {
+   "round": 4,
+   "attempt": 4,
+   "wall_s": 2.2326059341430664,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.5549389567147613
+  },
+  {
+   "round": 5,
+   "attempt": 5,
+   "wall_s": 2.0861129760742188,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.35629453681710216
+  },
+  {
+   "round": 6,
+   "attempt": 6,
+   "wall_s": 2.293133020401001,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.5405405405405406
+  },
+  {
+   "round": 7,
+   "attempt": 7,
+   "wall_s": 2.3367178440093994,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.21321961620469082
+  },
+  {
+   "round": 8,
+   "attempt": 8,
+   "wall_s": 2.3434879779815674,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.3194888178913738
+  },
+  {
+   "round": 9,
+   "attempt": 9,
+   "wall_s": 2.3332769870758057,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.4282655246252677
+  },
+  {
+   "round": 10,
+   "attempt": 10,
+   "wall_s": 2.349423885345459,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.635593220338983
+  },
+  {
+   "round": 11,
+   "attempt": 11,
+   "wall_s": 2.431475877761841,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.6134969325153374
+  },
+  {
+   "round": 12,
+   "attempt": 12,
+   "wall_s": 2.286620855331421,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.21715526601520088
+  },
+  {
+   "round": 13,
+   "attempt": 13,
+   "wall_s": 2.479588031768799,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.10030090270812438
+  },
+  {
+   "round": 14,
+   "attempt": 14,
+   "wall_s": 2.4687740802764893,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.3
+  },
+  {
+   "round": 15,
+   "attempt": 15,
+   "wall_s": 2.372724771499634,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.3147953830010493
+  }
+ ],
+ "failed": [],
+ "stderr_of_runs": "2026-11-22T08:07:12+00:00\nRunning /run-dir/bin/a.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.40, 1.71, 2.29\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T08:07:12+00:00\nRunning /run-dir/bin/aa.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.40, 1.71, 2.29\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T08:07:13+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.40, 1.71, 2.29\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T08:07:13+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.40, 1.71, 2.29\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T08:07:13+00:00\nRunning /run-dir/bin/b.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.40, 1.71, 2.29\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T08:07:14+00:00\nRunning /run-dir/bin/a.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.40, 1.71, 2.29\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T08:07:14+00:00\nRunning /run-dir/bin/aa.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.40, 1.71, 2.29\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T08:07:15+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.40, 1.71, 2.29\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T08:07:15+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.40, 1.71, 2.29\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T08:07:15+00:00\nRunning /run-dir/bin/b.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.40, 1.71, 2.29\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T08:07:16+00:00\nRunning /run-dir/bin/a.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.40, 1.71, 2.29\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T08:07:16+00:00\nRunning /run-dir/bin/a.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.40, 1.71, 2.29\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T08:07:16+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.40, 1.71, 2.29\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T08:07:17+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 K",
+ "packages": [],
+ "noise_floor": {
+  "a_over_a_max_deviation_percent": 3.94724901105723
+ },
+ "difference_test": "two-tailed Mann-Whitney U test of compare.py of Google Benchmark over the rounds, alpha 0.05, and B/A further from 1 than A/A and than the noise floor of the machine (5 %)",
+ "compare_text": {
+  "gxx": {
+   "a_aa": "Comparing /run-dir/out/merged.a.gxx.json to /run-dir/out/merged.aa.gxx.json\nBenchmark                               Time             CPU      Time Old      Time New       CPU Old       CPU New\n--------------------------------------------------------------------------------------------------------------------\nlazy_read                            +0.1833         +0.1092           118           140           118           131\nlazy_read                            +0.1492         +0.1637           112           129           110           128\nlazy_read                            -0.1824         -0.2019           145           119           145           116\nlazy_read                            +0.1635         +0.1720           109           126           108           126\nlazy_read                            +0.3327         +0.3319           111           147           111           147\nlazy_read                            +0.2990         +0.3078           114           149           113           148\nlazy_read                            -0.1937         -0.1933           146           118           146           118\nlazy_read                            +0.0232         +0.0117           120           122           119           121\nlazy_read                            -0.0218         -0.0269           124           121           123           120\nlazy_read                            -0.2517         -0.2566           146           109           146           108\nlazy_read                            -0.0558         -0.0429           124           117           119           114\nlazy_read                            +0.2430         +0.0930           115           143           113           123\nlazy_read                            -0.0914         -0.1298           130           118           130           113\nlazy_read                            +0.2076         +0.2087           118           142           118           142\nlazy_read                            -0.0992         -0.1138           138           124           138           122\nlazy_read_pvalue                      0.3615          0.5069      U Test, Repetitions: 15 vs 15\nlazy_read_integer_key                +0.0454         +0.0429           147           154           147           153\nlazy_read_integer_key                -0.1568         -0.1493           152           128           150           128\nlazy_read_integer_key                -0.1751         -0.1762           172           142           172           142\nlazy_read_integer_key                +0.1501         +0.1578           131           150           130           150\nlazy_read_integer_key                +0.2625         +0.2627           141           178           141           178\nlazy_read_integer_key                +0.1195         +0.1275           137           153           136           153\nlazy_read_integer_key                -0.2310         -0.2425           176           135           176           133\nlazy_read_integer_key                -0.2964         -0.2964           177           125           177           125\nlazy_read_integer_key                -0.0149         -0.0239           137           135           137           133\nlazy_read_integer_key                -0.1255         -0.0734           151           132           141           131\nlazy_read_integer_key                -0.1346         -0.1263           157           136           156           136\nlazy_read_integer_key                +0.1111         +0.1151           155           172           152           169\nlazy_read_integer_key                +0.0803         +0.0799           138           149           138           149\nlazy_read_integer_key                +0.0245         +0.0638           144           148           138           147\nlazy_read_integer_key                -0.1128         -0.1110           170           151           169           150\nlazy_read_integer_key_pvalue          0.2455          0.3615      U Test, Repetitions: 15 vs 15\nOVERALL_GEOMEAN                      -0.0068         -0.0118             0             0             0             0",
+   "a_b": "Comparing /run-dir/out/merged.a.gxx.json to /run-dir/out/merged.b.gxx.json\nBenchmark                               Time             CPU      Time Old      Time New       CPU Old       CPU New\n--------------------------------------------------------------------------------------------------------------------\nlazy_read                            +0.1938         +0.1289           118           141           118           134\nlazy_read                            +0.0430         +0.0612           112           117           110           117\nlazy_read                            -0.0551         -0.1143           145           137           145           129\nlazy_read                            +0.2223         +0.2343           109           133           108           133\nlazy_read                            +0.1649         +0.1646           111           129           111           129\nlazy_read                            +0.3073         +0.3171           114           150           113           149\nlazy_read                            -0.3776         -0.3874           146            91           146            89\nlazy_read                            -0.0815         -0.0876           120           110           119           109\nlazy_read                            +0.1902         +0.1905           124           147           123           147\nlazy_read                            -0.0476         -0.0706           146           139           146           135\nlazy_read                            -0.1219         -0.0897           124           109           119           108\nlazy_read                            -0.0460         -0.0289           115           110           113           109\nlazy_read                            -0.0469         -0.0584           130           124           130           122\nlazy_read                            -0.0250         -0.0244           118           115           118           115\nlazy_read                            -0.1381         -0.1406           138           119           138           119\nlazy_read_pvalue                      0.9669          1.0000      U Test, Repetitions: 15 vs 15\nlazy_read_integer_key                +0.2152         +0.2149           147           179           147           179\nlazy_read_integer_key                -0.0082         -0.0761           152           151           150           139\nlazy_read_integer_key                -0.1428         -0.1425           172           148           172           148\nlazy_read_integer_key                +0.1310         +0.1383           131           148           130           148\nlazy_read_integer_key                -0.0257         -0.0258           141           137           141           137\nlazy_read_integer_key                +0.3642         +0.3749           137           187           136           187\nlazy_read_integer_key                -0.2166         -0.2229           176           138           176           137\nlazy_read_integer_key                -0.2541         -0.2597           177           132           177           131\nlazy_read_integer_key                +0.3373         +0.3374           137           183           137           183\nlazy_read_integer_key                -0.0862         -0.0319           151           138           141           137\nlazy_read_integer_key                -0.1971         -0.1893           157           126           156           126\nlazy_read_integer_key                -0.2136         -0.1967           155           122           152           122\nlazy_read_integer_key                +0.2752         +0.2755           138           176           138           176\nlazy_read_integer_key                -0.0227         +0.0181           144           141           138           141\nlazy_read_integer_key                -0.1439         -0.1746           170           146           169           139\nlazy_read_integer_key_pvalue          0.6482          0.6187      U Test, Repetitions: 15 vs 15\nOVERALL_GEOMEAN                      -0.0113         -0.0137             0             0             0             0"
+  },
+  "clang": {
+   "a_aa": "Comparing /run-dir/out/merged.a.clang.json to /run-dir/out/merged.aa.clang.json\nBenchmark                               Time             CPU      Time Old      Time New       CPU Old       CPU New\n--------------------------------------------------------------------------------------------------------------------\nlazy_read                            +0.0348         +0.0120           105           109           105           107\nlazy_read                            +0.0176         +0.0165           116           118           116           118\nlazy_read                            -0.0743         -0.0758           126           116           126           116\nlazy_read                            -0.0924         -0.0898           108            98           108            98\nlazy_read                            -0.1439         -0.1442           130           111           130           111\nlazy_read                            -0.1729         -0.1782           133           110           133           109\nlazy_read                            -0.1148         -0.1175           111            98           111            98\nlazy_read                            -0.0639         -0.1008           116           109           116           104\nlazy_read                            +0.2192         +0.2321            96           118            95           117\nlazy_read                            +0.0092         -0.0210           106           107           105           103\nlazy_read                            +0.1560         +0.1545            82            95            82            95\nlazy_read                            +0.0115         +0.0207           112           113           111           113\nlazy_read                            +0.0015         -0.0048           106           107           106           106\nlazy_read                            -0.1955         -0.2037           123            99           122            97\nlazy_read                            +0.4981         +0.5011            83           125            83           125\nlazy_read_pvalue                      0.8035          0.5614      U Test, Repetitions: 15 vs 15\nlazy_read_integer_key                +0.1532         +0.1500           135           156           135           155\nlazy_read_integer_key                +0.1073         +0.1739           150           166           142           166\nlazy_read_integer_key                -0.0161         +0.0551           168           165           151           159\nlazy_read_integer_key                -0.2804         -0.2768           167           120           166           120\nlazy_read_integer_key                -0.1422         -0.1420           175           150           175           150\nlazy_read_integer_key                -0.2552         -0.2561           171           128           171           127\nlazy_read_integer_key                +0.1950         +0.0808           147           175           147           158\nlazy_read_integer_key                +0.0582         +0.0674           137           145           136           145\nlazy_read_integer_key                +0.1354         +0.1479           131           149           130           149\nlazy_read_integer_key                -0.0852         -0.0805           143           131           142           131\nlazy_read_integer_key                -0.2160         -0.2150           142           111           141           111\nlazy_read_integer_key                +0.0201         +0.0092           156           159           155           157\nlazy_read_integer_key                -0.1394         -0.1387           141           122           141           122\nlazy_read_integer_key                -0.0184         -0.0328           155           152           152           147\nlazy_read_integer_key                +0.3355         +0.3586           130           173           127           173\nlazy_read_integer_key_pvalue          0.8035          0.9339      U Test, Repetitions: 15 vs 15\nOVERALL_GEOMEAN                      -0.0160         -0.0177             0             0             0             0",
+   "a_b": "Comparing /run-dir/out/merged.a.clang.json to /run-dir/out/merged.b.clang.json\nBenchmark                               Time             CPU      Time Old      Time New       CPU Old       CPU New\n--------------------------------------------------------------------------------------------------------------------\nlazy_read                            +0.1690         +0.1703           105           123           105           123\nlazy_read                            +0.1033         +0.0922           116           128           116           127\nlazy_read                            -0.1051         -0.1061           126           112           126           112\nlazy_read                            +0.0090         +0.0046           108           109           108           109\nlazy_read                            +0.0213         +0.0213           130           133           130           133\nlazy_read                            -0.2129         -0.2423           133           104           133           100\nlazy_read                            +0.3128         +0.3135           111           146           111           146\nlazy_read                            -0.0085         -0.0170           116           115           116           114\nlazy_read                            +0.4075         +0.3436            96           136            95           128\nlazy_read                            +0.2557         +0.0672           106           133           105           112\nlazy_read                            +0.3327         +0.3318            82           110            82           110\nlazy_read                            -0.0828         -0.1238           112           102           111            97\nlazy_read                            +0.2166         +0.2182           106           129           106           129\nlazy_read                            +0.0018         +0.0043           123           123           122           123\nlazy_read                            +0.5416         +0.5214            83           129            83           127\nlazy_read_pvalue                      0.0465          0.0971      U Test, Repetitions: 15 vs 15\nlazy_read_integer_key                +0.1197         +0.1204           135           151           135           151\nlazy_read_integer_key                +0.1580         +0.1734           150           174           142           166\nlazy_read_integer_key                -0.1328         -0.0756           168           145           151           140\nlazy_read_integer_key                -0.0417         -0.0365           167           160           166           160\nlazy_read_integer_key                -0.0155         -0.0152           175           173           175           173\nlazy_read_integer_key                -0.1759         -0.1760           171           141           171           141\nlazy_read_integer_key                +0.2730         +0.2724           147           187           147           187\nlazy_read_integer_key                -0.0001         +0.0046           137           137           136           136\nlazy_read_integer_key                +0.2233         +0.2349           131           161           130           160\nlazy_read_integer_key                +0.0169         +0.0227           143           146           142           146\nlazy_read_integer_key                +0.0396         +0.0423           142           147           141           147\nlazy_read_integer_key                -0.1106         -0.1212           156           138           155           137\nlazy_read_integer_key                +0.2089         +0.2093           141           171           141           171\nlazy_read_integer_key                +0.0771         +0.1002           155           167           152           167\nlazy_read_integer_key                +0.0157         +0.0338           130           132           127           132\nlazy_read_integer_key_pvalue          0.3837          0.3401      U Test, Repetitions: 15 vs 15\nOVERALL_GEOMEAN                      +0.0734         +0.0665             0             0             0             0"
+  }
+ },
+ "cells": {
+  "gxx": {
+   "lazy_read": {
+    "a": {
+     "repetitions_ns": [
+      118307825.99827217,
+      112220418.00101578,
+      145277532.00127336,
+      108722221.99941461,
+      110628118.00002237,
+      114360908.00089005,
+      145814924.00066054,
+      119544826.99911751,
+      123521279.00157939,
+      145731779.0009256,
+      123810544.00066204,
+      114842537.99972066,
+      129757132.00103201,
+      117921050.00131415,
+      137945381.0004634
+     ],
+     "median_ns": 119544826.99911751,
+     "spread": 0.34116946213116983
+    },
+    "aa": {
+     "repetitions_ns": [
+      139998585.99891013,
+      128961373.99911822,
+      118777067.9989626,
+      126494431.99916276,
+      147439304.00072715,
+      148554211.00037348,
+      117568649.99915706,
+      122322290.99936377,
+      120822379.99857171,
+      109056120.9985026,
+      116896805.99920394,
+      142754027.9983077,
+      117895917.00107849,
+      142396153.9985612,
+      124263559.00061026
+     ],
+     "median_ns": 124263559.00061026,
+     "spread": 0.3621813213254965
+    },
+    "b": {
+     "repetitions_ns": [
+      141238190.99950197,
+      117046769.99943331,
+      137267091.00046718,
+      132890884.99914214,
+      128869685.00060903,
+      149508475.00040254,
+      90756403.00034139,
+      109807201.99950156,
+      147009033.0003586,
+      138796777.0006071,
+      108718486.00072554,
+      109556138.99932359,
+      123667802.00136419,
+      114968398.00020097,
+      118890265.9996529
+     ],
+     "median_ns": 123667802.00136419,
+     "spread": 0.6473600766200502
+    },
+    "a_over_a_ratio": 1.0394724901105723,
+    "b_over_a_ratio": 1.0344889453248958,
+    "utest_a_aa": {
+     "time_pvalue": 0.3614963660708982,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.9669147771731937,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "lazy_read_integer_key": {
+    "a": {
+     "repetitions_ns": [
+      147063168.0003862,
+      151780430.99876958,
+      172106244.99966797,
+      130828692.99978483,
+      140638159.9990709,
+      136878167.00075927,
+      176141636.00046596,
+      177175853.99987,
+      136700473.00001898,
+      150583222.9995576,
+      157322832.99985284,
+      155091098.00041187,
+      137866602.00094047,
+      144176358.99917513,
+      170456091.99885803
+     ],
+     "median_ns": 150583222.9995576,
+     "spread": 0.3542583812265203
+    },
+    "aa": {
+     "repetitions_ns": [
+      153737991.00052565,
+      127978956.9998684,
+      141970041.0006044,
+      150465454.00036848,
+      177556536.00033838,
+      153231757.9985829,
+      135448392.9990238,
+      124656370.0005936,
+      134662129.9999242,
+      131684174.00083853,
+      136145496.00060853,
+      172324845.0016399,
+      148942165.00033507,
+      147715495.99936408,
+      151221193.00031045
+     ],
+     "median_ns": 147715495.99936408,
+     "spread": 0.4243679324168743
+    },
+    "b": {
+     "repetitions_ns": [
+      178709179.00108907,
+      150536188.00084224,
+      147531871.99858075,
+      147961194.9998798,
+      137017144.99984518,
+      186734815.99944353,
+      137982367.99993902,
+      132149381.0009997,
+      182803997.0005193,
+      137601548.00002056,
+      126316910.00024147,
+      121958760.99940506,
+      175810012.00051105,
+      140908008.99975875,
+      145923980.9992141
+     ],
+     "median_ns": 145923980.9992141,
+     "spread": 0.5311308057676518
+    },
+    "a_over_a_ratio": 0.9809558665097641,
+    "b_over_a_ratio": 0.969058691217167,
+    "utest_a_aa": {
+     "time_pvalue": 0.24548500120312422,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.6482039260122094,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   }
+  },
+  "clang": {
+   "lazy_read": {
+    "a": {
+     "repetitions_ns": [
+      105487947.99979077,
+      116113020.99845488,
+      125673562.99950916,
+      108498983.00148198,
+      130201314.9997947,
+      132647829.99976887,
+      111033625.99897082,
+      115976950.00091335,
+      96411916.99847695,
+      106147423.00094804,
+      82400211.00027661,
+      111656973.99883357,
+      106401320.99979383,
+      122615491.9986584,
+      83369424.00092085
+     ],
+     "median_ns": 111033625.99897082,
+     "spread": 0.6097996399465966
+    },
+    "aa": {
+     "repetitions_ns": [
+      109153795.00147538,
+      118157662.00015786,
+      116331999.99960198,
+      98474488.0006474,
+      111460040.00147514,
+      109714027.99987118,
+      98289051.00039265,
+      108570198.00096168,
+      117549605.00002198,
+      107127190.00002834,
+      95257691.00036997,
+      112938964.99955736,
+      106560344.00017233,
+      98647214.99980079,
+      124897293.00068575
+     ],
+     "median_ns": 109153795.00147538,
+     "spread": 0.3111517998079616
+    },
+    "b": {
+     "repetitions_ns": [
+      123320339.99882697,
+      128111205.00009565,
+      112464978.00129873,
+      109473114.0001386,
+      132974294.99834834,
+      104411377.00036052,
+      145763239.99972373,
+      114993703.99906184,
+      135698714.99930742,
+      133289490.00060675,
+      109811431.99933286,
+      102413309.99997444,
+      129448421.99976847,
+      122832202.00151846,
+      128526350.9998913
+     ],
+     "median_ns": 123320339.99882697,
+     "spread": 0.4232841414827828
+    },
+    "a_over_a_ratio": 0.9830697144168482,
+    "b_over_a_ratio": 1.1106575948440163,
+    "utest_a_aa": {
+     "time_pvalue": 0.8034625743147712,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.04648668639528603,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": true
+   },
+   "lazy_read_integer_key": {
+    "a": {
+     "repetitions_ns": [
+      134955482.0008052,
+      150210929.99995744,
+      167723370.9997381,
+      167188531.00064734,
+      175241175.99896273,
+      171391982.99992132,
+      146599549.0016212,
+      137280764.99864984,
+      131214715.00016923,
+      143209064.00098467,
+      141720157.0002362,
+      155622711.99996758,
+      141207083.99968863,
+      155046076.99949703,
+      129801839.99934524
+     ],
+     "median_ns": 146599549.0016212,
+     "spread": 0.35006696361042877
+    },
+    "aa": {
+     "repetitions_ns": [
+      155631261.99958786,
+      166331242.99914926,
+      165025608.99971285,
+      120306647.99931401,
+      150314444.99982172,
+      127658752.99919571,
+      175181467.00058424,
+      145268623.99907258,
+      148975293.99968335,
+      131006282.99980599,
+      111113221.00077814,
+      158746475.99957824,
+      121518273.99975446,
+      152199142.9999616,
+      173346888.99973115
+     ],
+     "median_ns": 150314444.99982172,
+     "spread": 0.57660326487482
+    },
+    "b": {
+     "repetitions_ns": [
+      151114301.00114375,
+      173947989.00022578,
+      145442301.00000277,
+      160215943.99899185,
+      172527234.99950662,
+      141251966.9993344,
+      186622444.00002238,
+      137267162.99970576,
+      160509720.00084585,
+      145622293.99962234,
+      147337537.99919215,
+      138414115.99969432,
+      170708109.99939567,
+      166994375.0002858,
+      131834964.00051808
+     ],
+     "median_ns": 151114301.00114375,
+     "spread": 0.41557625031314904
+    },
+    "a_over_a_ratio": 1.0253404326513955,
+    "b_over_a_ratio": 1.0307964931015758,
+    "utest_a_aa": {
+     "time_pvalue": 0.8034625743147712,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.38373262766250305,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   }
+  }
+ }
+}
