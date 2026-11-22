@@ -1,0 +1,702 @@
+{
+ "time": "2026-11-22-060044Z",
+ "block": "diagnostic_notation",
+ "what": "each function of bench/function/diagnostic_notation.cpp over a buffer of COLD_BYTES bytes of items; a = commit a, aa = commit a built again, b = commit b",
+ "commit_a": {
+  "given": "2bfae287",
+  "id": "2bfae2874baba1e803d8dc9900b3f1f6e28b34c1"
+ },
+ "commit_b": {
+  "given": "da4984da",
+  "id": "da4984da60db239817d6c247b52b3e30dfd2acf5"
+ },
+ "bench_sources_commit": "da4984da60db239817d6c247b52b3e30dfd2acf5",
+ "image": "compiler",
+ "flags": "-std=c++26 -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -DNDEBUG -pipe",
+ "warnings": {
+  "gxx": "-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -Wnull-dereference",
+  "clang": "-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -Wnull-dereference -Wunsafe-buffer-usage"
+ },
+ "link_flags": "-pie -fuse-ld=mold",
+ "gxx_binary": {
+  "binary": "a.gxx",
+  "comment": "String dump of section '.comment':\n  [     1]  GCC: (Debian 16.2.0-5) 16.2.0\n  [    1f]  mold 3.0.0 (compatible with GNU ld)",
+  "libraries": {
+   "libbenchmark.so.1.9.1": "/usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1",
+   "libstdc++.so.6": "/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.36",
+   "libc.so.6": "/usr/lib/x86_64-linux-gnu/libc.so.6",
+   "libm.so.6": "/usr/lib/x86_64-linux-gnu/libm.so.6"
+  }
+ },
+ "clang_binary": {
+  "binary": "a.clang",
+  "comment": "String dump of section '.comment':\n  [     1]  Debian clang version 23.1.6 (1)\n  [    21]  GCC: (Debian 16.2.0-5) 16.2.0\n  [    3f]  mold 3.0.0 (compatible with GNU ld)",
+  "libraries": {
+   "libbenchmark.so.1.9.1": "/usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1",
+   "libstdc++.so.6": "/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.36",
+   "libm.so.6": "/usr/lib/x86_64-linux-gnu/libm.so.6",
+   "libc.so.6": "/usr/lib/x86_64-linux-gnu/libc.so.6"
+  }
+ },
+ "rounds": 15,
+ "min_time": "0.05s",
+ "cold_bytes": 4194304,
+ "build": "build: 15.13 s for 6 binaries",
+ "resolved_march": "sapphirerapids",
+ "compilers": [
+  "g++-16 (Debian 16.2.0-5) 16.2.0",
+  "Debian clang version 23.1.6 (1)"
+ ],
+ "libc": "ldd (Debian GLIBC 2.43-7) 2.43",
+ "level_two_cache": "2048K",
+ "kernel": "6.18.44-fc-v726",
+ "scheduler": "no sched_ext state (kernel default)",
+ "virtualization": "docker ",
+ "host_in_container": "no",
+ "host_user": "root 0",
+ "container": "podman compiler, user 65534, network none",
+ "cpu": {
+  "model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "flags_sha256": "19139faa5b3c177a2d253ee9520b13713aee71074562456de06d1ba7833e7890",
+  "cpus": 4,
+  "l3": "266240K"
+ },
+ "uid": 65534,
+ "priority": "nice -10 granted",
+ "threads": 1,
+ "pinned": false,
+ "cpu_left_to_the_machine": "each bench process is single-threaded on 4 cpus",
+ "gate_before_build": [
+  "gate: vmstat 1 2",
+  "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+  " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+  " 1  0      0 15103796  78592 943356    0    0   568  2005  705    1 39  2 56  3  0  0",
+  " 0  0      0 15106740  78592 943500    0    0     0     0  317  382  0  0 100  0  0  0",
+  "gate: ps --sort=-pcpu (top 7)",
+  "  PID USER     %CPU  NI COMMAND",
+  "  102 root      1.9   0 claude",
+  "    1 root      0.0   0 process_api",
+  "   94 root      0.0   0 environment-man",
+  "   15 root      0.0   0 rcu_preempt",
+  "   21 root      0.0   - migration/1",
+  "   26 root      0.0   - migration/2",
+  "   31 root      0.0   - migration/3",
+  "gate: busy 0.0% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough"
+ ],
+ "gate_before_runs": [
+  "gate: vmstat 1 2",
+  "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+  " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+  " 0  0      0 14606736  80372 1145908    0    0   693  1982  711    1 38  2 56  4  0  0",
+  " 0  0      0 14638868  80372 1145816    0    0     0     0  329  317  0  0 99  0  0  0",
+  "gate: ps --sort=-pcpu (top 7)",
+  "  PID USER     %CPU  NI COMMAND",
+  "  102 root      1.9   0 claude",
+  " 6268 root      0.0   0 function.sh",
+  "    1 root      0.0   0 process_api",
+  "   94 root      0.0   0 environment-man",
+  "   15 root      0.0   0 rcu_preempt",
+  "   21 root      0.0   - migration/1",
+  "   26 root      0.0   - migration/2",
+  "gate: busy 1.0% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough"
+ ],
+ "steal_limit_percent": 3,
+ "rounds_detail": [
+  {
+   "round": 1,
+   "attempt": 1,
+   "wall_s": 1.9254579544067383,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.13003901170351106
+  },
+  {
+   "round": 2,
+   "attempt": 2,
+   "wall_s": 1.9136309623718262,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.12987012987012986
+  },
+  {
+   "round": 3,
+   "attempt": 3,
+   "wall_s": 1.983100175857544,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.12531328320802004
+  },
+  {
+   "round": 4,
+   "attempt": 4,
+   "wall_s": 2.006978988647461,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.12422360248447205
+  },
+  {
+   "round": 5,
+   "attempt": 5,
+   "wall_s": 2.0923337936401367,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.23837902264600716
+  },
+  {
+   "round": 6,
+   "attempt": 6,
+   "wall_s": 1.850045919418335,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.13458950201884254
+  },
+  {
+   "round": 7,
+   "attempt": 7,
+   "wall_s": 2.0023207664489746,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.24906600249066002
+  },
+  {
+   "round": 8,
+   "attempt": 8,
+   "wall_s": 1.9940869808197021,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.1251564455569462
+  },
+  {
+   "round": 9,
+   "attempt": 9,
+   "wall_s": 1.9486501216888428,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.12804097311139565
+  },
+  {
+   "round": 10,
+   "attempt": 10,
+   "wall_s": 2.009338140487671,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.12437810945273632
+  },
+  {
+   "round": 11,
+   "attempt": 11,
+   "wall_s": 2.25614595413208,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.4434589800443459
+  },
+  {
+   "round": 12,
+   "attempt": 12,
+   "wall_s": 1.9040560722351074,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.39113428943937417
+  },
+  {
+   "round": 13,
+   "attempt": 13,
+   "wall_s": 2.0058341026306152,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.0
+  },
+  {
+   "round": 14,
+   "attempt": 14,
+   "wall_s": 1.9996790885925293,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.24937655860349128
+  },
+  {
+   "round": 15,
+   "attempt": 15,
+   "wall_s": 1.9760699272155762,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.37735849056603776
+  }
+ ],
+ "failed": [],
+ "stderr_of_runs": "2026-11-22T06:01:03+00:00\nRunning /run-dir/bin/a.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.56, 1.99, 1.61\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T06:01:03+00:00\nRunning /run-dir/bin/aa.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.56, 1.99, 1.61\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T06:01:04+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.56, 1.99, 1.61\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T06:01:04+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.56, 1.99, 1.61\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T06:01:04+00:00\nRunning /run-dir/bin/b.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.56, 1.99, 1.61\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T06:01:05+00:00\nRunning /run-dir/bin/a.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.56, 1.99, 1.61\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T06:01:05+00:00\nRunning /run-dir/bin/aa.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.56, 1.99, 1.61\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T06:01:05+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.56, 1.99, 1.61\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T06:01:06+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.56, 1.99, 1.61\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T06:01:06+00:00\nRunning /run-dir/bin/b.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.52, 1.97, 1.61\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T06:01:06+00:00\nRunning /run-dir/bin/a.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.52, 1.97, 1.61\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T06:01:06+00:00\nRunning /run-dir/bin/a.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.52, 1.97, 1.61\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T06:01:07+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.52, 1.97, 1.61\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-22T06:01:07+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 K",
+ "packages": [],
+ "noise_floor": {
+  "a_over_a_max_deviation_percent": 13.23133127472219
+ },
+ "difference_test": "two-tailed Mann-Whitney U test of compare.py of Google Benchmark over the rounds, alpha 0.05, and B/A further from 1 than A/A and than the noise floor of the machine (5 %)",
+ "compare_text": {
+  "gxx": {
+   "a_aa": "Comparing /run-dir/out/merged.a.gxx.json to /run-dir/out/merged.aa.gxx.json\nBenchmark                                          Time             CPU      Time Old      Time New       CPU Old       CPU New\n-------------------------------------------------------------------------------------------------------------------------------\ndiagnostic_notation                             -0.0205         -0.0215            84            82            84            82\ndiagnostic_notation                             +0.4202         +0.4205            54            76            54            76\ndiagnostic_notation                             +0.4891         +0.4891            56            84            56            84\ndiagnostic_notation                             -0.0750         -0.0315            61            56            58            56\ndiagnostic_notation                             -0.4039         -0.4044            87            52            87            52\ndiagnostic_notation                             -0.1350         -0.1142            57            49            56            49\ndiagnostic_notation                             +0.0515         +0.0453            55            58            55            58\ndiagnostic_notation                             +0.0195         +0.0195            54            56            54            56\ndiagnostic_notation                             +0.2988         +0.3003            70            90            69            90\ndiagnostic_notation                             -0.3702         -0.3744            85            53            85            53\ndiagnostic_notation                             -0.2469         -0.2895            71            54            71            51\ndiagnostic_notation                             -0.2410         -0.2418            67            50            66            50\ndiagnostic_notation                             -0.0291         -0.0088            54            52            53            52\ndiagnostic_notation                             +0.3217         +0.3709            56            74            53            73\ndiagnostic_notation                             -0.3115         -0.3183            84            58            84            58\ndiagnostic_notation_pvalue                       0.2455          0.2628      U Test, Repetitions: 15 vs 15\ndiagnostic_notation_byte_string                 +0.5767         +0.5753            17            26            17            26\ndiagnostic_notation_byte_string                 +0.1993         +0.1977            16            20            16            20\ndiagnostic_notation_byte_string                 +0.0647         +0.0647            16            17            16            17\ndiagnostic_notation_byte_string                 -0.0034         -0.0001            22            22            22            22\ndiagnostic_notation_byte_string                 -0.3623         -0.3619            24            16            24            16\ndiagnostic_notation_byte_string                 -0.2327         -0.2325            19            15            19            15\ndiagnostic_notation_byte_string                 -0.0566         -0.0653            18            17            18            17\ndiagnostic_notation_byte_string                 -0.3341         -0.3169            25            17            24            17\ndiagnostic_notation_byte_string                 -0.2070         -0.2070            20            16            20            16\ndiagnostic_notation_byte_string                 -0.3601         -0.3607            24            15            24            15\ndiagnostic_notation_byte_string                 -0.0257         -0.0469            20            19            20            19\ndiagnostic_notation_byte_string                 -0.0944         -0.0935            17            15            17            15\ndiagnostic_notation_byte_string                 +0.0293         +0.0427            17            17            16            17\ndiagnostic_notation_byte_string                 +0.0646         +0.0634            16            17            16            17\ndiagnostic_notation_byte_string                 -0.2754         -0.2785            25            18            25            18\ndiagnostic_notation_byte_string_pvalue           0.1150          0.1354      U Test, Repetitions: 15 vs 15\ndiagnostic_notation_control_text                -0.0337         -0.0151            28            27            27            27\ndiagnostic_notation_control_text                -0.0690         -0.0615            26            24            26            24\ndiagnostic_notation_control_text                +0.0112         +0.0039            27            27            27            27\ndiagnostic_notation_control_text                +0.0145         +0.0162            27            27            27            27\ndiagnostic_notation_control_text                -0.0453         -0.0515            27            25            27            25\ndiagnostic_notation_control_text                -0.1850         -0.1849            28            23            28            23\ndiagnostic_notation_control_text                -0.0216         -0.0514            26            26            26            25\ndiagnostic_notation_control_text                -0.3395         -0.3395            41            27            41            27\ndiagnostic_notation_control_text                -0.2074         -0.2081            32            25            32            25\ndiagnostic_notation_control_text                -0.0133         +0.0137            29            29            28            29\ndiagnostic_notation_control_text                +0.3123         +0.3143            27            36            27            36\ndiagnostic_notation_control_text                -0.0855         -0.0807            27            25            27            25\ndiagnostic_notation_control_text                -0.0471         -0.0480            27            25            26            25\ndiagnostic_notation_control_text                +0.1611         +0.1589            24            28            23            27\ndiagnostic_notation_control_text                -0.3610         -0.3638            40            26            40            26\ndiagnostic_notation_control_text_pvalue          0.0745          0.0815      U Test, Repetitions: 15 vs 15\nOVERALL_GEOMEAN                                 -0.0753         -0.0741             0             0             0             0",
+   "a_b": "Comparing /run-dir/out/merged.a.gxx.json to /run-dir/out/merged.b.gxx.json\nBenchmark                                          Time             CPU      Time Old      Time New       CPU Old       CPU New\n-------------------------------------------------------------------------------------------------------------------------------\ndiagnostic_notation                             -0.3513         -0.3696            84            54            84            53\ndiagnostic_notation                             +0.0078         +0.0067            54            54            54            54\ndiagnostic_notation                             +0.2281         +0.2254            56            69            56            69\ndiagnostic_notation                             -0.1266         -0.0923            61            53            58            52\ndiagnostic_notation                             -0.2432         -0.2440            87            66            87            66\ndiagnostic_notation                             +0.0133         +0.0213            57            58            56            57\ndiagnostic_notation                             -0.0600         -0.0629            55            52            55            52\ndiagnostic_notation                             +0.0025         -0.0256            54            55            54            53\ndiagnostic_notation                             +0.2708         +0.2719            70            88            69            88\ndiagnostic_notation                             -0.4001         -0.4003            85            51            85            51\ndiagnostic_notation                             +0.3433         +0.3434            71            96            71            96\ndiagnostic_notation                             -0.1586         -0.1728            67            56            66            55\ndiagnostic_notation                             +0.1467         +0.1718            54            62            53            62\ndiagnostic_notation                             -0.1952         -0.1581            56            45            53            45\ndiagnostic_notation                             -0.3140         -0.3177            84            58            84            58\ndiagnostic_notation_pvalue                       0.1985          0.1466      U Test, Repetitions: 15 vs 15\ndiagnostic_notation_byte_string                 +0.0331         +0.0161            17            17            17            17\ndiagnostic_notation_byte_string                 -0.0829         -0.0803            16            15            16            15\ndiagnostic_notation_byte_string                 +0.1036         +0.0895            16            17            16            17\ndiagnostic_notation_byte_string                 -0.2567         -0.2569            22            17            22            16\ndiagnostic_notation_byte_string                 -0.0707         -0.0701            24            23            24            23\ndiagnostic_notation_byte_string                 -0.1181         -0.1257            19            17            19            17\ndiagnostic_notation_byte_string                 -0.0395         -0.0750            18            17            18            17\ndiagnostic_notation_byte_string                 -0.3255         -0.3093            25            17            24            17\ndiagnostic_notation_byte_string                 +0.1738         +0.1635            20            23            20            23\ndiagnostic_notation_byte_string                 -0.3770         -0.3788            24            15            24            15\ndiagnostic_notation_byte_string                 -0.1548         -0.1575            20            17            20            17\ndiagnostic_notation_byte_string                 +0.0746         +0.0723            17            18            17            18\ndiagnostic_notation_byte_string                 +0.1306         +0.1472            17            19            16            19\ndiagnostic_notation_byte_string                 -0.1348         -0.1359            16            13            16            13\ndiagnostic_notation_byte_string                 -0.3040         -0.3084            25            17            25            17\ndiagnostic_notation_byte_string_pvalue           0.1844          0.1844      U Test, Repetitions: 15 vs 15\ndiagnostic_notation_control_text                -0.0023         +0.0174            28            28            27            28\ndiagnostic_notation_control_text                -0.0526         -0.0442            26            25            26            25\ndiagnostic_notation_control_text                +0.0644         +0.0615            27            28            27            28\ndiagnostic_notation_control_text                +0.1704         +0.1636            27            32            27            31\ndiagnostic_notation_control_text                +0.2447         +0.2447            27            33            27            33\ndiagnostic_notation_control_text                -0.2186         -0.2205            28            22            28            22\ndiagnostic_notation_control_text                +0.0615         +0.0774            26            28            26            28\ndiagnostic_notation_control_text                -0.3055         -0.3082            41            28            41            28\ndiagnostic_notation_control_text                -0.0118         -0.0122            32            32            32            32\ndiagnostic_notation_control_text                -0.0473         -0.0235            29            28            28            27\ndiagnostic_notation_control_text                +0.0083         +0.0099            27            27            27            27\ndiagnostic_notation_control_text                +0.5244         +0.5328            27            42            27            42\ndiagnostic_notation_control_text                +0.0567         +0.0550            27            28            26            28\ndiagnostic_notation_control_text                -0.0875         -0.0782            24            22            23            22\ndiagnostic_notation_control_text                -0.3098         -0.3100            40            28            40            28\ndiagnostic_notation_control_text_pvalue          0.4807          0.3195      U Test, Repetitions: 15 vs 15\nOVERALL_GEOMEAN                                 -0.0681         -0.0673             0             0             0             0"
+  },
+  "clang": {
+   "a_aa": "Comparing /run-dir/out/merged.a.clang.json to /run-dir/out/merged.aa.clang.json\nBenchmark                                          Time             CPU      Time Old      Time New       CPU Old       CPU New\n-------------------------------------------------------------------------------------------------------------------------------\ndiagnostic_notation                             -0.0104         -0.0104            58            58            58            58\ndiagnostic_notation                             -0.3939         -0.3954            98            59            98            59\ndiagnostic_notation                             +0.2231         +0.2378            51            63            51            63\ndiagnostic_notation                             -0.0941         -0.0973            61            55            61            55\ndiagnostic_notation                             +0.7544         +0.7555            52            92            52            92\ndiagnostic_notation                             +0.3958         +0.3983            64            90            64            90\ndiagnostic_notation                             -0.3416         -0.3479            75            49            75            49\ndiagnostic_notation                             -0.0404         -0.0333            57            55            56            55\ndiagnostic_notation                             +0.2506         +0.2521            69            86            69            86\ndiagnostic_notation                             +0.0476         +0.0384            54            57            54            56\ndiagnostic_notation                             -0.2786         -0.2800            78            56            78            56\ndiagnostic_notation                             +0.0091         +0.0159            54            54            53            54\ndiagnostic_notation                             -0.0985         -0.1192            50            45            50            44\ndiagnostic_notation                             +0.0656         +0.0704            51            55            51            55\ndiagnostic_notation                             -0.2155         -0.2172            54            43            54            43\ndiagnostic_notation_pvalue                       0.9339          0.9339      U Test, Repetitions: 15 vs 15\ndiagnostic_notation_byte_string                 +0.1258         +0.0923            16            18            15            17\ndiagnostic_notation_byte_string                 -0.4248         -0.4247            28            16            28            16\ndiagnostic_notation_byte_string                 -0.0695         -0.0500            17            15            16            15\ndiagnostic_notation_byte_string                 -0.0655         -0.0684            18            17            18            17\ndiagnostic_notation_byte_string                 +0.5745         +0.5802            16            25            16            25\ndiagnostic_notation_byte_string                 -0.1277         -0.1287            18            16            18            16\ndiagnostic_notation_byte_string                 -0.3160         -0.3260            22            15            22            15\ndiagnostic_notation_byte_string                 -0.0081         +0.0013            16            16            16            16\ndiagnostic_notation_byte_string                 +0.2139         +0.2241            13            16            13            16\ndiagnostic_notation_byte_string                 +0.1204         +0.1168            15            16            15            16\ndiagnostic_notation_byte_string                 +0.2667         +0.2675            17            21            17            21\ndiagnostic_notation_byte_string                 -0.4263         -0.4310            22            13            22            13\ndiagnostic_notation_byte_string                 -0.0066         -0.0165            15            14            14            14\ndiagnostic_notation_byte_string                 +0.1152         +0.1265            16            17            15            17\ndiagnostic_notation_byte_string                 -0.1550         -0.1657            18            15            18            15\ndiagnostic_notation_byte_string_pvalue           0.4068          0.5338      U Test, Repetitions: 15 vs 15\ndiagnostic_notation_control_text                -0.0014         -0.0107            32            32            32            31\ndiagnostic_notation_control_text                -0.4093         -0.4095            49            29            49            29\ndiagnostic_notation_control_text                -0.0099         -0.0616            30            30            30            28\ndiagnostic_notation_control_text                +0.2278         +0.2307            32            39            32            39\ndiagnostic_notation_control_text                +0.0979         +0.1371            32            35            31            35\ndiagnostic_notation_control_text                -0.0219         -0.0929            32            31            32            29\ndiagnostic_notation_control_text                -0.1385         -0.1398            32            28            32            28\ndiagnostic_notation_control_text                +0.0051         +0.0057            30            30            30            30\ndiagnostic_notation_control_text                +0.2722         +0.2606            24            30            24            30\ndiagnostic_notation_control_text                +0.1366         +0.1351            26            30            26            30\ndiagnostic_notation_control_text                +0.4996         +0.5118            27            41            27            41\ndiagnostic_notation_control_text                -0.0489         -0.0395            27            26            27            26\ndiagnostic_notation_control_text                +0.1209         +0.1115            27            31            27            30\ndiagnostic_notation_control_text                +0.2221         +0.2174            30            36            30            36\ndiagnostic_notation_control_text                -0.1338         -0.1321            31            27            31            27\ndiagnostic_notation_control_text_pvalue          0.7089          0.8682      U Test, Repetitions: 15 vs 15\nOVERALL_GEOMEAN                                 -0.0118         -0.0152             0             0             0             0",
+   "a_b": "Comparing /run-dir/out/merged.a.clang.json to /run-dir/out/merged.b.clang.json\nBenchmark                                          Time             CPU      Time Old      Time New       CPU Old       CPU New\n-------------------------------------------------------------------------------------------------------------------------------\ndiagnostic_notation                             +0.0214         +0.0203            58            60            58            60\ndiagnostic_notation                             -0.0567         -0.0580            98            93            98            92\ndiagnostic_notation                             +0.4515         +0.4680            51            74            51            74\ndiagnostic_notation                             +0.0260         +0.0258            61            63            61            63\ndiagnostic_notation                             +0.5884         +0.5433            52            83            52            81\ndiagnostic_notation                             -0.0913         -0.0947            64            59            64            58\ndiagnostic_notation                             -0.2280         -0.2329            75            58            75            58\ndiagnostic_notation                             +0.5638         +0.5753            57            89            56            89\ndiagnostic_notation                             -0.1543         -0.1708            69            58            69            57\ndiagnostic_notation                             +0.4083         +0.4071            54            76            54            76\ndiagnostic_notation                             +0.0141         +0.0131            78            79            78            79\ndiagnostic_notation                             +0.3278         +0.3048            54            71            53            69\ndiagnostic_notation                             +0.1736         +0.1761            50            58            50            58\ndiagnostic_notation                             -0.0038         -0.0033            51            51            51            51\ndiagnostic_notation                             -0.0527         -0.0545            54            52            54            52\ndiagnostic_notation_pvalue                       0.1354          0.1354      U Test, Repetitions: 15 vs 15\ndiagnostic_notation_byte_string                 +0.0647         +0.0746            16            17            15            17\ndiagnostic_notation_byte_string                 -0.4069         -0.4070            28            17            28            17\ndiagnostic_notation_byte_string                 +0.3726         +0.4060            17            23            16            23\ndiagnostic_notation_byte_string                 +0.2226         +0.2256            18            22            18            22\ndiagnostic_notation_byte_string                 +0.4329         +0.4226            16            23            16            23\ndiagnostic_notation_byte_string                 -0.0915         -0.0939            18            17            18            17\ndiagnostic_notation_byte_string                 -0.1880         -0.1929            22            18            22            17\ndiagnostic_notation_byte_string                 +0.5640         +0.5789            16            26            16            26\ndiagnostic_notation_byte_string                 +0.2894         +0.2318            13            17            13            16\ndiagnostic_notation_byte_string                 +0.5505         +0.5492            15            22            15            22\ndiagnostic_notation_byte_string                 -0.0169         -0.0177            17            16            17            16\ndiagnostic_notation_byte_string                 -0.0951         -0.1009            22            20            22            20\ndiagnostic_notation_byte_string                 +0.1668         +0.1693            15            17            14            17\ndiagnostic_notation_byte_string                 +0.0707         +0.0769            16            17            15            16\ndiagnostic_notation_byte_string                 -0.1601         -0.1587            18            15            18            15\ndiagnostic_notation_byte_string_pvalue           0.1249          0.1249      U Test, Repetitions: 15 vs 15\ndiagnostic_notation_control_text                -0.0474         -0.0465            32            30            32            30\ndiagnostic_notation_control_text                -0.3851         -0.3851            49            30            49            30\ndiagnostic_notation_control_text                +0.2133         +0.2147            30            37            30            37\ndiagnostic_notation_control_text                -0.0584         -0.0561            32            30            32            30\ndiagnostic_notation_control_text                +0.0637         +0.1013            32            34            31            34\ndiagnostic_notation_control_text                -0.0751         -0.0872            32            29            32            29\ndiagnostic_notation_control_text                +0.0103         -0.0111            32            33            32            32\ndiagnostic_notation_control_text                +0.5084         +0.5059            30            45            30            45\ndiagnostic_notation_control_text                +0.3081         +0.3016            24            31            24            31\ndiagnostic_notation_control_text                +0.6768         +0.6765            26            44            26            44\ndiagnostic_notation_control_text                +0.1017         +0.1105            27            30            27            30\ndiagnostic_notation_control_text                -0.1452         -0.1363            27            23            27            23\ndiagnostic_notation_control_text                +0.1056         +0.1175            27            30            27            30\ndiagnostic_notation_control_text                +0.0053         +0.0053            30            30            30            30\ndiagnostic_notation_control_text                -0.1001         -0.0989            31            28            31            28\ndiagnostic_notation_control_text_pvalue          0.4068          0.4306      U Test, Repetitions: 15 vs 15\nOVERALL_GEOMEAN                                 +0.0786         +0.0774             0             0             0             0"
+  }
+ },
+ "cells": {
+  "gxx": {
+   "diagnostic_notation": {
+    "a": {
+     "repetitions_ns": [
+      83600308.00008644,
+      53655373.000083275,
+      56083767.00001827,
+      60771248.000037305,
+      87354804.99990444,
+      57026911.0000936,
+      55136109.99992125,
+      54441410.99997068,
+      69568412.00008057,
+      84777582.00001517,
+      71368452.00011522,
+      66509920.00004408,
+      53880711.00014713,
+      55953379.00012964,
+      84441307.00013375
+     ],
+     "median_ns": 60771248.000037305,
+     "spread": 0.6280718987783174
+    },
+    "aa": {
+     "repetitions_ns": [
+      81889664.00007303,
+      76201042.99985541,
+      83513788.00011843,
+      56215528.00016616,
+      52072470.99997403,
+      49327231.50000129,
+      57973220.99988378,
+      55504977.000055075,
+      90356327.9998707,
+      53396753.00001545,
+      53748056.50001235,
+      50481989.99998021,
+      52312266.999933854,
+      73956096.00007446,
+      58137208.999823995
+     ],
+     "median_ns": 56215528.00016616,
+     "spread": 0.8317737536084575
+    },
+    "b": {
+     "repetitions_ns": [
+      54232076.00006208,
+      54071406.00004823,
+      68876071.99996637,
+      53076314.00000901,
+      66109024.9998324,
+      57783261.00016784,
+      51828346.99985506,
+      54575597.00016645,
+      88405327.99990797,
+      50861843.9998827,
+      95869818.99997227,
+      55962106.000151835,
+      61785100.999941275,
+      45029715.00005515,
+      57925657.99993099
+     ],
+     "median_ns": 55962106.000151835,
+     "spread": 1.1290345497379866
+    },
+    "a_over_a_ratio": 0.9250349441586531,
+    "b_over_a_ratio": 0.9208648471414884,
+    "utest_a_aa": {
+     "time_pvalue": 0.24548500120312422,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.1985058531538877,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "diagnostic_notation_byte_string": {
+    "a": {
+     "repetitions_ns": [
+      16538321.499979246,
+      16378198.49997868,
+      15668158.250036867,
+      22241375.25001879,
+      24453845.99999064,
+      19226392.999996733,
+      18077770.49998549,
+      24910687.750036687,
+      20009620.999947704,
+      24191729.66665428,
+      19877342.4999672,
+      16711128.999986613,
+      16693258.499969942,
+      15562174.2500216,
+      24707623.666699875
+     ],
+     "median_ns": 19226392.999996733,
+     "spread": 0.6007202688918685
+    },
+    "aa": {
+     "repetitions_ns": [
+      26075994.000014663,
+      19641748.749961607,
+      16682485.249987166,
+      22166362.999996636,
+      15593204.400011018,
+      14752795.200001856,
+      17054506.00002223,
+      16587939.000032747,
+      15867239.250042075,
+      15479957.25002238,
+      19365775.750031844,
+      15134232.249977231,
+      17182111.00001099,
+      16568148.749968259,
+      17903568.999997787
+     ],
+     "median_ns": 16682485.249987166,
+     "spread": 0.7675290442594487
+    },
+    "b": {
+     "repetitions_ns": [
+      17086101.00001806,
+      15019843.400023092,
+      17291013.999965798,
+      16531993.000000967,
+      22724970.2500103,
+      16956457.499986753,
+      17363856.750023387,
+      16802631.25001602,
+      23487269.33337275,
+      15072211.400001833,
+      16801177.666669294,
+      17957519.749984384,
+      18872710.666679874,
+      13463636.799997402,
+      17195848.749963716
+     ],
+     "median_ns": 17086101.00001806,
+     "spread": 0.744496652893762
+    },
+    "a_over_a_ratio": 0.8676866872527781,
+    "b_over_a_ratio": 0.888679483459064,
+    "utest_a_aa": {
+     "time_pvalue": 0.11498741920155964,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.1844100692216365,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "diagnostic_notation_control_text": {
+    "a": {
+     "repetitions_ns": [
+      27889496.666678797,
+      26211244.000023726,
+      26729314.333276004,
+      26930226.000028294,
+      26687596.999977358,
+      28143067.49996831,
+      26350572.666615333,
+      40772021.50006087,
+      32009172.50001112,
+      28900723.99998189,
+      27108137.000065353,
+      27389175.33330702,
+      26507462.000002608,
+      23766168.999979224,
+      40183198.500017166
+     ],
+     "median_ns": 27108137.000065353,
+     "spread": 0.7155487491524828
+    },
+    "aa": {
+     "repetitions_ns": [
+      26949238.333372705,
+      24402220.666615903,
+      27029195.999981917,
+      27320776.500005197,
+      25479683.00003352,
+      22936932.333323058,
+      25782455.000050202,
+      26930727.66661923,
+      25369599.999976344,
+      28517073.000026964,
+      35573947.49998366,
+      25048175.000013847,
+      25260075.666665215,
+      27595345.999998245,
+      25678380.000044852
+     ],
+     "median_ns": 25782455.000050202,
+     "spread": 0.5509461763682055
+    },
+    "b": {
+     "repetitions_ns": [
+      27824930.33328137,
+      24831339.000002116,
+      28451349.9999548,
+      31519450.000056773,
+      33218134.49997535,
+      21990848.33334079,
+      27970996.499902867,
+      28317773.000026137,
+      31633030.999955736,
+      27532498.33335758,
+      27334471.99996893,
+      41753026.00003761,
+      28009540.666668426,
+      21687040.999950115,
+      27733023.000034034
+     ],
+     "median_ns": 27970996.499902867,
+     "spread": 0.9252523200437373
+    },
+    "a_over_a_ratio": 0.9510965286912946,
+    "b_over_a_ratio": 1.031830276637433,
+    "utest_a_aa": {
+     "time_pvalue": 0.0744956919139866,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.48073111045562256,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   }
+  },
+  "clang": {
+   "diagnostic_notation": {
+    "a": {
+     "repetitions_ns": [
+      58443293.9999715,
+      98079172.99986002,
+      51181838.99992346,
+      60947596.99999486,
+      52224368.999986835,
+      64428010.99979079,
+      75113963.999911,
+      56911453.99987363,
+      68712844.99993636,
+      53964658.0000408,
+      77846953.9998241,
+      53598612.99984914,
+      49672552.99993667,
+      51216941.00000695,
+      54487562.00007665
+     ],
+     "median_ns": 56911453.99987363,
+     "spread": 0.974514436573958
+    },
+    "aa": {
+     "repetitions_ns": [
+      57833457.000015184,
+      59447283.000054084,
+      62598776.000186265,
+      55209713.000067495,
+      91620046.99987847,
+      89929426.00002606,
+      49456610.49998762,
+      54609669.000001304,
+      85932347.99991478,
+      56532199.99999237,
+      56158058.0001646,
+      54088653.99999741,
+      44781805.000070564,
+      54578827.000113964,
+      42746555.000007905
+     ],
+     "median_ns": 56158058.0001646,
+     "spread": 1.1433317140962944
+    },
+    "b": {
+     "repetitions_ns": [
+      59696123.0000943,
+      92518294.00000133,
+      74291076.99999803,
+      62532863.000114955,
+      82952411.99994053,
+      58544504.99987251,
+      57988901.00004428,
+      88997078.99990971,
+      58110107.9999371,
+      75998856.00006928,
+      78941949.99994397,
+      71165721.99993242,
+      58297135.99996467,
+      51022026.00005512,
+      51617760.99998861
+     ],
+     "median_ns": 62532863.000114955,
+     "spread": 0.8133010633466686
+    },
+    "a_over_a_ratio": 0.9867619618414475,
+    "b_over_a_ratio": 1.0987746508858094,
+    "utest_a_aa": {
+     "time_pvalue": 0.9338864180775845,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.13538211004560674,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "diagnostic_notation_byte_string": {
+    "a": {
+     "repetitions_ns": [
+      15567823.24996675,
+      27973593.999983374,
+      16501766.00001032,
+      17916033.250003237,
+      15914620.249986911,
+      18405486.25000338,
+      21578243.666681375,
+      16355401.750047348,
+      13294412.249990728,
+      14502525.400030209,
+      16779516.999955986,
+      22419015.666703973,
+      14526686.799990784,
+      15547970.600027839,
+      17814309.333289202
+     ],
+     "median_ns": 16501766.00001032,
+     "spread": 1.1041617691675603
+    },
+    "aa": {
+     "repetitions_ns": [
+      17526897.000038844,
+      16091390.99997492,
+      15354935.999994269,
+      16743385.499978557,
+      25057929.333343055,
+      16055686.249956125,
+      14758464.40002897,
+      16222588.4999998,
+      16138301.750004303,
+      16247983.249968456,
+      21254984.75004406,
+      12861975.49999694,
+      14430138.83332848,
+      17339240.500007235,
+      15052596.199984692
+     ],
+     "median_ns": 16138301.750004303,
+     "spread": 0.9482177783147712
+    },
+    "b": {
+     "repetitions_ns": [
+      16575531.750049777,
+      16590591.75000266,
+      22651114.25003852,
+      21904872.999963727,
+      22804785.99999469,
+      16721455.750030145,
+      17520719.25000109,
+      25579897.666678637,
+      17141447.249969132,
+      22485866.000048798,
+      16495560.750001915,
+      20287932.49996852,
+      16950259.24999527,
+      16647962.000024563,
+      14961703.250037316
+     ],
+     "median_ns": 17141447.249969132,
+     "spread": 0.709691553106752
+    },
+    "a_over_a_ratio": 0.9779742210618069,
+    "b_over_a_ratio": 1.0387644116368158,
+    "utest_a_aa": {
+     "time_pvalue": 0.4067868333984651,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.12486035998214667,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "diagnostic_notation_control_text": {
+    "a": {
+     "repetitions_ns": [
+      31850525.99997107,
+      49294504.00004498,
+      30200381.49998072,
+      31773608.499975126,
+      32236144.499961484,
+      31637775.000035618,
+      32355053.000060253,
+      29915553.9998992,
+      23665078.66668144,
+      26216842.00001558,
+      27424124.000011336,
+      27483659.500035174,
+      27362740.6666795,
+      29657573.000008598,
+      31005326.999888893
+     ],
+     "median_ns": 30200381.49998072,
+     "spread": 1.0830061329754948
+    },
+    "aa": {
+     "repetitions_ns": [
+      31806211.000002805,
+      29115986.00007892,
+      29901653.666608278,
+      39010523.99999116,
+      35392117.00001488,
+      30945577.000011325,
+      27872428.33331523,
+      30067767.499986075,
+      30106484.000043564,
+      29797386.99991685,
+      41126226.49995501,
+      26138833.000004523,
+      30671520.500050064,
+      36243140.50000521,
+      26857795.333323035
+     ],
+     "median_ns": 30106484.000043564,
+     "spread": 0.573376535209047
+    },
+    "b": {
+     "repetitions_ns": [
+      30339686.499928575,
+      30311870.50009976,
+      36641347.49999448,
+      29918780.000002697,
+      34289224.99995224,
+      29262254.499940354,
+      32687087.99998876,
+      45124320.500008255,
+      30956887.49999681,
+      43960575.49990928,
+      30213664.000029895,
+      23493457.66666981,
+      30253081.500063673,
+      29814866.00003791,
+      27902379.66663274
+     ],
+     "median_ns": 30311870.50009976,
+     "spread": 0.920718573665986
+    },
+    "a_over_a_ratio": 0.9968908505365331,
+    "b_over_a_ratio": 1.0036916421111803,
+    "utest_a_aa": {
+     "time_pvalue": 0.7089232340537643,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.4067868333984651,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   }
+  }
+ }
+}
