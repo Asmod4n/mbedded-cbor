@@ -190,8 +190,15 @@ public:
         return *held;
     }
 
-    T const &&operator*() const && = delete;
-    T &&operator*() && = delete;
+    constexpr T operator*() const &&
+    {
+        return *held;
+    }
+
+    constexpr T operator*() &&
+    {
+        return *std::move(held);
+    }
 
     /**
      * @brief Gives the address of the value; the result holds a value.
@@ -206,8 +213,15 @@ public:
         return held.operator->();
     }
 
-    T const *operator->() const && = delete;
-    T *operator->() && = delete;
+    constexpr T const *operator->() const && CBOR_LIFETIMEBOUND
+    {
+        return held.operator->();
+    }
+
+    constexpr T *operator->() && CBOR_LIFETIMEBOUND
+    {
+        return held.operator->();
+    }
 
     /**
      * @brief Gives the value.
@@ -224,8 +238,15 @@ public:
         return held.value();
     }
 
-    T const &&value() const && = delete;
-    T &&value() && = delete;
+    constexpr T value() const &&
+    {
+        return held.value();
+    }
+
+    constexpr T value() &&
+    {
+        return std::move(held).value();
+    }
 
     /**
      * @brief Gives the error; the result holds an error.
