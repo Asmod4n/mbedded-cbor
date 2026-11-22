@@ -138,6 +138,11 @@ using view_of_elements = decltype(std::declval<cbor::lazy const &>().elements())
 using view_of_entries = decltype(std::declval<cbor::lazy const &>().entries());
 
 using query_result = decltype(cbor::path::compile<cbor::nodelist>(std::declval<std::string_view>()));
+using owner_text = decltype(cbor::at_path<"$.name", std::string_view>(std::declval<std::shared_ptr<std::string const> const &>()));
+using lazy_text = decltype(std::declval<cbor::lazy const &>().at_path<"$.name", std::string_view>());
+using owner_query_text = decltype(cbor::at_path(std::declval<std::shared_ptr<std::string const> const &>(),
+                                                std::declval<cbor::path::query<std::string_view> const &>()));
+using lazy_query_text = decltype(std::declval<cbor::lazy const &>().at_path(std::declval<cbor::path::query<std::string_view> const &>()));
 
 using next_result = decltype(std::declval<cbor::sequence_reader &>().next());
 
@@ -615,6 +620,9 @@ TEST_CASE("result: cbor::diag2cbor gives its result in a constant expression")
 // a cbor::sequence and cbor::sequence_reader::next give a result. The view of elements is the case that a loop over a
 // temporary would leave dangling, so neither a reader nor a monadic form of a temporary result compiles, and the same
 // call on a named result does.
+// A reference to the ref inside a temporary result of at_path ends with its statement, and no compiler warns, so the
+// forms auto const &r = *at_path(...) and at_path(...).value() must not compile, for the owner form, the member form
+// and both forms with a compiled query.
 TEST_CASE("result: a temporary result of at_path, elements, compile or next cannot be read")
 {
     CHECK(deref_of_named<nodes_result>);
@@ -642,6 +650,16 @@ TEST_CASE("result: a temporary result of at_path, elements, compile or next cann
     CHECK_FALSE(arrow_of_call<cbor::sequence::iterator::value_type>);
     CHECK_FALSE(deref_of_call<cbor::lazy_elements::iterator::value_type>);
     CHECK_FALSE(deref_of_call<cbor::lazy_entries::iterator::value_type>);
+    CHECK(deref_of_named<owner_text>);
+    CHECK_FALSE(deref_of_call<owner_text>);
+    CHECK_FALSE(value_of_call<owner_text>);
+    CHECK(deref_of_named<lazy_text>);
+    CHECK_FALSE(deref_of_call<lazy_text>);
+    CHECK(deref_of_named<owner_query_text>);
+    CHECK_FALSE(deref_of_call<owner_query_text>);
+    CHECK_FALSE(value_of_call<owner_query_text>);
+    CHECK(deref_of_named<lazy_query_text>);
+    CHECK_FALSE(deref_of_call<lazy_query_text>);
     using compile = decltype(compile_root);
     using count = decltype(count_of_nodes);
     using again = decltype(nodes_of_document);
