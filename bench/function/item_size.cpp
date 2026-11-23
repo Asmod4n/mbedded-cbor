@@ -12,6 +12,8 @@
 #include <fstream>
 #include <string>
 #include <string_view>
+#include <ranges>
+#include <span>
 
 namespace {
 
@@ -45,8 +47,14 @@ BENCHMARK(item_size_arrays);
 int main(int argc, char **argv)
 {
     constexpr std::string_view output_flag = "--output_file=";
-    for (int i = 1; i < argc; ++i) {
-        std::string_view const argument = argv[i];
+#if defined(__clang__)
+#pragma clang unsafe_buffer_usage begin
+#endif
+    std::span<char *const> const arguments(argv, static_cast<std::size_t>(argc));
+#if defined(__clang__)
+#pragma clang unsafe_buffer_usage end
+#endif
+    for (std::string_view const argument : arguments | std::views::drop(1)) {
         if (argument.starts_with(output_flag)) {
             std::ofstream file(std::string(argument.substr(output_flag.size())), std::ios::binary);
             for (std::size_t cut = 0; cut <= message.size(); ++cut) {

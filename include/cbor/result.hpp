@@ -67,7 +67,7 @@ result<item> encoded_cbor_data_item(owning<item> const &tree, item tagged);
  * @ingroup errors
  */
 template <class T, class E>
-class result {
+class [[nodiscard]] result {
     std::expected<T, E> held;
 
 public:
@@ -193,7 +193,9 @@ public:
     }
 
     /**
-     * @brief Gives the value; the result holds a value.
+     * @brief Gives the value.
+     *
+     * @throws std::logic_error the result holds an error
      */
     constexpr T const &operator*() const & CBOR_LIFETIMEBOUND
     {
@@ -229,7 +231,9 @@ public:
     = delete;
 
     /**
-     * @brief Gives the address of the value; the result holds a value.
+     * @brief Gives the address of the value.
+     *
+     * @throws std::logic_error the result holds an error
      */
     constexpr T const *operator->() const & CBOR_LIFETIMEBOUND
     {
@@ -249,28 +253,32 @@ public:
     /**
      * @brief Gives the value.
      *
-     * @throws std::bad_expected_access<E> the result holds an error
+     * @throws std::logic_error the result holds an error
      */
     constexpr T const &value() const & CBOR_LIFETIMEBOUND
     {
-        return held.value();
+        detail::validity::throw_logic_error_if(!held.has_value(), "cbor::result: value() of a result that holds an error");
+        return *held;
     }
 
     constexpr T &value() & CBOR_LIFETIMEBOUND
     {
-        return held.value();
+        detail::validity::throw_logic_error_if(!held.has_value(), "cbor::result: value() of a result that holds an error");
+        return *held;
     }
 
     constexpr T value() const &&
         requires detail::value_outlives_result<T>
     {
-        return held.value();
+        detail::validity::throw_logic_error_if(!held.has_value(), "cbor::result: value() of a result that holds an error");
+        return *held;
     }
 
     constexpr T value() &&
         requires detail::value_outlives_result<T>
     {
-        return std::move(held).value();
+        detail::validity::throw_logic_error_if(!held.has_value(), "cbor::result: value() of a result that holds an error");
+        return *std::move(held);
     }
 
     T value() const &&
@@ -281,10 +289,13 @@ public:
     = delete;
 
     /**
-     * @brief Gives the error; the result holds an error.
+     * @brief Gives the error.
+     *
+     * @throws std::logic_error the result holds a value
      */
     constexpr E const &error() const & CBOR_LIFETIMEBOUND
     {
+        detail::validity::throw_logic_error_if(held.has_value(), "cbor::result: error() of a result that holds a value");
         return held.error();
     }
 
@@ -426,7 +437,7 @@ public:
  * @ingroup errors
  */
 template <class E>
-class result<void, E> {
+class [[nodiscard]] result<void, E> {
     std::expected<void, E> held;
 
 public:
@@ -473,18 +484,21 @@ public:
     /**
      * @brief Checks that the result holds no error.
      *
-     * @throws std::bad_expected_access<E> the result holds an error
+     * @throws std::logic_error the result holds an error
      */
     constexpr void value() const
     {
-        held.value();
+        detail::validity::throw_logic_error_if(!held.has_value(), "cbor::result: value() of a result that holds an error");
     }
 
     /**
-     * @brief Gives the error; the result holds an error.
+     * @brief Gives the error.
+     *
+     * @throws std::logic_error the result holds a value
      */
     constexpr E const &error() const & CBOR_LIFETIMEBOUND
     {
+        detail::validity::throw_logic_error_if(held.has_value(), "cbor::result: error() of a result that holds a value");
         return held.error();
     }
 

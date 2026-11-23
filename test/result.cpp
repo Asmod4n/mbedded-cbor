@@ -235,7 +235,7 @@ TEST_CASE("result: the readers of a named result give the error")
     CHECK_FALSE(b.has_value());
     CHECK_FALSE(static_cast<bool>(b));
     CHECK_EQ(b.error(), error::key_not_found);
-    CHECK_THROWS_AS(static_cast<void>(b.value()), std::bad_expected_access<error>);
+    CHECK_THROWS_AS(static_cast<void>(b.value()), std::logic_error);
     auto const a = doc.at("a");
     auto const wrong = a->get<bool>();
     CHECK_EQ(wrong.error(), error::incorrect_type);
@@ -1022,4 +1022,16 @@ TEST_CASE("result: a temporary result gives a value that outlives it")
     CHECK_EQ(*cbor::item_size(*encoded), encoded->size());
     std::string const text = *cbor::encode(std::string("ab"));
     CHECK_EQ(text, *encoded);
+}
+
+// error() of a result that holds a value reads no error: the wrong use throws std::logic_error. value() of a result
+// that holds an error throws the same, for a value and for void.
+TEST_CASE("result: error() of a value and value() of an error throw std::logic_error")
+{
+    auto const size = cbor::item_size(*cbor::encode(1));
+    REQUIRE(size.has_value());
+    CHECK_THROWS_AS(static_cast<void>(size.error()), std::logic_error);
+    auto const failed = cbor::item_size(std::string_view{});
+    CHECK_THROWS_AS(static_cast<void>(failed.value()), std::logic_error);
+    CHECK_THROWS_AS(static_cast<void>(cbor::item_size(std::string_view{}).value()), std::logic_error);
 }
