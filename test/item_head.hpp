@@ -44,10 +44,8 @@ inline std::uint64_t read_argument_of_item(cbor::item const node)
         auto const bytes = node.get<std::span<std::byte const>>();
         return bytes.value().size();
     }
-    case cbor::type::text_string: {
-        auto const text = node.get<std::string_view>();
-        return text.value().size();
-    }
+    case cbor::type::text_string:
+        return node.get<std::string_view>().value().size();
     case cbor::type::array: {
         auto const node_elements = node.elements();
         return node_elements.value().size();
@@ -71,19 +69,15 @@ inline std::uint64_t read_argument_of_item(cbor::item const node)
     case cbor::type::true_value:
     case cbor::type::null:
     case cbor::type::undefined:
-    case cbor::type::simple_value: {
-        auto const simple = node.get<cbor::simple_value>();
-        return std::to_underlying(simple.value());
-    }
+    case cbor::type::simple_value:
+        return std::to_underlying(node.get<cbor::simple_value>().value());
     case cbor::type::half_float:
     case cbor::type::single_float:
     case cbor::type::double_float:
     case cbor::type::negative_integer:
         return read_argument_from_encoding(node);
-    case cbor::type::unsigned_integer: {
-        auto const number = node.get<std::uint64_t>();
-        return number.value();
-    }
+    case cbor::type::unsigned_integer:
+        return node.get<std::uint64_t>().value();
     }
     std::unreachable();
 }

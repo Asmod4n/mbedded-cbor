@@ -128,8 +128,7 @@ TEST_CASE("encode: a list of a fixed-width number is a typed array of RFC 8746")
 // message. A span that holds the message but not the padding of a head still takes it.
 TEST_CASE("encode: into a string, a vector, a span and a writer of the caller")
 {
-    auto const encoded = form<garage>::encode(sample_garage);
-    std::string const expected = *encoded;
+    std::string const expected = *form<garage>::encode(sample_garage);
     std::string text = "x";
     CHECK_EQ((form<garage>::encode(text, sample_garage)), expected.size());
     CHECK_EQ(text, "x" + expected);
@@ -214,8 +213,7 @@ TEST_CASE("encode: into the exact span that a writer allocates")
     };
 
     auto const check = [](auto const &value) {
-        auto const encoded = form<std::remove_cvref_t<decltype(value)>>::encode(value);
-        std::string const expected = *encoded;
+        std::string const expected = *form<std::remove_cvref_t<decltype(value)>>::encode(value);
         reserving writer;
         writer.store.fill('#');
         REQUIRE_EQ((form<std::remove_cvref_t<decltype(value)>>::encode(writer, value)), expected.size());
@@ -327,8 +325,7 @@ void check_value_alternative(T const value, std::string_view const head)
     REQUIRE(doc.has_value());
     auto const v = doc->template at_path<"$.value">();
     REQUIRE(v.has_value());
-    auto const alternative = v->template get<T>();
-    CHECK(alternative.value() == value);
+    CHECK(v->template get<T>().value() == value);
     CHECK_EQ(v->template get<dog>(), std::unexpected(error::incorrect_type));
 }
 
@@ -397,8 +394,7 @@ TEST_CASE("encode: a text, a byte string and a class as alternatives of one vari
 TEST_CASE("encode: a span keeps every byte behind the message")
 {
     constexpr char sentinel = 'Z';
-    auto const encoded = form<garage>::encode(sample_garage);
-    std::string const expected = *encoded;
+    std::string const expected = *form<garage>::encode(sample_garage);
     std::vector<char> buffer(expected.size() + 64, sentinel);
     auto const n = form<garage>::encode(std::span<char>(buffer), sample_garage);
     REQUIRE(n.has_value());

@@ -452,8 +452,7 @@ TEST_CASE("structs: only public members are written and read")
     a.name = "ann";
     a.id = 7;
     a.hidden_set(42, 9);
-    auto const encoded = cbor::encode<account>(a);
-    std::string const bytes = *encoded;
+    std::string const bytes = *cbor::encode<account>(a);
     CHECK_EQ(bytes, "\xda\x00\x02\x71\x33\xa2\x62id\x07\x64name\x63"
                     "ann"s);
     auto const back = cbor::structs<account>::decode("\xda\x00\x02\x71\x33\xa4\x64name\x63"
@@ -495,12 +494,10 @@ TEST_CASE("structs: a value under tag 28 or tag 29 is invalid_tag")
     for (std::string const width : {"_0", "_1", "_2", "_3"}) {
         CAPTURE(width);
         auto const bytes = [&width](std::string const &before, std::string const &after) {
-            auto const edn_bytes = cbor::diag2cbor(before + "28" + width + after);
-            return edn_bytes.value();
+            return cbor::diag2cbor(before + "28" + width + after).value();
         };
         auto const reference = [&width](std::string const &before, std::string const &after) {
-            auto const edn_bytes_2 = cbor::diag2cbor(before + "29" + width + after);
-            return edn_bytes_2.value();
+            return cbor::diag2cbor(before + "29" + width + after).value();
         };
         CHECK_EQ(cbor::structs<value_kinds>::decode(bytes(R"({"a": )", R"((1), "b": []})")),
                  std::unexpected(error::invalid_tag));
@@ -555,8 +552,7 @@ TEST_CASE("structs: a tag 28 or tag 29 in a skipped entry is skipped")
 // std::chrono::sys_seconds.
 TEST_CASE("structs: a tag 28 inside the content of tag 1 keeps the error of tag 1")
 {
-    auto const edn_bytes = cbor::diag2cbor(R"({"a": 1(28(5))})");
-    std::string const bytes = edn_bytes.value();
+    std::string const bytes = cbor::diag2cbor(R"({"a": 1(28(5))})").value();
     CHECK_EQ(cbor::structs<value_kinds>::decode(std::string(bytes)), std::unexpected(error::incorrect_type));
     CHECK_EQ(cbor::structs<seconds_member>::decode(std::string(bytes)),
              std::unexpected(error::inadmissible_type_for_tag_content));
@@ -815,8 +811,7 @@ TEST_CASE("structs: decode reserves the elements that the bytes left can hold")
     for (std::size_t i = 1; i < claimed; ++i)
         claim += ", null";
     claim += "]}";
-    auto const edn_bytes = cbor::diag2cbor(claim);
-    std::string const full = edn_bytes.value();
+    std::string const full = cbor::diag2cbor(claim).value();
     std::string message = full.substr(0, full.size() - claimed);
     auto const edn_bytes_2 = cbor::diag2cbor("null");
     message.append(nulls, edn_bytes_2.value().front());
@@ -932,8 +927,7 @@ TEST_CASE("structs: an array head reserves no more elements than the bytes left 
     for (std::size_t i = 1; i < claimed; ++i)
         all_zeros += ", 0";
     all_zeros += "]";
-    auto const edn_bytes = cbor::diag2cbor(all_zeros);
-    std::string const claim = edn_bytes.value();
+    std::string const claim = cbor::diag2cbor(all_zeros).value();
     std::string const head_of_claim = claim.substr(0, claim.size() - claimed);
     std::string input = head_of_claim;
     auto const point = cbor::diag2cbor(R"({"x": 0, "y": 0})");
@@ -959,9 +953,8 @@ struct tree_node {
 // succeeds gives the same tree. A tree whose last byte is cut gives too_little_data.
 TEST_CASE("structs: a recursive type decodes and a cut tree gives too_little_data")
 {
-    auto const edn_bytes = cbor::diag2cbor(
-        R"({"children": [{"children": []}, {"children": [{"children": []}, {"children": []}]}]})");
-    std::string const bytes = edn_bytes.value();
+    std::string const bytes = cbor::diag2cbor(
+        R"({"children": [{"children": []}, {"children": [{"children": []}, {"children": []}]}]})").value();
     tree_node const expected{{tree_node{}, tree_node{{tree_node{}, tree_node{}}}}};
     auto const read = cbor::structs<tree_node>::decode(std::string(bytes));
     REQUIRE(read.has_value());
@@ -1191,10 +1184,7 @@ TEST_CASE("structs: sys_seconds is tag 1 and year_month_day is tag 100")
 TEST_CASE("structs: tag 1 with a fraction of a second")
 {
     using namespace std::chrono;
-    auto const tag1 = [](std::string_view const diag) {
-        auto const bytes = cbor::diag2cbor(diag);
-        return bytes.value();
-    };
+    auto const tag1 = [](std::string_view const diag) { return cbor::diag2cbor(diag).value(); };
     auto const ms = cbor::structs<sys_time<milliseconds>>::decode(tag1("1(1.5)"));
     REQUIRE(ms.has_value());
     CHECK_EQ((*ms)->time_since_epoch().count(), 1500);
@@ -1220,10 +1210,7 @@ TEST_CASE("structs: tag 1 with a fraction of a second")
 TEST_CASE("structs: sys_time of each precision round trips through tag 1 and tag 1001")
 {
     using namespace std::chrono;
-    auto const item = [](std::string_view const diag) {
-        auto const bytes = cbor::diag2cbor(diag);
-        return bytes.value();
-    };
+    auto const item = [](std::string_view const diag) { return cbor::diag2cbor(diag).value(); };
     round_trip(item("1(1700000000)"), sys_seconds{seconds{1700000000}});
     round_trip(item("1001({1: 1, -3: 500})"), sys_time<milliseconds>{milliseconds{1500}});
     round_trip(item("1001({1: 1, -3: 1})"), sys_time<milliseconds>{milliseconds{1001}});
@@ -1323,10 +1310,7 @@ TEST_CASE("structs: tag 1001 that the library cannot read gives inadmissible_typ
 TEST_CASE("structs: tai_time and gps_time are tag 1001 with timescale 1")
 {
     using namespace std::chrono;
-    auto const item = [](std::string_view const diag) {
-        auto const bytes = cbor::diag2cbor(diag);
-        return bytes.value();
-    };
+    auto const item = [](std::string_view const diag) { return cbor::diag2cbor(diag).value(); };
     round_trip(item("1001({1: 0, 13: 1})"), tai_seconds{seconds{378691200}});
     round_trip(item("1001({1: 0, -3: 500, 13: 1})"), tai_time<milliseconds>{milliseconds{378691200500}});
     round_trip(item("1001({1: -378691200, 13: 1})"), tai_seconds{seconds{0}});
@@ -1347,10 +1331,7 @@ TEST_CASE("structs: tai_time and gps_time are tag 1001 with timescale 1")
 TEST_CASE("structs: timescale 1 into sys_time and UTC forms into tai_time convert with the leap seconds")
 {
     using namespace std::chrono;
-    auto const item = [](std::string_view const diag) {
-        auto const bytes = cbor::diag2cbor(diag);
-        return bytes.value();
-    };
+    auto const item = [](std::string_view const diag) { return cbor::diag2cbor(diag).value(); };
     auto const utc = cbor::structs<sys_seconds>::decode(item("1001({1: 1500000000, 13: 1})"));
     REQUIRE(utc.has_value());
     CHECK_EQ((*utc)->time_since_epoch().count(), 1499999963);
@@ -1375,10 +1356,7 @@ TEST_CASE("structs: timescale 1 into sys_time and UTC forms into tai_time conver
 TEST_CASE("structs: utc_time is TAI and keeps a leap second")
 {
     using namespace std::chrono;
-    auto const item = [](std::string_view const diag) {
-        auto const bytes = cbor::diag2cbor(diag);
-        return bytes.value();
-    };
+    auto const item = [](std::string_view const diag) { return cbor::diag2cbor(diag).value(); };
     auto const before = clock_cast<utc_clock>(sys_seconds{seconds{1483228799}});
     utc_seconds const leap = before + seconds{1};
     CHECK(get_leap_second_info(leap).is_leap_second);
@@ -1397,10 +1375,7 @@ TEST_CASE("structs: utc_time is TAI and keeps a leap second")
 TEST_CASE("structs: file_time is written as its sys_time")
 {
     using namespace std::chrono;
-    auto const item = [](std::string_view const diag) {
-        auto const bytes = cbor::diag2cbor(diag);
-        return bytes.value();
-    };
+    auto const item = [](std::string_view const diag) { return cbor::diag2cbor(diag).value(); };
     round_trip(item("1(1700000000)"), clock_cast<file_clock>(sys_seconds{seconds{1700000000}}));
     round_trip(item("1001({1: 1700000000, -3: 500})"),
                clock_cast<file_clock>(sys_time<milliseconds>{milliseconds{1700000000500}}));
@@ -1413,10 +1388,7 @@ TEST_CASE("structs: zoned_time is tag 1001 with a time zone hint")
 {
     using namespace std::chrono;
     using zoned = zoned_time<seconds>;
-    auto const item = [](std::string_view const diag) {
-        auto const bytes = cbor::diag2cbor(diag);
-        return bytes.value();
-    };
+    auto const item = [](std::string_view const diag) { return cbor::diag2cbor(diag).value(); };
     zoned const berlin{locate_zone("Europe/Berlin"), sys_seconds{seconds{1700000000}}};
     round_trip(item(R"(1001({1: 1700000000, -10: "Europe/Berlin"}))"), berlin);
     round_trip(item(R"(1001({1: 1700000000, -3: 5, -10: "Europe/Berlin"}))"),
@@ -1479,10 +1451,7 @@ CBOR_DEFINE_TYPE_MEMBERS(duration_member, cbor::untagged, a);
 TEST_CASE("structs: std::chrono::duration is tag 1002")
 {
     using namespace std::chrono;
-    auto const item = [](std::string_view const diag) {
-        auto const bytes = cbor::diag2cbor(diag);
-        return bytes.value();
-    };
+    auto const item = [](std::string_view const diag) { return cbor::diag2cbor(diag).value(); };
     round_trip(item("1002({1: 5})"), seconds{5});
     round_trip(item("1002({1: 1, -3: 500})"), milliseconds{1500});
     round_trip(item("1002({1: -2, -3: 500})"), milliseconds{-1500});
@@ -2094,8 +2063,7 @@ TEST_CASE("structs: the value of a description wins over the range form of the t
 TEST_CASE("structs: a span that is too small gives no_buffer_space and keeps the bytes before")
 {
     handle const h = sample_handle();
-    auto const encoded = cbor::encode(h);
-    std::string const expected = encoded.value();
+    std::string const expected = cbor::encode(h).value();
     std::string room(expected.size() - 1, '\0');
     auto const n = cbor::encode(std::span<char>(room), h);
     REQUIRE_FALSE(n.has_value());

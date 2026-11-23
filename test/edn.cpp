@@ -86,8 +86,7 @@ TEST_CASE("parse_edn: the diagnostic notation of RFC 8949 Appendix A gives the b
         auto const diagnostic = member_of(vector, "diagnostic");
         if (!diagnostic || !round_trips(vector))
             continue;
-        auto const diagnostic_text = diagnostic->get<std::string_view>();
-        std::string const text(*diagnostic_text);
+        std::string const text(*diagnostic->get<std::string_view>());
         CAPTURE(text);
         auto const tree = cbor::parse_edn(text);
         REQUIRE(tree.has_value());
@@ -212,8 +211,7 @@ TEST_CASE("parse_edn: a JSON number with a long fraction gives the double of std
             auto const elements = root.elements();
             auto const members = root.pairs();
             cbor::item const value = elements ? elements->front() : members ? members->front().second : root;
-            auto const real = value.get<double>();
-            CHECK_EQ(real.value(), expected);
+            CHECK_EQ(value.get<double>().value(), expected);
         }
     }
 }
@@ -226,10 +224,7 @@ TEST_CASE("parse_edn: a JSON number with a long fraction gives the double of std
 // the string. h'01' is a byte string head and one byte (RFC 8949 3.1).
 TEST_CASE("diag2cbor: the reader runs in a constant expression")
 {
-    constexpr std::size_t size = [] {
-        auto const bytes = cbor::diag2cbor("h'01'");
-        return bytes.value().size();
-    }();
+    constexpr std::size_t size = cbor::diag2cbor("h'01'").value().size();
     CHECK_EQ(size, 2u);
 }
 
@@ -258,8 +253,7 @@ TEST_CASE("diag2cbor: the diagnostic notation of RFC 8949 Appendix A gives the b
         auto const diagnostic = member_of(vector, "diagnostic");
         if (!diagnostic || !round_trips(vector))
             continue;
-        auto const diagnostic_text = diagnostic->get<std::string_view>();
-        std::string_view const text = *diagnostic_text;
+        std::string_view const text = *diagnostic->get<std::string_view>();
         CAPTURE(text);
         auto const bytes = cbor::diag2cbor(text);
         REQUIRE(bytes.has_value());

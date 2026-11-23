@@ -677,8 +677,7 @@ TEST_CASE("describe: a key that no entry has is skipped")
 // encoded by the library.
 TEST_CASE("describe: a repeated key of a member is duplicate_key")
 {
-    auto const edn_bytes = cbor::diag2cbor(R"(160001({"count": 4, "count": 5}))");
-    std::string bytes = edn_bytes.value();
+    std::string bytes = cbor::diag2cbor(R"(160001({"count": 4, "count": 5}))").value();
     CHECK_EQ(cbor::structs<describe_test::doors>::decode(std::move(bytes)), std::unexpected(cbor::error::duplicate_key));
 }
 
