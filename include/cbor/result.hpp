@@ -29,6 +29,21 @@
 namespace cbor
 {
 
+namespace detail
+{
+
+template <class T>
+inline constexpr bool is_ref_v = false;
+
+template <class V>
+inline constexpr bool is_ref_v<ref<V>> = true;
+
+template <class T>
+concept value_outlives_result =
+    std::is_scalar_v<T> || std::same_as<T, std::string_view> || copied_value<T> || is_ref_v<T>;
+
+}
+
 result<item> encoded_cbor_data_item(owning<item> const &tree, item tagged);
 
 /**
@@ -182,27 +197,49 @@ public:
      */
     constexpr T const &operator*() const & CBOR_LIFETIMEBOUND
     {
+        detail::validity::throw_logic_error_if(!held.has_value(), "cbor::result: operator* of a result that holds an error");
         return *held;
     }
 
     constexpr T &operator*() & CBOR_LIFETIMEBOUND
     {
+        detail::validity::throw_logic_error_if(!held.has_value(), "cbor::result: operator* of a result that holds an error");
         return *held;
     }
 
-    T const &&operator*() const && = delete;
-    T &&operator*() && = delete;
+    constexpr T operator*() const &&
+        requires detail::value_outlives_result<T>
+    {
+        detail::validity::throw_logic_error_if(!held.has_value(), "cbor::result: operator* of a result that holds an error");
+        return *held;
+    }
+
+    constexpr T operator*() &&
+        requires detail::value_outlives_result<T>
+    {
+        detail::validity::throw_logic_error_if(!held.has_value(), "cbor::result: operator* of a result that holds an error");
+        return *std::move(held);
+    }
+
+    T operator*() const &&
+        requires(!detail::value_outlives_result<T>)
+    = delete;
+    T operator*() &&
+        requires(!detail::value_outlives_result<T>)
+    = delete;
 
     /**
      * @brief Gives the address of the value; the result holds a value.
      */
     constexpr T const *operator->() const & CBOR_LIFETIMEBOUND
     {
+        detail::validity::throw_logic_error_if(!held.has_value(), "cbor::result: operator-> of a result that holds an error");
         return held.operator->();
     }
 
     constexpr T *operator->() & CBOR_LIFETIMEBOUND
     {
+        detail::validity::throw_logic_error_if(!held.has_value(), "cbor::result: operator-> of a result that holds an error");
         return held.operator->();
     }
 
@@ -224,8 +261,24 @@ public:
         return held.value();
     }
 
-    T const &&value() const && = delete;
-    T &&value() && = delete;
+    constexpr T value() const &&
+        requires detail::value_outlives_result<T>
+    {
+        return held.value();
+    }
+
+    constexpr T value() &&
+        requires detail::value_outlives_result<T>
+    {
+        return std::move(held).value();
+    }
+
+    T value() const &&
+        requires(!detail::value_outlives_result<T>)
+    = delete;
+    T value() &&
+        requires(!detail::value_outlives_result<T>)
+    = delete;
 
     /**
      * @brief Gives the error; the result holds an error.

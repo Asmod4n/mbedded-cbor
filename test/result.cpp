@@ -16,6 +16,7 @@
 #include <memory>
 #include <ranges>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -344,14 +345,14 @@ TEST_CASE("result: == compares the value or the error")
 TEST_CASE("result: a reader of a temporary result does not compile")
 {
     CHECK_FALSE(deref_of_call<lazy_result>);
-    CHECK_FALSE(deref_of_call<number_result>);
+    CHECK(deref_of_call<number_result>);
     CHECK_FALSE(arrow_of_call<lazy_result>);
     CHECK_FALSE(value_of_call<lazy_result>);
-    CHECK_FALSE(value_of_call<number_result>);
+    CHECK(value_of_call<number_result>);
     CHECK_FALSE(error_of_call<lazy_result>);
     CHECK_FALSE(error_of_call<number_result>);
     CHECK_FALSE(deref_of_moved<lazy_result>);
-    CHECK_FALSE(deref_of_moved<number_result>);
+    CHECK(deref_of_moved<number_result>);
     CHECK_FALSE(loop_over_call<lazy_result>);
     CHECK_FALSE((std::is_constructible_v<std::expected<std::int64_t, error>, number_result>));
     CHECK_FALSE((std::is_convertible_v<number_result, std::expected<std::int64_t, error>>));
@@ -458,19 +459,19 @@ TEST_CASE("result: a temporary result of cbor::encode or cbor::structs cannot be
 {
     CHECK(deref_of_named<encoded_result>);
     CHECK(loop_over_named<encoded_result>);
-    CHECK_FALSE(deref_of_call<encoded_result>);
+    CHECK(deref_of_call<encoded_result>);
     CHECK_FALSE(loop_over_call<encoded_result>);
     CHECK_FALSE(arrow_of_call<encoded_result>);
-    CHECK_FALSE(value_of_call<encoded_result>);
+    CHECK(value_of_call<encoded_result>);
     CHECK_FALSE(error_of_call<encoded_result>);
-    CHECK_FALSE(deref_of_moved<encoded_result>);
-    CHECK_FALSE(deref_of_call<written_result>);
-    CHECK_FALSE(value_of_call<written_result>);
+    CHECK(deref_of_moved<encoded_result>);
+    CHECK(deref_of_call<written_result>);
+    CHECK(value_of_call<written_result>);
     CHECK_FALSE(error_of_call<written_result>);
-    CHECK_FALSE(deref_of_call<struct_result>);
-    CHECK_FALSE(value_of_call<struct_result>);
+    CHECK(deref_of_call<struct_result>);
+    CHECK(value_of_call<struct_result>);
     CHECK_FALSE(error_of_call<struct_result>);
-    CHECK_FALSE(deref_of_moved<struct_result>);
+    CHECK(deref_of_moved<struct_result>);
     using after = decltype(size_of_text);
     using length = decltype(length_of_text);
     using again = decltype(encode_zero);
@@ -539,14 +540,14 @@ TEST_CASE("result: a temporary result of cbor::diag2cbor, cbor::to_edn or cbor::
 {
     CHECK(deref_of_named<edn_result>);
     CHECK(loop_over_named<edn_result>);
-    CHECK_FALSE(deref_of_call<edn_result>);
+    CHECK(deref_of_call<edn_result>);
     CHECK_FALSE(loop_over_call<edn_result>);
     CHECK_FALSE(arrow_of_call<edn_result>);
-    CHECK_FALSE(value_of_call<edn_result>);
+    CHECK(value_of_call<edn_result>);
     CHECK_FALSE(error_of_call<edn_result>);
-    CHECK_FALSE(deref_of_moved<edn_result>);
-    CHECK_FALSE(deref_of_call<text_result>);
-    CHECK_FALSE(value_of_call<text_result>);
+    CHECK(deref_of_moved<edn_result>);
+    CHECK(deref_of_call<text_result>);
+    CHECK(value_of_call<text_result>);
     CHECK_FALSE(error_of_call<text_result>);
     CHECK_FALSE(deref_of_call<parsed_result>);
     CHECK_FALSE(value_of_call<parsed_result>);
@@ -646,20 +647,20 @@ TEST_CASE("result: a temporary result of at_path, elements, compile or next cann
     CHECK_FALSE(error_of_call<query_result>);
     CHECK_FALSE(deref_of_call<next_result>);
     CHECK_FALSE(error_of_call<next_result>);
-    CHECK_FALSE(deref_of_call<cbor::sequence::iterator::value_type>);
+    CHECK(deref_of_call<cbor::sequence::iterator::value_type>);
     CHECK_FALSE(arrow_of_call<cbor::sequence::iterator::value_type>);
     CHECK_FALSE(deref_of_call<cbor::lazy_elements::iterator::value_type>);
     CHECK_FALSE(deref_of_call<cbor::lazy_entries::iterator::value_type>);
     CHECK(deref_of_named<owner_text>);
-    CHECK_FALSE(deref_of_call<owner_text>);
-    CHECK_FALSE(value_of_call<owner_text>);
+    CHECK(deref_of_call<owner_text>);
+    CHECK(value_of_call<owner_text>);
     CHECK(deref_of_named<lazy_text>);
-    CHECK_FALSE(deref_of_call<lazy_text>);
+    CHECK(deref_of_call<lazy_text>);
     CHECK(deref_of_named<owner_query_text>);
-    CHECK_FALSE(deref_of_call<owner_query_text>);
-    CHECK_FALSE(value_of_call<owner_query_text>);
+    CHECK(deref_of_call<owner_query_text>);
+    CHECK(value_of_call<owner_query_text>);
     CHECK(deref_of_named<lazy_query_text>);
-    CHECK_FALSE(deref_of_call<lazy_query_text>);
+    CHECK(deref_of_call<lazy_query_text>);
     using compile = decltype(compile_root);
     using count = decltype(count_of_nodes);
     using again = decltype(nodes_of_document);
@@ -832,8 +833,8 @@ TEST_CASE("result: a temporary result of schema, static_dictionary, typed_array_
     CHECK_FALSE(value_of_call<route_root>);
     CHECK_FALSE(error_of_call<route_root>);
     CHECK_FALSE(deref_of_moved<route_root>);
-    CHECK_FALSE(deref_of_call<route_number>);
-    CHECK_FALSE(value_of_call<route_message>);
+    CHECK(deref_of_call<route_number>);
+    CHECK(value_of_call<route_message>);
     CHECK_FALSE(arrow_of_call<route_message>);
     CHECK_FALSE(arrow_of_call<track_view>);
     CHECK_FALSE(loop_over_call<track_view>);
@@ -1000,4 +1001,25 @@ TEST_CASE("result: cbor::lazy::view, adopt and to_item give a result")
     REQUIRE(cut.has_value());
     auto const broken = cut->to_item();
     CHECK_EQ(broken.error(), error::too_little_data);
+}
+
+// operator* and operator-> of a result that holds an error read no value: the wrong use throws std::logic_error, on
+// a named result and on a temporary one.
+TEST_CASE("result: operator* and operator-> of a result that holds an error throw std::logic_error")
+{
+    auto const failed = cbor::decode(std::string_view{});
+    REQUIRE_FALSE(failed.has_value());
+    CHECK_THROWS_AS(static_cast<void>(*failed), std::logic_error);
+    CHECK_THROWS_AS(static_cast<void>(failed.operator->()), std::logic_error);
+    CHECK_THROWS_AS(static_cast<void>(*cbor::item_size(std::string_view{})), std::logic_error);
+}
+
+// A temporary result gives its value where the value outlives the result: a size, a text it copied.
+TEST_CASE("result: a temporary result gives a value that outlives it")
+{
+    auto const encoded = cbor::encode(std::string("ab"));
+    REQUIRE(encoded.has_value());
+    CHECK_EQ(*cbor::item_size(*encoded), encoded->size());
+    std::string const text = *cbor::encode(std::string("ab"));
+    CHECK_EQ(text, *encoded);
 }
