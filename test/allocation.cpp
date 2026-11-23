@@ -487,8 +487,7 @@ TEST_CASE("sequence_reader: an rvalue std::string is taken without a copy")
     std::size_t const after = allocated_bytes;
     CHECK_LT(after - before, size / share_of_size);
     auto const item = r.next();
-    auto const read = item->get<std::uint64_t>();
-    CHECK_EQ(read.value(), 1u);
+    CHECK_EQ(item->get<std::uint64_t>().value(), 1u);
 }
 
 // A count in the input reserves nothing (rule). An array can claim 2^64 - 1 elements. The memory that the reader holds

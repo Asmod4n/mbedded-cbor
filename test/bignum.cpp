@@ -148,16 +148,12 @@ TEST_CASE("bignum: a magnitude that fits 64 bits is an integer in decode and in 
     }
     auto const read = test::make_lazy_from_copy("\xc3\x48"s + max)->get<std::int64_t>();
     CHECK_EQ(read.error(), error::number_out_of_range);
-    auto const read_2 = test::make_lazy_from_copy("\xc2\x40"s)->get<std::int64_t>();
-    CHECK_EQ(*read_2, 0);
-    auto const read_3 = test::make_lazy_from_copy("\xc2\x41\x05"s)->get<double>();
-    CHECK_EQ(*read_3, 5.0);
-    auto const read_4 = test::make_lazy_from_copy("\xc3\x41\x05"s)->get<double>();
-    CHECK_EQ(*read_4, -6.0);
+    CHECK_EQ(*test::make_lazy_from_copy("\xc2\x40"s)->get<std::int64_t>(), 0);
+    CHECK_EQ(*test::make_lazy_from_copy("\xc2\x41\x05"s)->get<double>(), 5.0);
+    CHECK_EQ(*test::make_lazy_from_copy("\xc3\x41\x05"s)->get<double>(), -6.0);
     auto const read_5 = test::make_lazy_from_copy("\xc2\x41\x05"s)->get<std::span<std::byte const>>();
     CHECK_EQ(read_5.error(), error::incorrect_type);
-    auto const read_6 = test::make_lazy_from_copy("\xc3\x40"s)->get<std::int64_t>();
-    CHECK_EQ(*read_6, -1);
+    CHECK_EQ(*test::make_lazy_from_copy("\xc3\x40"s)->get<std::int64_t>(), -1);
 }
 
 // A path read as double gives a bignum as the number of its magnitude (RFC 8949 3.4.3). The errors are those of
@@ -243,11 +239,9 @@ TEST_CASE("bignum: tag 28 around a bignum that fits is a tag over the integer")
     auto const tagged = elements[1].get<std::pair<std::uint64_t, cbor::item>>();
     CHECK_EQ(tagged.value().first, 29u);
     auto const at_1 = l->at(1);
-    auto const kind = at_1->type();
-    CHECK_EQ(*kind, cbor::type::tag);
+    CHECK_EQ(*at_1->type(), cbor::type::tag);
     auto const at_1_2 = l->at(1);
-    auto const read = at_1_2->get<std::int64_t>();
-    CHECK_EQ(*read, 0);
+    CHECK_EQ(*at_1_2->get<std::int64_t>(), 0);
     std::string again;
     REQUIRE(cbor::encode(again, **tree).has_value());
     CHECK_EQ(again, "\x82\xd8\x1c\x01\xd8\x1d\x00"s);
@@ -359,8 +353,7 @@ TEST_CASE("bignum: every reader gives the value of a bignum")
         check_read(doc->get<std::int64_t>(), r.as_int64);
         check_read(doc->get<std::uint64_t>(), r.as_uint64);
         check_read(doc->get<double>(), r.as_double);
-        auto const kind = doc->type();
-        CHECK_EQ(kind.value(), r.type);
+        CHECK_EQ(doc->type().value(), r.type);
         auto const tree = cbor::decode(encoded);
         REQUIRE(tree.has_value());
         CHECK_EQ((*tree)->type(), r.type);

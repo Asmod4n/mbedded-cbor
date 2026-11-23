@@ -270,8 +270,7 @@ TEST_CASE("cbor2 decoder: test_float")
         auto const tree = cbor::decode(unhexlify(r.payload));
         REQUIRE(tree.has_value());
         REQUIRE_EQ((*tree)->type(), r.type);
-        auto const real = (*tree)->get<double>();
-        double const got = real.value();
+        double const got = (*tree)->get<double>().value();
         CHECK_EQ(std::bit_cast<std::uint64_t>(got), std::bit_cast<std::uint64_t>(r.expected));
     }
 }
@@ -523,8 +522,7 @@ TEST_CASE("cbor2 decoder: test_simple_value")
         auto const tree = cbor::decode(unhexlify(r.payload));
         REQUIRE(tree.has_value());
         CHECK_EQ((*tree)->type(), cbor::type::simple_value);
-        auto const tree_simple = (*tree)->get<cbor::simple_value>();
-        CHECK_EQ(tree_simple.value(), cbor::simple_value{r.value});
+        CHECK_EQ((*tree)->get<cbor::simple_value>().value(), cbor::simple_value{r.value});
     }
     check_decoded({{"A1F86301", M(test::simple{99}, 1)}});
 }
@@ -705,8 +703,7 @@ TEST_CASE("cbor2 decoder: test_fraction, test_bigfloat")
     auto const pair = tag->second.elements();
     REQUIRE(pair.has_value());
     REQUIRE_EQ(pair->size(), 2u);
-    auto const number = pair->front().get<std::int64_t>();
-    CHECK_EQ(number.value(), -78);
+    CHECK_EQ(pair->front().get<std::int64_t>().value(), -78);
     auto const mantissa = pair->next(1).front().get<std::pair<std::uint64_t, cbor::item>>();
     REQUIRE(mantissa.has_value());
     CHECK_EQ(mantissa->first, 2u);
@@ -957,8 +954,7 @@ TEST_CASE("cbor2 decoder: TestAllowDuplicateKeys")
 {
     check_decoded({{"a2616101616102", M("a", 1, "a", 2)}});
 
-    auto const edn_bytes = cbor::diag2cbor(R"({"a": 1, "a": 2})");
-    std::string repeated = edn_bytes.value();
+    std::string repeated = cbor::diag2cbor(R"({"a": 1, "a": 2})").value();
     CHECK_EQ(cbor::structs<std::map<std::string, int>>::decode(std::move(repeated)), std::unexpected(error::duplicate_key));
 
     // test_raises_on_duplicate[indefinite]: structs.hpp: "@retval indefinite_length a head uses indefinite length".

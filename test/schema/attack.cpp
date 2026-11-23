@@ -143,8 +143,7 @@ concept dereferenced_as_rvalue = requires(R &&r) { *std::move(r); } || requires(
 // The whole message reads every path, and each value is the one that went in.
 TEST_CASE("attack: the sample message reads every path")
 {
-    auto const encoded = form<probe>::encode(sample_probe);
-    std::string const bytes = *encoded;
+    std::string const bytes = *form<probe>::encode(sample_probe);
     CHECK_EQ(probe_paths_read(bytes), probe_paths);
     CHECK_EQ(probe_lot_read(bytes), probe_lot_paths);
     CHECK_EQ(read_leaf_with_copying_path<probe, "$.i16">(bytes), -300);
@@ -159,8 +158,7 @@ TEST_CASE("attack: the sample message reads every path")
 // wrong use and throws. The test exists because each of these would otherwise let a view outlive its bytes.
 TEST_CASE("attack: no text result outlives its bytes")
 {
-    auto const encoded = form<probe>::encode(sample_probe);
-    std::string const bytes = *encoded;
+    std::string const bytes = *form<probe>::encode(sample_probe);
     using A = form<probe>::accessor<>;
     CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.text">()), cbor::result<std::string_view>>);
     CHECK(std::same_as<decltype(std::declval<A const &>().at_path<"@.code">()), cbor::result<std::string_view>>);
@@ -179,8 +177,7 @@ TEST_CASE("attack: no text result outlives its bytes")
 // stored pointer refused an owner that holds the bytes.
 TEST_CASE("attack: path and decode check that the owner holds an object")
 {
-    auto const encoded = form<probe>::encode(sample_probe);
-    auto const bytes = std::make_shared<std::string const>(*encoded);
+    auto const bytes = std::make_shared<std::string const>(*form<probe>::encode(sample_probe));
     CHECK_FALSE(([]<class O>(O const &) { return requires(O const &o) { form<probe>::view(o, std::string(*o)); }; }(bytes)));
     CHECK(([]<class O>(O const &) { return requires(O const &o) { form<probe>::view(o, std::string_view(*o)); }; }(bytes)));
     CHECK(([]<class O>(O const &) { return requires(O const &o) { form<probe>::decode(o, std::string_view(*o)); }; }(bytes)));
@@ -203,8 +200,7 @@ TEST_CASE("attack: path and decode check that the owner holds an object")
 // wire would read past the end of the cut. No prefix reads a value: the rump lies at the end of the message.
 TEST_CASE("attack: every prefix of a message is an error for every path")
 {
-    auto const encoded = form<probe>::encode(sample_probe);
-    std::string const bytes = *encoded;
+    std::string const bytes = *form<probe>::encode(sample_probe);
     std::size_t values = 0;
     for (std::size_t size = 0; size < bytes.size(); ++size)
         values += probe_paths_read(std::string_view(bytes).substr(0, size)) + probe_lot_read(std::string_view(bytes).substr(0, size));
@@ -215,15 +211,13 @@ TEST_CASE("attack: every prefix of a message is an error for every path")
 // message gives that error, and a whole message of another struct, shorter or longer, gives incorrect_type.
 TEST_CASE("attack: a cut message is too_little_data, a message of another struct is incorrect_type")
 {
-    auto const encoded = form<probe>::encode(sample_probe);
-    std::string const bytes = *encoded;
+    std::string const bytes = *form<probe>::encode(sample_probe);
     for (std::size_t size = 0; size < bytes.size(); ++size) {
         CHECK_EQ(form<probe>::adopt(bytes.substr(0, size)), std::unexpected(error::too_little_data));
         CHECK_EQ(read_leaf_with_copying_path<probe, "$.i16">(std::string_view(bytes).substr(0, size)).error(),
                  error::too_little_data);
     }
-    auto const encoded_2 = form<login>::encode(login{5, true, "ab"});
-    std::string const other = *encoded_2;
+    std::string const other = *form<login>::encode(login{5, true, "ab"});
     CHECK_EQ(form<probe>::adopt(std::string(other)), std::unexpected(error::incorrect_type));
     CHECK_EQ(form<login>::adopt(std::string(bytes)), std::unexpected(error::incorrect_type));
 }
@@ -234,8 +228,7 @@ TEST_CASE("attack: a cut message is too_little_data, a message of another struct
 // every path reads its value.
 TEST_CASE("attack: a shifted root is incorrect_type, a byte behind the message is not read")
 {
-    auto const encoded = form<probe>::encode(sample_probe);
-    std::string const bytes = *encoded;
+    std::string const bytes = *form<probe>::encode(sample_probe);
     CHECK_EQ(read_leaf_with_copying_path<probe, "$.i16">("\x00"s + bytes).error(), error::incorrect_type);
     CHECK_EQ(form<probe>::decode("\x00"s + bytes), std::unexpected(error::incorrect_type));
     CHECK_EQ(probe_paths_read("\x00"s + bytes), 0u);
@@ -252,8 +245,7 @@ TEST_CASE("attack: a shifted root is incorrect_type, a byte behind the message i
 // because a reader that ignored the head would read the argument of another type.
 TEST_CASE("attack: every forged head of a fixed field is incorrect_type")
 {
-    auto const encoded = form<probe>::encode(sample_probe);
-    std::string const bytes = *encoded;
+    std::string const bytes = *form<probe>::encode(sample_probe);
     auto const forged = [&bytes](std::size_t const member, unsigned const head) {
         std::string f = bytes;
         f.at(probe_offset(f, member)) = static_cast<char>(head);
@@ -282,8 +274,7 @@ TEST_CASE("attack: every forged head of a fixed field is incorrect_type")
 // see that.
 TEST_CASE("attack: a forged byte anywhere in the root reads nothing outside the message")
 {
-    auto const encoded = form<probe>::encode(sample_probe);
-    std::string const bytes = *encoded;
+    std::string const bytes = *form<probe>::encode(sample_probe);
     std::size_t const root = root_offset(bytes);
     for (std::size_t at = root; at < root + form<probe>::fixed_size(); ++at) {
         for (int const flip : {0x01, 0x20, 0x80, 0xff}) {
@@ -300,8 +291,7 @@ TEST_CASE("attack: a forged byte anywhere in the root reads nothing outside the 
 // directory or ends in the root would overlap bytes. Another path reads those bytes as another type.
 TEST_CASE("attack: a directory entry out of range is an error")
 {
-    auto const encoded = form<probe>::encode(sample_probe);
-    std::string const bytes = *encoded;
+    std::string const bytes = *form<probe>::encode(sample_probe);
     std::size_t const head = bytes.find("\x5a\x00\x00\x00\x10"s);
     REQUIRE_NE(head, std::string::npos);
     std::size_t const root = root_offset(bytes);
@@ -326,8 +316,7 @@ TEST_CASE("attack: a directory entry out of range is an error")
 // and gives the value.
 TEST_CASE("attack: a forged rump index is incorrect_type in decode")
 {
-    auto const encoded = form<probe>::encode(sample_probe);
-    std::string const bytes = *encoded;
+    std::string const bytes = *form<probe>::encode(sample_probe);
     std::string forged = bytes;
     forged.back() = '\x01';
     CHECK(form<probe>::adopt(std::string(forged)).has_value());
@@ -343,8 +332,7 @@ TEST_CASE("attack: a forged rump index is incorrect_type in decode")
 // forms take the index of the place and read the text.
 TEST_CASE("attack: a root reference that disagrees with the directory is unpopulated_table_index")
 {
-    auto const encoded = form<probe>::encode(sample_probe);
-    std::string const bytes = *encoded;
+    std::string const bytes = *form<probe>::encode(sample_probe);
     std::size_t const root = root_offset(bytes);
     std::size_t const text = root + form<probe>::member_offset<&probe::text>();
     std::size_t const maybe = root + form<probe>::member_offset<&probe::maybe>();
@@ -364,8 +352,7 @@ TEST_CASE("attack: a root reference that disagrees with the directory is unpopul
 // an item starts behind the directory, and the unverified forms that it starts behind the entries of the root.
 TEST_CASE("attack: a directory entry into the root or into the directory is syntax_error")
 {
-    auto const encoded = form<probe>::encode(sample_probe);
-    std::string const bytes = *encoded;
+    std::string const bytes = *form<probe>::encode(sample_probe);
     std::size_t const root = root_offset(bytes);
     std::size_t const head = root + form<probe>::fixed_size();
     auto const big_endian = [](std::size_t const x) {
@@ -389,8 +376,7 @@ TEST_CASE("attack: a directory entry into the root or into the directory is synt
 // that reached past its item would give the bytes of other fields as text.
 TEST_CASE("attack: overlapping items are an error")
 {
-    auto const encoded = form<probe>::encode(sample_probe);
-    std::string const bytes = *encoded;
+    std::string const bytes = *form<probe>::encode(sample_probe);
     std::size_t const head = bytes.find("\x5a\x00\x00\x00\x10"s);
     REQUIRE_NE(head, std::string::npos);
     std::string same = bytes;
@@ -476,8 +462,7 @@ TEST_CASE("attack: a directory longer than the message is too_little_data")
 // reference, while a path that does not touch the vector stays readable.
 TEST_CASE("attack: a forged reference of a fixed-size vector is incorrect_type")
 {
-    auto const encoded = form<probe>::encode(sample_probe);
-    std::string const bytes = *encoded;
+    std::string const bytes = *form<probe>::encode(sample_probe);
     std::size_t const head = bytes.find("\xd9\x80\x69\x82"s);
     REQUIRE_NE(head, std::string::npos);
     std::string forged = bytes;
@@ -566,8 +551,7 @@ std::size_t read_pet(std::string_view const bytes)
 TEST_CASE("attack: a variant member under a cut or a changed byte")
 {
     for (home const &h : {make_home_with_dog(), make_home_with_cat()}) {
-        auto const encoded = form<home>::encode(h);
-        std::string const bytes = *encoded;
+        std::string const bytes = *form<home>::encode(h);
         CHECK_EQ(read_pet(bytes), 4u);
         std::size_t values = 0;
         for (std::size_t size = 0; size < bytes.size(); ++size)
@@ -587,8 +571,7 @@ TEST_CASE("attack: a variant member under a cut or a changed byte")
 // and finds the entry off its place.
 TEST_CASE("attack: an unknown tag, a cut record and a wrong directory entry of a variant member")
 {
-    auto const encoded = form<home>::encode(make_home_with_dog());
-    std::string const bytes = *encoded;
+    std::string const bytes = *form<home>::encode(make_home_with_dog());
     auto const at = bytes.find("\xd9\x06\xcc"sv);
     REQUIRE_NE(at, std::string::npos);
     std::string unknown = bytes;
@@ -626,8 +609,7 @@ TEST_CASE("attack: an unknown tag, a cut record and a wrong directory entry of a
 TEST_CASE("attack: value and text alternatives of a variant member")
 {
     for (setting const &s : make_sample_settings()) {
-        auto const encoded = form<setting>::encode(s);
-        std::string const bytes = *encoded;
+        std::string const bytes = *form<setting>::encode(s);
         for (std::size_t size = 0; size < bytes.size(); ++size) {
             CHECK_FALSE(form<setting>::decode(bytes.substr(0, size)).has_value());
             CHECK_FALSE(form<setting>::unverified_decode(bytes.substr(0, size)).has_value());
@@ -647,8 +629,7 @@ TEST_CASE("attack: value and text alternatives of a variant member")
     }
     // The text "ab" of pet is the first item; note holds the bytes of an empty text and "y". The length of pet grows
     // from 2 to 7 and swallows the head of note. The verified forms stop at the start of note.
-    auto const encoded_2 = form<shelter>::encode(shelter{std::string("ab"), "\x7a\x00\x00\x00\x00y"s});
-    std::string const swallowed = *encoded_2;
+    std::string const swallowed = *form<shelter>::encode(shelter{std::string("ab"), "\x7a\x00\x00\x00\x00y"s});
     std::size_t const pet = swallowed.find("\x7a\x00\x00\x00\x02" "ab"sv);
     REQUIRE_NE(pet, std::string::npos);
     std::string inside = swallowed;
@@ -658,8 +639,7 @@ TEST_CASE("attack: value and text alternatives of a variant member")
     auto const adopted = form<shelter>::adopt(std::string(inside));
     CHECK_EQ(adopted->at_path<"$.pet">(), std::unexpected(error::too_little_data));
     // name "n" is the first item, the text "ab" of value the last; its length grows past the rump.
-    auto const encoded_3 = form<setting>::encode(setting{"n", std::string("ab")});
-    std::string const bytes = *encoded_3;
+    std::string const bytes = *form<setting>::encode(setting{"n", std::string("ab")});
     std::size_t const head = bytes.size() - rump_size - 7;
     REQUIRE_EQ(bytes.substr(head, 7), "\x7a\x00\x00\x00\x02" "ab"sv);
     std::string past = bytes;
@@ -680,8 +660,7 @@ TEST_CASE("attack: value and text alternatives of a variant member")
 TEST_CASE("attack: a verified read checks the head of the item that it reads")
 {
     auto const cut = [](std::string const &m) { return m.substr(0, m.size() - 1); };
-    auto const encoded = form<probe>::encode(sample_probe);
-    std::string const bytes = *encoded;
+    std::string const bytes = *form<probe>::encode(sample_probe);
     std::size_t const root = root_offset(bytes);
 
     std::string flag = bytes;
@@ -719,8 +698,7 @@ TEST_CASE("attack: a verified read checks the head of the item that it reads")
     CHECK_EQ(form<doubles>::at_path<"$.v[0]">(wrong), std::unexpected(error::incorrect_type));
     CHECK_EQ(form<doubles>::at_path<"$.v[0]">(cut(wrong)), std::unexpected(error::too_little_data));
 
-    auto const encoded_2 = form<home>::encode(make_home_with_dog());
-    std::string const pet = *encoded_2;
+    std::string const pet = *form<home>::encode(make_home_with_dog());
     std::size_t const tag = pet.find("\xd9\x06\xcc"sv);
     REQUIRE_NE(tag, std::string::npos);
     std::string unknown = pet;
@@ -753,8 +731,7 @@ TEST_CASE("attack: a forged directory length leaves the fixed members readable")
         return std::string{static_cast<char>(x >> 24), static_cast<char>(x >> 16), static_cast<char>(x >> 8),
                            static_cast<char>(x)};
     };
-    auto const encoded = form<probe>::encode(sample_probe);
-    std::string const bytes = *encoded;
+    std::string const bytes = *form<probe>::encode(sample_probe);
     std::size_t const directory = bytes.find("\x5a\x00\x00\x00\x10"s);
     REQUIRE_NE(directory, std::string::npos);
     std::string shorter = bytes;

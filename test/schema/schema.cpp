@@ -25,10 +25,8 @@ TEST_CASE("schema::at: one number of a typed array, with every check of path")
 {
     std::string const bytes = encode_with_schema(doubles{{1.0, 2.0}});
     using S = form<doubles>;
-    auto const found = S::at_path<"$.v[0]">(bytes);
-    CHECK_EQ(std::bit_cast<std::uint64_t>(*found), 0x3ff0000000000000u);
-    auto const found_2 = S::at_path<"$.v[]">(bytes, 1uz);
-    CHECK_EQ(std::bit_cast<std::uint64_t>(*found_2), 0x4000000000000000u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*S::at_path<"$.v[0]">(bytes)), 0x3ff0000000000000u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*S::at_path<"$.v[]">(bytes, 1uz)), 0x4000000000000000u);
     CHECK_EQ(S::at_path<"$.v[2]">(bytes), std::unexpected(error::index_out_of_bounds));
     CHECK_EQ(S::at_path<"$.v[]">(bytes, std::numeric_limits<std::size_t>::max()), std::unexpected(error::index_out_of_bounds));
     CHECK_EQ(S::at_path<"$.v[0]">(std::string_view(bytes).substr(0, 20)), std::unexpected(error::too_little_data));
@@ -48,14 +46,12 @@ TEST_CASE("schema::at: one number of a typed array, with every check of path")
     for (std::size_t j = filler; j < bytes.size() && bytes[j] == '\xf7'; ++j) {
         std::string defined = bytes;
         defined[j] = '\xf6';
-        auto const found_3 = S::at_path<"$.v[0]">(defined);
-        CHECK_EQ(std::bit_cast<std::uint64_t>(*found_3), 0x3ff0000000000000u);
+        CHECK_EQ(std::bit_cast<std::uint64_t>(*S::at_path<"$.v[0]">(defined)), 0x3ff0000000000000u);
         CHECK_EQ(form<doubles>::decode(std::string(defined)), std::unexpected(error::incorrect_type));
     }
     std::string root = bytes;
     root[root_offset(bytes) + 2] = '\xfc';
-    auto const found_4 = S::at_path<"$.v[0]">(root);
-    CHECK_EQ(std::bit_cast<std::uint64_t>(*found_4), 0x3ff0000000000000u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*S::at_path<"$.v[0]">(root)), 0x3ff0000000000000u);
     CHECK_EQ(form<doubles>::decode(std::string(root)), std::unexpected(error::incorrect_type));
 }
 
@@ -99,16 +95,14 @@ TEST_CASE("schema: the description gives the key of a member")
     CHECK_EQ(form<keyed>::fixed_size(), 15u);
     CHECK_EQ(form<keyed>::member_offset<&keyed::m1>(), 12u);
     CHECK_EQ(form<keyed>::member_offset<&keyed::m0>(), 13u);
-    auto const encoded = form<keyed>::encode(keyed{7, true});
-    std::string const bytes = *encoded;
+    std::string const bytes = *form<keyed>::encode(keyed{7, true});
     CHECK_EQ(bytes, "\xd8\x71\x82\x9a\x00\x00\x00\x12\xd8\x72\x82\x63"
                     "EOF\x69x-user-id"
                     "\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7\xf7"
                     "\xda\x00\x01\x00\x00\xd8\x80\x9a\x00\x00\x00\x02\xf5\x18\x07"
                     "\x5a\x00\x00\x00\x04\x00\x00\x00\x40"
                     "\xc6\x00"s);
-    auto const decoded = form<keyed>::decode(std::string(bytes));
-    auto const decoded_back = *decoded;
+    auto const decoded_back = *form<keyed>::decode(std::string(bytes));
     keyed const &back = *decoded_back;
     CHECK_EQ(back.m0, 7u);
     CHECK(back.m1);
@@ -121,19 +115,16 @@ TEST_CASE("schema: the description gives the key of a member")
 TEST_CASE("schema: an optional struct and an optional string, present and absent")
 {
     passkey_login const full{{std::byte{1}, std::byte{2}}, passkey_user{{std::byte{9}}, "alice"}, "hello"};
-    auto const encoded = form<passkey_login>::encode(full);
-    std::string const bytes = *encoded;
+    std::string const bytes = *form<passkey_login>::encode(full);
     CHECK_EQ(read_leaf_with_copying_path<passkey_login, "$.note">(bytes).value(), std::optional<std::string>{"hello"});
-    auto const decoded = form<passkey_login>::decode(std::string(bytes));
-    auto const decoded_back = *decoded;
+    auto const decoded_back = *form<passkey_login>::decode(std::string(bytes));
     passkey_login const &back = *decoded_back;
     REQUIRE(back.user.has_value());
     CHECK_EQ(back.user->name, "alice");
     CHECK_EQ(back.note, std::optional<std::string>{"hello"});
 
     passkey_login const empty{{std::byte{1}}, std::nullopt, std::nullopt};
-    auto const encoded_2 = form<passkey_login>::encode(empty);
-    std::string const none = *encoded_2;
+    std::string const none = *form<passkey_login>::encode(empty);
     auto const absent = read_leaf_with_copying_path<passkey_login, "$.note">(none);
     REQUIRE(absent.has_value());
     CHECK_FALSE(absent->has_value());
@@ -143,8 +134,7 @@ TEST_CASE("schema: an optional struct and an optional string, present and absent
         CHECK_EQ(*end, message.size());
     }
     CHECK_EQ(form<wheel>::fixed_size<std::optional<passkey_user>>(), 2 + form<passkey_user>::fixed_size());
-    auto const decoded_2 = form<passkey_login>::decode(std::string(none));
-    auto const decoded_back2 = *decoded_2;
+    auto const decoded_back2 = *form<passkey_login>::decode(std::string(none));
     passkey_login const &back2 = *decoded_back2;
     CHECK_FALSE(back2.user.has_value());
     CHECK_FALSE(back2.note.has_value());
@@ -167,8 +157,7 @@ TEST_CASE("schema: a root with 20 struct types reaches indexes 8 and more with t
     CHECK_EQ(form<chain8>::member_offset<&chain8::next>(), 12u);
 
     chain0 const value = chain_of<chain0>(0);
-    auto const encoded = form<chain0>::encode(value);
-    std::string const bytes = *encoded;
+    std::string const bytes = *form<chain0>::encode(value);
     CHECK_EQ(cbor::item_size(bytes), bytes.size());
     CHECK_EQ(bytes.substr(0, 8), "\xd8\x71\x82\x9a\x00\x00\x00\x1a"s);
     std::size_t const root = root_offset(bytes, 20);
@@ -177,8 +166,7 @@ TEST_CASE("schema: a root with 20 struct types reaches indexes 8 and more with t
     CHECK_EQ(bytes.substr(root + 8u * 12u, 6), "\xd9\x06\x48\xc6\x82\x00"s);
     CHECK_EQ(bytes.substr(bytes.size() - 2), "\xc6\x02"s);
 
-    auto const decoded = form<chain0>::decode(std::string(bytes));
-    auto const decoded_back = *decoded;
+    auto const decoded_back = *form<chain0>::decode(std::string(bytes));
     chain0 const &back = *decoded_back;
     CHECK_EQ((form<chain0>::encode(back)), bytes);
     CHECK_EQ(back.next.next.next.next.next.next.next.next.next.v, 9u);
@@ -201,8 +189,7 @@ TEST_CASE("schema: a root with 20 struct types reaches indexes 8 and more with t
 TEST_CASE("schema: a root with 17 struct types starts its shared items at index 19")
 {
     chain3 const value = chain_of<chain3>(3);
-    auto const encoded = form<chain3>::encode(value);
-    std::string const bytes = *encoded;
+    std::string const bytes = *form<chain3>::encode(value);
     CHECK_EQ(cbor::item_size(bytes), bytes.size());
     CHECK_EQ(bytes.substr(0, 8), "\xd8\x71\x82\x9a\x00\x00\x00\x17"s);
     std::size_t const end = root_offset(bytes, 17) + form<chain3>::fixed_size();
@@ -210,8 +197,7 @@ TEST_CASE("schema: a root with 17 struct types starts its shared items at index 
              "\xd9\x06\x53\xc6\x82\x08\x9a\x00\x00\x00\x03\x18\x13\xc6\x3a\x00\x00\x00\x01\xc6\x1a\x00\x00\x00\x02"s);
     CHECK_EQ(bytes.substr(bytes.size() - 2), "\xc6\x20"s);
 
-    auto const decoded = form<chain3>::decode(std::string(bytes));
-    auto const decoded_back = *decoded;
+    auto const decoded_back = *form<chain3>::decode(std::string(bytes));
     chain3 const &back = *decoded_back;
     CHECK_EQ((form<chain3>::encode(back)), bytes);
     CHECK_EQ(read_leaf_with_copying_path<chain3, "$.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.next.text">(bytes), "ab"s);
@@ -230,11 +216,9 @@ TEST_CASE("schema: a root with 17 struct types starts its shared items at index 
 // of one member checks only that member, and the member has the same place and head in both classes.
 TEST_CASE("schema: a root of another class tag is incorrect_type in decode")
 {
-    auto const encoded = form<point_a>::encode(point_a{7});
-    std::string const bytes = *encoded;
+    std::string const bytes = *form<point_a>::encode(point_a{7});
     CHECK_EQ(bytes.substr(root_offset(bytes), 3), "\xd9\x05\xf0"s);
-    auto const decoded = form<point_a>::decode(std::string(bytes));
-    auto const point = *decoded;
+    auto const point = *form<point_a>::decode(std::string(bytes));
     CHECK_EQ(point->x, 7u);
     CHECK_EQ(form<point_b>::decode(std::string(bytes)), std::unexpected(error::incorrect_type));
     CHECK_EQ(read_leaf_with_copying_path<point_b, "$.x">(bytes), 7u);
@@ -246,8 +230,7 @@ TEST_CASE("schema: a root of another class tag is incorrect_type in decode")
 // through that record reads only the field at its end, so it gives the value, as the other fields do.
 TEST_CASE("schema: a forged class tag of a nested record is incorrect_type")
 {
-    auto const encoded = form<car>::encode(car{4, {300, 1800}, true});
-    std::string const bytes = *encoded;
+    std::string const bytes = *form<car>::encode(car{4, {300, 1800}, true});
     std::size_t const motor = root_offset(bytes) + form<car>::member_offset<&car::motor>();
     CHECK_EQ(bytes.substr(motor, 3), "\xd9\x05\xdd"s);
     std::string forged = bytes;
@@ -310,16 +293,13 @@ CBOR_DEFINE_TYPE(nan_fields, cbor::tag{1736}, CBOR_MEMBER(nan_fields, single), C
 TEST_CASE("schema: a NaN keeps its bits through encode, decode and at_path")
 {
     nan_fields const value{std::bit_cast<float>(0x7f800001u), std::bit_cast<double>(0x7ff0000000000001ull)};
-    auto const encoded = form<nan_fields>::encode(value);
-    std::string const bytes = *encoded;
+    std::string const bytes = *form<nan_fields>::encode(value);
     auto const back = form<nan_fields>::decode(std::string(bytes));
     REQUIRE(back.has_value());
     CHECK_EQ(std::bit_cast<std::uint32_t>((*back)->single), 0x7f800001u);
     CHECK_EQ(std::bit_cast<std::uint64_t>((*back)->twice), 0x7ff0000000000001ull);
-    auto const form_read_2 = form<nan_fields>::at_path<"$.single">(bytes);
-    CHECK_EQ(std::bit_cast<std::uint32_t>(*form_read_2), 0x7f800001u);
-    auto const form_read = form<nan_fields>::at_path<"$.twice">(bytes);
-    CHECK_EQ(std::bit_cast<std::uint64_t>(*form_read), 0x7ff0000000000001ull);
+    CHECK_EQ(std::bit_cast<std::uint32_t>(*form<nan_fields>::at_path<"$.single">(bytes)), 0x7f800001u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*form<nan_fields>::at_path<"$.twice">(bytes)), 0x7ff0000000000001ull);
 }
 
 #if defined(__STDCPP_BFLOAT16_T__)
@@ -340,14 +320,12 @@ CBOR_DEFINE_TYPE(brain_float, cbor::tag{1737}, CBOR_MEMBER(brain_float, value));
 TEST_CASE("schema: a bfloat16 NaN keeps its bits")
 {
     brain_float const value{std::bit_cast<std::bfloat16_t>(std::uint16_t{0x7f81})};
-    auto const encoded = form<brain_float>::encode(value);
-    std::string const bytes = *encoded;
+    std::string const bytes = *form<brain_float>::encode(value);
     CHECK_NE(bytes.find("\xfa\x7f\x81\x00\x00"s), std::string::npos);
     auto const back = form<brain_float>::decode(std::string(bytes));
     REQUIRE(back.has_value());
     CHECK_EQ(std::bit_cast<std::uint16_t>((*back)->value), 0x7f81u);
-    auto const form_read = form<brain_float>::at_path<"$.value">(bytes);
-    CHECK_EQ(std::bit_cast<std::uint16_t>(*form_read), 0x7f81u);
+    CHECK_EQ(std::bit_cast<std::uint16_t>(*form<brain_float>::at_path<"$.value">(bytes)), 0x7f81u);
 }
 
 #endif

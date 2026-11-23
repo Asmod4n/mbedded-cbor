@@ -231,14 +231,10 @@ struct packed_unpacker {
         if (x.type() == cbor::type::tag) {
             auto const tagged = x.get<std::pair<std::uint64_t, cbor::item>>();
             auto const [number, content] = *tagged;
-            if (number == reference && content.type() == cbor::type::unsigned_integer) {
-                auto const positive = content.get<std::uint64_t>();
-                return entry(shared_first + 2 * *positive);
-            }
-            if (number == reference && content.type() == cbor::type::negative_integer) {
-                auto const negative = content.get<std::int64_t>();
-                return entry(shared_first - 2 * static_cast<std::uint64_t>(*negative) - 1);
-            }
+            if (number == reference && content.type() == cbor::type::unsigned_integer)
+                return entry(shared_first + 2 * *content.get<std::uint64_t>());
+            if (number == reference && content.type() == cbor::type::negative_integer)
+                return entry(shared_first - 2 * static_cast<std::uint64_t>(*content.get<std::int64_t>()) - 1);
             if (number == reference && content.type() == cbor::type::array) {
                 auto const pair = content.elements();
                 if (!pair || pair->size() != 2)
@@ -311,14 +307,12 @@ std::expected<std::string, cbor::error> unpack(std::string const &message)
 // undefined entry. The present struct unpacks to its keys and values.
 TEST_CASE("nested: a generic unpacker reads a message with an absent and a present optional struct")
 {
-    auto const encoded = form<passkey_login>::encode(passkey_login{{std::byte{1}}, std::nullopt, std::nullopt});
-    auto const absent = unpack(*encoded);
+    auto const absent = unpack(*form<passkey_login>::encode(passkey_login{{std::byte{1}}, std::nullopt, std::nullopt}));
     REQUIRE(absent.has_value());
     CHECK_EQ(absent->find("6("), std::string::npos);
     CHECK_NE(absent->find("\"user\": [false, h'000000"), std::string::npos);
     CHECK_NE(absent->find("\"signature\": h'01'"), std::string::npos);
-    auto const encoded_2 = form<passkey_login>::encode(passkey_login{{std::byte{1}}, passkey_user{{std::byte{9}}, "alice"}, "hi"});
-    auto const present = unpack(*encoded_2);
+    auto const present = unpack(*form<passkey_login>::encode(passkey_login{{std::byte{1}}, passkey_user{{std::byte{9}}, "alice"}, "hi"}));
     REQUIRE(present.has_value());
     CHECK_NE(present->find("\"user\": [true, 1516({\"id\": h'09'"), std::string::npos);
     CHECK_NE(present->find("\"name\": \"alice\""), std::string::npos);

@@ -94,10 +94,8 @@ inline std::expected<value, error> make_value_from_tag_item(cbor::item const it)
 inline std::expected<value, error> make_value_from_item(cbor::item const it)
 {
     switch (it.type()) {
-    case cbor::type::text_string: {
-        auto const text = it.get<std::string_view>();
-        return value{std::string(text.value())};
-    }
+    case cbor::type::text_string:
+        return value{std::string(it.get<std::string_view>().value())};
     case cbor::type::byte_string: {
         auto const read = it.get<std::span<std::byte const>>();
         std::span<std::byte const> const b = read.value();
@@ -105,22 +103,16 @@ inline std::expected<value, error> make_value_from_item(cbor::item const it)
     }
     case cbor::type::half_float:
     case cbor::type::single_float:
-    case cbor::type::double_float: {
-        auto const real = it.get<double>();
-        return value{real.value()};
-    }
+    case cbor::type::double_float:
+        return value{it.get<double>().value()};
     case cbor::type::false_value:
     case cbor::type::true_value:
     case cbor::type::null:
     case cbor::type::undefined:
-    case cbor::type::simple_value: {
-        auto const simple_read = it.get<cbor::simple_value>();
-        return value{simple{std::to_underlying(simple_read.value())}};
-    }
-    case cbor::type::unsigned_integer: {
-        auto const number = it.get<std::uint64_t>();
-        return value{number.value()};
-    }
+    case cbor::type::simple_value:
+        return value{simple{std::to_underlying(it.get<cbor::simple_value>().value())}};
+    case cbor::type::unsigned_integer:
+        return value{it.get<std::uint64_t>().value()};
     case cbor::type::negative_integer:
         return value{negative{argument_of_negative_integer(it)}};
     case cbor::type::array: {

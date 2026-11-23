@@ -128,8 +128,7 @@ TEST_CASE("sequence: lazy, path and decode read each element")
     CHECK_FALSE(inside(*owner, (*view)->data()));
     auto const second = items[1].at(1);
     REQUIRE(second.has_value());
-    auto const read = second->get<std::uint64_t>();
-    CHECK_EQ(read.value(), 2u);
+    CHECK_EQ(second->get<std::uint64_t>().value(), 2u);
 
     std::vector<std::string_view> views;
     for (auto const e : cbor::sequence{owner})
