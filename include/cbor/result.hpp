@@ -40,7 +40,8 @@ inline constexpr bool is_ref_v<ref<V>> = true;
 
 template <class T>
 concept value_outlives_result =
-    std::is_scalar_v<T> || std::same_as<T, std::string_view> || copied_value<T> || is_ref_v<T>;
+    std::is_scalar_v<T> || detail::integer<T> || std::same_as<T, std::string_view> || copied_value<T> ||
+    is_ref_v<T>;
 
 }
 
