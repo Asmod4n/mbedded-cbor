@@ -1,20 +1,32 @@
-# mbedded-cbor
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
+    <img src="assets/logo-light.svg" alt="mbedded-cbor" width="560">
+  </picture>
+</h1>
 
-A fast C++ library for CBOR (RFC 8949) that follows the specifications,
-for microcontrollers and for large servers. It does more than decode a
-whole message and encode it again without a schema:
+<p align="center">
+  <b>Fast, header-only CBOR for C++23 and C++26, from microcontrollers to servers,
+  made to be embedded in devices and in other languages.</b>
+</p>
 
-- **Lazy decode.** `cbor::lazy` and `cbor::at_path` read only the items
-  that you ask for, and skip the rest by their length.
-- **Structs and classes.** `cbor::structs` decodes CBOR into a struct or
-  a class, and encodes it again.
-- **Schema encode with Packed CBOR** (draft-ietf-cbor-packed-19).
-  `cbor::schema` lays out a struct at compile time. A list of structs
-  whose fields all have a fixed width is written with one copy.
-- **The whole message.** `cbor::decode` gives a tree of items, and
-  `cbor::encode` writes it again.
+<p align="center">
+  <img src="assets/badge-cpp.svg" alt="C++ 23 | 26">
+  <img src="assets/badge-header-only.svg" alt="header-only">
+  <a href="https://www.rfc-editor.org/rfc/rfc8949"><img src="assets/badge-rfc8949.svg" alt="CBOR RFC 8949"></a>
+  <a href="LICENSE"><img src="assets/badge-license.svg" alt="license Apache 2.0"></a>
+  <a href="https://asmod4n.github.io/mbedded-cbor-docs/"><img src="assets/badge-docs.svg" alt="docs online"></a>
+</p>
 
-The library is header-only.
+<p align="center">
+  <a href="https://asmod4n.github.io/mbedded-cbor-docs/">Documentation</a> ·
+  <a href="#examples">Examples</a> ·
+  <a href="#performance">Performance</a> ·
+  <a href="#integration">Integration</a>
+</p>
+
+Describe a struct in one line, write it, and read one field without decoding
+the rest:
 
 ```cpp
 struct point {
@@ -41,309 +53,54 @@ for (auto const p : *points | std::views::drop(1) | std::views::take(1)) {
 }
 ```
 
-The reference with examples that run in the browser:
-<https://asmod4n.github.io/mbedded-cbor-docs/>.
-
-It implements CBOR (RFC 8949), CBOR sequences (RFC 8742), typed arrays
-(RFC 8746), the paths of RFC 9535 and Packed CBOR
-(draft-ietf-cbor-packed-19). Every message it writes is standard CBOR.
-The tests read it with six other decoders: tinycbor, libcbor, jsoncons,
-nlohmann::json, cbor2 and CBOR::XS.
+Every call that can fail returns a `cbor::result`: read it from a variable, as with
+`std::expected`.
 
 ## Features
 
-- **Reads in place.** A text comes back as a view into
-  the message.
-- **Reads only what you ask for.** A path reads the heads of the items on
-  its way and skips the rest by their length.
-- **Fixed offsets.** `cbor::schema` lays out a struct at compile time,
-  from the tag and the members that `cbor::describe_members` gives. A
-  read of a field of fixed size is one jump.
-- **Raw arrays.** A list of numbers, and a list of structs whose fields
-  all have a fixed width, is one block of little-endian bytes. The block
-  is checked once.
-- **Errors as values.** Bad input gives a `cbor::result` with a
-  `cbor::error`. A read gives every fault of the input as a value.
-- **One description, every compiler.** `cbor::schema` reads only
-  `cbor::describe_members` and builds in C++23. With C++26 reflection it
-  also checks each description against the members of the struct.
-  `CBOR_DEFINE_TYPE_MEMBERS` writes a description from the names of the
-  members in one line.
-- **Trusted peers.** The `unverified_` forms of `cbor::schema` skip the
-  checks of the data and keep every check of a bound.
-- **Static dictionary.** `cbor::static_dictionary` stores the description
-  of a struct once and the data of each message apart from it.
-- **Limits.** A reader that recurses stops where the stack of its
-  thread ends, so the depth follows the stack. String length and element count
-  are constants of the build. Memory grows with the items that were read.
+- **Lazy** - `cbor::lazy` and `cbor::at_path` read only the items you ask for
+  and skip the rest by their length.
+- **Zero-copy** - a text comes back as a view into the message.
+- **Structs** - `cbor::structs<T>` decodes into your struct or class;
+  `cbor::encode` writes it.
+- **Fixed offsets** - `cbor::schema<T>` lays out a struct at compile time
+  (Packed CBOR), so a read of a fixed-size field is one jump.
+- **Raw arrays** - a list of numbers, or of structs with fixed-size fields, is
+  one block of little-endian bytes that is checked once.
+- **Paths** - RFC 9535 paths, checked at compile time: `at_path<"$.user.id">`.
+- **Errors as values** - bad input gives a `cbor::result` with a `cbor::error`.
+- **Standard CBOR out** - tinycbor, libcbor, jsoncons, nlohmann::json, cbor2 and
+  CBOR::XS read every message that the tests write.
 
-## How a read works
+## Which API for which work
 
-<img src="assets/path-read.svg" alt="lazy::at_path reads the heads on its way, skips a text by its length, and stops at the value" width="100%">
-
-A path compares the keys it meets. It skips every other value by the
-length in its head, and it stops at the value.
-
-<img src="assets/walk-or-jump.svg" alt="a CBOR walk visits every item before the field; cbor::schema jumps to the field in one step" width="100%">
-
-With `cbor::schema`, the struct is the layout. The offset of a field
-comes from the compiler, so the read is one jump.
-
-<img src="assets/fixed-vector.svg" alt="a vector of fixed-size structs: the head is checked once, element i is at i times 8" width="100%">
-
-A vector of fixed-size structs is checked once. After that, element `i`
-is at `i × sizeof(element)`, and a loop runs over raw bytes.
-
-## Validity checks
-
-RFC 8949 section 10 asks a generic decoder to state the checks that it
-makes. These are the checks of mbedded-cbor.
-
-- **Well-formed.** Each reader accepts only well-formed CBOR (RFC 8949
-  section 3 and Appendix F). `cbor::decode` and `cbor::structs` stop at
-  the first fault and give the error and no part of the item. A
-  `cbor::lazy` reads only the parts that a call reaches; a fault in
-  another part comes when a call reaches it.
-- **Indefinite length.** `cbor::decode`, `cbor::structs`,
-  `cbor::schema` and `cbor::lazy` refuse it with `indefinite_length`
-  (RFC 8949 section 5.1 allows a decoder to do so).
-  `cbor::diagnostic_notation` writes it as it stands.
-- **Tag content.** Tags 2 and 3 take a byte string, tag 24 a byte
-  string that holds one item, tag 29 an unsigned integer, and tags 64
-  to 87 (RFC 8746) a byte string. Other content gives
-  `inadmissible_type_for_tag_content`. The content of every other tag
-  is not checked.
-- **Shared references.** `cbor::decode_cycles` resolves tags 28
-  and 29 for cycles only. A reference of tag 29 names an item that tag
-  28 marked before it and whose decode has not ended; else the read
-  gives `sharedref_not_cyclic`, `sharedref_not_defined` or
-  `sharedref_index_not_marked`.
-- **Duplicate keys.** A repeated key gives every entry in `cbor::decode`,
-  the error `duplicate_key` in `cbor::structs` (an unordered multimap
-  appends the values), and the first match in `cbor::lazy`.
-- **UTF-8.** No reader checks that a text string is UTF-8. C++ has many
-  ways to check UTF-8, and the application uses its own.
-- **Limits.** See Features: the depth follows the stack, the string
-  length and the element count are constants of the build, and memory
-  grows with the items that were read, never with a count of the input.
-
-## Performance
-
-The carsales message of 1000 cars, read and written by each kind of
-mbedded-cbor and by a library that does the same work. A number says how
-many times faster mbedded-cbor is. A number under 1 says that the library
-is faster. Every library checks its input, except where the row says so.
-
-Read one field (`cars[500].engine.cc`):
-
-| Kind | Library beside it | g++ 16 | clang 23 |
-|---|---|---|---|
-| lazy | tinycbor | 6.6× | 5.1× |
-| at_path | jsoncons JSONPath | 50× | 47× |
-| item | jsoncons `json` | 3.2× | 4.1× |
-| structs | jsoncons `decode_cbor<T>` | 8.6× | 13× |
-| schema | FlatBuffers with Verifier | 4700× | 2800× |
-| schema, unverified | FlatBuffers, no Verifier | 0.40× | 0.27× |
-
-Read the whole message:
-
-| Kind | Library beside it | g++ 16 | clang 23 |
-|---|---|---|---|
-| item | jsoncons `json` | 3.2× | 4.0× |
-| structs | jsoncons `decode_cbor<T>` | 8.7× | 13× |
-| schema | FlatBuffers with Verifier | 1.3× | 1.5× |
-| schema, unverified | FlatBuffers, no Verifier | 0.47× | 0.55× |
-
-lazy and at_path read the values that you ask for and skip the rest.
-For the whole message, use item or structs.
-
-Write the message:
-
-| Kind | Library beside it | g++ 16 | clang 23 |
-|---|---|---|---|
-| item | jsoncons `json` | 3.2× | 4.2× |
-| structs | jsoncons `encode_cbor` | 4.6× | 7.9× |
-| schema | FlatBuffers | 9.0× | 3.4× |
-
-- schema reads Packed CBOR (155849 bytes). The other kinds and the
-  libraries read the CBOR of `cbor::encode` (440957 bytes).
-- item, structs and jsoncons decode the message before they read one
-  field. jsoncons decodes the message before its path.
-- jsoncons `decode_cbor<T>` copies each text into a `std::string`.
-  structs gives views into the message.
-- jsoncons writes no tags (422954 bytes).
-- schema, unverified checks every bound, so no read leaves the input.
-  It reads the tags and heads as they stand. FlatBuffers without its
-  Verifier checks no bounds.
-
-Measured at commit cb28a52 in a VM with 4 cpus (Intel Xeon, Sapphire
-Rapids), Debian sid, libstdc++ 16, `-O2 -march=native`, the median of 5
-runs of 3 s. The noise of one run is up to 10 %. `bench/kinds-table.sh`
-measures these tables on your machine, in the image of
-`containers/debian-sid-bench.Containerfile`.
-The run and its context:
-[bench/results/kinds-2026-11-07-052855Z.json](bench/results/kinds-2026-11-07-052855Z.json).
-The code of every library, task by task: see the section
-"Compared with other libraries" below.
-
-## Compared with other libraries
-
-This section compares mbedded-cbor with four C++ libraries that read and
-write CBOR or a binary format of their own: nlohmann/json, libcbor,
-FlatBuffers and Cap'n Proto. Each code example was compiled and run. The
-details stand in [bench/comparison.md](bench/comparison.md).
-
-| Task | mbedded-cbor | nlohmann/json | libcbor | FlatBuffers | Cap'n Proto |
-|---|---|---|---|---|---|
-| Format | CBOR | JSON; CBOR through `from_cbor` and `to_cbor` | CBOR | its own | its own |
-| Read one field | a path; the rest is not decoded | decodes the whole input first | decodes the whole input; no lookup of a key | direct | direct |
-| Write a struct | `CBOR_DEFINE_TYPE_MEMBERS` names each member; the read needs no extra code (C++26 reflection, or Boost.PFR in C++23) | a macro that names each member | no mapping of a struct | a schema file and a code generator | a schema file and a code generator |
-| Cycles through tags 28 and 29 | read and written | not read | not read | one offset in two places | not checked |
-| A list of numbers with no copy | `cbor::schema` | copies | reads each number | direct | direct |
-| Broken input | a `cbor::result` error | an exception, or a discarded value | an error code | the Verifier; without it, no check | an exception |
-
-### Read one field
-
-```cpp
-// mbedded-cbor; bytes: {"user": {"id": 42}}
-auto const id = cbor::at_path<"$.user.id", std::int64_t>(bytes);   // *id == 42
-```
-
-```cpp
-// nlohmann/json
-nlohmann::json const doc = nlohmann::json::from_cbor(bytes);
-int const id = doc.at("user").at("id").get<int>();
-```
-
-### Write a struct and read it back
-
-```cpp
-// mbedded-cbor
-struct person {
-    std::string name;
-    int age;
-};
-CBOR_DEFINE_TYPE_MEMBERS(person, cbor::untagged, name, age);
-
-auto bytes = cbor::encode(person{"ann", 30});
-auto const back = cbor::structs<person>::decode(std::move(*bytes));
-// (*back)->name is "ann", (*back)->age is 30
-```
-
-```cpp
-// nlohmann/json
-struct person {
-    std::string name;
-    int age;
-};
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(person, name, age)
-
-std::vector<std::uint8_t> const bytes = nlohmann::json::to_cbor(person{"ann", 30});
-person const back = nlohmann::json::from_cbor(bytes).get<person>();
-```
-
-`encode` and `decode` return a `cbor::result`, and `*` takes the value
-(`mbedded-cbor-structs(3)`).
-
-### Broken input
-
-```cpp
-// mbedded-cbor; bytes: [1, 2] without its last byte
-auto const r = cbor::at_path<"$[1]", std::int64_t>(bytes);
-bool const broken = !r && r.error() == cbor::error::too_little_data;
-```
-
-```cpp
-// nlohmann/json
-auto const doc = nlohmann::json::from_cbor(bytes, true, false);
-bool const broken = doc.is_discarded();
-```
-
-## Requirements
-
-| Compiler | System | What builds |
+| You want | Use | You get |
 |---|---|---|
-| g++ 16, `-std=c++26 -freflection` | Linux | every part, and the check of each description against the members |
-| g++ 15, clang 21 (Debian stable with trixie-backports), `-std=c++23` | Linux | every part in C++23 |
-| AppleClang of Xcode 26 | macOS 26 | every part in C++23 |
-| clang-cl of Visual Studio | Windows x64 | every part in C++23 |
-| cl.exe (MSVC) | Windows | not supported |
+| the whole message, no schema | `cbor::decode` | a tree of items |
+| the whole message as your type | `cbor::structs<T>` | your struct, with views into the bytes |
+| a few values of a large message | `cbor::lazy`, `cbor::at_path` | the values; the rest is skipped by length |
+| many reads of fixed-size fields | `cbor::schema<T>` | a jump to an offset the compiler knows |
+| to write anything | `cbor::encode` | the bytes of a value, a tree or a described struct |
 
-On Windows the library builds with clang-cl, the clang frontend of
-Visual Studio. cl.exe is not supported: it cannot evaluate the
-compile-time code of `cbor::schema`, `cbor::structs` and `cbor::at_path`.
-The library stops at the first include with an error when cl.exe
-compiles it.
-
-The library reads the bounds of the stack of each thread. It compiles
-for Linux (glibc and musl), macOS, Windows on x64, WebAssembly without
-threads and picolibc. On another target the build stops with an error.
-
-On g++ 15, clang 21 and later and AppleClang, `cbor::structs` reads the members
-through Boost.PFR 1.84 or later, and `cbor::schema` uses it to check that
-a description lists every member of an aggregate. It is the only
-dependency.
-
-CMake takes Boost 1.84 or later from the system, else its own copy in
-`third_party/boost_pfr`. Details: `mbedded-cbor-structs(3)`.
-
-## Installation
-
-```sh
-cmake -S mbedded-cbor -B build -DBUILD_TESTING=OFF
-cmake --install build --prefix /usr/local
-```
-
-```cmake
-find_package(mbedded-cbor 0.9 CONFIG REQUIRED)
-target_link_libraries(app PRIVATE mbedded-cbor::mbedded-cbor)
-```
-
-Or with FetchContent:
-
-```cmake
-include(FetchContent)
-FetchContent_Declare(mbedded-cbor
-    GIT_REPOSITORY https://github.com/Asmod4n/mbedded-cbor
-    GIT_TAG main)
-FetchContent_MakeAvailable(mbedded-cbor)
-```
-
-## Usage
-
-Every call that can fail returns a `cbor::result`, which holds a value or
-a `cbor::error` as `std::expected` does. `*result` or `result.value()`
-gives the value, and `result->` reaches a member of it. These work on a
-named result only: each step is a variable.
-Where the value is itself a handle, such as `cbor::owning<cbor::item>` or
-`cbor::ref<T>`, a second `->` reaches the item or the struct.
+## Examples
 
 ### Decode and encode a whole message
 
-`cbor::decode` gives a tree of items. `cbor::encode` writes a tree back.
-
 ```cpp
 // bytes: a std::string with {"sensor": "t1", "value": 21.5}
-auto const decoded = cbor::decode(bytes);
-auto const tree = decoded.value();
+auto const tree = cbor::decode(bytes);
 
-auto const read = tree->pairs();
-auto const pairs = read.value();
-for (auto const [key, value] : pairs) {
-    auto const text = key.get<std::string_view>();
-    std::println("{}", *text);                                      // sensor, value
+auto const pairs = (*tree)->pairs();
+for (auto const [key, value] : *pairs) {
+    auto const name = key.get<std::string_view>();
+    std::println("{}", *name);                                      // sensor, value
 }
 
 std::string out;
-cbor::encode(out, *tree);                                           // out == bytes
+auto const written = cbor::encode(out, **tree);                     // out == bytes
 ```
 
 ### Encode a value or a struct
-
-`cbor::encode` writes any value: a struct, an `int`, a `std::map`. A
-struct needs a `cbor::describe_members` specialization, which
-`CBOR_DEFINE_TYPE_MEMBERS` writes. `cbor::structs<T>` decodes the bytes
-back into the same type.
 
 ```cpp
 struct reading {
@@ -361,31 +118,18 @@ cbor::encode(42);                                                   // 18 2a
 cbor::encode(std::map<std::string, int>{{"a", 1}});                 // {"a": 1}
 ```
 
-A decoded struct can point into the bytes, for example with a
-`std::string_view` member. So `decode` takes the bytes by move, or as a
-`std::shared_ptr` that keeps them alive:
-
-```cpp
-auto const owner = std::make_shared<std::string const>(*bytes);
-auto const r = cbor::structs<reading>::decode(owner);
-```
-
 ### Read a message
-
-The bytes move into the library, or the library reads them in place
-through a `std::shared_ptr`. Both forms read the bytes where they are.
 
 ```cpp
 // bytes: a std::string with {"sensor": "t1", "value": 21.5, "samples": [3, 4, 5]}
-auto const adopted = cbor::lazy::adopt(std::move(bytes));
-auto const doc = adopted.value();
+auto const doc = cbor::lazy::adopt(std::move(bytes));
 
 int sum = 0;
-if (auto const samples = doc.at("samples")) {
-    if (auto const elements = samples->elements())
-        for (auto const &x : *elements)
-            if (x)
-                sum += x->get<int>().value_or(0);   // 12
+if (auto const samples = doc->at("samples")) {
+    auto const elements = samples->elements();
+    for (auto const &x : *elements)
+        if (x)
+            sum += x->get<int>().value_or(0);   // 12
 }
 ```
 
@@ -393,38 +137,158 @@ if (auto const samples = doc.at("samples")) {
 
 ```cpp
 // owner: a std::shared_ptr<std::string const> with {"user": {"id": 42, "name": "ann"}}
-auto const viewed = cbor::lazy::view(owner);
-auto const doc = viewed.value();
+auto const doc = cbor::lazy::view(owner);
 
-auto const id = doc.at_path<"$.user.id", std::int64_t>();          // 42
-auto const name = doc.at_path<"$.user.name", std::string_view>();  // "ann", a view into the message
-auto const age = doc.at_path<"$.user.age", int>();                 // cbor::error::key_not_found
+auto const id = doc->at_path<"$.user.id", std::int64_t>();         // 42
+auto const name = doc->at_path<"$.user.name", std::string_view>(); // "ann", a view into the message
+auto const age = doc->at_path<"$.user.age", int>();                // cbor::error::key_not_found
+```
+
+## How a read works
+
+<img src="assets/path-read.svg" alt="lazy::at_path reads the heads on its way, skips a text by its length, and stops at the value" width="100%">
+
+A path compares the keys it meets, skips every other value by the length in its
+head, and stops at the value.
+
+<img src="assets/walk-or-jump.svg" alt="a CBOR walk visits every item before the field; cbor::schema jumps to the field in one step" width="100%">
+
+With `cbor::schema`, the struct is the layout: the compiler knows the offset of
+each field, so the read is one jump.
+
+<img src="assets/fixed-vector.svg" alt="a vector of fixed-size structs: the head is checked once, element i is at i times 8" width="100%">
+
+A vector of fixed-size structs is checked once. Then element `i` is at
+`i × sizeof(element)`.
+
+## Performance
+
+Read one field (`cars[500].engine.cc`) of the carsales message of 1000 cars. The
+number says how many times faster mbedded-cbor is than the library beside it.
+
+| mbedded-cbor | Library beside it | g++ 16 | clang 23 |
+|---|---|---|---|
+| `lazy` | tinycbor | 6.6× | 5.1× |
+| `at_path` | jsoncons JSONPath | 50× | 47× |
+| `item` | jsoncons `json` | 3.2× | 4.1× |
+| `structs` | jsoncons `decode_cbor<T>` | 8.6× | 13× |
+| `schema`, unverified | FlatBuffers without Verifier | 0.40× | 0.27× |
+
+`schema`, unverified checks every bound and FlatBuffers without its Verifier
+checks none, so FlatBuffers is faster here. Where both check the whole message,
+a read of the whole message by `schema` takes the time of FlatBuffers with its
+Verifier divided by 1.3 (g++ 16) or 1.5 (clang 23).
+
+Intel Xeon (Sapphire Rapids) VM with 4 cpus, Debian sid, `-O2 -march=native`,
+median of 5 runs, at commit cb28a52. The tables for the whole message and for
+writing, the notes and the method are in [bench/README.md](bench/README.md#kinds-tablesh);
+the code of each library, task by task, is in [bench/comparison.md](bench/comparison.md).
+
+## Standards
+
+| Specification | In the library |
+|---|---|
+| [RFC 8949](https://www.rfc-editor.org/rfc/rfc8949) CBOR | decode, encode, diagnostic notation |
+| [RFC 8742](https://www.rfc-editor.org/rfc/rfc8742) CBOR sequences | `cbor::sequence_reader` |
+| [RFC 8746](https://www.rfc-editor.org/rfc/rfc8746) typed arrays | tags 64 to 87 as raw blocks of numbers |
+| [RFC 8943](https://www.rfc-editor.org/rfc/rfc8943) dates | tags 100 and 1004 |
+| [RFC 9581](https://www.rfc-editor.org/rfc/rfc9581) extended time | tags 1001 and 1002 |
+| [RFC 9535](https://www.rfc-editor.org/rfc/rfc9535) JSONPath | `at_path` |
+| [draft-ietf-cbor-packed-19](https://datatracker.ietf.org/doc/draft-ietf-cbor-packed/19/) Packed CBOR | `cbor::schema`, `cbor::static_dictionary` |
+
+### Validity checks
+
+RFC 8949 section 10 asks a generic decoder to state its checks:
+
+- **Well-formed.** Each reader accepts well-formed CBOR (RFC 8949 section 3 and
+  Appendix F). `cbor::decode` and `cbor::structs` stop at the first fault with
+  the error; `cbor::lazy` gives a fault when a call reaches it.
+- **Definite length.** The readers take definite lengths and give
+  `indefinite_length` for an indefinite one (RFC 8949 section 5.1);
+  `cbor::diagnostic_notation` writes it as it stands.
+- **Tag content.** Tags 2 and 3 take a byte string, tag 24 a byte string that
+  holds one item, tag 29 an unsigned integer, and tags 64 to 87 a byte string;
+  other content gives `inadmissible_type_for_tag_content`.
+- **Cycles.** `cbor::decode_cycles` resolves tags 28 and 29 for cycles. A tag 29
+  names an item that a tag 28 marked before it and whose decode is open; else
+  the read gives `sharedref_not_cyclic`, `sharedref_not_defined` or
+  `sharedref_index_not_marked`.
+- **Duplicate keys.** `cbor::decode` keeps every entry, `cbor::structs` gives
+  `duplicate_key` (an unordered multimap appends the values), and `cbor::lazy`
+  gives the first match.
+- **UTF-8.** The application checks text strings with the UTF-8 check of its
+  choice.
+- **Limits.** A reader that recurses stops where the stack of its thread ends.
+  String length and element count are constants of the build, and memory grows
+  with the items that were read.
+
+## Supported compilers
+
+| Compiler | Standard | System |
+|---|---|---|
+| g++ 16 | C++26 with `-freflection` | Linux |
+| g++ 15, clang 21 | C++23 | Linux (glibc, musl) |
+| AppleClang of Xcode 26 | C++23 | macOS 26 |
+| clang-cl of Visual Studio | C++23 | Windows x64 |
+
+It also builds for WebAssembly without threads and for picolibc. In C++23,
+`cbor::structs` reads the members through Boost.PFR 1.84 or later; a copy is in
+`third_party/boost_pfr`. With C++26 reflection, `cbor::schema` also checks each
+description against the members of the struct.
+
+## Integration
+
+The library is header-only. Add `include/` to the include path of your build:
+
+```sh
+g++-16 -std=c++26 -freflection -I mbedded-cbor/include app.cpp
+clang++ -std=c++23 -I mbedded-cbor/include -I mbedded-cbor/third_party/boost_pfr/include app.cpp
+```
+
+```cpp
+#include <cbor/cbor.hpp>
+```
+
+With CMake, install it and find it:
+
+```sh
+cmake -S mbedded-cbor -B build -DBUILD_TESTING=OFF
+cmake --install build --prefix /usr/local
+```
+
+```cmake
+find_package(mbedded-cbor 0.9 CONFIG REQUIRED)
+target_link_libraries(app PRIVATE mbedded-cbor::mbedded-cbor)
+```
+
+Or take it with FetchContent:
+
+```cmake
+include(FetchContent)
+FetchContent_Declare(mbedded-cbor
+    GIT_REPOSITORY https://github.com/Asmod4n/mbedded-cbor
+    GIT_TAG main)
+FetchContent_MakeAvailable(mbedded-cbor)
 ```
 
 ## Documentation
 
-- <https://asmod4n.github.io/mbedded-cbor-docs/>: every function and type,
-  with examples that run in the browser.
-- The comments of the headers in `include/cbor/`: every function and type. The site and the man pages
-  are made from them in [Asmod4n/mbedded-cbor-docs](https://github.com/Asmod4n/mbedded-cbor-docs).
-- The man pages, one for each class and one for each group, install from that repository.
-- The section "Compared with other libraries" above: other libraries, task by task.
+- [asmod4n.github.io/mbedded-cbor-docs](https://asmod4n.github.io/mbedded-cbor-docs/):
+  every function and type, with examples that run in the browser.
+- The comments of the headers in `include/cbor/`. The site and the man pages are
+  made from them in [Asmod4n/mbedded-cbor-docs](https://github.com/Asmod4n/mbedded-cbor-docs).
 
 ## Testing
 
-The tests run the examples of RFC 8949 Appendix A, the test vectors of
-the IETF CBOR working group and the JSONPath Compliance Test Suite.
-`test/run.sh full` builds and runs them with g++ 16 and clang 23, each
-with AddressSanitizer and UndefinedBehaviorSanitizer at -O0, and runs
-other decoders on the output. Fuzz
-targets cover decode, diagnostic notation, item_size, lazy, path,
+The tests run the examples of RFC 8949 Appendix A, the test vectors of the IETF
+CBOR working group and the JSONPath Compliance Test Suite, with
+AddressSanitizer and UndefinedBehaviorSanitizer, and other decoders read the
+output. Fuzz targets cover decode, diagnostic notation, item_size, lazy, path,
 sequence_reader, structs and schema.
 
-## Status
-
-Version 0.9, before the first release. The API can still change. The
-fuzzing runs before the first release.
+**Status:** version 0.9, before the first release. The API can still change.
 
 ## License
 
-Apache License 2.0. See [LICENSE](LICENSE).
+Apache License 2.0, see [LICENSE](LICENSE). The JSON reader of
+`cbor::parse_edn` is ported from yyjson (MIT), see [NOTICE](NOTICE).

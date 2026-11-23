@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <memory>
 #include <ranges>
 #include <string>
@@ -92,6 +93,33 @@ struct track {
 
 CBOR_DEFINE_TYPE_MEMBERS(point, cbor::tag{1703}, x, y);
 CBOR_DEFINE_TYPE_MEMBERS(track, cbor::tag{1704}, points);
+
+namespace
+{
+
+struct reading {
+    std::string sensor;
+    double value;
+    std::vector<int> samples;
+};
+
+} // namespace
+
+CBOR_DEFINE_TYPE_MEMBERS(reading, cbor::untagged, sensor, value, samples);
+
+// "Encode a value or a struct" writes a described struct and reads it back, and writes an integer and a map.
+TEST_CASE("doc readme: encode a value or a struct")
+{
+    auto const bytes = cbor::encode(reading{"t1", 21.5, {3, 4, 5}});
+    REQUIRE(bytes.has_value());
+    auto const back = cbor::structs<reading>::decode(std::string(*bytes));
+    REQUIRE(back.has_value());
+    CHECK_EQ((*back)->sensor, "t1");
+    auto const number = cbor::encode(42);
+    CHECK_EQ(*number, test::encode_in_preferred_form(test::V(42)));
+    auto const map = cbor::encode(std::map<std::string, int>{{"a", 1}});
+    CHECK_EQ(*map, test::encode_in_preferred_form(test::M("a"s, 1)));
+}
 
 // "Write structs, read one field" reads one leaf at its offset and a page of the fixed-size vector.
 TEST_CASE("doc readme: write structs, read one field")
