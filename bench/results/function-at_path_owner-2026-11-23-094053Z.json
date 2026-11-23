@@ -1,0 +1,546 @@
+{
+ "time": "2026-11-23-094053Z",
+ "block": "at_path_owner",
+ "what": "each function of bench/function/at_path_owner.cpp over a buffer of COLD_BYTES bytes of items; a = commit a, aa = commit a built again, b = commit b",
+ "commit_a": {
+  "given": "a583d143",
+  "id": "a583d143fb19d6745fc1938dbc6e7df539e56bf9"
+ },
+ "commit_b": {
+  "given": "6aa2ac48",
+  "id": "6aa2ac48ec932bf75f786d2be6725f105e99b07d"
+ },
+ "bench_sources_commit": "6aa2ac48ec932bf75f786d2be6725f105e99b07d",
+ "image": "compiler",
+ "flags": "-std=c++26 -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -DNDEBUG -pipe",
+ "warnings": {
+  "gxx": "-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -Wnull-dereference",
+  "clang": "-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -Wnull-dereference -Wunsafe-buffer-usage"
+ },
+ "link_flags": "-pie -fuse-ld=mold",
+ "gxx_binary": {
+  "binary": "a.gxx",
+  "comment": "String dump of section '.comment':\n  [     1]  GCC: (Debian 16.2.0-5) 16.2.0\n  [    1f]  mold 3.0.0 (compatible with GNU ld)",
+  "libraries": {
+   "libbenchmark.so.1.9.1": "/usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1",
+   "libstdc++.so.6": "/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.36",
+   "libc.so.6": "/usr/lib/x86_64-linux-gnu/libc.so.6",
+   "libm.so.6": "/usr/lib/x86_64-linux-gnu/libm.so.6"
+  }
+ },
+ "clang_binary": {
+  "binary": "a.clang",
+  "comment": "String dump of section '.comment':\n  [     1]  Debian clang version 23.1.6 (1)\n  [    21]  GCC: (Debian 16.2.0-5) 16.2.0\n  [    3f]  mold 3.0.0 (compatible with GNU ld)",
+  "libraries": {
+   "libbenchmark.so.1.9.1": "/usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1",
+   "libstdc++.so.6": "/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.36",
+   "libm.so.6": "/usr/lib/x86_64-linux-gnu/libm.so.6",
+   "libc.so.6": "/usr/lib/x86_64-linux-gnu/libc.so.6"
+  }
+ },
+ "rounds": 15,
+ "min_time": "0.05s",
+ "cold_bytes": 4194304,
+ "build": "build: 16.24 s for 6 binaries",
+ "resolved_march": "sapphirerapids",
+ "compilers": [
+  "g++-16 (Debian 16.2.0-5) 16.2.0",
+  "Debian clang version 23.1.6 (1)"
+ ],
+ "libc": "ldd (Debian GLIBC 2.43-7) 2.43",
+ "level_two_cache": "2048K",
+ "kernel": "6.18.44-fc-v726",
+ "scheduler": "no sched_ext state (kernel default)",
+ "virtualization": "docker ",
+ "host_in_container": "no",
+ "host_user": "root 0",
+ "container": "podman compiler, user 65534, network none",
+ "cpu": {
+  "model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "flags_sha256": "19139faa5b3c177a2d253ee9520b13713aee71074562456de06d1ba7833e7890",
+  "cpus": 4,
+  "l3": "266240K"
+ },
+ "uid": 65534,
+ "priority": "nice -10 granted",
+ "threads": 1,
+ "pinned": false,
+ "cpu_left_to_the_machine": "each bench process is single-threaded on 4 cpus",
+ "gate_before_build": [
+  "gate: vmstat 1 2",
+  "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+  " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+  " 1  0      0 15035844  41824 936540    0    0  1228  1322  665    1 23  2 71  4  1  0",
+  " 0  0      0 15075408  41824 936488    0    0     0     0  179  157  0  0 100  0  0  0",
+  "gate: ps --sort=-pcpu (top 7)",
+  "  PID USER     %CPU  NI COMMAND",
+  "  101 root      2.1   0 claude",
+  "    1 root      0.0   0 process_api",
+  "   93 root      0.0   0 environment-man",
+  "   43 root      0.0   0 kworker/u16:1-ext4-rsv-conversion",
+  "   21 root      0.0   - migration/1",
+  "   26 root      0.0   - migration/2",
+  "   31 root      0.0   - migration/3",
+  "gate: busy 0.0% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough"
+ ],
+ "gate_before_runs": [
+  "gate: vmstat 1 2",
+  "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+  " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+  " 0  0      0 15050868  41828 938292    0    0  1198  1291  672    1 24  2 70  4  1  0",
+  " 0  0      0 15062248  41828 938044    0    0     0     0  189  194  0  0 100  0  0  0",
+  "gate: ps --sort=-pcpu (top 7)",
+  "  PID USER     %CPU  NI COMMAND",
+  "  101 root      2.1   0 claude",
+  "    1 root      0.0   0 process_api",
+  "   93 root      0.0   0 environment-man",
+  " 4363 root      0.0   0 function.sh",
+  "   43 root      0.0   0 kworker/u16:1-ext4-rsv-conversion",
+  "   21 root      0.0   - migration/1",
+  "   26 root      0.0   - migration/2",
+  "gate: busy 0.0% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough"
+ ],
+ "steal_limit_percent": 3,
+ "rounds_detail": [
+  {
+   "round": 1,
+   "attempt": 1,
+   "wall_s": 1.3334219455718994,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.9242144177449169
+  },
+  {
+   "round": 2,
+   "attempt": 2,
+   "wall_s": 1.3623030185699463,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.9140767824497258
+  },
+  {
+   "round": 3,
+   "attempt": 3,
+   "wall_s": 1.3408739566802979,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.7380073800738007
+  },
+  {
+   "round": 4,
+   "attempt": 4,
+   "wall_s": 1.2303237915039062,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.40404040404040403
+  },
+  {
+   "round": 5,
+   "attempt": 5,
+   "wall_s": 1.2677719593048096,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.19607843137254902
+  },
+  {
+   "round": 6,
+   "attempt": 6,
+   "wall_s": 1.2936689853668213,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.9596928982725528
+  },
+  {
+   "round": 7,
+   "attempt": 7,
+   "wall_s": 1.3811249732971191,
+   "kept": true,
+   "steal_percent_of_cpu_time": 1.4414414414414414
+  },
+  {
+   "round": 8,
+   "attempt": 8,
+   "wall_s": 1.2669520378112793,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.39215686274509803
+  },
+  {
+   "round": 9,
+   "attempt": 9,
+   "wall_s": 1.3652570247650146,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.36429872495446264
+  },
+  {
+   "round": 10,
+   "attempt": 10,
+   "wall_s": 1.3229529857635498,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.3766478342749529
+  },
+  {
+   "round": 11,
+   "attempt": 11,
+   "wall_s": 1.2963011264801025,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.0
+  },
+  {
+   "round": 12,
+   "attempt": 12,
+   "wall_s": 1.3270010948181152,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.5617977528089888
+  },
+  {
+   "round": 13,
+   "attempt": 13,
+   "wall_s": 1.324493169784546,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.5628517823639775
+  },
+  {
+   "round": 14,
+   "attempt": 14,
+   "wall_s": 1.3530528545379639,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.3663003663003663
+  },
+  {
+   "round": 15,
+   "attempt": 15,
+   "wall_s": 1.3818318843841553,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.7220216606498195
+  }
+ ],
+ "failed": [],
+ "stderr_of_runs": "2026-11-23T09:41:12+00:00\nRunning /run-dir/bin/a.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.43, 1.21, 0.71\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-23T09:41:12+00:00\nRunning /run-dir/bin/aa.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.43, 1.21, 0.71\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-23T09:41:13+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.43, 1.21, 0.71\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-23T09:41:13+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.43, 1.21, 0.71\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-23T09:41:13+00:00\nRunning /run-dir/bin/b.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.43, 1.21, 0.71\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-23T09:41:13+00:00\nRunning /run-dir/bin/a.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.43, 1.21, 0.71\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-23T09:41:14+00:00\nRunning /run-dir/bin/aa.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.43, 1.21, 0.71\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-23T09:41:14+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.43, 1.21, 0.71\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-23T09:41:14+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.43, 1.21, 0.71\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-23T09:41:14+00:00\nRunning /run-dir/bin/b.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.43, 1.21, 0.71\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-23T09:41:14+00:00\nRunning /run-dir/bin/a.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.43, 1.21, 0.71\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-23T09:41:15+00:00\nRunning /run-dir/bin/a.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.43, 1.21, 0.71\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-23T09:41:15+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 1.43, 1.21, 0.71\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-23T09:41:15+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 K",
+ "packages": [],
+ "noise_floor": {
+  "a_over_a_max_deviation_percent": 4.855425610370445
+ },
+ "difference_test": "two-tailed Mann-Whitney U test of compare.py of Google Benchmark over the rounds, alpha 0.05, and B/A further from 1 than A/A and than the noise floor of the machine (7.5 %)",
+ "compare_text": {
+  "gxx": {
+   "a_aa": "Comparing /run-dir/out/merged.a.gxx.json to /run-dir/out/merged.aa.gxx.json\nBenchmark                         Time             CPU      Time Old      Time New       CPU Old       CPU New\n--------------------------------------------------------------------------------------------------------------\nat_path_fixed                  +0.0500         +0.0510            17            18            17            18\nat_path_fixed                  -0.0356         -0.0728            18            17            18            16\nat_path_fixed                  +0.0486         +0.0135            17            18            17            17\nat_path_fixed                  -0.4664         -0.4654            31            16            31            16\nat_path_fixed                  -0.0656         -0.0290            18            17            18            17\nat_path_fixed                  +0.1876         +0.1712            15            18            15            17\nat_path_fixed                  +0.4409         +0.4452            18            26            18            26\nat_path_fixed                  -0.1074         +0.0918            19            17            15            17\nat_path_fixed                  -0.0282         -0.0109            17            17            17            17\nat_path_fixed                  +0.1993         +0.2032            16            19            16            19\nat_path_fixed                  -0.0036         -0.0717            18            18            18            16\nat_path_fixed                  -0.1225         +0.1078            22            20            17            19\nat_path_fixed                  +0.0840         +0.0920            17            18            17            18\nat_path_fixed                  -0.0124         -0.0077            17            17            17            17\nat_path_fixed                  +0.2544         +0.2605            18            22            18            22\nat_path_fixed_pvalue            0.9339          0.5614      U Test, Repetitions: 15 vs 15\nat_path_query                  +0.0534         +0.0396            17            17            17            17\nat_path_query                  -0.1179         -0.1179            18            16            18            16\nat_path_query                  -0.0151         -0.0151            17            16            17            16\nat_path_query                  -0.1768         -0.1508            20            16            19            16\nat_path_query                  +0.0196         +0.0201            16            17            16            17\nat_path_query                  +0.3460         +0.2480            14            19            14            17\nat_path_query                  -0.0047         -0.0053            17            17            17            17\nat_path_query                  -0.0971         -0.0954            18            16            18            16\nat_path_query                  -0.0933         -0.0140            19            17            17            17\nat_path_query                  +0.0459         +0.0157            16            17            16            16\nat_path_query                  -0.0618         -0.0613            16            15            16            15\nat_path_query                  +0.2318         +0.1888            17            20            17            20\nat_path_query                  +0.0153         +0.0226            17            17            17            17\nat_path_query                  -0.0713         -0.0596            18            16            17            16\nat_path_query                  -0.0658         -0.0653            17            16            17            16\nat_path_query_pvalue            0.4553          0.3837      U Test, Repetitions: 15 vs 15\nOVERALL_GEOMEAN                -0.0002         +0.0112             0             0             0             0",
+   "a_b": "Comparing /run-dir/out/merged.a.gxx.json to /run-dir/out/merged.b.gxx.json\nBenchmark                         Time             CPU      Time Old      Time New       CPU Old       CPU New\n--------------------------------------------------------------------------------------------------------------\nat_path_fixed                  -0.0409         -0.0419            17            16            17            16\nat_path_fixed                  +0.0219         +0.0218            18            18            18            18\nat_path_fixed                  +0.0004         +0.0004            17            17            17            17\nat_path_fixed                  -0.4691         -0.4756            31            16            31            16\nat_path_fixed                  -0.1029         -0.0661            18            16            18            16\nat_path_fixed                  +0.7492         +0.7458            15            26            15            26\nat_path_fixed                  -0.0002         -0.0204            18            18            18            18\nat_path_fixed                  +0.0656         +0.1407            19            20            15            17\nat_path_fixed                  -0.0808         -0.0642            17            16            17            16\nat_path_fixed                  +0.0446         +0.0486            16            17            16            17\nat_path_fixed                  -0.0591         -0.0563            18            17            18            17\nat_path_fixed                  -0.1657         -0.0239            22            19            17            17\nat_path_fixed                  +0.3249         +0.2946            17            22            17            21\nat_path_fixed                  -0.0186         -0.0225            17            17            17            17\nat_path_fixed                  +0.0181         -0.0184            18            18            18            17\nat_path_fixed_pvalue            0.7716          0.7716      U Test, Repetitions: 15 vs 15\nat_path_query                  +0.2607         +0.2086            17            21            17            20\nat_path_query                  +0.3449         +0.3264            18            25            18            24\nat_path_query                  -0.0114         -0.0123            17            16            17            16\nat_path_query                  -0.0597         -0.0303            20            18            19            18\nat_path_query                  +0.0020         +0.0004            16            16            16            16\nat_path_query                  +0.9258         +0.8946            14            26            14            26\nat_path_query                  +0.9714         +0.9688            17            33            17            33\nat_path_query                  -0.0879         -0.1461            18            17            18            15\nat_path_query                  -0.1845         -0.1039            19            15            17            15\nat_path_query                  -0.0162         -0.0111            16            16            16            16\nat_path_query                  +0.0621         +0.0569            16            17            16            17\nat_path_query                  +0.0942         +0.0779            17            18            17            18\nat_path_query                  +0.2010         +0.0798            17            20            17            18\nat_path_query                  -0.1140         -0.1052            18            16            17            16\nat_path_query                  +0.0224         +0.0228            17            17            17            17\nat_path_query_pvalue            0.3615          0.4306      U Test, Repetitions: 15 vs 15\nOVERALL_GEOMEAN                +0.0538         +0.0560             0             0             0             0"
+  },
+  "clang": {
+   "a_aa": "Comparing /run-dir/out/merged.a.clang.json to /run-dir/out/merged.aa.clang.json\nBenchmark                         Time             CPU      Time Old      Time New       CPU Old       CPU New\n--------------------------------------------------------------------------------------------------------------\nat_path_fixed                  -0.1387         -0.0350            37            32            32            31\nat_path_fixed                  -0.0116         -0.0156            33            32            33            32\nat_path_fixed                  -0.2276         -0.2179            33            26            33            26\nat_path_fixed                  -0.2290         -0.0903            43            33            36            33\nat_path_fixed                  -0.0159         -0.0227            33            33            33            32\nat_path_fixed                  -0.0064         -0.0085            33            33            33            33\nat_path_fixed                  +0.0475         +0.0733            34            36            33            36\nat_path_fixed                  -0.0328         -0.0347            34            33            34            33\nat_path_fixed                  -0.0356         -0.0264            33            32            32            31\nat_path_fixed                  +0.0114         +0.0124            30            31            30            31\nat_path_fixed                  +0.0005         -0.0077            33            33            33            32\nat_path_fixed                  +0.0315         +0.0133            32            33            32            33\nat_path_fixed                  +0.1287         +0.1874            33            38            32            38\nat_path_fixed                  -0.0986         -0.1115            36            33            36            32\nat_path_fixed                  -0.0945         -0.0967            37            33            37            33\nat_path_fixed_pvalue            0.0815          0.2455      U Test, Repetitions: 15 vs 15\nat_path_query                  -0.1929         -0.1859            40            32            39            32\nat_path_query                  -0.0775         -0.0781            36            33            36            33\nat_path_query                  -0.0946         -0.0937            37            33            37            33\nat_path_query                  -0.0449         -0.0743            38            36            38            35\nat_path_query                  -0.0191         -0.0192            34            33            34            33\nat_path_query                  -0.1115         -0.1286            38            34            38            33\nat_path_query                  -0.0341         -0.0198            35            34            34            33\nat_path_query                  +0.0519         +0.0494            34            36            34            36\nat_path_query                  -0.0483         -0.0445            34            32            33            32\nat_path_query                  -0.0237         -0.0220            32            31            32            31\nat_path_query                  -0.0173         -0.0055            34            33            33            33\nat_path_query                  +0.0198         +0.0052            33            34            33            33\nat_path_query                  +0.0146         +0.0152            35            36            35            36\nat_path_query                  -0.0031         -0.0024            33            33            33            33\nat_path_query                  +0.0804         +0.0207            38            41            38            39\nat_path_query_pvalue            0.1057          0.0465      U Test, Repetitions: 15 vs 15\nOVERALL_GEOMEAN                -0.0427         -0.0351             0             0             0             0",
+   "a_b": "Comparing /run-dir/out/merged.a.clang.json to /run-dir/out/merged.b.clang.json\nBenchmark                         Time             CPU      Time Old      Time New       CPU Old       CPU New\n--------------------------------------------------------------------------------------------------------------\nat_path_fixed                  +0.0533         +0.2022            37            39            32            39\nat_path_fixed                  +0.0072         -0.0012            33            33            33            33\nat_path_fixed                  -0.0237         -0.0121            33            32            33            32\nat_path_fixed                  -0.2397         -0.1237            43            32            36            32\nat_path_fixed                  -0.1589         -0.1721            33            28            33            27\nat_path_fixed                  -0.0075         -0.0134            33            33            33            33\nat_path_fixed                  +0.5168         +0.4206            34            52            33            48\nat_path_fixed                  -0.0223         -0.0209            34            34            34            34\nat_path_fixed                  +0.0268         +0.0447            33            34            32            34\nat_path_fixed                  +0.0144         +0.0106            30            31            30            31\nat_path_fixed                  +0.0687         +0.0735            33            35            33            35\nat_path_fixed                  +0.0154         +0.0111            32            33            32            33\nat_path_fixed                  -0.0295         +0.0211            33            32            32            32\nat_path_fixed                  -0.0710         -0.1420            36            34            36            31\nat_path_fixed                  -0.0942         -0.0996            37            33            37            33\nat_path_fixed_pvalue            0.5069          0.8035      U Test, Repetitions: 15 vs 15\nat_path_query                  -0.1612         -0.1560            40            33            39            33\nat_path_query                  -0.0464         -0.0854            36            34            36            33\nat_path_query                  -0.0792         -0.0778            37            34            37            34\nat_path_query                  -0.0740         -0.0821            38            35            38            35\nat_path_query                  +0.0049         -0.0077            34            34            34            33\nat_path_query                  -0.0484         -0.0706            38            37            38            36\nat_path_query                  +0.0050         -0.0069            35            35            34            33\nat_path_query                  -0.0071         -0.0042            34            34            34            34\nat_path_query                  +0.2652         -0.0152            34            43            33            33\nat_path_query                  +0.0218         +0.0052            32            32            32            32\nat_path_query                  -0.0405         -0.0267            34            33            33            33\nat_path_query                  +0.0684         +0.0310            33            36            33            34\nat_path_query                  +0.3754         -0.0622            35            49            35            33\nat_path_query                  +0.0029         -0.0016            33            33            33            33\nat_path_query                  -0.1300         -0.1304            38            33            38            33\nat_path_query_pvalue            0.4068          0.0279      U Test, Repetitions: 15 vs 15\nOVERALL_GEOMEAN                -0.0024         -0.0219             0             0             0             0"
+  }
+ },
+ "cells": {
+  "gxx": {
+   "at_path_fixed": {
+    "a": {
+     "repetitions_ns": [
+      16768377.000033751,
+      17761321.499989435,
+      16727639.999970734,
+      30820113.000061154,
+      18289482.499966424,
+      14844463.800000085,
+      17933912.99997893,
+      18614438.400004473,
+      17099564.499972075,
+      15817348.750005066,
+      17819573.333288945,
+      22244384.499941815,
+      16795505.000004597,
+      17209769.74999644,
+      17887561.999998525
+     ],
+     "median_ns": 17761321.499989435,
+     "spread": 1.0762025099256856
+    },
+    "aa": {
+     "repetitions_ns": [
+      17606088.00003638,
+      17129552.499966394,
+      17541143.50001146,
+      16445745.000055468,
+      17090276.333306063,
+      17629313.750006758,
+      25841811.666661367,
+      16614687.000014782,
+      16617279.250027651,
+      18969521.749994557,
+      17754894.99996752,
+      19519393.999985367,
+      18206823.25001144,
+      16997206.499979712,
+      22437914.24999131
+     ],
+     "median_ns": 17606088.00003638,
+     "spread": 0.5713372465993003
+    },
+    "b": {
+     "repetitions_ns": [
+      16082076.000003554,
+      18151139.250022653,
+      16733855.750032945,
+      16361092.250008369,
+      16408296.500003416,
+      25966261.000007764,
+      17929883.999954656,
+      19834747.400022935,
+      15718502.999959582,
+      16522137.749973353,
+      16766163.999977835,
+      18558862.250017684,
+      22252153.666689385,
+      16889052.750030942,
+      18211221.75002188
+     ],
+     "median_ns": 16889052.750030942,
+     "spread": 0.6519550875852829
+    },
+    "a_over_a_ratio": 0.9912600253335234,
+    "b_over_a_ratio": 0.9508894228417063,
+    "utest_a_aa": {
+     "time_pvalue": 0.9338864180775845,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.7715511878155722,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "at_path_query": {
+    "a": {
+     "repetitions_ns": [
+      16612355.749998642,
+      18380704.250006374,
+      16648065.499992982,
+      19564803.000008624,
+      16394251.000008352,
+      13760176.79999677,
+      16839885.75001649,
+      18095203.500053003,
+      18608780.999954887,
+      16238223.399977868,
+      16271960.749975279,
+      16559436.500017455,
+      16768220.250014566,
+      17627922.49999734,
+      17000730.250003926
+     ],
+     "median_ns": 16768220.250014566,
+     "spread": 0.4218424141187791
+    },
+    "aa": {
+     "repetitions_ns": [
+      17499313.749965496,
+      16213323.500011256,
+      16396619.749997398,
+      16105225.750038698,
+      16716253.250024239,
+      18521704.250019867,
+      16760610.250031505,
+      16338983.750017632,
+      16873285.499997336,
+      16982753.749999803,
+      15265749.750000168,
+      20398523.000001963,
+      17024658.499963153,
+      16371094.750013527,
+      15882869.99998445
+     ],
+     "median_ns": 16716253.250024239,
+     "spread": 0.3362280486748932
+    },
+    "b": {
+     "repetitions_ns": [
+      20942714.750020742,
+      24719302.749957707,
+      16457578.750021184,
+      18396140.25004721,
+      16427737.250012342,
+      26499850.666634,
+      33197935.500083987,
+      16504254.999995282,
+      15174558.399985472,
+      15975536.749976981,
+      17282842.0000144,
+      18119629.99994421,
+      20138554.749991044,
+      15618531.249998568,
+      17381036.500012215
+     ],
+     "median_ns": 17381036.500012215,
+     "spread": 1.1877365143038214
+    },
+    "a_over_a_ratio": 0.9969008637043468,
+    "b_over_a_ratio": 1.0365462905937866,
+    "utest_a_aa": {
+     "time_pvalue": 0.4553018964198552,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.3614963660708982,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   }
+  },
+  "clang": {
+   "at_path_fixed": {
+    "a": {
+     "repetitions_ns": [
+      37085963.00003819,
+      32774130.000007063,
+      33215610.999945965,
+      42645502.50007915,
+      33233582.000036675,
+      33351104.99995153,
+      34279221.5000145,
+      34275986.000068314,
+      32797510.66660689,
+      30474439.50003981,
+      32720082.500077296,
+      32299901.000044428,
+      33394586.000042636,
+      36480313.00002685,
+      36846155.49997261
+     ],
+     "median_ns": 33351104.99995153,
+     "spread": 0.39938595097125384
+    },
+    "aa": {
+     "repetitions_ns": [
+      31940566.000002947,
+      32395042.00001875,
+      25654807.999975067,
+      32877732.500082858,
+      32704665.499977637,
+      33138403.000009477,
+      35908504.99995213,
+      33150159.999991048,
+      31629890.499971226,
+      30822236.99999531,
+      32735706.99997208,
+      33317680.50009032,
+      37693905.49996387,
+      32882834.000020012,
+      33363117.500016414
+     ],
+     "median_ns": 32877732.500082858,
+     "spread": 0.46927256286620844
+    },
+    "b": {
+     "repetitions_ns": [
+      39062005.00000523,
+      33011044.9999097,
+      32427897.50004249,
+      32421375.500007343,
+      27953881.499968246,
+      33099692.99994009,
+      51995064.49997671,
+      33513063.99991927,
+      33677390.50003138,
+      30912091.499999404,
+      34967480.000034355,
+      32795900.49999115,
+      32410298.99993464,
+      33890119.00003425,
+      33374234.999939743
+     ],
+     "median_ns": 33099692.99994009,
+     "spread": 0.8600302251419278
+    },
+    "a_over_a_ratio": 0.9858063923258507,
+    "b_over_a_ratio": 0.9924616590661147,
+    "utest_a_aa": {
+     "time_pvalue": 0.08149464839345506,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.506914933812496,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "at_path_query": {
+    "a": {
+     "repetitions_ns": [
+      39855385.99999927,
+      35745284.49996705,
+      36704082.499966264,
+      37730969.99998415,
+      33618364.5000574,
+      38416471.49994287,
+      35006199.99999799,
+      34032995.50001293,
+      33921587.50006047,
+      31686190.50001098,
+      33892005.499922104,
+      33249056.99997771,
+      35332757.5000435,
+      32918073.999951504,
+      37933671.50001359
+     ],
+     "median_ns": 35006199.99999799,
+     "spread": 0.2578156405385956
+    },
+    "aa": {
+     "repetitions_ns": [
+      32168894.500046007,
+      32974194.000018995,
+      33233498.333364274,
+      36038377.50000594,
+      32974719.99997015,
+      34134668.50003033,
+      33811740.49997071,
+      35798634.999991916,
+      32281901.499970898,
+      30936761.999953434,
+      33306499.999980588,
+      33905991.999972686,
+      35848348.0000018,
+      32817316.500029393,
+      40984298.00006898
+     ],
+     "median_ns": 33306499.999980588,
+     "spread": 0.3247765878061404
+    },
+    "b": {
+     "repetitions_ns": [
+      33432276.49997971,
+      34087448.499974474,
+      33795972.00000717,
+      34937190.50004529,
+      33783401.9999832,
+      36557085.00002675,
+      35180825.999987066,
+      33789689.99999188,
+      42916220.99998449,
+      32376515.50000464,
+      32518440.50004138,
+      35523117.99995778,
+      48596954.999993615,
+      33012495.499917805,
+      33003348.00002247
+     ],
+     "median_ns": 33795972.00000717,
+     "spread": 0.5009939843584048
+    },
+    "a_over_a_ratio": 0.9514457438962955,
+    "b_over_a_ratio": 0.9654281812938597,
+    "utest_a_aa": {
+     "time_pvalue": 0.10573920209087935,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.4067868333984651,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   }
+  }
+ }
+}
