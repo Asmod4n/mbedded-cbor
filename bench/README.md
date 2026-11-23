@@ -74,7 +74,7 @@ The script measures the functions of one block for two commits, in podman.
 Each benchmark checks its output once against RFC 8949, then writes every item of a buffer of COLD_BYTES bytes in each
 iteration. NOISE_FLOOR_PERCENT is the largest deviation of B/A from 1 that the script found on this machine with commit
 a as commit b. The image is built with
-`podman build -t mbedded-cbor-sid-bench -f containers/debian-sid-bench.Containerfile containers`.
+`podman build -t compiler -f containers/debian-sid-bench.Containerfile containers`.
 
 ## Method
 
