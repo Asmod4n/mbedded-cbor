@@ -209,8 +209,7 @@ TEST_CASE("at_path: a fixed-size vector is a range of its elements")
 // the message: inline in the root for a fixed size, a part for a vector. The byte is the end of the path.
 TEST_CASE("at_path: [n] reads one byte of a byte string")
 {
-    auto const encoded = form<byte_fields>::encode(make_byte_fields());
-    std::string const bytes = *encoded;
+    std::string const bytes = *form<byte_fields>::encode(make_byte_fields());
     CHECK_EQ(form<byte_fields>::at_path<"$.fixed[2]">(bytes), std::uint8_t{3});
     CHECK_EQ(form<byte_fields>::at_path<"$.plain[1]">(bytes), std::uint8_t{5});
     CHECK_EQ(form<byte_fields>::at_path<"$.bytes[1]">(bytes), std::byte{7});
@@ -227,8 +226,8 @@ TEST_CASE("at_path: [n] reads one byte of a byte string")
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.fixed[0]">(), std::uint8_t{1});
     CHECK_EQ(root->at_path<"$.list[0]">(), std::uint8_t{8});
-    auto const encoded_2 = form<byte_lists>::encode(byte_lists{{{"x", {1, 2, 3, 4}}, {"y", {5, 6, 7, 8}}}, {{9, 10, 11, 12}}});
-    std::string const lists = *encoded_2;
+    std::string const lists =
+        *form<byte_lists>::encode(byte_lists{{{"x", {1, 2, 3, 4}}, {"y", {5, 6, 7, 8}}}, {{9, 10, 11, 12}}});
     CHECK_EQ(form<byte_lists>::at_path<"$.records[1].code[2]">(lists), std::uint8_t{7});
     CHECK_EQ(form<byte_lists>::at_path<"$.codes[0][3]">(lists), std::uint8_t{12});
     auto const records = form<byte_lists>::adopt(std::string(lists));
@@ -252,8 +251,7 @@ TEST_CASE("at_path: [n] into a byte string does not compile past its end or into
 // A verified read checks the head of a byte string before it reads a byte of it.
 TEST_CASE("at_path: [n] into a byte string with a wrong head is incorrect_type")
 {
-    auto const encoded = form<byte_fields>::encode(make_byte_fields());
-    std::string bytes = *encoded;
+    std::string bytes = *form<byte_fields>::encode(make_byte_fields());
     std::size_t const head = bytes.find("\x43\x01\x02\x03"sv);
     REQUIRE_NE(head, std::string::npos);
     bytes[head] = '\x63';

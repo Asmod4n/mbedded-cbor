@@ -103,13 +103,10 @@ TEST_CASE("pending items: a container that holds every item it claims is read wh
 {
     std::string const array = encode_edn("[1, 2, 3]");
     std::string const map = encode_edn("{1: 2, 3: 4}");
-    auto const count = test::make_lazy_from_copy(array)->size();
-    CHECK_EQ(count.value(), 3u);
-    auto const count_2 = test::make_lazy_from_copy(map)->size();
-    CHECK_EQ(count_2.value(), 2u);
+    CHECK_EQ(test::make_lazy_from_copy(array)->size().value(), 3u);
+    CHECK_EQ(test::make_lazy_from_copy(map)->size().value(), 2u);
     CHECK_EQ(cbor::item_size(array), array.size());
-    auto const length = cbor::item_size(map);
-    CHECK_EQ(length.value(), map.size());
+    CHECK_EQ(cbor::item_size(map).value(), map.size());
 }
 
 // structs skips a map key that names no member. An array, a map and a tag key enclose items, and the skip reads them

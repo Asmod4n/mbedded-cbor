@@ -388,8 +388,7 @@ std::expected<value, error> lazy_value(cbor::lazy const &l)
         return value{bytes{std::move(b)}};
     }
     case cbor::major_type::text_string: {
-        auto const text = it.get<std::string_view>();
-        return value{std::string(text.value())};
+        return value{std::string(it.get<std::string_view>().value())};
     }
     case cbor::major_type::array: {
         auto const elements = l.elements();

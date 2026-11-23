@@ -1116,8 +1116,7 @@ ticket const sample_ticket{"a holder name longer than the small string buffer", 
 template <class = void>
 std::string build_ticket_message()
 {
-    auto const encoded = form<ticket>::encode(sample_ticket);
-    return *encoded;
+    return *form<ticket>::encode(sample_ticket);
 }
 
 

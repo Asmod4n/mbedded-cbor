@@ -1070,8 +1070,9 @@ TEST_CASE("tinycbor parser: find a key in a map")
         auto const tree = value->to_item();
         REQUIRE_EQ(make_outcome_text(tree), make_error_text(no_error));
         auto const tagged = (*tree)->get<std::pair<std::uint64_t, cbor::item>>();
-        auto const number = tagged.transform([](std::pair<std::uint64_t, cbor::item> const t) { return t.first; });
-        CHECK_EQ(number.value_or(0u), 42u);
+        CHECK_EQ(tagged.transform([](std::pair<std::uint64_t, cbor::item> const t) { return t.first; })
+                     .value_or(0u),
+                 42u);
         auto const text = value->get<std::string_view>();
         REQUIRE_EQ(make_outcome_text(text), make_error_text(no_error));
         CHECK_EQ(**text, "haystack"sv);

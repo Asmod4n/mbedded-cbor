@@ -541,11 +541,9 @@ TEST_CASE("decode_cycles: a struct decode refuses every form of a tag 28 and a t
     using marked_numbers = std::vector<std::optional<std::uint64_t>>;
     for (std::string const width : {"_0", "_1", "_2", "_3"}) {
         CAPTURE(width);
-        auto const edn_bytes = cbor::diag2cbor("[28" + width + "(5)]");
-        std::string const marked = edn_bytes.value();
-        auto const edn_bytes_2 = cbor::diag2cbor("[28" + width + "(5), 29" + width + "(0" + width + ")]");
+        std::string const marked = cbor::diag2cbor("[28" + width + "(5)]").value();
         std::string const named =
-            edn_bytes_2.value();
+            cbor::diag2cbor("[28" + width + "(5), 29" + width + "(0" + width + ")]").value();
         CHECK_EQ(cbor::structs<marked_numbers>::decode(std::string(marked)), std::unexpected(error::invalid_tag));
         CHECK_EQ(cbor::structs<marked_numbers>::decode(std::string(named)), std::unexpected(error::invalid_tag));
     }
@@ -682,8 +680,7 @@ TEST_CASE("decode_cycles: cbor::decode_cycles reads a long chain of marks and a 
     chain += '\x01';
     auto const one = cbor::decode_cycles(chain);
     REQUIRE(one.has_value());
-    auto const number = (*one)->get<std::uint64_t>();
-    CHECK_EQ(number.value(), 1u);
+    CHECK_EQ((*one)->get<std::uint64_t>().value(), 1u);
     auto const tree = cbor::decode_cycles("\x82\xd8\x1c\x01\xd8\x18\x43\xd8\x1d\x00"sv);
     CHECK_EQ(tree.error(), error::sharedref_index_not_marked);
 }
@@ -839,13 +836,11 @@ TEST_CASE("decode_cycles: cbor::encode of a shared_reference node and of a marke
 // the content, from cbor::encoded_cbor_data_item, is written with its cycle.
 TEST_CASE("decode_cycles: cbor::encode of the content of a tag 24 writes its cycle")
 {
-    auto const edn_bytes = cbor::diag2cbor("28([29(0)])");
-    std::string const inner = edn_bytes.value();
+    std::string const inner = cbor::diag2cbor("28([29(0)])").value();
     std::string hex;
     for (char const c : inner)
         hex += std::format("{:02x}", static_cast<unsigned char>(c));
-    auto const edn_bytes_2 = cbor::diag2cbor("24(h'" + hex + "')");
-    std::string const outer = edn_bytes_2.value();
+    std::string const outer = cbor::diag2cbor("24(h'" + hex + "')").value();
     auto const tree = cbor::decode_cycles(outer);
     REQUIRE(tree.has_value());
     CHECK_EQ(shared_test::written_by_encode(**tree), outer);
