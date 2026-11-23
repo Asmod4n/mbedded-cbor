@@ -94,14 +94,12 @@ TEST_CASE("self-described CBOR: lazy reads through a leading tag 55799")
     REQUIRE(a.has_value());
     auto const second = a->at(1);
     REQUIRE(second.has_value());
-    auto const read = second->get<std::uint64_t>();
-    CHECK_EQ(read.value(), 6u);
+    CHECK_EQ(second->get<std::uint64_t>().value(), 6u);
     auto const owned = cbor::lazy::adopt(std::string(document));
     REQUIRE(owned.has_value());
     auto const found = owned->at("a"sv);
     auto const at_0 = found->at(0);
-    auto const read_2 = at_0->get<std::uint64_t>();
-    CHECK_EQ(read_2.value(), 5u);
+    CHECK_EQ(at_0->get<std::uint64_t>().value(), 5u);
 }
 
 // From the former runtime guide: lazy::view and lazy::adopt read one leading tag 55799 as its content. A second tag
@@ -115,14 +113,11 @@ TEST_CASE("self-described CBOR: type() of a second tag 55799 and of a tag 55799 
         CAPTURE(head.size());
         auto const one = cbor::lazy::adopt(head + "\x01");
         REQUIRE(one.has_value());
-        auto const kind = one->type();
-        CHECK_EQ(kind.value(), cbor::type::unsigned_integer);
+        CHECK_EQ(one->type().value(), cbor::type::unsigned_integer);
         auto const two = cbor::lazy::adopt(head + head + "\x01");
         REQUIRE(two.has_value());
-        auto const kind_2 = two->type();
-        CHECK_EQ(kind_2.value(), cbor::type::tag);
-        auto const read = two->get<std::int64_t>();
-        CHECK_EQ(read.value(), 1);
+        CHECK_EQ(two->type().value(), cbor::type::tag);
+        CHECK_EQ(two->get<std::int64_t>().value(), 1);
         auto const cloned = two->to_item();
         REQUIRE(cloned.has_value());
         CHECK_EQ((*cloned)->type(), cbor::type::tag);
@@ -133,24 +128,20 @@ TEST_CASE("self-described CBOR: type() of a second tag 55799 and of a tag 55799 
         REQUIRE(array.has_value());
         auto const element = array->at(0);
         REQUIRE(element.has_value());
-        auto const kind_3 = element->type();
-        CHECK_EQ(kind_3.value(), cbor::type::tag);
-        auto const read_2 = element->get<std::int64_t>();
-        CHECK_EQ(read_2.value(), 1);
+        CHECK_EQ(element->type().value(), cbor::type::tag);
+        CHECK_EQ(element->get<std::int64_t>().value(), 1);
         CHECK_EQ((cbor::at_path<"$[0]", std::int64_t>("\x81" + head + "\x01")), 1);
         std::string const map = "\xa1" + head + "\x61k\x01";
         auto const adopted = cbor::lazy::adopt(std::string(map));
         auto const found = adopted->at("k"sv);
-        auto const read_3 = found->get<std::int64_t>();
-        CHECK_EQ(read_3.value(), 1);
+        CHECK_EQ(found->get<std::int64_t>().value(), 1);
         CHECK_EQ((cbor::at_path<"$.k", std::int64_t>(map)), 1);
         std::string const embedded = "\xa1\x61\x61\xd8\x18" + std::string(1, static_cast<char>(0x40 + head.size() + 3)) +
                                      head + "\x82\x01\x02";
         auto const adopted_2 = cbor::lazy::adopt(std::string(embedded));
         auto const found_2 = adopted_2->at("a"sv);
         auto const at_1 = found_2->at(1);
-        auto const read_4 = at_1->get<std::int64_t>();
-        CHECK_EQ(read_4.value(), 2);
+        CHECK_EQ(at_1->get<std::int64_t>().value(), 2);
         CHECK_EQ((cbor::at_path<"$.a[1]", std::int64_t>(embedded)), 2);
     }
 }
@@ -282,8 +273,7 @@ TEST_CASE("RFC 9277: the header of CBOR-Labeled Non-CBOR Data ends after 12 byte
 {
     std::string const header = "\xd9\xd9\xf9\xda\x63\x74\x01\x01\x43\x42\x4f\x52"s;
     std::string const file = header + "text/plain"s;
-    auto const size = cbor::item_size(file);
-    CHECK_EQ(size.value(), 12u);
+    CHECK_EQ(cbor::item_size(file).value(), 12u);
     auto const v = decode_wire_into_value(file);
     REQUIRE(v.has_value());
     CHECK(*v == tag(55801, tag(1668546817, {bytes{"BOR"}})));

@@ -67,8 +67,7 @@ TEST_CASE("unverified: the same results as the verified forms on a message that 
     auto const track = root->view<"$.track">();
     REQUIRE(track.has_value());
     REQUIRE(track->at(1).has_value());
-    auto const element = track->at(1);
-    CHECK_EQ(std::bit_cast<std::uint64_t>(*element), 0x4000000000000000u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*track->at(1)), 0x4000000000000000u);
     auto const gauges = root->at_path<"$.gauges">();
     REQUIRE(gauges.has_value());
     std::vector<int> xs;
@@ -205,8 +204,7 @@ TEST_CASE("unverified: a bool byte 2 reads true")
 // unverified forms compare it too, and an unknown tag is incorrect_type in both forms.
 TEST_CASE("unverified: a variant member reads as in the verified forms")
 {
-    auto const encoded = form<home>::encode(make_home_with_cat());
-    auto const bytes = *encoded;
+    auto const bytes = *form<home>::encode(make_home_with_cat());
     auto const back = form<home>::unverified_decode(std::string(bytes));
     REQUIRE(back);
     CHECK_EQ(std::get<cat>((*back)->pet).toys, std::vector<std::string>{"ball", "mouse"});
@@ -232,8 +230,7 @@ TEST_CASE("unverified: a variant member reads as in the verified forms")
 TEST_CASE("unverified: value and text alternatives read as in the verified forms")
 {
     for (setting const &s : make_sample_settings()) {
-        auto const encoded = form<setting>::encode(s);
-        auto const bytes = *encoded;
+        auto const bytes = *form<setting>::encode(s);
         auto const doc = form<setting>::unverified_adopt(std::string(bytes));
         REQUIRE(doc.has_value());
         auto const v = doc->at_path<"$.value">();
@@ -244,8 +241,7 @@ TEST_CASE("unverified: value and text alternatives read as in the verified forms
         if (auto const *n = std::get_if<std::int32_t>(&s.value))
             CHECK_EQ((v->get<std::int32_t>()), *n);
     }
-    auto const encoded_2 = form<setting>::encode(setting{"x", std::int32_t{1}});
-    std::string forged = *encoded_2;
+    std::string forged = *form<setting>::encode(setting{"x", std::int32_t{1}});
     std::size_t const at = forged.size() - rump_size - form<setting>::fixed_size<std::int32_t>();
     forged[at] = '\x1b';
     CHECK_EQ(form<setting>::unverified_decode(std::string(forged)), std::unexpected(error::incorrect_type));

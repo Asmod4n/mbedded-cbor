@@ -217,8 +217,7 @@ TEST_CASE("decode: a plain struct in a std::pmr::vector takes the resource of th
 // Broken bytes give the error as a value, as with std::expected.
 TEST_CASE("decode: an error is read as a value")
 {
-    auto const encoded = form<vehicle>::encode(sample_vehicle);
-    std::string const bytes = *encoded;
+    std::string const bytes = *form<vehicle>::encode(sample_vehicle);
     std::string_view const cut = std::string_view(bytes).substr(0, 3);
     auto const r = form<vehicle>::decode(std::string(cut));
     REQUIRE_FALSE(r.has_value());
@@ -346,10 +345,8 @@ TEST_CASE("decode: a class with a constructor in a std::pmr::vector takes the re
 TEST_CASE("a message cut at any length is too_little_data")
 {
     std::string const bytes = encode_with_schema(reading{7, "kg"});
-    auto const encoded = cbor::static_dictionary<byte_fields>::encode(make_byte_fields());
-    std::string const encode_data_apart = *encoded;
-    auto const encoded_2 = form<byte_fields>::encode(make_byte_fields());
-    std::string const whole = *encoded_2;
+    std::string const encode_data_apart = *cbor::static_dictionary<byte_fields>::encode(make_byte_fields());
+    std::string const whole = *form<byte_fields>::encode(make_byte_fields());
     for (std::size_t n = 0; n < whole.size(); ++n) {
         CAPTURE(n);
         std::string const cut = whole.substr(0, n);
@@ -375,8 +372,7 @@ TEST_CASE("a message cut at any length is too_little_data")
 // keeps its error. A byte after a message is the next item of a CBOR sequence, and the message reads.
 TEST_CASE("a whole message of another type keeps its error")
 {
-    auto const encoded = form<byte_fields>::encode(make_byte_fields());
-    std::string const whole = *encoded;
+    std::string const whole = *form<byte_fields>::encode(make_byte_fields());
     CHECK_EQ(form<reading>::decode(std::string(whole)), std::unexpected(error::incorrect_type));
     CHECK(form<byte_fields>::decode(whole + "\x01").has_value());
     std::string const text(whole.size(), '{');
@@ -432,8 +428,7 @@ TEST_CASE("decode: a target that holds another alternative gets the alternative 
 TEST_CASE("decode: value, text and class alternatives of a variant member")
 {
     for (setting const &s : make_sample_settings()) {
-        auto const encoded = form<setting>::encode(s);
-        auto const bytes = *encoded;
+        auto const bytes = *form<setting>::encode(s);
         for (auto const &back : {form<setting>::decode(std::string(bytes)), form<setting>::unverified_decode(std::string(bytes))}) {
             REQUIRE(back.has_value());
             CHECK_EQ((*back)->name, s.name);
@@ -479,14 +474,12 @@ struct long_code {
 std::string message_with_part_replaced(std::string const &bytes, std::string_view const part,
                                        std::string_view const replacement)
 {
-    auto const edn_text = cbor::diagnostic_notation(bytes);
-    std::string edn = edn_text.value();
+    std::string edn = cbor::diagnostic_notation(bytes).value();
     std::size_t const at = edn.find(part);
     REQUIRE_NE(at, std::string::npos);
     REQUIRE_EQ(edn.find(part, at + 1), std::string::npos);
     edn.replace(at, part.size(), replacement);
-    auto const edn_bytes = cbor::diag2cbor(edn);
-    std::string out = edn_bytes.value();
+    std::string out = cbor::diag2cbor(edn).value();
     REQUIRE_EQ(out.size(), bytes.size());
     return out;
 }
@@ -586,8 +579,7 @@ CBOR_DEFINE_TYPE_MEMBERS(quad, cbor::tag{1750}, value);
 // head, so another tag of one byte, here 100 (d8 64), is incorrect_type and not a value.
 TEST_CASE("decode: a binary128 field with another tag head is incorrect_type")
 {
-    auto const encoded = form<quad>::encode(quad{0.5f128});
-    std::string bytes = *encoded;
+    std::string bytes = *form<quad>::encode(quad{0.5f128});
     std::size_t const at = bytes.find("\xd8\x53\x50"sv);
     REQUIRE_NE(at, std::string::npos);
     bytes[at + 1] = '\x64';

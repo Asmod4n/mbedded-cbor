@@ -256,8 +256,7 @@ TEST_CASE("encode_iov: the overload for a decoded tree with a shared_reference r
     for (std::size_t const size : sizes_around_copybreak()) {
         CAPTURE(size);
         std::string const text_edn = "\"" + std::string(size, 'a') + "\"";
-        auto const edn_bytes = cbor::diag2cbor("28([" + text_edn + ", 29(0)])");
-        std::string const encoded = edn_bytes.value();
+        std::string const encoded = cbor::diag2cbor("28([" + text_edn + ", 29(0)])").value();
         auto const tree = cbor::decode_cycles(encoded);
         REQUIRE(tree.has_value());
         auto const referred = cbor::encode_iov(*tree);

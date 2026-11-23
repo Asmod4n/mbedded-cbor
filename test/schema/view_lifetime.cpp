@@ -116,8 +116,7 @@ TEST_CASE("view: a moved-from view and a moved-from accessor read no bytes")
     REQUIRE(root.has_value());
     {
         auto const taken = std::move(*root);
-        auto const found = taken.at_path<"$.v[0]">();
-        CHECK_EQ(std::bit_cast<std::uint64_t>(*found), 0x3ff0000000000000u);
+        CHECK_EQ(std::bit_cast<std::uint64_t>(*taken.at_path<"$.v[0]">()), 0x3ff0000000000000u);
     }
     CHECK_THROWS_AS((void)root->at_path<"$.v[0]">(), std::logic_error);
     CHECK_THROWS_AS((void)root->view<"$.v">(), std::logic_error);
@@ -129,8 +128,7 @@ TEST_CASE("view: a moved-from view and a moved-from accessor read no bytes")
     list_root = form<doubles>::adopt(std::string());
     {
         auto const taken = std::move(*list);
-        auto const found_2 = taken.at_path<"@[1]">();
-        CHECK_EQ(std::bit_cast<std::uint64_t>(*found_2), 0x4000000000000000u);
+        CHECK_EQ(std::bit_cast<std::uint64_t>(*taken.at_path<"@[1]">()), 0x4000000000000000u);
     }
     CHECK_THROWS_AS((void)list->at_path<"@[1]">(), std::logic_error);
 }
@@ -143,8 +141,7 @@ TEST_CASE("view: borrowed alternatives of a variant point into a message that th
     std::vector<borrowed_value> const all{{std::string_view("view")}, {std::span<std::byte const>(raw)}, {std::int8_t{-3}}};
     for (borrowed_value const &b : all) {
         auto back = [&] {
-            auto const encoded = form<borrowed_value>::encode(b);
-            std::string bytes = *encoded;
+            std::string bytes = *form<borrowed_value>::encode(b);
             return form<borrowed_value>::decode(std::move(bytes));
         }();
         REQUIRE(back.has_value());
@@ -155,8 +152,7 @@ TEST_CASE("view: borrowed alternatives of a variant point into a message that th
             CHECK(std::ranges::equal(*s, raw));
     }
     auto const u8 = [] {
-        auto const encoded_2 = form<one_value<std::u8string>>::encode(one_value<std::u8string>{std::u8string(u8"u8")});
-        std::string bytes = *encoded_2;
+        std::string bytes = *form<one_value<std::u8string>>::encode(one_value<std::u8string>{std::u8string(u8"u8")});
         return form<one_value<std::u8string>>::decode(std::move(bytes));
     }();
     REQUIRE(u8.has_value());

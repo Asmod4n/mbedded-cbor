@@ -179,8 +179,7 @@ TEST_CASE("path: the root keeps the owner after the caller releases it")
 TEST_CASE("path: an accessor gives the values of decode in every order")
 {
     std::string const bytes = encode_with_schema(make_sample_lot());
-    auto const decoded = form<parking_lot>::decode(std::string(bytes));
-    auto const decoded_2 = *decoded;
+    auto const decoded_2 = *form<parking_lot>::decode(std::string(bytes));
     parking_lot const &back = *decoded_2;
     auto const adopted = form<parking_lot>::adopt(std::string(bytes));
     auto lot = *adopted;
@@ -224,8 +223,7 @@ TEST_CASE("path: the copying form keeps its copy after the caller frees the mess
     auto bytes = std::make_unique<std::string>(encode_with_schema(make_sample_lot()));
     auto const adopted = form<parking_lot>::adopt(std::string(*bytes));
     auto lot = *adopted;
-    auto const found = lot.at_path<"$.cars[].make">(3uz);
-    auto const make = *found;
+    auto const make = *lot.at_path<"$.cars[].make">(3uz);
     auto const found_2 = lot.at_path<"$.cars[]">(4uz);
     auto const car = *found_2;
     bytes.reset();

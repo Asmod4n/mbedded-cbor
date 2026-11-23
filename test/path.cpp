@@ -732,8 +732,7 @@ TEST_CASE("path: a moved ref keeps no view")
 {
     auto const read = [] {
         auto const owner = std::make_shared<std::string const>("\xa1\x61\x61\x63xyz"s);
-        auto const found = cbor::at_path<"$.a", std::string_view>(owner);
-        return *found;
+        return *cbor::at_path<"$.a", std::string_view>(owner);
     };
     std::optional<cbor::ref<std::string_view>> source(read());
     {
