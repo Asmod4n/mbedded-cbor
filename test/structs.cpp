@@ -1919,7 +1919,7 @@ struct handle {
     long long number = 0;
     std::string text;
     std::vector<handle> elements;
-    std::vector<std::pair<std::string, handle>> pairs;
+    std::shared_ptr<std::vector<std::pair<std::string, handle>> const> pairs;
 };
 
 struct handle_failure : std::runtime_error {
@@ -1943,7 +1943,7 @@ handle array_handle(std::vector<handle> e)
 
 handle map_handle(std::vector<std::pair<std::string, handle>> p)
 {
-    return {handle::kind::map, 0, {}, {}, std::move(p)};
+    return {handle::kind::map, 0, {}, {}, std::make_shared<std::vector<std::pair<std::string, handle>> const>(std::move(p))};
 }
 
 // A type that is a range itself, but whose description gives a number: the description decides.
@@ -1988,7 +1988,7 @@ struct cbor::describe_members<handle> {
         case handle::kind::array:
             return std::span<handle const>(h.elements);
         case handle::kind::map:
-            return std::span<std::pair<std::string, handle> const>(h.pairs);
+            return std::span<std::pair<std::string, handle> const>(*h.pairs);
         case handle::kind::failing:
             break;
         }
