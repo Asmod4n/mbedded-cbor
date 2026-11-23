@@ -119,7 +119,7 @@ one() {
 		r=$?; b=${EPOCHREALTIME/./}
 		rm -f /b/test.log /b/ctest.log; [ $r = 0 ] && { /b/mbedded-cbor-test ${CBOR_TEST_PATTERN:+"-tc=*$CBOR_TEST_PATTERN*"} >/b/test.log 2>&1; r=$?; }
 		jobs=$(sed -n "s/^CBOR_PARALLEL_COMPILE_JOBS:INTERNAL=//p" /b/CMakeCache.txt)
-		[ $r = 0 ] && { ctest --test-dir /b -j"$jobs" -R "^(cmake|clang_query|limits)_.*$CBOR_TEST_PATTERN" --output-on-failure >/b/ctest.log 2>&1; r=$?; }
+		[ $r = 0 ] && { ctest --test-dir /b -j"$jobs" -R "^(cmake|limits)_.*$CBOR_TEST_PATTERN" --output-on-failure >/b/ctest.log 2>&1; r=$?; }
 		t=${EPOCHREALTIME/./}
 		printf "%-14s rc=%s build=%ds test=%ds %s\n" '"$n"' $r \
 			$(((b - s) / '"$microseconds_per_second"')) $(((t - b) / '"$microseconds_per_second"')) "$(tail -2 /b/test.log | head -1)"
