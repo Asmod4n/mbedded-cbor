@@ -50,9 +50,12 @@ result<item> encoded_cbor_data_item(owning<item> const &tree, item tagged);
  * @brief The value of a read, or its error, as `std::expected<T, E>` holds them.
  *
  * Only the library makes a result; a program copies, moves, compares and reads it.
- * The members that give a reference or a pointer into the result, and the monadic forms, take a named result
- * only. On a temporary they do not compile: `*doc.at("a")`, `doc.at("a")->size()` and
- * `doc.at("a").value()` are ill-formed. Each step is a named variable, and the next call goes on that
+ * Every read checks the state: `*`, `->` and `value()` of an error, and `error()` of a value, throw
+ * `std::logic_error`.
+ * A temporary result gives its value by `*` and `value()` where the value holds nothing that the result owns: a
+ * number, a `std::string_view`, a `std::string`, a `std::vector<std::byte>` or a `cbor::ref`. Every other read of a
+ * temporary, and each monadic form on a temporary, does not compile: `*doc.at("a")`, `doc.at("a")->size()` and
+ * `doc.at("a").value()` are ill-formed. There each step is a named variable, and the next call goes on that
  * variable.
  * No conversion to `std::expected` exists.
  *

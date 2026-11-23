@@ -340,9 +340,10 @@ TEST_CASE("result: == compares the value or the error")
     CHECK_FALSE(missing == 7);
 }
 
-// A reference or a pointer into the result of a call ends with the full expression. So each reader that gives one,
-// and each monadic form, does not compile on a temporary or a moved result: the program names the result first.
-TEST_CASE("result: a reader of a temporary result does not compile")
+// A reference or a pointer into the result of a call ends with the full expression. So a reader of a temporary or a
+// moved result gives a value only where the value holds nothing that the result owns; every other reader, and each
+// monadic form, does not compile there: the program names the result first.
+TEST_CASE("result: a temporary result gives only a value that holds nothing of it")
 {
     CHECK_FALSE(deref_of_call<lazy_result>);
     CHECK(deref_of_call<number_result>);
@@ -452,10 +453,10 @@ TEST_CASE("result: cbor::decode, cbor::item_size and the reads of cbor::item giv
     CHECK_EQ(fallback.error(), error::too_little_data);
 }
 
-// cbor::encode, cbor::encode_iov and cbor::structs give a result too, so the same rules hold for them: a reader or a
-// monadic form of a temporary result does not compile, and the same call on a named result does. The bytes of encode
-// are the case that a loop reads.
-TEST_CASE("result: a temporary result of cbor::encode or cbor::structs cannot be read")
+// cbor::encode, cbor::encode_iov and cbor::structs give a result too, so the same rules hold for them: a temporary
+// result gives its bytes or its size by value, a reference, a pointer or a monadic form of it does not compile, and the
+// same call on a named result does. The bytes of encode are the case that a loop reads.
+TEST_CASE("result: a temporary result of cbor::encode or cbor::structs gives only a value that holds nothing of it")
 {
     CHECK(deref_of_named<encoded_result>);
     CHECK(loop_over_named<encoded_result>);
@@ -534,9 +535,9 @@ TEST_CASE("result: cbor::encode, cbor::encode_iov and cbor::structs give a resul
 }
 
 // cbor::diag2cbor, cbor::diagnostic_notation, cbor::to_edn and cbor::parse_edn give a result too, so the same rules
-// hold for them: a reader or a monadic form of a temporary result does not compile, and the same call on a named
-// result does. The bytes of diag2cbor are the case that a loop reads.
-TEST_CASE("result: a temporary result of cbor::diag2cbor, cbor::to_edn or cbor::parse_edn cannot be read")
+// hold for them: a temporary result gives its text or bytes by value, a reference, a pointer or a monadic form of it
+// does not compile, and the same call on a named result does. The bytes of diag2cbor are the case that a loop reads.
+TEST_CASE("result: a temporary result of cbor::diag2cbor, cbor::to_edn or cbor::parse_edn gives only a copied value")
 {
     CHECK(deref_of_named<edn_result>);
     CHECK(loop_over_named<edn_result>);
@@ -619,12 +620,10 @@ TEST_CASE("result: cbor::diag2cbor gives its result in a constant expression")
 
 // cbor::at_path, cbor::path::compile, cbor::lazy::at_path, cbor::lazy::elements, cbor::lazy::entries, the elements of
 // a cbor::sequence and cbor::sequence_reader::next give a result. The view of elements is the case that a loop over a
-// temporary would leave dangling, so neither a reader nor a monadic form of a temporary result compiles, and the same
-// call on a named result does.
-// A reference to the ref inside a temporary result of at_path ends with its statement, and no compiler warns, so the
-// forms auto const &r = *at_path(...) and at_path(...).value() must not compile, for the owner form, the member form
-// and both forms with a compiled query.
-TEST_CASE("result: a temporary result of at_path, elements, compile or next cannot be read")
+// temporary would leave dangling, so no reader of such a temporary result compiles, and the same call on a named result
+// does. A ref that at_path gives holds its owner, so *at_path(...) and at_path(...).value() of a temporary give the
+// ref by value, for the owner form, the member form and both forms with a compiled query.
+TEST_CASE("result: a temporary result of at_path, elements, compile or next gives only a value that holds nothing of it")
 {
     CHECK(deref_of_named<nodes_result>);
     CHECK(loop_over_named<nodes_result>);
@@ -824,9 +823,10 @@ TEST_CASE("result: cbor::sequence and cbor::sequence_reader::next give a result"
     CHECK(r.empty());
 }
 
-// A temporary result of the group cannot be read: the opening of a message, a read of one value, a write, a view of
-// a typed array and its parts, the tree of a lazy and the opening of a lazy.
-TEST_CASE("result: a temporary result of schema, static_dictionary, typed_array_view or lazy::adopt cannot be read")
+// A temporary result of the group gives only a value that holds nothing of it: a number or a write by value; the
+// opening of a message, a view of a typed array and its parts, the tree of a lazy and the opening of a lazy do not
+// compile on a temporary.
+TEST_CASE("result: a temporary result of schema, static_dictionary, typed_array_view or lazy::adopt gives only a value")
 {
     CHECK(deref_of_named<route_root>);
     CHECK_FALSE(deref_of_call<route_root>);
@@ -1025,7 +1025,7 @@ TEST_CASE("result: a temporary result gives a value that outlives it")
 }
 
 // error() of a result that holds a value reads no error: the wrong use throws std::logic_error. value() of a result
-// that holds an error throws the same, for a value and for void.
+// that holds an error throws the same.
 TEST_CASE("result: error() of a value and value() of an error throw std::logic_error")
 {
     auto const size = cbor::item_size(*cbor::encode(1));
@@ -1034,4 +1034,14 @@ TEST_CASE("result: error() of a value and value() of an error throw std::logic_e
     auto const failed = cbor::item_size(std::string_view{});
     CHECK_THROWS_AS(static_cast<void>(failed.value()), std::logic_error);
     CHECK_THROWS_AS(static_cast<void>(cbor::item_size(std::string_view{}).value()), std::logic_error);
+}
+
+// A ref that a temporary result of at_path gives holds the owner of the bytes, so its view stays valid after the
+// result is gone.
+TEST_CASE("result: a ref from a temporary result of at_path stays valid")
+{
+    auto const encoded = cbor::encode(std::map<std::string, std::string>{{"a", "x"}});
+    REQUIRE(encoded.has_value());
+    auto const text = *cbor::at_path<"$.a", std::string_view>(std::string(*encoded));
+    CHECK_EQ(*text, "x");
 }
