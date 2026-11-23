@@ -49,8 +49,7 @@ TEST_CASE("doc reference console: one value by its path")
 {
     auto const doc = cbor::lazy::adopt(user_message());
     auto const user_id = doc->at_path<"$.user.id">();
-    auto const read = user_id->get<int>();
-    CHECK_EQ(read.value(), 42);
+    CHECK_EQ(user_id->get<int>().value(), 42);
 }
 
 // Read all values of a path: [*] with cbor::nodelist gives every match.
