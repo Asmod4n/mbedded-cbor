@@ -88,8 +88,7 @@ namespace doc_advanced_comparison
 // The section "A number array" reads a std::vector<double> member as an RFC 8746 typed array with no copy.
 TEST_CASE("doc advanced comparison: a number array")
 {
-    auto const encoded = cbor::schema<series>::encode(series{{1.5, 2.5, 3.5}});
-    std::string bytes = *encoded;
+    std::string bytes = *cbor::schema<series>::encode(series{{1.5, 2.5, 3.5}});
     // begin numbers
     auto const root = cbor::schema<series>::adopt(std::move(bytes));
     auto const values = root->view<"$.values">();

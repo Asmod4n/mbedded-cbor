@@ -24,15 +24,14 @@ using namespace std::string_literals;
 TEST_CASE("doc readme: read a message")
 {
     std::string bytes = test::encode_in_preferred_form(test::M("sensor"s, "t1"s, "value"s, 21.5, "samples"s, test::A(3, 4, 5)));
-    auto const adopted = cbor::lazy::adopt(std::move(bytes));
-    auto const doc = adopted.value();
+    auto const doc = cbor::lazy::adopt(std::move(bytes));
 
     int sum = 0;
-    if (auto const samples = doc.at("samples")) {
-        if (auto const elements = samples->elements())
-            for (auto const &x : *elements)
-                if (x)
-                    sum += x->get<int>().value_or(0);
+    if (auto const samples = doc->at("samples")) {
+        auto const elements = samples->elements();
+        for (auto const &x : *elements)
+            if (x)
+                sum += x->get<int>().value_or(0);
     }
     CHECK_EQ(sum, 12);
 }
@@ -42,19 +41,18 @@ TEST_CASE("doc readme: read a message")
 TEST_CASE("doc readme: decode a tree and write it back")
 {
     std::string const bytes = test::encode_in_preferred_form(test::M("sensor"s, "t1"s, "value"s, 21.5));
-    auto const decoded = cbor::decode(bytes);
-    auto const tree = decoded.value();
+    auto const tree = cbor::decode(bytes);
 
     std::vector<std::string_view> keys;
-    auto const read = tree->pairs();
-    auto const pairs = read.value();
-    for (auto const [key, value] : pairs) {
-        auto const text = key.get<std::string_view>();
-        keys.push_back(*text);
+    auto const pairs = (*tree)->pairs();
+    for (auto const [key, value] : *pairs) {
+        auto const name = key.get<std::string_view>();
+        keys.push_back(*name);
     }
 
     std::string out;
-    REQUIRE(cbor::encode(out, *tree).has_value());
+    auto const written = cbor::encode(out, **tree);
+    REQUIRE(written.has_value());
     CHECK_EQ(keys, std::vector<std::string_view>{"sensor", "value"});
     CHECK_EQ(out, bytes);
 }
@@ -65,12 +63,11 @@ TEST_CASE("doc readme: read one value by its path")
 {
     auto const owner =
         std::make_shared<std::string const>(test::encode_in_preferred_form(test::M("user"s, test::M("id"s, 42, "name"s, "ann"s))));
-    auto const viewed = cbor::lazy::view(owner);
-    auto const doc = viewed.value();
+    auto const doc = cbor::lazy::view(owner);
 
-    auto const id = doc.at_path<"$.user.id", std::int64_t>();
-    auto const name = doc.at_path<"$.user.name", std::string_view>();
-    auto const age = doc.at_path<"$.user.age", int>();
+    auto const id = doc->at_path<"$.user.id", std::int64_t>();
+    auto const name = doc->at_path<"$.user.name", std::string_view>();
+    auto const age = doc->at_path<"$.user.age", int>();
     CHECK_EQ(*id, 42);
     CHECK_EQ(**name, "ann");
     CHECK_EQ(age.error(), cbor::error::key_not_found);

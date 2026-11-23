@@ -172,8 +172,7 @@ TEST_CASE("doc advanced schema: encode and decode")
 TEST_CASE("doc advanced schema: the description apart")
 {
     CHECK_GT(sizeof(tire), sizeof(std::uint16_t) + sizeof(float));
-    auto const encoded = cbor::schema<car>::encode(sample);
-    std::string const bytes = *encoded;
+    std::string const bytes = *cbor::schema<car>::encode(sample);
     auto const data = cbor::static_dictionary<car>::encode(sample);
     REQUIRE(data.has_value());
     auto const back = cbor::static_dictionary<car>::decode(std::string(*data));
@@ -186,8 +185,7 @@ TEST_CASE("doc advanced schema: the description apart")
 // The section "One value with no accessor" shows schema<T>::at_path for a value that holds no view.
 TEST_CASE("doc advanced schema: one value with no accessor")
 {
-    auto const encoded = cbor::schema<car>::encode(sample);
-    std::string const bytes = *encoded;
+    std::string const bytes = *cbor::schema<car>::encode(sample);
     CHECK_EQ(cbor::schema<car>::at_path<"$.seats">(bytes), 5u);
     CHECK_EQ(cbor::schema<car>::at_path<"$.tires[1].diameter">(bytes), 18u);
     CHECK_EQ(cbor::schema<car>::at_path<"$.tires[].pressure">(bytes, 0uz), 2.5f);
@@ -223,8 +221,7 @@ TEST_CASE("doc advanced schema: a wrong path does not compile")
 // The section "The accessor" shows path, the root accessor, and relative paths that start with @.
 TEST_CASE("doc advanced schema: the accessor")
 {
-    auto const encoded = cbor::schema<car>::encode(sample);
-    std::string const bytes = *encoded;
+    std::string const bytes = *cbor::schema<car>::encode(sample);
     auto const root = cbor::schema<car>::adopt(std::string(bytes));
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.make">(), "Volvo"sv);
@@ -258,8 +255,7 @@ TEST_CASE("doc advanced schema: the accessor holds the owner")
     owner.reset();
     REQUIRE(root.has_value());
     CHECK_EQ(root->at_path<"$.make">(), "Volvo"sv);
-    auto const encoded_2 = cbor::schema<car>::encode(sample);
-    std::string temp = *encoded_2;
+    std::string temp = *cbor::schema<car>::encode(sample);
     auto const copied = cbor::schema<car>::adopt(std::string(temp));
     temp.assign(temp.size(), '\0');
     REQUIRE(copied.has_value());
@@ -284,8 +280,7 @@ TEST_CASE("doc advanced schema: the accessor holds the owner")
 // bytes. The section "The accessor" states that every accessor holds the owner.
 TEST_CASE("doc advanced schema: a list accessor keeps the bytes alive")
 {
-    auto const encoded = cbor::schema<car>::encode(sample);
-    std::string const bytes = *encoded;
+    std::string const bytes = *cbor::schema<car>::encode(sample);
     auto const adopted = cbor::schema<car>::adopt(std::string(bytes));
     auto const tires = adopted->at_path<"$.tires">();
     REQUIRE(tires.has_value());
@@ -321,14 +316,12 @@ TEST_CASE("doc advanced schema: a typed array view")
 // description of the struct that reads it.
 TEST_CASE("doc advanced schema: errors")
 {
-    auto const encoded = cbor::schema<car>::encode(sample);
-    std::string const bytes = *encoded;
+    std::string const bytes = *cbor::schema<car>::encode(sample);
     CHECK_EQ(cbor::schema<car>::decode(bytes.substr(0, 3)), std::unexpected(error::too_little_data));
     std::string_view const view = bytes;
     CHECK_EQ(cbor::schema<car>::at_path<"$.seats">(view.substr(0, view.size() - 1)), std::unexpected(error::too_little_data));
     CHECK_EQ(cbor::schema<car>::adopt(bytes.substr(0, bytes.size() / 2)), std::unexpected(error::too_little_data));
-    auto const encoded_2 = cbor::schema<tire>::encode(tire{1, 1.0f});
-    std::string const small = *encoded_2;
+    std::string const small = *cbor::schema<tire>::encode(tire{1, 1.0f});
     CHECK_EQ(cbor::schema<car>::decode(std::string(small)), std::unexpected(error::incorrect_type));
     CHECK_EQ(cbor::schema<tire>::decode(std::string(bytes)), std::unexpected(error::incorrect_type));
     CHECK_EQ(cbor::schema<tire>::adopt(std::string(bytes)), std::unexpected(error::incorrect_type));

@@ -80,8 +80,7 @@ TEST_CASE("doc schema: tags and keys")
 // The section "Read one value" shows an index from an argument, and the paths that do not compile.
 TEST_CASE("doc schema: read one value")
 {
-    auto const encoded = cbor::schema<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
-    std::string const bytes = *encoded;
+    std::string const bytes = *cbor::schema<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
     std::size_t const i = 1;
     CHECK_EQ(cbor::schema<sensor>::at_path<"$.readings[]">(bytes, i), 2.5);
     CHECK_EQ(cbor::schema<sensor>::at_path<"$.readings[]">(bytes, 2uz), std::unexpected(error::index_out_of_bounds));
@@ -94,8 +93,7 @@ TEST_CASE("doc schema: read one value")
 // The section "Read a text, a list or a struct" opens the message with path and reads a text and a list of numbers.
 TEST_CASE("doc schema: read a text, a list or a struct")
 {
-    auto const encoded = cbor::schema<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
-    std::string const bytes = *encoded;
+    std::string const bytes = *cbor::schema<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
     std::vector<double> used;
     auto const use = [&used](double const r) { used.push_back(r); };
     auto const owner = std::make_shared<std::string const>(bytes);
@@ -111,8 +109,7 @@ TEST_CASE("doc schema: read a text, a list or a struct")
     CHECK_EQ(std::bit_cast<std::uint64_t>(used[1]), 0x4004000000000000u);
     CHECK_EQ(readings->size(), 2u);
     REQUIRE(readings->at(1).has_value());
-    auto const element = readings->at(1);
-    CHECK_EQ(std::bit_cast<std::uint64_t>(*element), 0x4004000000000000u);
+    CHECK_EQ(std::bit_cast<std::uint64_t>(*readings->at(1)), 0x4004000000000000u);
     CHECK_EQ(readings->at(2), std::unexpected(error::index_out_of_bounds));
     using accessor = cbor::schema<sensor>::accessor<>;
     CHECK(reads_name<accessor const &>);
@@ -122,8 +119,7 @@ TEST_CASE("doc schema: read a text, a list or a struct")
 // The section "Read the whole struct" decodes the message into a sensor.
 TEST_CASE("doc schema: read the whole struct")
 {
-    auto const encoded = cbor::schema<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
-    std::string const bytes = *encoded;
+    std::string const bytes = *cbor::schema<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
     std::size_t used = 0;
     auto const use = [&used](std::size_t const n) { used = n; };
     auto const owner = std::make_shared<std::string const>(bytes);
@@ -178,8 +174,7 @@ TEST_CASE("doc schema: store the description apart")
 // The section "Errors" gives one input for each row, and states that a field with a wrong head gives an error.
 TEST_CASE("doc schema: errors")
 {
-    auto const encoded = cbor::schema<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
-    std::string const bytes = *encoded;
+    std::string const bytes = *cbor::schema<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}});
     CHECK_EQ(cbor::schema<sensor>::decode(bytes.substr(0, 3)), std::unexpected(error::too_little_data));
     CHECK_EQ(cbor::schema<other>::decode(std::string(bytes)), std::unexpected(error::incorrect_type));
     CHECK_EQ(cbor::schema<sensor>::at_path<"$.readings[]">(bytes, 9uz), std::unexpected(error::index_out_of_bounds));

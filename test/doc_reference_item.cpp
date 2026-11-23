@@ -153,8 +153,7 @@ TEST_CASE("doc reference item: decode")
     input.reset();
     REQUIRE(copy);
     auto const copy_elements = (*copy)->elements();
-    auto const text = copy_elements.value().front().get<std::string_view>();
-    CHECK_EQ(text.value(), "hi"sv);
+    CHECK_EQ(copy_elements.value().front().get<std::string_view>().value(), "hi"sv);
 }
 
 // decode.hpp, snippet encoded_cbor_data_item: the content of a tag 24, a content that is no byte string, and a wrong

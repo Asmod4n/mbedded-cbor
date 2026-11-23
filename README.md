@@ -53,8 +53,9 @@ for (auto const p : *points | std::views::drop(1) | std::views::take(1)) {
 }
 ```
 
-Every call that can fail returns a `cbor::result`: read it from a variable, as with
-`std::expected`.
+Every call that can fail returns a `cbor::result`, which you read as a
+`std::expected`. A temporary result gives a number, a string, a string view,
+bytes or a `cbor::ref` directly; keep any other value in a variable.
 
 ## Features
 
