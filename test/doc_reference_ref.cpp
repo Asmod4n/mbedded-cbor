@@ -101,8 +101,7 @@ TEST_CASE("doc reference ref: the example of owning")
 {
     std::optional<cbor::owning<person>> kept;
     {
-        auto const decoded = cbor::structs<person>::decode(test::encode_in_preferred_form(test::M("name"s, "ann"s, "age"s, 30)));
-        auto const p = decoded.value();
+        auto const p = cbor::structs<person>::decode(test::encode_in_preferred_form(test::M("name"s, "ann"s, "age"s, 30))).value();
         // [owning]
         // p: the cbor::ref<person> of {"name": "ann", "age": 30}
         auto const own = p.clone();
@@ -117,8 +116,7 @@ TEST_CASE("doc reference ref: the example of owning")
 // ref.hpp, the comment of ref: a moved-from ref holds a value-initialized T.
 TEST_CASE("doc reference ref: move")
 {
-    auto const decoded = cbor::structs<std::string_view>::decode(test::encode_in_preferred_form(test::V("abc"s)));
-    auto r = decoded.value();
+    auto r = cbor::structs<std::string_view>::decode(test::encode_in_preferred_form(test::V("abc"s))).value();
     auto const s = std::move(r);
     CHECK_EQ(*s, "abc");
 }
@@ -127,8 +125,7 @@ TEST_CASE("doc reference ref: move")
 // an owning that holds its own copy of the bytes of each view.
 TEST_CASE("doc reference ref: clone")
 {
-    auto const decoded = cbor::structs<std::string_view>::decode(test::encode_in_preferred_form(test::V("abc"s)));
-    auto const text = decoded.value();
+    auto const text = cbor::structs<std::string_view>::decode(test::encode_in_preferred_form(test::V("abc"s))).value();
     std::string const copy = text.clone();
     CHECK_EQ(copy, "abc");
 
@@ -136,8 +133,7 @@ TEST_CASE("doc reference ref: clone")
     std::string_view seen;
     {
         auto const owner = std::make_shared<std::string const>(test::encode_in_preferred_form(test::M("name"s, "ann"s, "age"s, 30)));
-        auto const read = cbor::structs<person>::decode(owner);
-        auto const p = read.value();
+        auto const p = cbor::structs<person>::decode(owner).value();
         own = p.clone();
         seen = (*own)->name;
         CHECK_NE(seen.data(), p->name.data());

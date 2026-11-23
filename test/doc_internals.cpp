@@ -161,8 +161,7 @@ CBOR_DEFINE_TYPE(doc_internals::reading, cbor::tag{1720}, CBOR_MEMBER(doc_intern
 // path, at_path and decode. The test exists because the root is read from the end, so a cut gives a wrong tag first.
 TEST_CASE("doc internals: a cut message gives too_little_data in a schema read")
 {
-    auto const encoded = cbor::schema<doc_internals::reading>::encode(doc_internals::reading{7, "t1"});
-    std::string const bytes = *encoded;
+    std::string const bytes = *cbor::schema<doc_internals::reading>::encode(doc_internals::reading{7, "t1"});
     for (std::size_t n = 1; n < bytes.size(); ++n) {
         std::string const cut = bytes.substr(0, n);
         CAPTURE(n);

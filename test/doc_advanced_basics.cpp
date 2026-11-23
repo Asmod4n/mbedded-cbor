@@ -180,13 +180,11 @@ TEST_CASE("doc advanced basics: threads" * doctest::skip(!test::threads_availabl
     {
         std::thread a([&] {
             auto const at_1 = l.at(1);
-            auto const read = at_1->get<std::int64_t>();
-            first = *read;
+            first = *at_1->get<std::int64_t>();
         });
         std::thread b([&] {
             auto const at_1 = l.at(1);
-            auto const read = at_1->get<std::int64_t>();
-            second = *read;
+            second = *at_1->get<std::int64_t>();
         });
         a.join();
         b.join();
@@ -204,8 +202,7 @@ TEST_CASE("doc advanced basics: a lazy moved out of the expected to another thre
     std::thread(
         [&read](cbor::lazy const &v) {
             auto const at_1 = v.at(1);
-            auto const value = at_1->get<std::int64_t>();
-            read = *value;
+            read = *at_1->get<std::int64_t>();
         },
         std::move(*l))
         .join();
@@ -214,16 +211,14 @@ TEST_CASE("doc advanced basics: a lazy moved out of the expected to another thre
     std::int64_t other = 0;
     std::thread([&] {
         auto const a = plain.at("a");
-        auto const value = a->get<std::int64_t>();
-        other = *value;
+        other = *a->get<std::int64_t>();
     }).join();
     CHECK_EQ(other, 1);
     auto const tagged = *test::make_lazy_from_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
     std::int64_t content = -1;
     std::thread([&] {
         auto const at_1 = tagged.at(1);
-        auto const value = at_1->get<std::int64_t>();
-        content = *value;
+        content = *at_1->get<std::int64_t>();
     }).join();
     CHECK_EQ(content, 0);
 }
@@ -240,8 +235,7 @@ TEST_CASE("doc advanced basics: a lazy holds the owner")
         keep = *tags;
     }
     auto const at_1 = keep->at(1);
-    auto const read = at_1->get<std::string_view>();
-    CHECK(*read == "b"sv);
+    CHECK(*at_1->get<std::string_view>() == "b"sv);
 }
 
 // The section "Owners" states what *, -> and == of a ref give, that a copy shares the owner. That the aliasing
@@ -308,15 +302,13 @@ TEST_CASE("doc advanced basics: no form copies the bytes")
     auto const shared = std::make_shared<std::string const>(message());
     auto const viewed = cbor::lazy::view(shared);
     auto const a = viewed.value();
-    auto const read = a.get<std::string_view>();
-    auto const va = read.value();
+    auto const va = a.get<std::string_view>().value();
     CHECK_EQ((*va).data(), std::span(*shared).subspan(1).data());
 
     std::string bytes = encode_in_preferred_form(V(std::string(40, 'x')));
     std::span<char const> const data(bytes);
     auto const adopted = cbor::lazy::adopt(std::move(bytes));
     auto const b = adopted.value();
-    auto const read_2 = b.get<std::string_view>();
-    auto const vb = read_2.value();
+    auto const vb = b.get<std::string_view>().value();
     CHECK_EQ((*vb).data(), data.subspan(2).data());
 }

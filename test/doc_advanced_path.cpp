@@ -55,8 +55,7 @@ CBOR_DEFINE_TYPE(doc_advanced_path::frame, cbor::tag{1760}, CBOR_MEMBER(doc_adva
 TEST_CASE("doc advanced path: an index on a byte string")
 {
     using doc_advanced_path::frame;
-    auto const encoded = cbor::schema<frame>::encode(frame{{7, 9}});
-    std::string const message = *encoded;
+    std::string const message = *cbor::schema<frame>::encode(frame{{7, 9}});
     CHECK_EQ(cbor::schema<frame>::at_path<"$.mac[1]">(message), std::uint8_t{9});
     CHECK_EQ(cbor::at_path<"$.mac[1]", int>(encode_in_preferred_form(M("mac"s, test::bytes{"\x07\x09"}))),
              std::unexpected(error::not_indexable));
@@ -77,10 +76,8 @@ TEST_CASE("doc advanced path: encoded is a string_view")
     auto const bytes = std::make_shared<std::string const>(encode_in_preferred_form(M("n"s, 1)) + encode_in_preferred_form(M("n"s, 2)) +
                                                            encode_in_preferred_form(M("n"s, 3)));
     std::int64_t sum = 0;
-    for (auto const e : cbor::sequence{bytes}) {
-        auto const n = cbor::at_path<"$.n", std::int64_t>(*e);
-        sum += *n;
-    }
+    for (auto const e : cbor::sequence{bytes})
+        sum += *cbor::at_path<"$.n", std::int64_t>(*e);
     CHECK_EQ(sum, 6);
     CHECK_EQ(cbor::at_path<"$.n", std::int64_t>(std::string_view{*bytes}), 1);
 }
@@ -217,8 +214,7 @@ TEST_CASE("doc advanced path: the types of a typed read")
     CHECK_EQ(cbor::at_path<"$", char>(encode_in_preferred_form(V(65))), 'A');
     CHECK_EQ(cbor::at_path<"$", int>("\xc3\x41\x01"s), -2);
     CHECK_EQ(cbor::at_path<"$", int>("\xc1\x05"s), 5);
-    auto const uri = test::make_lazy_from_copy("\xd8\x20\x61x"s)->at_path<"$", std::string_view>();
-    CHECK(*uri == "x"sv);
+    CHECK(*test::make_lazy_from_copy("\xd8\x20\x61x"s)->at_path<"$", std::string_view>() == "x"sv);
     CHECK_FALSE((advanced_typed_path_compiles<"$", float>));
     CHECK((advanced_typed_path_compiles<"$", std::string>));
     CHECK_FALSE((advanced_typed_path_compiles<"$", std::string_view>));
@@ -368,17 +364,11 @@ TEST_CASE("doc advanced path: a lazy in another thread" * doctest::skip(!test::t
 {
     auto const l = *test::make_lazy_from_copy(encode_in_preferred_form(A(1, 2)));
     std::int64_t read = 0;
-    std::thread([&read, &l] {
-        auto const r = l.at_path<"$[1]", std::int64_t>();
-        read = *r;
-    }).join();
+    std::thread([&read, &l] { read = *l.at_path<"$[1]", std::int64_t>(); }).join();
     CHECK_EQ(read, 2);
     auto const shared = *test::make_lazy_from_copy("\x82\xd8\x1c\x01\xd8\x1d\x00"s);
     std::int64_t content = -1;
-    std::thread([&content, &shared] {
-        auto const r = shared.at_path<"$[1]", std::int64_t>();
-        content = *r;
-    }).join();
+    std::thread([&content, &shared] { content = *shared.at_path<"$[1]", std::int64_t>(); }).join();
     CHECK_EQ(content, 0);
 }
 
