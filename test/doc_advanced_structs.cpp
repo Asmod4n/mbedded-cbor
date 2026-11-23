@@ -235,8 +235,7 @@ TEST_CASE("doc advanced structs: unknown, repeated and missing keys")
     auto const extra = cbor::structs<person>::decode(encode_in_preferred_form(M("name"s, "x"s, "age"s, 1, "z"s, 2)));
     REQUIRE(extra.has_value());
     CHECK_EQ((*extra)->name, "x");
-    auto const edn_bytes = cbor::diag2cbor(R"({"name": "x", "age": 1, "age": 2})");
-    std::string repeated = edn_bytes.value();
+    std::string repeated = cbor::diag2cbor(R"({"name": "x", "age": 1, "age": 2})").value();
     CHECK_EQ(cbor::structs<person>::decode(std::move(repeated)), std::unexpected(error::duplicate_key));
     CHECK_EQ(cbor::structs<person>::decode(encode_in_preferred_form(M("name"s, "x"s))), std::unexpected(error::key_not_found));
     for (value const &key : {A(), M(), value{tagged{1000, V(1)}}, A(1, M("a"s, A())), value{tagged{28, V(1)}}}) {

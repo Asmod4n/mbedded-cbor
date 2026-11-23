@@ -95,8 +95,7 @@ TEST_CASE("doc reference lazy: view")
     CHECK_EQ(id.value(), 42);
     auto const in_place = cbor::lazy::view(std::shared_ptr<void const>(owner), std::string_view(*owner));
     auto const id_3 = in_place->at("id");
-    auto const read = id_3->get<std::int64_t>();
-    CHECK_EQ(read.value(), 42);
+    CHECK_EQ(id_3->get<std::int64_t>().value(), 42);
     CHECK_THROWS_AS((void)cbor::lazy::view(std::shared_ptr<std::string const>()), std::logic_error);
     CHECK_THROWS_AS((void)cbor::lazy::view(std::shared_ptr<void const>(), std::string_view(*owner)),
                     std::logic_error);
@@ -167,8 +166,7 @@ TEST_CASE("doc reference lazy: at")
 // lazy.hpp, snippet at_edn: a byte string key, an array key and a float key behind tag 55799, each as an EDN literal.
 TEST_CASE("doc reference lazy: at with an EDN literal")
 {
-    auto const edn_bytes = cbor::diag2cbor(R"({h'01': "bytes", [1, 2]: "pair", 1.5: "float"})");
-    std::string bytes = edn_bytes.value();
+    std::string bytes = cbor::diag2cbor(R"({h'01': "bytes", [1, 2]: "pair", 1.5: "float"})").value();
     // [at_edn]
     // bytes: a std::string with {h'01': "bytes", [1, 2]: "pair", 1.5: "float"}
     using namespace cbor::literals;
@@ -201,8 +199,7 @@ TEST_CASE("doc reference lazy: at_path")
     CHECK_EQ(**last, "b"sv);
     CHECK_EQ(tags->size(), 2u);
     auto const user_id = doc->at_path<"$.user.id">();
-    auto const read = user_id->get<int>();
-    CHECK_EQ(read.value(), 42);
+    CHECK_EQ(user_id->get<int>().value(), 42);
     auto const query = cbor::path::compile<std::int64_t>("$.user.id");
     REQUIRE(query);
     CHECK_EQ(doc->at_path(*query), 42);
@@ -345,8 +342,7 @@ TEST_CASE("doc reference lazy: clone")
     auto const tree_elements = (*tree)->elements();
     auto const children = tree_elements.value();
     REQUIRE_EQ(children.size(), 2u);
-    auto const read = children.next().front().get<std::string_view>();
-    CHECK_EQ(read.value(), "x"sv);
+    CHECK_EQ(children.next().front().get<std::string_view>().value(), "x"sv);
 }
 
 // lazy.hpp, snippet lazy_elements: the range concepts, count_if, a deleted front, and an error that repeats.

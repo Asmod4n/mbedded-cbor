@@ -114,10 +114,8 @@ TEST_CASE("doc path: path syntax")
     CHECK_EQ(cbor::at_path<"$.store.bicycle.price", int>(bytes), 20);
     CHECK_EQ(cbor::at_path<"$['store']['bicycle']['price']", int>(bytes), 20);
     auto const owner = std::make_shared<std::string const>(bytes);
-    auto const first_title = cbor::at_path<"$.store.book[0].title", std::string_view>(owner);
-    CHECK(*first_title == "A"sv);
-    auto const last_title = cbor::at_path<"$.store.book[-1].title", std::string_view>(owner);
-    CHECK(*last_title == "C"sv);
+    CHECK(*cbor::at_path<"$.store.book[0].title", std::string_view>(owner) == "A"sv);
+    CHECK(*cbor::at_path<"$.store.book[-1].title", std::string_view>(owner) == "C"sv);
     CHECK(*test::query("$.store.book[*].price", l) == A(8, 12, 9));
     CHECK(*test::query("$..price", l) == A(8, 12, 9, 20));
     CHECK(*test::query("$.store.book[?@.price < 10].title", l) == A("A"s, "C"s));
