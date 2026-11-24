@@ -1,0 +1,858 @@
+{
+ "time": "2026-11-24-105952Z",
+ "block": "sequence_whole",
+ "what": "each function of bench/function/sequence_whole.cpp over a buffer of COLD_BYTES bytes of items; a = commit a, aa = commit a built again, b = commit b",
+ "commit_a": {
+  "given": "1770b49b",
+  "id": "1770b49bc587df2bac187e46ce692652ee7d8c7d"
+ },
+ "commit_b": {
+  "given": "1770b49b",
+  "id": "1770b49bc587df2bac187e46ce692652ee7d8c7d"
+ },
+ "bench_sources_commit": "1770b49bc587df2bac187e46ce692652ee7d8c7d",
+ "image": "compiler",
+ "flags": "-std=c++26 -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -DNDEBUG -pipe",
+ "warnings": {
+  "gxx": "-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -Wnull-dereference",
+  "clang": "-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -Wnull-dereference -Wunsafe-buffer-usage"
+ },
+ "link_flags": "-pie -fuse-ld=mold",
+ "gxx_binary": {
+  "binary": "a.gxx",
+  "comment": "String dump of section '.comment':\n  [     1]  GCC: (Debian 16.2.0-5) 16.2.0\n  [    1f]  mold 3.0.0 (compatible with GNU ld)",
+  "libraries": {
+   "libbenchmark.so.1.9.1": "/usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1",
+   "libstdc++.so.6": "/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.36",
+   "libc.so.6": "/usr/lib/x86_64-linux-gnu/libc.so.6",
+   "libm.so.6": "/usr/lib/x86_64-linux-gnu/libm.so.6"
+  }
+ },
+ "clang_binary": {
+  "binary": "a.clang",
+  "comment": "String dump of section '.comment':\n  [     1]  Debian clang version 23.1.6 (1)\n  [    21]  GCC: (Debian 16.2.0-5) 16.2.0\n  [    3f]  mold 3.0.0 (compatible with GNU ld)",
+  "libraries": {
+   "libbenchmark.so.1.9.1": "/usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1",
+   "libstdc++.so.6": "/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.36",
+   "libm.so.6": "/usr/lib/x86_64-linux-gnu/libm.so.6",
+   "libc.so.6": "/usr/lib/x86_64-linux-gnu/libc.so.6"
+  }
+ },
+ "rounds": 15,
+ "min_time": "0.05s",
+ "cold_bytes": 4194304,
+ "build": "build: 14.78 s for 6 binaries",
+ "resolved_march": "graniterapids",
+ "compilers": [
+  "g++-16 (Debian 16.2.0-5) 16.2.0",
+  "Debian clang version 23.1.6 (1)"
+ ],
+ "libc": "ldd (Debian GLIBC 2.43-7) 2.43",
+ "level_two_cache": "2048K",
+ "kernel": "6.18.44-fc-v819",
+ "scheduler": "no sched_ext state (kernel default)",
+ "virtualization": "docker ",
+ "host_in_container": "no",
+ "host_user": "root 0",
+ "container": "podman compiler, user 65534, network none",
+ "cpu": {
+  "model": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+  "flags_sha256": "15c549c6abba3b2839f5ae941760c3918e8f639fb0814cefc6050e97d8593430",
+  "cpus": 4,
+  "l3": "516096K"
+ },
+ "uid": 65534,
+ "priority": "nice -10 granted",
+ "threads": 1,
+ "pinned": false,
+ "cpu_left_to_the_machine": "each bench process is single-threaded on 4 cpus",
+ "gate_before_build": [
+  "gate: vmstat 1 2",
+  "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+  " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+  " 0  0      0 15141728  28544 949212    0    0   943   144  268    0  3  0 95  1  0  0",
+  " 0  0      0 15151696  28544 949544    0    0     0     0  279  321  0  0 99  0  0  0",
+  "gate: ps --sort=-pcpu (top 7)",
+  "  PID USER     %CPU  NI COMMAND",
+  "  101 root      1.7   0 claude",
+  "    1 root      0.0   0 process_api",
+  "   93 root      0.0   0 environment-man",
+  "   31 root      0.0   - migration/3",
+  "   21 root      0.0   - migration/1",
+  "   26 root      0.0   - migration/2",
+  "   42 root      0.0   0 kworker/u16:1-kvfree_rcu_reclaim",
+  "gate: busy 1.0% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough"
+ ],
+ "gate_before_runs": [
+  "gate: vmstat 1 2",
+  "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+  " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+  " 1  0      0 15074628  28556 952212    0    0   934   144  277    0  4  0 95  1  0  0",
+  " 0  0      0 15083256  28556 951684    0    0     0     0  240  199  0  0 100  0  0  0",
+  "gate: ps --sort=-pcpu (top 7)",
+  "  PID USER     %CPU  NI COMMAND",
+  "  101 root      1.7   0 claude",
+  " 3367 root      0.0   0 function.sh",
+  "    1 root      0.0   0 process_api",
+  "   93 root      0.0   0 environment-man",
+  "   31 root      0.0   - migration/3",
+  "   21 root      0.0   - migration/1",
+  "   26 root      0.0   - migration/2",
+  "gate: busy 0.0% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough"
+ ],
+ "steal_limit_percent": 3,
+ "rounds_detail": [
+  {
+   "round": 1,
+   "attempt": 1,
+   "wall_s": 2.434844970703125,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.7194244604316546
+  },
+  {
+   "round": 2,
+   "attempt": 2,
+   "wall_s": 2.4189279079437256,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.31023784901758017
+  },
+  {
+   "round": 3,
+   "attempt": 3,
+   "wall_s": 2.5424258708953857,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.2949852507374631
+  },
+  {
+   "round": 4,
+   "attempt": 4,
+   "wall_s": 2.3750109672546387,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.2109704641350211
+  },
+  {
+   "round": 5,
+   "attempt": 5,
+   "wall_s": 2.4081571102142334,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.4136504653567735
+  },
+  {
+   "round": 6,
+   "attempt": 6,
+   "wall_s": 2.3428268432617188,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.21321961620469082
+  },
+  {
+   "round": 7,
+   "attempt": 7,
+   "wall_s": 2.491853952407837,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.20080321285140562
+  },
+  {
+   "round": 8,
+   "attempt": 8,
+   "wall_s": 2.6151931285858154,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.28735632183908044
+  },
+  {
+   "round": 9,
+   "attempt": 9,
+   "wall_s": 2.44036602973938,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.40858018386108275
+  },
+  {
+   "round": 10,
+   "attempt": 10,
+   "wall_s": 2.4035468101501465,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.10416666666666667
+  },
+  {
+   "round": 11,
+   "attempt": 11,
+   "wall_s": 2.4481730461120605,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.2034587995930824
+  },
+  {
+   "round": 12,
+   "attempt": 12,
+   "wall_s": 2.605196952819824,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.4798464491362764
+  },
+  {
+   "round": 13,
+   "attempt": 13,
+   "wall_s": 2.4569201469421387,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.0
+  },
+  {
+   "round": 14,
+   "attempt": 14,
+   "wall_s": 2.342586040496826,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.21299254526091588
+  },
+  {
+   "round": 15,
+   "attempt": 15,
+   "wall_s": 2.3784918785095215,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.21008403361344538
+  }
+ ],
+ "failed": [],
+ "stderr_of_runs": "2026-11-24T11:00:09+00:00\nRunning /run-dir/bin/a.gxx\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.93, 0.38, 0.19\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-24T11:00:10+00:00\nRunning /run-dir/bin/aa.clang\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.93, 0.38, 0.19\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-24T11:00:10+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.93, 0.38, 0.19\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-24T11:00:11+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.93, 0.38, 0.19\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-24T11:00:11+00:00\nRunning /run-dir/bin/b.gxx\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.93, 0.38, 0.19\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-24T11:00:11+00:00\nRunning /run-dir/bin/a.clang\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.93, 0.38, 0.19\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-24T11:00:12+00:00\nRunning /run-dir/bin/aa.clang\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.93, 0.38, 0.19\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-24T11:00:12+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.93, 0.38, 0.19\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-24T11:00:13+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.93, 0.38, 0.19\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-24T11:00:13+00:00\nRunning /run-dir/bin/b.gxx\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.93, 0.38, 0.19\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-24T11:00:13+00:00\nRunning /run-dir/bin/a.clang\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.94, 0.39, 0.20\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-24T11:00:14+00:00\nRunning /run-dir/bin/a.gxx\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.94, 0.39, 0.20\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-24T11:00:14+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 64 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 516096 KiB (x1)\nLoad Average: 0.94, 0.39, 0.20\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-24T11:00:15+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2300 MHz CPU s)\nCPU Caches:\n  L1 Data 48 K",
+ "packages": [],
+ "noise_floor": {
+  "a_over_a_max_deviation_percent": 5.521674763012907
+ },
+ "difference_test": "two-tailed Mann-Whitney U test of compare.py of Google Benchmark over the rounds, alpha 0.05, and B/A further from 1 than A/A and than the noise floor of the machine (5 %)",
+ "compare_text": {
+  "gxx": {
+   "a_aa": "Comparing /run-dir/out/merged.a.gxx.json to /run-dir/out/merged.aa.gxx.json\nBenchmark                         Time             CPU      Time Old      Time New       CPU Old       CPU New\n--------------------------------------------------------------------------------------------------------------\nsequence_count                 +0.0927         -0.0140             8             9             8             8\nsequence_count                 +0.2326         +0.2303             8            10             8            10\nsequence_count                 -0.0169         -0.0090             8             8             8             8\nsequence_count                 -0.0570         -0.0289             8             8             8             8\nsequence_count                 -0.1148         -0.1147             9             8             9             8\nsequence_count                 +0.0096         +0.0138             8             8             8             8\nsequence_count                 +0.4123         +0.4130             8            12             8            12\nsequence_count                 -0.3240         -0.3236            12             8            12             8\nsequence_count                 +0.2785         +0.2779             8            11             8            11\nsequence_count                 +0.0295         +0.0295             8             8             8             8\nsequence_count                 +0.1423         +0.1044             8            10             8             9\nsequence_count                 -0.0372         -0.0324             9             8             8             8\nsequence_count                 -0.2916         -0.2920            11             8            11             8\nsequence_count                 +0.6015         +0.6985             9            14             8            14\nsequence_count                 -0.0431         -0.0405             8             8             8             8\nsequence_count_pvalue           0.7716          0.6783      U Test, Repetitions: 15 vs 15\nreader_count                   -0.0195         -0.0195            11            11            11            11\nreader_count                   +0.1359         +0.1355            11            12            11            12\nreader_count                   -0.0322         -0.0125            11            11            11            11\nreader_count                   -0.0345         -0.0062            11            11            11            11\nreader_count                   -0.0226         -0.0320            11            11            11            11\nreader_count                   +0.0058         +0.0102            11            11            11            11\nreader_count                   +0.7137         +0.7139            11            19            11            19\nreader_count                   +0.0978         +0.0849            11            12            11            12\nreader_count                   -0.0235         +0.0901            14            14            12            14\nreader_count                   -0.0169         -0.0159            11            11            11            11\nreader_count                   +0.1952         +0.1237            11            13            11            12\nreader_count                   -0.0118         -0.0106            11            11            11            11\nreader_count                   -0.3719         -0.4073            19            12            19            11\nreader_count                   +0.9300         +0.9336            12            23            12            23\nreader_count                   -0.0042         -0.0004            11            11            11            11\nreader_count_pvalue             0.4807          0.5338      U Test, Repetitions: 15 vs 15\nsequence_read                  +0.0336         +0.0157            17            17            17            17\nsequence_read                  +0.2377         +0.2377            16            20            16            20\nsequence_read                  +0.0219         +0.0257            17            17            16            17\nsequence_read                  -0.1558         -0.1485            19            16            19            16\nsequence_read                  -0.0101         -0.0101            16            16            16            16\nsequence_read                  +0.3757         +0.4184            17            23            16            23\nsequence_read                  +0.6172         +0.6172            16            26            16            26\nsequence_read                  +0.4182         +0.4175            16            23            16            23\nsequence_read                  +0.2023         +0.2026            20            24            20            24\nsequence_read                  -0.0167         -0.0114            17            16            16            16\nsequence_read                  -0.0041         -0.0042            16            16            16            16\nsequence_read                  -0.0183         -0.0204            17            16            16            16\nsequence_read                  -0.1732         -0.1773            27            22            27            22\nsequence_read                  +0.0132         +0.0355            17            17            17            17\nsequence_read                  -0.0021         -0.0011            16            16            16            16\nsequence_read_pvalue            0.2808          0.2808      U Test, Repetitions: 15 vs 15\nreader_read                    +0.2915         +0.2263            45            58            45            55\nreader_read                    +0.2654         +0.2684            41            52            41            52\nreader_read                    +0.0500         +0.0527            41            43            41            43\nreader_read                    -0.1163         -0.1252            47            41            47            41\nreader_read                    -0.0025         -0.0027            41            41            41            41\nreader_read                    -0.2725         -0.1088            71            52            58            52\nreader_read                    +0.4483         +0.4478            41            59            41            59\nreader_read                    +0.3885         +0.3889            41            56            41            56\nreader_read                    +0.2266         +0.2266            45            55            45            55\nreader_read                    -0.0330         -0.0329            43            41            42            41\nreader_read                    +0.0009         +0.0006            41            41            41            41\nreader_read                    -0.0485         -0.0393            43            41            42            41\nreader_read                    -0.3111         -0.3110            59            41            59            41\nreader_read                    -0.1370         -0.1263            53            45            52            45\nreader_read                    +0.0116         +0.0081            41            41            41            41\nreader_read_pvalue              0.4807          0.4807      U Test, Repetitions: 15 vs 15\nOVERALL_GEOMEAN                +0.0529         +0.0566             0             0             0             0",
+   "a_b": "Comparing /run-dir/out/merged.a.gxx.json to /run-dir/out/merged.b.gxx.json\nBenchmark                         Time             CPU      Time Old      Time New       CPU Old       CPU New\n--------------------------------------------------------------------------------------------------------------\nsequence_count                 +0.1037         +0.0380             8             9             8             8\nsequence_count                 +0.2512         +0.2493             8            10             8            10\nsequence_count                 +0.4425         +0.4536             8            12             8            12\nsequence_count                 +0.2215         +0.2710             8            10             8            10\nsequence_count                 -0.0793         -0.0824             9             8             9             8\nsequence_count                 +0.3567         +0.3621             8            11             8            11\nsequence_count                 -0.0377         -0.0433             8             8             8             8\nsequence_count                 -0.2410         -0.2506            12             9            12             9\nsequence_count                 +0.0170         +0.0034             8             9             8             8\nsequence_count                 +0.5791         +0.5784             8            13             8            13\nsequence_count                 +0.1201         +0.0584             8             9             8             9\nsequence_count                 -0.0339         -0.0281             9             8             8             8\nsequence_count                 +0.3306         +0.3306            11            15            11            15\nsequence_count                 -0.0727         -0.0165             9             8             8             8\nsequence_count                 -0.0324         -0.0347             8             8             8             8\nsequence_count_pvalue           0.1249          0.1354      U Test, Repetitions: 15 vs 15\nreader_count                   +0.0006         -0.0008            11            11            11            11\nreader_count                   +0.3569         +0.3567            11            14            11            14\nreader_count                   +0.5861         +0.6199            11            18            11            18\nreader_count                   +0.0885         +0.1236            11            12            11            12\nreader_count                   +0.0038         -0.0067            11            11            11            11\nreader_count                   +0.0777         +0.0824            11            12            11            12\nreader_count                   -0.0098         -0.0221            11            11            11            11\nreader_count                   +0.0002         +0.0018            11            11            11            11\nreader_count                   +0.1095         +0.2386            14            15            12            15\nreader_count                   +0.2176         +0.2192            11            14            11            14\nreader_count                   +0.0105         +0.0122            11            11            11            11\nreader_count                   +0.0255         +0.0298            11            11            11            11\nreader_count                   +0.0220         +0.0212            19            19            19            19\nreader_count                   +0.0020         -0.0198            12            12            12            11\nreader_count                   -0.0206         -0.0215            11            11            11            11\nreader_count_pvalue             0.1585          0.1585      U Test, Repetitions: 15 vs 15\nsequence_read                  +0.0119         +0.0298            17            17            17            17\nsequence_read                  +0.0235         +0.0188            16            17            16            16\nsequence_read                  +0.1636         +0.1679            17            19            16            19\nsequence_read                  -0.1552         -0.1487            19            16            19            16\nsequence_read                  +0.0210         +0.0172            16            17            16            17\nsequence_read                  +0.0076         +0.0390            17            17            16            17\nsequence_read                  +0.0204         +0.0030            16            16            16            16\nsequence_read                  +0.0306         +0.0307            16            16            16            16\nsequence_read                  -0.0309         -0.0306            20            20            20            20\nsequence_read                  +0.0260         +0.0314            17            17            16            17\nsequence_read                  +0.0258         +0.0250            16            17            16            17\nsequence_read                  -0.0277         -0.0273            17            16            16            16\nsequence_read                  +0.0907         +0.0904            27            29            27            29\nsequence_read                  -0.0135         +0.0127            17            17            17            17\nsequence_read                  -0.0045         -0.0003            16            16            16            16\nsequence_read_pvalue            0.4553          0.3615      U Test, Repetitions: 15 vs 15\nreader_read                    -0.0766         -0.0784            45            41            45            41\nreader_read                    +0.0040         +0.0066            41            41            41            41\nreader_read                    -0.0093         -0.0073            41            41            41            41\nreader_read                    -0.1147         -0.1161            47            41            47            41\nreader_read                    +0.0418         +0.0387            41            42            41            42\nreader_read                    -0.4074         -0.2742            71            42            58            42\nreader_read                    +0.0262         +0.0263            41            42            41            42\nreader_read                    +0.0189         +0.0174            41            41            41            41\nreader_read                    +0.1544         +0.1221            45            52            45            50\nreader_read                    +0.0400         +0.0424            43            44            42            44\nreader_read                    +0.0746         +0.0738            41            44            41            44\nreader_read                    -0.0493         -0.0401            43            41            42            41\nreader_read                    -0.0002         +0.0003            59            59            59            59\nreader_read                    +0.1871         +0.1688            53            63            52            61\nreader_read                    -0.0028         -0.0025            41            41            41            41\nreader_read_pvalue              0.9339          1.0000      U Test, Repetitions: 15 vs 15\nOVERALL_GEOMEAN                +0.0456         +0.0512             0             0             0             0"
+  },
+  "clang": {
+   "a_aa": "Comparing /run-dir/out/merged.a.clang.json to /run-dir/out/merged.aa.clang.json\nBenchmark                         Time             CPU      Time Old      Time New       CPU Old       CPU New\n--------------------------------------------------------------------------------------------------------------\nsequence_count                 +0.0498         +0.0517            13            13            13            13\nsequence_count                 +0.0582         +0.0589            12            13            12            13\nsequence_count                 +0.0266         +0.0274            12            13            12            13\nsequence_count                 +0.1589         +0.1604            13            15            13            15\nsequence_count                 -0.0236         -0.0243            13            13            13            13\nsequence_count                 +0.0050         +0.0049            12            12            12            12\nsequence_count                 +0.0043         +0.0026            12            12            12            12\nsequence_count                 -0.0900         +0.0105            14            13            13            13\nsequence_count                 -0.0279         -0.0081            13            12            13            12\nsequence_count                 -0.0080         -0.0056            13            12            12            12\nsequence_count                 +0.0529         +0.0512            13            13            13            13\nsequence_count                 -0.0677         -0.0599            13            12            13            12\nsequence_count                 +0.0109         +0.0019            12            13            12            12\nsequence_count                 -0.0606         -0.0917            14            13            14            13\nsequence_count                 +0.0196         +0.0027            13            13            13            13\nsequence_count_pvalue           0.5614          0.6783      U Test, Repetitions: 15 vs 15\nreader_count                   +0.7944         +0.7999             9            15             9            15\nreader_count                   -0.0037         -0.0034             9             9             9             9\nreader_count                   -0.1864         -0.1887            12             9            12             9\nreader_count                   -0.2358         -0.2376            12             9            12             9\nreader_count                   +0.4235         +0.4239             9            12             9            12\nreader_count                   -0.0193         -0.0073             9             9             9             9\nreader_count                   +0.0325         +0.0076             9             9             9             9\nreader_count                   -0.3574         -0.3588            18            12            18            12\nreader_count                   -0.2159         -0.2201            12             9            12             9\nreader_count                   -0.2424         -0.0976            11             9             9             9\nreader_count                   -0.0796         -0.0830             9             9             9             9\nreader_count                   -0.4063         -0.4088            15             9            15             9\nreader_count                   +0.0253         +0.0263             9             9             9             9\nreader_count                   +0.0789         +0.0661             9             9             9             9\nreader_count                   +0.0028         -0.0004             9             9             9             9\nreader_count_pvalue             0.8035          0.6187      U Test, Repetitions: 15 vs 15\nsequence_read                  +0.1193         +0.1586            28            31            27            31\nsequence_read                  +0.0312         +0.0315            26            27            26            27\nsequence_read                  -0.1484         -0.1483            36            31            36            31\nsequence_read                  -0.0505         -0.0547            30            28            30            28\nsequence_read                  +0.0509         +0.0511            30            31            30            31\nsequence_read                  +0.0042         +0.0055            26            26            26            26\nsequence_read                  -0.0055         -0.0044            26            26            26            26\nsequence_read                  +0.1447         +0.1445            28            32            28            32\nsequence_read                  -0.1707         -0.1735            33            27            33            27\nsequence_read                  +0.1620         +0.1240            27            32            27            31\nsequence_read                  -0.0313         -0.0353            27            26            27            26\nsequence_read                  -0.2469         -0.2415            35            26            35            26\nsequence_read                  +0.0685         +0.0661            26            28            26            27\nsequence_read                  +0.0104         +0.0093            26            26            26            26\nsequence_read                  +0.0071         -0.0045            26            26            26            26\nsequence_read_pvalue            0.8035          0.8682      U Test, Repetitions: 15 vs 15\nreader_read                    -0.0357         -0.0292            42            40            42            40\nreader_read                    +0.1596         +0.1593            40            47            40            47\nreader_read                    -0.0566         -0.0587            54            51            54            51\nreader_read                    +0.0201         +0.0224            42            43            42            42\nreader_read                    -0.0604         -0.0606            50            47            50            47\nreader_read                    +0.0021         +0.0027            41            41            41            41\nreader_read                    +0.0285         +0.0286            41            42            40            42\nreader_read                    +0.0250         +0.0410            43            45            43            45\nreader_read                    +0.1032         +0.1054            41            45            41            45\nreader_read                    +0.1991         +0.1998            45            54            45            54\nreader_read                    -0.0480         -0.0479            43            41            43            41\nreader_read                    -0.2939         -0.2937            59            41            59            41\nreader_read                    +0.0073         +0.0094            41            41            40            41\nreader_read                    +0.0031         -0.0006            41            41            41            41\nreader_read                    +0.1491         +0.1369            41            47            41            46\nreader_read_pvalue              0.4306          0.4068      U Test, Repetitions: 15 vs 15\nOVERALL_GEOMEAN                -0.0160         -0.0126             0             0             0             0",
+   "a_b": "Comparing /run-dir/out/merged.a.clang.json to /run-dir/out/merged.b.clang.json\nBenchmark                         Time             CPU      Time Old      Time New       CPU Old       CPU New\n--------------------------------------------------------------------------------------------------------------\nsequence_count                 +0.2996         +0.0179            13            17            13            13\nsequence_count                 +0.0710         +0.0080            12            13            12            13\nsequence_count                 +0.1337         +0.0317            12            14            12            13\nsequence_count                 -0.0209         -0.0209            13            12            13            12\nsequence_count                 -0.0705         -0.0702            13            12            13            12\nsequence_count                 +0.0563         +0.0563            12            13            12            13\nsequence_count                 +0.2746         +0.2682            12            16            12            15\nsequence_count                 -0.0903         +0.0102            14            13            13            13\nsequence_count                 -0.0180         +0.0019            13            13            13            13\nsequence_count                 +0.0535         +0.0572            13            13            12            13\nsequence_count                 +0.0288         +0.0282            13            13            13            13\nsequence_count                 -0.0471         -0.0528            13            13            13            13\nsequence_count                 +0.0001         -0.0003            12            12            12            12\nsequence_count                 +0.0147         +0.0151            14            14            14            14\nsequence_count                 +0.0453         +0.0018            13            13            13            13\nsequence_count_pvalue           0.1354          0.2628      U Test, Repetitions: 15 vs 15\nreader_count                   +0.1175         +0.1239             9            10             9            10\nreader_count                   +0.0926         +0.0811             9             9             9             9\nreader_count                   -0.2400         -0.2516            12             9            12             9\nreader_count                   -0.2895         -0.2876            12             9            12             9\nreader_count                   -0.0088         -0.0086             9             9             9             9\nreader_count                   +0.2423         +0.2560             9            11             9            11\nreader_count                   +0.7171         +0.7188             9            15             9            15\nreader_count                   -0.4126         -0.4148            18            11            18            11\nreader_count                   -0.1695         -0.1694            12            10            12            10\nreader_count                   +0.0262         +0.2238            11            12             9            12\nreader_count                   +0.3423         +0.3427             9            12             9            12\nreader_count                   -0.4367         -0.4374            15             9            15             9\nreader_count                   +0.0881         +0.0887             9             9             9             9\nreader_count                   +0.4928         +0.4975             9            13             9            13\nreader_count                   +0.2025         +0.2025             9            10             9            10\nreader_count_pvalue             0.4807          0.4068      U Test, Repetitions: 15 vs 15\nsequence_read                  -0.0660         -0.0332            28            26            27            26\nsequence_read                  +0.1639         +0.1514            26            30            26            30\nsequence_read                  -0.2779         -0.2777            36            26            36            26\nsequence_read                  +0.0056         +0.0056            30            30            30            30\nsequence_read                  -0.1414         -0.1412            30            26            30            26\nsequence_read                  +0.0693         +0.0718            26            28            26            28\nsequence_read                  -0.0039         -0.0020            26            26            26            26\nsequence_read                  +0.0080         +0.0052            28            28            28            28\nsequence_read                  -0.1298         -0.1298            33            29            33            29\nsequence_read                  +0.0419         +0.0392            27            29            27            29\nsequence_read                  +0.2005         +0.2004            27            32            27            32\nsequence_read                  -0.1729         -0.1672            35            29            35            29\nsequence_read                  -0.0061         -0.0020            26            26            26            26\nsequence_read                  +0.0160         +0.0022            26            26            26            26\nsequence_read                  -0.0020         -0.0017            26            26            26            26\nsequence_read_pvalue            0.8357          0.8682      U Test, Repetitions: 15 vs 15\nreader_read                    +0.1667         +0.1746            42            49            42            49\nreader_read                    +0.0092         +0.0071            40            41            40            41\nreader_read                    -0.2262         -0.2325            54            42            54            42\nreader_read                    +0.4191         +0.3662            42            59            42            57\nreader_read                    -0.1580         -0.1612            50            42            50            42\nreader_read                    +0.1679         +0.1715            41            47            41            47\nreader_read                    +0.0096         +0.0048            41            41            40            41\nreader_read                    +0.2681         +0.2868            43            55            43            55\nreader_read                    +0.0967         +0.0977            41            45            41            45\nreader_read                    -0.0823         -0.0825            45            41            45            41\nreader_read                    -0.0551         -0.0557            43            41            43            41\nreader_read                    -0.3028         -0.3059            59            41            59            41\nreader_read                    -0.0025         +0.0000            41            40            40            40\nreader_read                    +0.0143         +0.0048            41            41            41            41\nreader_read                    +0.1189         +0.0385            41            46            41            42\nreader_read_pvalue              0.4807          0.6187      U Test, Repetitions: 15 vs 15\nOVERALL_GEOMEAN                +0.0076         +0.0034             0             0             0             0"
+  }
+ },
+ "cells": {
+  "gxx": {
+   "reader_count": {
+    "a": {
+     "repetitions_ns": [
+      11041551.857130928,
+      10589658.571429286,
+      11384970.999984033,
+      11173662.1666599,
+      10939009.500020802,
+      10878377.66666174,
+      11010023.999991367,
+      10654174.999975415,
+      13891544.666686665,
+      11106329.999999313,
+      10757841.500018608,
+      10753487.000010865,
+      18545675.166668236,
+      11678669.999999633,
+      10868614.57143381
+     ],
+     "median_ns": 11010023.999991367,
+     "spread": 0.7513005770274921
+    },
+    "aa": {
+     "repetitions_ns": [
+      10825806.333324786,
+      12029100.333355322,
+      11018925.999981852,
+      10787649.166672964,
+      10692165.428573778,
+      10941560.166694822,
+      18868127.250016186,
+      11696299.666671924,
+      13565293.999969678,
+      10919054.166682448,
+      12857832.333338592,
+      10626588.428554637,
+      11649265.3333277,
+      22540214.33335159,
+      10822819.833341176
+     ],
+     "median_ns": 11018925.999981852,
+     "spread": 1.1211148323749818
+    },
+    "b": {
+     "repetitions_ns": [
+      11048438.833351307,
+      14369457.999994969,
+      18057726.74998707,
+      12162886.166644663,
+      10980846.333344137,
+      11723996.000000626,
+      10902044.500009349,
+      10656092.333344229,
+      15412751.249982648,
+      13523125.250003431,
+      10870707.833343355,
+      11027934.499982925,
+      18953220.750006493,
+      11701559.83334098,
+      10644666.285738172
+     ],
+     "median_ns": 11701559.83334098,
+     "spread": 0.7805368661862331
+    },
+    "a_over_a_ratio": 1.0008085359296668,
+    "b_over_a_ratio": 1.0628096572132955,
+    "utest_a_aa": {
+     "time_pvalue": 0.48073111045562256,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.15846460599820356,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "reader_read": {
+    "a": {
+     "repetitions_ns": [
+      44551708.00008546,
+      41036130.00006589,
+      40983420.49996973,
+      46591320.499942414,
+      40647855.999964125,
+      71448330.00006656,
+      40619649.499944896,
+      40606077.99999616,
+      44926583.00000585,
+      42574484.99993189,
+      40944937.49994399,
+      42829080.49992784,
+      59159632.00004626,
+      52657666.50006753,
+      40711144.50005098
+     ],
+     "median_ns": 42574484.99993189,
+     "spread": 0.7595476716582505
+    },
+    "aa": {
+     "repetitions_ns": [
+      57537215.00013853,
+      51928844.00003095,
+      43031673.500081524,
+      41171848.999965735,
+      40546887.00000497,
+      51979168.99987831,
+      58830820.99990133,
+      56381523.0000273,
+      55105243.000070915,
+      41170321.0000951,
+      40980332.99999315,
+      40753497.50007717,
+      40756603.9999665,
+      45441059.000040695,
+      41184760.49995934
+     ],
+     "median_ns": 43031673.500081524,
+     "spread": 0.450933113555527
+    },
+    "b": {
+     "repetitions_ns": [
+      41139879.000070326,
+      41200782.499913655,
+      40601375.00005112,
+      41249579.000009365,
+      42345443.49992575,
+      42337533.99989837,
+      41684896.50010087,
+      41372292.9999949,
+      51862192.9999199,
+      44276994.50002365,
+      44000738.50001718,
+      40717811.50003062,
+      59148091.999986716,
+      62507403.00004054,
+      40596848.49994483
+     ],
+     "median_ns": 41684896.50010087,
+     "spread": 0.5397107241003076
+    },
+    "a_over_a_ratio": 1.010738556206854,
+    "b_over_a_ratio": 0.9791051259966518,
+    "utest_a_aa": {
+     "time_pvalue": 0.48073111045562256,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.9338864180775845,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "sequence_count": {
+    "a": {
+     "repetitions_ns": [
+      8043308.249995107,
+      7852998.555538055,
+      8213710.555537546,
+      8377194.333333035,
+      9017949.500010522,
+      8115590.444428259,
+      8251864.888885999,
+      11985905.799974717,
+      8405944.25000063,
+      7929456.333335515,
+      8378078.374988718,
+      8509649.62498324,
+      11225223.571435502,
+      8716139.777763804,
+      8308606.4285648065
+     ],
+     "median_ns": 8377194.333333035,
+     "spread": 0.5262839685004237
+    },
+    "aa": {
+     "repetitions_ns": [
+      8789131.555557914,
+      9679642.666659068,
+      8075140.125015423,
+      7899678.999996872,
+      7982554.9999996945,
+      8193415.124992498,
+      11654024.833357349,
+      8102652.888889375,
+      10747138.714285549,
+      8163221.444445096,
+      9570584.42856708,
+      8193457.888890205,
+      7952007.24999745,
+      13958764.199969664,
+      7950830.777771343
+     ],
+     "median_ns": 8193415.124992498,
+     "spread": 0.7670039757280254
+    },
+    "b": {
+     "repetitions_ns": [
+      8876999.624988003,
+      9825695.142873362,
+      11847962.833333744,
+      10232858.333337288,
+      8302875.666661041,
+      11010323.777782105,
+      7941104.714291214,
+      9097530.33333042,
+      8548888.555550447,
+      12521574.599986706,
+      9384156.857160112,
+      8220919.125022874,
+      14936702.000022706,
+      8082879.624993211,
+      8039295.444455597
+     ],
+     "median_ns": 9097530.33333042,
+     "spread": 0.8809350257202704
+    },
+    "a_over_a_ratio": 0.9780619619137549,
+    "b_over_a_ratio": 1.0859877390131865,
+    "utest_a_aa": {
+     "time_pvalue": 0.7715511878155722,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.12486035998214667,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "sequence_read": {
+    "a": {
+     "repetitions_ns": [
+      16848966.499992456,
+      16129225.749978105,
+      16504557.750010917,
+      19271420.750044398,
+      16251617.749958314,
+      16953153.500026017,
+      16167000.499990536,
+      15925033.000030452,
+      20316677.49997723,
+      16539555.9999979,
+      16248251.250033263,
+      16503938.249968542,
+      26610387.666702688,
+      17266676.750011813,
+      16231119.999986276
+     ],
+     "median_ns": 16504557.750010917,
+     "spread": 0.6709784944653994
+    },
+    "aa": {
+     "repetitions_ns": [
+      17415885.750040162,
+      19962591.749958847,
+      16865881.00000108,
+      16268036.500036942,
+      16088282.999987768,
+      23322069.249957167,
+      26144560.333401993,
+      22584886.00000419,
+      24426176.66664167,
+      16263187.749984808,
+      16182329.999992361,
+      16201749.999993354,
+      22002665.24999961,
+      17493835.500033583,
+      16197185.999999419
+     ],
+     "median_ns": 17415885.750040162,
+     "spread": 0.6250684012347292
+    },
+    "b": {
+     "repetitions_ns": [
+      17049777.250008445,
+      16508437.000027243,
+      19204015.333343703,
+      16280415.500034451,
+      16593026.250006914,
+      17082540.49998459,
+      16497356.749994196,
+      16412895.749965629,
+      19689713.000010062,
+      16969844.750008177,
+      16666778.999990584,
+      16046077.749990672,
+      29024805.00006277,
+      17034284.49997091,
+      16157711.74999736
+     ],
+     "median_ns": 16666778.999990584,
+     "spread": 0.8088411044923203
+    },
+    "a_over_a_ratio": 1.055216747630129,
+    "b_over_a_ratio": 1.009828875904267,
+    "utest_a_aa": {
+     "time_pvalue": 0.28084201086629845,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.4553018964198552,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   }
+  },
+  "clang": {
+   "reader_count": {
+    "a": {
+     "repetitions_ns": [
+      8611418.625008583,
+      8549240.000007786,
+      11572495.874986544,
+      12254005.499983123,
+      8621928.374992648,
+      8729391.624996196,
+      8510715.999989316,
+      18236407.50001232,
+      11745035.833314432,
+      11269135.49998676,
+      9310917.749985492,
+      15183665.799986556,
+      8667938.99999152,
+      8591734.624985747,
+      8561783.000004653
+     ],
+     "median_ns": 8729391.624996196,
+     "spread": 1.1427583178706953
+    },
+    "aa": {
+     "repetitions_ns": [
+      15452609.800013306,
+      8517288.87499803,
+      9415155.166645186,
+      9363929.625010313,
+      12273402.333297176,
+      8560946.625010502,
+      8786973.499979923,
+      11718104.875001244,
+      9209754.37500715,
+      8536933.625009624,
+      8569445.000006227,
+      9014370.375012958,
+      8887038.250009026,
+      9269221.750002999,
+      8585333.499979697
+     ],
+     "median_ns": 9014370.375012958,
+     "spread": 0.81426390801109
+    },
+    "b": {
+     "repetitions_ns": [
+      9623660.71429902,
+      9340757.374985741,
+      8795145.875012621,
+      8706686.750002746,
+      8545903.24999549,
+      10844863.600004828,
+      14614113.999982692,
+      10712193.666677194,
+      9754734.857129473,
+      11564458.800012289,
+      12498477.166673183,
+      8552911.87500029,
+      9431819.750005843,
+      12825350.142877921,
+      10295270.250026079
+     ],
+     "median_ns": 9754734.857129473,
+     "spread": 0.7100724841450088
+    },
+    "a_over_a_ratio": 1.0326458889988093,
+    "b_over_a_ratio": 1.1174587275013823,
+    "utest_a_aa": {
+     "time_pvalue": 0.8034625743147712,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.48073111045562256,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "reader_read": {
+    "a": {
+     "repetitions_ns": [
+      41989454.499912426,
+      40490523.000016764,
+      54330049.00010019,
+      41799535.50010396,
+      50236365.000046134,
+      40644671.49999018,
+      40540908.999901146,
+      43483820.500000544,
+      40868409.00004063,
+      45094731.00006289,
+      42955616.5000804,
+      58528616.99986534,
+      40580327.500038035,
+      40592396.99995487,
+      40772271.00003711
+     ],
+     "median_ns": 41799535.50010396,
+     "spread": 0.4454892815249907
+    },
+    "aa": {
+     "repetitions_ns": [
+      40492388.000075154,
+      46952522.50007798,
+      51255941.00002217,
+      42641464.999974236,
+      47202244.49999932,
+      40728828.99993146,
+      41697457.500049494,
+      44571221.500063986,
+      45086448.99999581,
+      54070911.99981551,
+      40893775.49996698,
+      41329300.50002415,
+      40878206.49999685,
+      40718054.99995662,
+      46850951.99999978
+     ],
+     "median_ns": 42641464.999974236,
+     "spread": 0.3353352239861762
+    },
+    "b": {
+     "repetitions_ns": [
+      48988366.99999265,
+      40862562.000029355,
+      42037887.49998694,
+      59317925.499954075,
+      42297525.00009454,
+      47468655.49998347,
+      40930376.00000571,
+      55141683.99997743,
+      44820339.0000117,
+      41384968.9999779,
+      40587651.50000454,
+      40805368.50005956,
+      40479558.00001546,
+      41170884.00005286,
+      45621836.00000935
+     ],
+     "median_ns": 42037887.49998694,
+     "spread": 0.46537977267270114
+    },
+    "a_over_a_ratio": 1.020142077891468,
+    "b_over_a_ratio": 1.0057022643201954,
+    "utest_a_aa": {
+     "time_pvalue": 0.43064798984807773,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.48073111045562256,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "sequence_count": {
+    "a": {
+     "repetitions_ns": [
+      12734381.000018403,
+      12449414.333332242,
+      12479170.999995403,
+      12751204.999995025,
+      13333729.80002423,
+      12431961.166650277,
+      12208692.833307091,
+      14308476.666656133,
+      12849931.49999991,
+      12501486.66667883,
+      12518874.166668562,
+      13343395.666652214,
+      12392546.333330756,
+      13889353.750016654,
+      12527167.799999006
+     ],
+     "median_ns": 12527167.799999006,
+     "spread": 0.17199088076165903
+    },
+    "aa": {
+     "repetitions_ns": [
+      13368532.399999822,
+      13174463.800032753,
+      12811210.200015921,
+      14776837.7499915,
+      13019614.799986811,
+      12493809.166661171,
+      12261374.833353026,
+      13020774.59999964,
+      12492042.166665366,
+      12401517.16664665,
+      13181299.999985185,
+      12440063.500018064,
+      12527479.333357405,
+      13048228.833326902,
+      12772369.666663507
+     ],
+     "median_ns": 12811210.200015921,
+     "spread": 0.20515341475378346
+    },
+    "b": {
+     "repetitions_ns": [
+      16549113.666656012,
+      13333182.500029275,
+      14147712.400017554,
+      12484218.000016276,
+      12393830.83335118,
+      13131803.00003296,
+      15560843.250000289,
+      13016430.400011813,
+      12618556.166633729,
+      13169895.600003656,
+      12878989.399996499,
+      12714449.166689215,
+      12394371.49998442,
+      14093516.599996291,
+      13094281.833332388
+     ],
+     "median_ns": 13094281.833332388,
+     "spread": 0.3352702557568539
+    },
+    "a_over_a_ratio": 1.0226741115431484,
+    "b_over_a_ratio": 1.0452707301752138,
+    "utest_a_aa": {
+     "time_pvalue": 0.5614474146848649,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.13538211004560674,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   },
+   "sequence_read": {
+    "a": {
+     "repetitions_ns": [
+      28032210.00006791,
+      25832551.3333754,
+      36345626.499951325,
+      29645964.49999135,
+      29970999.33334842,
+      25759675.66667714,
+      25733555.9999774,
+      27827977.666674998,
+      33113806.49995499,
+      27428628.333382223,
+      26722751.00000358,
+      34761461.49989745,
+      25746056.333294593,
+      25655226.000026233,
+      26076254.999982968
+     ],
+     "median_ns": 27428628.333382223,
+     "spread": 0.41669484805607104
+    },
+    "aa": {
+     "repetitions_ns": [
+      31376983.999962248,
+      26637952.000025205,
+      30952812.500004258,
+      28149500.99999199,
+      31496297.499984395,
+      25867409.333310813,
+      25592238.00002049,
+      31853460.50008775,
+      27462140.000049356,
+      31870992.666730065,
+      25885008.66666739,
+      26180401.33332518,
+      27509021.666674018,
+      25921967.666666508,
+      26262164.333274994
+     ],
+     "median_ns": 27462140.000049356,
+     "spread": 0.2453382414896481
+    },
+    "b": {
+     "repetitions_ns": [
+      26181906.500028163,
+      30066470.333395045,
+      26245335.99995023,
+      29811802.499921214,
+      25734465.99997927,
+      27543791.333300762,
+      25632051.00000232,
+      28050173.99998633,
+      28814901.000032477,
+      28578878.999951486,
+      32079610.99997192,
+      28751406.50007779,
+      25589457.6666833,
+      26066375.00002762,
+      26023478.999983735
+     ],
+     "median_ns": 27543791.333300762,
+     "spread": 0.2536260603028957
+    },
+    "a_over_a_ratio": 1.0012217769791407,
+    "b_over_a_ratio": 1.0041986423279643,
+    "utest_a_aa": {
+     "time_pvalue": 0.8034625743147712,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.8357050269952793,
+     "repetitions": 15,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   }
+  }
+ }
+}
