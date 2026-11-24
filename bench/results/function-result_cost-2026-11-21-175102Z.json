@@ -1,0 +1,318 @@
+{
+ "time": "2026-11-21-175102Z",
+ "block": "result_cost",
+ "what": "each function of bench/function/result_cost.cpp over a buffer of COLD_BYTES bytes of items; a = commit a, aa = commit a built again, b = commit b",
+ "commit_a": {
+  "given": "209f7429",
+  "id": "209f7429 (scratch tree, std::expected)"
+ },
+ "commit_b": {
+  "given": "209f7429-moved-from-checks",
+  "id": "209f7429 + std::expected, the moved-from checks of lazy removed (scratch tree)"
+ },
+ "bench_sources_commit": "scratch",
+ "image": "compiler",
+ "flags": "-std=c++26 -O2 -march=native -falign-functions=64 -falign-loops=64 -fPIE -DNDEBUG -pipe",
+ "warnings": {
+  "gxx": "-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -Wnull-dereference",
+  "clang": "-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wold-style-cast -Werror -Wnull-dereference -Wunsafe-buffer-usage"
+ },
+ "link_flags": "-pie -fuse-ld=mold",
+ "gxx_binary": {
+  "binary": "a.gxx",
+  "comment": "String dump of section '.comment':\n  [     1]  GCC: (Debian 16.2.0-5) 16.2.0\n  [    1f]  mold 3.0.0 (compatible with GNU ld)",
+  "libraries": {
+   "libbenchmark.so.1.9.1": "/usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1",
+   "libstdc++.so.6": "/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.36",
+   "libc.so.6": "/usr/lib/x86_64-linux-gnu/libc.so.6",
+   "libm.so.6": "/usr/lib/x86_64-linux-gnu/libm.so.6"
+  }
+ },
+ "clang_binary": {
+  "binary": "a.clang",
+  "comment": "String dump of section '.comment':\n  [     1]  Debian clang version 23.1.6 (1)\n  [    21]  GCC: (Debian 16.2.0-5) 16.2.0\n  [    3f]  mold 3.0.0 (compatible with GNU ld)",
+  "libraries": {
+   "libbenchmark.so.1.9.1": "/usr/lib/x86_64-linux-gnu/libbenchmark.so.1.9.1",
+   "libstdc++.so.6": "/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.36",
+   "libm.so.6": "/usr/lib/x86_64-linux-gnu/libm.so.6",
+   "libc.so.6": "/usr/lib/x86_64-linux-gnu/libc.so.6"
+  }
+ },
+ "rounds": 9,
+ "min_time": "0.05s",
+ "cold_bytes": 4194304,
+ "build": "build: 5.94 s for 6 binaries",
+ "resolved_march": "sapphirerapids",
+ "compilers": [
+  "g++-16 (Debian 16.2.0-5) 16.2.0",
+  "Debian clang version 23.1.6 (1)"
+ ],
+ "libc": "ldd (Debian GLIBC 2.43-7) 2.43",
+ "level_two_cache": "2048K",
+ "kernel": "6.18.44-fc-v726",
+ "scheduler": "no sched_ext state (kernel default)",
+ "virtualization": "docker ",
+ "host_in_container": "no",
+ "host_user": "root 0",
+ "container": "podman compiler, user 65534, network none",
+ "cpu": {
+  "model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "flags_sha256": "19139faa5b3c177a2d253ee9520b13713aee71074562456de06d1ba7833e7890",
+  "cpus": 4,
+  "l3": "266240K"
+ },
+ "uid": 65534,
+ "priority": "nice -10 granted",
+ "threads": 1,
+ "pinned": false,
+ "cpu_left_to_the_machine": "each bench process is single-threaded on 4 cpus",
+ "gate_before_build": [
+  "gate: vmstat 1 5",
+  "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+  " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+  " 1  0      0 15649312   3372 516536    0    0  1197   245  410    1  5  1 93  1  0  0",
+  " 0  0      0 15649740   3372 516856    0    0     0     4  234  197  1  0 100  0  0  0",
+  " 0  0      0 15652196   3372 516856    0    0     0     0  248  369  1  0 99  0  0  0",
+  " 0  0      0 15652576   3372 516856    0    0     0     0  194  264  0  0 100  0  0  0",
+  " 0  0      0 15652956   3372 516856    0    0     0     0  224  307  1  0 99  0  0  0",
+  "gate: ps --sort=-pcpu (top 7)",
+  "  PID USER     %CPU  NI COMMAND",
+  "  102 root      2.6   0 claude",
+  "    1 root      0.0   0 process_api",
+  "   94 root      0.0   0 environment-man",
+  "   31 root      0.0   - migration/3",
+  "   21 root      0.0   - migration/1",
+  "   26 root      0.0   - migration/2",
+  "   43 root      0.0   0 kworker/u16:1-kvfree_rcu_reclaim",
+  "gate: busy 0.5% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough"
+ ],
+ "gate_before_runs": [
+  "gate: vmstat 1 5",
+  "procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu-------",
+  " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu",
+  " 0  0      0 15336752   3904 719568    0    0  1345   245  418    1  6  1 93  1  0  0",
+  " 0  0      0 15347724   3904 719364    0    0     0     8  275  308  1  0 99  0  0  0",
+  " 0  0      0 15366420   3904 719468    0    0   104     0  489  522  3  1 96  0  0  0",
+  " 0  0      0 15382304   3904 719468    0    0     0     0  209  307  0  0 100  0  0  0",
+  " 0  0      0 15391248   3904 719468    0    0     0     0  179  266  0  0 100  0  0  0",
+  "gate: ps --sort=-pcpu (top 7)",
+  "  PID USER     %CPU  NI COMMAND",
+  "  102 root      2.6   0 claude",
+  " 5449 root      0.0   0 run4.sh",
+  "    1 root      0.0   0 process_api",
+  "   94 root      0.0   0 environment-man",
+  "   31 root      0.0   - migration/3",
+  "   21 root      0.0   - migration/1",
+  "   26 root      0.0   - migration/2",
+  "gate: busy 1.2% of all cpus (limit 10%), steal 0.0%, iowait 0.0%: idle enough"
+ ],
+ "steal_limit_percent": 3,
+ "rounds_detail": [
+  {
+   "round": 1,
+   "attempt": 1,
+   "wall_s": 1.064316987991333,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.0
+  },
+  {
+   "round": 2,
+   "attempt": 2,
+   "wall_s": 1.0642509460449219,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.2304147465437788
+  },
+  {
+   "round": 3,
+   "attempt": 3,
+   "wall_s": 1.0674090385437012,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.2331002331002331
+  },
+  {
+   "round": 4,
+   "attempt": 4,
+   "wall_s": 1.1248040199279785,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.0
+  },
+  {
+   "round": 5,
+   "attempt": 5,
+   "wall_s": 1.174267053604126,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.6302521008403361
+  },
+  {
+   "round": 6,
+   "attempt": 6,
+   "wall_s": 1.0824170112609863,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.22779043280182232
+  },
+  {
+   "round": 7,
+   "attempt": 7,
+   "wall_s": 1.1613249778747559,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.4219409282700422
+  },
+  {
+   "round": 8,
+   "attempt": 8,
+   "wall_s": 1.0889720916748047,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.22727272727272727
+  },
+  {
+   "round": 9,
+   "attempt": 9,
+   "wall_s": 1.0954980850219727,
+   "kept": true,
+   "steal_percent_of_cpu_time": 0.22675736961451248
+  }
+ ],
+ "failed": [],
+ "stderr_of_runs": "2026-11-21T17:51:17+00:00\nRunning /run-dir/bin/a.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 0.63, 0.47, 0.27\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-21T17:51:17+00:00\nRunning /run-dir/bin/aa.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 0.63, 0.47, 0.27\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-21T17:51:17+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 0.63, 0.47, 0.27\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-21T17:51:17+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 0.63, 0.47, 0.27\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-21T17:51:17+00:00\nRunning /run-dir/bin/b.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 0.63, 0.47, 0.27\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-21T17:51:18+00:00\nRunning /run-dir/bin/a.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 0.74, 0.49, 0.28\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-21T17:51:18+00:00\nRunning /run-dir/bin/aa.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 0.74, 0.49, 0.28\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-21T17:51:18+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 0.74, 0.49, 0.28\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-21T17:51:18+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 0.74, 0.49, 0.28\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-21T17:51:18+00:00\nRunning /run-dir/bin/b.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 0.74, 0.49, 0.28\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-21T17:51:19+00:00\nRunning /run-dir/bin/a.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 0.74, 0.49, 0.28\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-21T17:51:19+00:00\nRunning /run-dir/bin/a.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 0.74, 0.49, 0.28\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-21T17:51:19+00:00\nRunning /run-dir/bin/aa.gxx\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 KiB (x4)\n  L1 Instruction 32 KiB (x4)\n  L2 Unified 2048 KiB (x4)\n  L3 Unified 266240 KiB (x1)\nLoad Average: 0.74, 0.49, 0.28\n***WARNING*** Library was built as DEBUG. Timings may be affected.\n2026-11-21T17:51:19+00:00\nRunning /run-dir/bin/b.clang\nRun on (4 X 2100 MHz CPU s)\nCPU Caches:\n  L1 Data 48 K",
+ "packages": [],
+ "noise_floor": {
+  "a_over_a_max_deviation_percent": 1.6943920235911403
+ },
+ "difference_test": "two-tailed Mann-Whitney U test of compare.py of Google Benchmark over the rounds, alpha 0.05, and B/A further from 1 than A/A and than the noise floor of the machine (5 %)",
+ "compare_text": {
+  "gxx": {
+   "a_aa": "Comparing /run-dir/out/merged.a.gxx.json to /run-dir/out/merged.aa.gxx.json\nBenchmark                         Time             CPU      Time Old      Time New       CPU Old       CPU New\n--------------------------------------------------------------------------------------------------------------\nresult_cost                    +0.0499         +0.0476     107747504     113125992     107618787     112736822\nresult_cost                    -0.1517         -0.1480     123442205     104713868     122833739     104652649\nresult_cost                    -0.0870         -0.1163     125881941     114936485     125825175     111189902\nresult_cost                    +0.0964         +0.1013     111862713     122646921     111287892     122561878\nresult_cost                    -0.0647         -0.0721     121261646     113411636     120931098     112210992\nresult_cost                    +0.0544         +0.0572     107209581     113037747     106385275     112467571\nresult_cost                    +0.0230         +0.0197     105812923     108247517     105233770     107306081\nresult_cost                    +0.1483         +0.1431     110664182     127072789     110322930     126114775\nresult_cost                    -0.1737         -0.1732     128313685     106026092     128234295     106027477\nresult_cost_pvalue              0.8598          0.7239      U Test, Repetitions: 9 vs 9\nOVERALL_GEOMEAN                -0.0175         -0.0217             0             0             0             0",
+   "a_b": "Comparing /run-dir/out/merged.a.gxx.json to /run-dir/out/merged.b.gxx.json\nBenchmark                         Time             CPU      Time Old      Time New       CPU Old       CPU New\n--------------------------------------------------------------------------------------------------------------\nresult_cost                    +0.0336         +0.0318     107747504     111368161     107618787     111035879\nresult_cost                    -0.1189         -0.1163     123442205     108766822     122833739     108546523\nresult_cost                    -0.0749         -0.0754     125881941     116449583     125825175     116335517\nresult_cost                    +0.3550         +0.3619     111862713     151579459     111287892     151565436\nresult_cost                    -0.0362         -0.0351     121261646     116870758     120931098     116685436\nresult_cost                    +0.2331         +0.2419     107209581     132198716     106385275     132121611\nresult_cost                    +0.4909         +0.4783     105812923     157755850     105233770     155563965\nresult_cost                    -0.0382         -0.0372     110664182     106434798     110322930     106220289\nresult_cost                    -0.0753         -0.0850     128313685     118649685     128234295     117340027\nresult_cost_pvalue              0.4268          0.4268      U Test, Repetitions: 9 vs 9\nOVERALL_GEOMEAN                +0.0674         +0.0669             0             0             0             0"
+  },
+  "clang": {
+   "a_aa": "Comparing /run-dir/out/merged.a.clang.json to /run-dir/out/merged.aa.clang.json\nBenchmark                         Time             CPU      Time Old      Time New       CPU Old       CPU New\n--------------------------------------------------------------------------------------------------------------\nresult_cost                    -0.0938         -0.0944     105825316      95893888     105825283      95831194\nresult_cost                    +0.0556         +0.0399      97820896     103257145      96437560     100286516\nresult_cost                    -0.0469         -0.0442     103409965      98560598     102703536      98159997\nresult_cost                    -0.0242         -0.0243     101343862      98892680     101328936      98867065\nresult_cost                    -0.1915         -0.2422     140738588     113788187     140648881     106577734\nresult_cost                    +0.1543         +0.1580     101466783     117123565     101137361     117112589\nresult_cost                    +0.0700         +0.0855     104076010     111362301     102169609     110904546\nresult_cost                    -0.0015         +0.0024     101536715     101388759     101035482     101278954\nresult_cost                    +0.0884         +0.0905      95401251     103835588      94920531     103506535\nresult_cost_pvalue              0.8598          0.9296      U Test, Repetitions: 9 vs 9\nOVERALL_GEOMEAN                -0.0039         -0.0099             0             0             0             0",
+   "a_b": "Comparing /run-dir/out/merged.a.clang.json to /run-dir/out/merged.b.clang.json\nBenchmark                         Time             CPU      Time Old      Time New       CPU Old       CPU New\n--------------------------------------------------------------------------------------------------------------\nresult_cost                    -0.0277         -0.0290     105825316     102888760     105825283     102757014\nresult_cost                    -0.0320         -0.0198      97820896      94689969      96437560      94523657\nresult_cost                    -0.0212         -0.0159     103409965     101217666     102703536     101071567\nresult_cost                    +0.0330         +0.0093     101343862     104686098     101328936     102268696\nresult_cost                    -0.3166         -0.3174     140738588      96178512     140648881      96009238\nresult_cost                    -0.0415         -0.0398     101466783      97260519     101137361      97117071\nresult_cost                    +0.0113         +0.0012     104076010     105257238     102169609     102291598\nresult_cost                    +0.0819         +0.0674     101536715     109856009     101035482     107845592\nresult_cost                    +0.0687         +0.0676      95401251     101953713      94920531     101334647\nresult_cost_pvalue              0.7239          0.8598      U Test, Repetitions: 9 vs 9\nOVERALL_GEOMEAN                -0.0345         -0.0378             0             0             0             0"
+  }
+ },
+ "cells": {
+  "gxx": {
+   "result_cost": {
+    "a": {
+     "repetitions_ns": [
+      107747503.99991716,
+      123442204.99994662,
+      125881940.99998873,
+      111862713.00016415,
+      121261645.99999356,
+      107209581.00000644,
+      105812923.00003043,
+      110664181.99993677,
+      128313684.99996643
+     ],
+     "median_ns": 111862713.00016415,
+     "spread": 0.21264663485318835
+    },
+    "aa": {
+     "repetitions_ns": [
+      113125992.00005025,
+      104713868.00008985,
+      114936484.99981646,
+      122646921.0000687,
+      113411635.99990977,
+      113037746.99990754,
+      108247516.99988155,
+      127072789.00006713,
+      106026091.99986546
+     ],
+     "median_ns": 113125992.00005025,
+     "spread": 0.21352397181964555
+    },
+    "b": {
+     "repetitions_ns": [
+      111368160.99997304,
+      108766822.00000687,
+      116449583.00007601,
+      151579459.00000414,
+      116870758.00000457,
+      132198716.00017542,
+      157755849.9998304,
+      106434798.00000933,
+      118649685.0000367
+     ],
+     "median_ns": 116870758.00000457,
+     "spread": 0.4821830168721377
+    },
+    "a_over_a_ratio": 1.0112931196285597,
+    "b_over_a_ratio": 1.0447695649919833,
+    "utest_a_aa": {
+     "time_pvalue": 0.859819205054158,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.42677673653298365,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   }
+  },
+  "clang": {
+   "result_cost": {
+    "a": {
+     "repetitions_ns": [
+      105825315.99993671,
+      97820896.00003019,
+      103409965.0000826,
+      101343862.00002155,
+      140738587.99997652,
+      101466782.99997802,
+      104076009.99997157,
+      101536715.00006567,
+      95401251.0001121
+     ],
+     "median_ns": 101536715.00006567,
+     "spread": 0.47522790869703724
+    },
+    "aa": {
+     "repetitions_ns": [
+      95893888.00009146,
+      103257145.00004324,
+      98560597.9999491,
+      98892680.00006269,
+      113788186.99995463,
+      117123564.99992894,
+      111362300.99987188,
+      101388758.99997401,
+      103835588.00003812
+     ],
+     "median_ns": 103257145.00004324,
+     "spread": 0.221387175372608
+    },
+    "b": {
+     "repetitions_ns": [
+      102888760.00004166,
+      94689969.00000092,
+      101217665.99991134,
+      104686098.00000195,
+      96178512.00005133,
+      97260518.99997401,
+      105257237.99992193,
+      109856009.00016834,
+      101953712.9998298
+     ],
+     "median_ns": 101953712.9998298,
+     "spread": 0.16016522299386615
+    },
+    "a_over_a_ratio": 1.0169439202359114,
+    "b_over_a_ratio": 1.004106869123783,
+    "utest_a_aa": {
+     "time_pvalue": 0.859819205054158,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "utest_a_b": {
+     "time_pvalue": 0.7239320396139757,
+     "repetitions": 9,
+     "optimal_repetitions": true
+    },
+    "difference_over_noise": false
+   }
+  }
+ }
+}
