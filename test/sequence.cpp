@@ -164,6 +164,24 @@ TEST_CASE("sequence: only a std::shared_ptr<std::string const> makes a sequence"
     CHECK_THROWS_AS(cbor::sequence{std::shared_ptr<std::string const>{}}, std::logic_error);
 }
 
+// The second constructor takes the bytes and their owner apart, so it checks the owner by itself. An owner that owns
+// nothing would let an element outlive its bytes. An aliasing std::shared_ptr can point at the bytes and own nothing,
+// so the check looks at what the owner owns and not at where it points.
+TEST_CASE("sequence: an owner that owns nothing throws, an owner of the bytes reads them")
+{
+    auto const bytes = std::make_shared<std::string const>(*cbor::encode(1) + *cbor::encode(2));
+    std::string_view const view = *bytes;
+    CHECK_THROWS_AS((cbor::sequence{std::shared_ptr<void const>{}, view}), std::logic_error);
+    std::shared_ptr<void const> const points_only(std::shared_ptr<void const>{}, bytes.get());
+    CHECK_THROWS_AS((cbor::sequence{points_only, view}), std::logic_error);
+    std::size_t count = 0;
+    for (auto const e : cbor::sequence{bytes, view}) {
+        CHECK(e.has_value());
+        ++count;
+    }
+    CHECK_EQ(count, 2);
+}
+
 // RFC 8742 2 and RFC 8949 3: each data item of a CBOR Sequence has at least its initial byte. An element whose count is
 // larger than the bytes left is too_little_data before its elements are read, by owner decision.
 TEST_CASE("sequence: a count larger than the bytes left is too_little_data before the elements")
