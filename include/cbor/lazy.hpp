@@ -320,9 +320,9 @@ public:
      *
      * @code{.example}
      * message: {h'01': "bytes", [1, 2]: "pair", 1.5: "float"}
-     * call: auto const bytes = doc->at("h'01'"_edn)
+     * call: auto const found = doc->at("h'01'"_edn)
      * result: lazy of "bytes"
-     * call: bytes->get<std::string_view>()
+     * call: found->get<std::string_view>()
      * result: ref to "bytes"
      * call: auto const pair = doc->at("[1, 2]"_edn)
      * result: lazy of "pair"

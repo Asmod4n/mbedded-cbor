@@ -652,7 +652,7 @@ result<owning<item>> decode(Encoded &&encoded)
  * call: auto const tree = cbor::decode_cycles(bytes)
  * result: owning item of 28([29(0)])
  * call: auto const elements = (*tree)->elements()
- * result: 1 element: 29(0)
+ * result: 1 element: 28([29(0)])
  * call: elements->front().type()
  * result: cbor::type::shared_reference
  * @endcode
