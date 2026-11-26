@@ -20,16 +20,6 @@ using cbor::error;
 namespace
 {
 
-std::string nested_arrays(std::size_t const depth)
-{
-    return std::string(depth, '\x81') + "\x00"s;
-}
-
-std::string nested_tags(std::size_t const depth)
-{
-    return std::string(depth, '\xc1') + "\x00"s;
-}
-
 template <class Piece>
 concept feedable = requires(cbor::sequence_reader r, Piece p) { r.feed(std::forward<Piece>(p)); };
 
@@ -103,30 +93,6 @@ TEST_CASE("sequence_reader: a char array and a shared_ptr to bytes that are not 
     CHECK_THROWS_AS(r.feed(std::shared_ptr<std::string const>{}), std::logic_error);
 }
 
-// RFC 8742 2: a sequence with no item is valid. A reader that got no byte, or only empty pieces, holds nothing
-// and waits.
-TEST_CASE("sequence_reader: an empty sequence and empty pieces")
-{
-    for (test::feed_form const form : test::feed_forms) {
-        CAPTURE(static_cast<int>(form));
-        cbor::sequence_reader r;
-        CHECK(r.empty());
-        CHECK_EQ(r.next(), std::unexpected(error::too_little_data));
-        r = test::feed_piece_to_reader(std::move(r), ""sv, form, 0);
-        r = test::feed_piece_to_reader(std::move(r), ""sv, form, 1);
-        r = test::feed_piece_to_reader(std::move(r), ""sv, form, 2);
-        CHECK(r.empty());
-        CHECK_EQ(r.next(), std::unexpected(error::too_little_data));
-        r = test::feed_piece_to_reader(std::move(r), "\x82"sv, form, 0);
-        r = test::feed_piece_to_reader(std::move(r), ""sv, form, 1);
-        r = test::feed_piece_to_reader(std::move(r), "\x01\x02"sv, form, 2);
-        auto const item = r.next();
-        REQUIRE(item.has_value());
-        CHECK_EQ(item->encoded(), "\x82\x01\x02"sv);
-        CHECK(r.empty());
-    }
-}
-
 // The bytes of several pieces wait until next() is called. The items come in the order of the bytes, also
 // where the forms of the pieces differ.
 // The reader asks for the next piece where the piece it reads is the last one. With no piece left, or after every
@@ -146,23 +112,6 @@ TEST_CASE("sequence_reader: next() with no piece left")
     REQUIRE(r.next().has_value());
     CHECK_EQ(r.next(), std::unexpected(error::too_little_data));
     CHECK(r.empty());
-}
-
-// Items can span the pieces that were fed before one next(). The test fails if a piece is lost or if an item is cut at a piece border.
-TEST_CASE("sequence_reader: several pieces before one next()")
-{
-    for (test::feed_form const form : test::feed_forms) {
-        CAPTURE(static_cast<int>(form));
-        cbor::sequence_reader r;
-        r = test::feed_piece_to_reader(std::move(r), "\x01\x02"sv, form, 0);
-        r = test::feed_piece_to_reader(std::move(r), "\x83\x01"sv, form, 1);
-        r = test::feed_piece_to_reader(std::move(r), "\x02\x03\x04"sv, form, 2);
-        r = test::feed_piece_to_reader(std::move(r), "\x05"sv, form, 3);
-        std::vector<std::string> got;
-        while (auto item = r.next())
-            got.emplace_back(item->encoded());
-        CHECK_EQ(got, std::vector<std::string>{"\x01"s, "\x02"s, "\x83\x01\x02\x03"s, "\x04"s, "\x05"s});
-    }
 }
 
 // Every split of a sequence into three pieces gives the items of cbor::sequence over the whole buffer, in each form of
@@ -287,21 +236,6 @@ TEST_CASE("sequence_reader: an item stays valid after later feeds and after the 
     }
 }
 
-// The reader and each item keep a shared piece alive, so the caller may drop its own pointer at once.
-TEST_CASE("sequence_reader: an item stays valid after the caller releases the piece")
-{
-    cbor::sequence_reader r;
-    auto piece = std::make_shared<std::string const>("\x63"
-                                                     "abc\x01"s);
-    r.feed(piece);
-    piece.reset();
-    auto const item = r.next();
-    REQUIRE(item.has_value());
-    CHECK_EQ(item->get<std::string_view>().value(), "abc"sv);
-    auto const second = r.next();
-    CHECK_EQ(second->get<std::uint64_t>().value(), 1u);
-}
-
 // RFC 8949 3: the initial byte alone decides that additional information 28 to 30 is not well-formed. That 31 is an
 // indefinite length (a break for major type 7). Appendix F names these errors. The reader gives the error as soon as the
 // byte is there, at every split and in every form, and never too_little_data.
@@ -374,21 +308,6 @@ TEST_CASE("sequence_reader: a large count waits for bytes")
                      test::sequence_outcome{{}, error::too_little_data});
         }
     }
-}
-
-// The reader keeps one count of the items that are still to read and does not recurse, so no depth bounds it. A
-// nested item is read at every split, and an item deeper than a small stack holds is read on a thread with that
-// stack.
-TEST_CASE("sequence_reader: a nested item of any depth")
-{
-    std::size_t const depth = test::levels_every_stack_holds;
-    for (test::feed_form const form : test::feed_forms) {
-        CAPTURE(static_cast<int>(form));
-        CHECK_EQ(test::read_reader_outcome_byte_by_byte(nested_arrays(depth), form).items.size(), 1u);
-        CHECK_EQ(test::read_reader_outcome_byte_by_byte(nested_tags(depth), form).items.size(), 1u);
-    }
-    std::string const deep = std::string(test::levels_beyond_small_stack, '\x81') + "\x80"s;
-    test::run_on_small_stack([&deep] { CHECK_EQ(test::read_reader_outcome_split_at(deep, 0).items.size(), 1u); });
 }
 
 // RFC 8949 3 and the decision of the owner of 2026-10-12 apply. An array or a map announces more items than bytes

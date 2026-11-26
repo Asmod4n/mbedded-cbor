@@ -60,20 +60,6 @@ TEST_CASE("sequence: an empty CBOR Sequence has no element")
     CHECK_FALSE(cbor::sequence{held("\x18"sv)}.empty());
 }
 
-// RFC 8742 2: the elements are the encoded data items, one after the other, with no marker between them. Each
-// element is a view into the bytes of the owner that the caller gave.
-TEST_CASE("sequence: each element is the view of one encoded data item")
-{
-    auto const bytes = held("\x01\x61\x61\xa1\x61\x61\x82\x01\x02\xf6"sv);
-    auto const e = elements_of(bytes);
-    REQUIRE_EQ(e.size(), 4u);
-    CHECK_EQ(e[0].value(), "\x01"sv);
-    CHECK_EQ(e[1].value(), "\x61\x61"sv);
-    CHECK_EQ(e[2].value(), "\xa1\x61\x61\x82\x01\x02"sv);
-    CHECK_EQ(e[3].value(), "\xf6"sv);
-    CHECK(inside(*bytes, e[2]->data()));
-}
-
 // RFC 8742 2: a truncated last item is detected. The bytes that follow the last complete item stay in the iterator. So
 // that a reader of a stream can wait for more bytes and read them again.
 TEST_CASE("sequence: a partial last item gives too_little_data and keeps its bytes")

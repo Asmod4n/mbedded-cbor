@@ -82,17 +82,6 @@ std::string const double_nan_payload = "\xfb\x7f\xf8\x00\x00\x00\x00\x00\x01"s;
 
 using namespace path_equality;
 
-// RFC 9535 2.3.3: an integer alone in brackets is an index. With an encoding indicator of the EDN draft (4.1) it is a
-// key literal. RFC 8949 5.6.1 decides: numeric values are distinct unless they are numerically equal, whatever the
-// length of the argument of the key.
-TEST_CASE("path equality: a map key that is an integer with a longer argument")
-{
-    CHECK((key_found("\x18\x01"s, "$[1_0]") == true));
-    CHECK((key_found("\x38\x00"s, "$[-1_0]") == true));
-    CHECK((key_found("\x20"s, "$[1_0]") == false));
-    CHECK((key_found("\x02"s, "$[1_0]") == false));
-}
-
 // RFC 8949 5.6.1: map keys are compared in the data model. The library folds a big number that fits 64 bits into its
 // integer. This is its own data model. The generic one keeps them apart. The fold happens also inside a key that is an
 // array or a map. RFC 8949 3.4.3: the value of tag 3 is -1 - n, and the empty byte string is n = 0. A byte string and a

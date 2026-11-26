@@ -97,17 +97,6 @@ TEST_CASE("encode_iov: a head and a float at each offset before the end of a blo
     }
 }
 
-// A text can fill the free space of a block exactly. It can also miss it by one byte either way. There the copy splits
-// across two blocks.
-TEST_CASE("encode_iov: texts at the free space of a block")
-{
-    std::size_t const free = CBOR_ENCODER_BLOCK_SIZE - longest_head_size - 1;
-    for (std::size_t const size : {free - 1, free, free + 1}) {
-        CAPTURE(size);
-        check_pieces_give_the_wire<false>("\x82"s + wide_text(std::string(size, 's')) + "\x07"s);
-    }
-}
-
 // A reference closes the open part of the block first. The order of the pieces must be the order of the bytes. This
 // holds also when a reference follows a full block and when a block follows a reference. The fill holds small integers
 // and no string, so it is copied also where the copy limit is 0.

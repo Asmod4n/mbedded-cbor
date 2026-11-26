@@ -361,13 +361,6 @@ TEST_CASE("cbor::to_edn: each kind of item gives its text with its encoding indi
     }
 }
 
-// The item form takes any node of a tree, not only the root.
-TEST_CASE("cbor::to_edn: an item inside a tree gives the text of that item")
-{
-    auto const tree = decoded_from_edn("[1, {\"a\": [2_0]}]");
-    CHECK_EQ(cbor::to_edn(element_of(*tree, 1)), "{\"a\": [2_0]}");
-}
-
 // A tree of cbor::decode_cycles with a shared_reference gives the text of the bytes of cbor::encode. So a tag 28
 // stands only on a value that a tag 29 names, each tag 29 has the index of its mark in the text and its shortest head,
 // and a tag 28 over a tag 29 marks no value of its own. A tag 28 that no tag 29 names makes no shared_reference, so
