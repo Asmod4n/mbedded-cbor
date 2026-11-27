@@ -140,7 +140,8 @@ class canonical_ids;
  *
  * The macro `CBOR_STRING_LENGTH_DEFAULT` sets `string_length`, and the macro `CBOR_CONTAINER_ELEMENTS_DEFAULT` sets
  * `container_elements`.
- * A macro that the build does not set gets its default, `SIZE_MAX`.
+ * A macro that the build does not set gets its default, `SIZE_MAX`: 18446744073709551615 where `std::size_t` has
+ * 64 bits, and 4294967295 where it has 32 bits, as in the WebAssembly build that runs the examples of this page.
  * No call reads a limit at run time.
  * A limit at `SIZE_MAX` is not set, and its check is not in the program.
  * A limit counts what a call reads or decodes.

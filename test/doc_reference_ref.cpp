@@ -21,14 +21,12 @@ using reference_ref::person;
 
 // The snippet of the group ref, between the markers "ref group". The example on the page of the group ref shows that a
 // ref keeps the bytes. They stay after the lazy that read them ends. That clone copies the bytes. The test checks each
-// value that the comments of the example state, and the bytes against the encoding of RFC 8949.
+// value that the comments of the example state. The snippet declares kept and makes its bytes, so a reader can copy it.
 TEST_CASE("doc reference ref: the example of the group ref")
 {
-    std::string bytes = test::encode_in_preferred_form(test::M("name"s, "ann"s));
-    CHECK_EQ(bytes, "\xa1\x64\x6e\x61\x6d\x65\x63\x61\x6e\x6e"s);
-    std::optional<cbor::ref<std::string_view>> kept;
     // [ref group]
-    // bytes: a std::string with {"name": "ann"}
+    std::string bytes = *cbor::diag2cbor(R"({"name": "ann"})");
+    std::optional<cbor::ref<std::string_view>> kept;
     {
         auto const doc = cbor::lazy::adopt(std::move(bytes));
         auto const name_2 = doc->at("name");
