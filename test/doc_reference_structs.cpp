@@ -29,6 +29,8 @@ using namespace std::string_literals;
 using reference_structs::device;
 using reference_structs::account;
 using reference_structs::header;
+using reference_structs::line;
+using reference_structs::node;
 using reference_structs::person;
 using reference_structs::reading;
 using reference_structs::senml;
@@ -239,6 +241,25 @@ TEST_CASE("doc reference structs: member types")
     auto const back = cbor::structs<reading>::decode(test::encode_in_preferred_form(test::M("id"s, 4)));
     REQUIRE(back.has_value());
     CHECK_FALSE((*back)->unit.has_value());
+}
+
+// structs.hpp, the table of member types: a struct in a struct is a map in a map, and each point keeps its own tag
+// 1802. A struct that holds a std::vector of itself is a map whose arrays hold maps of the same form. Both read back.
+TEST_CASE("doc reference structs: a struct in a struct and a struct that holds itself")
+{
+    auto const l = cbor::encode<line>(line{{1, 2}, {3, 4}});
+    CHECK_EQ(*l, test::encode_in_preferred_form(test::M("to"s, test::value{test::tagged{1802, test::M("x"s, 3.0, "y"s, 4.0)}},
+                                                        "from"s, test::value{test::tagged{1802, test::M("x"s, 1.0, "y"s, 2.0)}})));
+    auto const line_back = cbor::structs<line>::decode(std::string(*l));
+    REQUIRE(line_back.has_value());
+    CHECK_EQ((*line_back)->to.y, 4.0f);
+    auto const n = cbor::encode<node>(node{"root", {node{"a", {}}}});
+    CHECK_EQ(*n, test::encode_in_preferred_form(test::M("name"s, "root"s, "children"s,
+                                                        test::A(test::M("name"s, "a"s, "children"s, test::A())))));
+    auto const node_back = cbor::structs<node>::decode(std::string(*n));
+    REQUIRE(node_back.has_value());
+    REQUIRE_EQ((*node_back)->children.size(), 1u);
+    CHECK_EQ((*node_back)->children[0].name, "a");
 }
 
 // describe.hpp, the comment of describe_members: CBOR_DEFINE_TYPE writes the description; 160061 = 0x0002713d,

@@ -113,6 +113,16 @@ struct device {
     std::uint8_t port;
 };
 
+struct line {
+    doc_reference_schema::point from;
+    doc_reference_schema::point to;
+};
+
+struct node {
+    std::string name;
+    std::vector<node> children;
+};
+
 } // namespace reference_structs
 
 // The descriptions below are the examples of the reference pages of describe_members, member, CBOR_MEMBER and
@@ -164,3 +174,7 @@ CBOR_DEFINE_TYPE_MEMBERS(reference_structs::person, cbor::untagged, name, age);
 // [person]
 
 CBOR_DEFINE_TYPE_MEMBERS(reference_structs::reading, cbor::untagged, id, unit);
+
+CBOR_DEFINE_TYPE_MEMBERS(reference_structs::line, cbor::untagged, from, to);
+
+CBOR_DEFINE_TYPE_MEMBERS(reference_structs::node, cbor::untagged, name, children);

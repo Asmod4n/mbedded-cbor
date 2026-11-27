@@ -5404,7 +5404,7 @@ private:
  * result: 213
  * call: cbor::static_dictionary<car>::at_path<"$.seats">(*data)
  * result: 5
- * call: cbor::static_dictionary<car>::decode(*data)
+ * call: cbor::static_dictionary<car>::decode(std::string(*data))
  * result: ref to car{"Volvo", 5, {tire{17, 2.5f}, tire{18, 2.25f}}, {1, 2, 3}}
  * call: auto const owner = std::make_shared<std::string const>(*data)
  * result: shared_ptr to 137 bytes: d8 71 82 9a 00 00 00 12 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 f7 d9 07 09 d8 80 9a 00 00 00 04 c6 1a 00 00 00 01 18 05 c6 3a 00 00 00 01 c6 1a 00 00 00 02 5a 00 00 00 10 00 00 00 87 00 00 00 48 00 00 00 52 00 00 00 68 7a 00 00 00 05 56 6f 6c 76 6f d9 80 69 82 e2 5a 00 00 00 0c 11 00 00 00 20 40 12 00 00 00 10 40 d8 56 5a 00 00 00 18 00 00 00 00 00 00 f0 3f 00 00 00 00 00 00 00 40 00 00 00 00 00 00 08 40 c6 00

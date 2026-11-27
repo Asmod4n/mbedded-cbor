@@ -1913,7 +1913,7 @@ using generic = basic_generic<false>;
  * message: {"name": "ann", "age": 30}
  * call: auto const encoded = cbor::encode<person>(person{"ann", 30})
  * result: 16 bytes: a2 63 61 67 65 18 1e 64 6e 61 6d 65 63 61 6e 6e
- * call: cbor::lazy::adopt(*encoded)
+ * call: cbor::lazy::adopt(std::string(*encoded))
  * result: lazy of {"age": 30, "name": "ann"}
  * @endcode
  *
@@ -2016,7 +2016,8 @@ inline result<std::string> to_edn(T const &value)
  * | a map type; a multimap type | a map; a map to arrays |
  * | another container | an array |
  * | `cbor::tagged_item<N, E>` | tag N on the item of E |
- * | a struct | a map |
+ * | a struct | a map; a struct in a struct is a map in a map |
+ * | a struct that holds a `std::vector` of itself | a map whose arrays hold maps of the same form, at any depth |
  *
  * `decode` gives `incorrect_type` for another item: a `std::vector<int>` takes a typed array, not an array.
  * An enum with no fixed underlying type does not compile in `decode`.
@@ -2026,12 +2027,20 @@ inline result<std::string> to_edn(T const &value)
  * message: {"id": 4}
  * call: auto const r = cbor::encode<reading>(reading{4, std::nullopt})
  * result: 5 bytes: a1 62 69 64 04
- * call: cbor::lazy::adopt(*r)
+ * call: cbor::lazy::adopt(std::string(*r))
  * result: lazy of {"id": 4}
  * call: auto const s = cbor::encode<std::set<std::uint8_t>>(std::set<std::uint8_t>{3, 1})
  * result: 6 bytes: d9 01 02 82 01 03
- * call: cbor::lazy::adopt(*s)
+ * call: cbor::lazy::adopt(std::string(*s))
  * result: lazy of 258([1, 3])
+ * call: auto const l = cbor::encode<line>(line{{1, 2}, {3, 4}})
+ * result: 37 bytes: a2 62 74 6f d9 07 0a a2 61 78 f9 42 00 61 79 f9 44 00 64 66 72 6f 6d d9 07 0a a2 61 78 f9 3c 00 61 79 f9 40 00
+ * call: cbor::lazy::adopt(std::string(*l))
+ * result: lazy of {"to": 1802({"x": 3.0, "y": 4.0}), "from": 1802({"x": 1.0, "y": 2.0})}
+ * call: auto const n = cbor::encode<node>(node{"root", {node{"a", {}}}})
+ * result: 39 bytes: a2 64 6e 61 6d 65 64 72 6f 6f 74 68 63 68 69 6c 64 72 65 6e 81 a2 64 6e 61 6d 65 61 61 68 63 68 69 6c 64 72 65 6e 80
+ * call: cbor::lazy::adopt(std::string(*n))
+ * result: lazy of {"name": "root", "children": [{"name": "a", "children": []}]}
  * call: cbor::structs<reading>::decode(std::move(bytes))
  * result: ref to reading{4, std::nullopt}
  * @endcode
@@ -2160,7 +2169,7 @@ public:
      * message: {"name": "ann", "age": 30}
      * call: auto const encoded = cbor::structs<person>::encode(person{"ann", 30})
      * result: 16 bytes: a2 63 61 67 65 18 1e 64 6e 61 6d 65 63 61 6e 6e
-     * call: cbor::lazy::adopt(*encoded)
+     * call: cbor::lazy::adopt(std::string(*encoded))
      * result: lazy of {"age": 30, "name": "ann"}
      * @endcode
      *
