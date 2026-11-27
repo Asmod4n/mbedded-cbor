@@ -77,7 +77,10 @@ enum class error {
     incorrect_type,
     /** The number does not fit T. */
     number_out_of_range,
-    /** The library does not return it. A writer of the program can return it for a cycle. */
+    /**
+     * `encode_cycles` meets a cycle through a `std::unique_ptr` or a `std::shared_ptr`. A writer of the program can
+     * return it for a cycle.
+     */
     cyclic_data_structure,
     /** A reference in a `%schema<T>` message names an entry that its table does not have. */
     unpopulated_table_index,
@@ -103,11 +106,7 @@ enum class error {
     /** `path::compile<T>` gets a path that is not singular, and `T` is not `nodelist`. */
     not_singular_query,
     /** `decode_cycles` meets a tag 29 that names a tag 28 whose content is decoded to its end, so no cycle. */
-    sharedref_not_cyclic,
-    /**
-     * An encode meets an object in place after a pointer wrote it, or a pointer into a string or a typed array.
-     */
-    pointer_conflict
+    sharedref_not_cyclic
 };
 
 /**
@@ -217,8 +216,6 @@ public:
             return "not a singular query";
         case error::sharedref_not_cyclic:
             return "sharedref not cyclic";
-        case error::pointer_conflict:
-            return "pointer conflict";
         }
         return "unknown cbor error";
     }

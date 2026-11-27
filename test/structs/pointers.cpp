@@ -1,16 +1,20 @@
-#include "../reference.hpp"
+#include "../small_stack.hpp"
+#include <cbor/decode.hpp>
 #include <cbor/diagnostic_notation.hpp>
 #include <cbor/error.hpp>
+#include <cbor/item.hpp>
 #include <cbor/structs.hpp>
 
 #include <doctest/doctest.h>
 
 #include <array>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 using cbor::error;
@@ -58,96 +62,37 @@ struct tree {
     std::vector<std::unique_ptr<tree>> kids;
 };
 
-struct pointer_first {
-    leaf *first;
-    std::vector<leaf> nodes;
-};
-
-struct value_first {
-    std::vector<leaf> items;
-    leaf *focus_pointer;
-};
-
 struct plain {
     int a;
     std::vector<std::string> b;
     std::optional<int> c;
 };
 
-struct array_first {
-    std::array<int, 4> a;
-    std::array<int, 4> *p;
-    int *i;
+struct loop {
+    loop *self;
 };
 
-struct array_after_pointer {
-    std::array<int, 4> array;
-    std::array<int, 4> *p;
-    int *i;
+struct two_loops {
+    loop *a;
+    loop *b;
 };
 
-struct starts_with_array {
-    std::array<int, 4> a;
-    int x;
+struct ring {
+    ring *next;
 };
 
-struct holds_struct {
-    starts_with_array o;
-    starts_with_array *p;
-    int *i;
+struct two_rings {
+    ring *a;
+    ring *b;
 };
 
-struct vector_and_int {
-    std::vector<int> v;
-    int a;
-    int *p;
+struct unique_link {
+    std::unique_ptr<unique_link> next;
 };
 
-struct text_and_char {
-    std::string t;
-    char *p;
+struct shared_link {
+    std::shared_ptr<shared_link> next;
 };
-
-} // namespace
-
-// The types below stand only in checks at compile time. Outside the unnamed namespace their descriptions are not
-// unused declarations of internal linkage.
-struct view_of_reached_char {
-    std::string_view s;
-    char *c;
-};
-
-struct view_of_other_type {
-    std::string_view s;
-    int *p;
-};
-
-struct span_of_reached_type {
-    std::vector<leaf> v;
-    std::span<leaf const> s;
-    leaf *p;
-};
-
-struct value_with_pointer {
-    int x;
-};
-
-struct value_of_int {
-    int x;
-};
-
-struct reached_by_value {
-    int *p;
-    value_of_int d;
-};
-
-struct not_reached_by_value {
-    leaf *p;
-    value_of_int d;
-};
-
-namespace
-{
 
 std::string bytes_of(std::string_view const edn)
 {
@@ -156,17 +101,9 @@ std::string bytes_of(std::string_view const edn)
     return *bytes;
 }
 
-std::string edn_of_array(std::array<int, 4> const &array)
-{
-    auto const bytes = cbor::encode<std::array<int, 4>>(array);
-    REQUIRE(bytes.has_value());
-    auto const text = cbor::diagnostic_notation(*bytes);
-    REQUIRE(text.has_value());
-    return *text;
-}
-
-// Each entry of the encode writes the same bytes: cbor::encode into a new string, cbor::encode into a span,
-// cbor::structs<T>::encode, and cbor::to_edn, whose text equals cbor::diagnostic_notation of these bytes.
+// Each entry of the encode writes the same bytes: cbor::encode into a new string and into a span,
+// cbor::structs<T>::encode into a new string and into a span, and cbor::to_edn, whose text equals
+// cbor::diagnostic_notation of these bytes.
 template <class T>
 void check_written(T const &value, std::string_view const edn)
 {
@@ -181,6 +118,10 @@ void check_written(T const &value, std::string_view const edn)
     auto const by_structs = cbor::structs<T>::encode(value);
     REQUIRE(by_structs.has_value());
     CHECK_EQ(*by_structs, expected);
+    std::array<char, 256> structs_buffer{};
+    auto const structs_written = cbor::structs<T>::encode(std::span<char>(structs_buffer), value);
+    REQUIRE(structs_written.has_value());
+    CHECK_EQ(std::string_view(structs_buffer.data(), *structs_written), expected);
     auto const text = cbor::to_edn<T>(value);
     auto const notation = cbor::diagnostic_notation(expected);
     REQUIRE(text.has_value());
@@ -188,36 +129,56 @@ void check_written(T const &value, std::string_view const edn)
     CHECK_EQ(*text, *notation);
 }
 
+// Both entries of cbor::encode_cycles write the same bytes: into a new string, into a span and into a string that
+// they append to.
 template <class T>
-void check_refused(T const &value, error const expected)
+std::string check_cycles_written(T const &value, std::string_view const edn)
 {
-    auto const encoded = cbor::encode<T>(value);
+    std::string const expected = bytes_of(edn);
+    auto const encoded = cbor::encode_cycles<T>(value);
+    REQUIRE(encoded.has_value());
+    CHECK_EQ(*encoded, expected);
+    std::array<char, 256> buffer{};
+    auto const written = cbor::encode_cycles<T>(std::span<char>(buffer), value);
+    REQUIRE(written.has_value());
+    CHECK_EQ(std::string_view(buffer.data(), *written), expected);
+    std::string appended = "x";
+    auto const appended_size = cbor::encode_cycles<T>(appended, value);
+    REQUIRE(appended_size.has_value());
+    CHECK_EQ(appended, "x" + expected);
+    return expected;
+}
+
+template <class T>
+void check_cycles_refused(T const &value, error const expected)
+{
+    auto const encoded = cbor::encode_cycles<T>(value);
     REQUIRE_FALSE(encoded.has_value());
     CHECK_EQ(encoded.error(), expected);
     std::array<char, 256> buffer{};
-    auto const written = cbor::encode<T>(std::span<char>(buffer), value);
+    auto const written = cbor::encode_cycles<T>(std::span<char>(buffer), value);
     REQUIRE_FALSE(written.has_value());
     CHECK_EQ(written.error(), expected);
-    auto const by_structs = cbor::structs<T>::encode(value);
-    REQUIRE_FALSE(by_structs.has_value());
-    CHECK_EQ(by_structs.error(), expected);
-    auto const text = cbor::to_edn<T>(value);
-    REQUIRE_FALSE(text.has_value());
-    CHECK_EQ(text.error(), expected);
 }
 
-template <class X>
-constexpr bool encodes = requires(X const &x, std::span<char> const out) {
-    cbor::encode<X>(x);
-    cbor::encode<X>(out, x);
-    cbor::to_edn<X>(x);
-};
+cbor::item value_at(cbor::item const map, std::string_view const key)
+{
+    auto const pairs = map.pairs();
+    REQUIRE(pairs.has_value());
+    for (auto const &[k, v] : *pairs)
+        if (k.get<std::string_view>() == key)
+            return v;
+    FAIL("the map has no key ", key);
+    return map;
+}
 
-template <class X>
-constexpr bool structs_encodes = requires(X const &x, std::span<char> const out) {
-    cbor::structs<X>::encode(x);
-    cbor::structs<X>::encode(out, x);
-};
+cbor::item target_of(cbor::item const reference)
+{
+    CHECK_EQ(reference.type(), cbor::type::shared_reference);
+    auto const r = reference.get<std::pair<std::uint64_t, cbor::item>>();
+    REQUIRE(r.has_value());
+    return r->second;
+}
 
 } // namespace
 } // namespace structs_pointers
@@ -229,36 +190,13 @@ CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::numbers, cbor::untagged, a, b, p);
 CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::shared_pair, cbor::untagged, a, b);
 CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::node, cbor::untagged, name, parent, children);
 CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::tree, cbor::untagged, v, kids);
-CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::pointer_first, cbor::untagged, first, nodes);
-CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::value_first, cbor::untagged, items, focus_pointer);
 CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::plain, cbor::untagged, a, b, c);
-CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::array_first, cbor::untagged, a, p, i);
-CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::array_after_pointer, cbor::untagged, array, p, i);
-CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::starts_with_array, cbor::untagged, a, x);
-CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::holds_struct, cbor::untagged, o, p, i);
-CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::vector_and_int, cbor::untagged, v, a, p);
-CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::text_and_char, cbor::untagged, t, p);
-CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::view_of_reached_char, cbor::untagged, s, c);
-CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::view_of_other_type, cbor::untagged, s, p);
-CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::span_of_reached_type, cbor::untagged, v, s, p);
-CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::reached_by_value, cbor::untagged, p, d);
-CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::not_reached_by_value, cbor::untagged, p, d);
-
-template <>
-struct cbor::describe_members<structs_pointers::value_with_pointer> {
-    static int const *value(structs_pointers::value_with_pointer const &object)
-    {
-        return &object.x;
-    }
-};
-
-template <>
-struct cbor::describe_members<structs_pointers::value_of_int> {
-    static int value(structs_pointers::value_of_int const &object)
-    {
-        return object.x;
-    }
-};
+CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::loop, cbor::untagged, self);
+CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::two_loops, cbor::untagged, a, b);
+CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::ring, cbor::untagged, next);
+CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::two_rings, cbor::untagged, a, b);
+CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::unique_link, cbor::untagged, next);
+CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::shared_link, cbor::untagged, next);
 
 namespace structs_pointers
 {
@@ -271,40 +209,24 @@ TEST_CASE("structs pointers: an empty pointer of each kind writes null")
     check_written<leaf *>(nullptr, "null");
 }
 
-// The owner decided that a tag 28 stands only on an object that the value reaches twice or more at run time. The
-// object reached once stays without a tag, and the index of tag 29 counts only the tags 28 written before it.
-TEST_CASE("structs pointers: only an object reached twice or more carries tag 28")
+// The owner decided that cbor::encode keeps no identity: a pointer writes the value of its target, and an object
+// that two pointers reach is written twice, with no tag.
+TEST_CASE("structs pointers: cbor::encode writes the value of each target, once for each pointer")
 {
     numbers n{1, 2, nullptr};
     n.p = &n.b;
-    check_written(n, R"({"a": 1, "b": 28(2), "p": 29(0)})");
+    check_written(n, R"({"a": 1, "b": 2, "p": 2})");
     leaf x{1};
     leaf y{2};
-    check_written(raw_triple{&x, &y, &y}, R"({"a": {"v": 1}, "b": 28({"v": 2}), "c": 29(0)})");
-    check_written(raw_triple{&x, &x, nullptr}, R"({"a": 28({"v": 1}), "b": 29(0), "c": null})");
+    check_written(raw_triple{&x, &y, &y}, R"({"a": {"v": 1}, "b": {"v": 2}, "c": {"v": 2}})");
     check_written<leaf *>(&x, R"({"v": 1})");
-}
-
-// A parent pointer leads back to the root, which the value reaches in place and again through the pointer. The
-// root carries tag 28, the child that is reached once carries none, and the encode ends at tag 29.
-TEST_CASE("structs pointers: a cycle through a parent T* to the root")
-{
-    node root{"r", nullptr, {}};
-    root.children.push_back(std::make_unique<node>(node{"c", &root, {}}));
-    check_written(root, R"(28({"name": "r", "parent": null,)"
-                        R"( "children": [{"name": "c", "parent": 29(0), "children": []}]}))");
-}
-
-// A std::shared_ptr held twice is one object: tag 28 at the first member, tag 29 at the second. A pointer to const
-// names the same object as a pointer to the type without const.
-TEST_CASE("structs pointers: a std::shared_ptr shared by two members")
-{
     auto const shared = std::make_shared<leaf>(leaf{3});
-    check_written(shared_pair{shared, shared}, R"({"a": 28({"v": 3}), "b": 29(0)})");
+    check_written(shared_pair{shared, shared}, R"({"a": {"v": 3}, "b": {"v": 3}})");
+    auto u = std::make_unique<leaf>(leaf{4});
+    check_written(empty_pointers{&x, std::move(u), shared}, R"({"r": {"v": 1}, "s": {"v": 3}, "u": {"v": 4}})");
 }
 
-// Each std::unique_ptr owns its own object, so the value reaches every object of the tree once and the bytes hold
-// no tag.
+// Each std::unique_ptr owns its own object, so the bytes hold each object once and no tag.
 TEST_CASE("structs pointers: a tree of std::unique_ptr")
 {
     tree root{1, {}};
@@ -315,80 +237,130 @@ TEST_CASE("structs pointers: a tree of std::unique_ptr")
                         R"( {"v": 3, "kids": [{"v": 4, "kids": []}]}]})");
 }
 
-// A pointer that writes an element first leaves the element to be written in place again later, as a second copy
-// of the object. Boost.Serialization refuses this with pointer_conflict, and so does the encode. The other order,
-// the element first and the pointer after it, writes tag 29.
-TEST_CASE("structs pointers: an object in place after a pointer wrote it is pointer_conflict")
+// The owner decided that cbor::encode recurses through a cycle until the stack is full and then gives
+// nesting_depth_exceeded. The check of the stack stands between two levels of the recursion, so the frames between
+// two checks must fit the reserve of the stack; the test runs on a small stack, and in the ASan build at -O0, where
+// the frames are largest. The span is larger than the bytes that the small stack lets the call write.
+TEST_CASE("structs pointers: each entry of cbor::encode gives nesting_depth_exceeded for a node that points to itself")
 {
-    pointer_first g{nullptr, {leaf{1}, leaf{2}}};
-    g.first = &g.nodes[1];
-    check_refused(g, error::pointer_conflict);
-    value_first h{{leaf{1}, leaf{2}}, nullptr};
-    h.focus_pointer = &h.items[1];
-    check_written(h, R"({"items": [{"v": 1}, 28({"v": 2})], "focus_pointer": 29(0)})");
+    loop self{nullptr};
+    self.self = &self;
+    std::string buffer(test::small_stack_bytes, '\0');
+    std::span<char> const out(buffer);
+    CHECK_EQ(test::error_on_small_stack([&self] { return cbor::encode<loop>(self); }), error::nesting_depth_exceeded);
+    CHECK_EQ(test::error_on_small_stack([&self, out] { return cbor::encode<loop>(out, self); }),
+             error::nesting_depth_exceeded);
+    CHECK_EQ(test::error_on_small_stack([&self] { return cbor::structs<loop>::encode(self); }),
+             error::nesting_depth_exceeded);
+    CHECK_EQ(test::error_on_small_stack([&self, out] { return cbor::structs<loop>::encode(out, self); }),
+             error::nesting_depth_exceeded);
+    CHECK_EQ(test::error_on_small_stack([&self] { return cbor::to_edn<loop>(self); }), error::nesting_depth_exceeded);
 }
 
-// A typed array is written as one byte string, so no tag can stand on one of its elements. A pointer to the whole
-// array is a pointer to another type: in key order after the array it writes tag 29, before the array it writes
-// the array, which then stands in place a second time.
-TEST_CASE("structs pointers: a pointer to a typed array beside it, in both key orders")
-{
-    array_first f{{1, 2, 3, 4}, nullptr, nullptr};
-    f.p = &f.a;
-    check_written(f, R"({"a": 28()" + edn_of_array(f.a) + R"(), "i": null, "p": 29(0)})");
-    array_after_pointer g{{1, 2, 3, 4}, nullptr, nullptr};
-    g.p = &g.array;
-    check_refused(g, error::pointer_conflict);
-}
-
-// A struct and the typed array at its start share one address. The identity of an object holds its type, so a
-// pointer to the struct does not point into the array of int.
-TEST_CASE("structs pointers: a pointer to a struct that starts with a typed array")
-{
-    holds_struct h{{{1, 2, 3, 4}, 5}, nullptr, nullptr};
-    h.p = &h.o;
-    check_written(h, R"({"i": null, "o": 28({"a": )" + edn_of_array(h.o.a) + R"(, "x": 5}), "p": 29(0)})");
-}
-
-// An element of a typed array or a char of a string has no item of its own, so a pointer into one cannot name it.
-// A pointer to an int beside the vector names an item of its own and writes tags 28 and 29.
-TEST_CASE("structs pointers: a pointer into a typed array or a string is pointer_conflict")
-{
-    vector_and_int into{{1, 2, 3}, 4, nullptr};
-    into.p = &into.v[1];
-    check_refused(into, error::pointer_conflict);
-    vector_and_int beside{{1, 2, 3}, 4, nullptr};
-    beside.p = &beside.a;
-    auto const vector_text = cbor::diagnostic_notation(*cbor::encode<std::vector<int>>(beside.v));
-    REQUIRE(vector_text.has_value());
-    check_written(beside, R"({"a": 28(4), "p": 29(0), "v": )" + *vector_text + "}");
-    text_and_char text{"abc", nullptr};
-    text.p = &text.t[1];
-    check_refused(text, error::pointer_conflict);
-}
-
-// A view over the objects of a type that a pointer can reach would reach each of them a second time in place, and a
-// value made by cbor::describe_members is a temporary whose address names no object of the value. Such a type does
-// not compile. A view of a type that no pointer can reach compiles.
-TEST_CASE("structs pointers: a view or a described value of a reached type does not compile")
-{
-    CHECK_FALSE(encodes<view_of_reached_char>);
-    CHECK_FALSE(structs_encodes<view_of_reached_char>);
-    CHECK_FALSE(encodes<span_of_reached_type>);
-    CHECK_FALSE(structs_encodes<span_of_reached_type>);
-    CHECK(encodes<view_of_other_type>);
-    CHECK(structs_encodes<view_of_other_type>);
-    CHECK_FALSE(encodes<value_with_pointer>);
-    CHECK_FALSE(encodes<reached_by_value>);
-    CHECK(encodes<not_reached_by_value>);
-    CHECK(encodes<value_of_int>);
-}
-
-// A type with no pointer in it has no tracker: its bytes hold no tag 28.
-TEST_CASE("structs pointers: a type without pointers writes the bytes it wrote before")
+// A type without pointers takes the path of cbor::encode in both functions and writes the same bytes.
+TEST_CASE("structs pointers: a type without pointers writes the same bytes in cbor::encode and cbor::encode_cycles")
 {
     check_written(plain{1, {"x"}, std::nullopt}, R"({"a": 1, "b": ["x"]})");
+    check_cycles_written(plain{1, {"x"}, std::nullopt}, R"({"a": 1, "b": ["x"]})");
     check_written(leaf{5}, R"({"v": 5})");
+    check_cycles_written(leaf{5}, R"({"v": 5})");
+}
+
+// The owner decided that cbor::encode_cycles writes tags 28 and 29 only for a cycle. An object that two pointers
+// reach outside a cycle is written twice as a value, as cbor::encode writes it.
+TEST_CASE("structs pointers: cbor::encode_cycles writes a shared object that is no cycle as a value each time")
+{
+    leaf x{1};
+    check_cycles_written(raw_triple{&x, &x, nullptr}, R"({"a": {"v": 1}, "b": {"v": 1}, "c": null})");
+    auto const shared = std::make_shared<leaf>(leaf{3});
+    check_cycles_written(shared_pair{shared, shared}, R"({"a": {"v": 3}, "b": {"v": 3}})");
+    numbers n{1, 2, nullptr};
+    n.p = &n.b;
+    check_cycles_written(n, R"({"a": 1, "b": 2, "p": 2})");
+}
+
+// The value-sharing registration: a tag 28 marks the object, and a tag 29 with the index 0 names the first mark.
+// cbor::decode_cycles reads the bytes back to a node whose member is a reference to that node.
+TEST_CASE("structs pointers: cbor::encode_cycles writes a node that points to itself")
+{
+    loop self{nullptr};
+    self.self = &self;
+    auto const bytes = check_cycles_written(self, R"(28({"self": 29(0)}))");
+    auto const tree = cbor::decode_cycles(bytes);
+    REQUIRE(tree.has_value());
+    CHECK(target_of(value_at(**tree, "self")) == **tree);
+}
+
+// A parent pointer leads back to an object whose write is open: to the root from the child, to the child from the
+// grandchild. Each target carries a tag 28, and the index of tag 29 counts the tags 28 in the order of the bytes.
+TEST_CASE("structs pointers: cbor::encode_cycles writes a tree with parent pointers")
+{
+    node root{"r", nullptr, {}};
+    root.children.push_back(std::make_unique<node>(node{"c", &root, {}}));
+    node &child = *root.children.front();
+    child.children.push_back(std::make_unique<node>(node{"g", &child, {}}));
+    auto const bytes = check_cycles_written(root, R"(28({"name": "r", "parent": null, "children": [)"
+                                                  R"(28({"name": "c", "parent": 29(0), "children": [)"
+                                                  R"({"name": "g", "parent": 29(1), "children": []}]})]}))");
+    auto const tree = cbor::decode_cycles(bytes);
+    REQUIRE(tree.has_value());
+    auto const children = value_at(**tree, "children").elements();
+    REQUIRE(children.has_value());
+    cbor::item const decoded_child = *children->begin();
+    CHECK(target_of(value_at(decoded_child, "parent")) == **tree);
+    auto const grandchildren = value_at(decoded_child, "children").elements();
+    REQUIRE(grandchildren.has_value());
+    CHECK(target_of(value_at(*grandchildren->begin(), "parent")) == decoded_child);
+}
+
+// Review 11 (A1): one target reached on two paths is written on each path, each time with a tag 28 of its own. The
+// tag 29 of each path names the tag 28 of that path, so cbor::decode_cycles gives two objects, each its own cycle.
+TEST_CASE("structs pointers: cbor::encode_cycles marks a cycle that two pointers reach on each path")
+{
+    loop self{nullptr};
+    self.self = &self;
+    auto const bytes = check_cycles_written(two_loops{&self, &self}, R"({"a": 28({"self": 29(0)}),)"
+                                                                      R"( "b": 28({"self": 29(1)})})");
+    auto const tree = cbor::decode_cycles(bytes);
+    REQUIRE(tree.has_value());
+    cbor::item const a = value_at(**tree, "a");
+    cbor::item const b = value_at(**tree, "b");
+    CHECK(target_of(value_at(a, "self")) == a);
+    CHECK(target_of(value_at(b, "self")) == b);
+    CHECK_FALSE(a == b);
+}
+
+// Review 11 (A2): two objects that point to each other are both targets, each on the path that starts at the other.
+// On the path that starts at one of them, the other carries a tag 28 that no tag 29 names, because the cycle closes
+// at the first object. cbor::decode_cycles reads such a mark.
+TEST_CASE("structs pointers: cbor::encode_cycles writes a tag 28 that no tag 29 names, and decode_cycles reads it")
+{
+    ring first{nullptr};
+    ring second{&first};
+    first.next = &second;
+    auto const bytes = check_cycles_written(two_rings{&first, &second}, R"({"a": 28({"next": 28({"next": 29(0)})}),)"
+                                                                        R"( "b": 28({"next": 28({"next": 29(2)})})})");
+    auto const tree = cbor::decode_cycles(bytes);
+    REQUIRE(tree.has_value());
+    cbor::item const a = value_at(**tree, "a");
+    CHECK(target_of(value_at(value_at(a, "next"), "next")) == a);
+    cbor::item const b = value_at(**tree, "b");
+    CHECK(target_of(value_at(value_at(b, "next"), "next")) == b);
+}
+
+// Plan 12 (R10.2): a cycle through a std::shared_ptr leaks, and a cycle through a std::unique_ptr gives an object two
+// owners, so cbor::encode_cycles refuses both. The test ends each cycle before the objects end.
+TEST_CASE("structs pointers: cbor::encode_cycles gives cyclic_data_structure for a cycle through a smart pointer")
+{
+    unique_link root;
+    root.next.reset(&root);
+    check_cycles_refused(root, error::cyclic_data_structure);
+    unique_link *const released = root.next.release();
+    CHECK_EQ(released, &root);
+    auto const shared = std::make_shared<shared_link>();
+    shared->next = shared;
+    check_cycles_refused(*shared, error::cyclic_data_structure);
+    shared->next.reset();
 }
 
 } // namespace structs_pointers
