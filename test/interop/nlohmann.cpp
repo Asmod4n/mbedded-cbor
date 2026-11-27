@@ -1,6 +1,7 @@
-// nlohmann/json: the canonical dump of one top-level item, read with from_cbor in strict mode. The tag handler "store"
-// keeps the tag number of a byte string as its subtype. Nlohmann/json refuses a tag on any other item with this handler.
-// Map keys must be text in nlohmann/json.
+// nlohmann/json: the canonical dump of one top-level item, read with from_cbor in strict mode. The tag
+// handler "store" keeps the tag number of a byte string as its subtype. Nlohmann/json refuses a tag on any
+// other item with this handler. Map keys must be text in nlohmann/json. The re-encode writes the value of
+// from_cbor with to_cbor, which writes the subtype of a byte string as its tag.
 #include "dump.hpp"
 
 #include <nlohmann/json.hpp>
@@ -48,16 +49,29 @@ std::string value_dump(nlohmann::ordered_json const &j)
     }
 }
 
+nlohmann::ordered_json value_of(std::string const &bytes)
+{
+    return nlohmann::ordered_json::from_cbor(bytes, true, true, nlohmann::json::cbor_tag_handler_t::store);
+}
 }
 
-int main()
+int main(int const argc, char const *const *const argv)
 {
-    return interop::run([](std::string const &bytes) -> std::expected<std::string, std::string> {
-        try {
-            return value_dump(nlohmann::ordered_json::from_cbor(bytes, true, true,
-                                                                nlohmann::json::cbor_tag_handler_t::store));
-        } catch (std::exception const &e) {
-            return std::unexpected(e.what());
-        }
-    });
+    return interop::run(
+        argc, argv,
+        [](std::string const &bytes) -> std::expected<std::string, std::string> {
+            try {
+                return value_dump(value_of(bytes));
+            } catch (std::exception const &e) {
+                return std::unexpected(e.what());
+            }
+        },
+        [](std::string const &bytes) -> std::expected<std::string, std::string> {
+            try {
+                std::vector<std::uint8_t> const out = nlohmann::ordered_json::to_cbor(value_of(bytes));
+                return std::string(out.begin(), out.end());
+            } catch (std::exception const &e) {
+                return std::unexpected(e.what());
+            }
+        });
 }

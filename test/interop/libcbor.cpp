@@ -1,7 +1,10 @@
-// libcbor: the canonical dump of one top-level item, read with cbor_load.
+// libcbor: the canonical dump of one top-level item, read with cbor_load. The re-encode writes the item of
+// cbor_load with cbor_serialize_alloc, which keeps the widths that it read.
 #include "dump.hpp"
 
 #include <cbor.h>
+
+#include <cstdlib>
 
 namespace
 {
@@ -47,18 +50,35 @@ std::string item_dump(cbor_item_t *const item)
 
 }
 
-int main()
+int main(int const argc, char const *const *const argv)
 {
-    return interop::run([](std::string const &bytes) -> std::expected<std::string, std::string> {
-        cbor_load_result r;
-        cbor_item_t *item = cbor_load(reinterpret_cast<cbor_data>(bytes.data()), bytes.size(), &r);
-        if (item == nullptr)
-            return std::unexpected("cbor_load error " + std::to_string(r.error.code) + " at " +
-                                   std::to_string(r.error.position));
-        std::string const out = item_dump(item);
-        cbor_decref(&item);
-        if (r.read != bytes.size())
-            return std::unexpected("bytes after the item");
-        return out;
-    });
+    return interop::run(
+        argc, argv,
+        [](std::string const &bytes) -> std::expected<std::string, std::string> {
+            cbor_load_result r;
+            cbor_item_t *item = cbor_load(reinterpret_cast<cbor_data>(bytes.data()), bytes.size(), &r);
+            if (item == nullptr)
+                return std::unexpected("cbor_load error " + std::to_string(r.error.code) + " at " +
+                                       std::to_string(r.error.position));
+            std::string const out = item_dump(item);
+            cbor_decref(&item);
+            if (r.read != bytes.size())
+                return std::unexpected("bytes after the item");
+            return out;
+        },
+        [](std::string const &bytes) -> std::expected<std::string, std::string> {
+            cbor_load_result r;
+            cbor_item_t *item = cbor_load(reinterpret_cast<cbor_data>(bytes.data()), bytes.size(), &r);
+            if (item == nullptr)
+                return std::unexpected("cbor_load error " + std::to_string(r.error.code));
+            unsigned char *buffer = nullptr;
+            std::size_t buffer_size = 0;
+            std::size_t const written = cbor_serialize_alloc(item, &buffer, &buffer_size);
+            cbor_decref(&item);
+            if (written == 0)
+                return std::unexpected("cbor_serialize_alloc wrote no byte");
+            std::string out(reinterpret_cast<char const *>(buffer), written);
+            std::free(buffer);
+            return out;
+        });
 }

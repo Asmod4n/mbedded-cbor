@@ -1,9 +1,12 @@
-// Writes every interop case as one line to stdout. The line is "name TAB section TAB written TAB expected". Written and
-// expected are hex. Written comes from a public writer of the library. The writers are cbor::encode(item),
-// cbor::encode of a value and schema<T>::encode. Expected holds the same value in bytes that do not come
-// from the writer under test. These bytes are the input of a re-encode, or bytes written by hand from RFC 8949 and RFC
-// 8746. A dash stands for a case with no expected bytes; the decoders must then only accept the written bytes. A writer
-// that refuses a value gives "!" and the error in place of written, so the driver reports it.
+// Writes every interop case as one line to stdout. The line is "name TAB section TAB written TAB expected".
+// Written and expected are hex. Written comes from a public writer of the library. The writers are
+// cbor::encode(item), cbor::encode of a value and schema<T>::encode. Expected holds the same value in bytes
+// that do not come from the writer under test. These bytes are the input of a re-encode, or bytes written by
+// hand from RFC 8949 and RFC 8746. A dash stands for a case with no expected bytes; the decoders must then
+// only accept the written bytes. A writer that refuses a value gives "!" and the error in place of written,
+// so the driver reports it. No case holds a tag 28 or 29. The cycles that cbor::encode_cycles writes go to
+// the file of the fourth argument, one line each: "name TAB written TAB expected graph TAB cycle". The
+// expected graph is the text of read.cpp, written by hand from the value.
 #include <cbor/cbor.hpp>
 #include "../rfc8746.hpp"
 #include "../hex.hpp"
@@ -11,6 +14,7 @@
 
 #include <bit>
 #include <charconv>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -18,8 +22,8 @@
 #include <iostream>
 #include <iterator>
 #include <limits>
-#include <chrono>
 #include <map>
+#include <memory>
 #include <optional>
 #include <span>
 #include <stdfloat>
@@ -225,16 +229,6 @@ void native_widths()
         reencode(std::string("native/simple_") + c.name, "RFC 8949 3.3", test::unhexlify(c.expected));
 }
 
-// Tags 28 and 29 of the value-sharing registration, written by hand. cbor::encode writes the decoded tree with the
-// tags as they stand.
-void shared_values()
-{
-    char const *const s = "value-sharing (tags 28, 29), RFC 8949 3.4";
-    reencode("shared/array_text", s, test::unhexlify("82d81c6178d81d00"));
-    reencode("shared/map_array", s, test::unhexlify("a26161d81c8201026162d81d00"));
-    reencode("shared/two_marks", s, test::unhexlify("84d81c6170d81c4171d81d01d81d00"));
-}
-
 // Every tag of RFC 8746 Table 1 over 16 bytes, written by hand. The reserved tag 76 is the exception. 16 bytes are a
 // whole number of elements for every element size.
 void typed_arrays()
@@ -434,20 +428,84 @@ void packed_cases()
                cbor::schema<sensor>::encode(sensor{"t1", 7, {1.5, 2.5}, {std::byte{9}}, -5}), "-");
 }
 
+struct loop {
+    loop *self;
+};
+
+struct node {
+    std::string name;
+    node *parent;
+    std::vector<std::unique_ptr<node>> children;
+};
+
+struct two_loops {
+    loop *aa;
+    loop *b;
+};
+
+struct both_ways {
+    both_ways *left;
+    both_ways *right;
+};
+
+} // namespace
+
+CBOR_DEFINE_TYPE_MEMBERS(loop, cbor::untagged, self);
+CBOR_DEFINE_TYPE_MEMBERS(node, cbor::untagged, name, parent, children);
+CBOR_DEFINE_TYPE_MEMBERS(two_loops, cbor::untagged, aa, b);
+CBOR_DEFINE_TYPE_MEMBERS(both_ways, cbor::untagged, left, right);
+
+namespace
+{
+
+template <class T>
+void cycle_print(std::ostream &out, std::string_view const name, T const &value, std::string_view const graph)
+{
+    auto const written = cbor::encode_cycles<T>(value);
+    out << name << '\t' << (written ? test::hexlify(*written) : message_of(written.error())) << '\t' << graph
+        << "\tcycle\n";
+}
+
+// cbor::encode_cycles (http://cbor.schmorp.de/value-sharing). The keys of two_loops stand in the order "b",
+// "aa" in the bytes (RFC 8949 4.2.1) and in the order "aa", "b" in the graph, so the numbers of the graph do
+// not follow the order of the bytes.
+void cycles_cases(std::ostream &out)
+{
+    loop self{nullptr};
+    self.self = &self;
+    cycle_print(out, "mbedded/node_to_itself", self, "&0{t'73656c66':*0}");
+    node root{"r", nullptr, {}};
+    root.children.push_back(std::make_unique<node>(node{"c", &root, {}}));
+    node &child = *root.children.front();
+    child.children.push_back(std::make_unique<node>(node{"g", &child, {}}));
+    cycle_print(out, "mbedded/parent_pointers", root,
+                "&0{t'6368696c6472656e':[&1{t'6368696c6472656e':[{t'6368696c6472656e':[],t'6e616d65':t'67',"
+                "t'706172656e74':*1}],t'6e616d65':t'63',t'706172656e74':*0}],t'6e616d65':t'72',"
+                "t'706172656e74':s(22)}");
+    cycle_print(out, "mbedded/two_pointers_to_one_loop", two_loops{&self, &self},
+                "{t'6161':&0{t'73656c66':*0},t'62':&1{t'73656c66':*1}}");
+    both_ways both{nullptr, nullptr};
+    both.left = &both;
+    both.right = &both;
+    cycle_print(out, "mbedded/two_keys_to_the_root", both, "&0{t'6c656674':*0,t'7269676874':*0}");
+}
+
 } // namespace
 
 int main(int const argc, char const *const *const argv)
 {
-    if (argc != 4) {
-        std::cerr << "usage: write <appendix_a.json> <cbor-test-vectors/tests> <bench/docs>\n";
+    if (argc != 5) {
+        std::cerr << "usage: write <appendix_a.json> <cbor-test-vectors/tests> <bench/docs> <cycles.tsv>\n";
         return 2;
     }
     appendix_a(argv[1]);
     cbor_wg(argv[2]);
     corpora(argv[3]);
     native_widths();
-    shared_values();
     typed_arrays();
     structs_cases();
     packed_cases();
+    std::ofstream cycles(argv[4]);
+    cycles_cases(cycles);
+    return cycles ? 0 : 1;
 }
