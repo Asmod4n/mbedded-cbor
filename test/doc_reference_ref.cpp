@@ -25,7 +25,7 @@ using reference_ref::person;
 TEST_CASE("doc reference ref: the example of the group ref")
 {
     // [ref group]
-    std::string bytes = *cbor::diag2cbor(R"({"name": "ann"})");
+    std::string bytes = *cbor::diag2cbor(R"({"name": "ann"})");  // 10 bytes: a1 64 6e 61 6d 65 63 61 6e 6e
     std::optional<cbor::ref<std::string_view>> kept;
     {
         auto const doc = cbor::lazy::adopt(std::move(bytes));
@@ -39,6 +39,8 @@ TEST_CASE("doc reference ref: the example of the group ref")
     REQUIRE(kept.has_value());
     CHECK_EQ(**kept, "ann");
     CHECK_EQ(copy, "ann");
+    CHECK_EQ(*cbor::diag2cbor(R"({"name": "ann"})"), test::encode_in_preferred_form(test::M("name"s, "ann"s)));
+    CHECK_EQ((*cbor::diag2cbor(R"({"name": "ann"})")).size(), 10u);
     CHECK_NE(copy.data(), (**kept).data());
 }
 
