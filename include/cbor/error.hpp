@@ -104,7 +104,9 @@ enum class error {
     not_singular_query,
     /** `decode_cycles` meets a tag 29 that names a tag 28 whose content is decoded to its end, so no cycle. */
     sharedref_not_cyclic,
-    /** An encode writes an object in place after a pointer in the same value wrote it. */
+    /**
+     * An encode meets an object in place after a pointer wrote it, or a pointer into a string or a typed array.
+     */
     pointer_conflict
 };
 

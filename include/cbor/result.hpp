@@ -38,6 +38,12 @@ inline constexpr bool is_ref_v = false;
 template <class V>
 inline constexpr bool is_ref_v<ref<V>> = true;
 
+template <bool Reflected>
+class basic_generic;
+
+template <class T, bool Reflected>
+concept value_sharing_valid = basic_generic<Reflected>::template value_sharing_valid_v<T>;
+
 template <class T>
 concept value_outlives_result =
     std::is_scalar_v<T> || detail::integer<T> || std::same_as<T, std::string_view> || copied_value<T> ||
@@ -129,12 +135,12 @@ private:
     friend result<std::size_t> encode(Target &&out, item root);
 
     template <class V>
-        requires(!std::same_as<V, item> && !std::same_as<V, owning<item>>)
+        requires(!std::same_as<V, item> && !std::same_as<V, owning<item>> && detail::value_sharing_valid<V, false>)
     friend result<std::string> encode(V const &value);
 
     template <class V, class Target>
         requires(detail::is_target_v<std::remove_reference_t<Target>> && !std::same_as<V, item> &&
-                 !std::same_as<V, owning<item>>)
+                 !std::same_as<V, owning<item>> && detail::value_sharing_valid<V, false>)
     friend result<std::size_t> encode(Target &&out, V const &value);
 
     friend result<owning<item>> parse_edn(std::string_view text);
@@ -142,7 +148,7 @@ private:
     friend result<std::string> to_edn(item root);
 
     template <class V>
-        requires(!std::same_as<V, item> && !std::same_as<V, owning<item>>)
+        requires(!std::same_as<V, item> && !std::same_as<V, owning<item>> && detail::value_sharing_valid<V, false>)
     friend result<std::string> to_edn(V const &value);
 
     friend constexpr result<std::string> diag2cbor(std::string_view text);
