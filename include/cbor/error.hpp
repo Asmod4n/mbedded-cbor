@@ -103,7 +103,9 @@ enum class error {
     /** `path::compile<T>` gets a path that is not singular, and `T` is not `nodelist`. */
     not_singular_query,
     /** `decode_cycles` meets a tag 29 that names a tag 28 whose content is decoded to its end, so no cycle. */
-    sharedref_not_cyclic
+    sharedref_not_cyclic,
+    /** An encode writes an object in place after a pointer in the same value wrote it. */
+    pointer_conflict
 };
 
 /**
@@ -213,6 +215,8 @@ public:
             return "not a singular query";
         case error::sharedref_not_cyclic:
             return "sharedref not cyclic";
+        case error::pointer_conflict:
+            return "pointer conflict";
         }
         return "unknown cbor error";
     }

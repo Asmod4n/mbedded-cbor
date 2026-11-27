@@ -13,8 +13,8 @@ using cbor::error;
 namespace
 {
 
-// cbor::error is a finite set, so each test below checks each member. The list holds the 26 members in the order of
-// include/cbor/error.hpp, whose values run from 1 to 26 with no gap.
+// cbor::error is a finite set, so each test below checks each member. The list holds the 27 members in the order of
+// include/cbor/error.hpp, whose values run from 1 to 27 with no gap.
 constexpr std::array every_error{
     error::too_little_data,
     error::syntax_error,
@@ -42,6 +42,7 @@ constexpr std::array every_error{
     error::container_elements_exceeded,
     error::not_singular_query,
     error::sharedref_not_cyclic,
+    error::pointer_conflict,
 };
 
 } // namespace
@@ -50,7 +51,7 @@ constexpr std::array every_error{
 // member, so the size of the list equals the value of the last member.
 TEST_CASE("error: the list of the tests holds every member of cbor::error")
 {
-    CHECK_EQ(every_error.size(), static_cast<std::size_t>(error::sharedref_not_cyclic));
+    CHECK_EQ(every_error.size(), static_cast<std::size_t>(error::pointer_conflict));
 }
 
 // An error never equals the value-initialized enum: a result that holds error{} would read as no error.

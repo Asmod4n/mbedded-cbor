@@ -33,6 +33,7 @@
 #include <string_view>
 #include <tuple>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -267,6 +268,119 @@ class basic_generic
 
     template <class E, class A>
     static constexpr bool is_std_vector<std::vector<E, A>> = true;
+
+    template <class U>
+    static constexpr bool is_smart_pointer = false;
+
+    template <class E, class D>
+    static constexpr bool is_smart_pointer<std::unique_ptr<E, D>> = !std::is_array_v<E>;
+
+    template <class E>
+    static constexpr bool is_smart_pointer<std::shared_ptr<E>> = !std::is_array_v<E>;
+
+    template <class U>
+    static constexpr bool is_object_pointer =
+        (std::is_pointer_v<U> && std::is_object_v<std::remove_pointer_t<U>>) || is_smart_pointer<U>;
+
+    template <class U>
+    using pointee_t = std::remove_cv_t<typename std::pointer_traits<U>::element_type>;
+
+    template <auto matches, class U, class... Seen>
+    static consteval bool pointer_reaches()
+    {
+        using V = std::remove_cv_t<U>;
+        if constexpr ((std::same_as<V, Seen> || ...)) {
+            return false;
+        } else if constexpr (is_object_pointer<V>) {
+            return matches.template operator()<pointee_t<V>>() ||
+                   pointer_reaches<matches, pointee_t<V>, Seen...>();
+        } else if constexpr (detail::reflection::is_optional<V>) {
+            return pointer_reaches<matches, typename V::value_type, V, Seen...>();
+        } else if constexpr (detail::is_std_variant<V>) {
+            return [&]<std::size_t... I>(std::index_sequence<I...>) {
+                return (pointer_reaches<matches, std::variant_alternative_t<I, V>, V, Seen...>() || ...);
+            }(std::make_index_sequence<std::variant_size_v<V>>());
+        } else if constexpr (is_tagged_item<V>) {
+            return pointer_reaches<matches, decltype(std::declval<V &>().content), V, Seen...>();
+        } else if constexpr (is_std_tuple<V> || is_std_pair<V>) {
+            return [&]<std::size_t... I>(std::index_sequence<I...>) {
+                return (pointer_reaches<matches, std::tuple_element_t<I, V>, V, Seen...>() || ...);
+            }(std::make_index_sequence<std::tuple_size_v<V>>());
+        } else if constexpr (is_basic_string<V> || std::same_as<V, std::string_view>) {
+            return false;
+        } else if constexpr (std::ranges::range<V>) {
+            return pointer_reaches<matches, std::ranges::range_value_t<V>, V, Seen...>();
+        } else if constexpr (std::is_class_v<V> && !has_describe_value<V> &&
+                             (has_describe_members<V> || (Reflected && std::is_aggregate_v<V>))) {
+            return [&]<std::size_t... I>(std::index_sequence<I...>) {
+                return (pointer_reaches<matches,
+                                        std::remove_cvref_t<decltype(detail::pfr::get<I>(std::declval<V &>()))>, V,
+                                        Seen...>() ||
+                        ...);
+            }(std::make_index_sequence<detail::pfr::tuple_size_v<V>>());
+        } else {
+            return false;
+        }
+    }
+
+    template <class R>
+    static constexpr bool holds_pointer = pointer_reaches<[]<class>() { return true; }, R>();
+
+    template <class R, class U>
+    static constexpr bool tracked =
+        pointer_reaches<[]<class P>() { return std::same_as<P, std::remove_cv_t<U>>; }, R>();
+
+    template <class U>
+    static constexpr char class_id = 0;
+
+    struct address_hash {
+        std::size_t operator()(std::pair<void const *, void const *> const &object) const noexcept
+        {
+            return std::hash<void const *>{}(object.first);
+        }
+    };
+
+    template <class R>
+    class object_set
+    {
+        std::unordered_map<std::pair<void const *, void const *>, std::uint64_t, address_hash> object_ids;
+
+        template <class U>
+        static std::pair<void const *, void const *> identity_of(U const &object)
+        {
+            return {std::addressof(object), &class_id<U>};
+        }
+
+    public:
+        template <class U>
+        static constexpr bool tracks = tracked<R, U>;
+
+        template <class U>
+        std::optional<std::uint64_t> object_id_of(U const &object) const
+        {
+            auto const found = object_ids.find(identity_of(object));
+            if (found == object_ids.end())
+                return std::nullopt;
+            return found->second;
+        }
+
+        template <class U>
+        bool insert(U const &object)
+        {
+            return object_ids.try_emplace(identity_of(object), object_ids.size()).second;
+        }
+    };
+
+    struct track_never {
+        template <class U>
+        static constexpr bool tracks = false;
+    };
+
+    template <class T>
+    using objects_of = std::conditional_t<holds_pointer<T>, object_set<T>, track_never>;
+
+    template <class Objects>
+    using objects_held = std::conditional_t<std::is_empty_v<Objects>, Objects, Objects &>;
 
     template <class U>
     static constexpr bool is_sys_time = false;
@@ -1429,7 +1543,7 @@ class basic_generic
         at += put_head(out, at, major_type::tag, tag);
         if (tag != std::to_underlying(rfc8949::tag_number::epoch_based_date_time)) {
             at += put_head(out, at, major_type::map, extended_time_entries(*seconds, scale, zone));
-            auto const key = write_generic(out, at, std::to_underlying(rfc9581::map_key::base_time));
+            auto const key = write_value(out, at, std::to_underlying(rfc9581::map_key::base_time));
             if (!key) [[unlikely]]
                 return key;
             at = *key;
@@ -1439,13 +1553,13 @@ class basic_generic
                 if constexpr (is_std_pair<std::remove_cvref_t<decltype(s)>> &&
                               detail::validity::fraction_key_of_period<typename U::period>().has_value()) {
                     constexpr auto key = detail::validity::fraction_key_of_period<typename U::period>();
-                    return write_generic(out, at, s.first)
-                        .and_then([&](std::size_t const w) { return write_generic(out, w, std::to_underlying(*key)); })
-                        .and_then([&](std::size_t const w) { return write_generic(out, w, s.second.count()); });
+                    return write_value(out, at, s.first)
+                        .and_then([&](std::size_t const w) { return write_value(out, w, std::to_underlying(*key)); })
+                        .and_then([&](std::size_t const w) { return write_value(out, w, s.second.count()); });
                 } else if constexpr (is_std_pair<std::remove_cvref_t<decltype(s)>>) {
                     return std::unexpected(error::number_out_of_range);
                 } else {
-                    return write_generic(out, at, s);
+                    return write_value(out, at, s);
                 }
             },
             *seconds);
@@ -1453,15 +1567,17 @@ class basic_generic
             return time;
         at = *time;
         if (scale != rfc9581::timescale::utc) {
-            auto const w = write_generic(out, at, std::to_underlying(rfc9581::map_key::timescale_critical))
-                               .and_then([&](std::size_t const n) { return write_generic(out, n, std::to_underlying(scale)); });
+            auto const w = write_value(out, at, std::to_underlying(rfc9581::map_key::timescale_critical))
+                               .and_then([&](std::size_t const n) {
+                                   return write_value(out, n, std::to_underlying(scale));
+                               });
             if (!w) [[unlikely]]
                 return w;
             at = *w;
         }
         if (zone)
-            return write_generic(out, at, std::to_underlying(rfc9581::map_key::time_zone_hint))
-                .and_then([&](std::size_t const n) { return write_generic(out, n, *zone); });
+            return write_value(out, at, std::to_underlying(rfc9581::map_key::time_zone_hint))
+                .and_then([&](std::size_t const n) { return write_value(out, n, *zone); });
         return at;
     }
 
@@ -1506,43 +1622,53 @@ class basic_generic
         return at + sizeof(E);
     }
 
+    template <class Objects>
     struct edn_out {
         detail::edn_text &text;
+        [[no_unique_address]] objects_held<Objects> objects;
     };
 
-    static std::size_t put_head(edn_out const out, std::size_t, major_type const major, std::uint64_t const argument)
+    template <class Objects>
+    static std::size_t put_head(edn_out<Objects> const out, std::size_t, major_type const major,
+                                std::uint64_t const argument)
     {
         out.text.write_head(major, argument);
         return 0;
     }
 
-    static std::size_t put_head(edn_out const out, std::size_t, major_type const major, std::uint8_t const info,
-                                std::uint64_t const argument)
+    template <class Objects>
+    static std::size_t put_head(edn_out<Objects> const out, std::size_t, major_type const major,
+                                std::uint8_t const info, std::uint64_t const argument)
     {
         out.text.write_head(major, info, argument);
         return 0;
     }
 
-    static std::size_t put_simple(edn_out const out, std::size_t const at, simple_value const value)
+    template <class Objects>
+    static std::size_t put_simple(edn_out<Objects> const out, std::size_t const at, simple_value const value)
     {
         out.text.write_head(major_type::simple, std::to_underlying(value));
         return at;
     }
 
-    static std::size_t put_bytes(edn_out const out, std::size_t const at, std::span<char const> const bytes)
+    template <class Objects>
+    static std::size_t put_bytes(edn_out<Objects> const out, std::size_t const at,
+                                 std::span<char const> const bytes)
     {
         out.text.write_payload(std::string_view(bytes));
         return at;
     }
 
-    static std::size_t put_bytes(edn_out const out, std::size_t const at, std::span<std::byte const> const bytes)
+    template <class Objects>
+    static std::size_t put_bytes(edn_out<Objects> const out, std::size_t const at,
+                                 std::span<std::byte const> const bytes)
     {
         out.text.write_payload(bytes);
         return at;
     }
 
-    template <class E>
-    static std::size_t put_typed_array_element(edn_out const out, std::size_t const at, E const e)
+    template <class Objects, class E>
+    static std::size_t put_typed_array_element(edn_out<Objects> const out, std::size_t const at, E const e)
     {
         std::array<char, sizeof(E)> element;
         detail::reflection::write_typed_array_element<E>(std::span<char, sizeof(E)>(element), e);
@@ -1550,14 +1676,15 @@ class basic_generic
         return at;
     }
 
-    template <class Target>
+    template <class Target, class Objects>
     struct bytes_sink {
         Target &bytes;
         error &failure;
+        [[no_unique_address]] objects_held<Objects> objects;
     };
 
-    template <class Target>
-    [[gnu::cold, gnu::noinline]] static bool grow(bytes_sink<Target> const out, std::size_t const at,
+    template <class Target, class Objects>
+    [[gnu::cold, gnu::noinline]] static bool grow(bytes_sink<Target, Objects> const out, std::size_t const at,
                                                   std::size_t const need)
     {
         if constexpr (requires { out.bytes.resize(std::size_t{}); }) {
@@ -1574,8 +1701,8 @@ class basic_generic
         }
     }
 
-    template <class Target>
-    CBOR_ALWAYS_INLINE static bool room(bytes_sink<Target> const out, std::size_t const at,
+    template <class Target, class Objects>
+    CBOR_ALWAYS_INLINE static bool room(bytes_sink<Target, Objects> const out, std::size_t const at,
                                         std::size_t const need)
     {
         if (out.failure != error{}) [[unlikely]]
@@ -1585,8 +1712,8 @@ class basic_generic
         return grow(out, at, need);
     }
 
-    template <class Target>
-    CBOR_ALWAYS_INLINE static std::span<char> written_part(bytes_sink<Target> const out,
+    template <class Target, class Objects>
+    CBOR_ALWAYS_INLINE static std::span<char> written_part(bytes_sink<Target, Objects> const out,
                                                            std::size_t const end)
     {
         if constexpr (requires { out.bytes.resize(std::size_t{}); })
@@ -1595,8 +1722,8 @@ class basic_generic
             return std::span<char>(out.bytes).first(end);
     }
 
-    template <class Target>
-    CBOR_ALWAYS_INLINE static std::size_t put_head(bytes_sink<Target> const out, std::size_t const at,
+    template <class Target, class Objects>
+    CBOR_ALWAYS_INLINE static std::size_t put_head(bytes_sink<Target, Objects> const out, std::size_t const at,
                                                    major_type const major, std::uint64_t const argument)
     {
         std::size_t const need = detail::heads::head_size(argument);
@@ -1605,8 +1732,8 @@ class basic_generic
         return put_head(written_part(out, at + need), at, major, argument);
     }
 
-    template <class Target>
-    CBOR_ALWAYS_INLINE static std::size_t put_head(bytes_sink<Target> const out, std::size_t const at,
+    template <class Target, class Objects>
+    CBOR_ALWAYS_INLINE static std::size_t put_head(bytes_sink<Target, Objects> const out, std::size_t const at,
                                                    major_type const major, std::uint8_t const info,
                                                    std::uint64_t const argument)
     {
@@ -1616,8 +1743,8 @@ class basic_generic
         return put_head(written_part(out, at + need), at, major, info, argument);
     }
 
-    template <class Target>
-    CBOR_ALWAYS_INLINE static std::size_t put_simple(bytes_sink<Target> const out, std::size_t const at,
+    template <class Target, class Objects>
+    CBOR_ALWAYS_INLINE static std::size_t put_simple(bytes_sink<Target, Objects> const out, std::size_t const at,
                                                      simple_value const value)
     {
         if (!room(out, at, detail::heads::initial_byte_size)) [[unlikely]]
@@ -1625,8 +1752,8 @@ class basic_generic
         return put_simple(std::span<char>(out.bytes), at, value);
     }
 
-    template <class Target, class Bytes>
-    CBOR_ALWAYS_INLINE static std::size_t put_bytes(bytes_sink<Target> const out, std::size_t const at,
+    template <class Target, class Objects, class Bytes>
+    CBOR_ALWAYS_INLINE static std::size_t put_bytes(bytes_sink<Target, Objects> const out, std::size_t const at,
                                                     Bytes const bytes)
     {
         if (!room(out, at, bytes.size())) [[unlikely]]
@@ -1634,8 +1761,8 @@ class basic_generic
         return put_bytes(std::span<char>(out.bytes), at, bytes);
     }
 
-    template <class Target, class E>
-    CBOR_ALWAYS_INLINE static std::size_t put_typed_array_element(bytes_sink<Target> const out,
+    template <class Target, class Objects, class E>
+    CBOR_ALWAYS_INLINE static std::size_t put_typed_array_element(bytes_sink<Target, Objects> const out,
                                                                   std::size_t const at, E const e)
     {
         if (!room(out, at, sizeof(E))) [[unlikely]]
@@ -1644,7 +1771,22 @@ class basic_generic
     }
 
     template <class Out, class U>
+    static constexpr bool tracked_in =
+        std::remove_reference_t<decltype(std::declval<Out>().objects)>::template tracks<U>;
+
+    template <class Out, class U>
     static std::expected<std::size_t, error> write_generic(Out const out, std::size_t at, U const &value)
+    {
+        if constexpr (tracked_in<Out, U>) {
+            if (!out.objects.insert(value)) [[unlikely]]
+                return std::unexpected(error::pointer_conflict);
+            at += put_head(out, at, major_type::tag, std::to_underlying(rfc8949::tag_number::shareable));
+        }
+        return write_value(out, at, value);
+    }
+
+    template <class Out, class U>
+    static std::expected<std::size_t, error> write_value(Out const out, std::size_t at, U const &value)
     {
         if constexpr (!std::is_arithmetic_v<U> && !std::is_enum_v<U> && !is_basic_string<U> &&
                       !std::same_as<U, std::string_view> && !std::same_as<U, std::span<std::byte const>>)
@@ -1657,11 +1799,19 @@ class basic_generic
             if constexpr (constexpr std::optional<std::uint64_t> tag = detail::reflection::tag_number_of<U>();
                           tag.has_value())
                 at += put_head(out, at, major_type::tag, *tag);
-            return write_generic(out, at, describe_members<U>::value(value));
+            return write_value(out, at, describe_members<U>::value(value));
         } else if constexpr (std::same_as<U, bool>) {
             return put_simple(out, at, value ? simple_value::true_value : simple_value::false_value);
         } else if constexpr (std::same_as<U, std::nullptr_t>) {
             return put_simple(out, at, simple_value::null);
+        } else if constexpr (is_object_pointer<U>) {
+            if (!value)
+                return put_simple(out, at, simple_value::null);
+            if (auto const id = out.objects.object_id_of(*value)) {
+                at += put_head(out, at, major_type::tag, std::to_underlying(rfc8949::tag_number::sharedref));
+                return at + put_head(out, at, major_type::unsigned_integer, *id);
+            }
+            return write_generic(out, at, *value);
         } else if constexpr (std::same_as<U, simple_value>) {
             return at + put_head(out, at, major_type::simple, std::to_underlying(value));
 #ifdef CBOR_HAS_INT128
@@ -1688,7 +1838,7 @@ class basic_generic
         } else if constexpr (detail::is_std_variant<U>) {
             return std::visit([&](auto const &e) { return write_generic(out, at, e); }, value);
         } else if constexpr (std::is_enum_v<U>) {
-            return write_generic(out, at, std::to_underlying(value));
+            return write_value(out, at, std::to_underlying(value));
         } else if constexpr (std::is_integral_v<U>) {
             if constexpr (std::is_signed_v<U>) {
                 if (value < 0)
@@ -1815,11 +1965,11 @@ class basic_generic
     static std::expected<std::size_t, error> write_tag_content(Out const out, std::size_t at, U const &value)
     {
         if constexpr (is_whole_seconds<U>) {
-            return write_generic(out, at, value.time_since_epoch().count());
+            return write_value(out, at, value.time_since_epoch().count());
         } else if constexpr (std::same_as<U, std::chrono::year_month_day>) {
             if (!value.ok()) [[unlikely]]
                 detail::validity::throw_logic_error("cbor::encode: the year_month_day is no valid date");
-            return write_generic(out, at, std::chrono::sys_days{value}.time_since_epoch().count());
+            return write_value(out, at, std::chrono::sys_days{value}.time_since_epoch().count());
         } else if constexpr (is_set<U>) {
             return write_elements(out, at, value);
         } else {
@@ -1851,7 +2001,8 @@ public:
     static std::expected<std::string, error> edn_of(T const &value)
     {
         detail::edn_text text;
-        if (auto const r = write_generic(edn_out{text}, 0, value); !r) [[unlikely]]
+        objects_of<T> objects;
+        if (auto const r = write_generic(edn_out<objects_of<T>>{text, objects}, 0, value); !r) [[unlikely]]
             return std::unexpected(r.error());
         return text.release();
     }
@@ -1861,7 +2012,9 @@ public:
     {
         std::string out;
         error failure{};
-        auto const written = write_generic(bytes_sink<std::string>{out, failure}, 0, value);
+        objects_of<T> objects;
+        auto const written =
+            write_generic(bytes_sink<std::string, objects_of<T>>{out, failure, objects}, 0, value);
         if (!written) [[unlikely]]
             return std::unexpected(written.error());
         if (failure != error{}) [[unlikely]]
@@ -1877,7 +2030,9 @@ public:
         if constexpr (!detail::byte_container<U> && requires { std::span<char>(out); }) {
             std::span<char> bytes(out);
             error failure{};
-            auto const written = write_generic(bytes_sink<std::span<char>>{bytes, failure}, 0, value);
+            objects_of<T> objects;
+            auto const written =
+                write_generic(bytes_sink<std::span<char>, objects_of<T>>{bytes, failure, objects}, 0, value);
             if (!written) [[unlikely]]
                 return std::unexpected(written.error());
             if (failure != error{}) [[unlikely]]
@@ -1908,6 +2063,9 @@ using generic = basic_generic<false>;
  * cbor::describe_members specialization; an aggregate without one does not compile, also where reflection or
  * Boost.PFR is present. A struct is a map, and its keys come in the order of RFC 8949 4.2.1.
  * A cbor::item and a cbor::owning<cbor::item> take the overload that writes a tree.
+ * A `U*`, `std::unique_ptr<U>` or `std::shared_ptr<U>` that is empty writes null. Each object of a type `U` that a
+ * pointer in `T` can point to is written the first time under tag 28; a pointer to an object written before writes
+ * tag 29 and the index of that object (http://cbor.schmorp.de/value-sharing).
  *
  * @code{.example}
  * message: {"name": "ann", "age": 30}
@@ -1919,6 +2077,7 @@ using generic = basic_generic<false>;
  *
  * @retval value_too_large the size of the bytes does not fit in `std::size_t`
  * @retval nesting_depth_exceeded the value is deeper than the stack of the thread holds
+ * @retval pointer_conflict an object stands in place after a pointer wrote it
  * @throws std::logic_error a `std::chrono::year_month_day` that is no valid date
  * @throws std::bad_alloc a refused allocation of the result
  * @snippet doc_reference_structs.cpp encode
@@ -1945,6 +2104,7 @@ CBOR_ALWAYS_INLINE inline result<std::string> encode(T const &value)
  * span then holds the bytes written before the first one that did not fit
  * @retval value_too_large the size of the bytes does not fit in `std::size_t`, or the writer gives this error
  * @retval nesting_depth_exceeded the value is deeper than the stack of the thread holds
+ * @retval pointer_conflict an object stands in place after a pointer wrote it
  * @retval not_enough_memory, io_error the writer gives this error
  * @throws std::logic_error a `std::chrono::year_month_day` that is no valid date
  * @see cbor::encode(T const &)
@@ -1973,6 +2133,7 @@ CBOR_ALWAYS_INLINE inline result<std::size_t> encode(Target &&out, T const &valu
  *
  * @retval nesting_depth_exceeded the value is deeper than the stack of the thread holds
  * @retval number_out_of_range a time that its tag cannot hold, as cbor::encode gives it
+ * @retval pointer_conflict an object stands in place after a pointer wrote it
  * @throws std::logic_error a `std::chrono::year_month_day` that is no valid date
  * @see cbor::encode(T const &)
  * @see cbor::to_edn(item)
@@ -2164,6 +2325,7 @@ public:
      * The second form appends to `out` and returns the count of bytes that it appended.
      * `out` is a `std::string`, a container of `char`, a `std::span<char>` or a writer.
      * A type that `structs` does not take does not compile.
+     * A pointer is written as cbor::encode(T const &) writes it.
      *
      * @code{.example}
      * message: {"name": "ann", "age": 30}
@@ -2174,6 +2336,7 @@ public:
      * @endcode
      *
      * @retval value_too_large the size of the bytes does not fit in `std::size_t`
+     * @retval pointer_conflict an object stands in place after a pointer wrote it
      * @throws std::logic_error a `std::chrono::year_month_day` that is no valid date
      * @throws std::bad_alloc a refused allocation of the result
      * @snippet doc_reference_structs.cpp encode
@@ -2191,6 +2354,7 @@ public:
      * @return the count of bytes that it appended
      * @retval no_buffer_space a `std::span<char>` that is too small for the bytes, or the writer gives this error
      * @retval value_too_large the size of the bytes does not fit in `std::size_t`, or the writer gives this error
+     * @retval pointer_conflict an object stands in place after a pointer wrote it
      * @retval not_enough_memory, io_error the writer gives this error
      * @throws std::logic_error a `std::chrono::year_month_day` that is no valid date
      */
