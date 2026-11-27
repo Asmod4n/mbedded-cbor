@@ -130,11 +130,11 @@ cbor::ref<T> decoded(std::string bytes)
 }
 
 template <class T>
-cbor::ref<T> decoded_cycles(std::string bytes)
+cbor::owning<T> decoded_cycles(std::string bytes)
 {
-    auto r = cbor::structs<T>::decode_cycles(std::move(bytes));
+    auto const r = cbor::structs<T>::decode_cycles(std::move(bytes));
     REQUIRE(r.has_value());
-    return *std::move(r);
+    return *r;
 }
 
 template <class T>
@@ -493,16 +493,16 @@ TEST_CASE("structs pointers: cbor::decode gives invalid_tag for the bytes of cbo
     CHECK_EQ(r.error(), error::invalid_tag);
 }
 
-// Plan 11 (item 5): decode_cycles gives a node that points to itself, and the ref keeps the value in its owner, so
-// a copy and a move of the ref keep the cycle.
+// Plan 11 (item 5): decode_cycles gives a node that points to itself in a cbor::owning, so a copy and a move of the
+// owning keep the cycle.
 TEST_CASE("structs pointers: decode_cycles reads a node that points to itself")
 {
     loop self{nullptr};
     self.self = &self;
-    std::optional<cbor::ref<loop>> source(decoded_cycles<loop>(*cbor::encode_cycles(self)));
+    std::optional<cbor::owning<loop>> source(decoded_cycles<loop>(*cbor::encode_cycles(self)));
     CHECK_EQ((*source)->self, &**source);
-    cbor::ref<loop> const copy = *source;
-    cbor::ref<loop> const moved = std::move(*source);
+    cbor::owning<loop> const copy = *source;
+    cbor::owning<loop> const moved = std::move(*source);
     source.reset();
     CHECK_EQ(copy->self, &*copy);
     CHECK_EQ(moved->self, &*copy);
@@ -602,22 +602,6 @@ TEST_CASE("structs pointers: clone of a ref from cbor::decode copies each target
     source.reset();
     CHECK_EQ(own->raw->text, "one");
     CHECK_EQ(own->shared->text, "two");
-}
-
-// Plan 12 (item 7): a clone of a ref from decode_cycles copies each cycle, so a pointer of the copy points into the
-// copy.
-TEST_CASE("structs pointers: clone of a ref from decode_cycles keeps each cycle")
-{
-    ring first{nullptr};
-    ring second{&first};
-    first.next = &second;
-    std::optional<cbor::ref<ring>> source(decoded_cycles<ring>(*cbor::encode_cycles(first)));
-    auto const own = source->clone();
-    REQUIRE_NE(own->next, nullptr);
-    CHECK_EQ(own->next->next, &*own);
-    CHECK_NE(&*own, &**source);
-    source.reset();
-    CHECK_EQ(own->next->next->next, own->next);
 }
 
 } // namespace structs_pointers

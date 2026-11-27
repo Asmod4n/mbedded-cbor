@@ -91,29 +91,10 @@ class owning;
 namespace detail
 {
 
-template <class T, class Kept>
-void copy_views_into_zone(T &value, string_saver &zone, Kept &kept);
-
 using kept_objects = std::vector<std::shared_ptr<void>>;
 
-struct no_kept_objects {
-};
-
 template <class T>
-struct ref_targets {
-    using kept = no_kept_objects;
-};
-
-}
-
-template <class T>
-class ref;
-
-namespace detail
-{
-
-template <class T>
-ref<T> copy_with_cycles(T const &value);
+void copy_views_into_zone(T &value, string_saver &zone, kept_objects &kept);
 
 }
 
@@ -129,8 +110,6 @@ ref<T> copy_with_cycles(T const &value);
  * A view in the value stays valid while one `ref` with that owner lives.
  * A view copied out of the `ref` does not keep the bytes.
  * The same holds for the target of a `U*` in the value: the owner keeps it, and a copy of the `ref` shares it.
- * A `ref` from cbor::structs::decode_cycles() keeps its value in the owner, so a copy and a move give the same
- * address, and a `U*` to the value or into it stays valid.
  * `clone` copies the bytes: into a `std::string`, a byte vector, or a cbor::owning.
  * Only the library makes a `ref`.
  * `*` and `->` on a temporary `ref` do not compile.
@@ -155,18 +134,9 @@ class CBOR_OWNER ref
 {
     std::shared_ptr<void const> owner;
     T value;
-    [[no_unique_address]] detail::ref_targets<T> targets;
 
-    ref(std::shared_ptr<void const> o, T v) : owner(std::move(o)), value(std::move(v)), targets{}
+    ref(std::shared_ptr<void const> o, T v) : owner(std::move(o)), value(std::move(v))
     {
-    }
-
-    T const &stored() const
-    {
-        if constexpr (requires { targets.in_block; })
-            if (targets.in_block != nullptr)
-                return *targets.in_block;
-        return value;
     }
 
     template <class>
@@ -192,7 +162,7 @@ public:
     ref(ref &&o) noexcept(std::is_nothrow_move_constructible_v<T> &&
                                         std::is_nothrow_default_constructible_v<T>)
         requires std::is_default_constructible_v<T>
-        : owner(std::move(o.owner)), value(std::exchange(o.value, T{})), targets(std::exchange(o.targets, {}))
+        : owner(std::move(o.owner)), value(std::exchange(o.value, T{}))
     {
     }
 
@@ -203,14 +173,13 @@ public:
     {
         owner = std::move(o.owner);
         value = std::exchange(o.value, T{});
-        targets = std::exchange(o.targets, {});
         return *this;
     }
 
     /** @brief Gives the value: a view by value, any other `T` as `T const &`. */
     std::conditional_t<is_view<T>, T, T const &> operator*() const & CBOR_LIFETIMEBOUND
     {
-        return stored();
+        return value;
     }
 
     void operator*() const && = delete;
@@ -218,7 +187,7 @@ public:
     /** @brief Gives the address of the value, so that `r->` reaches its members. */
     T const *operator->() const & CBOR_LIFETIMEBOUND
     {
-        return &stored();
+        return &value;
     }
 
     void operator->() const && = delete;
@@ -241,27 +210,18 @@ public:
      * @brief Copies the value and the bytes of each view in it into a cbor::owning.
      *
      * The target of each `U*` and `std::shared_ptr<U>` in the value is copied once for each pointer, and the copy
-     * belongs to the cbor::owning. A `ref` from cbor::structs::decode_cycles() is copied with each cycle: a `U*` that
-     * points to an object of the value points to the copy of that object.
-     *
-     * @throws std::system_error a `ref` from cbor::structs::decode_cycles() whose value is deeper than the stack of
-     * the thread holds, with cbor::error::nesting_depth_exceeded
+     * belongs to the cbor::owning.
      */
     owning<T> clone() const
         requires(!std::same_as<T, std::string_view> && !std::same_as<T, std::span<std::byte const>>)
     {
-        if constexpr (requires { targets.in_block; })
-            if (targets.in_block != nullptr) {
-                ref const copy = detail::copy_with_cycles(*targets.in_block);
-                return owning<T>(std::shared_ptr<T const>(copy.owner, copy.targets.in_block));
-            }
         struct held {
             std::pmr::monotonic_buffer_resource memory;
             detail::string_saver zone{memory};
-            [[no_unique_address]] typename detail::ref_targets<T>::kept objects;
+            detail::kept_objects objects;
             T value;
 
-            explicit held(T const &v) : objects{}, value(v)
+            explicit held(T const &v) : value(v)
             {
             }
         };
@@ -274,14 +234,14 @@ public:
     friend bool operator==(ref const &a, ref const &b)
         requires std::equality_comparable<T>
     {
-        return a.stored() == b.stored();
+        return a.value == b.value;
     }
 
     /** @brief Compares the value of a ref with a value. */
     friend bool operator==(ref const &a, T const &b)
         requires std::equality_comparable<T>
     {
-        return a.stored() == b;
+        return a.value == b;
     }
 };
 
@@ -332,6 +292,9 @@ class CBOR_OWNER owning
 
     template <class>
     friend class ref;
+
+    template <class>
+    friend class structs;
 
 public:
     /** @brief Gives the value. */

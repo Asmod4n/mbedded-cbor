@@ -34,7 +34,6 @@
 #include <span>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <tuple>
 #include <type_traits>
 #include <unordered_map>
@@ -209,8 +208,8 @@ class pfr
     template <class>
     friend class cbor::structs;
 
-    template <class T, class Kept>
-    friend void detail::copy_views_into_zone(T &value, detail::string_saver &zone, Kept &kept);
+    template <class T>
+    friend void detail::copy_views_into_zone(T &value, detail::string_saver &zone, detail::kept_objects &kept);
 };
 
 }
@@ -224,8 +223,8 @@ class basic_generic
     template <class>
     friend class cbor::structs;
 
-    template <class T, class Kept>
-    friend void detail::copy_views_into_zone(T &value, detail::string_saver &zone, Kept &kept);
+    template <class T>
+    friend void detail::copy_views_into_zone(T &value, detail::string_saver &zone, detail::kept_objects &kept);
 
     template <class U>
     static constexpr bool is_std_tuple = false;
@@ -2423,13 +2422,6 @@ public:
 
 using generic = basic_generic<false>;
 
-template <class T>
-    requires(!is_view<T> && basic_generic<true>::holds_raw_pointer<T>)
-struct ref_targets<T> {
-    T const *in_block = nullptr;
-    using kept = kept_objects;
-};
-
 }
 
 /**
@@ -2768,14 +2760,14 @@ public:
      * its tag 28 marks, while the read of that `U` is open: the `U*` closes a cycle. cbor::encode_cycles() writes such
      * bytes. A `U*` reaches an object of the value only where the read does not move that object: in a member, in a
      * `std::array`, `std::tuple`, `std::optional` or `std::variant`, in an element of a `std::vector`, a `std::deque`
-     * or a `std::list`, and in the target of a pointer. When `T` holds a `U*`, the cbor::ref keeps its value in its
-     * owner, so the address of the value stays when the cbor::ref is copied or moved.
+     * or a `std::list`, and in the target of a pointer. The result is a cbor::owning, as cbor::decode_cycles() gives:
+     * the value and the bytes stand in its block, so a copy shares the value and its address stays.
      * The forms take the bytes as decode() takes them.
      *
      * @code{.example}
      * message: 28({"self": 29(0)})
      * call: auto const r = cbor::structs<loop>::decode_cycles(std::move(bytes))
-     * result: ref to a loop whose self is its own address
+     * result: owning of a loop whose self is its own address
      * call: (*r)->self == &**r
      * result: true
      * @endcode
@@ -2793,7 +2785,7 @@ public:
      * @see decode()
      */
     template <owning_range_of_bytes Encoded>
-    static result<ref<T>> decode_cycles(Encoded &&encoded)
+    static result<owning<T>> decode_cycles(Encoded &&encoded)
     {
         return decode_cycles(std::make_shared<Encoded const>(std::move(encoded)));
     }
@@ -2803,7 +2795,7 @@ public:
      * @throws std::logic_error @p encoded is null
      */
     template <owning_range_of_bytes Encoded>
-    static result<ref<T>> decode_cycles(std::shared_ptr<Encoded const> encoded)
+    static result<owning<T>> decode_cycles(std::shared_ptr<Encoded const> encoded)
     {
         detail::validity::throw_logic_error_if_null(encoded,
                                                     "cbor::structs::decode_cycles: the encoded data item is null");
@@ -2816,9 +2808,9 @@ public:
      * @throws std::logic_error @p owner is empty
      */
     template <borrowed_range_of_bytes Encoded>
-    static result<ref<T>> decode_cycles(std::shared_ptr<void const> owner, Encoded const &encoded)
+    static result<owning<T>> decode_cycles(std::shared_ptr<void const> owner, Encoded const &encoded)
     {
-        return result<ref<T>>(decode_cycles_with_owner(std::move(owner), detail::chars_of(encoded)));
+        return result<owning<T>>(decode_cycles_with_owner(std::move(owner), detail::chars_of(encoded)));
     }
 
     /**
@@ -2929,52 +2921,25 @@ private:
         return detail::generic::read_generic(d, out);
     }
 
-    static std::expected<ref<T>, error> decode_cycles_with_owner(std::shared_ptr<void const> owner,
-                                                                 std::string_view const encoded)
+    static std::expected<owning<T>, error> decode_cycles_with_owner(std::shared_ptr<void const> owner,
+                                                                    std::string_view const encoded)
     {
         detail::validity::throw_logic_error_if_empty(
             owner, "cbor::structs::decode_cycles: the owner of the encoded data item is empty");
         detail::pfr::check_default_constructible<T>();
-        if constexpr (detail::basic_generic<true>::holds_raw_pointer<T>) {
-            auto const held = std::make_shared<block_of_value>(std::move(owner), detail::kept_objects{}, T{});
-            if (auto const r = read_cycles(encoded, held->targets, held->value); !r) [[unlikely]]
-                return std::unexpected(r.error());
-            ref<T> decoded(held, T{});
-            decoded.targets.in_block = &held->value;
-            return decoded;
-        } else {
-            detail::kept_objects targets;
-            T value{};
-            if (auto const r = read_cycles(encoded, targets, value); !r) [[unlikely]]
-                return std::unexpected(r.error());
-            return ref<T>(std::move(owner), std::move(value));
-        }
+        auto const held = std::make_shared<block_of_value>(std::move(owner), detail::kept_objects{}, T{});
+        if (auto const r = read_cycles(encoded, held->targets, held->value); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        return owning<T>(std::shared_ptr<T const>(held, &held->value));
     }
 };
+
 
 namespace detail
 {
 
 template <class T>
-ref<T> copy_with_cycles(T const &value)
-{
-    auto encoded = basic_generic<true>::encode_cycles_to_string(value);
-    if (!encoded) [[unlikely]]
-        throw std::system_error(make_error_code(encoded.error()));
-    auto decoded = structs<T>::decode_cycles(std::move(*encoded));
-    if (!decoded) [[unlikely]]
-        throw std::system_error(make_error_code(decoded.error()));
-    return *std::move(decoded);
-}
-
-}
-
-
-namespace detail
-{
-
-template <class T, class Kept>
-void copy_views_into_zone(T &value, string_saver &zone, Kept &kept)
+void copy_views_into_zone(T &value, string_saver &zone, kept_objects &kept)
 {
     if constexpr (std::is_same_v<T, std::string_view>) {
         value = zone.save(value, detail::validity::string_saver_chunk_size);
