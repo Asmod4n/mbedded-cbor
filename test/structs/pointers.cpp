@@ -24,6 +24,13 @@ namespace structs_pointers
 namespace
 {
 
+std::string bytes_of(std::string_view const edn)
+{
+    auto const bytes = cbor::diag2cbor(edn);
+    REQUIRE(bytes.has_value());
+    return *bytes;
+}
+
 struct leaf {
     int v;
 };
@@ -94,12 +101,50 @@ struct shared_link {
     std::shared_ptr<shared_link> next;
 };
 
-std::string bytes_of(std::string_view const edn)
+struct label {
+    std::string_view text;
+};
+
+struct labelled {
+    label *raw;
+    std::shared_ptr<label const> shared;
+};
+
+struct family {
+    std::string name;
+    family *parent;
+    std::vector<family> kids;
+};
+
+struct mixed {
+    leaf l;
+    loop *p;
+};
+
+template <class T>
+cbor::ref<T> decoded(std::string bytes)
 {
-    auto const bytes = cbor::diag2cbor(edn);
-    REQUIRE(bytes.has_value());
-    return *bytes;
+    auto r = cbor::structs<T>::decode(std::move(bytes));
+    REQUIRE(r.has_value());
+    return *std::move(r);
 }
+
+template <class T>
+cbor::ref<T> decoded_cycles(std::string bytes)
+{
+    auto r = cbor::structs<T>::decode_cycles(std::move(bytes));
+    REQUIRE(r.has_value());
+    return *std::move(r);
+}
+
+template <class T>
+void check_cycles_read_refused(std::string_view const edn, error const expected)
+{
+    auto const r = cbor::structs<T>::decode_cycles(bytes_of(edn));
+    REQUIRE_FALSE(r.has_value());
+    CHECK_EQ(r.error(), expected);
+}
+
 
 // Each entry of the encode writes the same bytes: cbor::encode into a new string and into a span,
 // cbor::structs<T>::encode into a new string and into a span, and cbor::to_edn, whose text equals
@@ -197,6 +242,10 @@ CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::ring, cbor::untagged, next);
 CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::two_rings, cbor::untagged, a, b);
 CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::unique_link, cbor::untagged, next);
 CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::shared_link, cbor::untagged, next);
+CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::label, cbor::untagged, text);
+CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::labelled, cbor::untagged, raw, shared);
+CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::family, cbor::untagged, name, parent, kids);
+CBOR_DEFINE_TYPE_MEMBERS(structs_pointers::mixed, cbor::untagged, l, p);
 
 namespace structs_pointers
 {
@@ -361,6 +410,214 @@ TEST_CASE("structs pointers: cbor::encode_cycles gives cyclic_data_structure for
     shared->next = shared;
     check_cycles_refused(*shared, error::cyclic_data_structure);
     shared->next.reset();
+}
+
+// Plan 12 (R10.8): cbor::decode gives each pointer kind back from the bytes of cbor::encode: null as an empty
+// pointer, and a value as a new object with the same value.
+TEST_CASE("structs pointers: each pointer kind reads back from the bytes of cbor::encode")
+{
+    auto const empty = decoded<empty_pointers>(*cbor::encode(empty_pointers{}));
+    CHECK_EQ(empty->r, nullptr);
+    CHECK_EQ(empty->u, nullptr);
+    CHECK_EQ(empty->s, nullptr);
+    leaf x{1};
+    auto const full =
+        decoded<empty_pointers>(*cbor::encode(empty_pointers{&x, std::make_unique<leaf>(leaf{4}), std::make_shared<leaf>(leaf{3})}));
+    REQUIRE_NE(full->r, nullptr);
+    REQUIRE_NE(full->u, nullptr);
+    REQUIRE_NE(full->s, nullptr);
+    CHECK_EQ(full->r->v, 1);
+    CHECK_EQ(full->u->v, 4);
+    CHECK_EQ(full->s->v, 3);
+    numbers n{1, 2, nullptr};
+    n.p = &n.b;
+    auto const read_numbers = decoded<numbers>(*cbor::encode(n));
+    REQUIRE_NE(read_numbers->p, nullptr);
+    CHECK_EQ(*read_numbers->p, 2);
+    auto const shared = std::make_shared<leaf>(leaf{3});
+    auto const pair = decoded<shared_pair>(*cbor::encode(shared_pair{shared, shared}));
+    REQUIRE_NE(pair->a, nullptr);
+    REQUIRE_NE(pair->b, nullptr);
+    CHECK_EQ(pair->a->v, 3);
+    CHECK_EQ(pair->b->v, 3);
+    tree root{1, {}};
+    root.kids.push_back(std::make_unique<tree>(tree{2, {}}));
+    root.kids.back()->kids.push_back(std::make_unique<tree>(tree{3, {}}));
+    auto const read_tree = decoded<tree>(*cbor::encode(root));
+    REQUIRE_EQ(read_tree->kids.size(), 1u);
+    CHECK_EQ(read_tree->kids.front()->v, 2);
+    REQUIRE_EQ(read_tree->kids.front()->kids.size(), 1u);
+    CHECK_EQ(read_tree->kids.front()->kids.front()->v, 3);
+    auto const single = decoded<leaf *>(*cbor::encode<leaf *>(&x));
+    REQUIRE_NE(*single, nullptr);
+    CHECK_EQ((*single)->v, 1);
+}
+
+// The owner decided that cbor::decode keeps no identity: two pointers to one object in the value give two objects
+// with the same value.
+TEST_CASE("structs pointers: cbor::decode gives each pointer its own object")
+{
+    leaf y{2};
+    auto const triple = decoded<raw_triple>(*cbor::encode(raw_triple{&y, &y, nullptr}));
+    REQUIRE_NE(triple->a, nullptr);
+    REQUIRE_NE(triple->b, nullptr);
+    CHECK_NE(triple->a, triple->b);
+    CHECK_EQ(triple->a->v, 2);
+    CHECK_EQ(triple->b->v, 2);
+    CHECK_EQ(triple->c, nullptr);
+}
+
+// Review 11 (A3): the owner of the ref keeps the target of each U*. A copy and a move of the ref keep it, and the
+// target stays valid after the first ref ends. ASan finds a read of a target that ended.
+TEST_CASE("structs pointers: a target of cbor::decode stays valid after a copy and a move of the ref")
+{
+    leaf x{7};
+    std::optional<cbor::ref<raw_triple>> source(decoded<raw_triple>(*cbor::encode(raw_triple{&x, nullptr, nullptr})));
+    cbor::ref<raw_triple> const copy = *source;
+    cbor::ref<raw_triple> const moved = std::move(*source);
+    source.reset();
+    REQUIRE_NE(copy->a, nullptr);
+    CHECK_EQ(copy->a->v, 7);
+    CHECK_EQ(moved->a, copy->a);
+}
+
+// Plan 12 (R10.8): cbor::decode reads no tag 28 and no tag 29, also where cbor::encode_cycles wrote them.
+TEST_CASE("structs pointers: cbor::decode gives invalid_tag for the bytes of cbor::encode_cycles")
+{
+    loop self{nullptr};
+    self.self = &self;
+    auto const bytes = cbor::encode_cycles(self);
+    REQUIRE(bytes.has_value());
+    auto const r = cbor::structs<loop>::decode(std::string(*bytes));
+    REQUIRE_FALSE(r.has_value());
+    CHECK_EQ(r.error(), error::invalid_tag);
+}
+
+// Plan 11 (item 5): decode_cycles gives a node that points to itself, and the ref keeps the value in its owner, so
+// a copy and a move of the ref keep the cycle.
+TEST_CASE("structs pointers: decode_cycles reads a node that points to itself")
+{
+    loop self{nullptr};
+    self.self = &self;
+    std::optional<cbor::ref<loop>> source(decoded_cycles<loop>(*cbor::encode_cycles(self)));
+    CHECK_EQ((*source)->self, &**source);
+    cbor::ref<loop> const copy = *source;
+    cbor::ref<loop> const moved = std::move(*source);
+    source.reset();
+    CHECK_EQ(copy->self, &*copy);
+    CHECK_EQ(moved->self, &*copy);
+}
+
+// A parent pointer closes a cycle at each level: the child points to the root and the grandchild to the child.
+// The children stand behind a std::unique_ptr in one tree and by value in a std::vector in the other.
+TEST_CASE("structs pointers: decode_cycles reads a tree with parent pointers")
+{
+    node root{"r", nullptr, {}};
+    root.children.push_back(std::make_unique<node>(node{"c", &root, {}}));
+    node &child = *root.children.front();
+    child.children.push_back(std::make_unique<node>(node{"g", &child, {}}));
+    auto const read_root = decoded_cycles<node>(*cbor::encode_cycles(root));
+    CHECK_EQ(read_root->parent, nullptr);
+    REQUIRE_EQ(read_root->children.size(), 1u);
+    node const &read_child = *read_root->children.front();
+    CHECK_EQ(read_child.name, "c");
+    CHECK_EQ(read_child.parent, &*read_root);
+    REQUIRE_EQ(read_child.children.size(), 1u);
+    CHECK_EQ(read_child.children.front()->name, "g");
+    CHECK_EQ(read_child.children.front()->parent, &read_child);
+
+    family top{"r", nullptr, {}};
+    top.kids.push_back(family{"a", &top, {}});
+    top.kids.push_back(family{"b", &top, {}});
+    top.kids.front().kids.push_back(family{"g", &top.kids.front(), {}});
+    auto const read_top = decoded_cycles<family>(*cbor::encode_cycles(top));
+    REQUIRE_EQ(read_top->kids.size(), 2u);
+    CHECK_EQ(read_top->kids[0].parent, &*read_top);
+    CHECK_EQ(read_top->kids[1].parent, &*read_top);
+    REQUIRE_EQ(read_top->kids[0].kids.size(), 1u);
+    CHECK_EQ(read_top->kids[0].kids[0].parent, &read_top->kids[0]);
+}
+
+// Review 11 (A1, A2): one cycle reached on two paths gives two objects, and a tag 28 that no tag 29 names is read.
+TEST_CASE("structs pointers: decode_cycles reads each path of a cycle as its own object")
+{
+    loop self{nullptr};
+    self.self = &self;
+    auto const loops = decoded_cycles<two_loops>(*cbor::encode_cycles(two_loops{&self, &self}));
+    REQUIRE_NE(loops->a, nullptr);
+    REQUIRE_NE(loops->b, nullptr);
+    CHECK_NE(loops->a, loops->b);
+    CHECK_EQ(loops->a->self, loops->a);
+    CHECK_EQ(loops->b->self, loops->b);
+    ring first{nullptr};
+    ring second{&first};
+    first.next = &second;
+    auto const rings = decoded_cycles<two_rings>(*cbor::encode_cycles(two_rings{&first, &second}));
+    REQUIRE_NE(rings->a, nullptr);
+    REQUIRE_NE(rings->a->next, nullptr);
+    CHECK_EQ(rings->a->next->next, rings->a);
+    REQUIRE_NE(rings->b, nullptr);
+    REQUIRE_NE(rings->b->next, nullptr);
+    CHECK_EQ(rings->b->next->next, rings->b);
+}
+
+// cbor2 with value_sharing writes a tag 28 on every map and every array. decode_cycles counts each of them, also
+// one in a value that the struct has no member for, so the index of a tag 29 names the right tag 28.
+TEST_CASE("structs pointers: decode_cycles counts a tag 28 on every value and in a skipped value")
+{
+    auto const root = decoded_cycles<node>(bytes_of(R"(28({"name": "r", "parent": null, "children": 28([)"
+                                                    R"(28({"name": "c", "parent": 29(0), "children": 28([])})])}))"));
+    REQUIRE_EQ(root->children.size(), 1u);
+    CHECK_EQ(root->children.front()->parent, &*root);
+    auto const self = decoded_cycles<loop>(bytes_of(R"(28({"x": 28([1]), "self": 29(0)}))"));
+    CHECK_EQ(self->self, &*self);
+    check_cycles_read_refused<loop>(R"(28({"x": 28([1]), "self": 29(1)}))", error::incorrect_type);
+}
+
+// Plan 12 (item 6) and plan 2 (item 11): each tag 29 that does not close a cycle at a U* is refused, with the error
+// that names the reason.
+TEST_CASE("structs pointers: decode_cycles refuses a tag 29 that closes no cycle at a U*")
+{
+    check_cycles_read_refused<raw_triple>(R"({"a": 28({"v": 1}), "b": 29(0), "c": null})", error::sharedref_not_cyclic);
+    check_cycles_read_refused<loop>(R"({"self": 29(0)})", error::sharedref_index_not_marked);
+    check_cycles_read_refused<leaf>(R"(28({"v": 29(0)}))", error::incorrect_type);
+    check_cycles_read_refused<mixed>(R"({"l": 28({"v": 1}), "p": 29(0)})", error::incorrect_type);
+    check_cycles_read_refused<unique_link>(R"(28({"next": 29(0)}))", error::incorrect_type);
+    check_cycles_read_refused<shared_link>(R"(28({"next": 29(0)}))", error::cyclic_data_structure);
+    check_cycles_read_refused<loop>(R"(28({"self": 29("a")}))", error::inadmissible_type_for_tag_content);
+}
+
+// Plan 12 (item 7, A4): a clone of a ref from cbor::decode copies each target and the bytes of its views, so it
+// stays valid after the ref and its bytes end.
+TEST_CASE("structs pointers: clone of a ref from cbor::decode copies each target")
+{
+    label raw{"one"};
+    auto const shared = std::make_shared<label const>(label{"two"});
+    std::optional<cbor::ref<labelled>> source(decoded<labelled>(*cbor::encode(labelled{&raw, shared})));
+    auto const own = source->clone();
+    REQUIRE_NE(own->raw, nullptr);
+    REQUIRE_NE(own->shared, nullptr);
+    CHECK_NE(own->raw, (*source)->raw);
+    CHECK_NE(own->shared, (*source)->shared);
+    source.reset();
+    CHECK_EQ(own->raw->text, "one");
+    CHECK_EQ(own->shared->text, "two");
+}
+
+// Plan 12 (item 7): a clone of a ref from decode_cycles copies each cycle, so a pointer of the copy points into the
+// copy.
+TEST_CASE("structs pointers: clone of a ref from decode_cycles keeps each cycle")
+{
+    ring first{nullptr};
+    ring second{&first};
+    first.next = &second;
+    std::optional<cbor::ref<ring>> source(decoded_cycles<ring>(*cbor::encode_cycles(first)));
+    auto const own = source->clone();
+    REQUIRE_NE(own->next, nullptr);
+    CHECK_EQ(own->next->next, &*own);
+    CHECK_NE(&*own, &**source);
+    source.reset();
+    CHECK_EQ(own->next->next->next, own->next);
 }
 
 } // namespace structs_pointers

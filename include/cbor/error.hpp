@@ -61,7 +61,7 @@ enum class error {
     inadmissible_type_for_tag_content,
     /** A tag 29 names no tag 28 before it. */
     sharedref_index_not_marked,
-    /** `structs` or `%schema` meets a tag 28 or a tag 29 where it reads a value. */
+    /** `structs::decode` or `%schema` meets a tag 28 or a tag 29 where it reads a value. */
     invalid_tag,
     /** `decode_cycles` meets a tag 29 that names a tag 28 whose content is only tags 28 and this tag 29. */
     sharedref_not_defined,
@@ -78,8 +78,8 @@ enum class error {
     /** The number does not fit T. */
     number_out_of_range,
     /**
-     * `encode_cycles` meets a cycle through a `std::unique_ptr` or a `std::shared_ptr`. A writer of the program can
-     * return it for a cycle.
+     * `encode_cycles` meets a cycle through a `std::unique_ptr` or a `std::shared_ptr`, or `structs::decode_cycles`
+     * meets a tag 29 that closes a cycle at a `std::shared_ptr`. A writer of the program can return it for a cycle.
      */
     cyclic_data_structure,
     /** A reference in a `%schema<T>` message names an entry that its table does not have. */

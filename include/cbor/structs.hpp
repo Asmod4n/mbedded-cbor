@@ -21,9 +21,11 @@
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <expected>
 #include <functional>
 #include <limits>
+#include <list>
 #include <memory>
 #include <new>
 #include <optional>
@@ -32,6 +34,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <tuple>
 #include <type_traits>
 #include <unordered_map>
@@ -65,6 +68,7 @@
 #include "ref.hpp"
 #include "result.hpp"
 #include "schema.hpp"
+#include "shared.hpp"
 
 namespace cbor
 {
@@ -205,8 +209,8 @@ class pfr
     template <class>
     friend class cbor::structs;
 
-    template <class T>
-    friend void detail::copy_views_into_zone(T &value, detail::string_saver &zone);
+    template <class T, class Kept>
+    friend void detail::copy_views_into_zone(T &value, detail::string_saver &zone, Kept &kept);
 };
 
 }
@@ -220,8 +224,8 @@ class basic_generic
     template <class>
     friend class cbor::structs;
 
-    template <class T>
-    friend void detail::copy_views_into_zone(T &value, detail::string_saver &zone);
+    template <class T, class Kept>
+    friend void detail::copy_views_into_zone(T &value, detail::string_saver &zone, Kept &kept);
 
     template <class U>
     static constexpr bool is_std_tuple = false;
@@ -281,6 +285,24 @@ class basic_generic
     static constexpr bool is_smart_pointer<std::shared_ptr<E>> = !std::is_array_v<E>;
 
     template <class U>
+    static constexpr bool is_shared_ptr = false;
+
+    template <class E>
+    static constexpr bool is_shared_ptr<std::shared_ptr<E>> = true;
+
+    template <class U>
+    static constexpr bool is_std_deque = false;
+
+    template <class E, class A>
+    static constexpr bool is_std_deque<std::deque<E, A>> = true;
+
+    template <class U>
+    static constexpr bool is_std_list = false;
+
+    template <class E, class A>
+    static constexpr bool is_std_list<std::list<E, A>> = true;
+
+    template <class U>
     static constexpr bool is_object_pointer =
         (std::is_pointer_v<U> && std::is_object_v<std::remove_pointer_t<U>>) || is_smart_pointer<U>;
 
@@ -337,6 +359,30 @@ class basic_generic
 
     template <class R>
     static constexpr bool holds_pointer = any_reached<[]<class V>() { return is_object_pointer<V>; }, R>();
+
+    struct slot {
+        void *object;
+        void const *type;
+        bool complete;
+    };
+
+    struct kept_targets {
+        kept_objects &kept;
+    };
+
+    struct shared_values {
+        kept_objects &kept;
+        std::vector<slot> slots;
+        bool in_place;
+    };
+
+    template <class Objects>
+    struct object_decoder : detail::heads::decoder<true> {
+        Objects &objects;
+    };
+
+    template <class D>
+    static constexpr bool reads_shared_values = requires(D &d) { d.objects.slots; };
 
     template <class R, class U>
     static constexpr bool tracked = any_reached<[]<class V>() {
@@ -566,6 +612,8 @@ class basic_generic
             return detail::heads::is_boolean(h);
         else if constexpr (std::same_as<U, std::nullptr_t>)
             return detail::heads::is_null(h);
+        else if constexpr (is_object_pointer<U>)
+            return detail::heads::is_null(h) || head_accepted<pointee_t<U>>(h);
         else if constexpr (std::same_as<U, simple_value>)
             return detail::heads::is_simple_value(h);
         else if constexpr (std::is_floating_point_v<U>)
@@ -653,9 +701,8 @@ class basic_generic
         return h;
     }
 
-    template <class U, std::size_t I = 0>
-    static std::expected<void, error> read_variant(detail::heads::decoder<true> &d,
-                                                   detail::heads::head const &h, U &out)
+    template <class U, std::size_t I = 0, class D>
+    static std::expected<void, error> read_variant(D &d, detail::heads::head const &h, U &out)
     {
         if constexpr (I == std::variant_size_v<U>) {
             return std::unexpected(error::incorrect_type);
@@ -667,8 +714,8 @@ class basic_generic
         }
     }
 
-    template <class U>
-    static std::expected<void, error> read_generic(detail::heads::decoder<true> &d, U &out)
+    template <class D, class U>
+    static std::expected<void, error> read_generic(D &d, U &out)
     {
         auto const h = d.decode_head();
         if (!h) [[unlikely]]
@@ -676,15 +723,128 @@ class basic_generic
         if (h->major == major_type::tag) [[unlikely]] {
             if (detail::validity::is_self_described_cbor_tag(h->argument))
                 return read_generic(d, out);
+            if constexpr (reads_shared_values<D>) {
+                if (h->argument == std::to_underlying(rfc8949::tag_number::shareable))
+                    return read_shareable(d, out);
+                if (h->argument == std::to_underlying(rfc8949::tag_number::sharedref))
+                    return read_sharedref(d, out);
+            }
             if (detail::validity::tag_refused_by_value_types(h->argument))
                 return std::unexpected(error::invalid_tag);
         }
         return read_generic_value(d, *h, out);
     }
 
-    template <class U>
-    static std::expected<void, error> read_generic_value(detail::heads::decoder<true> &d,
-                                                         detail::heads::head const &h, U &out)
+    template <class D, class F>
+    static std::expected<void, error> read_in_place(D &d, bool const in_place, F const &read)
+    {
+        if constexpr (reads_shared_values<D>) {
+            bool const outer = std::exchange(d.objects.in_place, in_place);
+            auto const r = read();
+            d.objects.in_place = outer;
+            return r;
+        } else {
+            return read();
+        }
+    }
+
+    template <class D, class U, class F>
+    static std::expected<void, error> read_target(D &d, U &out, F const &read)
+    {
+        using V = pointee_t<U>;
+        detail::pfr::check_default_constructible<V>();
+        if constexpr (std::is_pointer_v<U>) {
+            auto const target = std::make_shared<V>();
+            d.objects.kept.push_back(target);
+            out = target.get();
+            return read_in_place(d, true, [&] { return read(*target); });
+        } else if constexpr (is_shared_ptr<U>) {
+            auto target = std::make_shared<V>();
+            auto const r = read_in_place(d, true, [&] { return read(*target); });
+            out = std::move(target);
+            return r;
+        } else {
+            static_assert(std::same_as<U, std::unique_ptr<typename U::element_type>>,
+                          "cbor::structs reads a std::unique_ptr only with std::default_delete.");
+            auto target = std::make_unique<V>();
+            auto const r = read_in_place(d, true, [&] { return read(*target); });
+            out = std::move(target);
+            return r;
+        }
+    }
+
+    template <class D, class U>
+    static std::expected<void, error> read_shareable(D &d, U &out)
+    {
+        if constexpr (is_object_pointer<U>) {
+            return read_target(d, out, [&](pointee_t<U> &target) { return read_shareable(d, target); });
+        } else {
+            std::size_t const index = d.objects.slots.size();
+            d.objects.slots.push_back(
+                {d.objects.in_place ? static_cast<void *>(std::addressof(out)) : nullptr, &class_id<U>, false});
+            auto const r = read_generic(d, out);
+            d.objects.slots[index].complete = true;
+            return r;
+        }
+    }
+
+    template <class D, class U>
+    static std::expected<void, error> read_sharedref(D &d, U &out)
+    {
+        if constexpr (!is_object_pointer<U>) {
+            return std::unexpected(error::incorrect_type);
+        } else {
+            auto const h = d.decode_head();
+            if (!h) [[unlikely]]
+                return std::unexpected(h.error());
+            if (auto const c =
+                    detail::validity::check_tag_content(std::to_underlying(rfc8949::tag_number::sharedref), h->major);
+                !c) [[unlikely]]
+                return std::unexpected(c.error());
+            auto const index = detail::value_sharing::check_sharedref_index(h->argument, d.objects.slots.size());
+            if (!index) [[unlikely]]
+                return std::unexpected(index.error());
+            slot const &named = d.objects.slots[std::to_underlying(*index)];
+            if ((is_smart_pointer<U> && !is_shared_ptr<U>) || named.object == nullptr ||
+                named.type != &class_id<pointee_t<U>>) [[unlikely]]
+                return std::unexpected(error::incorrect_type);
+            if (named.complete) [[unlikely]]
+                return std::unexpected(error::sharedref_not_cyclic);
+            if constexpr (is_smart_pointer<U>) {
+                return std::unexpected(error::cyclic_data_structure);
+            } else {
+                out = static_cast<pointee_t<U> *>(named.object);
+                return {};
+            }
+        }
+    }
+
+    template <class D>
+    static std::expected<void, error> skip_value(D &d)
+    {
+        std::string_view const before = d.encoded;
+        if (auto const s = detail::well_formedness::skip_item(d); !s) [[unlikely]]
+            return s;
+        if constexpr (reads_shared_values<D>) {
+            detail::heads::decoder<true> skipped{before.substr(0, before.size() - d.encoded.size())};
+            while (!skipped.encoded.empty()) {
+                auto const h = skipped.decode_head();
+                if (!h) [[unlikely]]
+                    return std::unexpected(h.error());
+                if (h->major == major_type::byte_string || h->major == major_type::text_string) {
+                    if (auto const t = skipped.decode_string(h->argument); !t) [[unlikely]]
+                        return std::unexpected(t.error());
+                } else if (h->major == major_type::tag &&
+                           h->argument == std::to_underlying(rfc8949::tag_number::shareable)) {
+                    d.objects.slots.push_back({nullptr, nullptr, true});
+                }
+            }
+        }
+        return {};
+    }
+
+    template <class D, class U>
+    static std::expected<void, error> read_generic_value(D &d, detail::heads::head const &h, U &out)
     {
         static_assert(!has_describe_value<U>, "cbor::structs reads no type whose description holds a value.");
         if (auto const r = detail::validity::check_recursion_limit(); !r) [[unlikely]]
@@ -738,6 +898,12 @@ class basic_generic
             if (!detail::heads::is_null(h)) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
             return {};
+        } else if constexpr (is_object_pointer<U>) {
+            if (detail::heads::is_null(h)) {
+                out = nullptr;
+                return {};
+            }
+            return read_target(d, out, [&](pointee_t<U> &target) { return read_generic_value(d, h, target); });
         } else if constexpr (is_basic_string<U> || std::same_as<U, std::string_view>) {
             if (h.major != major_type::text_string) [[unlikely]]
                 return std::unexpected(error::incorrect_type);
@@ -790,7 +956,7 @@ class basic_generic
             out.clear();
             for (std::uint64_t i = 0; i < h.argument; ++i) {
                 auto key = detail::pfr::make_element<typename U::key_type>(out);
-                if (auto const r = read_generic(d, key); !r) [[unlikely]]
+                if (auto const r = read_in_place(d, false, [&] { return read_generic(d, key); }); !r) [[unlikely]]
                     return r;
                 auto at = [&] {
                     if constexpr (requires { out.lower_bound(key); })
@@ -814,7 +980,8 @@ class basic_generic
                     return r;
                 for (std::uint64_t k = 0; k < values->argument; ++k) {
                     auto value = detail::pfr::make_element<typename U::mapped_type>(out);
-                    if (auto const r = read_generic(d, value); !r) [[unlikely]]
+                    if (auto const r = read_in_place(d, false, [&] { return read_generic(d, value); }); !r)
+                        [[unlikely]]
                         return r;
                     if constexpr (requires { out.lower_bound(key); })
                         out.emplace_hint(at, key, std::move(value));
@@ -833,10 +1000,10 @@ class basic_generic
             out.clear();
             for (std::uint64_t i = 0; i < h.argument; ++i) {
                 auto key = detail::pfr::make_element<typename U::key_type>(out);
-                if (auto const r = read_generic(d, key); !r) [[unlikely]]
+                if (auto const r = read_in_place(d, false, [&] { return read_generic(d, key); }); !r) [[unlikely]]
                     return r;
                 auto value = detail::pfr::make_element<typename U::mapped_type>(out);
-                if (auto const r = read_generic(d, value); !r) [[unlikely]]
+                if (auto const r = read_in_place(d, false, [&] { return read_generic(d, value); }); !r) [[unlikely]]
                     return r;
                 if constexpr (requires { out.try_emplace(std::move(key), std::move(value)); }) {
                     if (auto const r = detail::validity::check_key_unique(
@@ -872,16 +1039,28 @@ class basic_generic
             for (std::uint64_t i = 0; i < h.argument; ++i) {
                 if (!detail::validity::bytes_fit(min_encoded_size<E>(), d.encoded.size())) [[unlikely]]
                     return std::unexpected(error::too_little_data);
+                constexpr bool keeps_addresses = is_std_vector<U> || is_std_deque<U> || is_std_list<U>;
+                if constexpr (reads_shared_values<D> && is_std_vector<U>)
+                    detail::validity::throw_logic_error_if(
+                        out.size() == out.capacity(),
+                        "cbor::structs::decode_cycles: a std::vector would move the elements that it read");
                 if constexpr (requires {
                                   { out.emplace_back() } -> std::same_as<E &>;
                                   requires !detail::pfr::uses_allocator_aggregate<E, decltype(out.get_allocator())>();
                               }) {
-                    if (auto const r = read_generic(d, out.emplace_back()); !r)
+                    if (auto const r =
+                            read_in_place(d, keeps_addresses, [&] { return read_generic(d, out.emplace_back()); });
+                        !r) [[unlikely]]
+                        return r;
+                } else if constexpr (reads_shared_values<D> && keeps_addresses) {
+                    E &element = *out.insert(out.end(), detail::pfr::make_element<E>(out));
+                    if (auto const r = read_in_place(d, true, [&] { return read_generic(d, element); }); !r)
                         [[unlikely]]
                         return r;
                 } else {
                     E element = detail::pfr::make_element<E>(out);
-                    if (auto const r = read_generic(d, element); !r) [[unlikely]]
+                    if (auto const r = read_in_place(d, false, [&] { return read_generic(d, element); }); !r)
+                        [[unlikely]]
                         return r;
                     out.insert(out.end(), std::move(element));
                 }
@@ -1132,9 +1311,8 @@ class basic_generic
     }
 #endif
 
-    template <class U>
-    static std::expected<void, error> read_tag_content(detail::heads::decoder<true> &d, U &out,
-                                                       detail::heads::head const &tag)
+    template <class Decoder, class U>
+    static std::expected<void, error> read_tag_content(Decoder &d, U &out, detail::heads::head const &tag)
     {
         if constexpr (is_sys_time<U>) {
             if (tag.argument == std::to_underlying(rfc8949::tag_number::epoch_based_date_time)) [[likely]]
@@ -1252,7 +1430,8 @@ class basic_generic
             out.clear();
             for (std::uint64_t i = 0; i < h->argument; ++i) {
                 auto element = detail::pfr::make_element<typename U::value_type>(out);
-                if (auto const r = read_generic(d, element); !r) [[unlikely]]
+                if (auto const r = read_in_place(d, false, [&] { return read_generic(d, element); }); !r)
+                    [[unlikely]]
                     return r;
                 if (auto const r = detail::validity::check_key_unique(!out.insert(std::move(element)).second);
                     !r) [[unlikely]]
@@ -1325,7 +1504,8 @@ class basic_generic
                 return (detail::heads::head_size(std::tuple_size_v<U>) + ... +
                         min_encoded_size<std::tuple_element_t<I, U>>());
             }(std::make_index_sequence<std::tuple_size_v<U>>());
-        } else if constexpr (std::is_class_v<U> && !detail::reflection::is_optional<U> && !is_basic_string<U> &&
+        } else if constexpr (std::is_class_v<U> && !is_smart_pointer<U> && !detail::reflection::is_optional<U> &&
+                             !is_basic_string<U> &&
                              !std::same_as<U, std::string_view> && !std::same_as<U, std::span<std::byte const>> &&
                              !detail::reflection::is_wide_integer<U> && !detail::reflection::is_map<U> &&
                              !requires(U const &c) { typename U::value_type; c.size(); }) {
@@ -1352,9 +1532,8 @@ class basic_generic
                (key.major != major_type::text_string || text == key.text);
     }
 
-    template <class U>
-    static std::expected<void, error> read_struct(detail::heads::decoder<true> &d,
-                                                  detail::heads::head const &first, U &out)
+    template <class D, class U>
+    static std::expected<void, error> read_struct(D &d, detail::heads::head const &first, U &out)
     {
         static_assert(detail::pfr::struct_readable<U>());
         constexpr std::size_t count = detail::pfr::tuple_size_v<U>;
@@ -1403,8 +1582,12 @@ class basic_generic
                     if (auto const p = detail::validity::check_bytes_left(items, d.encoded.size()); !p)
                         [[unlikely]]
                         return std::unexpected(p.error());
+                    if constexpr (reads_shared_values<D>)
+                        if (key.major == major_type::tag &&
+                            key.argument == std::to_underlying(rfc8949::tag_number::shareable))
+                            d.objects.slots.push_back({nullptr, nullptr, true});
                     for (std::uint64_t i = 0; i < items; ++i)
-                        if (auto const e = detail::well_formedness::skip_item(d); !e) [[unlikely]]
+                        if (auto const e = skip_value(d); !e) [[unlikely]]
                             return e;
                 }
             }
@@ -1416,7 +1599,7 @@ class basic_generic
                      (static_cast<void>(r = read_member(std::integral_constant<std::size_t, I>{})), true)));
             }(std::make_index_sequence<count>());
             if (!matched) {
-                if (auto const s = detail::well_formedness::skip_item(d); !s) [[unlikely]]
+                if (auto const s = skip_value(d); !s) [[unlikely]]
                     return s;
             } else if (!r) [[unlikely]] {
                 return r;
@@ -2136,6 +2319,14 @@ class basic_generic
     }
 
 public:
+    template <class R>
+    static constexpr bool holds_raw_pointer = any_reached<[]<class V>() {
+        if constexpr (std::is_pointer_v<V>)
+            return is_object_pointer<V>;
+        else
+            return false;
+    }, R>();
+
     template <class T>
     static std::expected<std::string, error> edn_of(T const &value)
     {
@@ -2231,6 +2422,13 @@ public:
 };
 
 using generic = basic_generic<false>;
+
+template <class T>
+    requires(!is_view<T> && basic_generic<true>::holds_raw_pointer<T>)
+struct ref_targets<T> {
+    T const *in_block = nullptr;
+    using kept = kept_objects;
+};
 
 }
 
@@ -2415,6 +2613,7 @@ inline result<std::size_t> encode_cycles(Target &&out, T const &value)
  * | a map type; a multimap type | a map; a map to arrays |
  * | another container | an array |
  * | `cbor::tagged_item<N, E>` | tag N on the item of E |
+ * | `U*`, `std::unique_ptr<U>`, `std::shared_ptr<U>` | `null` when empty, else the item of U |
  * | a struct | a map; a struct in a struct is a map in a map |
  * | a struct that holds a `std::vector` of itself | a map whose arrays hold maps of the same form, at any depth |
  *
@@ -2475,6 +2674,10 @@ public:
      * least encoding of one element. While an item is read, each open container holds no more than that; the open
      * containers are at most as many as the nesting of the input, which the stack limit bounds. After a decode that
      * succeeds, each container holds storage for no more elements than it read.
+     * A `U*`, `std::unique_ptr<U>` or `std::shared_ptr<U>` is empty for null, and else points to a new `U` that holds
+     * the item: from `std::make_unique`, from `std::make_shared`, or for a `U*` an object that the owner of the
+     * cbor::ref keeps. A `U*` is valid while a copy of the cbor::ref lives. Each pointer gets its own object.
+     * `decode` reads no tag 28 and no tag 29; cbor::structs::decode_cycles() reads them.
      *
      * @code{.example}
      * message: {"name": "ann", "age": 30}
@@ -2557,6 +2760,68 @@ public:
     }
 
     /**
+     * @brief Reads one item into a `T` as decode() does, and resolves its tags 28 and 29
+     * (http://cbor.schmorp.de/value-sharing).
+     *
+     * A tag 28 marks the value under it. It stands on any value; the index of a tag 29 counts the tags 28 in the
+     * order of the bytes, also those in a skipped key or value. A tag 29 at a `U*` gives the address of the `U` that
+     * its tag 28 marks, while the read of that `U` is open: the `U*` closes a cycle. cbor::encode_cycles() writes such
+     * bytes. A `U*` reaches an object of the value only where the read does not move that object: in a member, in a
+     * `std::array`, `std::tuple`, `std::optional` or `std::variant`, in an element of a `std::vector`, a `std::deque`
+     * or a `std::list`, and in the target of a pointer. When `T` holds a `U*`, the cbor::ref keeps its value in its
+     * owner, so the address of the value stays when the cbor::ref is copied or moved.
+     * The forms take the bytes as decode() takes them.
+     *
+     * @code{.example}
+     * message: 28({"self": 29(0)})
+     * call: auto const r = cbor::structs<loop>::decode_cycles(std::move(bytes))
+     * result: ref to a loop whose self is its own address
+     * call: (*r)->self == &**r
+     * result: true
+     * @endcode
+     *
+     * @retval incorrect_type, number_out_of_range, key_not_found, duplicate_key, too_little_data, syntax_error,
+     * indefinite_length, nesting_depth_exceeded, inadmissible_type_for_tag_content, string_length_exceeded,
+     * container_elements_exceeded as decode()
+     * @retval incorrect_type a tag 29 at a value that is no pointer, at a `std::unique_ptr`, or that names a tag 28 of
+     * another type or of a value whose address the read does not keep
+     * @retval sharedref_index_not_marked a tag 29 whose index names no tag 28 before it
+     * @retval sharedref_not_cyclic a tag 29 that names a tag 28 whose value is read to its end, so no cycle
+     * @retval cyclic_data_structure a tag 29 at a `std::shared_ptr` that names a value whose read is open
+     * @throws std::bad_alloc a refused allocation
+     * @see cbor::encode_cycles()
+     * @see decode()
+     */
+    template <owning_range_of_bytes Encoded>
+    static result<ref<T>> decode_cycles(Encoded &&encoded)
+    {
+        return decode_cycles(std::make_shared<Encoded const>(std::move(encoded)));
+    }
+
+    /**
+     * @brief Reads one item into a `T` from the bytes that @p encoded owns, and resolves its tags 28 and 29.
+     * @throws std::logic_error @p encoded is null
+     */
+    template <owning_range_of_bytes Encoded>
+    static result<ref<T>> decode_cycles(std::shared_ptr<Encoded const> encoded)
+    {
+        detail::validity::throw_logic_error_if_null(encoded,
+                                                    "cbor::structs::decode_cycles: the encoded data item is null");
+        std::string_view const bytes = detail::chars_of(*encoded);
+        return decode_cycles(std::shared_ptr<void const>(std::move(encoded)), bytes);
+    }
+
+    /**
+     * @brief Reads one item into a `T` from bytes that @p owner keeps alive, and resolves its tags 28 and 29.
+     * @throws std::logic_error @p owner is empty
+     */
+    template <borrowed_range_of_bytes Encoded>
+    static result<ref<T>> decode_cycles(std::shared_ptr<void const> owner, Encoded const &encoded)
+    {
+        return result<ref<T>>(decode_cycles_with_owner(std::move(owner), detail::chars_of(encoded)));
+    }
+
+    /**
      * @brief Writes @p value as one CBOR item in preferred serialization, into a new `std::string`.
      *
      * A struct is a map, and its keys come in the order of RFC 8949 4.2.1.
@@ -2609,15 +2874,34 @@ public:
     }
 
 private:
+    struct owner_of_targets {
+        std::shared_ptr<void const> bytes;
+        detail::kept_objects targets;
+    };
+
+    struct block_of_value {
+        std::shared_ptr<void const> bytes;
+        detail::kept_objects targets;
+        T value;
+    };
+
     static std::expected<ref<T>, error> decode_with_owner(std::shared_ptr<void const> owner,
                                                      std::string_view const encoded, T &&target)
     {
         detail::validity::throw_logic_error_if_empty(
             owner, "cbor::structs::decode: the owner of the encoded data item is empty");
-        auto value = read(encoded, std::move(target));
-        if (!value) [[unlikely]]
-            return std::unexpected(value.error());
-        return ref<T>(std::move(owner), std::move(*value));
+        if constexpr (detail::basic_generic<true>::holds_raw_pointer<T>) {
+            auto const held = std::make_shared<owner_of_targets>(std::move(owner), detail::kept_objects{});
+            auto value = read(encoded, held->targets, std::move(target));
+            if (!value) [[unlikely]]
+                return std::unexpected(value.error());
+            return ref<T>(held, std::move(*value));
+        } else {
+            auto value = read(encoded, std::move(target));
+            if (!value) [[unlikely]]
+                return std::unexpected(value.error());
+            return ref<T>(std::move(owner), std::move(*value));
+        }
     }
 
     static std::expected<T, error> read(std::string_view const encoded, T out)
@@ -2627,44 +2911,100 @@ private:
             return std::unexpected(r.error());
         return out;
     }
-};
 
+    static std::expected<T, error> read(std::string_view const encoded, detail::kept_objects &targets, T out)
+    {
+        detail::generic::kept_targets objects{targets};
+        detail::generic::object_decoder<detail::generic::kept_targets> d{{encoded}, objects};
+        if (auto const r = detail::generic::read_generic(d, out); !r) [[unlikely]]
+            return std::unexpected(r.error());
+        return out;
+    }
+
+    static std::expected<void, error> read_cycles(std::string_view const encoded, detail::kept_objects &targets,
+                                                  T &out)
+    {
+        detail::generic::shared_values objects{targets, {}, true};
+        detail::generic::object_decoder<detail::generic::shared_values> d{{encoded}, objects};
+        return detail::generic::read_generic(d, out);
+    }
+
+    static std::expected<ref<T>, error> decode_cycles_with_owner(std::shared_ptr<void const> owner,
+                                                                 std::string_view const encoded)
+    {
+        detail::validity::throw_logic_error_if_empty(
+            owner, "cbor::structs::decode_cycles: the owner of the encoded data item is empty");
+        detail::pfr::check_default_constructible<T>();
+        if constexpr (detail::basic_generic<true>::holds_raw_pointer<T>) {
+            auto const held = std::make_shared<block_of_value>(std::move(owner), detail::kept_objects{}, T{});
+            if (auto const r = read_cycles(encoded, held->targets, held->value); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            ref<T> decoded(held, T{});
+            decoded.targets.in_block = &held->value;
+            return decoded;
+        } else {
+            detail::kept_objects targets;
+            T value{};
+            if (auto const r = read_cycles(encoded, targets, value); !r) [[unlikely]]
+                return std::unexpected(r.error());
+            return ref<T>(std::move(owner), std::move(value));
+        }
+    }
+};
 
 namespace detail
 {
 
 template <class T>
-void copy_views_into_zone(T &value, string_saver &zone)
+ref<T> copy_with_cycles(T const &value)
+{
+    auto encoded = basic_generic<true>::encode_cycles_to_string(value);
+    if (!encoded) [[unlikely]]
+        throw std::system_error(make_error_code(encoded.error()));
+    auto decoded = structs<T>::decode_cycles(std::move(*encoded));
+    if (!decoded) [[unlikely]]
+        throw std::system_error(make_error_code(decoded.error()));
+    return *std::move(decoded);
+}
+
+}
+
+
+namespace detail
+{
+
+template <class T, class Kept>
+void copy_views_into_zone(T &value, string_saver &zone, Kept &kept)
 {
     if constexpr (std::is_same_v<T, std::string_view>) {
         value = zone.save(value, detail::validity::string_saver_chunk_size);
     } else if constexpr (std::is_same_v<T, std::span<std::byte const>>) {
         value = zone.save(value, detail::validity::string_saver_chunk_size);
     } else if constexpr (std::is_same_v<T, typed_array>) {
-        detail::copy_views_into_zone(value.bytes, zone);
+        detail::copy_views_into_zone(value.bytes, zone, kept);
     } else if constexpr (std::is_arithmetic_v<T> || std::is_enum_v<T> || detail::generic::is_sys_time<T> ||
                          detail::generic::is_clock_time<T> || detail::generic::is_duration<T> ||
                          std::is_same_v<T, std::nullptr_t> ||
                          requires { typename T::traits_type; typename T::allocator_type; }) {
     } else if constexpr (requires { typename T::value_type; value.has_value(); *value; }) {
         if (value)
-            detail::copy_views_into_zone(*value, zone);
+            detail::copy_views_into_zone(*value, zone, kept);
     } else if constexpr (detail::is_std_variant<T>) {
-        std::visit([&zone](auto &alternative) { detail::copy_views_into_zone(alternative, zone); }, value);
+        std::visit([&zone, &kept](auto &alternative) { detail::copy_views_into_zone(alternative, zone, kept); }, value);
     } else if constexpr (detail::generic::is_std_tuple<T>) {
-        std::apply([&zone](auto &...element) { (detail::copy_views_into_zone(element, zone), ...); }, value);
+        std::apply([&zone, &kept](auto &...element) { (detail::copy_views_into_zone(element, zone, kept), ...); }, value);
     } else if constexpr (detail::generic::is_tagged_item<T>) {
-        detail::copy_views_into_zone(value.content, zone);
+        detail::copy_views_into_zone(value.content, zone, kept);
     } else if constexpr (detail::generic::is_std_vector<T> || detail::generic::is_std_array<T>) {
         for (auto &element : value)
-            detail::copy_views_into_zone(element, zone);
+            detail::copy_views_into_zone(element, zone, kept);
     } else if constexpr (requires { typename T::key_type; typename T::mapped_type; }) {
         T copied(value.get_allocator());
         for (auto const &[key, mapped] : value) {
             typename T::key_type k = key;
             typename T::mapped_type m = mapped;
-            detail::copy_views_into_zone(k, zone);
-            detail::copy_views_into_zone(m, zone);
+            detail::copy_views_into_zone(k, zone, kept);
+            detail::copy_views_into_zone(m, zone, kept);
             copied.emplace(std::move(k), std::move(m));
         }
         value = std::move(copied);
@@ -2672,15 +3012,26 @@ void copy_views_into_zone(T &value, string_saver &zone)
         T copied(value.get_allocator());
         for (auto const &element : value) {
             typename T::key_type k = element;
-            detail::copy_views_into_zone(k, zone);
+            detail::copy_views_into_zone(k, zone, kept);
             copied.insert(std::move(k));
         }
         value = std::move(copied);
+    } else if constexpr (std::is_pointer_v<T> || detail::generic::is_shared_ptr<T>) {
+        if (value) {
+            auto copy = std::make_shared<detail::generic::pointee_t<T>>(*value);
+            detail::copy_views_into_zone(*copy, zone, kept);
+            if constexpr (std::is_pointer_v<T>) {
+                value = copy.get();
+                kept.push_back(std::move(copy));
+            } else {
+                value = std::move(copy);
+            }
+        }
     } else {
         static_assert(std::is_class_v<T> && std::is_aggregate_v<T>,
                       "cbor::ref::clone takes a type whose views it knows how to copy.");
         [&]<std::size_t... I>(std::index_sequence<I...>) {
-            (detail::copy_views_into_zone(detail::pfr::get<I>(value), zone), ...);
+            (detail::copy_views_into_zone(detail::pfr::get<I>(value), zone, kept), ...);
         }(std::make_index_sequence<detail::pfr::members_count<T>()>{});
     }
 }
