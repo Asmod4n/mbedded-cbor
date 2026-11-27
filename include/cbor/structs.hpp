@@ -2033,11 +2033,11 @@ inline result<std::string> to_edn(T const &value)
  * result: 6 bytes: d9 01 02 82 01 03
  * call: cbor::lazy::adopt(std::string(*s))
  * result: lazy of 258([1, 3])
- * call: auto const l = cbor::encode<line>(line{{1, 2}, {3, 4}})
+ * call: auto const l = cbor::encode<line>(line{point{1, 2}, point{3, 4}})
  * result: 37 bytes: a2 62 74 6f d9 07 0a a2 61 78 f9 42 00 61 79 f9 44 00 64 66 72 6f 6d d9 07 0a a2 61 78 f9 3c 00 61 79 f9 40 00
  * call: cbor::lazy::adopt(std::string(*l))
  * result: lazy of {"to": 1802({"x": 3.0, "y": 4.0}), "from": 1802({"x": 1.0, "y": 2.0})}
- * call: auto const n = cbor::encode<node>(node{"root", {node{"a", {}}}})
+ * call: auto const n = cbor::encode<node>(node{"root", std::vector<node>{node{"a", std::vector<node>{}}}})
  * result: 39 bytes: a2 64 6e 61 6d 65 64 72 6f 6f 74 68 63 68 69 6c 64 72 65 6e 81 a2 64 6e 61 6d 65 61 61 68 63 68 69 6c 64 72 65 6e 80
  * call: cbor::lazy::adopt(std::string(*n))
  * result: lazy of {"name": "root", "children": [{"name": "a", "children": []}]}
